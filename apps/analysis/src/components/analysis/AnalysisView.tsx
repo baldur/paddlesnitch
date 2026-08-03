@@ -7,6 +7,7 @@ import type { AnalysisResult } from '@/lib/analysis'
 import { fmtDur, fmtDurWords, split500, rescaleDoubling } from '@/lib/analysis'
 import { gateAt, type Racer } from '@/lib/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
+import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const compass = (d?: number) => (d == null ? '' : COMPASS[Math.round(d / 45) % 8])
@@ -29,10 +30,12 @@ export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: str
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
-export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', onNewFile }: {
+export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile }: {
   data: ViewData
   sessionId?: string
   initialNote?: string
+  initialBoatClass?: BoatClass
+  initialSeat?: Seat
   onNewFile?: () => void
 }) {
   const router = useRouter()
@@ -58,6 +61,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const [note, setNote] = useState(initialNote)
   const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showDiary, setShowDiary] = useState(false)
+  // Boat metadata — the type of outing + which seat the paddler was in.
+  const [boatClass, setBoatClass] = useState<BoatClass | ''>(initialBoatClass ?? '')
+  const [seat, setSeat] = useState<Seat | ''>(initialSeat ?? '')
+  const [showBoat, setShowBoat] = useState(false)
+  const [boatState, setBoatState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // "Race a section" selection state.
@@ -88,6 +96,25 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
       setNoteState('saved'); setTimeout(() => setNoteState('idle'), 1500)
     } catch { setNoteState('idle') }
   }
+
+  // Persist boat class + seat. `cls`/`st` are passed explicitly (state may not
+  // have flushed when a dropdown onChange triggers the save).
+  const saveBoat = async (cls: BoatClass | '', st: Seat | '') => {
+    if (!sessionId) return
+    setBoatState('saving')
+    try {
+      await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boatClass: cls || null, seat: st === '' ? null : st }) })
+      setBoatState('saved'); setTimeout(() => setBoatState('idle'), 1500)
+    } catch { setBoatState('idle') }
+  }
+  const onBoatClass = (cls: BoatClass | '') => {
+    // Reset the seat if it's no longer valid for the new class (or the class cleared).
+    const seats = cls ? expectedSeats(cls) : []
+    const nextSeat: Seat | '' = cls && seat !== '' && seats.includes(seat) ? seat : ''
+    setBoatClass(cls); setSeat(nextSeat); saveBoat(cls, nextSeat)
+  }
+  const onSeat = (st: Seat | '') => { setSeat(st); if (boatClass) saveBoat(boatClass, st) }
+  const boatBadge = boatClass ? `${boatClass}${seat !== '' && BOAT_CLASS_INFO[boatClass].crewSize > 1 ? ` · ${seatLabel(boatClass, seat)}` : ''}` : ''
 
   // --- race-a-section helpers ---
   const nearestIdx = (lat: number, lng: number) => {
@@ -164,7 +191,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
 
       {/* HUD — top-left */}
       <div className={`${PANEL} absolute top-3 left-3 z-[1000] p-3 max-w-[340px] text-xs`}>
-        {paddled && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}</div>}
+        {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
           <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>
@@ -187,7 +214,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>NEW</button>}
           <Link href="/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>DIARY</button>}
-          {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${sectionMode ? 'text-[#22c55e]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>{sectionMode ? 'EXIT SECTION' : 'RACE A SECTION'}</button>}
+          {sessionId && <button onClick={() => setShowBoat(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showBoat ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>BOAT</button>}
+          {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Zoom into any stretch for a deeper, coached read — or race it against your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest rounded border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-[#a78bfa]' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : '🔍 ANALYSE A SECTION'}</button>}
         </div>
         {!sectionMode && (
           <div className={`${PANEL} p-1.5 flex items-center gap-1`}>
@@ -218,6 +246,28 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               className="mt-1 w-full px-3 py-1.5 text-[10px] tracking-widest bg-[#0369a1] text-white rounded disabled:opacity-40">
               {noteState === 'saving' ? 'SAVING…' : noteState === 'saved' ? 'SAVED ✓' : 'SAVE NOTE'}
             </button>
+          </div>
+        )}
+        {showBoat && sessionId && (
+          <div className={`${PANEL} p-2 w-[240px]`}>
+            <div className="text-[10px] text-[#64748b] tracking-widest mb-1">BOAT — type of outing {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved ✓' : ''}</div>
+            <label className="block text-[10px] text-[#64748b] mb-0.5">Class</label>
+            <select value={boatClass} onChange={e => onBoatClass(e.target.value as BoatClass | '')}
+              className="w-full text-xs bg-[#0b1220] border border-[#1e293b] rounded p-1.5 text-[#e2e8f0] mb-2">
+              <option value="">— not set —</option>
+              <optgroup label="Kayak">{BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
+              <optgroup label="Rowing">{BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'rowing').map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
+            </select>
+            {boatClass && BOAT_CLASS_INFO[boatClass].crewSize > 1 && (
+              <>
+                <label className="block text-[10px] text-[#64748b] mb-0.5">Your seat</label>
+                <select value={seat === '' ? '' : String(seat)} onChange={e => onSeat(e.target.value === '' ? '' : (e.target.value === 'C' ? 'C' : Number(e.target.value)))}
+                  className="w-full text-xs bg-[#0b1220] border border-[#1e293b] rounded p-1.5 text-[#e2e8f0]">
+                  <option value="">— not set —</option>
+                  {expectedSeats(boatClass).map(s => <option key={String(s)} value={String(s)}>{seatLabel(boatClass, s)}</option>)}
+                </select>
+              </>
+            )}
           </div>
         )}
         {/* match list */}
@@ -277,12 +327,12 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
       {/* bottom-center: replay scrubber, OR the section-selection panel */}
       {sectionMode ? (
         <div className={`${PANEL} absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] p-3 w-[min(520px,86vw)] text-xs`}>
-          <div className="text-[10px] text-[#64748b] tracking-widest mb-1">RACE A SECTION</div>
+          <div className="text-[10px] text-[#a78bfa] tracking-widest mb-1">🔍 ANALYSE A SECTION — GO DEEPER</div>
           <div className="text-[#cbd5e1] leading-relaxed">
-            {aIdx == null && 'Click the START of the stretch on your track.'}
+            {aIdx == null && 'Zoom into any stretch of this paddle. Click the START of the stretch on your track.'}
             {aIdx != null && bIdx == null && 'Now click the FINISH of the stretch.'}
             {aIdx != null && bIdx != null && (
-              <span>Section: <b className="tabular text-[#e2e8f0]">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-[#22c55e]">start</span> to <span className="text-[#ef4444]">finish</span>. Analyse this stretch, or race your other paddles over it.</span>
+              <span>Section: <b className="tabular text-[#e2e8f0]">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-[#22c55e]">start</span> to <span className="text-[#ef4444]">finish</span>. Get a coached read on this stretch, or race it against your other paddles.</span>
             )}
           </div>
           {sectionErr && <div className="text-[#f87171] mt-1">{sectionErr}</div>}
