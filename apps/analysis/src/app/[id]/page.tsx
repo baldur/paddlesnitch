@@ -20,5 +20,5 @@ export default function SavedPaddlePage({ params }: { params: Promise<{ id: stri
     </div>
   )
 
-  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type } }} sessionId={session.id} initialNote={session.note} />
+  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} />
 }

@@ -44,7 +44,7 @@ export default function LibraryPage() {
             <div key={s.id} className="border border-[#1e293b] rounded p-3 flex gap-3 items-start">
               <input type="checkbox" checked={sel.includes(s.id)} onChange={() => toggle(s.id)} className="mt-1 accent-[#0369a1]" />
               <Link href={`/${s.id}`} className="flex-1 min-w-0">
-                <div className="text-[10px] text-[#64748b] tracking-widest">{fmtDate(s.paddledAt).toUpperCase()}{s.source.type === 'strava' ? ' · STRAVA' : s.source.type === 'trial' ? ' · TIME TRIAL' : ''}</div>
+                <div className="text-[10px] text-[#64748b] tracking-widest">{fmtDate(s.paddledAt).toUpperCase()}{s.source.type === 'strava' ? ' · STRAVA' : s.source.type === 'trial' ? ' · TIME TRIAL' : ''}{s.boatClass ? <span className="text-[#a78bfa]"> · {s.boatClass}</span> : ''}</div>
                 <div className="text-sm tabular mt-0.5">
                   <b>{fmtDurWords(s.durationS)}</b> · {s.distanceKm.toFixed(2)} km · cruise {split500(s.cruiseSpeed)}/500
                   {s.avgSR != null && <> · ~{Math.round(s.avgSR)} spm</>}
