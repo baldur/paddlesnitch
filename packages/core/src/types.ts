@@ -82,13 +82,15 @@ export function expectedSeats(boatClass: BoatClass): Seat[] {
   return seats
 }
 
-// A human label for a seat: bow / stroke where meaningful, else the number.
+// A human label for a seat. Rowing uses bow/stroke; kayak uses front/back
+// (a K4 reads front, 2, 3, back). Middle seats are just their number.
 export function seatLabel(boatClass: BoatClass, seat: Seat): string {
   if (seat === 'C') return 'cox'
   const info = BOAT_CLASS_INFO[boatClass]
   if (info.crewSize === 1) return 'single'
-  if (seat === 1) return 'bow (1)'
-  if (seat === info.crewSize) return `stroke (${seat})`
+  const kayak = info.sport === 'kayak'
+  if (seat === 1) return kayak ? 'front' : 'bow (1)'
+  if (seat === info.crewSize) return kayak ? 'back' : `stroke (${seat})`
   return String(seat)
 }
 

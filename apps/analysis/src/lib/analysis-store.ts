@@ -2,7 +2,7 @@
 // analysis/{userId}/{id}/session.json (S3 in prod, .local-data in dev), private
 // to the user. Small scale → list = read each session.json, like att entries.
 import { getJson, putJson, listKeys, deleteObject } from '@paddlesnitch/core/storage'
-import { isBoatClass, expectedSeats, type BoatClass, type Seat } from '@paddlesnitch/core/types'
+import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 import type { AnalysisResult } from './analysis'
 import { rescaleDoubling } from './analysis'
 
@@ -94,12 +94,20 @@ export function resolveBoat(boatClass: unknown, seat: unknown): { boatClass?: Bo
 
 // Set the type of outing + which seat the paddler was in, and re-persist. A boat
 // update replaces the whole (class, seat) pair; a null/invalid class clears both.
+// Picking a boat class also sets the SUP→kayak stroke-rate doubling: a kayak
+// class (K1/K2/K4) counts stroke rate per full cycle, so it's doubled; a rowing
+// class isn't. The manual ×2 toggle can still override afterwards.
 export async function updateSessionBoat(userId: string, id: string, boatClass: unknown, seat: unknown): Promise<AnalysisSession | null> {
   const s = await getSession(userId, id)
   if (!s) return null
   const { boatClass: bc, seat: st } = resolveBoat(boatClass, seat)
-  if (bc) { s.boatClass = bc; if (st !== undefined) s.seat = st; else delete s.seat }
-  else { delete s.boatClass; delete s.seat }
+  if (bc) {
+    s.boatClass = bc
+    if (st !== undefined) s.seat = st; else delete s.seat
+    const doubled = BOAT_CLASS_INFO[bc].sport === 'kayak'
+    if (s.result.strokeRateDoubled !== doubled) s.result = rescaleDoubling(s.result, doubled)
+    s.doubleStrokeRate = doubled
+  } else { delete s.boatClass; delete s.seat }
   await saveSession(s)
   return s
 }

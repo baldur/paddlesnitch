@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import { resolveBoat } from './analysis-store'
+import { seatLabel } from '@paddlesnitch/core/types'
+
+describe('seatLabel', () => {
+  it('uses front/back for kayak (K4 = front, 2, 3, back)', () => {
+    expect(seatLabel('K4', 1)).toBe('front')
+    expect(seatLabel('K4', 2)).toBe('2')
+    expect(seatLabel('K4', 3)).toBe('3')
+    expect(seatLabel('K4', 4)).toBe('back')
+    expect(seatLabel('K2', 1)).toBe('front')
+    expect(seatLabel('K2', 2)).toBe('back')
+    expect(seatLabel('K1', 1)).toBe('single')
+  })
+  it('uses bow/stroke/cox for rowing', () => {
+    expect(seatLabel('8+', 1)).toBe('bow (1)')
+    expect(seatLabel('8+', 8)).toBe('stroke (8)')
+    expect(seatLabel('8+', 4)).toBe('4')
+    expect(seatLabel('8+', 'C')).toBe('cox')
+  })
+})
 
 describe('resolveBoat', () => {
   it('keeps a valid class + a seat that fits it', () => {

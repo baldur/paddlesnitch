@@ -103,7 +103,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
     if (!sessionId) return
     setBoatState('saving')
     try {
-      await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boatClass: cls || null, seat: st === '' ? null : st }) })
+      const r = await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boatClass: cls || null, seat: st === '' ? null : st }) })
+      // Picking a boat class also sets the doubling server-side (kayak → ×2);
+      // sync the view's toggle so the numbers/map update to match.
+      const d = await r.json().catch(() => null)
+      if (typeof d?.session?.result?.strokeRateDoubled === 'boolean') setSrDoubled(d.session.result.strokeRateDoubled)
       setBoatState('saved'); setTimeout(() => setBoatState('idle'), 1500)
     } catch { setBoatState('idle') }
   }
