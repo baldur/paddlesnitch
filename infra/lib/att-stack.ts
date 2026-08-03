@@ -354,8 +354,17 @@ export class AttStack extends cdk.Stack {
         // ON_DEMAND in eu-west-1 (auto-enables on first invoke — no console
         // step), and the same base as the local Ollama `dolphin-mixtral:8x7b`
         // so prompt-tuning maps between dev and prod. Verified via Converse.
-        // (Newer Claude/Nova models here are inference-profile only — they'd need
-        // an `eu.…` profile id; the IAM grant covers both ARN shapes.)
+        //
+        // To BUMP the narration model for the personable-insights feature
+        // (docs/features/personable-insights.md), switch this to a Claude Haiku
+        // or Nova Lite eu-west-1 INFERENCE-PROFILE id, e.g.
+        //   'eu.anthropic.claude-3-5-haiku-20241022-v1:0'  (Claude Haiku 3.5)
+        //   'eu.amazon.nova-lite-v1:0'                       (Amazon Nova Lite)
+        // The `BedrockInsighter` already uses model-agnostic Converse, so it's a
+        // one-line change here. Before flipping: (1) enable model access for that
+        // model in the Bedrock console (unlike Mixtral's auto-enable), and (2)
+        // confirm the exact profile id in this region. The IAM grant already
+        // covers `inference-profile/*`. Billed to AWS, NOT the Anthropic quota.
         LLM_MODEL: 'mistral.mixtral-8x7b-instruct-v0:1',
         // Strava API credentials — shared with att, fetched from SSM at runtime.
         STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',

@@ -1,8 +1,17 @@
 # Feature spec: Personable, memory-aware LLM commentary
 
-**Status:** 💭 design (2026-08-03). Living design record — build after review.
+**Status:** 🚧 built, in local review (2026-08-03; branch `personable-insights-build`). Layers 1–3 implemented + wired; the model bump is documented + one-line-switchable but NOT flipped in prod (needs Bedrock verification). Verified end-to-end on the real local library via Ollama.
 **Owners:** Baldur (product), Claude (implementation).
 **App:** `apps/analysis` (the analyse stack). Extends the existing insight in `src/lib/llm.ts`.
+
+## Implementation (2026-08-03)
+
+- **L1** `src/lib/history-stats.ts` — `computeHistoryStats` + `renderHistoryFacts` (PBs, vs-90-day-average, pace trend, volume this week/month, days-since-last, distance milestones). Pure, 8 unit tests.
+- **L3** same module — `selectRelevantPaddles` + `renderRelevant` (venue via start-point haversine + boat class + similar distance). `SessionSummary` gained `startLat`/`startLng`/`avgDps`.
+- **L2** `src/lib/athlete-profile.ts` — `refreshAthleteProfile` (cold-start skip < 3 paddles; full re-distill every 10 or when no profile; else incremental merge) + `deterministicProfile` fallback. Stored via `AthleteProfile` at `analysis/{userId}/profile.json` (`getAthleteProfile`/`saveAthleteProfile` in the store).
+- **llm.ts** — revised coach-persona `SYSTEM`; `buildPrompt` takes an `InsightContext` (profile + historyFacts + relevant); shared `runInsighter` used by both `generateInsight` and the profile builder (one place picks backend/model).
+- **Route** `api/analyse/route.ts` — computes L1/L3 from prior paddles + loads the profile → feeds `generateInsight`; after save, best-effort `refreshAthleteProfile` folds the new paddle in for next time (awaited in-request for Lambda reliability).
+- **Model bump** — `BedrockInsighter` already uses model-agnostic Converse, so it's a one-line `LLM_MODEL` change in `infra/lib/att-stack.ts` (documented there with the Haiku/Nova `eu.` inference-profile ids). **Left as Mixtral** until Bedrock model-access is enabled + the id confirmed.
 
 ## Why
 

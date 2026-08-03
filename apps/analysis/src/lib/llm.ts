@@ -8,36 +8,29 @@
 // you can tune the SAME model locally and deploy it unchanged.
 import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, split500 } from './analysis'
-import type { SessionSummary } from './analysis-store'
 import type { SectionRace, Racer, SectionStats } from './similar'
 
 const SYSTEM = [
-  'You are an experienced kayak and rowing coach reviewing a paddler\'s GPS session.',
-  'In 2–3 short sentences, tell them the single most interesting thing about the session plus one useful observation.',
-  'Use ONLY the numbers provided — never invent data. Be specific and concrete, encouraging but honest.',
-  'If recent-history and the paddler\'s own notes are given, use them to make the insight personal and progressive —',
-  'compare to recent sessions (fastest/steadiest lately, trends) and acknowledge what they noted — but never invent data.',
+  'You are this paddler\'s personal coach — you know them and their history.',
+  'Write 2–4 short sentences of warm, specific commentary on THIS session: the single most interesting thing that',
+  'happened, and one useful, forward-looking observation.',
+  'When a paddler profile, history facts, or comparable past paddles are given, weave them in naturally to make it',
+  'personal and progressive — reference their trajectory, their goals, and how today compares to their own record —',
+  'but use ONLY the facts provided; never invent numbers.',
+  'Vary how you open; avoid generic praise and filler. Sound like a real person who has watched them paddle before.',
   'No preamble, no lists, no markdown headings — just the short paragraph.',
 ].join(' ')
 
-// A compact digest of recent saved paddles + the paddler's own notes, so the
-// model can narrate in context and get smarter over time (feature 5).
-function buildHistory(history: SessionSummary[]): string {
-  if (!history.length) return '\nThis is one of the paddler\'s first saved sessions — there is NO prior history, so do not compare to or reference past paddles.'
-  const lines = history.slice(0, 8).map(h => {
-    const d = h.paddledAt?.slice(0, 10) ?? '?'
-    const bits = [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
-    if (h.avgSR != null) bits.push(`${Math.round(h.avgSR)}spm`)
-    if (h.effortCount) bits.push(`${h.effortCount} efforts`)
-    let line = `  - ${bits.join(', ')}.`
-    if (h.note?.trim()) line += ` Note: "${h.note.trim().slice(0, 160)}"`
-    return line
-  })
-  return `\nThe paddler's recent paddles (newest first):\n${lines.join('\n')}`
+// Extra context blocks fed alongside the session fact sheet. All pre-rendered
+// (by history-stats + the athlete-profile module) so llm.ts stays a thin adapter.
+export type InsightContext = {
+  profile?: string       // the persistent athlete-profile blurb (L2)
+  historyFacts?: string  // renderHistoryFacts output (L1)
+  relevant?: string      // renderRelevant output (L3)
 }
 
 // Compact, grounded fact sheet — the model narrates THIS, nothing else.
-function buildPrompt(r: AnalysisResult, history: SessionSummary[] = []): string {
+function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string {
   const L: string[] = []
   L.push(`Session: ${fmtDur(r.durationS)} min, ${r.distanceKm.toFixed(2)} km.`)
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
@@ -61,7 +54,14 @@ function buildPrompt(r: AnalysisResult, history: SessionSummary[] = []): string 
   const sets = r.sets.filter(s => s.count > 1)
   if (sets.length) L.push(`Sets detected: ${sets.map(s => `${s.count} × ~${fmtDur(s.avgDurS)} @ ${split500(s.avgSpeed)}/500`).join('; ')}.`)
   if (!r.surges.length) L.push('No distinct efforts — this was a steady paddle.')
-  return L.join('\n') + buildHistory(history)
+  let out = L.join('\n')
+  if (ctx.profile?.trim()) out += `\n\nWho this paddler is (their evolving profile):\n${ctx.profile.trim()}`
+  out += ctx.historyFacts ?? ''
+  out += ctx.relevant ?? ''
+  if (!ctx.profile?.trim() && !ctx.historyFacts && !ctx.relevant) {
+    out += '\nThis is one of their first saved sessions — no prior history, so do not compare to past paddles.'
+  }
+  return out
 }
 
 interface Insighter { generate(system: string, user: string, model: string): Promise<string> }
@@ -109,20 +109,32 @@ function makeInsighter(): Insighter | null {
   return null
 }
 
-// Returns the model-written insight, or null (→ caller keeps the template).
-// Model + backend come from env (LLM_MODEL / LLM_BACKEND); to change the model,
-// change the env/code — it is deliberately not selectable at runtime.
-export async function generateInsight(result: AnalysisResult, opts: { history?: SessionSummary[] } = {}): Promise<string | null> {
+// Shared low-level call: run the configured backend (env-driven) with a system +
+// user prompt. Returns { text, model } or null (no backend / call failed).
+// Reused by every insight generator here AND the athlete-profile module, so the
+// backend/model selection lives in exactly one place. `maxTokens` lets the
+// profile builder ask for a bit more room than a one-paragraph insight.
+export async function runInsighter(system: string, user: string): Promise<{ text: string; model: string } | null> {
   const insighter = makeInsighter()
   if (!insighter) return null
   const model = process.env.LLM_MODEL || 'llama3.2:3b'
   try {
-    const text = await insighter.generate(SYSTEM, buildPrompt(result, opts.history ?? []), model)
-    return text || null
+    const text = await insighter.generate(system, user, model)
+    return text ? { text, model } : null
   } catch (err) {
-    console.error('[llm] insight generation failed', err)
+    console.error('[llm] generation failed', err)
     return null
   }
+}
+
+// Returns the model-written insight, or null (→ caller keeps the template).
+// Model + backend come from env (LLM_MODEL / LLM_BACKEND); to change the model,
+// change the env/code — it is deliberately not selectable at runtime. The
+// history-aware context (profile + aggregates + relevant paddles) is pre-rendered
+// by the caller (see the analyse route) and passed in.
+export async function generateInsight(result: AnalysisResult, ctx: InsightContext = {}): Promise<string | null> {
+  const res = await runInsighter(SYSTEM, buildPrompt(result, ctx))
+  return res?.text ?? null
 }
 
 // ---- Section race: comparing several efforts over the SAME stretch ----

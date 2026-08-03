@@ -43,10 +43,15 @@ export type SessionSummary = {
   avgSR: number | null
   cruiseSpeed: number
   effortCount: number
+  avgDps: number | null
   note: string
   insight: string
   boatClass?: BoatClass
   seat?: Seat
+  // Start point of the track — used by relevance retrieval to group paddles by
+  // venue ("your other paddles here"). Undefined on a paddle with no points.
+  startLat?: number
+  startLng?: number
 }
 
 const key = (userId: string, id: string) => `analysis/${userId}/${id}/session.json`
@@ -117,8 +122,9 @@ function toSummary(s: AnalysisSession): SessionSummary {
     id: s.id, createdAt: s.createdAt, paddledAt: s.paddledAt, source: s.source,
     durationS: s.result.durationS, distanceKm: s.result.distanceKm,
     avgSR: s.result.avgSR, cruiseSpeed: s.result.cruiseSpeed,
-    effortCount: s.result.surges.length, note: s.note, insight: s.insight,
+    effortCount: s.result.surges.length, avgDps: s.result.avgDps, note: s.note, insight: s.insight,
     boatClass: s.boatClass, seat: s.seat,
+    startLat: s.result.points[0]?.lat, startLng: s.result.points[0]?.lng,
   }
 }
 
@@ -133,4 +139,26 @@ export async function listSessionSummaries(userId: string): Promise<SessionSumma
 export async function listSessions(userId: string): Promise<AnalysisSession[]> {
   const keys = (await listKeys(`analysis/${userId}/`)).filter(k => k.endsWith('session.json'))
   return (await Promise.all(keys.map(k => getJson<AnalysisSession>(k)))).filter((s): s is AnalysisSession => !!s)
+}
+
+// ---- Athlete profile: a persistent, distilled "who is this paddler" memory ----
+// Stored once per user at analysis/{userId}/profile.json, private to the user.
+// A compact natural-language blurb (built + updated by the LLM layer from the
+// paddler's history + diary notes) that feeds the per-paddle insight prompt at a
+// CONSTANT token cost regardless of how many paddles they have. See
+// docs/features/personable-insights.md.
+export type AthleteProfile = {
+  text: string          // the ~200-token natural-language memory
+  updatedAt: string     // ISO — when last built/merged
+  builtFromCount: number // paddle count at the last FULL re-distill (drift control)
+}
+
+const profileKey = (userId: string) => `analysis/${userId}/profile.json`
+
+export async function getAthleteProfile(userId: string): Promise<AthleteProfile | null> {
+  return getJson<AthleteProfile>(profileKey(userId))
+}
+
+export async function saveAthleteProfile(userId: string, profile: AthleteProfile): Promise<void> {
+  await putJson(profileKey(userId), profile)
 }
