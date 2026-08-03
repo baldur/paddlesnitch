@@ -7,7 +7,7 @@ import { parseTrace } from '@paddlesnitch/timing/parse'
 import { getWeatherAt } from '@paddlesnitch/timing/weather'
 import { getFlowAt } from '@paddlesnitch/timing/river-flow'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
-import { analyseTrack } from '@/lib/analysis'
+import { analyseTrack, autoDoubleForSport } from '@/lib/analysis'
 import { generateInsight } from '@/lib/llm'
 import { saveSession, listSessionSummaries, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
@@ -20,11 +20,14 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Sign in to analyse and save paddles.' }, { status: 401 })
 
   const form = await req.formData()
-  const doubleStrokeRate = form.get('doubleStrokeRate') === 'true'
 
   // ---- resolve the track from a file or a Strava activity ----
   let track: TrackPoint[]
   let source: AnalysisSource
+  // Sport drives the SUP→kayak stroke-rate doubling. Known for a Strava import
+  // (its sportType); unknown for an uploaded file / trial entry, where we assume
+  // kayak (double) and let the paddler correct it in the view. See autoDoubleForSport.
+  let sport: string | undefined
   const file = form.get('file')
   const stravaId = Number(form.get('stravaActivityId'))
   const trialEntryId = form.get('trialEntryId')
@@ -56,7 +59,9 @@ export async function POST(req: NextRequest) {
     const streams = await getActivityStreams(tokens.accessToken, stravaId)
     if (!streams) return NextResponse.json({ error: 'Could not read that Strava activity (no GPS stream).' }, { status: 422 })
     track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
-    source = { type: 'strava', stravaActivityId: stravaId }
+    const st = form.get('sportType')
+    sport = typeof st === 'string' && st ? st : undefined
+    source = { type: 'strava', stravaActivityId: stravaId, sport }
   } else {
     return NextResponse.json({ error: 'Provide a file or a Strava activity.' }, { status: 400 })
   }
@@ -75,6 +80,7 @@ export async function POST(req: NextRequest) {
     flowM3s: flow?.valueM3s, flowStation: flow?.stationLabel,
   }
 
+  const doubleStrokeRate = autoDoubleForSport(sport)
   const result = analyseTrack(track, { doubleStrokeRate, conditions })
 
   // History-aware narrative: feed the user's recent saved paddles + their notes

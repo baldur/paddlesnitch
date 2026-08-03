@@ -1,10 +1,10 @@
 'use client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AnalysisMapClient from '@/components/map/AnalysisMapClient'
 import type { AnalysisResult } from '@/lib/analysis'
-import { fmtDur, fmtDurWords, split500 } from '@/lib/analysis'
+import { fmtDur, fmtDurWords, split500, rescaleDoubling } from '@/lib/analysis'
 import { gateAt, type Racer } from '@/lib/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
 
@@ -29,13 +29,29 @@ export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: str
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
-export default function AnalysisView({ data, sessionId, initialNote = '', onNewFile }: {
+export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', onNewFile }: {
   data: ViewData
   sessionId?: string
   initialNote?: string
   onNewFile?: () => void
 }) {
   const router = useRouter()
+  // SUP→kayak stroke-rate doubling is decided automatically at analysis time,
+  // but the paddler can flip it here (e.g. an uploaded file we assumed was
+  // kayak but was actually rowing). Rescaling is a pure transform on the result
+  // — instant locally, then persisted to the saved paddle.
+  const [srDoubled, setSrDoubled] = useState(dataProp.strokeRateDoubled)
+  const [srSaving, setSrSaving] = useState(false)
+  const data = useMemo<ViewData>(() => ({ ...rescaleDoubling(dataProp, srDoubled), paddledAt: dataProp.paddledAt, source: dataProp.source, insightModel: dataProp.insightModel }), [dataProp, srDoubled])
+  const toggleDouble = async () => {
+    const next = !srDoubled
+    setSrDoubled(next)
+    if (!sessionId) return
+    setSrSaving(true)
+    try { await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doubleStrokeRate: next }) }) }
+    catch { /* the local view already reflects it; a failed persist is non-fatal */ }
+    finally { setSrSaving(false) }
+  }
   const [metric, setMetric] = useState<'speed' | 'sr'>('speed')
   const [cursor, setCursor] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -164,6 +180,15 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
                 {m === 'speed' ? 'SPEED' : 'RATE'}
               </button>
             ))}
+          </div>
+        )}
+        {!sectionMode && dataProp.avgSR != null && (
+          <div className={`${PANEL} p-1.5 flex items-center gap-1`} title="Kayak/SUP stroke rate is counted per full cycle, so we double it. Turn off for rowing.">
+            <span className="text-[10px] text-[#64748b] tracking-widest px-1">STROKE ×2 (SUP→KAYAK)</span>
+            <button onClick={toggleDouble} disabled={srSaving}
+              className={`px-2 py-1 text-[10px] tracking-widest rounded disabled:opacity-50 ${srDoubled ? 'bg-[#0369a1] text-white' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>
+              {srDoubled ? 'ON' : 'OFF'}
+            </button>
           </div>
         )}
         {showDiary && sessionId && (
