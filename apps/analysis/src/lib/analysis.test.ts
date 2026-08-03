@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyseTrack, fmtDurWords, autoDoubleForSport, rescaleDoubling } from './analysis'
+import { analyseTrack, fmtDurWords, rescaleDoubling } from './analysis'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 // Build a synthetic northbound track: a rest, a cruise, a faster surge, a rest.
@@ -41,18 +41,6 @@ describe('analyseTrack', () => {
 
   it('always produces a non-empty insight string', () => {
     expect(analyseTrack(track()).insight.length).toBeGreaterThan(20)
-  })
-})
-
-describe('autoDoubleForSport', () => {
-  it('doubles kayak / canoe / SUP and unknown, but not rowing', () => {
-    expect(autoDoubleForSport('Kayaking')).toBe(true)
-    expect(autoDoubleForSport('Canoeing')).toBe(true)
-    expect(autoDoubleForSport('StandUpPaddling')).toBe(true)
-    expect(autoDoubleForSport(undefined)).toBe(true)   // unknown → assume kayak
-    expect(autoDoubleForSport('')).toBe(true)
-    expect(autoDoubleForSport('Rowing')).toBe(false)
-    expect(autoDoubleForSport('VirtualRow')).toBe(false)
   })
 })
 

@@ -7,7 +7,7 @@ import { parseTrace } from '@paddlesnitch/timing/parse'
 import { getWeatherAt } from '@paddlesnitch/timing/weather'
 import { getFlowAt } from '@paddlesnitch/timing/river-flow'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
-import { analyseTrack, autoDoubleForSport } from '@/lib/analysis'
+import { analyseTrack } from '@/lib/analysis'
 import { generateInsight } from '@/lib/llm'
 import { saveSession, listSessionSummaries, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
@@ -24,10 +24,6 @@ export async function POST(req: NextRequest) {
   // ---- resolve the track from a file or a Strava activity ----
   let track: TrackPoint[]
   let source: AnalysisSource
-  // Sport drives the SUP→kayak stroke-rate doubling. Known for a Strava import
-  // (its sportType); unknown for an uploaded file / trial entry, where we assume
-  // kayak (double) and let the paddler correct it in the view. See autoDoubleForSport.
-  let sport: string | undefined
   const file = form.get('file')
   const stravaId = Number(form.get('stravaActivityId'))
   const trialEntryId = form.get('trialEntryId')
@@ -60,8 +56,7 @@ export async function POST(req: NextRequest) {
     if (!streams) return NextResponse.json({ error: 'Could not read that Strava activity (no GPS stream).' }, { status: 422 })
     track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
     const st = form.get('sportType')
-    sport = typeof st === 'string' && st ? st : undefined
-    source = { type: 'strava', stravaActivityId: stravaId, sport }
+    source = { type: 'strava', stravaActivityId: stravaId, sport: typeof st === 'string' && st ? st : undefined }
   } else {
     return NextResponse.json({ error: 'Provide a file or a Strava activity.' }, { status: 400 })
   }
@@ -80,8 +75,10 @@ export async function POST(req: NextRequest) {
     flowM3s: flow?.valueM3s, flowStation: flow?.stationLabel,
   }
 
-  const doubleStrokeRate = autoDoubleForSport(sport)
-  const result = analyseTrack(track, { doubleStrokeRate, conditions })
+  // Default to NOT doubling stroke rate — the paddler can turn on the SUP→kayak
+  // ×2 in the view if their device under-counts. (source.sport is kept as
+  // metadata but no longer forces doubling.)
+  const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
 
   // History-aware narrative: feed the user's recent saved paddles + their notes
   // + prior insights into the prompt so it gets smarter over time (feature 5).
@@ -94,7 +91,7 @@ export async function POST(req: NextRequest) {
   // auto-save to the user's library
   const session: AnalysisSession = {
     id: nanoid(), userId: user.id, createdAt: new Date().toISOString(), paddledAt: when,
-    source, doubleStrokeRate, note: '', insight: result.insight, result,
+    source, doubleStrokeRate: false, note: '', insight: result.insight, result,
   }
   await saveSession(session)
 

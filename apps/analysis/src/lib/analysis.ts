@@ -52,16 +52,6 @@ export function fmtDurWords(s: number): string {
 }
 export const split500 = (spd: number) => (spd > 0.2 ? fmtDur(500 / spd) : '—')
 
-// Kayak/canoe/SUP stroke rate is conventionally counted per full L+R cycle, so
-// GPS devices report half the per-blade rate → we double it. Rowing already
-// counts each stroke once → never double. We key off the activity's sport when
-// it's known; when it ISN'T (a plain GPX/CSV with no sport), we ASSUME kayak
-// (double) — the common case — and let the paddler flip it in the view.
-export function autoDoubleForSport(sport?: string | null): boolean {
-  if (!sport) return true                 // unknown → assume kayak-like
-  return !sport.toLowerCase().includes('row') // Rowing / VirtualRow → false
-}
-
 // Toggle the SUP→kayak doubling on an already-analysed result WITHOUT re-running
 // the pipeline. Doubling only scales stroke-rate-derived fields (sr, dps, and
 // their averages); speed and segmentation are untouched, and stroke-rate CV is
