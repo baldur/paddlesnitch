@@ -9,7 +9,7 @@
 import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, split500 } from './analysis'
 import type { SessionSummary } from './analysis-store'
-import type { SectionRace, Racer } from './similar'
+import type { SectionRace, Racer, SectionStats } from './similar'
 
 const SYSTEM = [
   'You are an experienced kayak and rowing coach reviewing a paddler\'s GPS session.',
@@ -195,6 +195,64 @@ export async function generateRaceInsight(race: SectionRace): Promise<{ text: st
     return text ? { text, model } : null
   } catch (err) {
     console.error('[llm] race insight generation failed', err)
+    return null
+  }
+}
+
+// ---- Section focus: narrate ONE selected stretch of a single paddle ----
+
+const SECTION_SYSTEM = [
+  'You are an experienced kayak and rowing coach looking at ONE stretch a paddler selected from their session.',
+  'In 2–3 short sentences, describe how they paddled THIS stretch specifically: the pace, the stroke rate and length,',
+  'and whether they held / built / faded across it (use the first-half vs second-half split). If wind or river flow is',
+  'given, note briefly whether it likely helped or hurt on this stretch. Use ONLY the numbers provided; never invent data.',
+  'No preamble, no lists, no markdown — just the short paragraph about this section.',
+].join(' ')
+
+const COMPASS2 = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+const dir2 = (d?: number | null) => (d == null ? '' : ` from ${COMPASS2[Math.round(d / 45) % 8]}`)
+const trendWord = (a: number, b: number) => {
+  if (a <= 0) return 'steady'
+  const chg = (b - a) / a
+  return chg > 0.04 ? 'built (finished faster)' : chg < -0.04 ? 'faded (slowed through it)' : 'held steady'
+}
+
+function buildSectionPrompt(s: SectionStats): string {
+  const L = [`Selected stretch: ${(s.sectionM / 1000).toFixed(2)} km in ${fmtDur(s.elapsedS)}, pace ${split500(s.cruiseSpeed)}/500.`]
+  if (s.avgSR != null) L.push(`Stroke rate ~${Math.round(s.avgSR)} spm${s.avgDps != null ? `, ~${s.avgDps.toFixed(1)} m per stroke` : ''}${s.srSlopePerMin != null ? ` (${s.srSlopePerMin >= 0 ? '+' : ''}${s.srSlopePerMin.toFixed(0)} spm/min across it)` : ''}.`)
+  L.push(`Pace ${trendWord(s.firstHalfSpeed, s.secondHalfSpeed)}: first half ${split500(s.firstHalfSpeed)}/500 vs second half ${split500(s.secondHalfSpeed)}/500.`)
+  const c = s.conditions
+  if (c?.windKmh != null || c?.flowM3s != null) {
+    const bits: string[] = []
+    if (c?.windKmh != null) bits.push(`wind ${Math.round(c.windKmh)} km/h${dir2(c.windDir)}`)
+    if (c?.flowM3s != null) bits.push(`river flow ${c.flowM3s.toFixed(1)} m³/s`)
+    L.push(`Conditions that day: ${bits.join('; ')}.`)
+  }
+  return L.join('\n')
+}
+
+// Deterministic fallback — never blank, no backend needed.
+export function buildSectionInsight(s: SectionStats): string {
+  const t = trendWord(s.firstHalfSpeed, s.secondHalfSpeed)
+  let out = `Over this ${(s.sectionM / 1000).toFixed(2)} km stretch you held ${split500(s.cruiseSpeed)}/500`
+  out += s.avgSR != null ? ` at ~${Math.round(s.avgSR)} spm${s.avgDps != null ? ` (~${s.avgDps.toFixed(1)} m/stroke)` : ''}.` : '.'
+  out += ` Pace ${t} — ${split500(s.firstHalfSpeed)}/500 into ${split500(s.secondHalfSpeed)}/500.`
+  const c = s.conditions
+  if (c?.flowM3s != null) out += ` River was running ${c.flowM3s.toFixed(1)} m³/s.`
+  else if (c?.windKmh != null) out += ` Wind ${Math.round(c.windKmh)} km/h${dir2(c.windDir)}.`
+  return out
+}
+
+// LLM narrative for a single selected stretch, or null → caller uses the template.
+export async function generateSectionInsight(s: SectionStats): Promise<{ text: string; model: string } | null> {
+  const insighter = makeInsighter()
+  if (!insighter) return null
+  const model = process.env.LLM_MODEL || 'llama3.2:3b'
+  try {
+    const text = await insighter.generate(SECTION_SYSTEM, buildSectionPrompt(s), model)
+    return text ? { text, model } : null
+  } catch (err) {
+    console.error('[llm] section insight generation failed', err)
     return null
   }
 }

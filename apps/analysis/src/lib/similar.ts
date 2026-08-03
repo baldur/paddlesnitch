@@ -118,6 +118,76 @@ function polylineLengthM(poly: LatLng[]): number {
   return d
 }
 
+const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0)
+const slope = (xs: number[], ys: number[]) => {
+  const mx = mean(xs), my = mean(ys); let n = 0, d = 0
+  xs.forEach((x, i) => { n += (x - mx) * (ys[i] - my); d += (x - mx) ** 2 })
+  return d ? n / d : 0
+}
+
+export type SectionStats = {
+  sectionM: number
+  elapsedS: number
+  cruiseSpeed: number          // m/s over the section
+  avgSR: number | null
+  avgDps: number | null
+  strokeRateDoubled: boolean
+  splits: { distance: number; elapsedSeconds: number }[] // per-500 m within the section
+  firstHalfSpeed: number       // m/s over the first half (by time)
+  secondHalfSpeed: number      // m/s over the second half
+  srSlopePerMin: number | null // stroke-rate trend, spm/min (null if no SR)
+  conditions: Conditions | null
+}
+
+// Stats for the paddler's OWN selected stretch — the literal slice points[lo..hi]
+// (NOT gate-racing, so an out-and-back reflects exactly what was picked). Speed
+// is re-derived over the slice; SR/dps use the already-scaled saved values so it
+// respects the current SUP→kayak doubling.
+export function sectionStats(source: AnalysisSession, aIdx: number, bIdx: number): SectionStats | null {
+  const pts = source.result.points
+  const lo = Math.min(aIdx, bIdx), hi = Math.max(aIdx, bIdx)
+  if (lo < 0 || hi >= pts.length || hi - lo < 1) return null
+  const slice = pts.slice(lo, hi + 1)
+  const sectionM = polylineLengthM(slice.map(p => [p.lat, p.lng] as LatLng))
+  const elapsedS = slice[slice.length - 1].t - slice[0].t
+  const cruiseSpeed = elapsedS > 0 ? sectionM / elapsedS : 0
+
+  const srs = slice.filter(p => p.sr != null && p.sr > 0).map(p => p.sr as number)
+  const dpsv = slice.filter(p => p.dps != null).map(p => p.dps as number)
+  const avgSR = srs.length ? mean(srs) : null
+  const avgDps = dpsv.length ? mean(dpsv) : null
+  const srSlopePerMin = srs.length > 2 ? slope(slice.filter(p => p.sr != null && p.sr > 0).map(p => p.t), srs) * 60 : null
+
+  // first vs second half by time → a simple held/faded/built read. Uses MOVING
+  // speed (>0.8 m/s), like the app's other averages, so a rest inside the
+  // section doesn't dominate the trend and make it read as a huge slow-down.
+  const midT = slice[0].t + elapsedS / 2
+  const movingMean = (a: typeof slice) => { const sp = a.filter(p => p.speed > 0.8).map(p => p.speed); return sp.length ? mean(sp) : 0 }
+  const firstHalfSpeed = movingMean(slice.filter(p => p.t <= midT))
+  const secondHalfSpeed = movingMean(slice.filter(p => p.t >= midT))
+
+  // per-500 m splits within the section (elapsed from the section start)
+  const splits: { distance: number; elapsedSeconds: number }[] = []
+  let acc = 0, next = 500
+  for (let i = 1; i < slice.length; i++) {
+    const seg = haversine([slice[i - 1].lat, slice[i - 1].lng], [slice[i].lat, slice[i].lng])
+    while (acc + seg >= next && seg > 0) {
+      const f = (next - acc) / seg
+      const ms = slice[i - 1].t + f * (slice[i].t - slice[i - 1].t)
+      splits.push({ distance: next, elapsedSeconds: ms - slice[0].t })
+      next += 500
+    }
+    acc += seg
+  }
+
+  return {
+    sectionM, elapsedS, cruiseSpeed, avgSR, avgDps,
+    strokeRateDoubled: source.result.strokeRateDoubled,
+    splits, firstHalfSpeed, secondHalfSpeed, srSlopePerMin,
+    conditions: source.result.conditions ?? null,
+  }
+}
+
 // Race one paddle through the gates. Same-direction only: point_to_point with
 // the reverse fallback DISABLED. Returns the fastest forward start→finish run,
 // or null if it never crossed both gates in order.
