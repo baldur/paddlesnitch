@@ -8,6 +8,16 @@ export function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Public POST endpoints that accept UNAUTHENTICATED requests — must be exempt
+  // from the mutation auth-gate below, or an anonymous customer's request is
+  // redirected to sign-in and silently lost. `feedback` files a GitHub issue
+  // from the "Report an issue" widget (att + analyse, which POSTs here across
+  // the shared origin); it has its own anti-bot gate and supports anonymous
+  // reporters by design. See src/app/att/api/feedback/route.ts.
+  if (pathname === '/att/api/feedback') {
+    return NextResponse.next()
+  }
+
 
   // Admin pages always require auth
   const requiresAuth =
