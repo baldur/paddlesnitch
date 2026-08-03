@@ -1,0 +1,119 @@
+# Auto-intake: the moment a customer issue is OPENED, Claude picks it up,
+# claims it (claude-active), and works it toward resolution — a draft PR with a
+# fix, or a specific clarifying question posted on the issue. Once the author
+# answers that question, the fast loop (claude-fast-loop.yml, which fires on
+# comments to claude-active items) takes it the rest of the way to a PR.
+#
+# This replaces the ~daily scheduled-cron pickup latency with near-immediate
+# intake. The cron routine can stay as a backstop; the concurrency group below
+# (shared with the fast loop) serialises work per issue so they never collide.
+name: Claude auto-intake (new issues)
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: claude-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    # Only auto-work CUSTOMER-reported issues (the feedback widget files them
+    # with `customer-reported` at creation, so the label is present on `opened`).
+    # Internal/tracking issues aren't auto-worked — kick one with the `claude-go`
+    # label to route it through the fast loop instead. Never react to a bot.
+    if: >
+      github.actor != 'claude[bot]' &&
+      github.actor != 'github-actions[bot]' &&
+      contains(github.event.issue.labels.*.name, 'customer-reported')
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write   # required by claude-code-action@v1 to fetch its OIDC token
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for diff context
+
+      # Node + pnpm + deps so Claude can run `pnpm test` / `pnpm build` while
+      # working (matches the deploy + fast-loop toolchain versions).
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Subscription OAuth token (from `claude setup-token`) so intake runs
+          # draw on the Max plan, not metered API billing — same as the fast loop.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            A customer just OPENED a new issue in the ATT / paddlesnitch repo and
+            you are picking it up immediately. Read the whole issue and drive it
+            toward resolution: either a PR with a fix, or a specific clarifying
+            question posted on the issue (which — once the author answers — the
+            fast loop will pick up and turn into a PR).
+
+            CRITICAL — leave a durable artifact EARLY. You have a finite turn
+            budget and may be cut off mid-work; do these steps in THIS order so a
+            partial run still leaves something reviewable:
+              1. Post a one-line ack comment FIRST
+                 (e.g. "On it — taking a look now.").
+              2. Claim the issue NOW, not at the end:
+                   gh issue edit <n> --add-label claude-active
+                 (The fast loop only auto-fires on comments to claude-active
+                 items and on a `claude-go` label, so claiming is safe.)
+              3. Decide: is the issue clear enough to act on?
+                 - If it needs a product decision or is ambiguous, post ONE
+                   concise, specific clarifying question and STOP. Leave the
+                   claude-active label on so the author's answer is picked up by
+                   the fast loop. Do not guess.
+                 - If it's clear and code is needed: create the branch, commit the
+                   first thing (even a failing test or stub), push, and OPEN A
+                   DRAFT PR immediately (`gh pr create --draft --title ... --body
+                   "WIP — Closes #<n>"`). THEN keep committing/pushing as you work.
+              4. Do the actual work, pushing commits as you go.
+              5. When done (or blocked), post a status comment; if green, mark the
+                 PR ready (`gh pr ready <pr>`).
+            Node, pnpm, and dependencies are already installed — run `pnpm test` /
+            `pnpm build` directly. Don't reinstall deps.
+
+            IMPORTANT — how to reply: your final text output is NOT shown to
+            anyone. To communicate you MUST post a GitHub comment yourself with
+            the gh CLI (GITHUB_TOKEN is already in the environment):
+              - gh issue comment <number> --body "..."
+            Determine the number from the event context. ALWAYS post exactly one
+            such comment before you finish — even if it's just a short status.
+
+            FIRST read CLAUDE.md at the repo root — it is the source of truth for
+            conventions you MUST follow (test-first; `pnpm test` AND `pnpm build`
+            must both pass before you push anything; match existing style; the
+            commit-message trailer used in recent commits).
+
+            Rules:
+            - Never push to `main`, never force-push, never merge. Work on a
+              branch and open a draft PR.
+            - Every code change ships with a test and green `pnpm test` +
+              `pnpm build`. If you can't get them green, do NOT push — post a
+              comment with what's blocking instead.
+            - Out of scope (post a comment asking, don't touch): auth, secrets,
+              billing, or production infra (CDK / SES / Cognito / IAM / deploy).
+            - Scope to the turn budget. If the issue is a LARGE feature that won't
+              fit, do NOT half-build it — open a draft PR with a small, coherent,
+              tested first slice (or a `docs/features` spec) and comment the plan
+              for the rest. A reviewable draft PR beats an over-limit run that
+              leaves nothing.
+            - Keep comments short. If the work is complete, say so explicitly so a
+              human can merge.
+          # Same headroom as the fast loop: a cold pickup (read issue → failing
+          # test → implement → pnpm test + build → commit → push → draft PR →
+          # comment) needs well over the default; the "open a draft PR early"
+          # ordering is the real safety net.
+          claude_args: "--max-turns 80 --model claude-opus-4-8 --allowedTools Bash,Read,Edit,Write,Glob,Grep"

@@ -337,6 +337,17 @@ A positive result means **drop silently**: skip the side effect (send no email, 
 
 Client forms (`/att/auth` OTP tab, `/att/auth/forgot`, the feedback widget) carry the hidden `website` input + a `mountedAt` ref. These checks only stop unsophisticated bots — a script POSTing JSON directly omits both fields. They're a cheap first line, **not** a guarantee; a real challenge (Turnstile) or rate limiting would be the next step if targeted abuse appears. Tests: `src/lib/anti-bot.test.ts` (unit) plus bot-drop cases in `otp.test.ts`, `password-reset.test.ts`, `feedback.test.ts`.
 
+### Customer-issue automation (GitHub)
+
+The full lifecycle of a customer report:
+
+1. **Create** — the "Report an issue" widget (att + `/analyse`, both POST to `/att/api/feedback`) files a GitHub issue labelled `customer-reported` + `triage`. The proxy exempts `/att/api/feedback` so **anonymous** reports get through (`src/proxy.ts`).
+2. **Auto-intake** (`.github/workflows/claude-intake.yml`) — fires on `issues: [opened]` for `customer-reported` issues: Claude claims it (`claude-active`), then either opens a **draft PR** with a fix or posts **one clarifying question** and stops. Near-immediate (replaces the old ~daily scheduled-cron pickup latency).
+3. **Fast loop** (`.github/workflows/claude-fast-loop.yml`) — fires on comments/reviews to `claude-active` items (and a manual `claude-go` label kick). So when the author **answers** the intake's clarifying question, the loop picks it up and turns it into a PR. Serialised with intake via a shared `concurrency: claude-<n>` group.
+4. **Cleanup** (`.github/workflows/claude-label-cleanup.yml`) — drains `claude-active` when an issue/PR closes; on a merged PR it also strips the label from the issues it closes.
+
+Internal/tracking issues (no `customer-reported`) aren't auto-worked — kick one with the `claude-go` label to route it through the fast loop. All Claude workflows exclude bot actors to avoid reacting to their own output, and auth via `CLAUDE_CODE_OAUTH_TOKEN` (Max plan, not metered API).
+
 ---
 
 ## Architecture (Production)
