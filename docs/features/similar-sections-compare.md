@@ -162,6 +162,19 @@ Server-side (don't ship every paddle's points to the browser); own sessions only
   racers' `trackSegment`s between the two gates (gates drawn as lines). Reuses the dark
   compare styling and ATT's leaderboard-map idea.
 
+### Analyse this section (single-paddle focus)
+
+The same two-click selection also drives an **ANALYSE THIS SECTION** action (next to
+FIND MY OTHER PADDLES) that narrates *just that stretch of the current paddle* — no
+comparison needed. `sectionStats(source, aIdx, bIdx)` (in `similar.ts`) computes stats
+over the **literal slice** `points[lo..hi]` (not gate-racing, so an out-and-back reflects
+exactly what was picked): distance, elapsed, pace/500, avg SR + dist/stroke (respecting
+the current SUP→kayak doubling), per-500 splits, an SR trend, and a **moving-speed**
+first-half vs second-half read (held / built / faded — moving speed so a rest inside the
+section doesn't distort it) + the day's conditions. `POST /analyse/api/analyse/section-insight`
+feeds that to `generateSectionInsight` (LLM) with a deterministic `buildSectionInsight`
+fallback; the narrative shows inline in the section panel.
+
 ### Conditions + coach narrative (LLM)
 
 Each racer carries the paddle's whole-session **conditions** (`result.conditions` — wind

@@ -52,6 +52,26 @@ export function fmtDurWords(s: number): string {
 }
 export const split500 = (spd: number) => (spd > 0.2 ? fmtDur(500 / spd) : '—')
 
+// Toggle the SUP→kayak doubling on an already-analysed result WITHOUT re-running
+// the pipeline. Doubling only scales stroke-rate-derived fields (sr, dps, and
+// their averages); speed and segmentation are untouched, and stroke-rate CV is
+// scale-invariant. So this is an exact rescale by 2 or ½ from the current state.
+export function rescaleDoubling(r: AnalysisResult, target: boolean): AnalysisResult {
+  const f = (target ? 2 : 1) / (r.strokeRateDoubled ? 2 : 1)
+  if (f === 1) return { ...r, strokeRateDoubled: target }
+  const sr = (v: number | null) => (v == null ? null : v * f)
+  const dps = (v: number | null) => (v == null ? null : v / f)
+  const seg = (s: Segment): Segment => ({ ...s, avgSR: sr(s.avgSR), avgDps: dps(s.avgDps) })
+  return {
+    ...r,
+    strokeRateDoubled: target,
+    avgSR: sr(r.avgSR), avgDps: dps(r.avgDps),
+    points: r.points.map(p => ({ ...p, sr: sr(p.sr), dps: dps(p.dps) })),
+    stops: r.stops.map(seg), surges: r.surges.map(seg),
+    sets: r.sets.map(s => ({ ...s, avgSR: sr(s.avgSR) })),
+  }
+}
+
 export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boolean; conditions?: Conditions } = {}): AnalysisResult {
   const t0 = track[0].timestamp.getTime()
   const dbl = opts.doubleStrokeRate ? 2 : 1

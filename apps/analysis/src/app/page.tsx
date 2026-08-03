@@ -15,7 +15,6 @@ export default function AnalysePage() {
   const [authed, setAuthed] = useState<boolean | undefined>(undefined)
   const [tab, setTab] = useState<'file' | 'strava' | 'trials'>('file')
   const [file, setFile] = useState<File | null>(null)
-  const [dbl, setDbl] = useState(false)
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
   const [error, setError] = useState('')
   const [res, setRes] = useState<Result | null>(null)
@@ -48,7 +47,6 @@ export default function AnalysePage() {
   const analyse = async (body: FormData) => {
     setStatus('busy'); setError('')
     try {
-      body.append('doubleStrokeRate', String(dbl))
       const r = await fetch('/analyse/api/analyse', { method: 'POST', body })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
       setRes(await r.json())
@@ -56,7 +54,7 @@ export default function AnalysePage() {
     finally { setStatus('idle') }
   }
   const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
-  const runStrava = (id: number) => { const fd = new FormData(); fd.append('stravaActivityId', String(id)); analyse(fd) }
+  const runStrava = (a: StravaActivitySummary) => { const fd = new FormData(); fd.append('stravaActivityId', String(a.id)); fd.append('sportType', a.sportType); analyse(fd) }
   const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
   const reset = () => { setRes(null); setFile(null); setError('') }
 
@@ -101,7 +99,7 @@ export default function AnalysePage() {
             {acts === undefined && <p className="text-xs text-[#64748b]">Loading your Strava activities…</p>}
             {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/att/account" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
             {acts && acts.length > 0 && acts.map(a => (
-              <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a.id)}
+              <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a)}
                 className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">
                 <span className="block text-sm truncate">{a.name}</span>
                 <span className="text-[11px] text-[#64748b]">{a.sportType} · {fmtDate(a.startDate)} · {fmtDist(a.distanceMetres)}</span>
@@ -122,10 +120,6 @@ export default function AnalysePage() {
             {trials && trials.length === 0 && <p className="text-xs text-[#64748b]">No time-trial submissions yet. <a href="/att" className="text-[#0369a1]">Race a trial</a>, then analyse it here.</p>}
           </div>
         )}
-
-        <label className="flex items-center gap-2 text-xs text-[#94a3b8] mt-3">
-          <input type="checkbox" checked={dbl} onChange={e => setDbl(e.target.checked)} /> double stroke rate (SUP&nbsp;→&nbsp;kayak)
-        </label>
 
         {tab === 'file' && (
           <button disabled={!file || status === 'busy'} onClick={runFile}

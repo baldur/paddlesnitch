@@ -1,10 +1,10 @@
 'use client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AnalysisMapClient from '@/components/map/AnalysisMapClient'
 import type { AnalysisResult } from '@/lib/analysis'
-import { fmtDur, fmtDurWords, split500 } from '@/lib/analysis'
+import { fmtDur, fmtDurWords, split500, rescaleDoubling } from '@/lib/analysis'
 import { gateAt, type Racer } from '@/lib/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
 
@@ -29,13 +29,29 @@ export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: str
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
-export default function AnalysisView({ data, sessionId, initialNote = '', onNewFile }: {
+export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', onNewFile }: {
   data: ViewData
   sessionId?: string
   initialNote?: string
   onNewFile?: () => void
 }) {
   const router = useRouter()
+  // SUP→kayak stroke-rate doubling is decided automatically at analysis time,
+  // but the paddler can flip it here (e.g. an uploaded file we assumed was
+  // kayak but was actually rowing). Rescaling is a pure transform on the result
+  // — instant locally, then persisted to the saved paddle.
+  const [srDoubled, setSrDoubled] = useState(dataProp.strokeRateDoubled)
+  const [srSaving, setSrSaving] = useState(false)
+  const data = useMemo<ViewData>(() => ({ ...rescaleDoubling(dataProp, srDoubled), paddledAt: dataProp.paddledAt, source: dataProp.source, insightModel: dataProp.insightModel }), [dataProp, srDoubled])
+  const toggleDouble = async () => {
+    const next = !srDoubled
+    setSrDoubled(next)
+    if (!sessionId) return
+    setSrSaving(true)
+    try { await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doubleStrokeRate: next }) }) }
+    catch { /* the local view already reflects it; a failed persist is non-fatal */ }
+    finally { setSrSaving(false) }
+  }
   const [metric, setMetric] = useState<'speed' | 'sr'>('speed')
   const [cursor, setCursor] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -52,6 +68,8 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
   const [matches, setMatches] = useState<Racer[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sectionErr, setSectionErr] = useState('')
+  const [sectionInsight, setSectionInsight] = useState<{ text: string; model?: string } | null>(null)
+  const [insightLoading, setInsightLoading] = useState(false)
 
   useEffect(() => {
     if (!playing) return
@@ -79,12 +97,12 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
   }
   const onPick = (lat: number, lng: number) => {
     const idx = nearestIdx(lat, lng)
-    setMatches([]); setFindState('idle'); setSectionErr('')
+    setMatches([]); setFindState('idle'); setSectionErr(''); setSectionInsight(null)
     if (aIdx == null) setAIdx(idx)
     else if (bIdx == null) setBIdx(idx)
     else { setAIdx(idx); setBIdx(null) } // third click starts a fresh selection
   }
-  const resetSection = () => { setAIdx(null); setBIdx(null); setMatches([]); setFindState('idle'); setSectionErr(''); setSelected(new Set()) }
+  const resetSection = () => { setAIdx(null); setBIdx(null); setMatches([]); setFindState('idle'); setSectionErr(''); setSelected(new Set()); setSectionInsight(null) }
   const exitSection = () => { setSectionMode(false); resetSection() }
 
   const pts = data.points
@@ -113,6 +131,22 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
     if (!sessionId || aIdx == null || bIdx == null || selected.size === 0) return
     const qs = new URLSearchParams({ src: sessionId, a: String(aIdx), b: String(bIdx), ids: [...selected].join(',') })
     router.push(`/compare/section?${qs.toString()}`)
+  }
+
+  const analyseSection = async () => {
+    if (aIdx == null || bIdx == null || !sessionId) return
+    setInsightLoading(true); setSectionErr(''); setSectionInsight(null)
+    try {
+      const r = await fetch('/analyse/api/analyse/section-insight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: sessionId, aIdx, bIdx }) })
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}))
+        setSectionErr(e?.reason === 'section_too_short' ? 'Pick a longer stretch (≥200 m).' : 'Could not analyse that section.')
+        return
+      }
+      const d = await r.json()
+      setSectionInsight({ text: d.insight, model: d.insightModel })
+    } catch { setSectionErr('Could not analyse that section.') }
+    finally { setInsightLoading(false) }
   }
 
   const c = data.conditions
@@ -164,6 +198,15 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
                 {m === 'speed' ? 'SPEED' : 'RATE'}
               </button>
             ))}
+          </div>
+        )}
+        {!sectionMode && dataProp.avgSR != null && (
+          <div className={`${PANEL} p-1.5 flex items-center gap-1`} title="Kayak/SUP stroke rate is counted per full cycle, so we double it. Turn off for rowing.">
+            <span className="text-[10px] text-[#64748b] tracking-widest px-1">STROKE ×2 (SUP→KAYAK)</span>
+            <button onClick={toggleDouble} disabled={srSaving}
+              className={`px-2 py-1 text-[10px] tracking-widest rounded disabled:opacity-50 ${srDoubled ? 'bg-[#0369a1] text-white' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>
+              {srDoubled ? 'ON' : 'OFF'}
+            </button>
           </div>
         )}
         {showDiary && sessionId && (
@@ -239,11 +282,21 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
             {aIdx == null && 'Click the START of the stretch on your track.'}
             {aIdx != null && bIdx == null && 'Now click the FINISH of the stretch.'}
             {aIdx != null && bIdx != null && (
-              <span>Section: <b className="tabular text-[#e2e8f0]">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-[#22c55e]">start</span> to <span className="text-[#ef4444]">finish</span>. We&apos;ll find your other paddles that raced it the same way.</span>
+              <span>Section: <b className="tabular text-[#e2e8f0]">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-[#22c55e]">start</span> to <span className="text-[#ef4444]">finish</span>. Analyse this stretch, or race your other paddles over it.</span>
             )}
           </div>
           {sectionErr && <div className="text-[#f87171] mt-1">{sectionErr}</div>}
-          <div className="flex gap-2 mt-2">
+          {sectionInsight && (
+            <div className="mt-2 border-l-2 border-[#a78bfa] pl-2 text-[#e2e8f0] leading-relaxed">
+              {sectionInsight.text}
+              {sectionInsight.model && <div className="text-[10px] text-[#64748b] mt-1">narrated by {sectionInsight.model}</div>}
+            </div>
+          )}
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <button onClick={analyseSection} disabled={aIdx == null || bIdx == null || insightLoading}
+              className="px-3 py-1.5 text-[10px] tracking-widest bg-[#7c3aed] text-white rounded disabled:opacity-40">
+              {insightLoading ? 'ANALYSING…' : sectionInsight ? 'RE-ANALYSE SECTION' : 'ANALYSE THIS SECTION'}
+            </button>
             <button onClick={findSimilar} disabled={aIdx == null || bIdx == null || findState === 'loading'}
               className="px-3 py-1.5 text-[10px] tracking-widest bg-[#0369a1] text-white rounded disabled:opacity-40">
               {findState === 'loading' ? 'SEARCHING…' : 'FIND MY OTHER PADDLES →'}

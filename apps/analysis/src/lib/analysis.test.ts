@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyseTrack, fmtDurWords } from './analysis'
+import { analyseTrack, fmtDurWords, rescaleDoubling } from './analysis'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 // Build a synthetic northbound track: a rest, a cruise, a faster surge, a rest.
@@ -41,6 +41,32 @@ describe('analyseTrack', () => {
 
   it('always produces a non-empty insight string', () => {
     expect(analyseTrack(track()).insight.length).toBeGreaterThan(20)
+  })
+})
+
+describe('rescaleDoubling', () => {
+  it('flips doubling as an exact rescale of SR-derived fields, leaving speed/segments intact', () => {
+    const base = analyseTrack(track())                  // not doubled
+    const on = rescaleDoubling(base, true)
+    expect(on.strokeRateDoubled).toBe(true)
+    expect(on.avgSR!).toBeCloseTo(base.avgSR! * 2, 6)
+    expect(on.avgDps!).toBeCloseTo(base.avgDps! / 2, 6)
+    // speed + segmentation untouched
+    expect(on.cruiseSpeed).toBe(base.cruiseSpeed)
+    expect(on.surges.length).toBe(base.surges.length)
+    expect(on.surges[0].avgSpeed).toBe(base.surges[0].avgSpeed)
+    expect(on.surges[0].srCv).toBeCloseTo(base.surges[0].srCv!, 6) // CV is scale-invariant
+    // matches a fresh doubled analysis
+    const fresh = analyseTrack(track(), { doubleStrokeRate: true })
+    expect(on.avgSR!).toBeCloseTo(fresh.avgSR!, 6)
+  })
+
+  it('round-trips back to the original', () => {
+    const base = analyseTrack(track())
+    const back = rescaleDoubling(rescaleDoubling(base, true), false)
+    expect(back.strokeRateDoubled).toBe(false)
+    expect(back.avgSR!).toBeCloseTo(base.avgSR!, 6)
+    expect(back.avgDps!).toBeCloseTo(base.avgDps!, 6)
   })
 })
 

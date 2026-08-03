@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gateAt, pathSimilarity, findSimilar, buildRace, GATE_M } from './similar'
+import { gateAt, pathSimilarity, findSimilar, buildRace, sectionStats, GATE_M } from './similar'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { AnalysisPoint } from './analysis'
 import type { AnalysisSession } from './analysis-store'
@@ -92,6 +92,35 @@ describe('findSimilar', () => {
     expect(r.ok).toBe(false)
     if (r.ok) return
     expect(r.reason).toBe('section_too_short')
+  })
+})
+
+describe('sectionStats', () => {
+  const src = session('src', line(61, 5), '2026-07-10T08:00:00Z')
+
+  it('computes distance/elapsed/pace over the literal selected slice', () => {
+    const s = sectionStats(src, 10, 50)!
+    expect(s).not.toBeNull()
+    expect(s.sectionM).toBeGreaterThan(700)          // ~40 × 20.8 m
+    expect(s.elapsedS).toBeCloseTo((50 - 10) * 5, 0) // 40 points × 5 s
+    expect(s.cruiseSpeed).toBeCloseTo(s.sectionM / s.elapsedS, 6)
+    expect(s.splits.length).toBeGreaterThanOrEqual(1) // ≥1 full 500 m
+  })
+
+  it('respects click order (works when start > finish) and rejects a degenerate pick', () => {
+    const forward = sectionStats(src, 10, 50)!
+    const swapped = sectionStats(src, 50, 10)!
+    expect(swapped.sectionM).toBeCloseTo(forward.sectionM, 6)
+    expect(sectionStats(src, 10, 10)).toBeNull()
+  })
+
+  it('carries avgSR/avgDps and conditions when present', () => {
+    const pts = line(61, 5).map(p => ({ ...p, sr: 60, dps: 4 / (60 / 60) }))
+    const withSR: AnalysisSession = { ...src, result: { ...src.result, points: pts, conditions: { windKmh: 12, windDir: 90, flowM3s: 2.5 } } }
+    const s = sectionStats(withSR, 10, 50)!
+    expect(Math.round(s.avgSR!)).toBe(60)
+    expect(s.avgDps!).toBeGreaterThan(0)
+    expect(s.conditions?.flowM3s).toBe(2.5)
   })
 })
 

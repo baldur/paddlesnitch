@@ -3,6 +3,7 @@
 // to the user. Small scale → list = read each session.json, like att entries.
 import { getJson, putJson, listKeys, deleteObject } from '@paddlesnitch/core/storage'
 import type { AnalysisResult } from './analysis'
+import { rescaleDoubling } from './analysis'
 
 export type AnalysisSource = {
   type: 'file' | 'strava' | 'trial'
@@ -61,6 +62,17 @@ export async function updateSessionNote(userId: string, id: string, note: string
   const s = await getSession(userId, id)
   if (!s) return null
   s.note = note
+  await saveSession(s)
+  return s
+}
+
+// Flip the SUP→kayak stroke-rate doubling on a saved paddle and re-persist. The
+// result's SR-derived fields are rescaled in place (no re-analysis needed).
+export async function updateSessionDoubling(userId: string, id: string, doubled: boolean): Promise<AnalysisSession | null> {
+  const s = await getSession(userId, id)
+  if (!s) return null
+  s.result = rescaleDoubling(s.result, doubled)
+  s.doubleStrokeRate = doubled
   await saveSession(s)
   return s
 }

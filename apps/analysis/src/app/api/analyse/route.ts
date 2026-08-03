@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Sign in to analyse and save paddles.' }, { status: 401 })
 
   const form = await req.formData()
-  const doubleStrokeRate = form.get('doubleStrokeRate') === 'true'
 
   // ---- resolve the track from a file or a Strava activity ----
   let track: TrackPoint[]
@@ -56,7 +55,8 @@ export async function POST(req: NextRequest) {
     const streams = await getActivityStreams(tokens.accessToken, stravaId)
     if (!streams) return NextResponse.json({ error: 'Could not read that Strava activity (no GPS stream).' }, { status: 422 })
     track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
-    source = { type: 'strava', stravaActivityId: stravaId }
+    const st = form.get('sportType')
+    source = { type: 'strava', stravaActivityId: stravaId, sport: typeof st === 'string' && st ? st : undefined }
   } else {
     return NextResponse.json({ error: 'Provide a file or a Strava activity.' }, { status: 400 })
   }
@@ -75,7 +75,10 @@ export async function POST(req: NextRequest) {
     flowM3s: flow?.valueM3s, flowStation: flow?.stationLabel,
   }
 
-  const result = analyseTrack(track, { doubleStrokeRate, conditions })
+  // Default to NOT doubling stroke rate — the paddler can turn on the SUP→kayak
+  // ×2 in the view if their device under-counts. (source.sport is kept as
+  // metadata but no longer forces doubling.)
+  const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
 
   // History-aware narrative: feed the user's recent saved paddles + their notes
   // + prior insights into the prompt so it gets smarter over time (feature 5).
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest) {
   // auto-save to the user's library
   const session: AnalysisSession = {
     id: nanoid(), userId: user.id, createdAt: new Date().toISOString(), paddledAt: when,
-    source, doubleStrokeRate, note: '', insight: result.insight, result,
+    source, doubleStrokeRate: false, note: '', insight: result.insight, result,
   }
   await saveSession(session)
 
