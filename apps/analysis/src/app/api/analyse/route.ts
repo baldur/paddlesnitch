@@ -9,7 +9,9 @@ import { getFlowAt } from '@paddlesnitch/timing/river-flow'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { analyseTrack } from '@/lib/analysis'
 import { generateInsight } from '@/lib/llm'
-import { saveSession, listSessionSummaries, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
+import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant, type PaddleFacts } from '@/lib/history-stats'
+import { refreshAthleteProfile } from '@/lib/athlete-profile'
+import { saveSession, listSessionSummaries, getAthleteProfile, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
@@ -80,20 +82,43 @@ export async function POST(req: NextRequest) {
   // metadata but no longer forces doubling.)
   const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
 
-  // History-aware narrative: feed the user's recent saved paddles + their notes
-  // + prior insights into the prompt so it gets smarter over time (feature 5).
-  const history = await listSessionSummaries(user.id).catch(() => [])
-  // The model + backend are code/env-driven only (LLM_MODEL, Bedrock in prod);
-  // there is no per-request or UI model selection.
-  const narrated = await generateInsight(result, { history })
+  // Memory-aware narrative (docs/features/personable-insights.md). The paddler's
+  // PRIOR paddles (this one isn't saved yet) drive three context layers, all fed
+  // to the model as compact text — grounded facts only, never raw points:
+  //   L1 aggregates (PBs / vs-average / trends / volume), L3 the most relevant
+  //   past paddles, L2 the persistent athlete profile. Best-effort: history read
+  //   failures degrade to a first-session (no-context) insight.
+  const prior = await listSessionSummaries(user.id).catch(() => [])
+  const now = new Date()
+  const currentFacts: PaddleFacts = {
+    paddledAt: when, cruiseSpeed: result.cruiseSpeed, distanceKm: result.distanceKm,
+    avgSR: result.avgSR, avgDps: result.avgDps,
+    startLat: result.points[0]?.lat, startLng: result.points[0]?.lng,
+  }
+  const profile = await getAthleteProfile(user.id).catch(() => null)
+  const narrated = await generateInsight(result, {
+    profile: profile?.text,
+    historyFacts: renderHistoryFacts(computeHistoryStats(currentFacts, prior, now)),
+    relevant: renderRelevant(selectRelevantPaddles(currentFacts, prior)),
+  })
   if (narrated) { result.insight = narrated; result.insightModel = process.env.LLM_MODEL || '' }
 
   // auto-save to the user's library
   const session: AnalysisSession = {
-    id: nanoid(), userId: user.id, createdAt: new Date().toISOString(), paddledAt: when,
+    id: nanoid(), userId: user.id, createdAt: now.toISOString(), paddledAt: when,
     source, doubleStrokeRate: false, note: '', insight: result.insight, result,
   }
   await saveSession(session)
+
+  // Fold this paddle into the persistent athlete profile for NEXT time. Done
+  // after the save (so the summary list includes it) and best-effort — a failure
+  // never affects the response. Kept in-request (awaited) for reliability on
+  // Lambda; the LLM call is small and the analyse flow is already multi-second.
+  try {
+    const all = await listSessionSummaries(user.id)
+    const latest = all.find(s => s.id === session.id)
+    if (latest) await refreshAthleteProfile(user.id, latest, all, new Date().toISOString())
+  } catch (err) { console.error('[analyse] profile refresh failed', err) }
 
   return NextResponse.json({ ...result, id: session.id, note: '', source, paddledAt: when })
 }
