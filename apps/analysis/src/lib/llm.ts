@@ -134,7 +134,10 @@ export async function runInsighter(system: string, user: string): Promise<{ text
 // history-aware context (profile + aggregates + relevant paddles) is pre-rendered
 // by the caller (see the analyse route) and passed in.
 export async function generateInsight(result: AnalysisResult, ctx: InsightContext = {}): Promise<string | null> {
-  const res = await runInsighter(SYSTEM, buildPrompt(result, ctx))
+  let prompt: string
+  try { prompt = buildPrompt(result, ctx) }
+  catch (err) { console.error('[llm] prompt build failed', err); return null }
+  const res = await runInsighter(SYSTEM, prompt)
   return res?.text ?? null
 }
 
