@@ -64,6 +64,24 @@ function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string {
   return out
 }
 
+// A slow or hanging LLM backend (Bedrock throttling / cold start) must never
+// stall the whole analyse request long enough for the platform to time it out —
+// that surfaces to the paddler as "analysis failed" even though the expensive
+// computation already succeeded, and works on a later retry once the model is
+// warm (issue #171). Bound every LLM call: on timeout we resolve to null and the
+// caller keeps the deterministic templated insight. Overridable via LLM_TIMEOUT_MS.
+const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 12000
+
+export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise<T | null>(resolve => {
+    const t = setTimeout(() => resolve(null), ms)
+    p.then(
+      v => { clearTimeout(t); resolve(v) },
+      () => { clearTimeout(t); resolve(null) },
+    )
+  })
+}
+
 interface Insighter { generate(system: string, user: string, model: string): Promise<string> }
 
 class OllamaInsighter implements Insighter {
@@ -119,7 +137,7 @@ export async function runInsighter(system: string, user: string): Promise<{ text
   if (!insighter) return null
   const model = process.env.LLM_MODEL || 'llama3.2:3b'
   try {
-    const text = await insighter.generate(system, user, model)
+    const text = await withTimeout(insighter.generate(system, user, model), LLM_TIMEOUT_MS)
     return text ? { text, model } : null
   } catch (err) {
     console.error('[llm] generation failed', err)
@@ -203,7 +221,7 @@ export async function generateRaceInsight(race: SectionRace): Promise<{ text: st
   if (!insighter) return null
   const model = process.env.LLM_MODEL || 'llama3.2:3b'
   try {
-    const text = await insighter.generate(RACE_SYSTEM, buildRacePrompt(race), model)
+    const text = await withTimeout(insighter.generate(RACE_SYSTEM, buildRacePrompt(race), model), LLM_TIMEOUT_MS)
     return text ? { text, model } : null
   } catch (err) {
     console.error('[llm] race insight generation failed', err)
@@ -261,7 +279,7 @@ export async function generateSectionInsight(s: SectionStats): Promise<{ text: s
   if (!insighter) return null
   const model = process.env.LLM_MODEL || 'llama3.2:3b'
   try {
-    const text = await insighter.generate(SECTION_SYSTEM, buildSectionPrompt(s), model)
+    const text = await withTimeout(insighter.generate(SECTION_SYSTEM, buildSectionPrompt(s), model), LLM_TIMEOUT_MS)
     return text ? { text, model } : null
   } catch (err) {
     console.error('[llm] section insight generation failed', err)
