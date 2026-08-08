@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyseTrack, fmtDurWords, rescaleDoubling } from './analysis'
+import { analyseTrack, fmtDurAdj, fmtDurWords, rescaleDoubling } from './analysis'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 // Build a synthetic northbound track: a rest, a cruise, a faster surge, a rest.
@@ -98,5 +98,22 @@ describe('fmtDurWords', () => {
     expect(fmtDurWords(3720)).toBe('1 hour 2 minutes')
     expect(fmtDurWords(3661)).toBe('1 hour 1 minute 1 second')
     expect(fmtDurWords(3605)).toBe('1 hour 5 seconds')
+  })
+})
+
+describe('fmtDurAdj', () => {
+  it('keeps short sessions in minutes', () => {
+    expect(fmtDurAdj(2700)).toBe('45-min')   // 45 min
+    expect(fmtDurAdj(60)).toBe('1-min')
+  })
+  it('frames 80 minutes as hours + minutes, not "80-min" (issue #170)', () => {
+    expect(fmtDurAdj(4800)).toBe('1 hr 20 min')
+  })
+  it('drops the minutes on a whole hour', () => {
+    expect(fmtDurAdj(3600)).toBe('1-hr')
+    expect(fmtDurAdj(7200)).toBe('2-hr')
+  })
+  it('rounds to the nearest minute', () => {
+    expect(fmtDurAdj(5401)).toBe('1 hr 30 min')  // 90.0 min
   })
 })

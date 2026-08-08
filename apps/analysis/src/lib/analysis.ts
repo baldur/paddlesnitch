@@ -51,6 +51,17 @@ export function fmtDurWords(s: number): string {
   return parts.join(' ')
 }
 export const split500 = (spd: number) => (spd > 0.2 ? fmtDur(500 / spd) : '—')
+// An adjectival duration for "a ___ paddle": short sessions stay in minutes
+// ("45-min"), but past an hour we frame the hours out ("1 hr 20 min") — saying
+// "80-min" reads strangely. See issue #170.
+export function fmtDurAdj(s: number): string {
+  const totalMin = Math.round(s / 60)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  if (h === 0) return `${m}-min`
+  if (m === 0) return `${h}-hr`
+  return `${h} hr ${m} min`
+}
 
 // Toggle the SUP→kayak doubling on an already-analysed result WITHOUT re-running
 // the pipeline. Doubling only scales stroke-rate-derived fields (sr, dps, and
@@ -148,15 +159,15 @@ export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boo
 // Deterministic templated insight (the LLM replaces this later, narrating the
 // same structured facts). Kept in engine so the page is useful before Bedrock.
 function buildInsight(a: { durationS: number; distanceKm: number; surges: Segment[]; stops: Segment[]; sets: SessionSet[]; allSR: number[]; cruise: number; conditions?: Conditions }): string {
-  const mins = Math.round(a.durationS / 60)
+  const dur = fmtDurAdj(a.durationS)
   const nS = a.surges.length, nR = a.stops.length
   const srTxt = a.allSR.length ? ` at ~${Math.round(mean(a.allSR))} spm` : ''
   const cruiseTxt = `~${split500(a.cruise)}/500`
   const flow = a.conditions?.flowM3s != null ? ` Flow was ${a.conditions.flowM3s.toFixed(1)} m³/s.` : ''
-  if (nS === 0) return `A steady ${mins}-min paddle, cruising ${cruiseTxt}${srTxt}${nR ? ` with ${nR} short ${nR === 1 ? 'break' : 'breaks'}` : ' — no stops'}.${flow}`
+  if (nS === 0) return `A steady ${dur} paddle, cruising ${cruiseTxt}${srTxt}${nR ? ` with ${nR} short ${nR === 1 ? 'break' : 'breaks'}` : ' — no stops'}.${flow}`
   const set = a.sets.find(s => s.count >= 2)
   const consist = a.surges.map(s => s.srCv).filter((x): x is number => x != null)
   const consistTxt = consist.length ? (Math.max(...consist) < 5 ? ' Rate held tight throughout.' : Math.min(...consist) < 5 ? ' Some efforts were rock-steady, others drifted.' : ' Stroke rate wandered within the efforts.') : ''
   const setTxt = set ? ` Looks like a set of ${set.count} × ~${fmtDur(set.avgDurS)} @ ${split500(set.avgSpeed)}/500.` : ''
-  return `A ${mins}-min paddle, mostly cruising ${cruiseTxt}${srTxt} — but not flat: ${nS} ${nS === 1 ? 'dig' : 'digs'}${nR ? ` and ${nR} ${nR === 1 ? 'breather' : 'breathers'}` : ''}.${setTxt}${consistTxt}${flow}`
+  return `A ${dur} paddle, mostly cruising ${cruiseTxt}${srTxt} — but not flat: ${nS} ${nS === 1 ? 'dig' : 'digs'}${nR ? ` and ${nR} ${nR === 1 ? 'breather' : 'breathers'}` : ''}.${setTxt}${consistTxt}${flow}`
 }
