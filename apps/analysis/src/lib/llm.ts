@@ -7,7 +7,7 @@
 // Parity tip: llama3.2 / llama3.3 / mistral exist on BOTH Ollama and Bedrock, so
 // you can tune the SAME model locally and deploy it unchanged.
 import type { AnalysisResult, Segment } from './analysis'
-import { fmtDur, split500 } from './analysis'
+import { fmtDur, fmtDurWords, split500 } from './analysis'
 import type { SectionRace, Racer, SectionStats } from './similar'
 
 const SYSTEM = [
@@ -18,6 +18,7 @@ const SYSTEM = [
   'personal and progressive — reference their trajectory, their goals, and how today compares to their own record —',
   'but use ONLY the facts provided; never invent numbers.',
   'Vary how you open; avoid generic praise and filler. Sound like a real person who has watched them paddle before.',
+  'Phrase long durations the natural way — "1 hour 20 minutes", never "80 minutes".',
   'No preamble, no lists, no markdown headings — just the short paragraph.',
 ].join(' ')
 
@@ -30,9 +31,9 @@ export type InsightContext = {
 }
 
 // Compact, grounded fact sheet — the model narrates THIS, nothing else.
-function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string {
+export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string {
   const L: string[] = []
-  L.push(`Session: ${fmtDur(r.durationS)} min, ${r.distanceKm.toFixed(2)} km.`)
+  L.push(`Session: ${fmtDurWords(r.durationS)}, ${r.distanceKm.toFixed(2)} km.`)
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
   // the SUP×2 normalisation — a small model misreads it as "the athlete doubled
   // their rate". Present the final numbers only.
