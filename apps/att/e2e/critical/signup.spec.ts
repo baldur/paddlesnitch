@@ -25,7 +25,9 @@ test('a new user can sign up and lands on /att with their session', async ({ pag
   // holds SIGN OUT; signed out it's a plain "SIGN IN" link with no such
   // trigger. Its presence is the cheapest unambiguous signal that we're
   // authenticated; opening it and finding SIGN OUT confirms the menu.
-  const accountMenu = page.locator('button[aria-haspopup="menu"]')
+  // Scope to title, not just aria-haspopup — the Next.js dev-tools button
+  // (present under `pnpm dev`) also carries aria-haspopup="menu".
+  const accountMenu = page.locator('button[title="Account menu"]')
   await expect(accountMenu).toBeVisible()
   await accountMenu.click()
   await expect(page.getByRole('menuitem', { name: 'SIGN OUT' })).toBeVisible()
