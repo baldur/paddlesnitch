@@ -6,11 +6,11 @@ import { POST as track } from '@/app/att/api/track/route'
 
 afterEach(() => vi.restoreAllMocks())
 
-function req(body: unknown) {
+function req(body: unknown, origin: string | null = 'https://paddlesnitch.com') {
   return new NextRequest('http://x/att/api/track', {
     method: 'POST',
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(origin ? { origin } : {}) },
   })
 }
 
@@ -33,9 +33,25 @@ describe('POST /att/api/track', () => {
   })
 
   it('handles a malformed body gracefully', async () => {
-    const bad = new NextRequest('http://x/att/api/track', { method: 'POST', body: 'not json' })
+    const bad = new NextRequest('http://x/att/api/track', {
+      method: 'POST', body: 'not json', headers: { origin: 'https://paddlesnitch.com' },
+    })
     const res = await track(bad)
     expect(res.status).toBe(204)
+  })
+
+  it('drops a ping from a foreign origin without emitting (204, no signal)', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const res = await track(req({ event: 'pageview' }, 'https://evil.example.com'))
+    expect(res.status).toBe(204)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('drops a ping with no Origin/Referer (a bare script) without emitting', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const res = await track(req({ event: 'pageview' }, null))
+    expect(res.status).toBe(204)
+    expect(spy).not.toHaveBeenCalled()
   })
 
   it('emits one EMF line per allowed event in a batch and drops unknown ones', async () => {

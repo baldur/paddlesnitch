@@ -101,6 +101,12 @@ where cheap. No coordinates are stored — only the signal + element descriptor.
   `/att/api/track`) or signed-out beacons 307 to auth. Caps: ≤N events/batch,
   ≤M props/event, truncated values; always 204. Analysis app POSTs here too
   (shared CloudFront origin).
+- **Origin allowlist** — reuse `isAllowedIngestOrigin` (`src/lib/ingest-origin.ts`,
+  shared with `/att/api/track`): drop (still 204) any ping whose Origin/Referer
+  isn't one of our own origins. Cheap first line against random/bot pings; the
+  header is spoofable, so it is NOT integrity — a determined actor can set it.
+  Real integrity would need rate-limiting (CloudFront/WAF rate rule) and/or a
+  signed short-lived page nonce; add those only if abuse actually appears.
 - Storage via the existing `@paddlesnitch/core/storage` abstraction:
   `behaviour/{date}/{sid}/{batchId}.json`. Append-only; a write error degrades
   silently (never 500 a beacon).
