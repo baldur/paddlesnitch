@@ -61,6 +61,10 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const [note, setNote] = useState(initialNote)
   const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showDiary, setShowDiary] = useState(false)
+  // Panels float over the map; on a phone they obscure it. Let the paddler
+  // minimise the two text-heavy ones (summary + segments) to reveal the map. (#187)
+  const [hudOpen, setHudOpen] = useState(true)
+  const [effortsOpen, setEffortsOpen] = useState(true)
   // Boat metadata — the type of outing + which seat the paddler was in.
   const [boatClass, setBoatClass] = useState<BoatClass | ''>(initialBoatClass ?? '')
   const [seat, setSeat] = useState<Seat | ''>(initialSeat ?? '')
@@ -195,21 +199,27 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
 
       {/* HUD — top-left */}
       <div className={`${PANEL} absolute top-3 left-3 z-[1000] p-3 max-w-[340px] text-xs`}>
-        {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
-        <div className="flex items-baseline gap-2 flex-wrap">
+        <button onClick={() => setHudOpen(o => !o)} aria-label={hudOpen ? 'Minimise summary' : 'Expand summary'}
+          className="absolute top-1.5 right-1.5 z-10 w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{hudOpen ? '–' : '+'}</button>
+        {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1 pr-5">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
+        <div className="flex items-baseline gap-2 flex-wrap pr-5">
           <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
           <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>
           {data.avgSR != null && <span className="tabular">· ~{Math.round(data.avgSR)} spm{data.strokeRateDoubled && <span className="text-[#64748b]"> ×2</span>}</span>}
           {data.avgDps != null && <span className="text-[#94a3b8] tabular">· {data.avgDps.toFixed(1)} m/str</span>}
         </div>
-        {(c?.windKmh != null || c?.flowM3s != null) && (
-          <div className="flex items-center gap-3 mt-2 text-[#cbd5e1] tabular">
-            {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
-            {c?.flowM3s != null && <span className="text-[#22d3ee]">~~ {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` · ${c.flowStation}` : ''}</span>}
-          </div>
+        {hudOpen && (
+          <>
+            {(c?.windKmh != null || c?.flowM3s != null) && (
+              <div className="flex items-center gap-3 mt-2 text-[#cbd5e1] tabular">
+                {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
+                {c?.flowM3s != null && <span className="text-[#22d3ee]">~~ {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` · ${c.flowStation}` : ''}</span>}
+              </div>
+            )}
+            <p className="mt-2 leading-relaxed text-[#e2e8f0] border-l-2 border-[#0369a1] pl-2">{data.insight}</p>
+            {data.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {data.insightModel}</div>}
+          </>
         )}
-        <p className="mt-2 leading-relaxed text-[#e2e8f0] border-l-2 border-[#0369a1] pl-2">{data.insight}</p>
-        {data.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {data.insightModel}</div>}
       </div>
 
       {/* controls — top-right */}
@@ -303,9 +313,17 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
       </div>
 
-      {/* efforts + sets — bottom-left (hidden in section mode to reduce clutter) */}
+      {/* efforts + sets — bottom-left (hidden in section mode to reduce clutter).
+          Lifted above the replay scrubber on phones (bottom-20) so its lower rows
+          aren't hidden behind it; back to bottom-3 once there's room (sm+). (#187) */}
       {!sectionMode && (data.surges.length > 0 || data.sets.some(s => s.count > 1)) && (
-        <div className={`${PANEL} absolute bottom-3 left-3 z-[1000] p-3 text-xs max-w-[300px] max-h-[42vh] overflow-auto`}>
+        <div className={`${PANEL} absolute bottom-20 sm:bottom-3 left-3 z-[1000] p-3 text-xs max-w-[300px] max-h-[42vh] overflow-auto`}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-[#64748b] tracking-widest">SEGMENTS</span>
+            <button onClick={() => setEffortsOpen(o => !o)} aria-label={effortsOpen ? 'Minimise segments' : 'Expand segments'}
+              className="w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{effortsOpen ? '–' : '+'}</button>
+          </div>
+          {effortsOpen && (<>
           {data.sets.some(s => s.count > 1) && (
             <div className="mb-2">
               <div className="text-[10px] text-[#64748b] tracking-widest mb-1">GROUPED</div>
@@ -325,6 +343,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             ))}
           </div>
           {data.stops.length > 0 && <div className="mt-2 text-[10px] text-[#64748b]">rests: {data.stops.map(s => `${fmtDur(s.fromT)} (${Math.round(s.durS)}s)`).join(' · ')}</div>}
+          </>)}
         </div>
       )}
 
