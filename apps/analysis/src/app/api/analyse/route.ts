@@ -11,7 +11,7 @@ import { analyseTrack } from '@/lib/analysis'
 import { generateInsight } from '@/lib/llm'
 import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant, type PaddleFacts } from '@/lib/history-stats'
 import { refreshAthleteProfile } from '@/lib/athlete-profile'
-import { saveSession, listSessionSummaries, getAthleteProfile, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
+import { saveSession, listSessionSummaries, getSession, getAthleteProfile, paddleFingerprint, findDuplicateSession, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
@@ -81,6 +81,21 @@ export async function POST(req: NextRequest) {
   // ×2 in the view if their device under-counts. (source.sport is kept as
   // metadata but no longer forces doubling.)
   const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
+
+  // Duplicate detection (#178): if this exact paddle is already in the user's
+  // library, don't create a second copy or spend an LLM call — return the
+  // existing one so the client can take them straight to it. Best-effort: a
+  // storage read failure here degrades to a normal (fresh) save, never a 500.
+  try {
+    const dup = await findDuplicateSession(user.id, paddleFingerprint(when, result.durationS, result.distanceKm))
+    if (dup) {
+      const existing = await getSession(user.id, dup.id)
+      if (existing) return NextResponse.json({
+        ...existing.result, id: existing.id, note: existing.note,
+        source: existing.source, paddledAt: existing.paddledAt, duplicate: true,
+      })
+    }
+  } catch (err) { console.error('[analyse] duplicate check failed', err) }
 
   const now = new Date()
 

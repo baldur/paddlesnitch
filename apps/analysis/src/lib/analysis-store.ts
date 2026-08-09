@@ -56,6 +56,24 @@ export type SessionSummary = {
 
 const key = (userId: string, id: string) => `analysis/${userId}/${id}/session.json`
 
+// A stable identity for a paddle so re-submitting the same trace is recognised as
+// a duplicate (#178). Derived only from fields every session already stores
+// (paddledAt + duration + distance), so it also fingerprints PRE-EXISTING
+// sessions with no migration. The same file re-uploaded — or the same Strava
+// activity re-imported — analyses to the same start time, duration, and distance,
+// so it collapses to the same fingerprint regardless of source. Distance is
+// rounded to whole metres and duration to whole seconds to absorb float noise.
+export function paddleFingerprint(paddledAt: string, durationS: number, distanceKm: number): string {
+  return `${paddledAt}|${Math.round(durationS)}|${Math.round(distanceKm * 1000)}`
+}
+
+// The user's existing paddle matching this fingerprint, if any. Newest first, so
+// a re-submission points at the most recent copy.
+export async function findDuplicateSession(userId: string, fingerprint: string): Promise<SessionSummary | null> {
+  const existing = await listSessionSummaries(userId)
+  return existing.find(s => paddleFingerprint(s.paddledAt, s.durationS, s.distanceKm) === fingerprint) ?? null
+}
+
 export async function saveSession(s: AnalysisSession): Promise<void> {
   await putJson(key(s.userId, s.id), s)
 }
