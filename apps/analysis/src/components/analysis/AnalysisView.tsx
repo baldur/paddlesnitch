@@ -197,31 +197,70 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           markB={bIdx != null ? { lat: pts[bIdx].lat, lng: pts[bIdx].lng } : null} />
       </div>
 
-      {/* HUD — top-left */}
-      <div className={`${PANEL} absolute top-3 left-3 z-[1000] p-3 max-w-[340px] text-xs`}>
-        <button onClick={() => setHudOpen(o => !o)} aria-label={hudOpen ? 'Minimise summary' : 'Expand summary'}
-          className="absolute top-1.5 right-1.5 z-10 w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{hudOpen ? '–' : '+'}</button>
-        {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1 pr-5">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
-        <div className="flex items-baseline gap-2 flex-wrap pr-5">
-          <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
-          <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>
-          {data.avgSR != null && <span className="tabular">· ~{Math.round(data.avgSR)} spm{data.strokeRateDoubled && <span className="text-[#64748b]"> ×2</span>}</span>}
-          {data.avgDps != null && <span className="text-[#94a3b8] tabular">· {data.avgDps.toFixed(1)} m/str</span>}
+      {/* Left column — the summary HUD (with the LLM narrative) and the SEGMENTS
+          panel stacked in ONE bounded-height flex column so they SHARE the
+          vertical space and can never overlap, at any viewport (not just mobile).
+          The HUD takes its own (capped, scrollable) height; SEGMENTS takes the
+          remainder and scrolls. The column is pointer-events-none so the map
+          stays draggable in the gaps; each panel re-enables its own. (#187) */}
+      <div className="absolute top-3 left-3 bottom-20 sm:bottom-3 z-[1000] flex flex-col gap-2 items-start max-w-[calc(100vw-1.5rem)] pointer-events-none">
+        {/* summary HUD */}
+        <div className={`${PANEL} relative max-w-[340px] p-3 text-xs shrink-0 pointer-events-auto`}>
+          <button onClick={() => setHudOpen(o => !o)} aria-label={hudOpen ? 'Minimise summary' : 'Expand summary'}
+            className="absolute top-1.5 right-1.5 z-10 w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{hudOpen ? '–' : '+'}</button>
+          {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1 pr-5">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
+          <div className="flex items-baseline gap-2 flex-wrap pr-5">
+            <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
+            <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>
+            {data.avgSR != null && <span className="tabular">· ~{Math.round(data.avgSR)} spm{data.strokeRateDoubled && <span className="text-[#64748b]"> ×2</span>}</span>}
+            {data.avgDps != null && <span className="text-[#94a3b8] tabular">· {data.avgDps.toFixed(1)} m/str</span>}
+          </div>
+          {hudOpen && (
+            // Bound the narrative so the HUD leaves room for SEGMENTS in the
+            // shared column (and scroll a very long one in place).
+            <div className="max-h-[38vh] overflow-y-auto overscroll-contain">
+              {(c?.windKmh != null || c?.flowM3s != null) && (
+                <div className="flex items-center gap-3 mt-2 text-[#cbd5e1] tabular">
+                  {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
+                  {c?.flowM3s != null && <span className="text-[#22d3ee]">~~ {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` · ${c.flowStation}` : ''}</span>}
+                </div>
+              )}
+              <p className="mt-2 leading-relaxed text-[#e2e8f0] border-l-2 border-[#0369a1] pl-2">{data.insight}</p>
+              {data.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {data.insightModel}</div>}
+            </div>
+          )}
         </div>
-        {hudOpen && (
-          // Cap the expandable narrative height + scroll it so a long LLM
-          // narrative can't grow the HUD down into the SEGMENTS panel below
-          // (worst on short/mobile viewports). The summary line + minimise
-          // button above stay fixed. (#187 follow-up)
-          <div className="max-h-[30vh] sm:max-h-[46vh] overflow-y-auto overscroll-contain">
-            {(c?.windKmh != null || c?.flowM3s != null) && (
-              <div className="flex items-center gap-3 mt-2 text-[#cbd5e1] tabular">
-                {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
-                {c?.flowM3s != null && <span className="text-[#22d3ee]">~~ {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` · ${c.flowStation}` : ''}</span>}
+
+        {/* SEGMENTS — takes the remaining column height and scrolls, so it can
+            never overlap the HUD above it. */}
+        {!sectionMode && (data.surges.length > 0 || data.sets.some(s => s.count > 1)) && (
+          <div className={`${PANEL} max-w-[300px] min-h-0 p-3 text-xs overflow-auto pointer-events-auto`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-[#64748b] tracking-widest">SEGMENTS</span>
+              <button onClick={() => setEffortsOpen(o => !o)} aria-label={effortsOpen ? 'Minimise segments' : 'Expand segments'}
+                className="w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{effortsOpen ? '–' : '+'}</button>
+            </div>
+            {effortsOpen && (<>
+            {data.sets.some(s => s.count > 1) && (
+              <div className="mb-2">
+                <div className="text-[10px] text-[#64748b] tracking-widest mb-1">GROUPED</div>
+                {data.sets.map((s, i) => (
+                  <div key={i} className="tabular">{s.count} × ~{fmtDur(s.avgDurS)} @ {split500(s.avgSpeed)}{s.avgSR != null ? `, ~${Math.round(s.avgSR)} spm` : ''}{s.count > 1 && <span className="text-[#0369a1]"> ← set</span>}</div>
+                ))}
               </div>
             )}
-            <p className="mt-2 leading-relaxed text-[#e2e8f0] border-l-2 border-[#0369a1] pl-2">{data.insight}</p>
-            {data.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {data.insightModel}</div>}
+            {data.surges.length > 0 && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">EFFORTS ({data.surges.length})</div>}
+            <div className="flex flex-col gap-0.5 tabular">
+              {data.surges.map((s, i) => (
+                <div key={i}>
+                  <span className="text-[#64748b]">#{i + 1} @{fmtDur(s.fromT)}</span> {fmtDur(s.durS)} · {split500(s.avgSpeed)}
+                  {s.avgSR != null && <> · {Math.round(s.avgSR)}spm{s.srCv != null && ` (${s.srCv.toFixed(0)}%)`}</>}
+                  {s.trend && <span className="text-[#a78bfa]"> → {s.trend}</span>}
+                </div>
+              ))}
+            </div>
+            {data.stops.length > 0 && <div className="mt-2 text-[10px] text-[#64748b]">rests: {data.stops.map(s => `${fmtDur(s.fromT)} (${Math.round(s.durS)}s)`).join(' · ')}</div>}
+            </>)}
           </div>
         )}
       </div>
@@ -317,39 +356,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
       </div>
 
-      {/* efforts + sets — bottom-left (hidden in section mode to reduce clutter).
-          Lifted above the replay scrubber on phones (bottom-20) so its lower rows
-          aren't hidden behind it; back to bottom-3 once there's room (sm+). (#187) */}
-      {!sectionMode && (data.surges.length > 0 || data.sets.some(s => s.count > 1)) && (
-        <div className={`${PANEL} absolute bottom-20 sm:bottom-3 left-3 z-[1000] p-3 text-xs max-w-[300px] max-h-[36vh] sm:max-h-[42vh] overflow-auto`}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-[#64748b] tracking-widest">SEGMENTS</span>
-            <button onClick={() => setEffortsOpen(o => !o)} aria-label={effortsOpen ? 'Minimise segments' : 'Expand segments'}
-              className="w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{effortsOpen ? '–' : '+'}</button>
-          </div>
-          {effortsOpen && (<>
-          {data.sets.some(s => s.count > 1) && (
-            <div className="mb-2">
-              <div className="text-[10px] text-[#64748b] tracking-widest mb-1">GROUPED</div>
-              {data.sets.map((s, i) => (
-                <div key={i} className="tabular">{s.count} × ~{fmtDur(s.avgDurS)} @ {split500(s.avgSpeed)}{s.avgSR != null ? `, ~${Math.round(s.avgSR)} spm` : ''}{s.count > 1 && <span className="text-[#0369a1]"> ← set</span>}</div>
-              ))}
-            </div>
-          )}
-          {data.surges.length > 0 && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">EFFORTS ({data.surges.length})</div>}
-          <div className="flex flex-col gap-0.5 tabular">
-            {data.surges.map((s, i) => (
-              <div key={i}>
-                <span className="text-[#64748b]">#{i + 1} @{fmtDur(s.fromT)}</span> {fmtDur(s.durS)} · {split500(s.avgSpeed)}
-                {s.avgSR != null && <> · {Math.round(s.avgSR)}spm{s.srCv != null && ` (${s.srCv.toFixed(0)}%)`}</>}
-                {s.trend && <span className="text-[#a78bfa]"> → {s.trend}</span>}
-              </div>
-            ))}
-          </div>
-          {data.stops.length > 0 && <div className="mt-2 text-[10px] text-[#64748b]">rests: {data.stops.map(s => `${fmtDur(s.fromT)} (${Math.round(s.durS)}s)`).join(' · ')}</div>}
-          </>)}
-        </div>
-      )}
+      {/* (SEGMENTS panel now lives in the shared left column above.) */}
 
       {/* bottom-center: replay scrubber, OR the section-selection panel */}
       {sectionMode ? (

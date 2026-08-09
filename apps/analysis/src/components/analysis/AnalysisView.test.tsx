@@ -62,16 +62,20 @@ describe('AnalysisView mobile panels (#187)', () => {
     expect(container.textContent).toContain('strong steady rhythm')
   })
 
-  it('caps the narrative height + scrolls it so the HUD cannot grow into the segments panel', async () => {
-    // Regression: a long LLM narrative used to push the top-left HUD down until
-    // it overlapped the bottom-left SEGMENTS panel (worst on mobile). The
-    // narrative now lives in a height-capped, scrollable container.
+  it('keeps the narrative + SEGMENTS in one bounded flex column so they cannot overlap', async () => {
+    // Regression (not mobile-only): a long LLM narrative used to grow the
+    // top-left HUD until it overlapped the bottom-left SEGMENTS panel. Both now
+    // live as siblings in ONE bounded-height flex column, sharing the space; the
+    // narrative is additionally height-capped + scrollable.
     await mount(<AnalysisView data={{ ...data, insight: 'x '.repeat(400).trim() }} />)
-    const narrative = Array.from(container.querySelectorAll('div')).find(
-      el => el.className.includes('overflow-y-auto') && el.textContent?.includes('x x'),
-    )
+    const divs = Array.from(container.querySelectorAll('div'))
+    const narrative = divs.find(el => el.className.includes('overflow-y-auto') && el.textContent?.includes('x x'))
     expect(narrative).toBeTruthy()
     expect(narrative!.className).toMatch(/max-h-\[\d+vh\]/)
+    // the SAME flex column contains both the narrative and the SEGMENTS panel
+    const column = divs.find(el =>
+      el.className.includes('flex-col') && el.textContent?.includes('x x') && el.textContent?.includes('SEGMENTS'))
+    expect(column).toBeTruthy()
   })
 
   it('minimises the segments panel to hide the efforts list', async () => {
