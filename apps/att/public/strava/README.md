@@ -15,7 +15,7 @@ button), so it's used for both first-time connect and Strava sign-in.
 
 Where they appear:
 - **"Connect with Strava"** button — the sign-in option on `/att/auth`, and the
-  connect controls on `/att/account` and the upload Strava tab.
+  connect controls on `/profile/me/settings` and the upload Strava tab.
 - **"Powered by Strava"** attribution — the account connection row, the upload
   activity list, and leaderboard rows imported from Strava.
 - **"View on Strava"** links Strava-imported data back to its source activity

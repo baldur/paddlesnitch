@@ -20,7 +20,7 @@ describe('proxy auth gate', () => {
 
   it('still gates other unauthenticated API mutations to sign-in', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/courses')))).toBe(true)
-    expect(redirectsToAuth(proxy(req('DELETE', '/att/api/account')))).toBe(true)
+    expect(redirectsToAuth(proxy(req('DELETE', '/api/account')))).toBe(true)
   })
 
   it('lets authenticated API mutations through', () => {

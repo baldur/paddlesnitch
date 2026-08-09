@@ -5,8 +5,8 @@ import { makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial, makeGpxBuff
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { GET as exportData } from '@/app/att/api/account/export/route'
-import { DELETE as deleteAccount } from '@/app/att/api/account/route'
+import { GET as exportData } from '@/app/api/account/export/route'
+import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { POST as upload } from '@/app/att/api/trials/[trialId]/upload/route'
 import { GET as listCourses } from '@/app/att/api/courses/route'
 import { GET as getLeaderboard } from '@/app/att/api/trials/[trialId]/leaderboard/route'
@@ -38,7 +38,7 @@ function uploadReq(trialId: string, file: File) {
   return new NextRequest(`http://x/att/api/trials/${trialId}/upload`, { method: 'POST', body: form })
 }
 
-describe('GET /att/api/account/export', () => {
+describe('GET /api/account/export', () => {
   it('returns 401 when not signed in', async () => {
     mockAuth(null)
     const res = await exportData()
@@ -99,7 +99,7 @@ describe('GET /att/api/account/export', () => {
   })
 })
 
-describe('DELETE /att/api/account', () => {
+describe('DELETE /api/account', () => {
   it('returns 401 when not signed in', async () => {
     mockAuth(null)
     const res = await deleteAccount()

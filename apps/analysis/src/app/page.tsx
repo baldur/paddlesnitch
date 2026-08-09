@@ -117,7 +117,7 @@ export default function AnalysePage() {
         ) : tab === 'strava' ? (
           <div className="max-h-[300px] overflow-auto">
             {acts === undefined && <p className="text-xs text-[#64748b]">Loading your Strava activities…</p>}
-            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/att/account" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
+            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/profile/me/settings" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
             {acts && acts.length > 0 && acts.map(a => (
               <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a)}
                 className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">

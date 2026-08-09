@@ -10,7 +10,7 @@ export default function Footer() {
       </div>
       <nav className="flex gap-4">
         <Link href="/att/privacy" className="tt-nav-link">PRIVACY</Link>
-        <Link href="/att/account" className="tt-nav-link">ACCOUNT</Link>
+        <Link href="/profile/me/settings" className="tt-nav-link">ACCOUNT</Link>
       </nav>
     </footer>
   )

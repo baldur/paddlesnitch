@@ -5,7 +5,7 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { GET as checkHandle, PUT as putHandle, DELETE as deleteHandle } from '@/app/att/api/account/handle/route'
+import { GET as checkHandle, PUT as putHandle, DELETE as deleteHandle } from '@/app/api/account/handle/route'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -18,12 +18,12 @@ function mockAuth(idToken: string | null) {
   } as ReturnType<typeof cookies> extends Promise<infer T> ? T : never)
 }
 
-const putReq = (handle: unknown) => new NextRequest('http://x/att/api/account/handle', {
+const putReq = (handle: unknown) => new NextRequest('http://x/api/account/handle', {
   method: 'PUT', body: JSON.stringify({ handle }), headers: { 'Content-Type': 'application/json' },
 })
-const checkReq = (slug: string) => new NextRequest(`http://x/att/api/account/handle?check=${encodeURIComponent(slug)}`)
+const checkReq = (slug: string) => new NextRequest(`http://x/api/account/handle?check=${encodeURIComponent(slug)}`)
 
-describe('/att/api/account/handle', () => {
+describe('/api/account/handle', () => {
   it('requires auth', async () => {
     mockAuth(null)
     expect((await checkHandle(checkReq('foo'))).status).toBe(401)

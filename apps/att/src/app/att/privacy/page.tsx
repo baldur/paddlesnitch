@@ -64,7 +64,7 @@ export default function PrivacyPolicy() {
         <Section title="How long we keep it">
           <p>
             We hold your data for as long as your account exists. You can delete it at any time from your{' '}
-            <Link href="/att/account" className="tt-link">account page</Link>{' '}
+            <Link href="/profile/me/settings" className="tt-link">account page</Link>{' '}
             — that removes your user record, all courses and trials you created, all entries you
             submitted, and rebuilds any affected leaderboards. The deletion is immediate and
             irreversible.

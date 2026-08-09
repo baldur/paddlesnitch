@@ -5,7 +5,7 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { GET as getProfile, PATCH as patchProfile } from '@/app/att/api/account/profile/route'
+import { GET as getProfile, PATCH as patchProfile } from '@/app/api/account/profile/route'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -19,14 +19,14 @@ function mockAuth(idToken: string | null) {
 }
 
 function patchReq(body: unknown) {
-  return new NextRequest('http://x/att/api/account/profile', {
+  return new NextRequest('http://x/api/account/profile', {
     method: 'PATCH',
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
   })
 }
 
-describe('GET/PATCH /att/api/account/profile', () => {
+describe('GET/PATCH /api/account/profile', () => {
   it('returns 401 when not signed in', async () => {
     mockAuth(null)
     expect((await getProfile()).status).toBe(401)

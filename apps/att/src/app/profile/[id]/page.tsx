@@ -29,10 +29,10 @@ function fmtMonthYear(iso: string | null): string {
 export default async function ProfilePage({
   params,
 }: {
-  // The dynamic segment is a handle OR a userId (kept the folder name [userId]).
-  params: Promise<{ userId: string }>
+  // The dynamic segment is a handle OR a userId.
+  params: Promise<{ id: string }>
 }) {
-  const { userId: segment } = await params
+  const { id: segment } = await params
   // A claimed handle resolves to its owner; otherwise the segment is a userId.
   const userId = await resolveToUserId(segment)
   const viewer = await getAuthUser()
@@ -44,9 +44,9 @@ export default async function ProfilePage({
   if (!settings.public && !isOwner) notFound()
 
   // Canonical URL: if the user has a handle and they were reached some other way
-  // (by userId, or a different-cased handle), redirect to /att/u/{handle}.
+  // (by userId, or a different-cased handle), redirect to /profile/{handle}.
   if (settings.handle && segment !== settings.handle) {
-    redirect(`/att/u/${settings.handle}`)
+    redirect(`/profile/${settings.handle}`)
   }
 
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : new Set<string>()
@@ -58,7 +58,9 @@ export default async function ProfilePage({
     <main className="flex-1 flex flex-col">
       <AppHeader
         breadcrumb={<Link href="/att" className="tt-nav-link text-sm shrink-0">← HOME</Link>}
-      />
+      >
+        {isOwner && <Link href="/profile/me/settings" className="tt-nav-link text-sm">SETTINGS</Link>}
+      </AppHeader>
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
         <div>
@@ -69,7 +71,7 @@ export default async function ProfilePage({
         {isOwner && !settings.public && (
           <div className="border border-primary bg-primary/10 px-4 py-3 text-xs text-primary">
             Only you can see this profile. Make it public from your{' '}
-            <Link href="/att/account" className="underline">account page</Link> to share it.
+            <Link href="/profile/me/settings" className="underline">account page</Link> to share it.
           </div>
         )}
 

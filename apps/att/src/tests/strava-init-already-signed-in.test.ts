@@ -41,9 +41,9 @@ describe('#55 — /att/api/auth/strava/init when already signed in', () => {
   it('honours ?next= when bouncing the already-signed-in user', async () => {
     const u = await makeUser('Already In Two')
     mockAuth(u.idToken)
-    const res = await stravaInit(new NextRequest('http://x/att/api/auth/strava/init?next=/att/account'))
+    const res = await stravaInit(new NextRequest('http://x/att/api/auth/strava/init?next=/profile/me/settings'))
     expect(res.status).toBe(307)
-    expect(res.headers.get('location') ?? '').toMatch(/\/att\/account/)
+    expect(res.headers.get('location') ?? '').toMatch(/\/profile\/me\/settings/)
   })
 
   it('clamps an open-redirect attempt back to /att', async () => {

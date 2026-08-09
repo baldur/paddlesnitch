@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getUserContact, putUserContactEmail, clearUserContact } from '@/lib/contact'
 
-// GET /att/api/account/contact
+// GET /api/account/contact
 // Returns the viewer's optional contact email, plus a flag indicating
 // whether their account email is the synthesised Strava placeholder —
 // the UI uses this to decide whether to show the "add an email" banner.
@@ -13,7 +13,7 @@ export async function GET() {
   return NextResponse.json({ contact: contact ?? null })
 }
 
-// POST /att/api/account/contact  { email }
+// POST /api/account/contact  { email }
 // Saves a contact email. No verification round-trip yet (phase 1B) —
 // we trust the user not to typo. Validation is just "looks like an
 // email at all"; everything stricter belongs at the SES verify step.
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ contact: updated })
 }
 
-// DELETE /att/api/account/contact
+// DELETE /api/account/contact
 // Removes the contact email entirely. Used by the "no, I don't want to
 // add an email" follow-on in the banner — distinct from a one-session
 // dismiss (which is just a cookie on the client).

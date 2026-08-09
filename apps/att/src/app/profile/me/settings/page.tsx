@@ -75,7 +75,7 @@ function AccountPageInner() {
     // Only fetch when we know we have a user — saves an unnecessary
     // round-trip on signed-out renders.
     if (!user) return
-    fetch('/att/api/account/contact')
+    fetch('/api/account/contact')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         const saved = d?.contact?.email ?? null
@@ -87,7 +87,7 @@ function AccountPageInner() {
 
   useEffect(() => {
     if (!user) return
-    fetch('/att/api/account/profile')
+    fetch('/api/account/profile')
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d) { setProfilePublic(!!d.public); setHandle(d.handle ?? null); setHandleInput(d.handle ?? '') } })
       .catch(() => { /* leave undefined */ })
@@ -97,7 +97,7 @@ function AccountPageInner() {
     setHandleMsg('')
     setHandleSaving(true)
     try {
-      const res = await fetch('/att/api/account/handle', {
+      const res = await fetch('/api/account/handle', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handle: handleInput.trim() }),
@@ -118,7 +118,7 @@ function AccountPageInner() {
     setHandleMsg('')
     setHandleSaving(true)
     try {
-      const res = await fetch('/att/api/account/handle', { method: 'DELETE' })
+      const res = await fetch('/api/account/handle', { method: 'DELETE' })
       if (!res.ok) throw new Error('Could not release handle')
       setHandle(null)
       setHandleInput('')
@@ -134,7 +134,7 @@ function AccountPageInner() {
     setProfileSaving(true)
     setError('')
     try {
-      const res = await fetch('/att/api/account/profile', {
+      const res = await fetch('/api/account/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ public: next }),
@@ -154,7 +154,7 @@ function AccountPageInner() {
     setContactMsg('')
     setWorking('contact')
     try {
-      const res = await fetch('/att/api/account/contact', {
+      const res = await fetch('/api/account/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: contactEmail.trim() }),
@@ -174,7 +174,7 @@ function AccountPageInner() {
     setContactMsg('')
     setWorking('contact')
     try {
-      const res = await fetch('/att/api/account/contact', { method: 'DELETE' })
+      const res = await fetch('/api/account/contact', { method: 'DELETE' })
       if (!res.ok) throw new Error('Could not clear email')
       setContactSaved(null)
       setContactEmail('')
@@ -204,7 +204,7 @@ function AccountPageInner() {
     setError('')
     setWorking('export')
     try {
-      const res = await fetch('/att/api/account/export')
+      const res = await fetch('/api/account/export')
       if (!res.ok) throw new Error('Export failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -228,7 +228,7 @@ function AccountPageInner() {
     setError('')
     setWorking('delete')
     try {
-      const res = await fetch('/att/api/account', { method: 'DELETE' })
+      const res = await fetch('/api/account', { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? 'Deletion failed')
@@ -265,7 +265,7 @@ function AccountPageInner() {
               Sign in to view or manage your account data.
             </p>
             <Link
-              href="/att/auth?next=/att/account"
+              href="/att/auth?next=/profile/me/settings"
               className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors self-center"
             >
               SIGN IN
@@ -416,7 +416,7 @@ function AccountPageInner() {
                       : 'MAKE PROFILE PUBLIC'}
                 </button>
                 {user && (
-                  <Link href={`/att/u/${handle ?? user.id}`} className="tt-link text-sm">
+                  <Link href={`/profile/${handle ?? user.id}`} className="tt-link text-sm">
                     {profilePublic ? 'View my profile →' : 'Preview my profile →'}
                   </Link>
                 )}
@@ -427,11 +427,11 @@ function AccountPageInner() {
                 <label className="text-xs text-muted tracking-widest">PROFILE HANDLE</label>
                 <p className="text-xs text-muted">
                   Claim a handle for a memorable link like{' '}
-                  <span className="text-fg">/att/u/{handle || 'your-handle'}</span>.
+                  <span className="text-fg">/profile/{handle || 'your-handle'}</span>.
                   Lowercase letters, numbers and hyphens, 3–30 characters.
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-muted">/att/u/</span>
+                  <span className="text-sm text-muted">/profile/</span>
                   <input
                     type="text"
                     value={handleInput}

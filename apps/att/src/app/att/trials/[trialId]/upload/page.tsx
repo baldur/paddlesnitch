@@ -539,7 +539,7 @@ export default function UploadPage({
                     <StravaButton href="/att/api/strava/connect" className="self-start" />
                     <p className="text-xs text-muted">
                       You&apos;ll be redirected to Strava to approve. Manage the connection any time from your{' '}
-                      <a href="/att/account" className="tt-link">account page</a>.
+                      <a href="/profile/me/settings" className="tt-link">account page</a>.
                     </p>
                   </div>
                 )}

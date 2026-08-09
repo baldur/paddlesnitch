@@ -6,7 +6,7 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
 import { POST as signup } from '@/app/att/api/auth/signup/route'
-import { GET as getMyTos, POST as acceptTos } from '@/app/att/api/account/tos/route'
+import { GET as getMyTos, POST as acceptTos } from '@/app/api/account/tos/route'
 import { GET as getTosDoc } from '@/app/att/api/legal/tos/route'
 import { cookies } from 'next/headers'
 
