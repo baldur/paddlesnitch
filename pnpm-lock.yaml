@@ -117,6 +117,9 @@ importers:
       '@paddlesnitch/timing':
         specifier: workspace:*
         version: link:../../packages/timing
+      '@paddlesnitch/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@swc/helpers':
         specifier: ^0.5.21
         version: 0.5.21

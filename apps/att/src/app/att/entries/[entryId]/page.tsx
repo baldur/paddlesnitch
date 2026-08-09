@@ -74,7 +74,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
   if (!data) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-[#64748b]">This entry doesn&apos;t exist, or you can&apos;t see it.</p>
+        <p className="text-sm text-muted">This entry doesn&apos;t exist, or you can&apos;t see it.</p>
         <Link href="/att" className="tt-nav-link text-xs tracking-widest">← HOME</Link>
       </main>
     )
@@ -89,38 +89,38 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
         breadcrumb={
           <>
             <Link href={`/att/trials/${trial.id}`} className="tt-nav-link text-sm shrink-0">← {trial.name.toUpperCase()}</Link>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm truncate">ENTRY</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm truncate">ENTRY</span>
           </>
         }
       />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-8">
         <section>
-          <div className="text-xs text-[#64748b] tracking-widest mb-1">
+          <div className="text-xs text-muted tracking-widest mb-1">
             <Link href={`/att/trials/${trial.id}`} className="tt-link">{trial.name}</Link> · {entry.raceDate}
           </div>
-          <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">{entry.displayName.toUpperCase()}</h1>
+          <h1 className="text-lg font-bold text-fg tracking-widest">{entry.displayName.toUpperCase()}</h1>
           <div className="mt-2 flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-[#0369a1] tabular">{formatTime(entry.totalElapsedSeconds)}</span>
-            <span className="text-xs text-[#64748b] tabular">{entry.boatClass}{course ? ` · ${course.distanceMetres.toLocaleString()} m` : ''}{entry.avgStrokeRate != null ? ` · ${entry.avgStrokeRate} spm avg` : ''}</span>
+            <span className="text-3xl font-bold text-primary tabular">{formatTime(entry.totalElapsedSeconds)}</span>
+            <span className="text-xs text-muted tabular">{entry.boatClass}{course ? ` · ${course.distanceMetres.toLocaleString()} m` : ''}{entry.avgStrokeRate != null ? ` · ${entry.avgStrokeRate} spm avg` : ''}</span>
           </div>
           {entry.runCount && entry.runCount > 1 && (
-            <p className="text-xs text-[#64748b] mt-1">Best of {entry.runCount} runs in this upload.</p>
+            <p className="text-xs text-muted mt-1">Best of {entry.runCount} runs in this upload.</p>
           )}
           {entry.stravaActivityId != null && (
-            <p className="text-xs text-[#64748b] mt-1">Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" /></p>
+            <p className="text-xs text-muted mt-1">Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" /></p>
           )}
         </section>
 
         {entry.crew.length > 1 && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">Crew</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Crew</h2>
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
               {entry.crew.map(m => (
                 <span key={String(m.seat)}>
-                  <span className="text-[#64748b] mr-1 tabular">{m.seat === 'C' ? 'Cox' : m.seat}</span>
-                  <span className="text-[#0f172a]">{m.name}</span>
+                  <span className="text-muted mr-1 tabular">{m.seat === 'C' ? 'Cox' : m.seat}</span>
+                  <span className="text-fg">{m.name}</span>
                 </span>
               ))}
             </div>
@@ -130,15 +130,15 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
 
         {entry.conditions && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">Conditions at finish</h2>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-[#0f172a] tabular">
-              {entry.conditions.weather?.temperatureC != null && <span><span className="text-[#64748b] mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>}
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Conditions at finish</h2>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-fg tabular">
+              {entry.conditions.weather?.temperatureC != null && <span><span className="text-muted mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>}
               {entry.conditions.weather?.windSpeedKmh != null && (
-                <span><span className="text-[#64748b] mr-1">wind</span>{entry.conditions.weather.windSpeedKmh.toFixed(0)} km/h{entry.conditions.weather.windDirectionDeg != null && ` ${compass(entry.conditions.weather.windDirectionDeg)}`}</span>
+                <span><span className="text-muted mr-1">wind</span>{entry.conditions.weather.windSpeedKmh.toFixed(0)} km/h{entry.conditions.weather.windDirectionDeg != null && ` ${compass(entry.conditions.weather.windDirectionDeg)}`}</span>
               )}
-              {entry.conditions.weather?.precipitationMm != null && <span><span className="text-[#64748b] mr-1">rain</span>{entry.conditions.weather.precipitationMm.toFixed(1)} mm</span>}
+              {entry.conditions.weather?.precipitationMm != null && <span><span className="text-muted mr-1">rain</span>{entry.conditions.weather.precipitationMm.toFixed(1)} mm</span>}
               {entry.conditions.flow?.valueM3s != null && (
-                <span><span className="text-[#64748b] mr-1">flow</span>{entry.conditions.flow.valueM3s.toFixed(1)} m³/s{entry.conditions.flow.stationLabel && <span className="text-[#64748b]"> · {entry.conditions.flow.stationLabel}</span>}</span>
+                <span><span className="text-muted mr-1">flow</span>{entry.conditions.flow.valueM3s.toFixed(1)} m³/s{entry.conditions.flow.stationLabel && <span className="text-muted"> · {entry.conditions.flow.stationLabel}</span>}</span>
               )}
             </div>
           </section>
@@ -146,26 +146,26 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
 
         {course && entry.trackSegment && entry.trackSegment.length > 0 && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">Track</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Track</h2>
             <CourseMapClient course={course} track={entry.trackSegment} />
           </section>
         )}
 
         {entry.splits.length > 0 && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">500 m splits</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">500 m splits</h2>
             <table className="text-sm border-collapse tabular">
               <thead>
-                <tr className="text-[#64748b] tracking-wider text-xs">
+                <tr className="text-muted tracking-wider text-xs">
                   <th className="text-left pr-8 py-1 font-normal">MARK</th>
                   <th className="text-right py-1 font-normal">ELAPSED</th>
                 </tr>
               </thead>
               <tbody>
                 {entry.splits.map(s => (
-                  <tr key={s.distance} className="border-t border-[#f1f5f9]">
-                    <td className="pr-8 py-1.5 text-[#0f172a]">{s.distance.toLocaleString()} m</td>
-                    <td className="py-1.5 text-right text-[#6d28d9]">{formatTime(s.elapsedSeconds)}</td>
+                  <tr key={s.distance} className="border-t border-surface-2">
+                    <td className="pr-8 py-1.5 text-fg">{s.distance.toLocaleString()} m</td>
+                    <td className="py-1.5 text-right text-split">{formatTime(s.elapsedSeconds)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -175,9 +175,9 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
 
         {/* Private note — owner only. */}
         {isOwner && (
-          <section className="border-t border-[#e2e8f0] pt-6">
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-1">Your note</h2>
-            <p className="text-xs text-[#64748b] mb-3">
+          <section className="border-t border-border pt-6">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-1">Your note</h2>
+            <p className="text-xs text-muted mb-3">
               🔒 Only you can see this. Jot down how the race felt, kit, tactics — anything.
             </p>
             <textarea
@@ -186,18 +186,18 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
               maxLength={2000}
               rows={4}
               placeholder="Add a private note about this race…"
-              className="w-full bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors resize-y"
+              className="w-full bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors resize-y"
             />
             <div className="flex items-center gap-3 mt-2">
               <button
                 type="button"
                 onClick={saveNote}
                 disabled={noteSaving}
-                className="px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
               >
                 {noteSaving ? 'SAVING…' : 'SAVE NOTE'}
               </button>
-              {noteMsg && <span className="text-xs text-[#64748b]">{noteMsg}</span>}
+              {noteMsg && <span className="text-xs text-muted">{noteMsg}</span>}
             </div>
           </section>
         )}

@@ -74,7 +74,7 @@ export default function CourseMap({ course, track, highlightGateIndex }: { cours
   useEffect(() => { setMounted(true) }, [])
 
   if (!mounted)
-    return <div style={{ height: 300 }} className="bg-[#f8fafc] border border-[#e2e8f0]" />
+    return <div style={{ height: 300 }} className="bg-surface border border-border" />
 
   const center = course.gates ? course.gates[0].line[0] : course.startLine[0]
   const isMultiGate = course.type === 'gate' && course.gates && course.gates.length >= 2
@@ -84,7 +84,7 @@ export default function CourseMap({ course, track, highlightGateIndex }: { cours
     <div className="relative">
       <button
         onClick={() => setDark(d => !d)}
-        className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-white border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+        className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary transition-colors"
         title="Toggle map style"
       >
         {dark ? 'LIGHT MAP' : 'DARK MAP'}

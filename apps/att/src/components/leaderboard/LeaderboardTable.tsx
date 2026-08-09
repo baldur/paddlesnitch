@@ -61,14 +61,14 @@ export default function LeaderboardTable({
 
   if (entries.length === 0) {
     return (
-      <div className="border border-[#e2e8f0] p-8 flex flex-col items-center gap-4 text-center text-[#64748b] text-sm">
+      <div className="border border-border p-8 flex flex-col items-center gap-4 text-center text-muted text-sm">
         <p>
           {uploadHref ? 'No entries yet. Be the first to submit your entry.' : 'No entries.'}
         </p>
         {uploadHref && (
           <a
             href={uploadHref}
-            className="px-4 py-2 bg-[#0369a1] text-white text-xs tracking-widest hover:bg-[#0284c7] transition-colors"
+            className="px-4 py-2 bg-primary text-white text-xs tracking-widest hover:bg-primary transition-colors"
           >
             SUBMIT YOUR ENTRY
           </a>
@@ -90,11 +90,11 @@ export default function LeaderboardTable({
     <div className="flex flex-col gap-4">
       {presentClasses.length > 1 && (
         <div className="flex items-center gap-3 text-xs">
-          <label className="text-[#64748b] tracking-widest">BOAT CLASS</label>
+          <label className="text-muted tracking-widest">BOAT CLASS</label>
           <select
             value={classFilter}
             onChange={e => setClassFilter(e.target.value as BoatClass | 'all')}
-            className="bg-white border border-[#e2e8f0] px-2 py-1 text-[#0f172a] text-xs focus:outline-none focus:border-[#0369a1] transition-colors"
+            className="bg-bg border border-border px-2 py-1 text-fg text-xs focus:outline-none focus:border-primary transition-colors"
           >
             <option value="all">All ({entries.length})</option>
             {presentClasses.map(c => {
@@ -108,7 +108,7 @@ export default function LeaderboardTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
-            <tr className="border-b border-[#e2e8f0] text-[#64748b] text-xs tracking-wider">
+            <tr className="border-b border-border text-muted text-xs tracking-wider">
               <th className="text-left py-2 pr-4 font-normal w-8">#</th>
               <th className="text-left py-2 pr-4 font-normal">ATHLETE</th>
               <th className="text-left py-2 pr-4 font-normal">CLASS</th>
@@ -135,15 +135,15 @@ export default function LeaderboardTable({
                 <React.Fragment key={entry.entryId}>
                   <tr
                     onClick={() => hasDetail && setExpanded(isOpen ? null : entry.entryId)}
-                    className={`border-b border-[#f1f5f9] transition-colors ${hasDetail ? 'cursor-pointer hover:bg-[#f8fafc]' : ''}`}
+                    className={`border-b border-surface-2 transition-colors ${hasDetail ? 'cursor-pointer hover:bg-surface' : ''}`}
                   >
-                    <td className="py-3 pr-4 text-[#64748b] tabular">{i + 1}</td>
-                    <td className="py-3 pr-4 text-[#0f172a] font-medium">
+                    <td className="py-3 pr-4 text-muted tabular">{i + 1}</td>
+                    <td className="py-3 pr-4 text-fg font-medium">
                       {profileLinks?.[entry.userId] ? (
                         <Link
                           href={`/att/u/${profileLinks[entry.userId]}`}
                           onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                          className="hover:text-[#0369a1] hover:underline transition-colors"
+                          className="hover:text-primary hover:underline transition-colors"
                         >
                           {entry.displayName}
                         </Link>
@@ -151,47 +151,47 @@ export default function LeaderboardTable({
                         entry.displayName
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-[#64748b] tabular text-xs">{entry.boatClass}</td>
-                    <td className="py-3 pr-4 text-right tabular font-bold text-[#0369a1] text-base">
+                    <td className="py-3 pr-4 text-muted tabular text-xs">{entry.boatClass}</td>
+                    <td className="py-3 pr-4 text-right tabular font-bold text-primary text-base">
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
-                    <td className="py-3 pr-4 text-right text-[#64748b] text-xs hidden sm:table-cell">
+                    <td className="py-3 pr-4 text-right text-muted text-xs hidden sm:table-cell">
                       {entry.raceDate ?? new Date(entry.submittedAt).toLocaleDateString()}
                     </td>
-                    <td className="py-3 text-[#64748b] text-xs text-right">
+                    <td className="py-3 text-muted text-xs text-right">
                       {hasDetail ? (isOpen ? '▲' : '▼') : ''}
                     </td>
                   </tr>
                   {isOpen && (
-                    <tr key={`${entry.entryId}-splits`} className="border-b border-[#f1f5f9] bg-[#f8fafc]">
+                    <tr key={`${entry.entryId}-splits`} className="border-b border-surface-2 bg-surface">
                       <td colSpan={6} className="px-4 py-3">
                         <div className="mb-4 text-xs">
                           <Link href={`/att/entries/${entry.entryId}`} className="tt-link tracking-widest">VIEW ENTRY →</Link>
                         </div>
                         {entry.stravaActivityId != null && (
-                          <div className="mb-4 text-xs text-[#64748b]">
+                          <div className="mb-4 text-xs text-muted">
                             Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" />
                           </div>
                         )}
                         {entry.runCount && entry.runCount > 1 && (
-                          <div className="mb-4 text-xs text-[#64748b]">
+                          <div className="mb-4 text-xs text-muted">
                             Best of {entry.runCount} runs in this upload — the fastest is shown.
                           </div>
                         )}
                         {entry.avgStrokeRate != null && (
                           <div className="mb-4 text-xs">
-                            <span className="text-[#64748b] tracking-wider mr-2">AVG STROKE RATE</span>
-                            <span className="tabular text-[#6d28d9]">{entry.avgStrokeRate} spm</span>
+                            <span className="text-muted tracking-wider mr-2">AVG STROKE RATE</span>
+                            <span className="tabular text-split">{entry.avgStrokeRate} spm</span>
                           </div>
                         )}
                         {entry.crew && entry.crew.length > 1 && (
                           <div className="mb-4">
-                            <div className="text-[#64748b] text-xs tracking-wider mb-1.5">CREW</div>
+                            <div className="text-muted text-xs tracking-wider mb-1.5">CREW</div>
                             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
                               {[...entry.crew].sort(seatSort).map(m => (
                                 <span key={String(m.seat)}>
-                                  <span className="text-[#64748b] mr-1 tabular">{seatBadge(m.seat, entry.crew.length, !!entry.crew.find(c => c.seat === 'C'), BOAT_CLASS_INFO[entry.boatClass].sport)}</span>
-                                  <span className="text-[#0f172a]">{m.name}</span>
+                                  <span className="text-muted mr-1 tabular">{seatBadge(m.seat, entry.crew.length, !!entry.crew.find(c => c.seat === 'C'), BOAT_CLASS_INFO[entry.boatClass].sport)}</span>
+                                  <span className="text-fg">{m.name}</span>
                                 </span>
                               ))}
                             </div>
@@ -199,29 +199,29 @@ export default function LeaderboardTable({
                         )}
                         {entry.conditions && (
                           <div className="mb-4">
-                            <div className="text-[#64748b] text-xs tracking-wider mb-1.5">
+                            <div className="text-muted text-xs tracking-wider mb-1.5">
                               CONDITIONS AT FINISH
                             </div>
-                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#0f172a] tabular">
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-fg tabular">
                               {entry.conditions.weather?.temperatureC != null && (
-                                <span><span className="text-[#64748b] mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>
+                                <span><span className="text-muted mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>
                               )}
                               {entry.conditions.weather?.windSpeedKmh != null && (
                                 <span>
-                                  <span className="text-[#64748b] mr-1">wind</span>
+                                  <span className="text-muted mr-1">wind</span>
                                   {entry.conditions.weather.windSpeedKmh.toFixed(0)} km/h
                                   {entry.conditions.weather.windDirectionDeg != null && ` ${compass(entry.conditions.weather.windDirectionDeg)}`}
                                 </span>
                               )}
                               {entry.conditions.weather?.precipitationMm != null && (
-                                <span><span className="text-[#64748b] mr-1">rain</span>{entry.conditions.weather.precipitationMm.toFixed(1)} mm</span>
+                                <span><span className="text-muted mr-1">rain</span>{entry.conditions.weather.precipitationMm.toFixed(1)} mm</span>
                               )}
                               {entry.conditions.flow?.valueM3s != null && (
                                 <span>
-                                  <span className="text-[#64748b] mr-1">flow</span>
+                                  <span className="text-muted mr-1">flow</span>
                                   {entry.conditions.flow.valueM3s.toFixed(1)} m³/s
                                   {entry.conditions.flow.stationLabel && (
-                                    <span className="text-[#64748b]"> · {entry.conditions.flow.stationLabel}</span>
+                                    <span className="text-muted"> · {entry.conditions.flow.stationLabel}</span>
                                   )}
                                 </span>
                               )}
@@ -231,7 +231,7 @@ export default function LeaderboardTable({
                         {entry.splits.length > 0 && (
                         <table className="text-xs border-collapse">
                           <thead>
-                            <tr className="text-[#64748b] tracking-wider">
+                            <tr className="text-muted tracking-wider">
                               <th className="text-left pr-8 py-1 font-normal">MARK</th>
                               <th className="text-right pr-8 py-1 font-normal">ELAPSED</th>
                               <th className="text-right pr-8 py-1 font-normal">SPLIT</th>
@@ -248,21 +248,21 @@ export default function LeaderboardTable({
                               const segSecs = split.elapsedSeconds - prev
                               const segDist = idx === 0 ? split.distance : split.distance - entry.splits[idx - 1].distance
                               return (
-                                <tr key={split.distance} className="border-b border-[#e2e8f0]">
-                                  <td className="pr-8 py-1.5 text-[#64748b]">{split.distance} m</td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-[#0f172a]">
+                                <tr key={split.distance} className="border-b border-border">
+                                  <td className="pr-8 py-1.5 text-muted">{split.distance} m</td>
+                                  <td className="pr-8 py-1.5 text-right tabular text-fg">
                                     {formatTime(split.elapsedSeconds)}
                                   </td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-[#6d28d9]">
+                                  <td className="pr-8 py-1.5 text-right tabular text-split">
                                     {formatTime(segSecs)}
                                   </td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-[#0369a1]">
+                                  <td className="pr-8 py-1.5 text-right tabular text-primary">
                                     {paceFor500m(segDist, segSecs)}
                                   </td>
-                                  <td className="pr-6 py-1.5 text-right tabular text-[#0369a1]">
+                                  <td className="pr-6 py-1.5 text-right tabular text-primary">
                                     {speedKmh(segDist, segSecs)}
                                   </td>
-                                  <td className="py-1.5 text-right tabular text-[#0369a1]">
+                                  <td className="py-1.5 text-right tabular text-primary">
                                     {speedMs(segDist, segSecs)}
                                   </td>
                                 </tr>

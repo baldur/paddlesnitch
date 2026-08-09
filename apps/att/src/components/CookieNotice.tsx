@@ -27,7 +27,7 @@ export default function CookieNotice() {
   if (!show) return null
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 border border-[#e2e8f0] bg-white shadow-lg p-4 text-xs text-[#0f172a] flex flex-col gap-3">
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 border border-border bg-bg shadow-lg p-4 text-xs text-fg flex flex-col gap-3">
       <p>
         We use essential cookies for sign-in only. No analytics, no trackers.{' '}
         <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
@@ -35,7 +35,7 @@ export default function CookieNotice() {
       <button
         type="button"
         onClick={dismiss}
-        className="self-end px-4 py-1.5 bg-[#0369a1] text-white tracking-widest hover:bg-[#0284c7] transition-colors"
+        className="self-end px-4 py-1.5 bg-primary text-white tracking-widest hover:bg-primary transition-colors"
       >
         OK
       </button>

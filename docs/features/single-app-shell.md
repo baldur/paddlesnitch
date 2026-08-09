@@ -1,19 +1,38 @@
 # Feature spec: Single-app feel — shared UI shell + one dark theme
 
-**Status:** 🚧 building (2026-08-09). **P1 done.**
+**Status:** 🚧 built, in review (2026-08-09). **P1–P4 done; P5 core done.**
 **Owners:** Baldur (product), Claude (implementation).
 **Apps:** both `apps/att` (`/att`) and `apps/analysis` (`/analyse`); new `packages/ui`.
 
 ### Progress
-- **P1 ✅** `@paddlesnitch/ui` created (`AppShell`, `AccountNav`, `ContactBanner`,
-  `FeedbackWidget`, `tokens.css`) — theme-aware, presentational/config-driven,
-  per-file subpath exports, `transpilePackages`d. Canonical **dark** tokens in
-  `tokens.css` (Tailwind v4 `@theme`, imported by an app's `globals.css` +
-  `@source` so the shell's classes get scanned). Adopted in **Analyse**: shared
-  `FeedbackWidget` (replaced its own copy), dark tokens, and the `AppShell` header
-  on the library page via a thin `AppAccountNav` (→ shared att profile/account,
-  one platform account). Analyse builds + 61 tests green. `AccountNav`/
-  `ContactBanner` ready for P2.
+- **P1 ✅** `@paddlesnitch/ui` (`AppShell`, `AccountNav`, `ContactBanner`,
+  `FeedbackWidget`, `tokens.css`) — theme-aware, config-driven, subpath exports,
+  transpiled. Canonical **dark** tokens (Tailwind v4 `@theme` + `@source`).
+  Adopted in Analyse (shared feedback, dark tokens, `AppShell` on the library page).
+- **P2 ✅** att adopts the shell: `AppHeader` is now a thin wrapper over `AppShell`
+  (all ~17 pages get the unified header, no per-page edits) via `AttAccountNav`;
+  shared `FeedbackWidget` replaces att's trigger+widget; `AttContactBanner` wraps
+  the shared banner. Removed `AuthNav`/`FeedbackTrigger`/`FeedbackWidget`/
+  `StravaContactBanner`.
+- **P3 ✅** att hardcoded hex → semantic token classes (2 scripted passes over the
+  tsx files): structural colours (`bg-bg`/`text-fg`/`border-border`/`text-muted`/…)
+  then accent/state colours (light-bg fills → `red/10`/`primary/10`/`green/10`,
+  greys → `muted`, hovers → `primary`). Only the Strava brand orange (`#fc4c02`)
+  stays hardcoded (intentional).
+- **P4 ✅** flip to dark: att's `globals.css` now `@import`s the shared dark
+  `tokens.css` (replaces the light `@theme`); `themeColor` → `#0b1220`. Whole
+  platform is dark. att builds + 549 tests green; Analyse builds + 61 tests green.
+- **P5 ◑** cross-app **Trials ↔ Analyse** nav is in `AppShell`; the paddler-profile
+  entry is consistent (both apps' `AccountNav` name → `/att/u/{id}`).
+
+### Follow-ups / polish (deferred, flagged for review)
+- **Visual polish pass on dark** — the token migration is thorough, but a human
+  pass will want to check contrast on state banners/badges and hover shades.
+- **att maps** still default to light tiles (dark toggle exists) — flip the default.
+- **ContactBanner on Analyse** — att shows it; to show it in Analyse too, move
+  `isSyntheticStravaEmail` + the contact check to `@paddlesnitch/core` and add an
+  `AppContactBanner` there (small follow-up).
+- **Deeper unified profile** — surface Analyse paddles on `/att/u/{id}` (spec open q).
 
 ## Why
 

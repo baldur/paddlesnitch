@@ -70,8 +70,8 @@ export default async function CoursesCataloguePage() {
             <Link href="/att" className="tt-nav-link text-sm">
               ← HOME
             </Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">COURSES</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">COURSES</span>
           </>
         }
       >
@@ -87,13 +87,13 @@ export default async function CoursesCataloguePage() {
       </AppHeader>
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-2">COURSE CATALOGUE</h1>
-        <p className="text-sm text-[#64748b] mb-8">
+        <h1 className="text-lg font-bold text-fg tracking-widest mb-2">COURSE CATALOGUE</h1>
+        <p className="text-sm text-muted mb-8">
           Browse all courses. Group admins can open time trials on a course; create a group to organise your own.
         </p>
 
         {courses.length === 0 ? (
-          <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
+          <div className="border border-border p-8 text-center text-muted text-sm">
             {canOrganise ? (
               <>
                 No courses yet.{' '}
@@ -112,14 +112,14 @@ export default async function CoursesCataloguePage() {
               <Link
                 key={course.id}
                 href={`/att/courses/${course.id}`}
-                className="border border-[#e2e8f0] px-4 py-4 hover:border-[#0369a1] transition-colors group"
+                className="border border-border px-4 py-4 hover:border-primary transition-colors group"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">
+                    <div className="text-fg font-bold group-hover:text-primary transition-colors">
                       {course.name}
                     </div>
-                    <div className="text-xs text-[#64748b] mt-0.5 tabular">
+                    <div className="text-xs text-muted mt-0.5 tabular">
                       {course.sport.toUpperCase()} ·{' '}
                       {course.distanceMetres > 0 ? `${course.distanceMetres.toLocaleString()} m` : '—'} ·{' '}
                       {courseTypeLabel(course)}
@@ -127,11 +127,11 @@ export default async function CoursesCataloguePage() {
                   </div>
                   <div className="text-right text-xs shrink-0">
                     {openCount > 0 && (
-                      <div className="border border-[#15803d] text-[#15803d] px-2 py-0.5 mb-1 inline-block">
+                      <div className="border border-green text-green px-2 py-0.5 mb-1 inline-block">
                         {openCount} OPEN
                       </div>
                     )}
-                    <div className="text-[#64748b]">
+                    <div className="text-muted">
                       {trialCount} trial{trialCount === 1 ? '' : 's'}
                     </div>
                   </div>

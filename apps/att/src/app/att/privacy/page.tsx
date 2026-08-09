@@ -14,15 +14,15 @@ export default function PrivacyPolicy() {
             <Link href="/att" className="tt-nav-link text-sm">
               ← HOME
             </Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">PRIVACY</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">PRIVACY</span>
           </>
         }
       />
 
-      <article className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full text-sm text-[#0f172a] leading-relaxed">
+      <article className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full text-sm text-fg leading-relaxed">
         <h1 className="text-lg font-bold tracking-widest mb-2">PRIVACY POLICY</h1>
-        <p className="text-xs text-[#64748b] mb-8">Last updated: 31 May 2026</p>
+        <p className="text-xs text-muted mb-8">Last updated: 31 May 2026</p>
 
         <Section title="Who runs paddlesnitch.com">
           <p>
@@ -133,7 +133,7 @@ export default function PrivacyPolicy() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-8">
-      <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">{title}</h2>
+      <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">{title}</h2>
       <div className="space-y-2">{children}</div>
     </section>
   )

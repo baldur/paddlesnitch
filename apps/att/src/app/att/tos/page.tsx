@@ -16,25 +16,25 @@ export default async function TosPage() {
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm">← HOME</Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">TERMS OF SERVICE</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">TERMS OF SERVICE</span>
           </>
         }
       />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        <p className="text-xs text-[#64748b] tracking-widest mb-2">
+        <p className="text-xs text-muted tracking-widest mb-2">
           VERSION {CURRENT_TOS_VERSION}
         </p>
         {body === null ? (
-          <p className="text-sm text-[#b91c1c]">
+          <p className="text-sm text-red">
             Terms of Service document is missing. Please contact privacy@paddlesnitch.com.
           </p>
         ) : (
           // Render markdown as preformatted text for now — keeps the page
           // dependency-light. A future PR can swap in a markdown renderer
           // when we add styling beyond the source format.
-          <pre className="whitespace-pre-wrap font-sans text-sm text-[#0f172a] leading-relaxed">
+          <pre className="whitespace-pre-wrap font-sans text-sm text-fg leading-relaxed">
             {body}
           </pre>
         )}

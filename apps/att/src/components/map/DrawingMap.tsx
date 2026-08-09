@@ -247,7 +247,7 @@ export default function DrawingMap({
   const resetStart = () => { setStartPts([]); setMode('start'); emitSimple([], finishPts) }
   const resetFinish = () => { setFinishPts([]); setMode('finish'); emitSimple(startPts, []) }
 
-  if (!mounted) return <div style={{ height: 400 }} className="bg-[#f8fafc] border border-[#e2e8f0]" />
+  if (!mounted) return <div style={{ height: 400 }} className="bg-surface border border-border" />
 
   const startDone = startPts.length === 2
   const finishDone = finishPts.length === 2
@@ -276,10 +276,10 @@ export default function DrawingMap({
                   onClick={() => done ? resetGate(i) : setMode(mode === i ? null : i)}
                   className={`px-3 py-1 text-xs border transition-colors ${
                     mode === i
-                      ? 'border-[#0369a1] text-[#0369a1]'
+                      ? 'border-primary text-primary'
                       : done
-                      ? 'border-[#64748b] text-[#64748b] opacity-70'
-                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1]'
+                      ? 'border-muted text-muted opacity-70'
+                      : 'border-border text-muted hover:border-primary hover:text-primary'
                   }`}
                 >
                   {done
@@ -292,7 +292,7 @@ export default function DrawingMap({
                   <button
                     type="button"
                     onClick={() => flipGate(i)}
-                    className="px-3 py-1 text-xs border border-[#0369a1] text-[#0369a1] hover:bg-[#f0f9ff] transition-colors"
+                    className="px-3 py-1 text-xs border border-primary text-primary hover:bg-primary/10 transition-colors"
                   >
                     FLIP ⇄ {directionLabel(gate.pts as Line, gate.direction)}
                   </button>
@@ -301,7 +301,7 @@ export default function DrawingMap({
                   <button
                     type="button"
                     onClick={() => removeGate(i)}
-                    className="px-2 py-1 text-xs border border-[#e2e8f0] text-[#64748b] hover:border-[#b91c1c] hover:text-[#b91c1c] transition-colors"
+                    className="px-2 py-1 text-xs border border-border text-muted hover:border-red hover:text-red transition-colors"
                   >
                     ✕
                   </button>
@@ -312,7 +312,7 @@ export default function DrawingMap({
           <button
             type="button"
             onClick={addGate}
-            className="self-start px-3 py-1 text-xs border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+            className="self-start px-3 py-1 text-xs border border-border text-muted hover:border-primary hover:text-primary transition-colors"
           >
             + ADD GATE
           </button>
@@ -327,12 +327,12 @@ export default function DrawingMap({
             onClick={() => startDone ? resetStart() : setMode(mode === 'start' ? null : 'start')}
             className={`px-3 py-1.5 text-xs border transition-colors ${
               mode === 'start'
-                ? (isTwoLine ? 'border-[#15803d] text-[#15803d]' : 'border-[#7c3aed] text-[#7c3aed]')
+                ? (isTwoLine ? 'border-green text-green' : 'border-split text-split')
                 : startDone
-                ? (isTwoLine ? 'border-[#15803d] text-[#15803d] opacity-70' : 'border-[#7c3aed] text-[#7c3aed] opacity-70')
+                ? (isTwoLine ? 'border-green text-green opacity-70' : 'border-split text-split opacity-70')
                 : (isTwoLine
-                    ? 'border-[#e2e8f0] text-[#64748b] hover:border-[#15803d] hover:text-[#15803d]'
-                    : 'border-[#e2e8f0] text-[#64748b] hover:border-[#7c3aed] hover:text-[#7c3aed]')
+                    ? 'border-border text-muted hover:border-green hover:text-green'
+                    : 'border-border text-muted hover:border-split hover:text-split')
             }`}
           >
             {startDone
@@ -345,9 +345,9 @@ export default function DrawingMap({
               type="button"
               onClick={() => finishDone ? resetFinish() : setMode(mode === 'finish' ? null : 'finish')}
               className={`px-3 py-1.5 text-xs border transition-colors ${
-                mode === 'finish' ? 'border-[#b91c1c] text-[#b91c1c]'
-                  : finishDone ? 'border-[#b91c1c] text-[#b91c1c] opacity-70'
-                  : 'border-[#e2e8f0] text-[#64748b] hover:border-[#b91c1c] hover:text-[#b91c1c]'
+                mode === 'finish' ? 'border-red text-red'
+                  : finishDone ? 'border-red text-red opacity-70'
+                  : 'border-border text-muted hover:border-red hover:text-red'
               }`}
             >
               {finishDone ? '✓ FINISH LINE (click to reset)' : mode === 'finish' ? `PLACE POINT ${finishPts.length + 1}/2` : 'SET FINISH LINE'}
@@ -360,7 +360,7 @@ export default function DrawingMap({
       <div className="relative" style={{ cursor: cursorStyle }}>
         <button
           onClick={() => setDark(d => !d)}
-          className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-white border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+          className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary transition-colors"
         >
           {dark ? 'LIGHT MAP' : 'DARK MAP'}
         </button>
@@ -420,17 +420,17 @@ export default function DrawingMap({
       </div>
 
       {mode !== null && !isGate && (
-        <p className="text-xs text-[#64748b]">
+        <p className="text-xs text-muted">
           Click 2 points on the map to set the{' '}
-          <span className={mode === 'start' ? (isTwoLine ? 'text-[#15803d]' : 'text-[#7c3aed]') : 'text-[#b91c1c]'}>
+          <span className={mode === 'start' ? (isTwoLine ? 'text-green' : 'text-split') : 'text-red'}>
             {mode === 'start' ? (isTwoLine ? 'start line' : 'crossing line') : 'finish line'}
           </span>. Pan/zoom with scroll and drag.
         </p>
       )}
       {isGate && typeof mode === 'number' && (
-        <p className="text-xs text-[#64748b]">
+        <p className="text-xs text-muted">
           Click 2 points on the map to draw{' '}
-          <span className="text-[#0369a1]">
+          <span className="text-primary">
             {mode === 0 ? 'the start gate' : mode === gateEntries.length - 1 ? 'the finish gate' : `gate ${mode}`}
           </span>. Pan/zoom with scroll and drag.
         </p>

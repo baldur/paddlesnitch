@@ -249,8 +249,8 @@ function AccountPageInner() {
             <Link href="/att" className="tt-nav-link text-sm">
               ← HOME
             </Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">ACCOUNT</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">ACCOUNT</span>
           </>
         }
       />
@@ -260,13 +260,13 @@ function AccountPageInner() {
 
         {user === null && (
           <div className="flex flex-col gap-4 text-center pt-16">
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">SIGN IN REQUIRED</h1>
-            <p className="text-sm text-[#64748b]">
+            <h1 className="text-lg font-bold text-fg tracking-widest">SIGN IN REQUIRED</h1>
+            <p className="text-sm text-muted">
               Sign in to view or manage your account data.
             </p>
             <Link
               href="/att/auth?next=/att/account"
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors self-center"
+              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors self-center"
             >
               SIGN IN
             </Link>
@@ -276,14 +276,14 @@ function AccountPageInner() {
         {user && (
           <>
             <section>
-              <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-6">YOUR ACCOUNT</h1>
+              <h1 className="text-lg font-bold text-fg tracking-widest mb-6">YOUR ACCOUNT</h1>
               <dl className="grid grid-cols-3 gap-4 text-sm">
-                <dt className="text-[#64748b] tracking-widest text-xs uppercase">Email</dt>
-                <dd className="col-span-2 text-[#0f172a] tabular">{user.email}</dd>
-                <dt className="text-[#64748b] tracking-widest text-xs uppercase">Display name</dt>
-                <dd className="col-span-2 text-[#0f172a]">{user.displayName}</dd>
-                <dt className="text-[#64748b] tracking-widest text-xs uppercase">User ID</dt>
-                <dd className="col-span-2 text-[#64748b] tabular text-xs break-all">{user.id}</dd>
+                <dt className="text-muted tracking-widest text-xs uppercase">Email</dt>
+                <dd className="col-span-2 text-fg tabular">{user.email}</dd>
+                <dt className="text-muted tracking-widest text-xs uppercase">Display name</dt>
+                <dd className="col-span-2 text-fg">{user.displayName}</dd>
+                <dt className="text-muted tracking-widest text-xs uppercase">User ID</dt>
+                <dd className="col-span-2 text-muted tabular text-xs break-all">{user.id}</dd>
               </dl>
             </section>
 
@@ -292,13 +292,13 @@ function AccountPageInner() {
                 have a real email and don't need this. */}
             {isSyntheticStravaEmail(user.email) && (
               <section>
-                <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+                <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
                   Contact email
                 </h2>
-                <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+                <p className="text-sm text-muted mb-4 leading-relaxed">
                   You signed in with Strava, so the address on your account
                   ({user.email}) is a placeholder we can&apos;t deliver to.
-                  <span className="text-[#9a3412]"> Until you add a real email, we have no way to
+                  <span className="text-fg"> Until you add a real email, we have no way to
                   reach you</span> — including if our Terms of Service change, or if there&apos;s a
                   problem with your account or a group invitation. Add one below (we&apos;ll never
                   share it). It&apos;s optional, but recommended.
@@ -309,12 +309,12 @@ function AccountPageInner() {
                     value={contactEmail}
                     onChange={e => setContactEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors flex-1"
+                    className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors flex-1"
                   />
                   <button
                     type="submit"
                     disabled={working === 'contact' || !contactEmail.trim()}
-                    className="px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {working === 'contact' ? 'SAVING…' : (contactSaved ? 'UPDATE' : 'SAVE')}
                   </button>
@@ -323,23 +323,23 @@ function AccountPageInner() {
                       type="button"
                       onClick={clearContactEmail}
                       disabled={working === 'contact'}
-                      className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
                     >
                       REMOVE
                     </button>
                   )}
                 </form>
                 {contactMsg && (
-                  <p className="text-xs text-[#64748b]">{contactMsg}</p>
+                  <p className="text-xs text-muted">{contactMsg}</p>
                 )}
               </section>
             )}
 
             <section>
-              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
                 Strava integration
               </h2>
-              <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+              <p className="text-sm text-muted mb-4 leading-relaxed">
                 Connect Strava once to do two things: import any of your recent water-sport
                 activities straight into a time trial (no GPX export needed), and sign in with
                 Strava next time instead of your email and password. We only request read access
@@ -350,8 +350,8 @@ function AccountPageInner() {
                 <div
                   className={`mb-4 border px-3 py-2 text-xs ${
                     stravaFlash.tone === 'ok'
-                      ? 'border-[#15803d] bg-[#f0fdf4] text-[#15803d]'
-                      : 'border-[#b91c1c] bg-[#fef2f2] text-[#b91c1c]'
+                      ? 'border-green bg-green/10 text-green'
+                      : 'border-red bg-red/10 text-red'
                   }`}
                 >
                   {stravaFlash.text}
@@ -359,7 +359,7 @@ function AccountPageInner() {
               )}
 
               {strava === undefined && (
-                <p className="text-xs text-[#64748b]">Checking…</p>
+                <p className="text-xs text-muted">Checking…</p>
               )}
 
               {strava && !strava.connected && (
@@ -368,23 +368,23 @@ function AccountPageInner() {
 
               {strava && strava.connected && (
                 <>
-                  <div className="flex items-center justify-between gap-4 border border-[#e2e8f0] px-4 py-3">
+                  <div className="flex items-center justify-between gap-4 border border-border px-4 py-3">
                     <div className="text-sm">
-                      <span className="text-[#15803d] tracking-widest text-xs mr-2">CONNECTED</span>
-                      <span className="text-[#0f172a]">{strava.athlete.name}</span>
+                      <span className="text-green tracking-widest text-xs mr-2">CONNECTED</span>
+                      <span className="text-fg">{strava.athlete.name}</span>
                     </div>
                     <button
                       type="button"
                       onClick={disconnectStrava}
                       disabled={working === 'strava'}
-                      className="px-4 py-2 border border-[#64748b] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 border border-muted text-muted text-xs tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
                     >
                       {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
                     </button>
                   </div>
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
                   <PoweredByStrava className="mt-2" />
-                  <p className="text-xs text-[#64748b] mt-2">
+                  <p className="text-xs text-muted mt-2">
                     You can now use <span className="text-[#fc4c02]">Continue with Strava</span> on the
                     sign-in page to log in to this account. Disconnecting stops both activity import and
                     Strava sign-in.
@@ -394,10 +394,10 @@ function AccountPageInner() {
             </section>
 
             <section>
-              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
                 Public profile
               </h2>
-              <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+              <p className="text-sm text-muted mb-4 leading-relaxed">
                 A public profile page shows your race history, personal bests and stats at a shareable link.
                 It only ever shows results from trials people can already see — private and group-only results stay hidden.
                 Off by default.
@@ -407,7 +407,7 @@ function AccountPageInner() {
                   type="button"
                   onClick={() => toggleProfilePublic(!profilePublic)}
                   disabled={profilePublic === undefined || profileSaving}
-                  className="px-6 py-2.5 border border-[#0369a1] text-[#0369a1] font-bold text-sm tracking-widest hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors"
+                  className="px-6 py-2.5 border border-primary text-primary font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
                 >
                   {profileSaving
                     ? 'SAVING…'
@@ -424,26 +424,26 @@ function AccountPageInner() {
 
               {/* Vanity handle */}
               <div className="mt-5 flex flex-col gap-2">
-                <label className="text-xs text-[#64748b] tracking-widest">PROFILE HANDLE</label>
-                <p className="text-xs text-[#64748b]">
+                <label className="text-xs text-muted tracking-widest">PROFILE HANDLE</label>
+                <p className="text-xs text-muted">
                   Claim a handle for a memorable link like{' '}
-                  <span className="text-[#0f172a]">/att/u/{handle || 'your-handle'}</span>.
+                  <span className="text-fg">/att/u/{handle || 'your-handle'}</span>.
                   Lowercase letters, numbers and hyphens, 3–30 characters.
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-[#64748b]">/att/u/</span>
+                  <span className="text-sm text-muted">/att/u/</span>
                   <input
                     type="text"
                     value={handleInput}
                     onChange={e => setHandleInput(e.target.value)}
                     placeholder="your-handle"
-                    className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors"
+                    className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors"
                   />
                   <button
                     type="button"
                     onClick={saveHandle}
                     disabled={handleSaving || !handleInput.trim() || handleInput.trim() === handle}
-                    className="px-4 py-2 border border-[#0369a1] text-[#0369a1] text-xs tracking-widest hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 border border-primary text-primary text-xs tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
                   >
                     {handleSaving ? 'SAVING…' : handle ? 'CHANGE' : 'CLAIM'}
                   </button>
@@ -452,21 +452,21 @@ function AccountPageInner() {
                       type="button"
                       onClick={releaseHandle}
                       disabled={handleSaving}
-                      className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#b91c1c] hover:text-[#b91c1c] disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red disabled:opacity-50 transition-colors"
                     >
                       RELEASE
                     </button>
                   )}
                 </div>
-                {handleMsg && <p className="text-xs text-[#64748b]">{handleMsg}</p>}
+                {handleMsg && <p className="text-xs text-muted">{handleMsg}</p>}
               </div>
             </section>
 
             <section>
-              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
                 Download my data
               </h2>
-              <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+              <p className="text-sm text-muted mb-4 leading-relaxed">
                 Get a JSON file containing every piece of personal data paddlesnitch.com holds about you:
                 your profile, every course and trial you created, every entry you submitted. Backs your
                 right of access (UK GDPR Art. 15) and data portability (Art. 20).
@@ -475,20 +475,20 @@ function AccountPageInner() {
                 type="button"
                 onClick={downloadExport}
                 disabled={working === 'export'}
-                className="px-6 py-2.5 border border-[#0369a1] text-[#0369a1] font-bold text-sm tracking-widest hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors"
+                className="px-6 py-2.5 border border-primary text-primary font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
               >
                 {working === 'export' ? 'PREPARING…' : 'DOWNLOAD MY DATA (.json)'}
               </button>
             </section>
 
-            <section className="border-t border-[#e2e8f0] pt-8">
-              <h2 className="text-xs text-[#b91c1c] tracking-[0.2em] uppercase mb-3">
+            <section className="border-t border-border pt-8">
+              <h2 className="text-xs text-red tracking-[0.2em] uppercase mb-3">
                 Delete my account
               </h2>
-              <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+              <p className="text-sm text-muted mb-4 leading-relaxed">
                 Permanently removes your account from Cognito, every course and trial you created,
                 every entry you submitted across all trials (their leaderboards rebuild without you),
-                and clears your sign-in cookies. <strong className="text-[#b91c1c]">This is immediate and cannot be undone.</strong> Backs
+                and clears your sign-in cookies. <strong className="text-red">This is immediate and cannot be undone.</strong> Backs
                 your right to erasure (UK GDPR Art. 17).
               </p>
 
@@ -496,20 +496,20 @@ function AccountPageInner() {
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(true)}
-                  className="px-6 py-2.5 border border-[#b91c1c] text-[#b91c1c] font-bold text-sm tracking-widest hover:bg-[#fef2f2] transition-colors"
+                  className="px-6 py-2.5 border border-red text-red font-bold text-sm tracking-widest hover:bg-red/10 transition-colors"
                 >
                   DELETE MY ACCOUNT
                 </button>
               ) : (
-                <div className="border border-[#b91c1c] bg-[#fef2f2] p-4 flex flex-col gap-3">
-                  <p className="text-sm text-[#0f172a]">
+                <div className="border border-red bg-red/10 p-4 flex flex-col gap-3">
+                  <p className="text-sm text-fg">
                     Type <strong>DELETE</strong> to confirm. There is no undo.
                   </p>
                   <input
                     type="text"
                     value={confirmText}
                     onChange={e => setConfirmText(e.target.value)}
-                    className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#b91c1c]"
+                    className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-red"
                     autoFocus
                   />
                   <div className="flex gap-3 flex-wrap">
@@ -517,7 +517,7 @@ function AccountPageInner() {
                       type="button"
                       onClick={deleteAccount}
                       disabled={confirmText !== 'DELETE' || working === 'delete'}
-                      className="px-6 py-2.5 bg-[#b91c1c] text-white font-bold text-sm tracking-widest hover:bg-[#dc2626] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="px-6 py-2.5 bg-red text-white font-bold text-sm tracking-widest hover:bg-red disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {working === 'delete' ? 'DELETING…' : 'CONFIRM DELETION'}
                     </button>
@@ -525,7 +525,7 @@ function AccountPageInner() {
                       type="button"
                       onClick={() => { setConfirmDelete(false); setConfirmText('') }}
                       disabled={working === 'delete'}
-                      className="px-6 py-2.5 border border-[#64748b] text-[#64748b] text-sm tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                      className="px-6 py-2.5 border border-muted text-muted text-sm tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
                     >
                       CANCEL
                     </button>
@@ -535,12 +535,12 @@ function AccountPageInner() {
             </section>
 
             {error && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                 {error}
               </div>
             )}
 
-            <section className="text-xs text-[#64748b] border-t border-[#e2e8f0] pt-6">
+            <section className="text-xs text-muted border-t border-border pt-6">
               See the{' '}
               <Link href="/att/privacy" className="tt-link">privacy policy</Link>{' '}
               for full details on what we hold, why, and how to exercise rights we can&apos;t handle from

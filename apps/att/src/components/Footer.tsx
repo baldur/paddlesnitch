@@ -4,7 +4,7 @@ import Link from 'next/link'
 // the privacy policy and surfaces the controller identity at a glance.
 export default function Footer() {
   return (
-    <footer className="border-t border-[#e2e8f0] px-4 py-4 text-xs text-[#64748b] flex flex-wrap items-center justify-between gap-3">
+    <footer className="border-t border-border px-4 py-4 text-xs text-muted flex flex-wrap items-center justify-between gap-3">
       <div>
         © {new Date().getFullYear()} paddlesnitch.com
       </div>

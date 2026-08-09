@@ -163,7 +163,7 @@ export default function NewCoursePage() {
     }
   }
 
-  const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
+  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
   const selectedType = COURSE_TYPES.find(t => t.value === courseType)!
 
   return (
@@ -174,28 +174,28 @@ export default function NewCoursePage() {
             <Link href="/att" className="tt-nav-link text-sm">
               ← HOME
             </Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">NEW COURSE</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">NEW COURSE</span>
           </>
         }
       />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-8">CREATE COURSE</h1>
+        <h1 className="text-lg font-bold text-fg tracking-widest mb-8">CREATE COURSE</h1>
 
         {groups !== null && groups.length === 0 ? (
           // No group → no creation (phase 2). Point the would-be organiser at
           // the "create a group" on-ramp instead of a form they can't submit.
-          <div className="border border-[#e2e8f0] bg-[#f8fafc] p-8 text-center flex flex-col gap-4">
-            <p className="text-sm font-bold text-[#0f172a] tracking-widest">CREATE A GROUP FIRST</p>
-            <p className="text-xs text-[#64748b] leading-relaxed">
+          <div className="border border-border bg-surface p-8 text-center flex flex-col gap-4">
+            <p className="text-sm font-bold text-fg tracking-widest">CREATE A GROUP FIRST</p>
+            <p className="text-xs text-muted leading-relaxed">
               Courses belong to a group — a club, a squad, or just you. Create one to start
               organising; you’ll be its admin and can add courses and open trials on them.
             </p>
             <div>
               <Link
                 href="/att/groups"
-                className="inline-block px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
+                className="inline-block px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
               >
                 + NEW GROUP
               </Link>
@@ -205,13 +205,13 @@ export default function NewCoursePage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           {/* Name */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">COURSE NAME</label>
+            <label className="text-xs text-muted tracking-widest">COURSE NAME</label>
             <input ref={nameRef} type="text" required placeholder="e.g. Thames — Henley Reach" className={inputClass} />
           </div>
 
           {/* Sport */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">SPORT</label>
+            <label className="text-xs text-muted tracking-widest">SPORT</label>
             <select ref={sportRef} required className={inputClass}>
               <option value="kayak">Kayak</option>
               <option value="rowing">Rowing</option>
@@ -221,27 +221,27 @@ export default function NewCoursePage() {
 
           {/* Group — the owning group (phase 2). Defaults to the user's only group. */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">GROUP</label>
+            <label className="text-xs text-muted tracking-widest">GROUP</label>
             <select value={groupId} onChange={e => setGroupId(e.target.value)} required className={inputClass}>
               <option value="">{groups === null ? 'Loading…' : '— Pick a group —'}</option>
               {(groups ?? []).map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
-            <p className="text-xs text-[#64748b]">The group that owns this course. Its admins can edit it and open trials on it.</p>
+            <p className="text-xs text-muted">The group that owns this course. Its admins can edit it and open trials on it.</p>
           </div>
 
           {/* Course type */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs text-[#64748b] tracking-widest">COURSE TYPE</label>
+            <label className="text-xs text-muted tracking-widest">COURSE TYPE</label>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {COURSE_TYPES.map(t => (
                 <label
                   key={t.value}
                   className={`flex flex-col gap-1.5 border p-3 cursor-pointer transition-colors ${
                     courseType === t.value
-                      ? 'border-[#0369a1] bg-[#f0f9ff]'
-                      : 'border-[#e2e8f0] hover:border-[#94a3b8]'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:border-muted'
                   }`}
                 >
                   <input
@@ -253,48 +253,48 @@ export default function NewCoursePage() {
                     className="sr-only"
                   />
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-[#0f172a]">{t.label}</span>
-                    <span className="text-[10px] tracking-widest text-[#64748b] border border-[#e2e8f0] px-1.5 py-0.5 whitespace-nowrap">
+                    <span className="text-sm font-bold text-fg">{t.label}</span>
+                    <span className="text-[10px] tracking-widest text-muted border border-border px-1.5 py-0.5 whitespace-nowrap">
                       {t.linesLabel}
                     </span>
                   </div>
-                  <p className="text-xs text-[#64748b]">{t.summary}</p>
+                  <p className="text-xs text-muted">{t.summary}</p>
                 </label>
               ))}
             </div>
-            <div className="border border-[#e2e8f0] bg-[#f8fafc] px-3 py-3 text-xs text-[#64748b] leading-relaxed">
-              <span className="font-bold text-[#0f172a]">{selectedType.label}: </span>
+            <div className="border border-border bg-surface px-3 py-3 text-xs text-muted leading-relaxed">
+              <span className="font-bold text-fg">{selectedType.label}: </span>
               {selectedType.detail}
             </div>
           </div>
 
           {/* Map */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs text-[#64748b] tracking-widest">
+            <label className="text-xs text-muted tracking-widest">
               {isP2P ? 'START / FINISH LINES' : isGate ? 'GATES' : 'CROSSING LINE'}
             </label>
             <DrawingMap onChange={handleMapChange} courseType={courseType} />
             <div className="flex gap-4 text-xs flex-wrap">
               {isGate ? (
-                <span className={gates ? 'text-[#15803d]' : 'text-[#64748b]'}>
+                <span className={gates ? 'text-green' : 'text-muted'}>
                   {gates ? `✓ ${gates.length} gates set` : '○ Gates not complete'}
                 </span>
               ) : (
                 <>
-                  <span className={startLine ? (isP2P ? 'text-[#15803d]' : 'text-[#7c3aed]') : 'text-[#64748b]'}>
+                  <span className={startLine ? (isP2P ? 'text-green' : 'text-split') : 'text-muted'}>
                     {isP2P
                       ? (startLine ? '✓ Start line set' : '○ Start line not set')
                       : (startLine ? '✓ Crossing line set' : '○ Crossing line not set')}
                   </span>
                   {isP2P && (
-                    <span className={finishLine ? 'text-[#b91c1c]' : 'text-[#64748b]'}>
+                    <span className={finishLine ? 'text-red' : 'text-muted'}>
                       {finishLine ? '✓ Finish line set' : '○ Finish line not set'}
                     </span>
                   )}
                 </>
               )}
               {distanceMetres != null && courseType !== 'loop' && (
-                <span className="text-[#6d28d9]">~{distanceMetres.toLocaleString()} m</span>
+                <span className="text-split">~{distanceMetres.toLocaleString()} m</span>
               )}
             </div>
           </div>
@@ -307,24 +307,24 @@ export default function NewCoursePage() {
           {/* Manual distance (loop only) */}
           {courseType === 'loop' && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#64748b] tracking-widest">COURSE DISTANCE (METRES) — OPTIONAL</label>
+              <label className="text-xs text-muted tracking-widest">COURSE DISTANCE (METRES) — OPTIONAL</label>
               <input ref={distanceRef} type="number" min={0} placeholder="e.g. 1000" className={inputClass} />
-              <p className="text-xs text-[#64748b]">Nominal course length shown on the leaderboard. Leave blank if unknown.</p>
+              <p className="text-xs text-muted">Nominal course length shown on the leaderboard. Leave blank if unknown.</p>
             </div>
           )}
 
           {/* Minimum valid time */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">MINIMUM VALID TIME (SECONDS) — OPTIONAL</label>
+            <label className="text-xs text-muted tracking-widest">MINIMUM VALID TIME (SECONDS) — OPTIONAL</label>
             <input ref={minValidSecondsRef} type="number" min={0} placeholder="e.g. 300" className={inputClass} />
-            <p className="text-xs text-[#64748b]">
+            <p className="text-xs text-muted">
               Ignore results shorter than this. Useful for loop courses where warmup crossings could be mistaken for a race.
             </p>
           </div>
 
           {/* Visibility */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
+            <label className="text-xs text-muted tracking-widest">VISIBILITY</label>
             <div className="flex gap-2">
               {(['public', 'private', 'group'] as const).map(v => (
                 <button
@@ -333,15 +333,15 @@ export default function NewCoursePage() {
                   onClick={() => setVisibility(v)}
                   className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                     visibility === v
-                      ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
-                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
+                      ? 'border-primary text-primary bg-primary/10'
+                      : 'border-border text-muted hover:border-muted'
                   }`}
                 >
                   {v === 'group' ? 'MY GROUP' : v.toUpperCase()}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-[#64748b]">
+            <p className="text-xs text-muted">
               {visibility === 'public'
                 ? 'Anyone can find this course. Group admins can open time trials on it.'
                 : visibility === 'private'
@@ -351,13 +351,13 @@ export default function NewCoursePage() {
           </div>
 
           {error && (
-            <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">{error}</div>
+            <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">{error}</div>
           )}
 
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? 'SAVING…' : 'CREATE COURSE'}
           </button>

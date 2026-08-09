@@ -52,29 +52,29 @@ export default async function TrialPage({
             <Link href="/att" className="tt-nav-link text-sm shrink-0">
               ← HOME
             </Link>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm truncate">{trial.name.toUpperCase()}</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm truncate">{trial.name.toUpperCase()}</span>
           </>
         }
       >
         {trial.status === 'open' && (
           <a
             href={`/att/trials/${trialId}/upload`}
-            className="text-xs bg-[#0369a1] text-white font-bold px-4 py-1.5 tracking-widest hover:bg-[#0284c7] transition-colors"
+            className="text-xs bg-primary text-white font-bold px-4 py-1.5 tracking-widest hover:bg-primary transition-colors"
           >
             SUBMIT YOUR ENTRY
           </a>
         )}
       </AppHeader>
 
-      <section className="border-b border-[#e2e8f0] px-4 py-8 bg-[#f8fafc]">
-        <p className="text-[#64748b] text-xs tracking-[0.2em] uppercase mb-1">
+      <section className="border-b border-border px-4 py-8 bg-surface">
+        <p className="text-muted text-xs tracking-[0.2em] uppercase mb-1">
           {course?.name ?? ''}
         </p>
-        <h1 className="text-3xl md:text-4xl font-bold text-[#0f172a] tracking-widest mb-1">
+        <h1 className="text-3xl md:text-4xl font-bold text-fg tracking-widest mb-1">
           {trial.name.toUpperCase()}
         </h1>
-        <div className="flex items-center gap-4 text-xs text-[#64748b]">
+        <div className="flex items-center gap-4 text-xs text-muted">
           <span>{trial.date}</span>
           {course && (
             <span>
@@ -84,8 +84,8 @@ export default async function TrialPage({
           <span
             className={`px-2 py-0.5 border ${
               trial.status === 'open'
-                ? 'border-[#15803d] text-[#15803d]'
-                : 'border-[#64748b] text-[#64748b]'
+                ? 'border-green text-green'
+                : 'border-muted text-muted'
             }`}
           >
             {trial.status.toUpperCase()}
@@ -96,22 +96,22 @@ export default async function TrialPage({
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-8">
         {course && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">Course</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Course</h2>
             <CourseMapClient course={course} track={winnerTrack} />
-            <div className="flex gap-4 mt-2 text-xs text-[#64748b]">
+            <div className="flex gap-4 mt-2 text-xs text-muted">
               <span className="flex items-center gap-1">
-                <span className="inline-block w-3 h-0.5 bg-[#15803d]" />
+                <span className="inline-block w-3 h-0.5 bg-green" />
                 {course.finishLine ? 'Start' : 'Crossing line'}
               </span>
               {course.finishLine && (
                 <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-0.5 bg-[#b91c1c]" />
+                  <span className="inline-block w-3 h-0.5 bg-red" />
                   Finish
                 </span>
               )}
               {winnerTrack && (
                 <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-0.5 bg-[#0369a1]" />
+                  <span className="inline-block w-3 h-0.5 bg-primary" />
                   Leader&apos;s track
                 </span>
               )}
@@ -120,7 +120,7 @@ export default async function TrialPage({
         )}
 
         <section>
-          <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
             Leaderboard
           </h2>
           <LeaderboardTable

@@ -3,8 +3,8 @@ import { IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import Footer from '@/components/Footer'
 import CookieNotice from '@/components/CookieNotice'
-import FeedbackWidget from '@/components/FeedbackWidget'
-import StravaContactBanner from '@/components/StravaContactBanner'
+import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
+import AttContactBanner from '@/components/AttContactBanner'
 import Analytics from '@/components/Analytics'
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -21,14 +21,14 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#ffffff',
+  themeColor: '#0b1220',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={ibmPlexMono.className}>
-      <body className="min-h-screen flex flex-col bg-white text-[#0f172a]">
-        <StravaContactBanner />
+      <body className="min-h-screen flex flex-col bg-bg text-fg">
+        <AttContactBanner />
         {children}
         <Footer />
         <CookieNotice />

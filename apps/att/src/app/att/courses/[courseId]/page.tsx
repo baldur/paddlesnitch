@@ -54,8 +54,8 @@ export default async function CourseDetailPage({
             <Link href="/att/courses" className="tt-nav-link text-sm shrink-0">
               ← COURSES
             </Link>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm truncate">{course.name.toUpperCase()}</span>
           </>
         }
       >
@@ -68,10 +68,10 @@ export default async function CourseDetailPage({
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section>
-          <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-1">
+          <h1 className="text-lg font-bold text-fg tracking-widest mb-1">
             {course.name.toUpperCase()}
           </h1>
-          <p className="text-xs text-[#64748b] mb-4">
+          <p className="text-xs text-muted mb-4">
             {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
             {course.type === 'loop' && ' · LOOP'}
           </p>
@@ -80,7 +80,7 @@ export default async function CourseDetailPage({
 
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase">
               Time Trials
             </h2>
             {canManage && (
@@ -93,7 +93,7 @@ export default async function CourseDetailPage({
             )}
           </div>
           {sortedTrials.length === 0 ? (
-            <div className="border border-[#e2e8f0] p-6 text-center text-[#64748b] text-sm">
+            <div className="border border-border p-6 text-center text-muted text-sm">
               No trials on this course yet.
               {canManage && (
                 <>
@@ -111,19 +111,19 @@ export default async function CourseDetailPage({
                 <Link
                   key={t.id}
                   href={`/att/trials/${t.id}`}
-                  className="border border-[#e2e8f0] px-4 py-3 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
+                  className="border border-border px-4 py-3 flex items-center justify-between hover:border-primary transition-colors group"
                 >
                   <div>
-                    <div className="text-[#0f172a] text-sm group-hover:text-[#0369a1] transition-colors">
+                    <div className="text-fg text-sm group-hover:text-primary transition-colors">
                       {t.name}
                     </div>
-                    <div className="text-xs text-[#64748b] mt-0.5">{t.date}</div>
+                    <div className="text-xs text-muted mt-0.5">{t.date}</div>
                   </div>
                   <span
                     className={`text-xs px-2 py-0.5 border ${
                       t.status === 'open'
-                        ? 'border-[#15803d] text-[#15803d]'
-                        : 'border-[#64748b] text-[#64748b]'
+                        ? 'border-green text-green'
+                        : 'border-muted text-muted'
                     }`}
                   >
                     {t.status.toUpperCase()}

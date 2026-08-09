@@ -9,9 +9,9 @@ import AppHeader from '@/components/AppHeader'
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
-      <div className="text-xs text-[#64748b] tracking-[0.2em] uppercase">{label}</div>
-      <div className="text-lg text-[#0f172a] tabular mt-1">{value}</div>
+    <div className="border border-border bg-surface px-4 py-3">
+      <div className="text-xs text-muted tracking-[0.2em] uppercase">{label}</div>
+      <div className="text-lg text-fg tabular mt-1">{value}</div>
     </div>
   )
 }
@@ -62,12 +62,12 @@ export default async function ProfilePage({
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f172a] tracking-wide">{name}</h1>
-          <p className="text-sm text-[#64748b] mt-1">Paddler profile</p>
+          <h1 className="text-2xl font-bold text-fg tracking-wide">{name}</h1>
+          <p className="text-sm text-muted mt-1">Paddler profile</p>
         </div>
 
         {isOwner && !settings.public && (
-          <div className="border border-[#0369a1] bg-[#f0f9ff] px-4 py-3 text-xs text-[#0369a1]">
+          <div className="border border-primary bg-primary/10 px-4 py-3 text-xs text-primary">
             Only you can see this profile. Make it public from your{' '}
             <Link href="/att/account" className="underline">account page</Link> to share it.
           </div>
@@ -82,32 +82,32 @@ export default async function ProfilePage({
         </div>
 
         {stats.races.length === 0 ? (
-          <p className="text-sm text-[#64748b]">No race results to show yet.</p>
+          <p className="text-sm text-muted">No race results to show yet.</p>
         ) : (
           <>
             {/* Best pace / speed */}
             {stats.bestRace && (
               <section className="flex flex-col gap-2">
-                <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">Personal best pace</h2>
+                <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Personal best pace</h2>
                 <div className="grid grid-cols-3 gap-3">
                   <Stat label="Pace /500m" value={paceFor500m(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
                   <Stat label="Speed" value={speedKmh(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
                   <Stat label="Speed" value={speedMs(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
                 </div>
-                <p className="text-xs text-[#64748b]">on {stats.bestRace.courseName} ({formatTime(stats.bestRace.totalElapsedSeconds)})</p>
+                <p className="text-xs text-muted">on {stats.bestRace.courseName} ({formatTime(stats.bestRace.totalElapsedSeconds)})</p>
               </section>
             )}
 
             {/* Personal bests per course */}
             <section className="flex flex-col gap-2">
-              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">Personal bests</h2>
-              <div className="border border-[#e2e8f0]">
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Personal bests</h2>
+              <div className="border border-border">
                 {stats.personalBests.map(pb => (
-                  <div key={pb.courseId} className="flex items-center justify-between px-4 py-2 border-b border-[#f1f5f9] last:border-b-0">
-                    <span className="text-sm text-[#0f172a] min-w-0 truncate">{pb.courseName}</span>
-                    <span className="text-sm text-[#0369a1] tabular shrink-0 ml-3">
+                  <div key={pb.courseId} className="flex items-center justify-between px-4 py-2 border-b border-surface-2 last:border-b-0">
+                    <span className="text-sm text-fg min-w-0 truncate">{pb.courseName}</span>
+                    <span className="text-sm text-primary tabular shrink-0 ml-3">
                       {formatTime(pb.bestSeconds)}
-                      <span className="text-[#64748b] ml-2">×{pb.raceCount}</span>
+                      <span className="text-muted ml-2">×{pb.raceCount}</span>
                     </span>
                   </div>
                 ))}
@@ -117,11 +117,11 @@ export default async function ProfilePage({
             {/* Boat classes */}
             {stats.boatClasses.length > 0 && (
               <section className="flex flex-col gap-2">
-                <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">Boat classes</h2>
+                <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Boat classes</h2>
                 <div className="flex flex-wrap gap-2">
                   {stats.boatClasses.map(bc => (
-                    <span key={bc.boatClass} className="border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1 text-sm text-[#0f172a] tabular">
-                      {bc.boatClass} <span className="text-[#64748b]">×{bc.count}</span>
+                    <span key={bc.boatClass} className="border border-border bg-surface px-3 py-1 text-sm text-fg tabular">
+                      {bc.boatClass} <span className="text-muted">×{bc.count}</span>
                     </span>
                   ))}
                 </div>
@@ -130,19 +130,19 @@ export default async function ProfilePage({
 
             {/* Race history */}
             <section className="flex flex-col gap-2">
-              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">Race history</h2>
-              <div className="border border-[#e2e8f0]">
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Race history</h2>
+              <div className="border border-border">
                 {stats.races.map(r => (
                   <Link
                     key={r.entryId}
                     href={`/att/entries/${r.entryId}`}
-                    className="flex items-center justify-between px-4 py-2 border-b border-[#f1f5f9] last:border-b-0 hover:bg-[#f8fafc] transition-colors"
+                    className="flex items-center justify-between px-4 py-2 border-b border-surface-2 last:border-b-0 hover:bg-surface transition-colors"
                   >
                     <span className="min-w-0">
-                      <span className="block text-sm text-[#0f172a] truncate">{r.courseName}</span>
-                      <span className="block text-xs text-[#64748b] tabular">{r.trialName} · {r.raceDate} · {r.boatClass}</span>
+                      <span className="block text-sm text-fg truncate">{r.courseName}</span>
+                      <span className="block text-xs text-muted tabular">{r.trialName} · {r.raceDate} · {r.boatClass}</span>
                     </span>
-                    <span className="text-sm text-[#0369a1] tabular shrink-0 ml-3">{formatTime(r.totalElapsedSeconds)}</span>
+                    <span className="text-sm text-primary tabular shrink-0 ml-3">{formatTime(r.totalElapsedSeconds)}</span>
                   </Link>
                 ))}
               </div>
