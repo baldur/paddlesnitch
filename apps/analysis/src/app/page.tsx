@@ -4,9 +4,22 @@ import { useState, useEffect } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
 import type { StravaActivitySummary } from '@paddlesnitch/core/types'
 import type { TrialEntrySummary } from '@/lib/trials'
+import AppShell from '@paddlesnitch/ui/AppShell'
+import AppAccountNav from '@/components/AppAccountNav'
 
 const PANEL = 'bg-[#0f172a]/95 border border-[#1e293b] rounded'
 type Result = ViewData & { id: string }
+
+// Shared frame for the entry-screen states so /analyse gets the same platform
+// header (brand + Trials↔Analyse nav + account) as every other page.
+function Frame({ nav, children }: { nav?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <AppShell active="analyse" nav={nav} account={<AppAccountNav />} />
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">{children}</div>
+    </div>
+  )
+}
 
 function fmtDist(m: number) { return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m` }
 function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) } catch { return iso.slice(0, 10) } }
@@ -66,23 +79,18 @@ export default function AnalysePage() {
   // result → immersive view
   if (res) return <AnalysisView data={res} sessionId={res.id} onNewFile={reset} />
 
-  const box = 'fixed inset-0 bg-[#0b1220] text-[#e2e8f0] flex flex-col items-center justify-center px-4'
-
   if (authed === false) return (
-    <div className={box}>
-      <a href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</a>
+    <Frame>
       <div className={`${PANEL} w-full max-w-md p-6 text-center`}>
         <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
         <p className="text-xs text-[#64748b] mt-2 mb-5">Sign in to analyse your paddles, save them to your diary, and track progress over time.</p>
         <a href="/att/auth?next=/analyse" className="inline-block px-6 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded hover:bg-[#0284c7]">SIGN IN / SIGN UP</a>
       </div>
-    </div>
+    </Frame>
   )
 
   return (
-    <div className={box}>
-      <a href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</a>
-      <Link href="/library" className="absolute top-4 right-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">MY PADDLES →</Link>
+    <Frame nav={<Link href="/library" className="text-muted hover:text-fg tracking-widest transition-colors">MY PADDLES</Link>}>
       <div className={`${PANEL} w-full max-w-md p-6`}>
         <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
         <p className="text-xs text-[#64748b] mt-1 mb-4">See what actually happened — pieces, rests, stroke-rate, wind &amp; flow — and keep a paddling diary.</p>
@@ -142,6 +150,6 @@ export default function AnalysePage() {
         {tab !== 'file' && status === 'busy' && <p className="mt-3 text-xs text-[#64748b]">Analysing…</p>}
         {error && <div className="mt-3 text-xs text-[#fca5a5] border border-[#7f1d1d] bg-[#450a0a]/40 px-3 py-2 rounded">{error}</div>}
       </div>
-    </div>
+    </Frame>
   )
 }

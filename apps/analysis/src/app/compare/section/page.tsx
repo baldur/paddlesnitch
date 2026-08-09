@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { fmtDur, split500 } from '@/lib/analysis'
 import type { Racer, SectionRace } from '@/lib/similar'
 import SectionRaceMapClient from '@/components/map/SectionRaceMapClient'
+import AppShell from '@paddlesnitch/ui/AppShell'
+import AppAccountNav from '@/components/AppAccountNav'
 
 // Palette: source is blue; the picked racers cycle through the rest.
 const SOURCE_COLOR = '#38bdf8'
@@ -57,6 +59,7 @@ function Inner() {
 
   return (
     <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0]">
+      <AppShell active="analyse" account={<AppAccountNav />} />
       <div className="h-[46vh] w-full relative">
         <SectionRaceMapClient racers={overlay} startLine={race.startLine} finishLine={race.finishLine} />
         <div className="absolute top-3 left-3 z-[1000] bg-[#0f172a]/95 border border-[#1e293b] rounded px-3 py-2 text-xs">
