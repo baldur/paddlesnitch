@@ -1,5 +1,4 @@
 'use client'
-import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AccountNav, { type NavUser } from '@paddlesnitch/ui/AccountNav'
 
@@ -7,7 +6,6 @@ import AccountNav, { type NavUser } from '@paddlesnitch/ui/AccountNav'
 // user from /analyse/api/me and points profile/account/sign-in at the shared att
 // pages (one platform, one account). Sign-out uses the shared auth cookie.
 export default function AppAccountNav() {
-  const router = useRouter()
   const [user, setUser] = useState<NavUser | null | undefined>(undefined)
 
   useEffect(() => {
@@ -20,7 +18,9 @@ export default function AppAccountNav() {
   const onSignOut = async () => {
     try { await fetch('/att/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ }
     setUser(null)
-    router.push('/att')
+    // Full nav (not router.push): /att is outside this app's '/analyse' basePath,
+    // which router.push would prepend → /analyse/att.
+    window.location.href = '/att'
   }
 
   return (
