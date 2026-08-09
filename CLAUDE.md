@@ -234,6 +234,8 @@ Browser
 
 OpenNext v4 bundles the Next.js server into a single Lambda. No API Gateway — CloudFront routes directly to a Lambda function URL. Static assets (JS/CSS/images) go to S3 and are served by CloudFront with long cache TTLs.
 
+**Deploy is not atomic — asset ordering matters (both directions).** Next.js chunks are content-hashed, so a deploy that changes shared code (e.g. the header) rehashes every page's bundle. Two guards in `infra/lib/att-stack.ts` keep the site from breaking mid-deploy: (1) the asset `BucketDeployment`s use **`prune:false`** so the PREVIOUS build's hashed files survive for in-flight/cached OLD HTML (a lifecycle rule expires orphans later); and (2) each server Lambda (`ServerFn`, `AnalysisFn`) has an explicit **`.node.addDependency(deployAssets)`** so CloudFormation uploads the NEW chunks to S3 *before* flipping the Lambda that serves HTML referencing them — otherwise the new HTML 404s on `/_next/static/*` for the duration of the upload. The BucketDeployments deliberately carry **no** `distribution`/`distributionPaths` (that built-in invalidation would depend on the distribution → serverFn and force the wrong order / a cycle); invalidation isn't needed for immutable hashed assets — invalidate a changed non-hashed `public/` path manually if that ever comes up.
+
 Cognito is the identity store. The server function has IAM permission to call `cognito-idp:*` against the user pool and `ses:SendEmail` for the `paddlesnitch.com` identity. The S3 data bucket holds *only* course/trial/entry data — no user records, no sessions.
 
 ### Local Data Layout

@@ -512,40 +512,60 @@ export class AttStack extends cdk.Stack {
     })
 
     // OpenNext v4 assets go under _assets/ in S3.
-    // prune:false is the fix for mid-deploy 403s on CSS/JS: BucketDeployment
-    // defaults to deleting any destination object not in the new build, which
-    // removes the PREVIOUS build's hashed assets. Because a deploy isn't atomic
-    // (the server Lambda begins serving HTML with new asset hashes while old
-    // cached HTML still references old hashes), pruning leaves a window where a
-    // requested /_next/static/<hash> is gone from S3 and the OAC origin returns
-    // 403. Next.js assets are content-hashed + immutable, so old and new coexist
-    // safely; the bucket lifecycle rule above expires the orphans later.
-    new s3deploy.BucketDeployment(this, 'DeployAssets', {
+    //
+    // Two mid-deploy-safety properties, both needed because a deploy is NOT
+    // atomic:
+    //
+    // 1. prune:false — BucketDeployment defaults to deleting any destination
+    //    object not in the new build, which would remove the PREVIOUS build's
+    //    hashed assets. In-flight/cached OLD HTML still references those, so
+    //    pruning would 403 them. Next.js assets are content-hashed + immutable,
+    //    so old and new coexist safely; the bucket lifecycle rule above expires
+    //    the orphans later. (Protects OLD HTML → OLD chunks.)
+    //
+    // 2. The server Lambda must NOT go live with NEW HTML before the NEW chunks
+    //    it references exist in S3, or every /_next/static/<hash> 404s until the
+    //    upload finishes (this broke the whole app chrome when a shared-header
+    //    change rehashed every page's bundle). We therefore make the upload a
+    //    DEPENDENCY of the server function below (serverFn.addDependency), so
+    //    CloudFormation uploads assets FIRST, then flips the Lambda. (Protects
+    //    NEW HTML → NEW chunks.)
+    //
+    // NB: no `distribution`/`distributionPaths` here on purpose. The built-in
+    // invalidation would make this deployment depend on the distribution, which
+    // depends on serverFn — forcing the exact wrong order (Lambda before upload)
+    // and making the dependency in (2) a cycle. Invalidation isn't needed anyway:
+    // _next/* assets are content-hashed (new deploys = new URLs), so there is
+    // nothing stale to purge. The one-off #135 cached-404s are long gone (the
+    // /strava + /data behaviors exist now); if a non-hashed public/ file ever
+    // changes, invalidate that path manually.
+    const deployAssets = new s3deploy.BucketDeployment(this, 'DeployAssets', {
       sources: [
         s3deploy.Source.asset(path.join(__dirname, '../../apps/att/.open-next/assets')),
       ],
       destinationBucket: assetsBucket,
       destinationKeyPrefix: '_assets',
       prune: false,
-      distribution,
-      // Invalidate the public-asset paths too so previously-cached 404s (from
-      // before the /strava + /data behaviors existed) are purged (#135).
-      distributionPaths: ['/_next/*', '/strava/*', '/data/*'],
     })
 
     // Analysis app assets. Deployed under _analyse-assets/analyse/ so the key
     // includes the /analyse basePath segment the browser sends (see
-    // analysisAssetsOrigin above). Same prune:false + lifecycle story as att.
-    new s3deploy.BucketDeployment(this, 'DeployAnalysisAssets', {
+    // analysisAssetsOrigin above). Same prune:false + upload-before-Lambda story.
+    const deployAnalysisAssets = new s3deploy.BucketDeployment(this, 'DeployAnalysisAssets', {
       sources: [
         s3deploy.Source.asset(path.join(__dirname, '../../apps/analysis/.open-next/assets')),
       ],
       destinationBucket: assetsBucket,
       destinationKeyPrefix: '_analyse-assets/analyse',
       prune: false,
-      distribution,
-      distributionPaths: ['/analyse/_next/*'],
     })
+
+    // Order the deploy so each server Lambda only goes live AFTER its new hashed
+    // assets are in S3 (see property 2 above). Without this, CloudFormation may
+    // flip the Lambda first, leaving a window where new HTML references chunks
+    // that aren't uploaded yet → 404s across the site during every deploy.
+    serverFn.node.addDependency(deployAssets)
+    analysisFn.node.addDependency(deployAnalysisAssets)
 
     // ---------------------------------------------------------------------------
     // DNS — www alias pointing to same CloudFront distribution
