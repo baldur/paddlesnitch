@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // code at this point would surface as a token-exchange error even though
   // they're already authenticated — reported in #55). Just bounce them to
   // `next`. Users who want to LINK Strava to their account should use the
-  // connect button on /att/account, which has its own flow.
+  // connect button on /profile/me/settings, which has its own flow.
   const existingUser = await getAuthUser()
   if (existingUser) {
     return NextResponse.redirect(new URL(next.startsWith('/') ? next : '/att', base))

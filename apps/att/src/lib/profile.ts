@@ -5,8 +5,8 @@
 //      entry is filtered through canViewTrial, so a private/group result stays
 //      hidden exactly as it is on the trial's own leaderboard.
 //
-// Profiles are keyed by userId (/att/u/{userId}); a user may also claim a vanity
-// handle (/att/u/baldur) resolved via a usernames/{slug}.json -> userId index.
+// Profiles are keyed by userId (/profile/{userId}); a user may also claim a vanity
+// handle (/profile/baldur) resolved via a usernames/{slug}.json -> userId index.
 
 import { getJson, putJson, deleteObject, listKeys } from './storage'
 import { canViewTrial } from './permissions'
@@ -71,7 +71,7 @@ export async function getHandleOwner(slug: string): Promise<string | null> {
 }
 
 // Resolve a route segment to a userId: a known handle wins, otherwise the
-// segment is treated as a userId directly (so old /att/u/{userId} links work).
+// segment is treated as a userId directly (so old /profile/{userId} links work).
 export async function resolveToUserId(segment: string): Promise<string> {
   return (await getHandleOwner(segment.toLowerCase())) ?? segment
 }

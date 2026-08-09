@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { getTosConsent, recordAcceptance, hasAcceptedCurrent } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 
-// GET /att/api/account/tos
+// GET /api/account/tos
 // Whether the authenticated viewer has accepted the current ToS version.
 // 401 for unauthenticated requests.
 export async function GET() {
@@ -18,7 +18,7 @@ export async function GET() {
   })
 }
 
-// POST /att/api/account/tos  { version }
+// POST /api/account/tos  { version }
 // Records an acceptance of the supplied version (or the current one if
 // omitted). 422 if the version doesn't match the current one — we don't
 // let users pre-accept future versions.

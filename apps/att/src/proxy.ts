@@ -19,10 +19,14 @@ export function proxy(req: NextRequest) {
   }
 
 
-  // Admin pages always require auth
+  // Admin pages + the signed-in "my profile"/settings area always require auth.
+  // `/profile/:id` (public profiles) is NOT gated — only `/profile/me*`.
   const requiresAuth =
     pathname.startsWith('/att/admin') ||
-    (req.method !== 'GET' && pathname.startsWith('/att/api') && !pathname.startsWith('/att/api/auth'))
+    pathname.startsWith('/profile/me') ||
+    (req.method !== 'GET' &&
+      (pathname.startsWith('/att/api') || pathname.startsWith('/api/account')) &&
+      !pathname.startsWith('/att/api/auth'))
 
   if (requiresAuth && !req.cookies.get('tt_id')) {
     const url = req.nextUrl.clone()

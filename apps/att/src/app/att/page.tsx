@@ -183,7 +183,7 @@ export default async function Home() {
                     <div className="min-w-0">
                       <div className="text-sm text-fg font-medium truncate">
                         {profileLinks[r.userId] ? (
-                          <Link href={`/att/u/${profileLinks[r.userId]}`} className="hover:text-primary hover:underline transition-colors">
+                          <Link href={`/profile/${profileLinks[r.userId]}`} className="hover:text-primary hover:underline transition-colors">
                             {r.displayName}
                           </Link>
                         ) : (

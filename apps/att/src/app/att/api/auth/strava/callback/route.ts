@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   // returned. Rather than block sign-in, we synthesise a stable
   // strava-{athleteId}@noreply.paddlesnitch.com address that satisfies
   // Cognito's email-format requirement. The user can add a real contact
-  // email later from /att/account — see src/lib/strava-account.ts and
+  // email later from /profile/me/settings — see src/lib/strava-account.ts and
   // the StravaContactBanner.
   // NOTE: `||`, not `??`. getAthleteProfile normalises a missing Strava email
   // to '' (empty string), and `?? ` only falls back on null/undefined — so with

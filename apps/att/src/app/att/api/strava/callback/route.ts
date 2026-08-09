@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const user = await getAuthUser()
   // No session = we've lost context. Send them back to sign in; once they
   // re-auth they can hit Connect again.
-  if (!user) return NextResponse.redirect(new URL('/att/auth?next=/att/account', base))
+  if (!user) return NextResponse.redirect(new URL('/att/auth?next=/profile/me/settings', base))
 
   const params = req.nextUrl.searchParams
   const code = params.get('code')
@@ -30,11 +30,11 @@ export async function GET(req: NextRequest) {
   }
 
   // User clicked deny, or Strava reported an error.
-  if (error) return clearStateCookie(NextResponse.redirect(new URL(`/att/account?strava=denied`, base)))
+  if (error) return clearStateCookie(NextResponse.redirect(new URL(`/profile/me/settings?strava=denied`, base)))
 
   // State must match what we set on /connect, else this is CSRF.
   if (!code || !stateFromStrava || !stateCookie || stateFromStrava !== stateCookie) {
-    return clearStateCookie(NextResponse.redirect(new URL('/att/account?strava=state_mismatch', base)))
+    return clearStateCookie(NextResponse.redirect(new URL('/profile/me/settings?strava=state_mismatch', base)))
   }
 
   try {
@@ -46,8 +46,8 @@ export async function GET(req: NextRequest) {
     if (tokens.athleteId) await putAthleteIndex(tokens.athleteId, user.id)
   } catch (err) {
     console.error('[strava callback] exchange failed', err)
-    return clearStateCookie(NextResponse.redirect(new URL('/att/account?strava=exchange_failed', base)))
+    return clearStateCookie(NextResponse.redirect(new URL('/profile/me/settings?strava=exchange_failed', base)))
   }
 
-  return clearStateCookie(NextResponse.redirect(new URL('/att/account?strava=connected', base)))
+  return clearStateCookie(NextResponse.redirect(new URL('/profile/me/settings?strava=connected', base)))
 }

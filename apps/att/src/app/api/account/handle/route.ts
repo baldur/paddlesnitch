@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { claimHandle, releaseHandle, normaliseHandle, getHandleOwner } from '@/lib/profile'
 
-// GET /att/api/account/handle?check=<handle>
+// GET /api/account/handle?check=<handle>
 // Availability check for the claim UI. { available, reason? }. Mine = available
 // (re-claiming your own handle is a no-op).
 export async function GET(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ available: true, slug: norm.slug })
 }
 
-// PUT /att/api/account/handle { handle } — claim or change.
+// PUT /api/account/handle { handle } — claim or change.
 export async function PUT(req: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json(result)
 }
 
-// DELETE /att/api/account/handle — give up the handle.
+// DELETE /api/account/handle — give up the handle.
 export async function DELETE() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

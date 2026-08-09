@@ -5,7 +5,7 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { GET, POST, DELETE } from '@/app/att/api/account/contact/route'
+import { GET, POST, DELETE } from '@/app/api/account/contact/route'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -26,7 +26,7 @@ function jsonReq(method: string, body?: unknown) {
   })
 }
 
-describe('GET /att/api/account/contact', () => {
+describe('GET /api/account/contact', () => {
   it('returns null when the user has never set a contact', async () => {
     const u = await makeUser('Bare')
     mockAuth(u.idToken)
@@ -42,7 +42,7 @@ describe('GET /att/api/account/contact', () => {
   })
 })
 
-describe('POST /att/api/account/contact', () => {
+describe('POST /api/account/contact', () => {
   it('saves a contact email and stamps addedAt', async () => {
     const u = await makeUser('Saver')
     mockAuth(u.idToken)
@@ -85,7 +85,7 @@ describe('POST /att/api/account/contact', () => {
   })
 })
 
-describe('DELETE /att/api/account/contact', () => {
+describe('DELETE /api/account/contact', () => {
   it('clears a previously-saved contact', async () => {
     const u = await makeUser('Clearer')
     mockAuth(u.idToken)

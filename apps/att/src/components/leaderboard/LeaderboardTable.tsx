@@ -141,7 +141,7 @@ export default function LeaderboardTable({
                     <td className="py-3 pr-4 text-fg font-medium">
                       {profileLinks?.[entry.userId] ? (
                         <Link
-                          href={`/att/u/${profileLinks[entry.userId]}`}
+                          href={`/profile/${profileLinks[entry.userId]}`}
                           onClick={(e: React.MouseEvent) => e.stopPropagation()}
                           className="hover:text-primary hover:underline transition-colors"
                         >

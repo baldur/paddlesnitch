@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     '**': ['infra/**', '.open-next/**', 'examples/**', 'scripts/**', '.local-data/**'],
   },
+  // Profile/account moved to platform-level routes (docs/features/profile-routes.md):
+  // keep the old att URLs working via permanent redirects so existing links /
+  // bookmarks / the Strava app config don't break.
+  async redirects() {
+    return [
+      { source: '/att/u/:id', destination: '/profile/:id', permanent: true },
+      { source: '/att/account', destination: '/profile/me/settings', permanent: true },
+    ]
+  },
 };
 
 export default nextConfig;

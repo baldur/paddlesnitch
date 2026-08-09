@@ -26,8 +26,8 @@ export default function AppAccountNav() {
   return (
     <AccountNav
       user={user}
-      profileHref={user ? `/att/u/${user.id}` : '/att'}
-      accountHref="/att/account"
+      profileHref={user ? "/profile/me" : "/att"}
+      accountHref="/profile/me/settings"
       signInHref="/att/auth?next=/analyse"
       onSignOut={onSignOut}
     />
