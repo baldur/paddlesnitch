@@ -62,6 +62,18 @@ describe('AnalysisView mobile panels (#187)', () => {
     expect(container.textContent).toContain('strong steady rhythm')
   })
 
+  it('caps the narrative height + scrolls it so the HUD cannot grow into the segments panel', async () => {
+    // Regression: a long LLM narrative used to push the top-left HUD down until
+    // it overlapped the bottom-left SEGMENTS panel (worst on mobile). The
+    // narrative now lives in a height-capped, scrollable container.
+    await mount(<AnalysisView data={{ ...data, insight: 'x '.repeat(400).trim() }} />)
+    const narrative = Array.from(container.querySelectorAll('div')).find(
+      el => el.className.includes('overflow-y-auto') && el.textContent?.includes('x x'),
+    )
+    expect(narrative).toBeTruthy()
+    expect(narrative!.className).toMatch(/max-h-\[\d+vh\]/)
+  })
+
   it('minimises the segments panel to hide the efforts list', async () => {
     await mount(<AnalysisView data={data} />)
     expect(container.textContent).toContain('EFFORTS')
