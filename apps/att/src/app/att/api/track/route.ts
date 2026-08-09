@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { emitMetric, isMetricEvent } from '@/lib/metrics'
+import { isAllowedIngestOrigin } from '@/lib/ingest-origin'
 
 // Receives client-side analytics beacons and emits CloudWatch EMF events.
 // Unauthenticated by design — events come from anyone. No PII is recorded: only
@@ -49,6 +50,11 @@ function buildProps(sid: string | undefined, path: unknown, props: unknown): Rec
 }
 
 export async function POST(req: NextRequest) {
+  // Drop beacons that don't carry our own origin (cheap first line against
+  // random/bot pings — spoofable, see ingest-origin.ts). Still 204 so a bot
+  // gets no signal it was rejected.
+  if (!isAllowedIngestOrigin(req)) return new NextResponse(null, { status: 204 })
+
   const body = await req.json().catch(() => ({}))
 
   // Batch shape.
