@@ -29,11 +29,13 @@ export function isMetricEvent(v: unknown): v is MetricEvent {
   return typeof v === 'string' && (METRIC_EVENTS as readonly string[]).includes(v)
 }
 
-// Build the EMF document for an event (exported for testing).
-export function buildEmf(event: MetricEvent, props: Record<string, string> = {}) {
+// Build the EMF document for an event (exported for testing). `timestamp` is the
+// metric time in epoch ms — defaults to now, but batched client events pass their
+// own capture time so the metric lands in the right minute, not at flush time.
+export function buildEmf(event: MetricEvent, props: Record<string, string> = {}, timestamp: number = Date.now()) {
   return {
     _aws: {
-      Timestamp: Date.now(),
+      Timestamp: timestamp,
       CloudWatchMetrics: [{
         Namespace: NAMESPACE,
         Dimensions: [['Event']],
@@ -47,9 +49,9 @@ export function buildEmf(event: MetricEvent, props: Record<string, string> = {})
 }
 
 // Emit a single event. Never throws — analytics must never break a request.
-export function emitMetric(event: MetricEvent, props: Record<string, string> = {}): void {
+export function emitMetric(event: MetricEvent, props: Record<string, string> = {}, timestamp?: number): void {
   try {
-    console.log(JSON.stringify(buildEmf(event, props)))
+    console.log(JSON.stringify(buildEmf(event, props, timestamp)))
   } catch {
     // swallow — a metric emission failure must not surface to the caller
   }
