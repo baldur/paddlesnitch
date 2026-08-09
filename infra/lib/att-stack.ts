@@ -31,7 +31,15 @@ export class AttStack extends cdk.Stack {
       roleName: 'att-github-deploy',
       assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
         StringLike: {
-          'token.actions.githubusercontent.com:sub': 'repo:baldur/paddlesnitch-att:ref:refs/heads/main',
+          // Accept BOTH the current and the post-rename repo slug so the GitHub
+          // Actions → AWS OIDC deploy keeps working across the
+          // `paddlesnitch-att` → `paddlesnitch` repo rename. Deploy this first
+          // (still under the old name), then rename the repo, then drop the old
+          // slug in a follow-up. IAM treats a list as OR.
+          'token.actions.githubusercontent.com:sub': [
+            'repo:baldur/paddlesnitch-att:ref:refs/heads/main',
+            'repo:baldur/paddlesnitch:ref:refs/heads/main',
+          ],
         },
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
