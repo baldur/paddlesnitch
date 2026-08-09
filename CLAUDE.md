@@ -152,6 +152,45 @@ When fixing a bug in any uncovered area, add a regression test at the same time.
 
 **ATT — Automated Time Trials.** A web application for managing GPS-timed river time trials for kayaking and rowing. Organisers define courses by drawing start/finish lines on a map; participants upload GPS traces from fitness apps; the system calculates elapsed time, 500 m splits, and any available biometric data.
 
+ATT is now one app in a **paddlesnitch platform** — a single repository that also hosts the **Analyse** app (see below), with common code factored into shared packages.
+
+## Repository structure (monorepo)
+
+**One repo, one pnpm workspace** (`pnpm-workspace.yaml` → `apps/*` + `packages/*`). Two Next.js apps share two internal packages:
+
+```
+apps/
+  att/        (pkg "att")             — Automated Time Trials, served at /att       (Next; /att baked into src/app/att/, no basePath)
+  analysis/   (pkg "analysis")        — the Analyse app, served at /analyse         (Next, basePath: '/analyse')
+packages/
+  core/       @paddlesnitch/core      — platform primitives shared by both apps
+  timing/     @paddlesnitch/timing    — GPS/track domain shared by both apps
+```
+
+- **`@paddlesnitch/core`** (`packages/core/src`): `storage` (S3 / local-fs `getJson`/`putJson`/`listKeys`/…), `auth` (`getAuthUser`), `cognito`, `url`, `strava` + `strava-storage`, and `types` — platform types (`AuthUser`, `StravaTokens`, `StravaActivitySummary`) **plus the shared boat-class model** (`BoatClass`, `BOAT_CLASSES`, `BOAT_CLASS_INFO`, `Seat`, `CrewMember`, `expectedSeats`, `seatLabel`, `validateCrew`, `isBoatClass`).
+- **`@paddlesnitch/timing`** (`packages/timing/src`): `geo` (haversine, line-crossing, `processTrace`, splits), the parsers (`gpx`/`fit`/`tcx`/`csv`/`speedcoach`, `parse` dispatcher, `unzip`), `weather` + `river-flow` + `conditions`, and track `types` (`LatLng`/`Line`/`TrackPoint`/`Split`/`ProcessedResult`/`CourseType`/`EntryConditions`). `core` depends on `timing` (Strava streams → `TrackPoint`); no cycle.
+
+**Conventions that keep it working:**
+- Each package exposes **per-file subpath exports** (`@paddlesnitch/core/auth`, `@paddlesnitch/timing/geo`, …) — import the subpath, not the barrel. Both apps `transpilePackages` the two packages in `next.config.ts`.
+- The extraction from att was **in-place**: each moved module left a **re-export shim** at its old `apps/att/src/lib/*.ts` path, so all existing att `@/lib/*` imports (and att's domain `types.ts`) resolve unchanged. When adding shared code, put it in the package and (if att already imported it) keep/add the shim.
+- **Don't duplicate** a domain type/util across apps — if both apps need it, it belongs in `core` or `timing` (that's how the boat-class model landed in `core`).
+- Local dev runs the two apps on two ports (`pnpm dev` → att :3000, `pnpm dev:analysis` → analysis :3001); in prod they sit behind **one CloudFront** distribution, routed by path (`/att/*`, `/analyse/*`). See [`platform-monorepo.md`](docs/features/platform-monorepo.md).
+
+## The Analyse app (`/analyse`)
+
+**Paddle-session analysis** — "what actually happened on this outing, and what it means." Lives in `apps/analysis` (Next, `basePath: '/analyse'`), on `@paddlesnitch/core` + `@paddlesnitch/timing`; map components are app-local. Same Cognito login + same S3 bucket as att (data under the `analysis/` prefix, private per user).
+
+- **Sources**: file upload (GPX/FIT/TCX/CSV/SpeedCoach/zip), **Strava import**, or **analyse one of your own ATT time-trial entries** (`src/lib/trials.ts`, no re-upload).
+- **Engine** (`src/lib/analysis.ts`, pure): speed + distance-per-stroke, **baseline+departures** segmentation (rests down / surges up), per-effort trend, set grouping, SUP→kayak ×2 stroke-rate (auto for kayak boat classes; manual toggle otherwise — default off).
+- **Conditions**: real wind (Open-Meteo) + river flow (EA) via `@paddlesnitch/timing`.
+- **Persistence** (`src/lib/analysis-store.ts`): auto-saves each paddle → `analysis/{userId}/{id}/session.json` (`AnalysisSession`). A **My Paddles** library, saved view, diary notes, per-paddle **boat class + seat**, and a persistent **athlete profile** (`analysis/{userId}/profile.json`).
+- **LLM insight** (`src/lib/llm.ts`, `makeInsighter()`): Ollama local / **Bedrock prod** (never the Anthropic quota), model per env `LLM_MODEL`; deterministic templated fallback when no backend, so it never breaks. History/memory-aware via `src/lib/history-stats.ts` (cross-history aggregates + relevance retrieval) + the athlete profile.
+- **Compare / race a section** (`src/lib/similar.ts`): "race a section" across your own paddles between two derived gate lines, and a single-section "analyse this stretch" narrative.
+- **Routes** (under `/analyse/api/`): `analyse` (main pipeline), `analyse/sessions[/[id]]`, `analyse/similar[/compare]`, `analyse/section-insight`, `trials`, `strava/activities`, `me`.
+- **Key files**: `src/app/api/analyse/route.ts` (pipeline), `src/components/analysis/AnalysisView.tsx` (immersive view), `src/components/map/AnalysisMap.tsx`. Infra: `AnalysisFn` Lambda + CloudFront `/analyse/*` routing in `infra/lib/att-stack.ts`.
+
+See the analysis feature records below ([`paddle-analysis.md`](docs/features/paddle-analysis.md), [`similar-sections-compare.md`](docs/features/similar-sections-compare.md), [`personable-insights.md`](docs/features/personable-insights.md)).
+
 ## Feature design records
 
 Shipped specs are retained under `docs/features/` as design records — the
