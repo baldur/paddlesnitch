@@ -60,7 +60,7 @@ async function getGitHubToken(): Promise<string | undefined> {
 
 export async function POST(req: NextRequest) {
   const token = await getGitHubToken()
-  const repo = process.env.GITHUB_REPO ?? 'baldur/paddlesnitch-att'
+  const repo = process.env.GITHUB_REPO ?? 'baldur/paddlesnitch'
   if (!token) {
     // No token configured (e.g. local dev without secrets). Don't 500 the
     // user — surface a clear status so the widget can tell them.

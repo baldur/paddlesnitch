@@ -20,8 +20,9 @@ directories) and URL path.
 
 This repo becomes the monorepo. Keep the git history; convert to a
 **pnpm workspace** gradually, one behaviour-preserving PR at a time. The GitHub
-repo can optionally be renamed `paddlesnitch-att` → `paddlesnitch` later (git
-remotes keep working); not required to start.
+repo was renamed `paddlesnitch-att` → `paddlesnitch` (2026-08); the OIDC
+deploy-role trust was updated to the new slug, and `GITHUB_REPO` (feedback →
+issue Lambda) points at `baldur/paddlesnitch`.
 
 ## Target structure
 
