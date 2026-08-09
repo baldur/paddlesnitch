@@ -18,6 +18,7 @@ export default function AnalysePage() {
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
   const [error, setError] = useState('')
   const [res, setRes] = useState<Result | null>(null)
+  const [dupId, setDupId] = useState<string | null>(null)
   const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
   const [stravaMsg, setStravaMsg] = useState('')
   const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
@@ -45,18 +46,22 @@ export default function AnalysePage() {
   }
 
   const analyse = async (body: FormData) => {
-    setStatus('busy'); setError('')
+    setStatus('busy'); setError(''); setDupId(null)
     try {
       const r = await fetch('/analyse/api/analyse', { method: 'POST', body })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
-      setRes(await r.json())
+      const data = await r.json()
+      // Already in the library (#178) — point the paddler at the existing one
+      // instead of silently creating a second copy.
+      if (data.duplicate) setDupId(data.id as string)
+      else setRes(data)
     } catch (err) { setError(err instanceof Error ? err.message : 'Analysis failed') }
     finally { setStatus('idle') }
   }
   const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
   const runStrava = (a: StravaActivitySummary) => { const fd = new FormData(); fd.append('stravaActivityId', String(a.id)); fd.append('sportType', a.sportType); analyse(fd) }
   const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
-  const reset = () => { setRes(null); setFile(null); setError('') }
+  const reset = () => { setRes(null); setFile(null); setError(''); setDupId(null) }
 
   // result → immersive view
   if (res) return <AnalysisView data={res} sessionId={res.id} onNewFile={reset} />
@@ -87,6 +92,13 @@ export default function AnalysePage() {
             <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest rounded ${tab === t ? 'bg-[#0369a1] text-white' : 'bg-[#1e293b] text-[#94a3b8]'}`}>{t === 'file' ? 'UPLOAD FILE' : t === 'strava' ? 'FROM STRAVA' : 'TIME TRIALS'}</button>
           ))}
         </div>
+
+        {dupId && (
+          <div className="mb-4 text-xs border border-[#334155] bg-[#0b1220] px-3 py-3 rounded">
+            <p className="text-[#94a3b8]">You&apos;ve already analysed this paddle — it&apos;s in your library.</p>
+            <Link href={`/${dupId}`} className="mt-2 inline-block px-4 py-2 bg-[#0369a1] text-white font-bold tracking-widest rounded hover:bg-[#0284c7]">OPEN IT →</Link>
+          </div>
+        )}
 
         {tab === 'file' ? (
           <>
