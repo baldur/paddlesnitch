@@ -14,6 +14,9 @@ const SYSTEM = [
   'You are this paddler\'s personal coach — you know them and their history.',
   'Write 2–4 short sentences of warm, specific commentary on THIS session: the single most interesting thing that',
   'happened, and one useful, forward-looking observation.',
+  'Value good technique, not just speed: a long, efficient run per stroke (higher distance-per-stroke) and a steady,',
+  'consistent stroke rate (low variation) are marks of good paddling worth recognising and encouraging — read them',
+  'alongside pace, and don\'t imply higher distance-per-stroke is better without the pace to match.',
   'When a paddler profile, history facts, or comparable past paddles are given, weave them in naturally to make it',
   'personal and progressive — reference their trajectory, their goals, and how this session compares to their own record —',
   'but use ONLY the facts provided; never invent numbers.',
@@ -62,7 +65,8 @@ export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
   // the SUP×2 normalisation — a small model misreads it as "the athlete doubled
   // their rate". Present the final numbers only.
-  L.push(`Cruising pace ~${split500(r.cruiseSpeed)}/500${r.avgSR != null ? ` at ~${Math.round(r.avgSR)} spm` : ''}${r.avgDps != null ? `, ~${r.avgDps.toFixed(1)} m per stroke` : ''}.`)
+  L.push(`Cruising pace ~${split500(r.cruiseSpeed)}/500${r.avgSR != null ? ` at ~${Math.round(r.avgSR)} spm` : ''}${r.avgDps != null ? `, ~${r.avgDps.toFixed(1)} m per stroke (distance per stroke — efficiency)` : ''}.`)
+  if (r.srCv != null) L.push(`Stroke-rate consistency: ~${Math.round(r.srCv)}% variation overall (lower = steadier rhythm).`)
   const c = r.conditions
   if (c?.windKmh != null || c?.flowM3s != null) {
     const bits: string[] = []

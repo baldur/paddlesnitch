@@ -49,6 +49,13 @@ describe('buildPrompt', () => {
   it('omits the date line when no paddledAt is given', () => {
     expect(buildPrompt(result())).not.toContain('Session date:')
   })
+
+  it('surfaces distance-per-stroke efficiency + overall consistency for the coach to value', () => {
+    const p = buildPrompt({ ...result(), srCv: 8 })
+    expect(p).toContain('distance per stroke — efficiency')
+    expect(p).toContain('Stroke-rate consistency')
+    expect(p).toContain('8% variation')
+  })
 })
 
 describe('describePaddleDate', () => {

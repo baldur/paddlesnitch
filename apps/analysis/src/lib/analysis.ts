@@ -30,6 +30,12 @@ export type Conditions = { windKmh?: number; windDir?: number; flowM3s?: number;
 export type AnalysisResult = {
   durationS: number; distanceKm: number
   avgSpeed: number; avgSR: number | null; avgDps: number | null
+  // Overall stroke-rate consistency, as a coefficient of variation in %
+  // (lower = steadier rhythm). Scale-invariant, so unaffected by SUP×2. Null
+  // when the trace carried no usable stroke-rate data. A "good technique" signal
+  // the coach narrative reads alongside distance-per-stroke. Optional so
+  // pre-existing sessions / fixtures without it still type-check.
+  srCv?: number | null
   cruiseSpeed: number
   strokeRateDoubled: boolean
   points: AnalysisPoint[]
@@ -160,6 +166,7 @@ export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boo
   return {
     durationS, distanceKm,
     avgSpeed: mean(moving), avgSR: allSR.length ? mean(allSR) : null, avgDps: allDps.length ? mean(allDps) : null,
+    srCv: allSR.length >= 2 ? cv(allSR) * 100 : null,
     cruiseSpeed: cruise, strokeRateDoubled: !!opts.doubleStrokeRate,
     points, stops, surges, sets,
     insight: buildInsight({ durationS, distanceKm, surges, stops, sets, allSR, cruise, conditions: opts.conditions }),
