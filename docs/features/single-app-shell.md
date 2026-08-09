@@ -23,12 +23,19 @@
   `tokens.css` (replaces the light `@theme`); `themeColor` → `#0b1220`. Whole
   platform is dark. att builds + 549 tests green; Analyse builds + 61 tests green.
 - **P5 ✅** cross-app **Trials ↔ Analyse** nav is in `AppShell`; the paddler-profile
-  entry is consistent (both apps' `AccountNav` name → `/att/u/{id}`). The shared
+  entry is consistent (both apps' `AccountNav` name → the platform profile). The shared
   header now renders on **every standard page including the root `/` landing**
   (att landing swapped its bespoke header for `AppHeader`; Analyse home/library/
   compare/section all mount `AppShell` via `AppAccountNav`). Exceptions by design:
   the att **auth** pages (focused pre-login flow) and the **immersive
   `AnalysisView`** (full-screen map; keeps its own overlay chrome).
+- **P5.1 ✅ header consolidation** — TRIALS/ANALYSE stay always-visible cross-app
+  tabs, but the items **common to every page** now collapse into a single
+  `AccountNav` dropdown (`Name ▾` → MY PROFILE · SETTINGS · REPORT AN ISSUE ·
+  SIGN OUT; click-outside/Escape to close). The standalone top-level REPORT button
+  is gone (anonymous users keep `FeedbackWidget`'s floating button). Section-specific
+  nav still renders inline in `AppShell`'s `nav` slot. This is the "one common
+  dropdown + section-specific extras" shape.
 
 ### Follow-ups / polish (deferred, flagged for review)
 - **Visual polish pass on dark** — the token migration is thorough, but a human
@@ -73,8 +80,8 @@ widget, and **one platform-wide dark theme**.
 
 | Component | Replaces | Notes |
 |---|---|---|
-| `AppShell` / `AppHeader` | att `AppHeader` + Analyse ad-hoc chrome | breadcrumb slot + **cross-app nav** (Trials ↔ Analyse) + `AccountNav` + feedback trigger |
-| `AccountNav` | att `AuthNav` | props: `user`, `profileHref`, `accountHref`, `onSignOut`; signed-out → sign-in link. No hardcoded `/att` paths. |
+| `AppShell` / `AppHeader` | att `AppHeader` + Analyse ad-hoc chrome | breadcrumb slot + **cross-app tabs** (Trials ↔ Analyse) + section `nav` slot + `AccountNav`. Common actions live in the account dropdown, not the top level (no standalone REPORT). |
+| `AccountNav` | att `AuthNav` | props: `user`, `profileHref`, `accountHref`, `signInHref`, `onSignOut`; signed-out → sign-in link. Signed in → **dropdown** (`Name ▾`: MY PROFILE · SETTINGS · REPORT AN ISSUE · SIGN OUT). No hardcoded `/att` paths. |
 | `ContactBanner` | att `StravaContactBanner` | props-driven (show?, dismiss cookie key, contact href); shown on BOTH apps |
 | `FeedbackWidget` | att `FeedbackTrigger` + Analyse `FeedbackWidget` | ONE component, POSTs to `/att/api/feedback` (shared origin), anti-bot fields, theme-aware |
 
