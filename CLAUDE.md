@@ -299,7 +299,7 @@ The shared UI shell that gives both apps a single-app feel (🚧 in progress —
 - `FeedbackWidget` — the one report-an-issue widget (floating + opens on a
   `paddlesnitch:open-feedback` event), POSTs to `/att/api/feedback`.
 - `AccountNav` — signed-in/out account nav (props-driven).
-- `AppShell` — platform header (brand + cross-app Trials↔Analyse nav + REPORT + account slot).
+- `AppShell` — platform header (brand + cross-app Trials↔Analyse nav + REPORT + account slot). **Cross-app links (`/`, `/att`, `/analyse`) and the account links (`/att/…`) use plain `<a>`, NOT `next/link`** — Analyse runs under `basePath:'/analyse'`, which makes `<Link>` prepend the basePath (turning `/att` into `/analyse/att`). App-supplied same-app `nav` children keep using `<Link>` (they SHOULD get the basePath).
 - `ContactBanner` — dismissible top banner (Strava add-email); host supplies the show-predicate + href.
 
 ---
