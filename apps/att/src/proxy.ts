@@ -9,12 +9,16 @@ export function proxy(req: NextRequest) {
   }
 
   // Public POST endpoints that accept UNAUTHENTICATED requests — must be exempt
-  // from the mutation auth-gate below, or an anonymous customer's request is
-  // redirected to sign-in and silently lost. `feedback` files a GitHub issue
-  // from the "Report an issue" widget (att + analyse, which POSTs here across
-  // the shared origin); it has its own anti-bot gate and supports anonymous
-  // reporters by design. See src/app/att/api/feedback/route.ts.
-  if (pathname === '/att/api/feedback') {
+  // from the mutation auth-gate below, or an anonymous request is redirected to
+  // sign-in (307) and silently lost.
+  //  - `feedback` files a GitHub issue from the "Report an issue" widget (att +
+  //    analyse, POSTing across the shared origin); anti-bot gated, anonymous by
+  //    design. See src/app/att/api/feedback/route.ts.
+  //  - `track` receives client analytics beacons (pageviews etc.); events come
+  //    from anyone (signed-out included) and it drops non-allowlisted input, so
+  //    without this exemption every signed-out beacon 307s and no anonymous
+  //    traffic is ever recorded. See src/app/att/api/track/route.ts.
+  if (pathname === '/att/api/feedback' || pathname === '/att/api/track') {
     return NextResponse.next()
   }
 

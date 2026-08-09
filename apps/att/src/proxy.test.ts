@@ -18,6 +18,12 @@ describe('proxy auth gate', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/feedback')))).toBe(false)
   })
 
+  it('lets an UNAUTHENTICATED POST to /att/api/track through (anonymous analytics beacons)', () => {
+    // Regression: the mutation gate 307-redirected every signed-out client
+    // analytics beacon to sign-in, so no anonymous pageviews were ever recorded.
+    expect(redirectsToAuth(proxy(req('POST', '/att/api/track')))).toBe(false)
+  })
+
   it('still gates other unauthenticated API mutations to sign-in', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/courses')))).toBe(true)
     expect(redirectsToAuth(proxy(req('DELETE', '/api/account')))).toBe(true)
