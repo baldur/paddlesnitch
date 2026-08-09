@@ -2,10 +2,10 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import FeedbackWidget from './FeedbackWidget'
+import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
 
-// #157: the analyse site had no way to report an issue. This widget mirrors the
-// ATT one and posts to the shared /att/api/feedback endpoint.
+// The report-an-issue widget is now the shared @paddlesnitch/ui one (used by both
+// att + Analyse); it posts to the shared /att/api/feedback endpoint (#157).
 
 let container: HTMLDivElement
 let root: Root

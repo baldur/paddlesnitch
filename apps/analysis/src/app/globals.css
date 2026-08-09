@@ -1,29 +1,18 @@
 @import "tailwindcss";
-
-@theme inline {
-  --font-mono: "IBM Plex Mono", "Courier New", monospace;
-  --color-bg: #ffffff;
-  --color-surface: #f8fafc;
-  --color-surface-2: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-fg: #0f172a;
-  --color-muted: #64748b;
-  --color-primary: #0369a1;
-  --color-split: #6d28d9;
-  --color-red: #b91c1c;
-  --color-green: #15803d;
-}
-
-:root { color-scheme: light; }
+/* Platform design tokens (dark) — single source of truth in @paddlesnitch/ui.
+   Defines the semantic @theme tokens Tailwind turns into bg-bg/text-fg/… . */
+@import "@paddlesnitch/ui/tokens.css";
+/* Let Tailwind scan the shared UI package for the class names it uses. */
+@source "../../../../packages/ui/src";
 
 * { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   padding: 0;
-  background: #ffffff;
-  color: #0f172a;
-  font-family: "IBM Plex Mono", "Courier New", monospace;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-mono);
   min-height: 100%;
 }
 
@@ -32,30 +21,25 @@ html, body {
   letter-spacing: 0.03em;
 }
 
-/* Inline body links — persistent subtle underline so they're discoverable
-   without screaming. The underline intensifies on hover. */
+/* Inline body links — persistent subtle underline. */
 .tt-link {
-  color: #0369a1;
+  color: var(--color-primary);
   text-decoration: underline;
-  text-decoration-color: rgba(3, 105, 161, 0.4);
+  text-decoration-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: text-decoration-color 0.15s ease;
 }
-.tt-link:hover {
-  text-decoration-color: #0369a1;
-}
+.tt-link:hover { text-decoration-color: var(--color-primary); }
 
-/* Nav / CTA links in headers and footers — muted resting state, primary
-   colour and subtle underline on hover. Adds a visual cue beyond colour
-   alone so they read as clickable. */
+/* Nav / CTA links — muted resting, primary on hover. */
 .tt-nav-link {
-  color: #64748b;
+  color: var(--color-muted);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 .tt-nav-link:hover {
-  color: #0369a1;
+  color: var(--color-primary);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;

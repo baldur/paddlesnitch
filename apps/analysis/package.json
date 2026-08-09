@@ -15,6 +15,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.1086.0",
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
+    "@paddlesnitch/ui": "workspace:*",
     "leaflet": "^1.9.4",
     "nanoid": "^5.1.11",
     "next": "16.2.6",
