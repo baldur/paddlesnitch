@@ -7,6 +7,17 @@ import { haversine } from '@paddlesnitch/timing/geo'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 export type AnalysisPoint = { t: number; lat: number; lng: number; speed: number; sr: number | null; dps: number | null }
+
+// Round a map point to sane precision before it goes on the wire / to storage.
+// Full-precision GPS floats dominate the payload and are ~incompressible; these
+// bounds are all below anything meaningful for paddle analysis — lat/lng to 6dp
+// (~0.1 m, well under GPS noise), speed/dps to mm-scale, t to 0.1 s, sr to 0.1
+// SPM — and cut the analyse payload ~3× after gzip. See docs (payload sizing).
+const q = (x: number, dp: number) => Math.round(x * 10 ** dp) / 10 ** dp
+const qn = (x: number | null, dp: number) => (x == null ? null : q(x, dp))
+function roundPoint(p: AnalysisPoint): AnalysisPoint {
+  return { t: q(p.t, 1), lat: q(p.lat, 6), lng: q(p.lng, 6), speed: q(p.speed, 3), sr: qn(p.sr, 1), dps: qn(p.dps, 3) }
+}
 export type Segment = {
   kind: 'rest' | 'cruise' | 'surge'
   fromT: number; toT: number; durS: number; distM: number
@@ -77,7 +88,7 @@ export function rescaleDoubling(r: AnalysisResult, target: boolean): AnalysisRes
     ...r,
     strokeRateDoubled: target,
     avgSR: sr(r.avgSR), avgDps: dps(r.avgDps),
-    points: r.points.map(p => ({ ...p, sr: sr(p.sr), dps: dps(p.dps) })),
+    points: r.points.map(p => roundPoint({ ...p, sr: sr(p.sr), dps: dps(p.dps) })),
     stops: r.stops.map(seg), surges: r.surges.map(seg),
     sets: r.sets.map(s => ({ ...s, avgSR: sr(s.avgSR) })),
   }
@@ -142,9 +153,9 @@ export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boo
   const allSR = P.filter(p => p.sr != null && p.sr > 0).map(p => p.sr as number)
   const allDps = P.filter(p => p.dps != null).map(p => p.dps as number)
 
-  // downsample points for the map (≤900)
+  // downsample points for the map (≤900) + round to keep the payload small
   const step = Math.max(1, Math.ceil(P.length / 900))
-  const points = P.filter((_, i) => i % step === 0)
+  const points = P.filter((_, i) => i % step === 0).map(roundPoint)
 
   return {
     durationS, distanceKm,

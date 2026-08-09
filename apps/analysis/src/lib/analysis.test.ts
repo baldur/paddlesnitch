@@ -42,6 +42,21 @@ describe('analyseTrack', () => {
   it('always produces a non-empty insight string', () => {
     expect(analyseTrack(track()).insight.length).toBeGreaterThan(20)
   })
+
+  it('rounds map points to a compact precision to keep the payload small', () => {
+    const r = analyseTrack(track())
+    expect(r.points.length).toBeGreaterThan(0)
+    for (const p of r.points) {
+      expect(p.lat).toBe(Math.round(p.lat * 1e6) / 1e6)      // ≤6dp (~0.1 m)
+      expect(p.lng).toBe(Math.round(p.lng * 1e6) / 1e6)
+      expect(p.t).toBe(Math.round(p.t * 10) / 10)            // ≤1dp
+      expect(p.speed).toBe(Math.round(p.speed * 1e3) / 1e3)  // ≤3dp
+      if (p.sr != null) expect(p.sr).toBe(Math.round(p.sr * 10) / 10)
+      if (p.dps != null) expect(p.dps).toBe(Math.round(p.dps * 1e3) / 1e3)
+    }
+    // Precision is far below GPS noise, so metrics are unaffected.
+    expect(r.distanceKm).toBeGreaterThan(0.3)
+  })
 })
 
 describe('rescaleDoubling', () => {
@@ -67,6 +82,14 @@ describe('rescaleDoubling', () => {
     expect(back.strokeRateDoubled).toBe(false)
     expect(back.avgSR!).toBeCloseTo(base.avgSR!, 6)
     expect(back.avgDps!).toBeCloseTo(base.avgDps!, 6)
+  })
+
+  it('keeps map points rounded after the rescale', () => {
+    const on = rescaleDoubling(analyseTrack(track()), true)
+    for (const p of on.points) {
+      if (p.sr != null) expect(p.sr).toBe(Math.round(p.sr * 10) / 10)
+      if (p.dps != null) expect(p.dps).toBe(Math.round(p.dps * 1e3) / 1e3)
+    }
   })
 })
 

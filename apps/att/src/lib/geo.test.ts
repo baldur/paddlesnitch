@@ -77,6 +77,22 @@ describe('processTrace', () => {
     expect(result.trackSegment![result.trackSegment!.length - 1][0]).toBeCloseTo(0.005, 3)
   })
 
+  it('rounds trackSegment coordinates to 6dp to keep the payload small', () => {
+    // A track whose interpolated crossing points would otherwise carry long
+    // float tails; every emitted coordinate must be quantised to ≤6 decimals.
+    const hp: TrackPoint[] = [
+      pt(0.0000007, 0.0000003, 0),
+      pt(0.0023331, 0.0000009, 10_000),
+      pt(0.0047771, 0.0000001, 20_000),
+      pt(0.0069999, 0.0000007, 30_000),
+    ]
+    const result = processTrace(hp, startLine, finishLine)!
+    for (const [lat, lng] of result.trackSegment!) {
+      expect(lat).toBe(Math.round(lat * 1e6) / 1e6)
+      expect(lng).toBe(Math.round(lng * 1e6) / 1e6)
+    }
+  })
+
   it('never exposes heart rate, and omits stroke rate when the track has none', () => {
     // HR is never captured (sensitive biometric). Stroke rate is only present
     // when the source carried it — these points don't, so avgStrokeRate is absent.
