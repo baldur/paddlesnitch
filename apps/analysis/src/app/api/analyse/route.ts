@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@paddlesnitch/core/auth'
 import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
@@ -82,25 +82,30 @@ export async function POST(req: NextRequest) {
   // metadata but no longer forces doubling.)
   const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
 
-  // Memory-aware narrative (docs/features/personable-insights.md). The paddler's
-  // PRIOR paddles (this one isn't saved yet) drive three context layers, all fed
-  // to the model as compact text — grounded facts only, never raw points:
-  //   L1 aggregates (PBs / vs-average / trends / volume), L3 the most relevant
-  //   past paddles, L2 the persistent athlete profile. Best-effort: history read
-  //   failures degrade to a first-session (no-context) insight.
-  const prior = await listSessionSummaries(user.id).catch(() => [])
   const now = new Date()
-  const currentFacts: PaddleFacts = {
-    paddledAt: when, cruiseSpeed: result.cruiseSpeed, distanceKm: result.distanceKm,
-    avgSR: result.avgSR, avgDps: result.avgDps,
-    startLat: result.points[0]?.lat, startLng: result.points[0]?.lng,
-  }
-  const profile = await getAthleteProfile(user.id).catch(() => null)
-  const narrated = await generateInsight(result, {
-    profile: profile?.text,
-    historyFacts: renderHistoryFacts(computeHistoryStats(currentFacts, prior, now)),
-    relevant: renderRelevant(selectRelevantPaddles(currentFacts, prior)),
-  })
+
+  // Memory-aware narrative (docs/features/personable-insights.md). The paddler's
+  // PRIOR paddles drive three context layers (L1 aggregates, L3 relevant paddles,
+  // L2 profile), all fed to the model as compact text — grounded facts only.
+  // WRAPPED so the enrichment can NEVER fail the analysis: any read/compute error
+  // degrades to a plain (no-context) insight rather than 500-ing the request.
+  let ctx: { profile?: string; historyFacts?: string; relevant?: string } = {}
+  try {
+    const prior = await listSessionSummaries(user.id)
+    const profile = await getAthleteProfile(user.id)
+    const currentFacts: PaddleFacts = {
+      paddledAt: when, cruiseSpeed: result.cruiseSpeed, distanceKm: result.distanceKm,
+      avgSR: result.avgSR, avgDps: result.avgDps,
+      startLat: result.points[0]?.lat, startLng: result.points[0]?.lng,
+    }
+    ctx = {
+      profile: profile?.text,
+      historyFacts: renderHistoryFacts(computeHistoryStats(currentFacts, prior, now)),
+      relevant: renderRelevant(selectRelevantPaddles(currentFacts, prior)),
+    }
+  } catch (err) { console.error('[analyse] memory context failed', err) }
+
+  const narrated = await generateInsight(result, ctx)
   if (narrated) { result.insight = narrated; result.insightModel = process.env.LLM_MODEL || '' }
 
   // auto-save to the user's library
@@ -110,15 +115,17 @@ export async function POST(req: NextRequest) {
   }
   await saveSession(session)
 
-  // Fold this paddle into the persistent athlete profile for NEXT time. Done
-  // after the save (so the summary list includes it) and best-effort — a failure
-  // never affects the response. Kept in-request (awaited) for reliability on
-  // Lambda; the LLM call is small and the analyse flow is already multi-second.
-  try {
-    const all = await listSessionSummaries(user.id)
-    const latest = all.find(s => s.id === session.id)
-    if (latest) await refreshAthleteProfile(user.id, latest, all, new Date().toISOString())
-  } catch (err) { console.error('[analyse] profile refresh failed', err) }
+  // Fold this paddle into the persistent athlete profile for NEXT time — a SECOND
+  // LLM call. Kept OFF the response's critical path via after(): it runs once the
+  // response has flushed (Lambda stays alive for it), so it can neither slow the
+  // analysis nor push the request past the 30s Lambda timeout. Best-effort.
+  after(async () => {
+    try {
+      const all = await listSessionSummaries(user.id)
+      const latest = all.find(s => s.id === session.id)
+      if (latest) await refreshAthleteProfile(user.id, latest, all, new Date().toISOString())
+    } catch (err) { console.error('[analyse] profile refresh failed', err) }
+  })
 
   return NextResponse.json({ ...result, id: session.id, note: '', source, paddledAt: when })
 }

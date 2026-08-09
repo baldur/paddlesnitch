@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { withTimeout } from './llm'
+import { withTimeout, buildPrompt } from './llm'
+import type { AnalysisResult } from './analysis'
 
 // Guards the "analysis failed, but works on retry" symptom (#171): a slow/hanging
 // LLM backend must not stall the analyse request — it resolves to null so the
@@ -16,5 +17,25 @@ describe('withTimeout', () => {
 
   it('resolves null when the underlying call rejects', async () => {
     await expect(withTimeout(Promise.reject(new Error('bedrock throttled')), 1000)).resolves.toBeNull()
+  })
+})
+
+// A minimal 80-minute session — just the fields buildPrompt reads.
+function result(): AnalysisResult {
+  return {
+    durationS: 4800, distanceKm: 12.5,
+    avgSpeed: 2.6, avgSR: 60, avgDps: 2.6,
+    cruiseSpeed: 2.6, strokeRateDoubled: false,
+    points: [], stops: [], surges: [], sets: [],
+    insight: '',
+  }
+}
+
+describe('buildPrompt', () => {
+  it('frames the session duration in hours + minutes, not raw minutes (issue #170)', () => {
+    const p = buildPrompt(result())
+    expect(p).toContain('Session: 1 hour 20 minutes,')
+    expect(p).not.toContain('80:00 min')
+    expect(p).not.toContain('80 minutes')
   })
 })
