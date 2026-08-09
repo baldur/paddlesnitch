@@ -43,6 +43,14 @@ describe('analyseTrack', () => {
     expect(analyseTrack(track()).insight.length).toBeGreaterThan(20)
   })
 
+  it('reports overall stroke-rate consistency (srCv) as a scale-invariant %', () => {
+    const base = analyseTrack(track())
+    expect(typeof base.srCv).toBe('number')
+    expect(base.srCv!).toBeGreaterThanOrEqual(0)
+    // CV is scale-invariant, so the SUP×2 toggle must not change it.
+    expect(rescaleDoubling(base, true).srCv).toBeCloseTo(base.srCv!, 6)
+  })
+
   it('rounds map points to a compact precision to keep the payload small', () => {
     const r = analyseTrack(track())
     expect(r.points.length).toBeGreaterThan(0)
