@@ -31,6 +31,20 @@ describe('metrics EMF', () => {
     spy.mockRestore()
   })
 
+  it('uses the supplied timestamp (batched events keep their capture time)', () => {
+    const t = 1_700_000_000_000
+    const emf = buildEmf('pageview', {}, t)
+    expect(emf._aws.Timestamp).toBe(t)
+  })
+
+  it('emitMetric forwards a timestamp when given', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    emitMetric('login', {}, 1_700_000_000_123)
+    const parsed = JSON.parse(spy.mock.calls[0][0] as string)
+    expect(parsed._aws.Timestamp).toBe(1_700_000_000_123)
+    spy.mockRestore()
+  })
+
   it('isMetricEvent gates the allowlist', () => {
     expect(isMetricEvent('pageview')).toBe(true)
     expect(isMetricEvent('signup')).toBe(true)

@@ -37,4 +37,44 @@ describe('POST /att/api/track', () => {
     const res = await track(bad)
     expect(res.status).toBe(204)
   })
+
+  it('emits one EMF line per allowed event in a batch and drops unknown ones', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const captureTs = Date.now() - 5_000 // recent (within CloudWatch's accepted window)
+    const res = await track(req({
+      sid: 'sess1',
+      events: [
+        { event: 'pageview', path: '/att', t: captureTs },
+        { event: 'nope' },                       // dropped
+        { event: 'upload', props: { boat: 'K1' } },
+      ],
+    }))
+    expect(res.status).toBe(204)
+    expect(spy).toHaveBeenCalledTimes(2)
+    const first = JSON.parse(spy.mock.calls[0][0] as string)
+    expect(first.Event).toBe('pageview')
+    expect(first.path).toBe('/att')
+    expect(first.sid).toBe('sess1')
+    expect(first._aws.Timestamp).toBe(captureTs) // event's own capture time
+    const second = JSON.parse(spy.mock.calls[1][0] as string)
+    expect(second.Event).toBe('upload')
+    expect(second.boat).toBe('K1')                        // custom prop attached
+    spy.mockRestore()
+  })
+
+  it('caps a batch at MAX_EVENTS so a flood can not emit unbounded metrics', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const events = Array.from({ length: 250 }, () => ({ event: 'pageview' }))
+    await track(req({ sid: 's', events }))
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(100)
+    spy.mockRestore()
+  })
+
+  it('rejects an out-of-range timestamp back to server time', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await track(req({ sid: 's', events: [{ event: 'pageview', t: 5 }] })) // ancient → dropped
+    const emf = JSON.parse(spy.mock.calls[0][0] as string)
+    expect(emf._aws.Timestamp).toBeGreaterThan(1_700_000_000_000)
+    spy.mockRestore()
+  })
 })
