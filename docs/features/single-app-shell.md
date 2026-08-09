@@ -1,8 +1,19 @@
 # Feature spec: Single-app feel — shared UI shell + one dark theme
 
-**Status:** 💭 design (2026-08-09). Living design record — build after review.
+**Status:** 🚧 building (2026-08-09). **P1 done.**
 **Owners:** Baldur (product), Claude (implementation).
 **Apps:** both `apps/att` (`/att`) and `apps/analysis` (`/analyse`); new `packages/ui`.
+
+### Progress
+- **P1 ✅** `@paddlesnitch/ui` created (`AppShell`, `AccountNav`, `ContactBanner`,
+  `FeedbackWidget`, `tokens.css`) — theme-aware, presentational/config-driven,
+  per-file subpath exports, `transpilePackages`d. Canonical **dark** tokens in
+  `tokens.css` (Tailwind v4 `@theme`, imported by an app's `globals.css` +
+  `@source` so the shell's classes get scanned). Adopted in **Analyse**: shared
+  `FeedbackWidget` (replaced its own copy), dark tokens, and the `AppShell` header
+  on the library page via a thin `AppAccountNav` (→ shared att profile/account,
+  one platform account). Analyse builds + 61 tests green. `AccountNav`/
+  `ContactBanner` ready for P2.
 
 ## Why
 
