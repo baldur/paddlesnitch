@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { fmtDurWords, split500 } from '@/lib/analysis'
 import type { SessionSummary } from '@/lib/analysis-store'
+import AppShell from '@paddlesnitch/ui/AppShell'
+import AppAccountNav from '@/components/AppAccountNav'
 
 function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
 
@@ -22,8 +24,9 @@ export default function LibraryPage() {
   const toggle = (id: string) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : s.length < 2 ? [...s, id] : [s[1], id])
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0] px-4 py-6">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen">
+      <AppShell active="analyse" account={<AppAccountNav />} />
+      <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">MY PADDLES</h1>
           <Link href="/" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">+ ANALYSE A PADDLE</Link>

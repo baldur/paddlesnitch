@@ -1,0 +1,31 @@
+/* Canonical paddlesnitch design tokens — the platform's single source of truth
+   for colour. Import after `@import "tailwindcss"` in an app's globals.css:
+
+     @import "tailwindcss";
+     @import "@paddlesnitch/ui/tokens.css";
+
+   Tailwind v4 reads the `@theme` block and generates the semantic utility
+   classes (bg-bg, bg-surface, text-fg, text-muted, border-border, text-primary,
+   …). Components in @paddlesnitch/ui use ONLY these semantic classes, so they
+   render correctly wherever the tokens are defined.
+
+   The platform theme is DARK (extends the Analyse palette). The light values are
+   retained in comments as the historical att palette / a possible future light
+   mode. See docs/features/single-app-shell.md. */
+
+@theme inline {
+  --font-mono: "IBM Plex Mono", "Courier New", monospace;
+
+  --color-bg: #0b1220;        /* light: #ffffff */
+  --color-surface: #0f172a;   /* light: #f8fafc */
+  --color-surface-2: #1e293b; /* light: #f1f5f9 */
+  --color-border: #1e293b;    /* light: #e2e8f0 */
+  --color-fg: #e2e8f0;        /* light: #0f172a */
+  --color-muted: #94a3b8;     /* light: #64748b */
+  --color-primary: #0369a1;   /* buttons/CTAs — white text sits on it in both themes */
+  --color-split: #a78bfa;     /* light: #6d28d9 */
+  --color-red: #f87171;       /* light: #b91c1c */
+  --color-green: #22c55e;     /* light: #15803d */
+}
+
+:root { color-scheme: dark; }

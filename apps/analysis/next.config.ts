@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   basePath: '/analyse',
   // Workspace packages ship untranspiled TypeScript — Next must transpile them.
-  transpilePackages: ['@paddlesnitch/core', '@paddlesnitch/timing'],
+  transpilePackages: ['@paddlesnitch/core', '@paddlesnitch/timing', '@paddlesnitch/ui'],
   // Bundle @aws-sdk into server chunks (Turbopack otherwise externalizes it,
   // creating .next/node_modules/ copies that require @smithy/* deps to be present)
   serverExternalPackages: [],
