@@ -8,6 +8,9 @@
     "./AccountNav": "./src/AccountNav.tsx",
     "./ContactBanner": "./src/ContactBanner.tsx",
     "./FeedbackWidget": "./src/FeedbackWidget.tsx",
+    "./Analytics": "./src/Analytics.tsx",
+    "./analytics": "./src/analytics.ts",
+    "./metrics-events": "./src/metrics-events.ts",
     "./tokens.css": "./src/tokens.css"
   },
   "peerDependencies": {

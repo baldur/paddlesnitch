@@ -11,23 +11,15 @@
 // page path is attached as a plain property — queryable in CloudWatch Logs
 // Insights, but it does NOT create per-path metrics.
 
+// The event vocabulary (strict allowlist) is shared platform state in
+// @paddlesnitch/ui/metrics-events (single source of truth for client capture +
+// this server EMF path). Re-exported here so existing `@/lib/metrics` importers
+// (the track route, tests) keep resolving unchanged.
+export { METRIC_EVENTS, isMetricEvent } from '@paddlesnitch/ui/metrics-events'
+export type { MetricEvent } from '@paddlesnitch/ui/metrics-events'
+import type { MetricEvent } from '@paddlesnitch/ui/metrics-events'
+
 export const NAMESPACE = 'Paddlesnitch/App'
-
-export type MetricEvent =
-  | 'pageview'
-  | 'signup'
-  | 'login'
-  | 'upload'
-  | 'trial_create'
-  | 'course_create'
-
-export const METRIC_EVENTS: readonly MetricEvent[] = [
-  'pageview', 'signup', 'login', 'upload', 'trial_create', 'course_create',
-]
-
-export function isMetricEvent(v: unknown): v is MetricEvent {
-  return typeof v === 'string' && (METRIC_EVENTS as readonly string[]).includes(v)
-}
 
 // Build the EMF document for an event (exported for testing). `timestamp` is the
 // metric time in epoch ms — defaults to now, but batched client events pass their
