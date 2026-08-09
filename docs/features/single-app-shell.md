@@ -22,8 +22,13 @@
 - **P4 ✅** flip to dark: att's `globals.css` now `@import`s the shared dark
   `tokens.css` (replaces the light `@theme`); `themeColor` → `#0b1220`. Whole
   platform is dark. att builds + 549 tests green; Analyse builds + 61 tests green.
-- **P5 ◑** cross-app **Trials ↔ Analyse** nav is in `AppShell`; the paddler-profile
-  entry is consistent (both apps' `AccountNav` name → `/att/u/{id}`).
+- **P5 ✅** cross-app **Trials ↔ Analyse** nav is in `AppShell`; the paddler-profile
+  entry is consistent (both apps' `AccountNav` name → `/att/u/{id}`). The shared
+  header now renders on **every standard page including the root `/` landing**
+  (att landing swapped its bespoke header for `AppHeader`; Analyse home/library/
+  compare/section all mount `AppShell` via `AppAccountNav`). Exceptions by design:
+  the att **auth** pages (focused pre-login flow) and the **immersive
+  `AnalysisView`** (full-screen map; keeps its own overlay chrome).
 
 ### Follow-ups / polish (deferred, flagged for review)
 - **Visual polish pass on dark** — the token migration is thorough, but a human

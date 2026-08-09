@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import AppHeader from '@/components/AppHeader'
 
 export const metadata = {
   title: 'paddlesnitch.com — tools for the river',
@@ -41,14 +42,7 @@ const PRODUCTS: Product[] = [
 export default function LandingPage() {
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-        <div>
-          <span className="text-fg font-bold text-lg tracking-widest">PADDLESNITCH.COM</span>
-          <span className="text-muted text-xs tracking-widest ml-3 hidden sm:inline">
-            TOOLS FOR THE RIVER
-          </span>
-        </div>
-      </header>
+      <AppHeader breadcrumb={<span className="text-muted text-xs tracking-widest hidden sm:inline">TOOLS FOR THE RIVER</span>} />
 
       <section className="border-b border-border px-4 py-16 text-center bg-surface">
         <p className="text-muted text-xs tracking-[0.3em] uppercase mb-3">

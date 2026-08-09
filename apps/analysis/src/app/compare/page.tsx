@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtDurWords, split500 } from '@/lib/analysis'
 import type { AnalysisSession } from '@/lib/analysis-store'
+import AppShell from '@paddlesnitch/ui/AppShell'
+import AppAccountNav from '@/components/AppAccountNav'
 
 export default function ComparePage() {
   return <Suspense fallback={<div className="min-h-screen bg-[#0b1220]" />}><CompareInner /></Suspense>
@@ -45,8 +47,9 @@ function CompareInner() {
   const dPace = 500 / paceA - 500 / paceB // seconds/500 difference (A - B); negative = A faster
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0] px-4 py-6">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen">
+      <AppShell active="analyse" account={<AppAccountNav />} />
+      <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">COMPARE</h1>
           <Link href="/library" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← MY PADDLES</Link>
