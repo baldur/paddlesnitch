@@ -31,8 +31,18 @@ export class AttStack extends cdk.Stack {
       roleName: 'att-github-deploy',
       assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
         StringLike: {
-          // GitHub Actions → AWS OIDC deploy: trust main of the paddlesnitch repo.
-          'token.actions.githubusercontent.com:sub': 'repo:baldur/paddlesnitch:ref:refs/heads/main',
+          // GitHub Actions → AWS OIDC deploy, trusting main of the paddlesnitch
+          // repo. After the paddlesnitch-att → paddlesnitch rename, GitHub
+          // switched this repo to IMMUTABLE OIDC subject claims: the token `sub`
+          // is now `repo:<owner>@<ownerId>/<repo>@<repoId>:…` (numeric IDs that
+          // survive future renames), NOT the plain `repo:owner/repo:…` form.
+          // baldur=759, paddlesnitch=1254392477. We trust the immutable form
+          // (what the runner actually presents) and keep the plain form too, so
+          // this still works if GitHub ever reverts to plain subjects.
+          'token.actions.githubusercontent.com:sub': [
+            'repo:baldur@759/paddlesnitch@1254392477:ref:refs/heads/main',
+            'repo:baldur/paddlesnitch:ref:refs/heads/main',
+          ],
         },
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
