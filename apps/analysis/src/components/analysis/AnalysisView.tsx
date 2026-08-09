@@ -209,7 +209,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {data.avgDps != null && <span className="text-[#94a3b8] tabular">· {data.avgDps.toFixed(1)} m/str</span>}
         </div>
         {hudOpen && (
-          <>
+          // Cap the expandable narrative height + scroll it so a long LLM
+          // narrative can't grow the HUD down into the SEGMENTS panel below
+          // (worst on short/mobile viewports). The summary line + minimise
+          // button above stay fixed. (#187 follow-up)
+          <div className="max-h-[30vh] sm:max-h-[46vh] overflow-y-auto overscroll-contain">
             {(c?.windKmh != null || c?.flowM3s != null) && (
               <div className="flex items-center gap-3 mt-2 text-[#cbd5e1] tabular">
                 {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
@@ -218,7 +222,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             )}
             <p className="mt-2 leading-relaxed text-[#e2e8f0] border-l-2 border-[#0369a1] pl-2">{data.insight}</p>
             {data.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {data.insightModel}</div>}
-          </>
+          </div>
         )}
       </div>
 
@@ -317,7 +321,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           Lifted above the replay scrubber on phones (bottom-20) so its lower rows
           aren't hidden behind it; back to bottom-3 once there's room (sm+). (#187) */}
       {!sectionMode && (data.surges.length > 0 || data.sets.some(s => s.count > 1)) && (
-        <div className={`${PANEL} absolute bottom-20 sm:bottom-3 left-3 z-[1000] p-3 text-xs max-w-[300px] max-h-[42vh] overflow-auto`}>
+        <div className={`${PANEL} absolute bottom-20 sm:bottom-3 left-3 z-[1000] p-3 text-xs max-w-[300px] max-h-[36vh] sm:max-h-[42vh] overflow-auto`}>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-[#64748b] tracking-widest">SEGMENTS</span>
             <button onClick={() => setEffortsOpen(o => !o)} aria-label={effortsOpen ? 'Minimise segments' : 'Expand segments'}
