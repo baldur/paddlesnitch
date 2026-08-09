@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Scan the shared UI package so Tailwind generates the semantic classes its
+   components use. (att's token VALUES are still defined below — light for now;
+   the platform-wide flip to the shared dark tokens happens in P4.) */
+@source "../../../../packages/ui/src";
 
 @theme inline {
   --font-mono: "IBM Plex Mono", "Courier New", monospace;

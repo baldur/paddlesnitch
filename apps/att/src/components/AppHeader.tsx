@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react'
-import AuthNav from '@/components/AuthNav'
-import FeedbackTrigger from '@/components/FeedbackTrigger'
+import AppShell from '@paddlesnitch/ui/AppShell'
+import AttAccountNav from '@/components/AttAccountNav'
 
-// Shared page header: a breadcrumb on the left, a nav on the right that always
-// ends with <AuthNav />. The wrapping <header> uses `flex-wrap` so that on a
-// narrow (mobile) viewport the two groups drop to separate lines instead of
-// overlapping — see issue #100. Previously this markup was copy-pasted inline
-// across every page under src/app/att/, so the overlap bug existed everywhere;
-// owning the header here fixes it once.
+// att's page header — now a thin wrapper over the shared platform AppShell so att
+// and Analyse share ONE header (brand + cross-app Trials↔Analyse nav + REPORT +
+// account). The per-page API is unchanged (`breadcrumb` + optional nav
+// `children`), so all ~17 callers keep working; the shell supplies the account
+// nav (AttAccountNav) and the REPORT trigger (opens the shared FeedbackWidget via
+// a window event).
 export default function AppHeader({
   breadcrumb,
   children,
@@ -16,13 +16,6 @@ export default function AppHeader({
   children?: ReactNode
 }) {
   return (
-    <header className="border-b border-[#e2e8f0] px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <div className="flex items-center gap-4 min-w-0">{breadcrumb}</div>
-      <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0">
-        {children}
-        <FeedbackTrigger />
-        <AuthNav />
-      </nav>
-    </header>
+    <AppShell active="att" breadcrumb={breadcrumb} nav={children} account={<AttAccountNav />} />
   )
 }

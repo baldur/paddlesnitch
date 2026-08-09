@@ -24,6 +24,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.1086.0",
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
+    "@paddlesnitch/ui": "workspace:*",
     "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
     "@aws-sdk/client-s3": "^3.1048.0",
     "@aws-sdk/client-ses": "^3.1056.0",
