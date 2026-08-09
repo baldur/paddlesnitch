@@ -298,8 +298,8 @@ The shared UI shell that gives both apps a single-app feel (🚧 in progress —
   (`bg-bg`, `text-fg`, `border-border`, `text-muted`, `text-primary`, …).
 - `FeedbackWidget` — the one report-an-issue widget (floating + opens on a
   `paddlesnitch:open-feedback` event), POSTs to `/att/api/feedback`.
-- `AccountNav` — signed-in/out account nav (props-driven).
-- `AppShell` — platform header (brand + cross-app Trials↔Analyse nav + REPORT + account slot). **Cross-app links (`/`, `/att`, `/analyse`) and the account links (`/att/…`) use plain `<a>`, NOT `next/link`** — Analyse runs under `basePath:'/analyse'`, which makes `<Link>` prepend the basePath (turning `/att` into `/analyse/att`). App-supplied same-app `nav` children keep using `<Link>` (they SHOULD get the basePath).
+- `AccountNav` — signed-in/out account nav (props-driven). **Signed in it's a single dropdown** (`Name ▾`) holding everything common to every page — MY PROFILE, SETTINGS, REPORT AN ISSUE (dispatches the `paddlesnitch:open-feedback` event), SIGN OUT; closes on click-outside + Escape. Signed out → a plain `SIGN IN` link. This consolidation (from the old flat name/ACCOUNT/SIGN OUT + a standalone header REPORT) keeps the header uncluttered.
+- `AppShell` — platform header (brand + cross-app Trials↔Analyse **tabs** + optional section `nav` slot + account slot). Common actions live in `AccountNav`'s dropdown, **not** the top level (there is no standalone REPORT button anymore — anonymous users still get `FeedbackWidget`'s floating button). **Cross-app links (`/`, `/att`, `/analyse`) and the account links (`/att/…`, `/profile/…`) use plain `<a>`, NOT `next/link`** — Analyse runs under `basePath:'/analyse'`, which makes `<Link>` prepend the basePath (turning `/att` into `/analyse/att`). App-supplied same-app `nav` children keep using `<Link>` (they SHOULD get the basePath).
 - `ContactBanner` — dismissible top banner (Strava add-email); host supplies the show-predicate + href.
 
 ---
