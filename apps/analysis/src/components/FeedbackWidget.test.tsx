@@ -37,7 +37,7 @@ describe('analyse FeedbackWidget (#157)', () => {
   it('posts the report to /att/api/feedback and shows confirmation', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ ok: true, url: 'https://github.com/baldur/paddlesnitch-att/issues/999' }),
+      json: async () => ({ ok: true, url: 'https://github.com/baldur/paddlesnitch/issues/999' }),
     })) as unknown as typeof fetch
     vi.stubGlobal('fetch', fetchMock)
 

@@ -31,15 +31,8 @@ export class AttStack extends cdk.Stack {
       roleName: 'att-github-deploy',
       assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
         StringLike: {
-          // Accept BOTH the current and the post-rename repo slug so the GitHub
-          // Actions → AWS OIDC deploy keeps working across the
-          // `paddlesnitch-att` → `paddlesnitch` repo rename. Deploy this first
-          // (still under the old name), then rename the repo, then drop the old
-          // slug in a follow-up. IAM treats a list as OR.
-          'token.actions.githubusercontent.com:sub': [
-            'repo:baldur/paddlesnitch-att:ref:refs/heads/main',
-            'repo:baldur/paddlesnitch:ref:refs/heads/main',
-          ],
+          // GitHub Actions → AWS OIDC deploy: trust main of the paddlesnitch repo.
+          'token.actions.githubusercontent.com:sub': 'repo:baldur/paddlesnitch:ref:refs/heads/main',
         },
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
@@ -222,9 +215,9 @@ export class AttStack extends cdk.Stack {
         // resolve SSM SecureString parameters at synth time, so we pass the
         // parameter NAME here and the route fetches+decrypts at runtime.
         // Must exist as an SSM SecureString at /att/github-issues-token.
-        // Fine-grained scope: Issues: read/write on baldur/paddlesnitch-att.
+        // Fine-grained scope: Issues: read/write on baldur/paddlesnitch.
         GITHUB_ISSUES_TOKEN_PARAM: '/att/github-issues-token',
-        GITHUB_REPO: 'baldur/paddlesnitch-att',
+        GITHUB_REPO: 'baldur/paddlesnitch',
         // Strava API credentials. Both halves live in SSM so deploys never
         // need GitHub-side variables or secrets — the Lambda fetches them at
         // runtime via fetchSsmParam() in src/lib/strava.ts. Client ID is a
