@@ -34,16 +34,36 @@ export default function AnalysePage() {
   const [dupId, setDupId] = useState<string | null>(null)
   const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
   const [stravaMsg, setStravaMsg] = useState('')
+  const [stravaPage, setStravaPage] = useState(1)
+  const [stravaMore, setStravaMore] = useState(false)
+  const [stravaLoadingMore, setStravaLoadingMore] = useState(false)
   const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
 
   useEffect(() => { fetch('/analyse/api/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
 
   const loadStrava = () => {
-    setActs(undefined); setStravaMsg('')
+    setActs(undefined); setStravaMsg(''); setStravaPage(1); setStravaMore(false)
     fetch('/analyse/api/strava/activities')
-      .then(async r => { if (r.status === 409) { setStravaMsg('not_connected'); return { activities: [] } } return r.json() })
-      .then((d: { activities: StravaActivitySummary[] }) => setActs(d.activities ?? []))
+      .then(async r => { if (r.status === 409) { setStravaMsg('not_connected'); return { activities: [], hasMore: false } } return r.json() })
+      .then((d: { activities: StravaActivitySummary[]; hasMore?: boolean }) => { setActs(d.activities ?? []); setStravaMore(!!d.hasMore) })
       .catch(() => { setActs([]); setStravaMsg('fetch_failed') })
+  }
+  // Fetch the next page and append (dedup by id — pages can overlap if the
+  // athlete logged a new activity mid-browse).
+  const loadMoreStrava = () => {
+    const next = stravaPage + 1
+    setStravaLoadingMore(true)
+    fetch(`/analyse/api/strava/activities?page=${next}`)
+      .then(r => (r.ok ? r.json() : { activities: [], hasMore: false }))
+      .then((d: { activities: StravaActivitySummary[]; hasMore?: boolean }) => {
+        setActs(prev => {
+          const seen = new Set((prev ?? []).map(a => a.id))
+          return [...(prev ?? []), ...(d.activities ?? []).filter(a => !seen.has(a.id))]
+        })
+        setStravaPage(next); setStravaMore(!!d.hasMore)
+      })
+      .catch(() => setStravaMore(false))
+      .finally(() => setStravaLoadingMore(false))
   }
   const loadTrials = () => {
     setTrials(undefined)
@@ -126,6 +146,12 @@ export default function AnalysePage() {
               </button>
             ))}
             {acts && acts.length === 0 && !stravaMsg && <p className="text-xs text-[#64748b]">No recent water activities found.</p>}
+            {acts && acts.length > 0 && stravaMore && (
+              <button disabled={stravaLoadingMore} onClick={loadMoreStrava}
+                className="block w-full text-center px-3 py-2 mt-1 text-[11px] tracking-widest text-[#94a3b8] border border-[#1e293b] rounded hover:border-[#0369a1] hover:text-[#e2e8f0] disabled:opacity-40">
+                {stravaLoadingMore ? 'LOADING…' : 'GET MORE'}
+              </button>
+            )}
           </div>
         ) : (
           <div className="max-h-[300px] overflow-auto">

@@ -255,15 +255,21 @@ type RawActivity = {
   moving_time: number       // seconds
 }
 
-// Most recent activities first. We page once (per_page=30) — the picker shows
-// recent activities, not a full archive.
-export async function listActivities(accessToken: string): Promise<StravaActivitySummary[]> {
-  const res = await fetch(`${API_BASE}/athlete/activities?per_page=30`, {
+// Most recent activities first, one page at a time (Strava is paginated). The
+// picker shows a page, then a "get more" control fetches older pages. `hasMore`
+// is derived from the RAW (pre-filter) page being full, so a page that's all
+// bike rides doesn't falsely end paging — there may be water sports further back.
+export async function listActivities(
+  accessToken: string,
+  page = 1,
+  perPage = 30,
+): Promise<{ activities: StravaActivitySummary[]; hasMore: boolean }> {
+  const res = await fetch(`${API_BASE}/athlete/activities?per_page=${perPage}&page=${page}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!res.ok) throw new Error(`strava_list_failed_${res.status}`)
   const raw = (await res.json()) as RawActivity[]
-  return raw
+  const activities = raw
     .map((a): StravaActivitySummary => ({
       id: a.id,
       name: a.name,
@@ -275,6 +281,7 @@ export async function listActivities(accessToken: string): Promise<StravaActivit
     // Drop activities Strava marked as a non-water sport so the picker isn't
     // 80% bike rides. The user can still import via URL if they want one.
     .filter(a => WATER_SPORT_TYPES.has(a.sportType))
+  return { activities, hasMore: raw.length === perPage }
 }
 
 type StreamSet = {

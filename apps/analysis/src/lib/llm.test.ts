@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { withTimeout, buildPrompt } from './llm'
+import { withTimeout, buildPrompt, describePaddleDate } from './llm'
 import type { AnalysisResult } from './analysis'
 
 // Guards the "analysis failed, but works on retry" symptom (#171): a slow/hanging
@@ -37,5 +37,30 @@ describe('buildPrompt', () => {
     expect(p).toContain('Session: 1 hour 20 minutes,')
     expect(p).not.toContain('80:00 min')
     expect(p).not.toContain('80 minutes')
+  })
+
+  it('includes the paddle date so the model does not assume an import is today', () => {
+    const p = buildPrompt(result(), { paddledAt: '2025-05-12T08:00:00Z', asOf: '2026-08-09T12:00:00Z' })
+    expect(p).toContain('Session date:')
+    expect(p).toContain('12 May 2025')
+    expect(p).toMatch(/year/) // relative age (~1 year ago)
+  })
+
+  it('omits the date line when no paddledAt is given', () => {
+    expect(buildPrompt(result())).not.toContain('Session date:')
+  })
+})
+
+describe('describePaddleDate', () => {
+  const asOf = '2026-08-09T12:00:00Z'
+  it('says today / yesterday / days / months / years appropriately', () => {
+    expect(describePaddleDate('2026-08-09T06:00:00Z', asOf)).toContain('today')
+    expect(describePaddleDate('2026-08-08T06:00:00Z', asOf)).toContain('yesterday')
+    expect(describePaddleDate('2026-08-04T06:00:00Z', asOf)).toContain('5 days ago')
+    expect(describePaddleDate('2026-05-01T06:00:00Z', asOf)).toMatch(/months ago/)
+    expect(describePaddleDate('2024-08-01T06:00:00Z', asOf)).toMatch(/years ago/)
+  })
+  it('returns empty for an unparseable date', () => {
+    expect(describePaddleDate('not-a-date', asOf)).toBe('')
   })
 })

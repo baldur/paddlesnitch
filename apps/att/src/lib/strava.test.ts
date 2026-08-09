@@ -132,9 +132,29 @@ describe('listActivities', () => {
       ]), { status: 200 })
     })
 
-    const activities = await listActivities('access-token')
+    const { activities } = await listActivities('access-token')
     expect(activities.map(a => a.id)).toEqual([1, 3, 4])
     expect(activities[2].sportType).toBe('StandUpPaddling')
+  })
+
+  it('pages via ?page= and reports hasMore from the raw (pre-filter) page fullness', async () => {
+    // A full raw page (30) that filters down to few water sports must still say
+    // hasMore — otherwise a page of bike rides would falsely end paging.
+    const full = Array.from({ length: 30 }, (_, i) => (
+      i === 0
+        ? { id: 100, name: 'Paddle', sport_type: 'Kayaking', start_date: '2026-01-01T08:00:00Z', distance: 5000, moving_time: 1500 }
+        : { id: 200 + i, name: 'Ride', sport_type: 'Ride', start_date: '2026-01-02T07:00:00Z', distance: 12000, moving_time: 2400 }
+    ))
+    mockFetch(async (url) => { expect(url).toContain('page=2'); return new Response(JSON.stringify(full), { status: 200 }) })
+    const r = await listActivities('t', 2)
+    expect(r.hasMore).toBe(true)              // raw page was full (30)
+    expect(r.activities.map(a => a.id)).toEqual([100])
+
+    // A short final page → no more.
+    mockFetch(async () => new Response(JSON.stringify([
+      { id: 5, name: 'Last paddle', sport_type: 'Canoeing', start_date: '2026-01-05T08:00:00Z', distance: 4000, moving_time: 1200 },
+    ]), { status: 200 }))
+    expect((await listActivities('t', 3)).hasMore).toBe(false)
   })
 
   it('throws on non-2xx', async () => {

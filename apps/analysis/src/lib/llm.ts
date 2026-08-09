@@ -15,8 +15,10 @@ const SYSTEM = [
   'Write 2–4 short sentences of warm, specific commentary on THIS session: the single most interesting thing that',
   'happened, and one useful, forward-looking observation.',
   'When a paddler profile, history facts, or comparable past paddles are given, weave them in naturally to make it',
-  'personal and progressive — reference their trajectory, their goals, and how today compares to their own record —',
+  'personal and progressive — reference their trajectory, their goals, and how this session compares to their own record —',
   'but use ONLY the facts provided; never invent numbers.',
+  'The session date is given below. It may be a recent paddle OR an older one just imported, so narrate it for WHEN it',
+  'actually happened — never assume it is today, and only say "today"/"this morning" if the date really is today.',
   'Vary how you open; avoid generic praise and filler. Sound like a real person who has watched them paddle before.',
   'Phrase long durations the natural way — "1 hour 20 minutes", never "80 minutes".',
   'No preamble, no lists, no markdown headings — just the short paragraph.',
@@ -28,11 +30,34 @@ export type InsightContext = {
   profile?: string       // the persistent athlete-profile blurb (L2)
   historyFacts?: string  // renderHistoryFacts output (L1)
   relevant?: string      // renderRelevant output (L3)
+  paddledAt?: string     // when the paddle happened (ISO) — so the model doesn't assume "today"
+  asOf?: string          // "now" (ISO) for the relative age; defaults to current time
+}
+
+// Human date + relative age, e.g. "12 May 2025 (about 3 months ago)". Keeps the
+// model from narrating an imported older paddle as if it happened today.
+export function describePaddleDate(paddledAt: string, asOf: string): string {
+  const d = new Date(paddledAt), ref = new Date(asOf)
+  if (isNaN(d.getTime()) || isNaN(ref.getTime())) return ''
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const days = Math.floor((ref.getTime() - d.getTime()) / 86_400_000)
+  let rel: string
+  if (days <= 0) rel = 'today'
+  else if (days === 1) rel = 'yesterday'
+  else if (days < 14) rel = `${days} days ago`
+  else if (days < 60) rel = `about ${Math.round(days / 7)} weeks ago`
+  else if (days < 365) rel = `about ${Math.round(days / 30)} months ago`
+  else { const y = Math.round(days / 365); rel = `about ${y} year${y === 1 ? '' : 's'} ago` }
+  return `${date} (${rel})`
 }
 
 // Compact, grounded fact sheet — the model narrates THIS, nothing else.
 export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string {
   const L: string[] = []
+  if (ctx.paddledAt) {
+    const label = describePaddleDate(ctx.paddledAt, ctx.asOf ?? new Date().toISOString())
+    if (label) L.push(`Session date: ${label}.`)
+  }
   L.push(`Session: ${fmtDurWords(r.durationS)}, ${r.distanceKm.toFixed(2)} km.`)
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
   // the SUP×2 normalisation — a small model misreads it as "the athlete doubled
