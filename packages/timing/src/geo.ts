@@ -164,7 +164,11 @@ function buildResult(
     track[finishCrossing.trackIndex].lng + finishCrossing.t * (track[finishCrossing.trackIndex + 1].lng - track[finishCrossing.trackIndex].lng),
   ]
   const midPoints = segment.map((p): LatLng => [p.lat, p.lng])
-  const trackSegment: LatLng[] = [startPt, ...midPoints, finishPt]
+  // Round lat/lng to 6dp (~0.1 m, well under GPS noise) before it's stored and
+  // sent to the map. Full-precision floats are ~incompressible and dominate the
+  // payload; this cuts the served trackSegment ~2.8× after gzip.
+  const round6 = ([lat, lng]: LatLng): LatLng => [Math.round(lat * 1e6) / 1e6, Math.round(lng * 1e6) / 1e6]
+  const trackSegment: LatLng[] = [startPt, ...midPoints, finishPt].map(round6)
 
   // Average stroke rate over the racing window, from whichever points carried
   // it (#143). Bound strictly to [startMs, finishMs] by timestamp — `segment`
