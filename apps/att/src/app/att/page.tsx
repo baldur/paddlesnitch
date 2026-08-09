@@ -61,8 +61,8 @@ export default async function Home() {
       <AppHeader
         breadcrumb={
           <>
-            <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
-            <span className="text-[#64748b] text-xs tracking-widest hidden sm:inline">paddlesnitch.com</span>
+            <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
+            <span className="text-muted text-xs tracking-widest hidden sm:inline">paddlesnitch.com</span>
           </>
         }
       >
@@ -83,14 +83,14 @@ export default async function Home() {
         )}
       </AppHeader>
 
-      <section className="border-b border-[#e2e8f0] px-4 py-12 text-center bg-[#f8fafc]">
-        <p className="text-[#64748b] text-xs tracking-[0.3em] uppercase mb-3">
+      <section className="border-b border-border px-4 py-12 text-center bg-surface">
+        <p className="text-muted text-xs tracking-[0.3em] uppercase mb-3">
           GPS-verified river racing
         </p>
-        <h1 className="text-4xl md:text-5xl font-bold text-[#0f172a] mb-2">
+        <h1 className="text-4xl md:text-5xl font-bold text-fg mb-2">
           Automated Time Trials
         </h1>
-        <p className="text-[#64748b] text-sm">Upload your trace. See your splits.</p>
+        <p className="text-muted text-sm">Upload your trace. See your splits.</p>
       </section>
 
       <section className="flex-1 px-4 py-8 max-w-5xl mx-auto w-full">
@@ -98,11 +98,11 @@ export default async function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           {/* Open trials */}
           <div>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-6">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
               Open Time Trials
             </h2>
             {openTrials.length === 0 ? (
-              <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
+              <div className="border border-border p-8 text-center text-muted text-sm">
                 {canOrganise ? (
                   <>
                     No open trials yet.{' '}
@@ -132,30 +132,30 @@ export default async function Home() {
                   // card anchor rather than inside it.
                   <div
                     key={trial.id}
-                    className="border border-[#e2e8f0] hover:border-[#0369a1] transition-colors"
+                    className="border border-border hover:border-primary transition-colors"
                   >
                     <a
                       href={`/att/trials/${trial.id}`}
                       className="px-4 py-4 flex items-center justify-between group"
                     >
                       <div>
-                        <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">
+                        <div className="text-fg font-bold group-hover:text-primary transition-colors">
                           {trial.name}
                         </div>
-                        <div className="text-xs text-[#64748b] mt-0.5">
+                        <div className="text-xs text-muted mt-0.5">
                           {course?.name ?? 'Unknown course'} · {trial.date}
                           {course && ` · ${course.sport}`}
                         </div>
                       </div>
-                      <span className="text-xs border border-[#15803d] text-[#15803d] px-2 py-0.5">
+                      <span className="text-xs border border-green text-green px-2 py-0.5">
                         OPEN
                       </span>
                     </a>
                     {canManageTrial(trial, viewer, adminGroupIds) && (
-                      <div className="border-t border-[#e2e8f0] px-4 py-2 flex justify-end">
+                      <div className="border-t border-border px-4 py-2 flex justify-end">
                         <Link
                           href={`/att/admin/trials/${trial.id}`}
-                          className="text-xs text-[#64748b] hover:text-[#0369a1] tracking-widest transition-colors"
+                          className="text-xs text-muted hover:text-primary tracking-widest transition-colors"
                         >
                           MANAGE / CLOSE →
                         </Link>
@@ -169,35 +169,35 @@ export default async function Home() {
 
           {/* Recent submissions */}
           <div>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-6">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
               Recent Submissions
             </h2>
             {recent.length === 0 ? (
-              <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
+              <div className="border border-border p-8 text-center text-muted text-sm">
                 No submissions yet.
               </div>
             ) : (
-              <ul className="border border-[#e2e8f0] divide-y divide-[#f1f5f9]">
+              <ul className="border border-border divide-y divide-surface-2">
                 {recent.map(r => (
                   <li key={r.entryId} className="px-4 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm text-[#0f172a] font-medium truncate">
+                      <div className="text-sm text-fg font-medium truncate">
                         {profileLinks[r.userId] ? (
-                          <Link href={`/att/u/${profileLinks[r.userId]}`} className="hover:text-[#0369a1] hover:underline transition-colors">
+                          <Link href={`/att/u/${profileLinks[r.userId]}`} className="hover:text-primary hover:underline transition-colors">
                             {r.displayName}
                           </Link>
                         ) : (
                           r.displayName
                         )}
                       </div>
-                      <div className="text-xs text-[#64748b] mt-0.5 truncate">
-                        <Link href={`/att/trials/${r.trialId}`} className="hover:text-[#0369a1] transition-colors">
+                      <div className="text-xs text-muted mt-0.5 truncate">
+                        <Link href={`/att/trials/${r.trialId}`} className="hover:text-primary transition-colors">
                           {r.courseName}
                         </Link>{' '}
                         · {r.raceDate} · {r.boatClass}
                       </div>
                     </div>
-                    <span className="text-sm tabular font-bold text-[#0369a1] shrink-0">
+                    <span className="text-sm tabular font-bold text-primary shrink-0">
                       {formatTime(r.totalElapsedSeconds)}
                     </span>
                   </li>

@@ -149,15 +149,15 @@ export default function TrialAdminPage({
             <Link href="/att" className="tt-nav-link text-sm shrink-0">
               ← HOME
             </Link>
-            <span className="text-[#64748b] shrink-0">/</span>
+            <span className="text-muted shrink-0">/</span>
             <a
               href={`/att/admin/courses/${course.id}`}
               className="tt-nav-link text-sm truncate"
             >
               {course.name.toUpperCase()}
             </a>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm shrink-0">{trial.name.toUpperCase()}</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm shrink-0">{trial.name.toUpperCase()}</span>
           </>
         }
       />
@@ -165,10 +165,10 @@ export default function TrialAdminPage({
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-1">
+            <h1 className="text-lg font-bold text-fg tracking-widest mb-1">
               {trial.name.toUpperCase()}
             </h1>
-            <p className="text-xs text-[#64748b]">
+            <p className="text-xs text-muted">
               {course.name} · {trial.date}
             </p>
           </div>
@@ -176,8 +176,8 @@ export default function TrialAdminPage({
             <span
               className={`text-xs px-2 py-0.5 border ${
                 trial.status === 'open'
-                  ? 'border-[#15803d] text-[#15803d]'
-                  : 'border-[#64748b] text-[#64748b]'
+                  ? 'border-green text-green'
+                  : 'border-muted text-muted'
               }`}
             >
               {trial.status.toUpperCase()}
@@ -187,8 +187,8 @@ export default function TrialAdminPage({
               disabled={toggling}
               className={`px-4 py-1.5 text-xs font-bold tracking-widest border transition-colors disabled:opacity-50 ${
                 trial.status === 'open'
-                  ? 'border-[#b91c1c] text-[#b91c1c] hover:bg-[#b91c1c] hover:text-white'
-                  : 'border-[#15803d] text-[#15803d] hover:bg-[#15803d] hover:text-white'
+                  ? 'border-red text-red hover:bg-red hover:text-white'
+                  : 'border-green text-green hover:bg-green hover:text-white'
               }`}
             >
               {toggling
@@ -203,7 +203,7 @@ export default function TrialAdminPage({
             <button
               type="button"
               onClick={toggleVisibility}
-              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
               title={
                 course.visibility === 'private'
                   ? 'Course is private, so this trial is private too.'
@@ -212,7 +212,7 @@ export default function TrialAdminPage({
             >
               {trial.visibility === 'public' ? 'PUBLIC ↔ PRIVATE' : 'PRIVATE ↔ PUBLIC'}
             </button>
-            <span className="text-xs text-[#64748b] tracking-widest self-center">SUBMIT:</span>
+            <span className="text-xs text-muted tracking-widest self-center">SUBMIT:</span>
             {(['members', 'invitational', 'public'] as const).map(v => (
               <button
                 key={v}
@@ -220,8 +220,8 @@ export default function TrialAdminPage({
                 onClick={() => changeParticipation(v)}
                 className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
                   trial.participation === v
-                    ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
-                    : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1]'
+                    ? 'border-primary text-primary bg-primary/10'
+                    : 'border-border text-muted hover:border-primary hover:text-primary'
                 }`}
               >
                 {v.toUpperCase()}
@@ -237,38 +237,38 @@ export default function TrialAdminPage({
           const submitLink = trial.submitToken ? `${origin}/att/trials/${trialId}/upload?invite=${trial.submitToken}` : ''
           const gated = trial.participation === 'members' || trial.participation === 'invitational'
           const copy = (t: string) => navigator.clipboard?.writeText(t)
-          const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-xs focus:outline-none focus:border-[#0369a1] transition-colors'
+          const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-xs focus:outline-none focus:border-primary transition-colors'
           return (
             <section>
-              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">Share this trial</h2>
-              <p className="text-sm text-[#64748b] mb-3">
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Share this trial</h2>
+              <p className="text-sm text-muted mb-3">
                 Send this link — visitors can view the leaderboard, and (on an open trial) sign up and submit right from it.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 mb-4">
                 <input readOnly value={trialLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
-                <button type="button" onClick={() => copy(trialLink)} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">COPY LINK</button>
+                <button type="button" onClick={() => copy(trialLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY LINK</button>
               </div>
 
               {gated && (
-                <div className="border border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] text-xs px-3 py-2 mb-4">
+                <div className="border border-border bg-surface-2 text-fg text-xs px-3 py-2 mb-4">
                   Heads-up: this trial is <b>{trial.participation}</b>, so people who follow the plain link above will need to{' '}
                   {trial.participation === 'members' ? 'join the group' : 'be invited'} before they can submit. Use the{' '}
                   <b>submit link</b> below to let anyone you share it with sign up and submit directly — or set “Submit” to <b>PUBLIC</b>.
                 </div>
               )}
 
-              <label className="text-xs text-[#64748b] tracking-widest">SUBMIT LINK</label>
-              <p className="text-xs text-[#64748b] mt-1 mb-2">
+              <label className="text-xs text-muted tracking-widest">SUBMIT LINK</label>
+              <p className="text-xs text-muted mt-1 mb-2">
                 Anyone with this link can sign up and submit to this trial{gated ? ', even though it’s gated' : ''}. Revoke it any time.
               </p>
               {submitLink ? (
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input readOnly value={submitLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
-                  <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">COPY</button>
-                  <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#b91c1c] hover:text-[#b91c1c] transition-colors">REVOKE</button>
+                  <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
+                  <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">REVOKE</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">
+                <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">
                   CREATE SUBMIT LINK
                 </button>
               )}
@@ -280,7 +280,7 @@ export default function TrialAdminPage({
             Open trials hide the section so we don't suggest the data is there. */}
         {trial.participation === 'invitational' && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
               Invitees ({invitees.length})
             </h2>
 
@@ -291,25 +291,25 @@ export default function TrialAdminPage({
                 value={inviteEmail}
                 onChange={e => setInviteEmail(e.target.value)}
                 placeholder="email of someone with an account"
-                className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors flex-1"
+                className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors flex-1"
               />
               <button
                 type="submit"
                 disabled={inviting || !inviteEmail.trim()}
-                className="px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {inviting ? 'INVITING…' : 'INVITE'}
               </button>
             </form>
 
             {inviteError && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs mb-4">
+              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs mb-4">
                 {inviteError}
               </div>
             )}
 
             {invitees.length === 0 ? (
-              <p className="text-xs text-[#64748b]">
+              <p className="text-xs text-muted">
                 No one is invited yet. Only you can submit until you invite someone.
               </p>
             ) : (
@@ -317,18 +317,18 @@ export default function TrialAdminPage({
                 {invitees.map(i => (
                   <div
                     key={i.sub}
-                    className="flex items-center justify-between border border-[#e2e8f0] px-3 py-2 text-sm"
+                    className="flex items-center justify-between border border-border px-3 py-2 text-sm"
                   >
                     <div className="min-w-0">
-                      <div className="text-[#0f172a] truncate">{i.displayName}</div>
+                      <div className="text-fg truncate">{i.displayName}</div>
                       {i.email && (
-                        <div className="text-xs text-[#64748b] truncate">{i.email}</div>
+                        <div className="text-xs text-muted truncate">{i.email}</div>
                       )}
                     </div>
                     <button
                       type="button"
                       onClick={() => uninvite(i.sub)}
-                      className="text-xs text-[#64748b] hover:text-[#b91c1c] tracking-widest"
+                      className="text-xs text-muted hover:text-red tracking-widest"
                     >
                       REMOVE
                     </button>
@@ -341,7 +341,7 @@ export default function TrialAdminPage({
 
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase">
               Leaderboard ({leaderboard.length} entr{leaderboard.length === 1 ? 'y' : 'ies'})
             </h2>
             {trial.status === 'open' && (
@@ -355,7 +355,7 @@ export default function TrialAdminPage({
           </div>
 
           {leaderboard.length === 0 ? (
-            <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
+            <div className="border border-border p-8 text-center text-muted text-sm">
               No entries yet.
               {trial.status === 'open' && (
                 <>
@@ -370,7 +370,7 @@ export default function TrialAdminPage({
           ) : (
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b border-[#e2e8f0] text-[#64748b] text-xs tracking-wider">
+                <tr className="border-b border-border text-muted text-xs tracking-wider">
                   <th className="text-left py-2 pr-4 font-normal">#</th>
                   <th className="text-left py-2 pr-4 font-normal">ATHLETE</th>
                   <th className="text-right py-2 pr-4 font-normal">TIME</th>
@@ -379,13 +379,13 @@ export default function TrialAdminPage({
               </thead>
               <tbody>
                 {leaderboard.map((entry, i) => (
-                  <tr key={entry.entryId} className="border-b border-[#f1f5f9]">
-                    <td className="py-2.5 pr-4 text-[#64748b]">{i + 1}</td>
-                    <td className="py-2.5 pr-4 text-[#0f172a]">{entry.displayName}</td>
-                    <td className="py-2.5 pr-4 text-right tabular text-[#0369a1] font-bold">
+                  <tr key={entry.entryId} className="border-b border-surface-2">
+                    <td className="py-2.5 pr-4 text-muted">{i + 1}</td>
+                    <td className="py-2.5 pr-4 text-fg">{entry.displayName}</td>
+                    <td className="py-2.5 pr-4 text-right tabular text-primary font-bold">
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
-                    <td className="py-2.5 text-right text-[#64748b] text-xs">
+                    <td className="py-2.5 text-right text-muted text-xs">
                       {new Date(entry.submittedAt).toLocaleDateString()}
                     </td>
                   </tr>
@@ -395,8 +395,8 @@ export default function TrialAdminPage({
           )}
         </section>
 
-        <section className="border-t border-[#e2e8f0] pt-6">
-          <p className="text-xs text-[#64748b]">
+        <section className="border-t border-border pt-6">
+          <p className="text-xs text-muted">
             Public leaderboard:{' '}
             <a href={`/att/trials/${trialId}`} className="tt-link">
               /att/trials/{trialId}

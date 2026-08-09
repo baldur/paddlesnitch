@@ -17,28 +17,28 @@ export default async function FaqPage() {
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm">← HOME</Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">HELP / FAQ</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">HELP / FAQ</span>
           </>
         }
       />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-8">
+        <h1 className="text-lg font-bold text-fg tracking-widest mb-8">
           FREQUENTLY ASKED QUESTIONS
         </h1>
         {entries.length === 0 ? (
-          <p className="text-sm text-[#b91c1c]">
+          <p className="text-sm text-red">
             The FAQ is unavailable right now. Please contact privacy@paddlesnitch.com.
           </p>
         ) : (
-          <div className="flex flex-col divide-y divide-[#e2e8f0]">
+          <div className="flex flex-col divide-y divide-border">
             {entries.map(entry => (
               <section key={entry.question} className="py-5 first:pt-0">
-                <h2 className="text-sm font-bold text-[#0f172a] mb-2">{entry.question}</h2>
+                <h2 className="text-sm font-bold text-fg mb-2">{entry.question}</h2>
                 <div className="flex flex-col gap-3">
                   {faqParagraphs(entry.answer).map((para, i) => (
-                    <p key={i} className="text-sm text-[#64748b] leading-relaxed">
+                    <p key={i} className="text-sm text-muted leading-relaxed">
                       {para}
                     </p>
                   ))}

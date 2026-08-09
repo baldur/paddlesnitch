@@ -187,7 +187,7 @@ export default function CourseAdminPage({
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
-  const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
+  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
 
   // For the DrawingMap default center we use the midpoint of the existing
   // start line so the map opens already showing the course geometry.
@@ -205,8 +205,8 @@ export default function CourseAdminPage({
             <Link href="/att" className="tt-nav-link text-sm shrink-0">
               ← HOME
             </Link>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm truncate">{course.name.toUpperCase()}</span>
           </>
         }
       />
@@ -217,15 +217,15 @@ export default function CourseAdminPage({
             at all times because it's a common one-click operation. */}
         <section>
           <div className="flex items-start justify-between gap-4 mb-1">
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
+            <h1 className="text-lg font-bold text-fg tracking-widest">
               {course.name.toUpperCase()}
             </h1>
             <div className="flex flex-col items-end gap-2">
               <span
                 className={`text-xs px-2 py-0.5 border ${
                   course.visibility === 'public'
-                    ? 'border-[#15803d] text-[#15803d]'
-                    : 'border-[#64748b] text-[#64748b]'
+                    ? 'border-green text-green'
+                    : 'border-muted text-muted'
                 }`}
               >
                 {course.visibility.toUpperCase()}
@@ -233,7 +233,7 @@ export default function CourseAdminPage({
               <button
                 type="button"
                 onClick={toggleVisibility}
-                className="px-3 py-1 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+                className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
               >
                 {course.visibility === 'public' ? '→ MAKE PRIVATE' : '→ MAKE PUBLIC'}
               </button>
@@ -241,23 +241,23 @@ export default function CourseAdminPage({
                 <button
                   type="button"
                   onClick={startEdit}
-                  className="px-3 py-1 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+                  className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
                 >
                   EDIT DETAILS
                 </button>
               )}
             </div>
           </div>
-          <p className="text-xs text-[#64748b] mb-4">
+          <p className="text-xs text-muted mb-4">
             {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
             {course.type === 'loop' && ' · LOOP'}
             {course.type === 'gate' && ' · GATE'}
           </p>
 
           {editing ? (
-            <div className="flex flex-col gap-4 border border-[#e2e8f0] p-4">
+            <div className="flex flex-col gap-4 border border-border p-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#64748b] tracking-widest">COURSE NAME</label>
+                <label className="text-xs text-muted tracking-widest">COURSE NAME</label>
                 <input
                   type="text"
                   required
@@ -268,7 +268,7 @@ export default function CourseAdminPage({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#64748b] tracking-widest">SPORT</label>
+                <label className="text-xs text-muted tracking-widest">SPORT</label>
                 <select
                   value={editSport}
                   onChange={e => setEditSport(e.target.value as CourseMetadata['sport'])}
@@ -281,10 +281,10 @@ export default function CourseAdminPage({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#64748b] tracking-widest">
+                <label className="text-xs text-muted tracking-widest">
                   GEOMETRY ({course.type.replace('_', ' ')})
                 </label>
-                <p className="text-xs text-[#64748b]">
+                <p className="text-xs text-muted">
                   Existing lines are highlighted. Click on the map to re-draw any
                   segment; the previous segment will reset. Distance updates as you
                   draw. The course type can&apos;t be changed here — create a new
@@ -302,7 +302,7 @@ export default function CourseAdminPage({
 
               {course.type === 'loop' && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-[#64748b] tracking-widest">DISTANCE (M)</label>
+                  <label className="text-xs text-muted tracking-widest">DISTANCE (M)</label>
                   <input
                     type="number"
                     min={0}
@@ -315,7 +315,7 @@ export default function CourseAdminPage({
 
               {course.type === 'loop' && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-[#64748b] tracking-widest">MINIMUM VALID TIME (SECONDS) — OPTIONAL</label>
+                  <label className="text-xs text-muted tracking-widest">MINIMUM VALID TIME (SECONDS) — OPTIONAL</label>
                   <input
                     type="number"
                     min={0}
@@ -324,14 +324,14 @@ export default function CourseAdminPage({
                     placeholder="e.g. 300"
                     className={inputClass}
                   />
-                  <p className="text-xs text-[#64748b]">
+                  <p className="text-xs text-muted">
                     Ignore results shorter than this. Useful for loops where warmup crossings could be mistaken for a race.
                   </p>
                 </div>
               )}
 
               {trials.length > 0 && (
-                <div className="border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-[#9a3412] text-xs">
+                <div className="border border-border bg-surface-2 px-3 py-2 text-fg text-xs">
                   This course already has trials. Editing the lines or course type
                   will create a NEW course (the original stays intact so historical
                   leaderboards aren&apos;t invalidated). Name and sport edits stay on
@@ -340,7 +340,7 @@ export default function CourseAdminPage({
               )}
 
               {editError && (
-                <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+                <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                   {editError}
                 </div>
               )}
@@ -350,7 +350,7 @@ export default function CourseAdminPage({
                   type="button"
                   onClick={saveEdit}
                   disabled={saving}
-                  className="px-4 py-2 bg-[#0369a1] text-white font-bold text-xs tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-primary text-white font-bold text-xs tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {saving ? 'SAVING…' : 'SAVE CHANGES'}
                 </button>
@@ -358,7 +358,7 @@ export default function CourseAdminPage({
                   type="button"
                   onClick={cancelEdit}
                   disabled={saving}
-                  className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
                 >
                   CANCEL
                 </button>
@@ -370,11 +370,11 @@ export default function CourseAdminPage({
         </section>
 
         <section>
-          <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
             Time Trials
           </h2>
           {sortedTrials.length === 0 ? (
-            <div className="border border-[#e2e8f0] p-6 text-center text-[#64748b] text-sm">
+            <div className="border border-border p-6 text-center text-muted text-sm">
               No trials yet.
             </div>
           ) : (
@@ -383,19 +383,19 @@ export default function CourseAdminPage({
                 <a
                   key={t.id}
                   href={`/att/admin/trials/${t.id}`}
-                  className="border border-[#e2e8f0] px-4 py-3 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
+                  className="border border-border px-4 py-3 flex items-center justify-between hover:border-primary transition-colors group"
                 >
                   <div>
-                    <div className="text-[#0f172a] text-sm group-hover:text-[#0369a1] transition-colors">
+                    <div className="text-fg text-sm group-hover:text-primary transition-colors">
                       {t.name}
                     </div>
-                    <div className="text-xs text-[#64748b] mt-0.5">{t.date}</div>
+                    <div className="text-xs text-muted mt-0.5">{t.date}</div>
                   </div>
                   <span
                     className={`text-xs px-2 py-0.5 border ${
                       t.status === 'open'
-                        ? 'border-[#15803d] text-[#15803d]'
-                        : 'border-[#64748b] text-[#64748b]'
+                        ? 'border-green text-green'
+                        : 'border-muted text-muted'
                     }`}
                   >
                     {t.status.toUpperCase()}
@@ -407,13 +407,13 @@ export default function CourseAdminPage({
         </section>
 
         <section>
-          <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
             New Time Trial
           </h2>
           <form onSubmit={createTrial} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#64748b] tracking-widest">TRIAL NAME</label>
+                <label className="text-xs text-muted tracking-widest">TRIAL NAME</label>
                 <input
                   type="text"
                   required
@@ -424,7 +424,7 @@ export default function CourseAdminPage({
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#64748b] tracking-widest">DATE</label>
+                <label className="text-xs text-muted tracking-widest">DATE</label>
                 <input
                   type="date"
                   required
@@ -432,18 +432,18 @@ export default function CourseAdminPage({
                   onChange={e => setTrialDate(e.target.value)}
                   className={`${inputClass} cursor-pointer`}
                 />
-                <p className="text-xs text-[#64748b]">Click to open calendar</p>
+                <p className="text-xs text-muted">Click to open calendar</p>
               </div>
             </div>
             {error && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                 {error}
               </div>
             )}
             <button
               type="submit"
               disabled={creating}
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start"
+              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start"
             >
               {creating ? 'CREATING…' : 'CREATE TRIAL'}
             </button>

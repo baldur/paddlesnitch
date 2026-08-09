@@ -39,19 +39,19 @@ export default function ForgotPasswordPage() {
     }
   }
 
-  const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
+  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3">
+      <header className="border-b border-border px-4 py-3">
         <Link href="/att">
-          <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
+          <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
         </Link>
       </header>
       <div className="flex-1 flex items-start justify-center pt-16 px-4">
         <div className="w-full max-w-sm">
-          <h1 className="text-sm tracking-widest text-[#0f172a] mb-2">RESET PASSWORD</h1>
-          <p className="text-xs text-[#64748b] mb-6">
+          <h1 className="text-sm tracking-widest text-fg mb-2">RESET PASSWORD</h1>
+          <p className="text-xs text-muted mb-6">
             Enter your email and we&apos;ll send you a 6-digit code to reset your
             password.
           </p>
@@ -72,7 +72,7 @@ export default function ForgotPasswordPage() {
               </label>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
+              <label className="text-xs text-muted tracking-widest">EMAIL</label>
               <input
                 type="email"
                 required
@@ -83,18 +83,18 @@ export default function ForgotPasswordPage() {
               />
             </div>
             {error && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                 {error}
               </div>
             )}
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
             >
               {loading ? 'SENDING…' : 'SEND CODE'}
             </button>
-            <p className="text-xs text-[#64748b] text-center">
+            <p className="text-xs text-muted text-center">
               Remembered it?{' '}
               <Link href="/att/auth" className="tt-link">Sign in</Link>
             </p>

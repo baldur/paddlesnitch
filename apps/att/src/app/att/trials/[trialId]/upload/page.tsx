@@ -35,7 +35,7 @@ function formatDate(iso: string): string {
 // and unmounts/remounts the subtree — input focus is lost after every
 // keystroke. Pass state down as props instead.
 
-const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors w-full'
+const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors w-full'
 
 // Kayaks use "Front" / "Back"; rowing uses "Bow" / "Stroke". Middle seats
 // in either sport are just the seat number. Cox (rowing only) shows as
@@ -71,14 +71,14 @@ function CrewEditor({
     : `One row per seat. Seat 1 is bow, ${total} is stroke${info.hasCox ? ', C is cox' : ''}.`
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-xs text-[#64748b] tracking-widest">CREW</label>
-      <p className="text-xs text-[#64748b] -mt-1">
+      <label className="text-xs text-muted tracking-widest">CREW</label>
+      <p className="text-xs text-muted -mt-1">
         {helperText}
       </p>
       <div className="flex flex-col gap-1.5">
         {crew.map(m => (
           <div key={String(m.seat)} className="flex items-center gap-2">
-            <span className="text-xs text-[#64748b] tracking-widest w-20 shrink-0 tabular">
+            <span className="text-xs text-muted tracking-widest w-20 shrink-0 tabular">
               {seatLabel(m.seat, total, info.sport)}
             </span>
             <input
@@ -105,7 +105,7 @@ function BoatClassPicker({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-xs text-[#64748b] tracking-widest">BOAT CLASS</label>
+      <label className="text-xs text-muted tracking-widest">BOAT CLASS</label>
       <select
         required
         value={boatClass}
@@ -349,8 +349,8 @@ export default function UploadPage({
             >
               ← LEADERBOARD
             </a>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">UPLOAD TRACE</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">UPLOAD TRACE</span>
           </>
         }
       />
@@ -358,15 +358,15 @@ export default function UploadPage({
       <div className="flex-1 px-4 py-8 max-w-xl mx-auto w-full">
         {authUser === null ? (
           <div className="flex flex-col gap-4 text-center">
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
+            <h1 className="text-lg font-bold text-fg tracking-widest">
               SIGN IN TO SUBMIT
             </h1>
-            <p className="text-sm text-[#64748b]">
+            <p className="text-sm text-muted">
               You need an account to submit a trace and appear on the leaderboard.
             </p>
             <a
               href={`/att/auth?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
+              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
             >
               SIGN IN / SIGN UP
             </a>
@@ -377,24 +377,24 @@ export default function UploadPage({
           // Signed in but not allowed to submit — explain why and point at the
           // group to join (self-serve join lands in phase 4).
           <div className="flex flex-col gap-4 text-center">
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
+            <h1 className="text-lg font-bold text-fg tracking-widest">
               {submitGate.reason === 'members' ? 'MEMBERS ONLY' : 'INVITATION ONLY'}
             </h1>
             {submitGate.reason === 'members' && submitGate.group ? (
               <>
-                <p className="text-sm text-[#64748b]">
-                  Only members of <span className="text-[#0f172a] font-bold">{submitGate.group.name}</span> can
+                <p className="text-sm text-muted">
+                  Only members of <span className="text-fg font-bold">{submitGate.group.name}</span> can
                   submit to this trial. Ask an admin of the group to add you, then come back and upload.
                 </p>
                 <a
                   href={`/att/groups/${submitGate.group.id}`}
-                  className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
+                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
                 >
                   VIEW GROUP →
                 </a>
               </>
             ) : (
-              <p className="text-sm text-[#64748b]">
+              <p className="text-sm text-muted">
                 This trial is invitation-only. Ask the organiser for an invite, then come back and upload.
               </p>
             )}
@@ -404,24 +404,24 @@ export default function UploadPage({
           </div>
         ) : (
           <div className="flex flex-col gap-6">
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
+            <h1 className="text-lg font-bold text-fg tracking-widest">
               SUBMIT YOUR ENTRY
             </h1>
-            <p className="text-sm text-[#64748b] -mt-4">
+            <p className="text-sm text-muted -mt-4">
               Upload your full session — warmup and cooldown included. The system
               automatically finds the segment between the start and finish lines
               and extracts your time.
             </p>
 
             {/* Mode toggle */}
-            <div className="flex border-b border-[#e2e8f0]">
+            <div className="flex border-b border-border">
               <button
                 type="button"
                 onClick={() => setInputMode('file')}
                 className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                   inputMode === 'file'
-                    ? 'border-b-2 border-[#0369a1] text-[#0369a1] -mb-px'
-                    : 'text-[#64748b] hover:text-[#0f172a]'
+                    ? 'border-b-2 border-primary text-primary -mb-px'
+                    : 'text-muted hover:text-fg'
                 }`}
               >
                 UPLOAD FILE
@@ -431,8 +431,8 @@ export default function UploadPage({
                 onClick={() => setInputMode('url')}
                 className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                   inputMode === 'url'
-                    ? 'border-b-2 border-[#0369a1] text-[#0369a1] -mb-px'
-                    : 'text-[#64748b] hover:text-[#0f172a]'
+                    ? 'border-b-2 border-primary text-primary -mb-px'
+                    : 'text-muted hover:text-fg'
                 }`}
               >
                 PASTE URL
@@ -443,7 +443,7 @@ export default function UploadPage({
                 className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                   inputMode === 'strava'
                     ? 'border-b-2 border-[#fc4c02] text-[#fc4c02] -mb-px'
-                    : 'text-[#64748b] hover:text-[#0f172a]'
+                    : 'text-muted hover:text-fg'
                 }`}
               >
                 FROM STRAVA
@@ -453,7 +453,7 @@ export default function UploadPage({
             {inputMode === 'file' && (
               <form onSubmit={handleFileSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs text-[#64748b] tracking-widest">
+                  <label className="text-xs text-muted tracking-widest">
                     GPS FILE (.gpx, .fit, .tcx, .csv, or .zip)
                   </label>
                   <input
@@ -461,9 +461,9 @@ export default function UploadPage({
                     type="file"
                     required
                     accept=".gpx,.fit,.tcx,.csv,.zip"
-                    className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm file:bg-[#f1f5f9] file:text-[#0f172a] file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer hover:border-[#0369a1] transition-colors cursor-pointer w-full"
+                    className="bg-bg border border-border px-3 py-2 text-fg text-sm file:bg-surface-2 file:text-fg file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer hover:border-primary transition-colors cursor-pointer w-full"
                   />
-                  <p className="text-xs text-[#64748b]">
+                  <p className="text-xs text-muted">
                     Export your full activity from Garmin Connect, Strava, a SpeedCoach, or any GPS device. GPX, FIT, TCX, and CSV are all supported — including a Garmin Connect .zip export (we unpack the activity inside). For paddlers, the FIT export usually carries stroke rate; GPX often doesn&apos;t. Heart rate is discarded; stroke rate is kept.
                   </p>
                 </div>
@@ -472,7 +472,7 @@ export default function UploadPage({
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
                 {status === 'error' && (
-                  <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
+                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">
                     {error}
                   </div>
                 )}
@@ -480,7 +480,7 @@ export default function UploadPage({
                 <button
                   type="submit"
                   disabled={status === 'uploading'}
-                  className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'uploading' ? 'PROCESSING…' : 'SUBMIT TRACE'}
                 </button>
@@ -490,7 +490,7 @@ export default function UploadPage({
             {inputMode === 'url' && (
               <form onSubmit={handleUrlSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs text-[#64748b] tracking-widest">
+                  <label className="text-xs text-muted tracking-widest">
                     ACTIVITY URL
                   </label>
                   <input
@@ -501,7 +501,7 @@ export default function UploadPage({
                     onChange={e => setActivityUrl(e.target.value)}
                     className={inputClass}
                   />
-                  <p className="text-xs text-[#64748b]">
+                  <p className="text-xs text-muted">
                     Paste a public Strava activity URL or a direct .gpx link. Your full session is fine — no need to trim it. Heart rate is discarded; stroke rate is kept.
                   </p>
                 </div>
@@ -510,7 +510,7 @@ export default function UploadPage({
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
                 {status === 'error' && (
-                  <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
+                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">
                     {error}
                   </div>
                 )}
@@ -518,7 +518,7 @@ export default function UploadPage({
                 <button
                   type="submit"
                   disabled={status === 'uploading'}
-                  className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'uploading' ? 'FETCHING…' : 'SUBMIT URL'}
                 </button>
@@ -528,16 +528,16 @@ export default function UploadPage({
             {inputMode === 'strava' && (
               <form onSubmit={handleStravaSubmit} className="flex flex-col gap-4">
                 {stravaConnected === undefined && (
-                  <p className="text-xs text-[#64748b]">Checking Strava connection…</p>
+                  <p className="text-xs text-muted">Checking Strava connection…</p>
                 )}
 
                 {stravaConnected === false && (
-                  <div className="flex flex-col gap-3 border border-[#e2e8f0] p-4">
-                    <p className="text-sm text-[#0f172a]">
+                  <div className="flex flex-col gap-3 border border-border p-4">
+                    <p className="text-sm text-fg">
                       Connect Strava once and you can import any recent water-sport activity straight into a time trial.
                     </p>
                     <StravaButton href="/att/api/strava/connect" className="self-start" />
-                    <p className="text-xs text-[#64748b]">
+                    <p className="text-xs text-muted">
                       You&apos;ll be redirected to Strava to approve. Manage the connection any time from your{' '}
                       <a href="/att/account" className="tt-link">account page</a>.
                     </p>
@@ -546,30 +546,30 @@ export default function UploadPage({
 
                 {stravaConnected && (
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs text-[#64748b] tracking-widest">
+                    <label className="text-xs text-muted tracking-widest">
                       RECENT STRAVA ACTIVITIES
                     </label>
                     {stravaError && (
-                      <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+                      <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                         {stravaError}
                       </div>
                     )}
                     {stravaActivities === undefined && !stravaError && (
-                      <p className="text-xs text-[#64748b]">Loading…</p>
+                      <p className="text-xs text-muted">Loading…</p>
                     )}
                     {stravaActivities !== undefined && stravaActivities.length === 0 && (
-                      <p className="text-xs text-[#64748b]">
+                      <p className="text-xs text-muted">
                         No recent kayak, canoe, rowing, or SUP activities found on your Strava.
                       </p>
                     )}
                     {stravaActivities !== undefined && stravaActivities.length > 0 && (
-                      <ul className="flex flex-col border border-[#e2e8f0] max-h-72 overflow-y-auto">
+                      <ul className="flex flex-col border border-border max-h-72 overflow-y-auto">
                         {stravaActivities.map(a => {
                           const checked = stravaActivityId === a.id
                           return (
                             <li
                               key={a.id}
-                              className={`border-b border-[#f1f5f9] last:border-b-0 ${checked ? 'bg-[#fff7ed]' : 'hover:bg-[#f8fafc]'}`}
+                              className={`border-b border-surface-2 last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface'}`}
                             >
                               <label className="flex items-center gap-3 px-3 py-2 cursor-pointer">
                                 <input
@@ -580,8 +580,8 @@ export default function UploadPage({
                                   className="accent-[#fc4c02]"
                                 />
                                 <span className="flex-1 min-w-0">
-                                  <span className="block text-sm text-[#0f172a] truncate">{a.name}</span>
-                                  <span className="block text-xs text-[#64748b] tabular">
+                                  <span className="block text-sm text-fg truncate">{a.name}</span>
+                                  <span className="block text-xs text-muted tabular">
                                     {a.sportType} · {formatDate(a.startDate)} · {formatDistance(a.distanceMetres)}
                                   </span>
                                 </span>
@@ -606,7 +606,7 @@ export default function UploadPage({
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
                 {status === 'error' && (
-                  <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
+                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">
                     {error}
                   </div>
                 )}
@@ -614,7 +614,7 @@ export default function UploadPage({
                 <button
                   type="submit"
                   disabled={status === 'uploading' || !stravaConnected || !stravaActivityId}
-                  className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'uploading' ? 'IMPORTING…' : 'IMPORT FROM STRAVA'}
                 </button>
@@ -623,10 +623,10 @@ export default function UploadPage({
 
             {diagnostic && (
               <div className="flex flex-col gap-2">
-                <label className="text-xs text-[#64748b] tracking-widest">
+                <label className="text-xs text-muted tracking-widest">
                   WHAT WE RECORDED
                 </label>
-                <p className="text-xs text-[#64748b]">
+                <p className="text-xs text-muted">
                   {diagnostic.gateAnalysis?.blocking
                     ? <>Your track is blue. The gate that blocked the match is highlighted in red — check it crosses that gate in the right direction and order.</>
                     : <>Your track is blue; the start line is green and the finish line red. If your track doesn&apos;t pass cleanly through both lines, your GPS may not have been recording there, or the course lines may need adjusting.</>}

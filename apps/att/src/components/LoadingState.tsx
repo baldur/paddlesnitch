@@ -18,11 +18,11 @@ export default function LoadingState({
       className={`flex flex-col items-center justify-center gap-3 ${className}`}
     >
       <div className="flex gap-1.5" aria-hidden="true">
-        <span className="w-2 h-2 bg-[#0369a1] animate-pulse" />
-        <span className="w-2 h-2 bg-[#0369a1] animate-pulse [animation-delay:150ms]" />
-        <span className="w-2 h-2 bg-[#0369a1] animate-pulse [animation-delay:300ms]" />
+        <span className="w-2 h-2 bg-primary animate-pulse" />
+        <span className="w-2 h-2 bg-primary animate-pulse [animation-delay:150ms]" />
+        <span className="w-2 h-2 bg-primary animate-pulse [animation-delay:300ms]" />
       </div>
-      <span className="text-sm text-[#64748b] tracking-widest">{label}</span>
+      <span className="text-sm text-muted tracking-widest">{label}</span>
     </div>
   )
 }

@@ -41,30 +41,30 @@ const PRODUCTS: Product[] = [
 export default function LandingPage() {
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
+      <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div>
-          <span className="text-[#0f172a] font-bold text-lg tracking-widest">PADDLESNITCH.COM</span>
-          <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">
+          <span className="text-fg font-bold text-lg tracking-widest">PADDLESNITCH.COM</span>
+          <span className="text-muted text-xs tracking-widest ml-3 hidden sm:inline">
             TOOLS FOR THE RIVER
           </span>
         </div>
       </header>
 
-      <section className="border-b border-[#e2e8f0] px-4 py-16 text-center bg-[#f8fafc]">
-        <p className="text-[#64748b] text-xs tracking-[0.3em] uppercase mb-3">
+      <section className="border-b border-border px-4 py-16 text-center bg-surface">
+        <p className="text-muted text-xs tracking-[0.3em] uppercase mb-3">
           A growing suite
         </p>
-        <h1 className="text-3xl md:text-5xl font-bold text-[#0f172a] mb-3">
+        <h1 className="text-3xl md:text-5xl font-bold text-fg mb-3">
           Software for paddlers, rowers, and river groups.
         </h1>
-        <p className="text-[#64748b] text-sm max-w-xl mx-auto leading-relaxed">
+        <p className="text-muted text-sm max-w-xl mx-auto leading-relaxed">
           Practical tools that disappear into the river day. Honest, no-bloat,
           designed for people who&apos;d rather be on the water.
         </p>
       </section>
 
       <section className="flex-1 px-4 py-12 max-w-3xl mx-auto w-full">
-        <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-6">
+        <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
           Products
         </h2>
         <div className="flex flex-col gap-4">
@@ -73,10 +73,10 @@ export default function LandingPage() {
               return (
                 <article
                   key={`teaser-${i}`}
-                  className="border border-dashed border-[#e2e8f0] bg-[#f8fafc] p-6 flex items-center justify-end h-24"
+                  className="border border-dashed border-border bg-surface p-6 flex items-center justify-end h-24"
                   aria-label="Coming soon"
                 >
-                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-[#cbd5e1] text-[#94a3b8] whitespace-nowrap">
+                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-muted text-muted whitespace-nowrap">
                     COMING SOON
                   </span>
                 </article>
@@ -85,20 +85,20 @@ export default function LandingPage() {
             return (
               <article
                 key={p.name}
-                className="border border-[#e2e8f0] p-6 flex flex-col gap-3"
+                className="border border-border p-6 flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-4">
-                  <h3 className="text-lg font-bold text-[#0f172a]">{p.name}</h3>
-                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-[#15803d] text-[#15803d] whitespace-nowrap shrink-0">
+                  <h3 className="text-lg font-bold text-fg">{p.name}</h3>
+                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-green text-green whitespace-nowrap shrink-0">
                     AVAILABLE NOW
                   </span>
                 </div>
-                <p className="text-sm text-[#0f172a]">{p.short}</p>
-                <p className="text-sm text-[#64748b] leading-relaxed">{p.details}</p>
+                <p className="text-sm text-fg">{p.short}</p>
+                <p className="text-sm text-muted leading-relaxed">{p.details}</p>
                 {p.href && p.cta && (
                   <Link
                     href={p.href}
-                    className="self-start mt-2 px-4 py-2 bg-[#0369a1] text-white text-xs tracking-widest hover:bg-[#0284c7] transition-colors"
+                    className="self-start mt-2 px-4 py-2 bg-primary text-white text-xs tracking-widest hover:bg-primary transition-colors"
                   >
                     {p.cta}
                   </Link>
@@ -108,7 +108,7 @@ export default function LandingPage() {
           })}
         </div>
 
-        <p className="text-xs text-[#64748b] text-center mt-12">
+        <p className="text-xs text-muted text-center mt-12">
           More tools are on the way. Use the &quot;Report an issue&quot; widget below
           to tell us what you&apos;d like to see.
         </p>

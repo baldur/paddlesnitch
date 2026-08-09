@@ -147,13 +147,13 @@ function AuthForm() {
   }
 
   const inputClass =
-    'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
+    'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
 
   const tabClass = (t: typeof tab) =>
     `px-4 py-2 text-sm tracking-widest transition-colors ${
       tab === t
-        ? 'border-b-2 border-[#0369a1] text-[#0369a1] -mb-px'
-        : 'text-[#64748b] hover:text-[#0f172a]'
+        ? 'border-b-2 border-primary text-primary -mb-px'
+        : 'text-muted hover:text-fg'
     }`
 
   // Sign in / sign up via Strava goes through a server-driven OAuth round
@@ -166,19 +166,19 @@ function AuthForm() {
       <div className="flex justify-center mb-2">
         <StravaButton href={stravaHref} />
       </div>
-      <p className="text-xs text-[#94a3b8] mb-6 text-center leading-relaxed">
+      <p className="text-xs text-muted mb-6 text-center leading-relaxed">
         Strava doesn&apos;t share your email, so after you continue we&apos;ll ask you to add one — that&apos;s
         how we reach you about your account and group invitations. Already have an email account here?
         Sign in below first and connect Strava from your account page, so it links to that account
         instead of creating a new one.
       </p>
-      <div className="flex items-center gap-3 mb-6 text-xs text-[#94a3b8] tracking-widest">
-        <span className="flex-1 h-px bg-[#e2e8f0]" />
+      <div className="flex items-center gap-3 mb-6 text-xs text-muted tracking-widest">
+        <span className="flex-1 h-px bg-border" />
         OR
-        <span className="flex-1 h-px bg-[#e2e8f0]" />
+        <span className="flex-1 h-px bg-border" />
       </div>
 
-      <div className="flex border-b border-[#e2e8f0] mb-8">
+      <div className="flex border-b border-border mb-8">
         <button type="button" onClick={() => { setTab('signin'); setError('') }} className={tabClass('signin')}>
           SIGN IN
         </button>
@@ -193,7 +193,7 @@ function AuthForm() {
       {tab === 'signin' && (
         <form onSubmit={handleSignIn} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
+            <label className="text-xs text-muted tracking-widest">EMAIL</label>
             <input
               type="email"
               required
@@ -204,7 +204,7 @@ function AuthForm() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">PASSWORD</label>
+            <label className="text-xs text-muted tracking-widest">PASSWORD</label>
             <input
               type="password"
               required
@@ -215,18 +215,18 @@ function AuthForm() {
             />
           </div>
           {error && (
-            <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+            <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
               {error}
             </div>
           )}
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+            className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
           >
             {loading ? 'SIGNING IN…' : 'SIGN IN'}
           </button>
-          <p className="text-xs text-[#64748b] text-center">
+          <p className="text-xs text-muted text-center">
             No account?{' '}
             <button
               type="button"
@@ -246,7 +246,7 @@ function AuthForm() {
       {tab === 'signup' && (
         <form onSubmit={handleSignUp} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
+            <label className="text-xs text-muted tracking-widest">EMAIL</label>
             <input
               type="email"
               required
@@ -257,7 +257,7 @@ function AuthForm() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">DISPLAY NAME</label>
+            <label className="text-xs text-muted tracking-widest">DISPLAY NAME</label>
             <input
               type="text"
               required
@@ -269,7 +269,7 @@ function AuthForm() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#64748b] tracking-widest">PASSWORD</label>
+            <label className="text-xs text-muted tracking-widest">PASSWORD</label>
             <input
               type="password"
               required
@@ -279,17 +279,17 @@ function AuthForm() {
               onChange={e => setPassword(e.target.value)}
               className={inputClass}
             />
-            <p className="text-xs text-[#64748b]">Minimum 8 characters</p>
+            <p className="text-xs text-muted">Minimum 8 characters</p>
           </div>
           {/* ToS acceptance — required for account creation. The checkbox
               has to be ticked AND the server side checks the version on
               POST, so a stale rendering won't accept a future version. */}
-          <label className="flex items-start gap-2 text-xs text-[#64748b]">
+          <label className="flex items-start gap-2 text-xs text-muted">
             <input
               type="checkbox"
               checked={tosAccepted}
               onChange={e => setTosAccepted(e.target.checked)}
-              className="mt-0.5 accent-[#0369a1]"
+              className="mt-0.5 accent-primary"
             />
             <span>
               I have read and agree to the{' '}
@@ -303,18 +303,18 @@ function AuthForm() {
             </span>
           </label>
           {error && (
-            <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+            <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
               {error}
             </div>
           )}
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+            className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
           >
             {loading ? 'CREATING ACCOUNT…' : 'CREATE ACCOUNT'}
           </button>
-          <p className="text-xs text-[#64748b] text-center">
+          <p className="text-xs text-muted text-center">
             Already have an account?{' '}
             <button
               type="button"
@@ -330,11 +330,11 @@ function AuthForm() {
       {tab === 'code' && (
         otpSession ? (
           <form onSubmit={handleOtpVerify} className="flex flex-col gap-4">
-            <p className="text-xs text-[#64748b]">
+            <p className="text-xs text-muted">
               We&apos;ve emailed a 6-digit code to <strong>{email}</strong>. Paste it below.
             </p>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#64748b] tracking-widest">CODE</label>
+              <label className="text-xs text-muted tracking-widest">CODE</label>
               <input
                 type="text"
                 required
@@ -349,18 +349,18 @@ function AuthForm() {
               />
             </div>
             {error && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                 {error}
               </div>
             )}
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
             >
               {loading ? 'VERIFYING…' : 'SIGN IN'}
             </button>
-            <p className="text-xs text-[#64748b] text-center">
+            <p className="text-xs text-muted text-center">
               Didn&apos;t arrive?{' '}
               <button
                 type="button"
@@ -388,11 +388,11 @@ function AuthForm() {
                 />
               </label>
             </div>
-            <p className="text-xs text-[#64748b]">
+            <p className="text-xs text-muted">
               Enter your email and we&apos;ll send you a one-time code. No password needed.
             </p>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
+              <label className="text-xs text-muted tracking-widest">EMAIL</label>
               <input
                 type="email"
                 required
@@ -403,14 +403,14 @@ function AuthForm() {
               />
             </div>
             {error && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
                 {error}
               </div>
             )}
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
             >
               {loading ? 'SENDING…' : 'SEND CODE'}
             </button>
@@ -425,10 +425,10 @@ function AuthForm() {
 export default function AuthPage() {
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3">
+      <header className="border-b border-border px-4 py-3">
         <Link href="/att">
-          <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
-          <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">AUTOMATED TIME TRIALS</span>
+          <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
+          <span className="text-muted text-xs tracking-widest ml-3 hidden sm:inline">AUTOMATED TIME TRIALS</span>
         </Link>
       </header>
       <div className="flex-1 flex items-start justify-center pt-16 px-4">

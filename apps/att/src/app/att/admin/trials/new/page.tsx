@@ -60,21 +60,21 @@ function NewTrialForm() {
     }
   }
 
-  const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
+  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
 
   const selectedCourse = courses?.find(c => c.id === courseId)
 
   return (
     <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-      <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-8">CREATE TIME TRIAL</h1>
+      <h1 className="text-lg font-bold text-fg tracking-widest mb-8">CREATE TIME TRIAL</h1>
 
       <form onSubmit={submit} className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-[#64748b] tracking-widest">COURSE</label>
+          <label className="text-xs text-muted tracking-widest">COURSE</label>
           {courses === null ? (
-            <div className="text-xs text-[#64748b] py-2">Loading courses…</div>
+            <div className="text-xs text-muted py-2">Loading courses…</div>
           ) : courses.length === 0 ? (
-            <div className="border border-[#e2e8f0] bg-[#f8fafc] px-3 py-3 text-xs text-[#64748b]">
+            <div className="border border-border bg-surface px-3 py-3 text-xs text-muted">
               No courses yet.{' '}
               <Link href="/att/admin/courses/new" className="tt-link">
                 Create one
@@ -97,7 +97,7 @@ function NewTrialForm() {
                 ))}
               </select>
               {selectedCourse && (
-                <p className="text-xs text-[#64748b]">
+                <p className="text-xs text-muted">
                   <Link href={`/att/courses/${selectedCourse.id}`} className="tt-link">
                     View course details
                   </Link>{' '}
@@ -108,7 +108,7 @@ function NewTrialForm() {
                 </p>
               )}
               {!selectedCourse && (
-                <p className="text-xs text-[#64748b]">
+                <p className="text-xs text-muted">
                   Or{' '}
                   <Link href="/att/admin/courses/new" className="tt-link">
                     create a new course
@@ -121,7 +121,7 @@ function NewTrialForm() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-[#64748b] tracking-widest">TRIAL NAME</label>
+          <label className="text-xs text-muted tracking-widest">TRIAL NAME</label>
           <input
             type="text"
             required
@@ -133,7 +133,7 @@ function NewTrialForm() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-[#64748b] tracking-widest">DATE</label>
+          <label className="text-xs text-muted tracking-widest">DATE</label>
           <input
             type="date"
             required
@@ -141,14 +141,14 @@ function NewTrialForm() {
             onChange={e => setDate(e.target.value)}
             className={`${inputClass} cursor-pointer`}
           />
-          <p className="text-xs text-[#64748b]">When the trial takes place. Defaults to today.</p>
+          <p className="text-xs text-muted">When the trial takes place. Defaults to today.</p>
         </div>
 
         {/* Visibility. The trial's scope can't exceed its course's: group
             courses force group; private courses force private. The server
             clamps anyway, but we visually disable to make it obvious. */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
+          <label className="text-xs text-muted tracking-widest">VISIBILITY</label>
           <div className="flex gap-2">
             {(['public', 'private', 'group'] as const).map(v => {
               const courseLocksTo =
@@ -165,8 +165,8 @@ function NewTrialForm() {
                   onClick={() => { if (!disabled) setVisibility(v) }}
                   className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                     active
-                      ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
-                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
+                      ? 'border-primary text-primary bg-primary/10'
+                      : 'border-border text-muted hover:border-muted'
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   {v === 'group' ? 'GROUP' : v.toUpperCase()}
@@ -174,7 +174,7 @@ function NewTrialForm() {
               )
             })}
           </div>
-          <p className="text-xs text-[#64748b]">
+          <p className="text-xs text-muted">
             {selectedCourse?.visibility === 'private'
               ? 'This course is private, so any trial on it must be private too.'
               : selectedCourse?.visibility === 'group'
@@ -191,7 +191,7 @@ function NewTrialForm() {
             invitational = only users you invite; public = anyone who can view.
             The organiser can always submit. */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-[#64748b] tracking-widest">WHO CAN SUBMIT</label>
+          <label className="text-xs text-muted tracking-widest">WHO CAN SUBMIT</label>
           <div className="flex gap-2">
             {(['members', 'invitational', 'public'] as const).map(v => (
               <button
@@ -200,15 +200,15 @@ function NewTrialForm() {
                 onClick={() => setParticipation(v)}
                 className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                   participation === v
-                    ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
-                    : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
+                    ? 'border-primary text-primary bg-primary/10'
+                    : 'border-border text-muted hover:border-muted'
                 }`}
               >
                 {v.toUpperCase()}
               </button>
             ))}
           </div>
-          <p className="text-xs text-[#64748b]">
+          <p className="text-xs text-muted">
             {participation === 'members'
               ? 'Members of this course’s group can submit a trace.'
               : participation === 'invitational'
@@ -218,7 +218,7 @@ function NewTrialForm() {
         </div>
 
         {error && (
-          <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+          <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
             {error}
           </div>
         )}
@@ -226,7 +226,7 @@ function NewTrialForm() {
         <button
           type="submit"
           disabled={creating || !courses || courses.length === 0}
-          className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start"
+          className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start"
         >
           {creating ? 'CREATING…' : 'CREATE TRIAL'}
         </button>
@@ -244,8 +244,8 @@ export default function NewTrialPage() {
             <Link href="/att" className="tt-nav-link text-sm">
               ← HOME
             </Link>
-            <span className="text-[#64748b]">/</span>
-            <span className="text-[#0f172a] text-sm">NEW TRIAL</span>
+            <span className="text-muted">/</span>
+            <span className="text-fg text-sm">NEW TRIAL</span>
           </>
         }
       />

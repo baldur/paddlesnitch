@@ -81,15 +81,15 @@ export default function GroupDetailPage({
   if (!user) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-[#64748b]">You need to sign in to view this group.</p>
-        <Link href={`/att/auth?next=/att/groups/${groupId}`} className="px-6 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] transition-colors">SIGN IN</Link>
+        <p className="text-sm text-muted">You need to sign in to view this group.</p>
+        <Link href={`/att/auth?next=/att/groups/${groupId}`} className="px-6 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary transition-colors">SIGN IN</Link>
       </main>
     )
   }
   if (!group) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-[#64748b]">This group doesn&apos;t exist.</p>
+        <p className="text-sm text-muted">This group doesn&apos;t exist.</p>
         <Link href="/att/groups" className="tt-nav-link text-xs tracking-widest">← BACK TO GROUPS</Link>
       </main>
     )
@@ -98,7 +98,7 @@ export default function GroupDetailPage({
   const role = group.viewerStatus
   const isMember = role === 'owner' || role === 'admin' || role === 'member'
   const canManage = role === 'owner' || role === 'admin'
-  const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
+  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
 
   // ---- Non-member: the join view ----
   if (!isMember) {
@@ -128,25 +128,25 @@ export default function GroupDetailPage({
         <AppHeader breadcrumb={
           <>
             <Link href="/att/groups" className="tt-nav-link text-sm shrink-0">← GROUPS</Link>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm truncate">{group.name.toUpperCase()}</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm truncate">{group.name.toUpperCase()}</span>
           </>
         } />
         <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-6">
           <div>
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-1">{group.name.toUpperCase()}</h1>
-            <p className="text-xs text-[#64748b]">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</p>
+            <h1 className="text-lg font-bold text-fg tracking-widest mb-1">{group.name.toUpperCase()}</h1>
+            <p className="text-xs text-muted">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</p>
           </div>
-          {group.description && <p className="text-sm text-[#64748b] whitespace-pre-wrap">{group.description}</p>}
+          {group.description && <p className="text-sm text-muted whitespace-pre-wrap">{group.description}</p>}
 
-          <div className="border border-[#e2e8f0] bg-[#f8fafc] p-6 flex flex-col gap-3">
+          <div className="border border-border bg-surface p-6 flex flex-col gap-3">
             {role === 'pending' ? (
-              <p className="text-sm text-[#0f172a]">Your request to join is pending an admin&apos;s approval.</p>
+              <p className="text-sm text-fg">Your request to join is pending an admin&apos;s approval.</p>
             ) : policy === 'invite_only' ? (
-              <p className="text-sm text-[#64748b]">This group is invite-only. Ask an admin to send you an invitation.</p>
+              <p className="text-sm text-muted">This group is invite-only. Ask an admin to send you an invitation.</p>
             ) : (
               <>
-                <p className="text-sm text-[#0f172a]">
+                <p className="text-sm text-fg">
                   {policy === 'open'
                     ? 'Anyone can join this group.'
                     : 'Request to join — an admin will approve you.'}
@@ -154,13 +154,13 @@ export default function GroupDetailPage({
                 <button
                   onClick={requestToJoin}
                   disabled={joining}
-                  className="self-start px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+                  className="self-start px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
                 >
                   {joining ? 'WORKING…' : policy === 'open' ? 'JOIN GROUP' : 'REQUEST TO JOIN'}
                 </button>
               </>
             )}
-            {joinError && <p className="text-xs text-[#b91c1c]">{joinError}</p>}
+            {joinError && <p className="text-xs text-red">{joinError}</p>}
           </div>
           <Link href="/att/groups" className="tt-nav-link text-xs tracking-widest">← BACK TO GROUPS</Link>
         </div>
@@ -270,8 +270,8 @@ export default function GroupDetailPage({
         breadcrumb={
           <>
             <Link href="/att/groups" className="tt-nav-link text-sm shrink-0">← GROUPS</Link>
-            <span className="text-[#64748b] shrink-0">/</span>
-            <span className="text-[#0f172a] text-sm truncate">{group.name.toUpperCase()}</span>
+            <span className="text-muted shrink-0">/</span>
+            <span className="text-fg text-sm truncate">{group.name.toUpperCase()}</span>
           </>
         }
       />
@@ -279,16 +279,16 @@ export default function GroupDetailPage({
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section>
           <div className="flex items-start justify-between gap-4 mb-2">
-            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">{group.name.toUpperCase()}</h1>
-            <span className="text-xs px-2 py-0.5 border border-[#0369a1] text-[#0369a1] uppercase shrink-0">{role}</span>
+            <h1 className="text-lg font-bold text-fg tracking-widest">{group.name.toUpperCase()}</h1>
+            <span className="text-xs px-2 py-0.5 border border-primary text-primary uppercase shrink-0">{role}</span>
           </div>
           {group.description && (
-            <p className="text-sm text-[#64748b] mb-2 whitespace-pre-wrap">{group.description}</p>
+            <p className="text-sm text-muted mb-2 whitespace-pre-wrap">{group.description}</p>
           )}
         </section>
 
         <section>
-          <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
             Members ({1 + adminUserIds.length + memberUserIds.length})
           </h2>
           <div className="flex flex-col gap-1.5">
@@ -301,7 +301,7 @@ export default function GroupDetailPage({
             ))}
           </div>
           {role !== 'owner' && (
-            <button onClick={leaveGroup} className="mt-4 text-xs text-[#64748b] hover:text-[#b91c1c] tracking-widest">
+            <button onClick={leaveGroup} className="mt-4 text-xs text-muted hover:text-red tracking-widest">
               LEAVE GROUP
             </button>
           )}
@@ -309,19 +309,19 @@ export default function GroupDetailPage({
 
         {canManage && joinRequests.length > 0 && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
               Join requests ({joinRequests.length})
             </h2>
             <div className="flex flex-col gap-1.5">
               {joinRequests.map(r => (
-                <div key={r.id} className="flex items-center justify-between border border-[#e2e8f0] px-3 py-2 text-sm gap-3">
+                <div key={r.id} className="flex items-center justify-between border border-border px-3 py-2 text-sm gap-3">
                   <div className="min-w-0">
-                    <div className="text-[#0f172a] truncate">{r.displayName}</div>
-                    {r.email && <div className="text-xs text-[#64748b] truncate">{r.email}</div>}
+                    <div className="text-fg truncate">{r.displayName}</div>
+                    {r.email && <div className="text-xs text-muted truncate">{r.email}</div>}
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button onClick={() => approveRequest(r.id)} className="px-3 py-1 text-xs font-bold tracking-widest border border-[#15803d] text-[#15803d] hover:bg-[#15803d] hover:text-white transition-colors">APPROVE</button>
-                    <button onClick={() => declineRequest(r.id)} className="px-3 py-1 text-xs tracking-widest text-[#64748b] hover:text-[#b91c1c] transition-colors">DECLINE</button>
+                    <button onClick={() => approveRequest(r.id)} className="px-3 py-1 text-xs font-bold tracking-widest border border-green text-green hover:bg-green hover:text-white transition-colors">APPROVE</button>
+                    <button onClick={() => declineRequest(r.id)} className="px-3 py-1 text-xs tracking-widest text-muted hover:text-red transition-colors">DECLINE</button>
                   </div>
                 </div>
               ))}
@@ -331,34 +331,34 @@ export default function GroupDetailPage({
 
         {canManage && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">Invite a member</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">Invite a member</h2>
             <form onSubmit={submitInvite} className="flex flex-col sm:flex-row gap-2">
               <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email address" className={`${inputClass} flex-1`} />
               <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'member')} className={inputClass}>
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
               </select>
-              <button type="submit" disabled={inviting || !inviteEmail.trim()} className="px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              <button type="submit" disabled={inviting || !inviteEmail.trim()} className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 {inviting ? 'INVITING…' : 'INVITE'}
               </button>
             </form>
-            {inviteError && <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs mt-3">{inviteError}</div>}
-            {inviteWarning && <div className="border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-[#9a3412] text-xs mt-3">{inviteWarning}</div>}
-            <p className="text-xs text-[#64748b] mt-3">If the email has no account yet, the invitation will activate the moment they sign up.</p>
+            {inviteError && <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs mt-3">{inviteError}</div>}
+            {inviteWarning && <div className="border border-border bg-surface-2 px-3 py-2 text-fg text-xs mt-3">{inviteWarning}</div>}
+            <p className="text-xs text-muted mt-3">If the email has no account yet, the invitation will activate the moment they sign up.</p>
           </section>
         )}
 
         {canManage && invitations.length > 0 && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">Pending invitations ({invitations.length})</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">Pending invitations ({invitations.length})</h2>
             <div className="flex flex-col gap-1.5">
               {invitations.map(i => (
-                <div key={i.id} className="flex items-center justify-between border border-[#e2e8f0] px-3 py-2 text-sm">
+                <div key={i.id} className="flex items-center justify-between border border-border px-3 py-2 text-sm">
                   <div className="min-w-0">
-                    <div className="text-[#0f172a] truncate">{i.toEmail ?? i.toUserId}</div>
-                    <div className="text-xs text-[#64748b]">role: {i.role}</div>
+                    <div className="text-fg truncate">{i.toEmail ?? i.toUserId}</div>
+                    <div className="text-xs text-muted">role: {i.role}</div>
                   </div>
-                  <button onClick={() => removeInvitation(i.id)} className="text-xs text-[#64748b] hover:text-[#b91c1c] tracking-widest">RESCIND</button>
+                  <button onClick={() => removeInvitation(i.id)} className="text-xs text-muted hover:text-red tracking-widest">RESCIND</button>
                 </div>
               ))}
             </div>
@@ -367,7 +367,7 @@ export default function GroupDetailPage({
 
         {canManage && (
           <section>
-            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">How people join</h2>
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">How people join</h2>
             <div className="flex gap-2 mb-3">
               {(['invite_only', 'request', 'open'] as const).map(p => (
                 <button
@@ -376,15 +376,15 @@ export default function GroupDetailPage({
                   onClick={() => setJoinPolicy(p)}
                   className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
                     joinPolicy === p
-                      ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
-                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1]'
+                      ? 'border-primary text-primary bg-primary/10'
+                      : 'border-border text-muted hover:border-primary hover:text-primary'
                   }`}
                 >
                   {p === 'invite_only' ? 'INVITE ONLY' : p.toUpperCase()}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-[#64748b] mb-4">
+            <p className="text-xs text-muted mb-4">
               {joinPolicy === 'invite_only'
                 ? 'Only people you invite can join.'
                 : joinPolicy === 'request'
@@ -392,31 +392,31 @@ export default function GroupDetailPage({
                   : 'Anyone with the group link can join instantly.'}
             </p>
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-[#64748b] tracking-widest">SHAREABLE JOIN LINK</label>
+              <label className="text-xs text-muted tracking-widest">SHAREABLE JOIN LINK</label>
               {joinLink ? (
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input readOnly value={joinLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-xs`} />
-                  <button type="button" onClick={() => navigator.clipboard?.writeText(joinLink)} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">COPY</button>
-                  <button type="button" onClick={() => patchLink({ joinLinkToken: null })} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#b91c1c] hover:text-[#b91c1c] transition-colors">REVOKE</button>
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(joinLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
+                  <button type="button" onClick={() => patchLink({ joinLinkToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">REVOKE</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">
+                <button type="button" onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">
                   CREATE JOIN LINK
                 </button>
               )}
-              <p className="text-xs text-[#64748b]">Anyone signed in who opens this link joins instantly, whatever the policy above. Revoke to disable it.</p>
+              <p className="text-xs text-muted">Anyone signed in who opens this link joins instantly, whatever the policy above. Revoke to disable it.</p>
             </div>
           </section>
         )}
 
         {role === 'owner' && (
-          <section className="border-t border-[#e2e8f0] pt-8">
-            <h2 className="text-xs text-[#b91c1c] tracking-[0.2em] uppercase mb-3">Delete group</h2>
-            <p className="text-sm text-[#64748b] mb-3">
+          <section className="border-t border-border pt-8">
+            <h2 className="text-xs text-red tracking-[0.2em] uppercase mb-3">Delete group</h2>
+            <p className="text-sm text-muted mb-3">
               Tears down the group, its invitations, and removes it from every member&apos;s list.
               Courses and trials scoped to this group fall back to private (you can re-scope them later).
             </p>
-            <button onClick={deleteGroup} className="px-4 py-2 border border-[#b91c1c] text-[#b91c1c] text-xs font-bold tracking-widest hover:bg-[#b91c1c] hover:text-white transition-colors">
+            <button onClick={deleteGroup} className="px-4 py-2 border border-red text-red text-xs font-bold tracking-widest hover:bg-red hover:text-white transition-colors">
               DELETE GROUP
             </button>
           </section>
@@ -438,13 +438,13 @@ function MemberRow({
   onKick: () => void
 }) {
   return (
-    <div className="flex items-center justify-between border border-[#e2e8f0] px-3 py-2 text-sm">
+    <div className="flex items-center justify-between border border-border px-3 py-2 text-sm">
       <div className="min-w-0 flex items-center gap-2">
-        <span className="text-xs px-2 py-0.5 border border-[#cbd5e1] text-[#64748b] uppercase tracking-widest">{role}</span>
-        <span className="text-xs text-[#64748b] truncate tabular">{userId}</span>
+        <span className="text-xs px-2 py-0.5 border border-muted text-muted uppercase tracking-widest">{role}</span>
+        <span className="text-xs text-muted truncate tabular">{userId}</span>
       </div>
       {canKick && (
-        <button onClick={onKick} className="text-xs text-[#64748b] hover:text-[#b91c1c] tracking-widest">REMOVE</button>
+        <button onClick={onKick} className="text-xs text-muted hover:text-red tracking-widest">REMOVE</button>
       )}
     </div>
   )

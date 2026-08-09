@@ -21,13 +21,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#ffffff',
+  themeColor: '#0b1220',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={ibmPlexMono.className}>
-      <body className="min-h-screen flex flex-col bg-white text-[#0f172a]">
+      <body className="min-h-screen flex flex-col bg-bg text-fg">
         <AttContactBanner />
         {children}
         <Footer />
