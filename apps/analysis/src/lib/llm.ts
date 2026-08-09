@@ -23,6 +23,9 @@ const SYSTEM = [
   'The session date is given below. It may be a recent paddle OR an older one just imported, so narrate it for WHEN it',
   'actually happened — never assume it is today, and only say "today"/"this morning" if the date really is today.',
   'Vary how you open; avoid generic praise and filler. Sound like a real person who has watched them paddle before.',
+  'Match your vocabulary to the sport stated below — rowing and kayak/canoe/SUP use different words for the stroke,',
+  'the rate, and the glide, so never mix them; if no sport is stated, use neutral paddling language and do not assume',
+  'rowing vs kayak.',
   'Phrase long durations the natural way — "1 hour 20 minutes", never "80 minutes".',
   'No preamble, no lists, no markdown headings — just the short paragraph.',
 ].join(' ')
@@ -35,6 +38,32 @@ export type InsightContext = {
   relevant?: string      // renderRelevant output (L3)
   paddledAt?: string     // when the paddle happened (ISO) — so the model doesn't assume "today"
   asOf?: string          // "now" (ISO) for the relative age; defaults to current time
+  sport?: string         // raw sport signal (Strava sportType / boat sport) — normalised for vocabulary
+}
+
+// Normalise a raw sport signal (Strava sportType, or a boat-class sport) to the
+// coaching-vocabulary buckets. Rowing is the key split from the paddle sports.
+export type SportKey = 'rowing' | 'kayak' | 'canoe' | 'sup'
+export function normaliseSport(raw?: string): SportKey | undefined {
+  const s = (raw ?? '').toLowerCase()
+  if (!s) return undefined
+  if (s.includes('row')) return 'rowing'          // Rowing, VirtualRow
+  if (s.includes('kayak')) return 'kayak'
+  if (s.includes('canoe')) return 'canoe'
+  if (s.includes('standup') || s.includes('sup') || s.includes('paddleboard')) return 'sup'
+  return undefined
+}
+
+// Sport-specific vocabulary steer for the prompt (empty when unknown — SYSTEM
+// then tells the model to stay neutral).
+function sportPromptLine(raw?: string): string {
+  switch (normaliseSport(raw)) {
+    case 'rowing': return 'Sport: ROWING. Use rowing language — catch, drive, finish/release, "rating" for stroke rate, run/glide, puddles, split — never kayak or generic "paddle" terms.'
+    case 'kayak':  return 'Sport: KAYAKING. Use kayak/paddling language — stroke, catch, rotation, cadence/stroke rate, blade — not rowing terms.'
+    case 'canoe':  return 'Sport: CANOEING. Use canoe/paddling language — stroke, catch, cadence — not rowing terms.'
+    case 'sup':    return 'Sport: STAND-UP PADDLEBOARDING. Use SUP/paddling language — stroke, catch, cadence, step-back turn — not rowing terms.'
+    default:       return ''
+  }
 }
 
 // Human date + relative age, e.g. "12 May 2025 (about 3 months ago)". Keeps the
@@ -57,6 +86,8 @@ export function describePaddleDate(paddledAt: string, asOf: string): string {
 // Compact, grounded fact sheet — the model narrates THIS, nothing else.
 export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string {
   const L: string[] = []
+  const sportLine = sportPromptLine(ctx.sport)
+  if (sportLine) L.push(sportLine)
   if (ctx.paddledAt) {
     const label = describePaddleDate(ctx.paddledAt, ctx.asOf ?? new Date().toISOString())
     if (label) L.push(`Session date: ${label}.`)

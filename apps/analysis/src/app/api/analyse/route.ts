@@ -104,9 +104,12 @@ export async function POST(req: NextRequest) {
   // L2 profile), all fed to the model as compact text — grounded facts only.
   // WRAPPED so the enrichment can NEVER fail the analysis: any read/compute error
   // degrades to a plain (no-context) insight rather than 500-ing the request.
-  // Seed with the paddle date (survives even if the memory-context enrichment
-  // below fails) so the model never assumes an imported older paddle is today.
-  let ctx: InsightContext = { paddledAt: when, asOf: now.toISOString() }
+  // Seed with the paddle date + sport (survive even if the memory-context
+  // enrichment below fails) so the model never assumes an import is today and
+  // uses sport-appropriate language. Sport is known for Strava imports; file /
+  // trial imports leave it undefined → the coach stays neutral.
+  const sportSignal = source.type === 'strava' ? source.sport : undefined
+  let ctx: InsightContext = { paddledAt: when, asOf: now.toISOString(), sport: sportSignal }
   try {
     const prior = await listSessionSummaries(user.id)
     const profile = await getAthleteProfile(user.id)
