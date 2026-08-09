@@ -3,12 +3,13 @@ import type { ReactNode } from 'react'
 
 // The platform header, shared by both apps. Left: the paddlesnitch brand +
 // cross-app nav (Trials ↔ Analyse) so the two apps feel like one product. Right:
-// an optional page-specific nav slot, a REPORT link (opens the shared
-// FeedbackWidget via a window event), and the account nav (passed as children so
-// the host app supplies the wired AccountNav). Theme-aware (semantic tokens).
+// an optional page-specific (section) nav slot + the account nav (passed as
+// `account` so the host app supplies the wired AccountNav). Everything common to
+// every page — My profile, Settings, Report an issue, Sign out — now lives inside
+// the account dropdown, so the top-level header stays uncluttered. Theme-aware
+// (semantic tokens).
 //
 // `active` highlights the current app in the cross-app nav.
-const OPEN_FEEDBACK = 'paddlesnitch:open-feedback'
 
 export default function AppShell({
   active,
@@ -47,7 +48,6 @@ export default function AppShell({
       </div>
       <nav className="flex gap-4 text-muted items-center shrink-0">
         {nav}
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_FEEDBACK))} className="text-muted hover:text-fg tracking-widest transition-colors">REPORT</button>
         {account}
       </nav>
     </header>

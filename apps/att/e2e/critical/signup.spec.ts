@@ -20,13 +20,15 @@ test('a new user can sign up and lands on /att with their session', async ({ pag
   await expect(page).toHaveURL('/att')
   await expect(page.getByRole('heading', { name: /Automated Time Trials/i })).toBeVisible()
 
-  // Verify the session is actually authenticated. AuthNav shows
-  // "SIGN OUT" when signed in (and "SIGN IN" when signed out). The
-  // displayed user name comes from the ID token — cognito-local
-  // doesn't include `name` in the JWT, so the UI falls back to
-  // email-local-part. Asserting on SIGN OUT is the cheapest
-  // unambiguous signal that we're authenticated.
-  await expect(page.getByRole('button', { name: 'SIGN OUT' })).toBeVisible()
+  // Verify the session is actually authenticated. When signed in the
+  // account nav renders a dropdown trigger (aria-haspopup="menu") that
+  // holds SIGN OUT; signed out it's a plain "SIGN IN" link with no such
+  // trigger. Its presence is the cheapest unambiguous signal that we're
+  // authenticated; opening it and finding SIGN OUT confirms the menu.
+  const accountMenu = page.locator('button[aria-haspopup="menu"]')
+  await expect(accountMenu).toBeVisible()
+  await accountMenu.click()
+  await expect(page.getByRole('menuitem', { name: 'SIGN OUT' })).toBeVisible()
 })
 
 test('signup is blocked when the ToS checkbox is not ticked', async ({ page }) => {

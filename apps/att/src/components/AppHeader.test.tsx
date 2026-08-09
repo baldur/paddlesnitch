@@ -15,7 +15,7 @@ describe('AppHeader (shared AppShell wrapper)', () => {
     expect(html).toContain('flex-wrap')
   })
 
-  it('renders the brand, cross-app nav, breadcrumb, extra children, REPORT and account', () => {
+  it('renders the brand, cross-app nav, breadcrumb, extra (section) children and account', () => {
     const html = renderToStaticMarkup(
       <AppHeader breadcrumb={<span>BREADCRUMB</span>}>
         <a href="/x">EXTRA</a>
@@ -26,7 +26,9 @@ describe('AppHeader (shared AppShell wrapper)', () => {
     expect(html).toContain('ANALYSE')
     expect(html).toContain('BREADCRUMB')
     expect(html).toContain('EXTRA')
-    expect(html).toContain('REPORT')
+    // Report/Profile/Settings/Sign out moved into the account dropdown
+    // (AttAccountNav, stubbed here as ACCOUNTNAV) — no standalone REPORT link.
+    expect(html).not.toContain('REPORT')
     expect(html).toContain('ACCOUNTNAV')
     expect(html.indexOf('EXTRA')).toBeLessThan(html.indexOf('ACCOUNTNAV'))
   })
