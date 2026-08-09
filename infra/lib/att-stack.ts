@@ -724,6 +724,50 @@ export class AttStack extends cdk.Stack {
       }),
     )
 
+    // Finer-grained, behaviour-oriented views over the same EMF data. Pageviews
+    // arrive in batches (client capture flushes ~15s / on tab-hide), so an hourly
+    // series makes recent/sparse traffic visible where the daily one hides it.
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Pageviews & key events / hour',
+        left: ['pageview', 'signup', 'login', 'upload'].map(e => eventMetric(e, cdk.Duration.hours(1))),
+        width: 24,
+        height: 6,
+      }),
+    )
+
+    // Logs Insights over the server Lambda's log group (where emitMetric writes
+    // the EMF lines). Referenced by NAME so we don't create/adopt a LogGroup
+    // resource (which could clash with the one Lambda auto-creates on first run).
+    const serverLogGroup = `/aws/lambda/${serverFn.functionName}`
+    dashboard.addWidgets(
+      new cloudwatch.LogQueryWidget({
+        title: 'Pageviews by path (what people look at)',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter Event = "pageview"',
+          'stats count(*) as views by path',
+          'sort views desc',
+          'limit 30',
+        ],
+        width: 12,
+        height: 8,
+      }),
+      new cloudwatch.LogQueryWidget({
+        title: 'Events by type + distinct sessions',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter ispresent(Event)',
+          'stats count(*) as events, count_distinct(sid) as sessions by Event',
+          'sort events desc',
+        ],
+        width: 12,
+        height: 8,
+      }),
+    )
+
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'Server Lambda — invocations & errors / hour',
