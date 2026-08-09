@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { withTimeout, buildPrompt, describePaddleDate } from './llm'
+import { withTimeout, buildPrompt, describePaddleDate, normaliseSport } from './llm'
 import type { AnalysisResult } from './analysis'
 
 // Guards the "analysis failed, but works on retry" symptom (#171): a slow/hanging
@@ -55,6 +55,33 @@ describe('buildPrompt', () => {
     expect(p).toContain('distance per stroke — efficiency')
     expect(p).toContain('Stroke-rate consistency')
     expect(p).toContain('8% variation')
+  })
+
+  it('steers rowing vocabulary (and away from paddle terms)', () => {
+    const p = buildPrompt(result(), { sport: 'Rowing' })
+    expect(p).toContain('Sport: ROWING')
+    expect(p).toMatch(/rating/)
+  })
+
+  it('steers kayak vocabulary', () => {
+    expect(buildPrompt(result(), { sport: 'Kayaking' })).toContain('Sport: KAYAKING')
+  })
+
+  it('omits the sport line when the sport is unknown', () => {
+    expect(buildPrompt(result(), { sport: 'Ride' })).not.toContain('Sport:')
+    expect(buildPrompt(result())).not.toContain('Sport:')
+  })
+})
+
+describe('normaliseSport', () => {
+  it('maps Strava sport types to coaching buckets (rowing split from paddle sports)', () => {
+    expect(normaliseSport('Rowing')).toBe('rowing')
+    expect(normaliseSport('VirtualRow')).toBe('rowing')
+    expect(normaliseSport('Kayaking')).toBe('kayak')
+    expect(normaliseSport('Canoeing')).toBe('canoe')
+    expect(normaliseSport('StandUpPaddling')).toBe('sup')
+    expect(normaliseSport('Ride')).toBeUndefined()
+    expect(normaliseSport(undefined)).toBeUndefined()
   })
 })
 
