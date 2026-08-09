@@ -13,7 +13,7 @@ export async function GET() {
   if (!tokens) return NextResponse.json({ error: 'not_connected' }, { status: 409 })
 
   try {
-    const activities = await listActivities(tokens.accessToken)
+    const { activities } = await listActivities(tokens.accessToken)
     return NextResponse.json({ activities })
   } catch (err) {
     console.error('[strava activities] failed', err)

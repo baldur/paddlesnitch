@@ -8,7 +8,7 @@ import { getWeatherAt } from '@paddlesnitch/timing/weather'
 import { getFlowAt } from '@paddlesnitch/timing/river-flow'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { analyseTrack } from '@/lib/analysis'
-import { generateInsight } from '@/lib/llm'
+import { generateInsight, type InsightContext } from '@/lib/llm'
 import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant, type PaddleFacts } from '@/lib/history-stats'
 import { refreshAthleteProfile } from '@/lib/athlete-profile'
 import { saveSession, listSessionSummaries, getSession, getAthleteProfile, paddleFingerprint, findDuplicateSession, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
@@ -104,7 +104,9 @@ export async function POST(req: NextRequest) {
   // L2 profile), all fed to the model as compact text — grounded facts only.
   // WRAPPED so the enrichment can NEVER fail the analysis: any read/compute error
   // degrades to a plain (no-context) insight rather than 500-ing the request.
-  let ctx: { profile?: string; historyFacts?: string; relevant?: string } = {}
+  // Seed with the paddle date (survives even if the memory-context enrichment
+  // below fails) so the model never assumes an imported older paddle is today.
+  let ctx: InsightContext = { paddledAt: when, asOf: now.toISOString() }
   try {
     const prior = await listSessionSummaries(user.id)
     const profile = await getAthleteProfile(user.id)
@@ -114,6 +116,7 @@ export async function POST(req: NextRequest) {
       startLat: result.points[0]?.lat, startLng: result.points[0]?.lng,
     }
     ctx = {
+      ...ctx,
       profile: profile?.text,
       historyFacts: renderHistoryFacts(computeHistoryStats(currentFacts, prior, now)),
       relevant: renderRelevant(selectRelevantPaddles(currentFacts, prior)),
