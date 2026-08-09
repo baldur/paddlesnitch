@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
+import Analytics from '@paddlesnitch/ui/Analytics'
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-bg text-fg">
         {children}
         <FeedbackWidget />
+        <Analytics />
       </body>
     </html>
   )
