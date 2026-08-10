@@ -300,9 +300,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
       </div>
 
-      {/* controls — top-right */}
-      <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2">
-        <div className="flex gap-1">
+      {/* controls — top-right. Width-capped to the viewport and the button row
+          wraps, so on a phone the leftmost controls (NEW / MY PADDLES / SHARE)
+          can't overflow off the left edge and become untappable. (#206) */}
+      <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 max-w-[calc(100vw-1.5rem)]">
+        <div className="flex flex-wrap justify-end gap-1">
           {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>NEW</button>}
           {readOnly
             ? <Link href="/" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>ANALYSE YOUR OWN →</Link>

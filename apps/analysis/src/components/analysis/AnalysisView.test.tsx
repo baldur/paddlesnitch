@@ -89,3 +89,25 @@ describe('AnalysisView mobile panels (#187)', () => {
     expect(btn('Expand segments')).not.toBeNull()
   })
 })
+
+describe('AnalysisView SHARE control (#206)', () => {
+  const textBtn = (label: string) =>
+    Array.from(container.querySelectorAll('button')).find(b => b.textContent?.trim() === label)
+
+  it('shows a SHARE button when the paddle is saved (has a sessionId)', async () => {
+    await mount(<AnalysisView data={data} sessionId="abc123" />)
+    expect(textBtn('SHARE')).toBeTruthy()
+  })
+
+  it('keeps the top-right controls on screen on a phone: the button row wraps and the column is viewport-capped', async () => {
+    // On a 426px phone the un-wrapped control row (NEW / MY PADDLES / SHARE /
+    // DIARY / BOAT / ANALYSE A SECTION) overflowed off the left edge, hiding the
+    // SHARE button. The row must wrap and the column must be width-capped.
+    await mount(<AnalysisView data={data} sessionId="abc123" />)
+    const share = textBtn('SHARE')!
+    const row = share.parentElement!
+    expect(row.className).toContain('flex-wrap')
+    const column = row.parentElement!
+    expect(column.className).toContain('max-w-[calc(100vw-1.5rem)]')
+  })
+})
