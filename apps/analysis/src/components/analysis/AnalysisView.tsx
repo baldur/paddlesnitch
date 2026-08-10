@@ -265,9 +265,12 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
       </div>
 
-      {/* controls — top-right */}
-      <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2">
-        <div className="flex gap-1">
+      {/* controls — top-right. Bounded to the viewport width and the button row
+          wraps, so on a narrow phone the cluster (incl. ANALYSE A SECTION) can
+          never overflow off-screen or hide behind the left HUD — every action
+          stays reachable. (#204) */}
+      <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 max-w-[calc(100vw-1.5rem)]">
+        <div className="flex flex-wrap justify-end gap-1">
           {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>NEW</button>}
           <Link href="/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>DIARY</button>}

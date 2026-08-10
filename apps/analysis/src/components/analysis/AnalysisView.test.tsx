@@ -78,6 +78,24 @@ describe('AnalysisView mobile panels (#187)', () => {
     expect(column).toBeTruthy()
   })
 
+  it('keeps the ANALYSE A SECTION control reachable on a narrow phone (#204)', async () => {
+    // A saved paddle exposes the "analyse a section" flow. On a 426px phone the
+    // top-right control cluster used to be a single non-wrapping row with no
+    // width bound, so it overflowed off-screen / behind the HUD and the section
+    // button couldn't be tapped. The cluster is now width-bounded and wraps.
+    await mount(<AnalysisView data={data} sessionId="s1" />)
+
+    const sectionBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent?.includes('ANALYSE A SECTION'))
+    expect(sectionBtn).toBeTruthy()
+
+    // The button row wraps so overflow stacks instead of running off-screen…
+    const row = sectionBtn!.parentElement!
+    expect(row.className).toContain('flex-wrap')
+    // …inside a column bounded to the viewport width.
+    expect(row.parentElement!.className).toMatch(/max-w-\[calc\(100vw/)
+  })
+
   it('minimises the segments panel to hide the efforts list', async () => {
     await mount(<AnalysisView data={data} />)
     expect(container.textContent).toContain('EFFORTS')
