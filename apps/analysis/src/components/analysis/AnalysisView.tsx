@@ -30,13 +30,16 @@ export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: str
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
-export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile }: {
+export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile, readOnly = false }: {
   data: ViewData
   sessionId?: string
   initialNote?: string
   initialBoatClass?: BoatClass
   initialSeat?: Seat
   onNewFile?: () => void
+  // Public shared view: hide the owner-only "MY PADDLES" link and show a
+  // "analyse your own" call to action instead (#202).
+  readOnly?: boolean
 }) {
   const router = useRouter()
   // SUP→kayak stroke-rate doubling is decided automatically at analysis time,
@@ -70,6 +73,10 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const [seat, setSeat] = useState<Seat | ''>(initialSeat ?? '')
   const [showBoat, setShowBoat] = useState(false)
   const [boatState, setBoatState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  // Sharing — an opt-in public link for this paddle (#202).
+  const [showShare, setShowShare] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareState, setShareState] = useState<'idle' | 'working' | 'copied'>('idle')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // "Race a section" selection state.
@@ -99,6 +106,34 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
       await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) })
       setNoteState('saved'); setTimeout(() => setNoteState('idle'), 1500)
     } catch { setNoteState('idle') }
+  }
+
+  // Opt this paddle into a public link (minting one lazily on first open), copy
+  // it, or revoke it. Owner only — gated on sessionId at the call site. (#202)
+  const toggleShare = async () => {
+    const next = !showShare
+    setShowShare(next)
+    if (next && !shareUrl && sessionId) {
+      setShareState('working')
+      try {
+        const r = await fetch(`/analyse/api/analyse/sessions/${sessionId}/share`, { method: 'POST' })
+        const d = await r.json().catch(() => null)
+        if (d?.shareId) setShareUrl(`${window.location.origin}/analyse/shared/${d.shareId}`)
+      } catch { /* leave the panel open; the paddler can reopen to retry */ }
+      finally { setShareState('idle') }
+    }
+  }
+  const copyShare = async () => {
+    if (!shareUrl) return
+    try { await navigator.clipboard.writeText(shareUrl); setShareState('copied'); setTimeout(() => setShareState('idle'), 1500) }
+    catch { /* clipboard blocked — the link is shown for manual copy */ }
+  }
+  const stopSharing = async () => {
+    if (!sessionId) return
+    setShareState('working')
+    try { await fetch(`/analyse/api/analyse/sessions/${sessionId}/share`, { method: 'DELETE' }); setShareUrl(null); setShowShare(false) }
+    catch { /* the link may still resolve until the next try */ }
+    finally { setShareState('idle') }
   }
 
   // Persist boat class + seat. `cls`/`st` are passed explicitly (state may not
@@ -269,7 +304,10 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
       <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2">
         <div className="flex gap-1">
           {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>NEW</button>}
-          <Link href="/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>
+          {readOnly
+            ? <Link href="/" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>ANALYSE YOUR OWN →</Link>
+            : <Link href="/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>}
+          {sessionId && !readOnly && <button onClick={toggleShare} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showShare ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>SHARE</button>}
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>DIARY</button>}
           {sessionId && <button onClick={() => setShowBoat(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showBoat ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>BOAT</button>}
           {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Zoom into any stretch for a deeper, coached read — or race it against your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest rounded border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-[#a78bfa]' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : '🔍 ANALYSE A SECTION'}</button>}
@@ -292,6 +330,31 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               className={`px-2 py-1 text-[10px] tracking-widest rounded disabled:opacity-50 ${srDoubled ? 'bg-[#0369a1] text-white' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>
               {srDoubled ? 'ON' : 'OFF'}
             </button>
+          </div>
+        )}
+        {showShare && sessionId && !readOnly && (
+          <div className={`${PANEL} p-2 w-[280px]`}>
+            <div className="text-[10px] text-[#64748b] tracking-widest mb-1">SHARE — anyone with the link can view this paddle</div>
+            {shareState === 'working' && !shareUrl ? (
+              <div className="text-xs text-[#64748b]">Creating link…</div>
+            ) : shareUrl ? (
+              <>
+                <input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()}
+                  className="w-full text-xs bg-[#0b1220] border border-[#1e293b] rounded p-2 text-[#e2e8f0]" />
+                <div className="flex gap-1 mt-1">
+                  <button onClick={copyShare}
+                    className="flex-1 px-3 py-1.5 text-[10px] tracking-widest bg-[#0369a1] text-white rounded">
+                    {shareState === 'copied' ? 'COPIED ✓' : 'COPY LINK'}
+                  </button>
+                  <button onClick={stopSharing} disabled={shareState === 'working'}
+                    className="px-3 py-1.5 text-[10px] tracking-widest text-[#f87171] border border-[#1e293b] rounded disabled:opacity-40">
+                    STOP SHARING
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="text-xs text-[#f87171]">Couldn&apos;t create a link. Close and try again.</div>
+            )}
           </div>
         )}
         {showDiary && sessionId && (
