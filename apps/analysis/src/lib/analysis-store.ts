@@ -1,6 +1,7 @@
 // Per-user persistence for saved paddle analyses. Stored under
 // analysis/{userId}/{id}/session.json (S3 in prod, .local-data in dev), private
 // to the user. Small scale → list = read each session.json, like att entries.
+import { nanoid } from 'nanoid'
 import { getJson, putJson, listKeys, deleteObject } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 import type { AnalysisResult } from './analysis'
@@ -30,6 +31,10 @@ export type AnalysisSession = {
   result: AnalysisResult     // full derived analysis, incl. downsampled map points
   boatClass?: BoatClass      // the type of outing (K1, 2X, 8+, …) — paddler-set
   seat?: Seat                // which seat they were in (1 = bow, N = stroke, 'C' = cox)
+  // Set when the owner opts this paddle into a public, unlisted share link
+  // (#202). Anyone with the token can view a read-only copy at
+  // /analyse/shared/{shareId}; the owner can revoke it. Absent = private.
+  shareId?: string
 }
 
 // Compact shape for the library list + the history digest fed back to the LLM.
@@ -83,7 +88,57 @@ export async function getSession(userId: string, id: string): Promise<AnalysisSe
 }
 
 export async function deleteSession(userId: string, id: string): Promise<void> {
+  // Drop the public share index too, so a deleted paddle can't be resolved by a
+  // dangling share link.
+  const s = await getSession(userId, id)
+  if (s?.shareId) await deleteObject(sharedKey(s.shareId))
   await deleteObject(key(userId, id))
+}
+
+// ---- Sharing: an opt-in, unlisted public link for one paddle (#202) ----
+// A share index at analysis/shared/{shareId}.json points back at the owning
+// user + session, so the public view resolves a paddle from the token alone
+// without leaking the userId in the URL.
+type ShareIndex = { userId: string; sessionId: string }
+
+const sharedKey = (shareId: string) => `analysis/shared/${shareId}.json`
+
+// Opt a paddle into public sharing and return its (existing or freshly minted)
+// share token. Idempotent — a paddle already shared keeps the same token so an
+// already-distributed link never breaks.
+export async function shareSession(userId: string, id: string): Promise<{ session: AnalysisSession; shareId: string } | null> {
+  const s = await getSession(userId, id)
+  if (!s) return null
+  if (!s.shareId) {
+    s.shareId = nanoid()
+    await putJson(sharedKey(s.shareId), { userId, sessionId: id } satisfies ShareIndex)
+    await saveSession(s)
+  }
+  return { session: s, shareId: s.shareId }
+}
+
+// Revoke a paddle's public link: drop the index and clear the token. Any
+// outstanding link stops resolving immediately.
+export async function unshareSession(userId: string, id: string): Promise<AnalysisSession | null> {
+  const s = await getSession(userId, id)
+  if (!s) return null
+  if (s.shareId) {
+    await deleteObject(sharedKey(s.shareId))
+    delete s.shareId
+    await saveSession(s)
+  }
+  return s
+}
+
+// Resolve a share token to its paddle for the public read-only view. Returns
+// null when the token is unknown OR the session has since been unshared/deleted
+// (a stale index whose session no longer bears the token doesn't resolve).
+export async function getSharedSession(shareId: string): Promise<AnalysisSession | null> {
+  const idx = await getJson<ShareIndex>(sharedKey(shareId))
+  if (!idx) return null
+  const s = await getSession(idx.userId, idx.sessionId)
+  if (!s || s.shareId !== shareId) return null
+  return s
 }
 
 export async function updateSessionNote(userId: string, id: string, note: string): Promise<AnalysisSession | null> {
