@@ -145,6 +145,24 @@ export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
 
 interface Insighter { generate(system: string, user: string, model: string): Promise<string> }
 
+// When a model stops because it hit the token ceiling, the text ends mid-sentence
+// — a paddler saw a coach paragraph "cut off ... just end with a comma and was
+// just one line" (#208). Treat a truncated generation as NO usable output: return
+// '' so runInsighter falls back to the COMPLETE deterministic template rather than
+// serving a fragment. Bedrock signals this with stopReason 'max_tokens'; Ollama
+// with done_reason 'length'.
+type ConverseLike = { stopReason?: string; output?: { message?: { content?: Array<{ text?: string }> } } }
+export function textFromConverse(out: ConverseLike): string {
+  if (out.stopReason === 'max_tokens') return ''
+  return (out.output?.message?.content?.map(b => ('text' in b ? b.text : '')).join('') ?? '').trim()
+}
+
+type OllamaLike = { message?: { content?: string }; done_reason?: string }
+export function textFromOllama(d: OllamaLike): string {
+  if (d?.done_reason === 'length') return ''
+  return (d?.message?.content ?? '').trim()
+}
+
 class OllamaInsighter implements Insighter {
   async generate(system: string, user: string, model: string): Promise<string> {
     const base = process.env.OLLAMA_URL ?? 'http://localhost:11434'
@@ -157,8 +175,7 @@ class OllamaInsighter implements Insighter {
       }),
     })
     if (!res.ok) throw new Error(`ollama ${res.status}`)
-    const d = await res.json()
-    return (d?.message?.content ?? '').trim()
+    return textFromOllama(await res.json())
   }
 }
 
@@ -169,12 +186,15 @@ class BedrockInsighter implements Insighter {
     // Fold the system instructions into the user turn rather than using the
     // Converse `system` field — some models (e.g. Mistral Mixtral) reject a
     // separate system message, and inlining works across all of them.
+    // 512 tokens leaves headroom for a full 2–4 sentence paragraph (with the
+    // history/profile context the model weaves in); textFromConverse still guards
+    // the case where a model overshoots it.
     const out = await client.send(new ConverseCommand({
       modelId: model,
       messages: [{ role: 'user', content: [{ text: `${system}\n\n${user}` }] }],
-      inferenceConfig: { maxTokens: 400, temperature: 0.6 },
+      inferenceConfig: { maxTokens: 512, temperature: 0.6 },
     }))
-    return (out.output?.message?.content?.map(b => ('text' in b ? b.text : '')).join('') ?? '').trim()
+    return textFromConverse(out)
   }
 }
 

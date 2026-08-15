@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { withTimeout, buildPrompt, describePaddleDate, normaliseSport } from './llm'
+import { withTimeout, buildPrompt, describePaddleDate, normaliseSport, textFromConverse, textFromOllama } from './llm'
 import type { AnalysisResult } from './analysis'
 
 // Guards the "analysis failed, but works on retry" symptom (#171): a slow/hanging
@@ -70,6 +70,36 @@ describe('buildPrompt', () => {
   it('omits the sport line when the sport is unknown', () => {
     expect(buildPrompt(result(), { sport: 'Ride' })).not.toContain('Sport:')
     expect(buildPrompt(result())).not.toContain('Sport:')
+  })
+})
+
+// A truncated coach paragraph ends mid-sentence — the paddler in #208 saw one
+// "cut off ... just end with a comma". A model that stops on its token ceiling
+// must yield NO text so the complete deterministic template stands in.
+describe('textFromConverse (Bedrock)', () => {
+  it('returns the joined text on a normal completion', () => {
+    const out = { stopReason: 'end_turn', output: { message: { content: [{ text: 'Great steady paddle.' }] } } }
+    expect(textFromConverse(out)).toBe('Great steady paddle.')
+  })
+
+  it('returns "" when the model was cut off at the token ceiling (#208)', () => {
+    const out = { stopReason: 'max_tokens', output: { message: { content: [{ text: 'You held a strong pace,' }] } } }
+    expect(textFromConverse(out)).toBe('')
+  })
+
+  it('joins multiple content blocks and trims', () => {
+    const out = { stopReason: 'end_turn', output: { message: { content: [{ text: '  Nice ' }, { text: 'work.  ' }] } } }
+    expect(textFromConverse(out)).toBe('Nice work.')
+  })
+})
+
+describe('textFromOllama', () => {
+  it('returns the message content on a normal completion', () => {
+    expect(textFromOllama({ message: { content: '  Solid session.  ' } })).toBe('Solid session.')
+  })
+
+  it('returns "" when Ollama stopped on the length limit (#208)', () => {
+    expect(textFromOllama({ done_reason: 'length', message: { content: 'You built through the middle,' } })).toBe('')
   })
 })
 
