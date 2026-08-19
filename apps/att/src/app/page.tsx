@@ -43,22 +43,34 @@ export default function LandingPage() {
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader breadcrumb={<span className="text-muted text-xs tracking-widest hidden sm:inline">TOOLS FOR THE RIVER</span>} />
+      <LandingContent />
+    </main>
+  )
+}
 
-      <section className="border-b border-border px-4 py-16 text-center bg-surface">
-        <p className="text-muted text-xs tracking-[0.3em] uppercase mb-3">
+// The page body, split out so it can be rendered in a test without the
+// client-only AppShell header. Kept deliberately compact on mobile
+// (#210): a short hero and one-line product cards so both products sit
+// above the fold on a phone; the marketing paragraphs only appear from
+// `sm:` up.
+export function LandingContent() {
+  return (
+    <>
+      <section className="border-b border-border px-4 py-8 md:py-14 text-center bg-surface">
+        <p className="text-muted text-[10px] md:text-xs tracking-[0.3em] uppercase mb-2">
           A growing suite
         </p>
-        <h1 className="text-3xl md:text-5xl font-bold text-fg mb-3">
+        <h1 className="text-2xl md:text-5xl font-bold text-fg mb-2">
           Software for paddlers, rowers, and river groups.
         </h1>
-        <p className="text-muted text-sm max-w-xl mx-auto leading-relaxed">
+        <p className="text-muted text-sm max-w-xl mx-auto leading-relaxed hidden sm:block">
           Practical tools that disappear into the river day. Honest, no-bloat,
           designed for people who&apos;d rather be on the water.
         </p>
       </section>
 
-      <section className="flex-1 px-4 py-12 max-w-3xl mx-auto w-full">
-        <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
+      <section className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
+        <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
           Products
         </h2>
         <div className="flex flex-col gap-4">
@@ -79,7 +91,7 @@ export default function LandingPage() {
             return (
               <article
                 key={p.name}
-                className="border border-border p-6 flex flex-col gap-3"
+                className="border border-border p-5 flex flex-col gap-2"
               >
                 <div className="flex items-start justify-between gap-4">
                   <h3 className="text-lg font-bold text-fg">{p.name}</h3>
@@ -88,7 +100,9 @@ export default function LandingPage() {
                   </span>
                 </div>
                 <p className="text-sm text-fg">{p.short}</p>
-                <p className="text-sm text-muted leading-relaxed">{p.details}</p>
+                <p className="text-sm text-muted leading-relaxed hidden sm:block">
+                  {p.details}
+                </p>
                 {p.href && p.cta && (
                   <Link
                     href={p.href}
@@ -102,11 +116,11 @@ export default function LandingPage() {
           })}
         </div>
 
-        <p className="text-xs text-muted text-center mt-12">
+        <p className="text-xs text-muted text-center mt-10">
           More tools are on the way. Use the &quot;Report an issue&quot; widget below
           to tell us what you&apos;d like to see.
         </p>
       </section>
-    </main>
+    </>
   )
 }
