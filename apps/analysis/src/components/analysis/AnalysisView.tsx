@@ -25,7 +25,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device' } }
 
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor and the
@@ -243,7 +243,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         <div className={`${PANEL} relative max-w-[340px] p-3 text-xs shrink-0 pointer-events-auto`}>
           <button onClick={() => setHudOpen(o => !o)} aria-label={hudOpen ? 'Minimise summary' : 'Expand summary'}
             className="absolute top-1.5 right-1.5 z-10 w-5 h-5 leading-none text-[#64748b] hover:text-[#e2e8f0]">{hudOpen ? '–' : '+'}</button>
-          {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1 pr-5">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
+          {(paddled || boatBadge) && <div className="text-[10px] text-[#64748b] tracking-widest mb-1 pr-5">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : data.source?.type === 'device' ? ' · TRACKER' : ''}{boatBadge && <span className="text-[#a78bfa]"> · {boatBadge}</span>}</div>}
           <div className="flex items-baseline gap-2 flex-wrap pr-5">
             <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
             <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>

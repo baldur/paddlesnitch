@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
 import type { StravaActivitySummary } from '@paddlesnitch/core/types'
 import type { TrialEntrySummary } from '@/lib/trials'
+import type { DeviceSessionMeta } from '@/lib/devices'
 import AppShell from '@paddlesnitch/ui/AppShell'
 import AppAccountNav from '@/components/AppAccountNav'
 
@@ -26,7 +27,7 @@ function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(un
 
 export default function AnalysePage() {
   const [authed, setAuthed] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<'file' | 'strava' | 'trials'>('file')
+  const [tab, setTab] = useState<'file' | 'strava' | 'trials' | 'device'>('file')
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
   const [error, setError] = useState('')
@@ -38,6 +39,7 @@ export default function AnalysePage() {
   const [stravaMore, setStravaMore] = useState(false)
   const [stravaLoadingMore, setStravaLoadingMore] = useState(false)
   const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
+  const [deviceSessions, setDeviceSessions] = useState<DeviceSessionMeta[] | undefined>(undefined)
 
   useEffect(() => { fetch('/analyse/api/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
 
@@ -72,10 +74,18 @@ export default function AnalysePage() {
       .then((d: { entries: TrialEntrySummary[] }) => setTrials(d.entries ?? []))
       .catch(() => setTrials([]))
   }
-  const openTab = (t: 'file' | 'strava' | 'trials') => {
+  const loadDevices = () => {
+    setDeviceSessions(undefined)
+    fetch('/analyse/api/devices')
+      .then(r => (r.ok ? r.json() : { sessions: [] }))
+      .then((d: { sessions: DeviceSessionMeta[] }) => setDeviceSessions(d.sessions ?? []))
+      .catch(() => setDeviceSessions([]))
+  }
+  const openTab = (t: 'file' | 'strava' | 'trials' | 'device') => {
     setTab(t)
     if (t === 'strava' && acts === undefined) loadStrava()
     if (t === 'trials' && trials === undefined) loadTrials()
+    if (t === 'device' && deviceSessions === undefined) loadDevices()
   }
 
   const analyse = async (body: FormData) => {
@@ -94,6 +104,7 @@ export default function AnalysePage() {
   const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
   const runStrava = (a: StravaActivitySummary) => { const fd = new FormData(); fd.append('stravaActivityId', String(a.id)); fd.append('sportType', a.sportType); analyse(fd) }
   const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
+  const runDevice = (s: DeviceSessionMeta) => { const fd = new FormData(); fd.append('deviceSessionId', s.sessionId); fd.append('deviceId', s.deviceId); analyse(fd) }
   const reset = () => { setRes(null); setFile(null); setError(''); setDupId(null) }
 
   // result → immersive view
@@ -116,8 +127,8 @@ export default function AnalysePage() {
         <p className="text-xs text-[#64748b] mt-1 mb-4">See what actually happened — pieces, rests, stroke-rate, wind &amp; flow — and keep a paddling diary.</p>
 
         <div className="flex gap-1 mb-4">
-          {(['file', 'strava', 'trials'] as const).map(t => (
-            <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest rounded ${tab === t ? 'bg-[#0369a1] text-white' : 'bg-[#1e293b] text-[#94a3b8]'}`}>{t === 'file' ? 'UPLOAD FILE' : t === 'strava' ? 'FROM STRAVA' : 'TIME TRIALS'}</button>
+          {(['file', 'strava', 'trials', 'device'] as const).map(t => (
+            <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest rounded ${tab === t ? 'bg-[#0369a1] text-white' : 'bg-[#1e293b] text-[#94a3b8]'}`}>{t === 'file' ? 'UPLOAD FILE' : t === 'strava' ? 'FROM STRAVA' : t === 'trials' ? 'TIME TRIALS' : 'MY TRACKER'}</button>
           ))}
         </div>
 
@@ -153,7 +164,7 @@ export default function AnalysePage() {
               </button>
             )}
           </div>
-        ) : (
+        ) : tab === 'trials' ? (
           <div className="max-h-[300px] overflow-auto">
             {trials === undefined && <p className="text-xs text-[#64748b]">Loading your time-trial entries…</p>}
             {trials && trials.length > 0 && trials.map(e => (
@@ -164,6 +175,18 @@ export default function AnalysePage() {
               </button>
             ))}
             {trials && trials.length === 0 && <p className="text-xs text-[#64748b]">No time-trial submissions yet. <a href="/att" className="text-[#0369a1]">Race a trial</a>, then analyse it here.</p>}
+          </div>
+        ) : (
+          <div className="max-h-[300px] overflow-auto">
+            {deviceSessions === undefined && <p className="text-xs text-[#64748b]">Loading your tracker sessions…</p>}
+            {deviceSessions && deviceSessions.length > 0 && deviceSessions.map(s => (
+              <button key={s.sessionId} disabled={status === 'busy'} onClick={() => runDevice(s)}
+                className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">
+                <span className="block text-sm truncate">{s.filename}</span>
+                <span className="text-[11px] text-[#64748b]">{fmtDate(s.startedAt ?? s.uploadedAt)}{s.distanceMetres ? ` · ${fmtDist(s.distanceMetres)}` : ''} · {s.points} pts</span>
+              </button>
+            ))}
+            {deviceSessions && deviceSessions.length === 0 && <p className="text-xs text-[#64748b]">No tracker uploads yet. Link a tracker in <a href="/profile/me/settings" className="text-[#0369a1]">Account</a>.</p>}
           </div>
         )}
 

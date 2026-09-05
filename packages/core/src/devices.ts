@@ -13,7 +13,7 @@
 //   - `deviceId` is NOT a secret (it's on every LoRa packet) — it authenticates
 //     nothing on its own.
 import { createHash, randomBytes, timingSafeEqual } from 'crypto'
-import { getJson, putJson, listKeys, deleteObject } from './storage'
+import { getJson, putJson, getObject, putObject, listKeys, deleteObject } from './storage'
 
 export type DeviceClaim = {
   claimCode: string
@@ -159,4 +159,62 @@ export async function revokeDevice(userId: string, deviceId: string): Promise<bo
   if (d.tokenHash) await deleteObject(tokenKey(d.tokenHash))
   await deleteObject(deviceKey(deviceId))
   return true
+}
+
+// ── Device sessions (uploads) ────────────────────────────────────────────────
+// Raw traces the device uploaded, stored like every other collection. The device
+// only lands the raw CSV + light metadata here; the Analyse app parses + analyses
+// on demand (exactly like ATT trial entries), so a device paddle is just another
+// importable source.
+
+export type DeviceSessionMeta = {
+  sessionId: string; deviceId: string; userId: string; filename: string
+  uploadedAt: string
+  startedAt?: string; endedAt?: string; distanceMetres?: number; points: number
+}
+
+const sessionMetaKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/session.json`
+const sessionTraceKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/trace.csv`
+// Idempotency index: a device numbers files monotonically and never reuses a
+// name, so deviceId+filename is a stable identity — a retry after a dropped
+// response can't create a duplicate.
+const uploadIndexKey = (deviceId: string, filename: string) => `devices/${deviceId}/uploads/${filename}.json`
+
+const safeName = (s: string) => /^[\w.-]{1,128}$/.test(s)
+
+// Returns the existing sessionId if this device+filename was already uploaded.
+export async function findUploadedSession(deviceId: string, filename: string): Promise<string | null> {
+  if (!isDeviceId(deviceId) || !safeName(filename)) return null
+  const idx = await getJson<{ sessionId: string }>(uploadIndexKey(deviceId, filename))
+  return idx?.sessionId ?? null
+}
+
+// Persist a device upload: raw CSV + metadata + the idempotency index.
+export async function storeDeviceSession(
+  meta: Omit<DeviceSessionMeta, 'sessionId' | 'uploadedAt'>,
+  csv: Buffer | string,
+): Promise<DeviceSessionMeta> {
+  const sessionId = randomBytes(9).toString('base64url')
+  const full: DeviceSessionMeta = { ...meta, sessionId, uploadedAt: nowIso() }
+  await putObject(sessionTraceKey(meta.deviceId, sessionId), csv)
+  await putJson(sessionMetaKey(meta.deviceId, sessionId), full)
+  await putJson(uploadIndexKey(meta.deviceId, meta.filename), { sessionId })
+  return full
+}
+
+// The signed-in user's device uploads, newest first (owner-filtered).
+export async function listUserDeviceSessions(userId: string): Promise<DeviceSessionMeta[]> {
+  const keys = await listKeys('devices/')
+  const metas = await Promise.all(keys.filter(k => k.endsWith('/session.json')).map(k => getJson<DeviceSessionMeta>(k)))
+  return metas.filter((m): m is DeviceSessionMeta => !!m && m.userId === userId)
+    .sort((a, b) => (b.uploadedAt > a.uploadedAt ? 1 : -1))
+}
+
+// The raw stored CSV for one of the user's device sessions, or null if it isn't
+// theirs / doesn't exist. The caller parses it (keeps core parser-agnostic).
+export async function getDeviceSessionTrace(userId: string, deviceId: string, sessionId: string): Promise<Buffer | null> {
+  if (!isDeviceId(deviceId)) return null
+  const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
+  if (!meta || meta.userId !== userId) return null
+  return getObject(sessionTraceKey(deviceId, sessionId))
 }

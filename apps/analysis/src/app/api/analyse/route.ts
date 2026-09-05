@@ -13,6 +13,7 @@ import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderR
 import { refreshAthleteProfile } from '@/lib/athlete-profile'
 import { saveSession, listSessionSummaries, getSession, getAthleteProfile, paddleFingerprint, findDuplicateSession, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
+import { loadDeviceSessionTrack } from '@/lib/devices'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
 // history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
   const stravaId = Number(form.get('stravaActivityId'))
   const trialEntryId = form.get('trialEntryId')
   const trialId = form.get('trialId')
+  const deviceSessionId = form.get('deviceSessionId')
+  const deviceIdField = form.get('deviceId')
 
   if (typeof trialEntryId === 'string' && trialEntryId && typeof trialId === 'string' && trialId) {
     const loaded = await loadTrialEntryTrack(user.id, trialId, trialEntryId)
@@ -38,6 +41,11 @@ export async function POST(req: NextRequest) {
     // Look up the entry's display info so the saved paddle names its course.
     const summary = (await listUserTrialEntries(user.id)).find(e => e.entryId === trialEntryId)
     source = { type: 'trial', trialId, entryId: trialEntryId, courseName: summary?.courseName, filename: summary?.filename }
+  } else if (typeof deviceSessionId === 'string' && deviceSessionId && typeof deviceIdField === 'string' && deviceIdField) {
+    const loaded = await loadDeviceSessionTrack(user.id, deviceIdField, deviceSessionId)
+    if (!loaded) return NextResponse.json({ error: 'Could not load that device session.' }, { status: 404 })
+    track = loaded
+    source = { type: 'device', deviceId: deviceIdField, deviceSessionId }
   } else if (file instanceof File && file.size > 0) {
     const parsed = await parseTrace(file.name, await file.arrayBuffer())
     if (!parsed.ok) {
