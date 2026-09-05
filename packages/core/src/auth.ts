@@ -1,6 +1,18 @@
 import type { AuthUser } from './types'
 import { cookies } from 'next/headers'
 import { refresh, verifyIdToken } from './cognito'
+import { resolveDeviceToken, type DeviceAuth } from './devices'
+
+// Authenticate a HARDWARE device from its `Authorization: Bearer <deviceToken>`
+// header, or null. Deliberately SEPARATE from getAuthUser(): a device token must
+// never satisfy a route that expects a human browser session, and a cookie must
+// never satisfy a device route. Do not merge these into one "current principal".
+export async function getDeviceAuth(req: Request): Promise<DeviceAuth | null> {
+  const header = req.headers.get('authorization') ?? ''
+  const m = /^Bearer\s+(.+)$/i.exec(header.trim())
+  if (!m) return null
+  return resolveDeviceToken(m[1].trim())
+}
 
 export const ID_COOKIE = 'tt_id'
 export const REFRESH_COOKIE = 'tt_refresh'

@@ -13,7 +13,8 @@
     "./cognito": "./src/cognito.ts",
     "./url": "./src/url.ts",
     "./strava": "./src/strava.ts",
-    "./strava-storage": "./src/strava-storage.ts"
+    "./strava-storage": "./src/strava-storage.ts",
+    "./devices": "./src/devices.ts"
   },
   "dependencies": {
     "@paddlesnitch/timing": "workspace:*",
