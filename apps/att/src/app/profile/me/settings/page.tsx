@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import StravaButton from '@/components/strava/StravaButton'
+import DevicesSection from '@/components/DevicesSection'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
@@ -392,6 +393,8 @@ function AccountPageInner() {
                 </>
               )}
             </section>
+
+            <DevicesSection />
 
             <section>
               <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
