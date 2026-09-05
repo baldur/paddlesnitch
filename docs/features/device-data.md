@@ -126,6 +126,24 @@ deliberate recording this should become rare, but `422` remains a normal outcome
 (a recording started indoors, or stopped before a fix) and should not be
 surfaced to the user as an error.
 
+## After you confirm an upload, you are the system of record
+
+From firmware 0.5.0 the device **deletes a session once the server has confirmed
+it** (`200`, `201`, or `409`), keeping only the five most recent sessions on the
+card as a local safety net.
+
+Two consequences:
+
+- **A `200` is a promise.** Do not return it until the trace is durably stored.
+  Returning `200` and then failing to persist loses the only other copy, once the
+  file ages past the five-session window.
+- **`409` also counts as confirmation.** If the server has forgotten a session it
+  previously accepted, answering `409` will let the device delete it. Answer
+  `404`/`422` instead if you want it re-sent.
+
+Files rejected `422` are **not** deleted — they are the evidence if a parse
+problem is ever suspected.
+
 ## Stroke rate: the gap worth closing
 
 `TrackPoint.strokeRate` exists and matters for paddlers (#143), and this device

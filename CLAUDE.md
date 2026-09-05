@@ -102,7 +102,10 @@ packages/
   core/       @paddlesnitch/core      — platform primitives shared by both apps (auth, storage, cognito, strava, url, shared types)
   timing/     @paddlesnitch/timing    — GPS/track domain shared by both apps
   ui/         @paddlesnitch/ui        — shared UI shell + design tokens (both apps) (geo, parsers, weather/flow/conditions, track types)
+firmware/     LilyGO T-Beam S3 Supreme tracker firmware — C/C++, built with PlatformIO, NOT pnpm
 ```
+
+**`firmware/` is not a workspace package.** It's the hardware tracker's PlatformIO project (`pio run -e tracker|receiver|displayprobe`), deliberately outside the `apps/*`/`packages/*` globs — it has no `package.json`, `pnpm install`/`pnpm test`/`pnpm build` do not touch it, and its `.pio/` build output (~750 MB) is gitignored. Its contract with the platform lives in [`docs/features/device-uplink.md`](docs/features/device-uplink.md) + [`device-data.md`](docs/features/device-data.md) (see the Devices section under Ops); keep firmware and those specs in step. `firmware/CLAUDE.md` covers the firmware itself.
 
 Both apps use the **same** Cognito user pool, S3 bucket, and CloudFront distribution; in prod CloudFront routes by path (`/att/*`, `/analyse/*`) to per-app Lambdas. Locally the two apps run on two ports (`pnpm dev` → att :3000, `pnpm dev:analysis` → analysis :3001).
 
