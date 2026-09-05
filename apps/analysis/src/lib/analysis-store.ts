@@ -8,7 +8,7 @@ import type { AnalysisResult } from './analysis'
 import { rescaleDoubling } from './analysis'
 
 export type AnalysisSource = {
-  type: 'file' | 'strava' | 'trial'
+  type: 'file' | 'strava' | 'trial' | 'device'
   filename?: string
   stravaActivityId?: number
   sport?: string
@@ -17,6 +17,11 @@ export type AnalysisSource = {
   trialId?: string
   entryId?: string
   courseName?: string
+  // Set when the paddle came from one of the user's hardware trackers
+  // (docs/features/device-uplink.md).
+  deviceId?: string
+  deviceSessionId?: string
+  deviceName?: string
 }
 
 export type AnalysisSession = {

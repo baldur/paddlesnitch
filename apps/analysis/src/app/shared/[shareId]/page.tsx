@@ -8,7 +8,7 @@ import type { BoatClass, Seat } from '@paddlesnitch/core/types'
 type SharedSession = {
   id: string
   paddledAt: string
-  source: { type: 'file' | 'strava' | 'trial' }
+  source: { type: 'file' | 'strava' | 'trial' | 'device' }
   result: AnalysisResult
   boatClass?: BoatClass
   seat?: Seat
