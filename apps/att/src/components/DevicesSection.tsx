@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 // Account settings → Devices. Links a paddlesnitch hardware tracker to the
@@ -66,7 +67,8 @@ export default function DevicesSection() {
       <p className="text-sm text-muted mb-4 leading-relaxed">
         Link a paddlesnitch tracker so it uploads sessions on its own. On the device screen you&apos;ll
         see a 6-character code — enter it here while signed in. Uploaded sessions appear under{' '}
-        <span className="text-fg">MY TRACKER</span> in Analyse.
+        <span className="text-fg">MY TRACKER</span> in Analyse, and you can inspect the raw data on the{' '}
+        <Link href="/profile/me/devices" className="text-primary">device data</Link> page.
       </p>
 
       <form onSubmit={linkDevice} className="flex flex-wrap items-center gap-2 mb-3">
