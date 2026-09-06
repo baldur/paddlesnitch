@@ -47,14 +47,14 @@ other paddlers/rowers to the app.
   (normalise `result.points` lat/lng into the viewbox, embed as an `<img>` data
   URI — Satori renders inline SVG unreliably, a data-URI `<img>` is safe),
   headline stats (**distance, duration, pace/500, avg stroke rate**), the paddle
-  **date**, a **sport** tag when known, the **paddlesnitch** wordmark, and a
-  **QR code encoding the paddle's public share URL** (`…/analyse/shared/{shareId}`).
-  No athlete name / no PII on the card.
-- **Why the QR (chosen 2026-09-06):** Strava's feed doesn't unfurl the link, so
-  when the owner adds the card as a **photo** to their activity, a QR is the only
-  way another paddler who sees it reaches the app — scan → the shared paddle →
-  "analyse your own" CTA. The QR is generated at render time (`qrcode` → data URI,
-  embedded as an `<img>` like the polyline).
+  **date**, a **sport** tag when known, the **paddlesnitch** wordmark, and the
+  readable `paddlesnitch.com`. No athlete name / no PII on the card.
+- **No QR (reverted 2026-09-06):** a QR was tried but dropped — it needs a
+  *second* device's camera, so it's useless in the dominant case (someone viewing
+  the photo on the same phone). The real mobile click-through is the **tappable
+  share link the owner pastes into the Strava description** (Strava linkifies
+  URLs; it just doesn't render a rich unfurl), plus the OG unfurl on social — so
+  the card just catches the eye + carries the brand, and the link does the work.
 - Next auto-injects `og:image` for the shared route from this file. No separate
   `twitter-image` (Turbopack can't statically read a re-exported `runtime`, and
   X falls back to `og:image` anyway).
@@ -89,11 +89,14 @@ name/PII** — just route shape + aggregate stats + brand.
 
 ## Phasing
 
-- **P1 — the share card.** `opengraph-image` route + `shareCard` helper +
-  DOWNLOAD IMAGE in the SHARE panel + `twitter-image`. Delivers the social
-  unfurl + the downloadable photo for everyone (not just Strava).
-- **P2 — Strava helper block** in the SHARE panel (deep link + nudge), shown for
-  Strava-sourced paddles.
+- **P1 — the share card. ✅ shipped.** `opengraph-image` route + `shareCard`
+  helper + DOWNLOAD IMAGE in the SHARE panel. Delivers the social unfurl + the
+  downloadable photo for everyone (not just Strava). (No `twitter-image` — X uses
+  the `og:image` fallback.)
+- **P2 — Strava helper block. ✅ shipped.** In the SHARE panel, for
+  `source.type === 'strava'`: an "OPEN MY STRAVA ACTIVITY ↗" deep link (owner's
+  session carries `stravaActivityId`) + a nudge to paste the tappable link into
+  the description and add the image as a photo. No API calls to Strava.
 - **P3 — (deferred, optional)** `activity:write` auto-append of the link to the
   Strava description. Separate decision; needs broader scope + re-auth.
 

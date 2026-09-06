@@ -1,13 +1,13 @@
 import { ImageResponse } from 'next/og'
-import QRCode from 'qrcode'
 import { getSharedSession } from '@/lib/analysis-store'
 import { shareCard } from '@/lib/share-card'
 
 // The share-card OG image for a public paddle (docs/features/share-image-strava.md).
 // Server-rendered via the opengraph-image route convention (the shared page is a
 // client component, so its OG meta must come from here). Also the downloadable
-// photo the owner adds to their Strava activity — hence the QR to the paddle,
-// the only way a viewer inside Strava (no link unfurl) reaches the app.
+// photo the owner adds to their Strava activity — the actual click-through is the
+// tappable share link they paste into the description (Strava linkifies URLs), so
+// the card just needs to catch the eye and carry the brand.
 export const runtime = 'nodejs'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
@@ -33,13 +33,8 @@ function Stat({ value, label }: { value: string; label: string }) {
 export default async function Image({ params }: { params: Promise<{ shareId: string }> }) {
   const { shareId } = await params
   const session = await getSharedSession(shareId).catch(() => null)
-  const shareUrl = `https://paddlesnitch.com/analyse/shared/${shareId}`
   const card = session ? shareCard(session) : null
   const route = card ? routeDataUri(card.pts, card.viewW, card.viewH) : null
-  // QR always points at the paddle; on the fallback card, at the site.
-  const qr = await QRCode.toDataURL(session ? shareUrl : 'https://paddlesnitch.com', {
-    margin: 1, width: 220, color: { dark: '#0b1220', light: '#ffffff' },
-  }).catch(() => '')
 
   const wordmark = (
     <div style={{ display: 'flex', fontSize: 34, fontWeight: 700, color: FG, letterSpacing: 2 }}>paddlesnitch</div>
@@ -72,17 +67,14 @@ export default async function Image({ params }: { params: Promise<{ shareId: str
           </div>
         </div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', fontSize: 24, color: MUTED }}>Scan to see this paddle →</div>
-        {qr ? <img src={qr} width={132} height={132} /> : <div style={{ display: 'flex' }} />}
-      </div>
+      <div style={{ display: 'flex', fontSize: 24, color: MUTED }}>paddlesnitch.com</div>
     </div>
   ) : (
     // Fallback: no session / revoked link — generic branded card, no leak.
     <div style={{ display: 'flex', width: '100%', height: '100%', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: BG, color: FG, padding: 56 }}>
       {wordmark}
       <div style={{ display: 'flex', fontSize: 30, color: MUTED, marginTop: 16 }}>See what actually happened on your paddle.</div>
-      {qr ? <img src={qr} width={140} height={140} style={{ marginTop: 32 }} /> : <div style={{ display: 'flex' }} />}
+      <div style={{ display: 'flex', fontSize: 24, color: MUTED, marginTop: 24 }}>paddlesnitch.com</div>
     </div>
   )
 

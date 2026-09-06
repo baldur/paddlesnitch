@@ -1,11 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest'
 
-// Mock the data + QR so the smoke test is cheap and deterministic; we assert the
+// Mock the data so the smoke test is cheap and deterministic; we assert the
 // route returns a 200 image for a valid share and a branded fallback (never
 // throws) for an unknown one. We do NOT consume the body (Satori render is
 // deferred), keeping this fast.
-vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn(async () => 'data:image/png;base64,AAAA') } }))
 const getSharedSession = vi.fn()
 vi.mock('@/lib/analysis-store', () => ({ getSharedSession: (...a: unknown[]) => getSharedSession(...a) }))
 
