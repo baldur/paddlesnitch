@@ -9,11 +9,13 @@ function AuthForm() {
   const searchParams = useSearchParams()
   const next = searchParams.get('next') ?? '/att'
 
-  // Redirect if already signed in
+  // Redirect if already signed in ( /me now answers 200 with a null body when
+  // signed out, so key off the body, not r.ok )
   useEffect(() => {
-    fetch('/att/api/auth/me').then(r => {
-      if (r.ok) router.replace(next)
-    })
+    fetch('/att/api/auth/me')
+      .then(r => r.json())
+      .then(user => { if (user) router.replace(next) })
+      .catch(() => {})
   }, [next, router])
 
   const [tab, setTab] = useState<'signin' | 'signup' | 'code'>('signin')

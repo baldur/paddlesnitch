@@ -41,7 +41,8 @@ export default function AnalysePage() {
   const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
   const [deviceSessions, setDeviceSessions] = useState<DeviceSessionMeta[] | undefined>(undefined)
 
-  useEffect(() => { fetch('/analyse/api/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
+  // /me answers 200 with { user: null } when signed out, so key off the body.
+  useEffect(() => { fetch('/analyse/api/me').then(r => r.json()).then(d => setAuthed(!!d?.user)).catch(() => setAuthed(false)) }, [])
 
   const loadStrava = () => {
     setActs(undefined); setStravaMsg(''); setStravaPage(1); setStravaMore(false)
