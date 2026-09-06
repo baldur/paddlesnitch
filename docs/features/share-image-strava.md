@@ -47,8 +47,14 @@ other paddlers/rowers to the app.
   (normalise `result.points` lat/lng into the viewbox, embed as an `<img>` data
   URI — Satori renders inline SVG unreliably, a data-URI `<img>` is safe),
   headline stats (**distance, duration, pace/500, avg stroke rate**), the paddle
-  **date**, a **sport** tag when known, and the **paddlesnitch** wordmark. No
-  athlete name / no PII on the card.
+  **date**, a **sport** tag when known, the **paddlesnitch** wordmark, and a
+  **QR code encoding the paddle's public share URL** (`…/analyse/shared/{shareId}`).
+  No athlete name / no PII on the card.
+- **Why the QR (chosen 2026-09-06):** Strava's feed doesn't unfurl the link, so
+  when the owner adds the card as a **photo** to their activity, a QR is the only
+  way another paddler who sees it reaches the app — scan → the shared paddle →
+  "analyse your own" CTA. The QR is generated at render time (`qrcode` → data URI,
+  embedded as an `<img>` like the polyline).
 - Next auto-injects `og:image` + `twitter:image` for the shared route from this
   file. `twitter-image.tsx` re-exports it.
 
