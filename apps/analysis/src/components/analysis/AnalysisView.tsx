@@ -25,7 +25,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device' } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number } }
 
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor and the
@@ -134,6 +134,21 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
     try { await fetch(`/analyse/api/analyse/sessions/${sessionId}/share`, { method: 'DELETE' }); setShareUrl(null); setShowShare(false) }
     catch { /* the link may still resolve until the next try */ }
     finally { setShareState('idle') }
+  }
+  // Download the branded share-card image (the OG image for this shared paddle)
+  // so the paddler can post it or add it as a photo to their Strava activity.
+  const downloadImage = async () => {
+    if (!shareUrl) return
+    try {
+      const res = await fetch(`${shareUrl}/opengraph-image`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'paddlesnitch.png'
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } catch { /* download blocked — the link still works for sharing */ }
   }
 
   // Persist boat class + seat. `cls`/`st` are passed explicitly (state may not
@@ -353,6 +368,22 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                     STOP SHARING
                   </button>
                 </div>
+                <button onClick={downloadImage}
+                  className="w-full mt-1 px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] border border-[#1e293b] rounded hover:text-[#e2e8f0] hover:border-[#0369a1]">
+                  DOWNLOAD IMAGE
+                </button>
+                <div className="text-[10px] text-[#64748b] mt-1 leading-snug">The link is tappable, and unfurls with a route+stats card on social. DOWNLOAD IMAGE gives you that card as a photo.</div>
+                {data.source?.type === 'strava' && (
+                  <div className="mt-2 pt-2 border-t border-[#1e293b]">
+                    {data.source.stravaActivityId && (
+                      <a href={`https://www.strava.com/activities/${data.source.stravaActivityId}`} target="_blank" rel="noopener noreferrer"
+                        className="block w-full px-3 py-1.5 text-[10px] tracking-widest text-center text-[#fc4c02] border border-[#1e293b] rounded hover:border-[#fc4c02]">
+                        OPEN MY STRAVA ACTIVITY ↗
+                      </a>
+                    )}
+                    <div className="text-[10px] text-[#64748b] mt-1 leading-snug">Paste the link into your activity&apos;s description — Strava makes it tappable — and add the image as a photo.</div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-xs text-[#f87171]">Couldn&apos;t create a link. Close and try again.</div>
