@@ -1,0 +1,10 @@
+# Custom partition table. The default 1.31 MB app partition is not enough once
+# WiFi + TLS are linked in alongside LoRa, GNSS, SD and the IMU.
+# The board has 8 MB of flash; this gives the app 6.25 MB and keeps NVS (device
+# token, WiFi credentials) and a coredump region.
+# Name,     Type, SubType,  Offset,   Size
+nvs,        data, nvs,      0x9000,   0x5000
+otadata,    data, ota,      0xe000,   0x2000
+app0,       app,  ota_0,    0x10000,  0x640000
+spiffs,     data, spiffs,   0x650000, 0x1A0000
+coredump,   data, coredump, 0x7F0000, 0x10000

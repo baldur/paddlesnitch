@@ -59,6 +59,10 @@ infra/node_modules/
 .open-next/
 cdk.out/
 
+# PlatformIO firmware build output (also covered by firmware/.gitignore;
+# belt-and-suspenders so a regenerable ~750 MB .pio/ can never be committed)
+.pio/
+
 # Playwright artifacts
 playwright-report/
 test-results/

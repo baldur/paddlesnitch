@@ -1,0 +1,5 @@
+# PlatformIO build output and downloaded libraries (~800 MB; fully regenerable
+# from platformio.ini, which pins every version).
+.pio/
+.vscode/
+*.bin
