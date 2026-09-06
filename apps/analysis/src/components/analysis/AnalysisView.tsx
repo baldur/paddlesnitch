@@ -135,6 +135,21 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
     catch { /* the link may still resolve until the next try */ }
     finally { setShareState('idle') }
   }
+  // Download the branded share-card image (the OG image for this shared paddle)
+  // so the paddler can post it or add it as a photo to their Strava activity.
+  const downloadImage = async () => {
+    if (!shareUrl) return
+    try {
+      const res = await fetch(`${shareUrl}/opengraph-image`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'paddlesnitch.png'
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } catch { /* download blocked — the link still works for sharing */ }
+  }
 
   // Persist boat class + seat. `cls`/`st` are passed explicitly (state may not
   // have flushed when a dropdown onChange triggers the save).
@@ -353,6 +368,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                     STOP SHARING
                   </button>
                 </div>
+                <button onClick={downloadImage}
+                  className="w-full mt-1 px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] border border-[#1e293b] rounded hover:text-[#e2e8f0] hover:border-[#0369a1]">
+                  DOWNLOAD IMAGE
+                </button>
+                <div className="text-[10px] text-[#64748b] mt-1 leading-snug">A shareable card with your route + stats. Add it as a photo on Strava, or post it anywhere.</div>
               </>
             ) : (
               <div className="text-xs text-[#f87171]">Couldn&apos;t create a link. Close and try again.</div>

@@ -55,8 +55,9 @@ other paddlers/rowers to the app.
   way another paddler who sees it reaches the app — scan → the shared paddle →
   "analyse your own" CTA. The QR is generated at render time (`qrcode` → data URI,
   embedded as an `<img>` like the polyline).
-- Next auto-injects `og:image` + `twitter:image` for the shared route from this
-  file. `twitter-image.tsx` re-exports it.
+- Next auto-injects `og:image` for the shared route from this file. No separate
+  `twitter-image` (Turbopack can't statically read a re-exported `runtime`, and
+  X falls back to `og:image` anyway).
 
 Pure helpers (so they're unit-testable without rendering): a `shareCard(session)`
 that returns the formatted stat strings + the normalised polyline points. The
