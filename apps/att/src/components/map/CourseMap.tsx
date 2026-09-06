@@ -7,10 +7,14 @@ import type { CourseMetadata, LatLng, Line } from '@/lib/types'
 import RiverLayer from './RiverLayer'
 
 const TILES = {
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  // Esri Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
+  // "API key required" nag tile once an IP passes their informal limit.) Native
+  // tiles cap at z16; maxNativeZoom on the layer upscales beyond so drawing/
+  // viewing still zooms to 19 without 404s.
+  dark: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  light: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
 }
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+const ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -95,7 +99,7 @@ export default function CourseMap({ course, track, highlightGateIndex }: { cours
         style={{ height: 300, width: '100%' }}
         zoomControl={true}
       >
-        <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxZoom={19} />
+        <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxNativeZoom={16} maxZoom={19} />
         <RiverLayer dark={dark} />
         <FitBounds course={course} track={track} />
         {track && track.length > 1 && (
