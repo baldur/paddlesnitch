@@ -4,8 +4,11 @@ import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap, useMa
 import { useEffect } from 'react'
 import type { AnalysisPoint, Segment } from '@/lib/analysis'
 
-const DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-const ATTR = '&copy; OpenStreetMap &copy; CARTO'
+// Esri Dark Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
+// "API key required" nag tile once over their informal limit.) Native tiles cap
+// at z16; maxNativeZoom on the layer upscales beyond so it still zooms to 19.
+const DARK = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+const ATTR = 'Tiles &copy; Esri'
 
 type LL = [number, number]
 export type SectionOverlay = {
@@ -48,7 +51,7 @@ export default function AnalysisMap({ points, stops, surges, metric, cursor, pic
 
   return (
     <MapContainer center={[points[0].lat, points[0].lng]} zoom={14} style={{ height: '100%', width: '100%', background: '#0b1220', cursor: pickMode ? 'crosshair' : undefined }} zoomControl>
-      <TileLayer url={DARK} attribution={ATTR} maxZoom={19} />
+      <TileLayer url={DARK} attribution={ATTR} maxNativeZoom={16} maxZoom={19} />
       <Fit pts={points} />
       {pickMode && onPick && <ClickCapture onPick={onPick} />}
       {points.slice(1).map((p, i) => {
