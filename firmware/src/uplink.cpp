@@ -19,6 +19,7 @@ static volatile bool     g_yield   = false;   // "let go of the SD card"
 static volatile bool     g_syncNow = false;
 static volatile bool     g_countNow = false;  // recompute Sync-screen tallies
 static volatile bool     g_deleteNow = false; // delete confirmed-uploaded files
+static volatile bool     g_sdBusy   = false;  // task is using the shared SPI bus (SD)
 
 static void statusSet(const UplinkStatus &s)
 {
@@ -364,6 +365,7 @@ void uplinkResume()               { g_yield = false; }
 void uplinkRequestSync()          { g_syncNow = true; }
 void uplinkRequestCounts()        { g_countNow = true; }
 void uplinkRequestDeleteUploaded(){ g_deleteNow = true; }
+bool uplinkSdBusy()               { return g_sdBusy; }
 
 static void uplinkTask(void *)
 {
@@ -385,6 +387,7 @@ static void uplinkTask(void *)
         // so SD access stays single-owner on this core.
         if ((g_countNow || g_deleteNow) && !storageRecording() && !g_yield) {
             UplinkStatus st = uplinkGetStatus();
+            g_sdBusy = true;                    // pause core-1 IMU polling: shared bus
             if (g_deleteNow) {
                 g_deleteNow = false;
                 st.busy = true; statusSet(st);
@@ -392,6 +395,7 @@ static void uplinkTask(void *)
                 g_countNow = true;              // tallies changed
             }
             if (g_countNow) { g_countNow = false; computeCounts(st); }
+            g_sdBusy = false;
             st.busy = false;
             statusSet(st);
         }
@@ -429,8 +433,10 @@ static void uplinkTask(void *)
         if (netIsClaimed() && !g_yield) {
             st.busy = true;
             statusSet(st);
+            g_sdBusy = true;            // pause core-1 IMU polling for the SD reads
             st.uploadedOk = uplinkSyncSessions();
             computeCounts(st);          // refresh tallies after uploading
+            g_sdBusy = false;
             st.busy       = false;
             statusSet(st);
         }
