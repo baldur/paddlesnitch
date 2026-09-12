@@ -53,6 +53,11 @@ struct UiState {
     int      pickSel     = 0;
     // track screen: a hold has armed "stop recording", awaiting a double-tap
     bool     stopArmed   = false;
+    // track speed readout unit, toggled by tap: 0 km/h, 1 m/s, 2 pace per 500 m
+    int      speedUnit   = 0;
+    // stroke rate (SPM) shown right of the speed; <0 = not available yet
+    // (on-device derivation from the IMU is deferred — see motion-capture-spec)
+    float    strokeRateSpm = -1;
 
     // nerd mode / diagnostics
     String   ssid;

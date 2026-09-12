@@ -115,14 +115,8 @@ static void drawTopRow(const UiState &s)
     if (showSat) drawSatellite(0, 0);
     drawBars(15, 0, s.sats);
 
-    // Nothing is drawn when idle: the absence of REC is the "not recording"
-    // state, and the bottom line already says what to press.
+    // REC now lives on the bottom line next to "hold to stop", not here.
     display.setFont(u8g2_font_5x8_tf);
-    if (s.recording) {
-        if ((millis() / 600) % 2) display.drawDisc(44, 4, 3);   // pulsing dot
-        display.drawStr(50, 7, "REC");
-    }
-
     if (s.batteryPct >= 0) {
         snprintf(line, sizeof(line), "%d%%", s.batteryPct);
         int bw = display.getStrWidth(line);
@@ -153,29 +147,56 @@ static void drawTracker(const UiState &s)
         return;
     }
 
-    // --- hero: speed -----------------------------------------------------
+    // --- hero: speed value + its unit (hugging the number), stroke rate right
+    char val[12], unit[6];
+    if (!s.fix) {
+        strcpy(val, "--");
+    } else if (s.speedUnit == 1) {                 // m/s
+        snprintf(val, sizeof(val), "%.1f", s.speedKmh / 3.6);
+    } else if (s.speedUnit == 2) {                 // pace per 500 m (m:ss)
+        if (s.speedKmh >= 0.5) {
+            int sec = (int)(1800.0 / s.speedKmh + 0.5);   // 500 m / (kmh/3.6)
+            snprintf(val, sizeof(val), "%d:%02d", sec / 60, sec % 60);
+        } else strcpy(val, "--:--");
+    } else {                                       // km/h
+        snprintf(val, sizeof(val), "%.1f", s.speedKmh);
+    }
+    strcpy(unit, s.speedUnit == 1 ? "m/s" : s.speedUnit == 2 ? "/500" : "km/h");
+
     display.setFont(u8g2_font_logisoso24_tn);
-    if (s.fix) { snprintf(line, sizeof(line), "%.1f", s.speedKmh); display.drawStr(0, 40, line); }
-    else       { display.drawStr(0, 40, "--"); }
+    display.drawStr(0, 40, val);
+    int vw = display.getStrWidth(val);
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(66, 28, "km/h");
+    display.drawStr(vw + 4, 40, unit);             // unit right up against the number
+
+    // stroke rate, top-right (value over a small "spm"); "--" until derived.
+    char sr[6];
+    if (s.strokeRateSpm >= 0) snprintf(sr, sizeof(sr), "%d", (int)(s.strokeRateSpm + 0.5));
+    else                      strcpy(sr, "--");
+    display.setFont(u8g2_font_helvB12_tf);
+    display.drawStr(128 - display.getStrWidth(sr), 28, sr);
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(128 - display.getStrWidth("spm"), 38, "spm");
 
     // --- bottom ----------------------------------------------------------
     if (!s.sdReady) {
         display.setFont(u8g2_font_6x10_tf);
         display.drawStr(0, 63, "No SD card");
     } else if (s.recording) {
-        // time + distance on one line, "hold to stop" hint beneath.
+        // time + distance on the line above the REC row.
         display.setFont(u8g2_font_6x10_tf);
         snprintf(line, sizeof(line), "%lu:%02lu", (unsigned long)(s.sessionSecs / 60),
                  (unsigned long)(s.sessionSecs % 60));
-        display.drawStr(0, 52, line);
+        display.drawStr(0, 51, line);
         if (s.distanceM >= 1000) snprintf(line, sizeof(line), "%.2f km", s.distanceM / 1000.0);
         else                     snprintf(line, sizeof(line), "%.0f m", s.distanceM);
-        display.drawStr(128 - display.getStrWidth(line), 52, line);
+        display.drawStr(128 - display.getStrWidth(line), 51, line);
+        // bottom row: blinking REC on the left, "hold to stop" on the right.
+        if ((millis() / 600) % 2) display.drawDisc(3, 60, 3);   // blinking circle
         display.setFont(u8g2_font_5x8_tf);
+        display.drawStr(9, 63, "REC");
         const char *h = "hold to stop";
-        display.drawStr((128 - display.getStrWidth(h)) / 2, 63, h);
+        display.drawStr(128 - display.getStrWidth(h), 63, h);
     } else {
         // Recording auto-starts once there's a fix; until then we're acquiring.
         display.setFont(u8g2_font_6x10_tf);

@@ -71,6 +71,7 @@ static uint32_t confirmUntil  = 0;
 // hold -> double-tap, so stopArmed gates the confirm the way confirmDelete does.
 static bool     stopArmed     = false;
 static uint32_t stopArmUntil  = 0;
+static uint8_t  speedUnit     = 0;   // Track readout: 0 km/h, 1 m/s, 2 pace/500m
 static String   toastText;
 static uint32_t toastUntil    = 0;
 
@@ -439,7 +440,10 @@ static void screenTap()
         return;
     }
     switch (uiScreen) {
-    case Screen::Track: if (stopArmed) stopArmed = false; break;  // cancel a stop
+    case Screen::Track:
+        if (stopArmed) stopArmed = false;             // cancel a pending stop
+        else speedUnit = (speedUnit + 1) % 3;         // toggle km/h -> m/s -> pace
+        break;
     case Screen::Sync:  uplinkRequestSync(); toast("SYNCING"); break;
     case Screen::Nerd:  break;
     }
@@ -789,6 +793,8 @@ void loop()
         u.pickSel     = pickHighlight == Screen::Track ? 0
                       : pickHighlight == Screen::Sync  ? 1 : 2;
         u.stopArmed   = stopArmed;
+        u.speedUnit   = speedUnit;
+        u.strokeRateSpm = -1;          // on-device stroke-rate derivation is TBD
         u.countsValid = up.countsValid;
         u.onDevice    = up.onDevice;
         u.uploaded    = up.uploaded;
