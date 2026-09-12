@@ -13,16 +13,12 @@
 
 static const char *UPLOADED_INDEX = "/uploaded.txt";
 
-// Keep this many of the newest sessions on the card no matter what. Deleting
-// purely on server confirmation is one server-side bug away from losing a paddle
-// that exists nowhere else, and the card is 244 GB -- space is not the
-// constraint here, recoverability is.
-static const int KEEP_RECENT_SESSIONS = 5;
-
 static SemaphoreHandle_t g_lock   = nullptr;
 static UplinkStatus      g_status;
-static volatile bool     g_yield  = false;   // "let go of the SD card"
+static volatile bool     g_yield   = false;   // "let go of the SD card"
 static volatile bool     g_syncNow = false;
+static volatile bool     g_countNow = false;  // recompute Sync-screen tallies
+static volatile bool     g_deleteNow = false; // delete confirmed-uploaded files
 
 static void statusSet(const UplinkStatus &s)
 {
@@ -244,39 +240,62 @@ static bool uploadOne(WiFiClientSecure &client, const String &name, size_t size)
     return rc == 200 || rc == 201;
 }
 
-// Deletes sessions the server has confirmed, keeping the newest
-// KEEP_RECENT_SESSIONS on the card whatever their status. Files rejected 422 are
-// left alone: they are already in /uploaded.txt so they are never re-sent, and
-// they are the evidence if a parse problem is ever suspected.
-static int pruneConfirmed()
+// Tallies the sessions on the card for the Sync screen: how many track files
+// exist, and how many of those the server has confirmed. Read-only; runs on the
+// uplink task so SD access stays single-owner. Writes the result into `st`.
+static void computeCounts(UplinkStatus &st)
 {
-    if (!storageReady()) return 0;
+    if (!storageReady()) { st.countsValid = false; return; }
 
-    // track_NNNN.csv is monotonic per card, so the name orders the sessions.
-    String names[128];
-    int n = 0;
+    int on = 0, up = 0;
     File root = SD.open("/");
-    for (File f = root.openNextFile(); f && n < 128; f = root.openNextFile()) {
+    for (File f = root.openNextFile(); f; f = root.openNextFile()) {
+        bool dir = f.isDirectory();
         String name = f.name();
         if (name.startsWith("/")) name = name.substring(1);
         bool isTrack = name.startsWith("track_") && name.endsWith(".csv");
         f.close();
-        if (isTrack) names[n++] = name;
+        if (dir || !isTrack) continue;
+        on++;
+        if (confirmedUploaded(name)) up++;
     }
     root.close();
-    for (int i = 1; i < n; i++) {            // insertion sort, ascending
-        String k = names[i];
-        int j = i - 1;
-        while (j >= 0 && names[j] > k) { names[j + 1] = names[j]; j--; }
-        names[j + 1] = k;
+
+    st.onDevice = on;
+    st.uploaded = up;
+    st.pending  = on - up;
+    st.countsValid = true;
+}
+
+// Deletes EVERY session the server has confirmed (200/201/409). No keep-newest-N
+// safety: this is a deliberate, user-confirmed action from the Sync screen, and
+// after a 200 paddlesnitch is the system of record. Files rejected 422 and files
+// never uploaded are left untouched -- 422 is the evidence if a parse problem is
+// ever suspected, and an un-uploaded file exists nowhere else yet.
+static int deleteConfirmedAll()
+{
+    if (!storageReady()) return 0;
+
+    // Collect names first; deleting while iterating the directory handle is
+    // asking for trouble.
+    String names[128];
+    int n = 0;
+    File root = SD.open("/");
+    for (File f = root.openNextFile(); f && n < 128; f = root.openNextFile()) {
+        bool dir = f.isDirectory();
+        String name = f.name();
+        if (name.startsWith("/")) name = name.substring(1);
+        bool isTrack = name.startsWith("track_") && name.endsWith(".csv");
+        f.close();
+        if (!dir && isTrack) names[n++] = name;
     }
+    root.close();
 
     int deleted = 0;
-    int protectFrom = n - KEEP_RECENT_SESSIONS;
-    for (int i = 0; i < n && i < protectFrom; i++) {
+    for (int i = 0; i < n; i++) {
         if (!confirmedUploaded(names[i])) continue;
         if (SD.remove("/" + names[i])) {
-            Serial.printf("  pruned %s\n", names[i].c_str());
+            Serial.printf("  deleted %s\n", names[i].c_str());
             deleted++;
         }
     }
@@ -332,8 +351,10 @@ bool uplinkYieldCard(uint32_t timeoutMs)
     return false;                                  // caller decides what to do
 }
 
-void uplinkResume()      { g_yield = false; }
-void uplinkRequestSync() { g_syncNow = true; }
+void uplinkResume()               { g_yield = false; }
+void uplinkRequestSync()          { g_syncNow = true; }
+void uplinkRequestCounts()        { g_countNow = true; }
+void uplinkRequestDeleteUploaded(){ g_deleteNow = true; }
 
 static void uplinkTask(void *)
 {
@@ -350,6 +371,22 @@ static void uplinkTask(void *)
     uint32_t lastAttempt = 0;
 
     for (;;) {
+        // Local SD maintenance first -- counts and the manual delete need no
+        // WiFi, and run only when the card is free (not recording, not yielded)
+        // so SD access stays single-owner on this core.
+        if ((g_countNow || g_deleteNow) && !storageRecording() && !g_yield) {
+            UplinkStatus st = uplinkGetStatus();
+            if (g_deleteNow) {
+                g_deleteNow = false;
+                st.busy = true; statusSet(st);
+                st.deleted = deleteConfirmedAll();
+                g_countNow = true;              // tallies changed
+            }
+            if (g_countNow) { g_countNow = false; computeCounts(st); }
+            st.busy = false;
+            statusSet(st);
+        }
+
         bool due = first || g_syncNow ||
                    (lastAttempt && millis() - lastAttempt > RETRY_MS);
         if (!due || storageRecording()) { vTaskDelay(pdMS_TO_TICKS(500)); continue; }
@@ -384,7 +421,7 @@ static void uplinkTask(void *)
             st.busy = true;
             statusSet(st);
             st.uploadedOk = uplinkSyncSessions();
-            st.deleted    = pruneConfirmed();
+            computeCounts(st);          // refresh tallies after uploading
             st.busy       = false;
             statusSet(st);
         }

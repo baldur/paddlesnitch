@@ -57,3 +57,9 @@ bool  board_display_ok();      // did the OLED actually ack at boot
 void  radioPrintConfig();      // logs the active LoRa parameters
 void  imuProbe();              // reads ID registers over SPI and logs them
 extern SPIClass sdSPI;         // second SPI bus: microSD + IMU
+
+// Sets the on-board PCF8563 RTC (on Wire1, the PMU bus). Best-effort: the RTC
+// is a convenience kept in step with GPS time, not a hard dependency -- session
+// filenames take their timestamp straight from GPS. No-ops if the RTC does not
+// ack. Lazily begins the driver on first call.
+void  boardRtcSet(int year, int month, int day, int hour, int minute, int second);

@@ -1,6 +1,11 @@
 # Feature spec: device screens, gestures and always-on sync
 
-**Status:** ✅ approved 2026-09-12 — implementing.
+**Status:** ✅ implemented + verified on hardware 2026-09-12 (firmware 0.4.0).
+Bench-verified: timestamped filename on a real recording (`track_20260912_130850.csv`),
+sync-on-stop uploading it `201` (no reformat collision), Sync-screen counts via
+`STATUS` (`on device 2, uploaded 2, pending 0`), cold-boot sync, screen dispatch.
+Visual/button checks (screen cycling, hold-to-delete confirm, `NEED GPS` toast)
+are the owner's to eyeball on the OLED.
 **Owner:** Baldur (product). Targets firmware **0.4.0** on the T-Beam S3 Supreme
 (bumped from 0.3.0; the server reads `X-Device-Firmware`, so the bump ships with this).
 **Related:** [`device-data`](../../docs/features/device-data.md) (what gets recorded),

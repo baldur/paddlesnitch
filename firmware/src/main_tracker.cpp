@@ -57,7 +57,13 @@ static bool     haveLastPos    = false;
 // What to tell the user while the device is not yet linked. Set during setup()
 // and by a retry, so the screen keeps explaining itself instead of showing a
 // tracker UI for a device that cannot yet deliver anything anywhere.
-static bool     nerdMode      = false;
+// The user-selected screen, cycled by double-tap. Onboarding screens (Setup/
+// Linking) are forced separately while the device is not yet usable. DeleteConfirm
+// is a transient overlay on the Sync screen.
+enum class Screen { Track, Sync, Nerd };
+static Screen   uiScreen      = Screen::Track;
+static bool     confirmDelete = false;
+static uint32_t confirmUntil  = 0;
 static String   toastText;
 static uint32_t toastUntil    = 0;
 
@@ -343,7 +349,17 @@ static void toggleRecording()
         return;
     }
 
-    if (storageStartSession()) {
+    // Name the file from GPS time (valid here: we just checked for a fix), so it
+    // is unique for the device's life and never collides with the server's
+    // deviceId+filename dedupe the way the old reused track_NNNN names did. Empty
+    // stamp -> storage falls back to its NVS counter.
+    char stamp[20] = "";
+    if (gps.date.isValid() && gps.time.isValid()) {
+        snprintf(stamp, sizeof(stamp), "%04d%02d%02d_%02d%02d%02d",
+                 gps.date.year(), gps.date.month(), gps.date.day(),
+                 gps.time.hour(), gps.time.minute(), gps.time.second());
+    }
+    if (storageStartSession(stamp[0] ? stamp : nullptr)) {
         sessionMetres = 0;
         haveLastPos   = false;
         firstFixMs    = 0;
@@ -377,17 +393,53 @@ static void linkAttempt()
     netDisconnect();
 }
 
-// One button, two gestures, because the board only has one free button:
-//   tap        -> start/stop recording
-//   hold 3 s   -> link / WiFi setup
-// The long-press fires while still held so it is discoverable: the screen
-// changes under your thumb rather than after you let go and wonder.
-// Three gestures on the one free button (RST is the AXP2101 power key):
-//   tap        -> start/stop recording
-//   double-tap -> nerd mode
-//   hold 3 s   -> setup / re-link
-// A single tap is only confirmed once the double-tap window closes, so recording
-// starts ~400 ms after release. Invisible next to a 1 Hz log rate.
+static bool deviceUsable() { return netHasWifi() && netIsClaimed(); }
+
+// The one free button (RST is the AXP2101 power key), three gestures, their
+// meaning depending on the visible screen. See docs/device-states-spec.md.
+//   tap        -> screen's primary action (Track: record; Sync: sync now;
+//                 DeleteConfirm: confirm)
+//   double-tap -> cycle screen Track -> Sync -> Nerd (DeleteConfirm: cancel)
+//   hold 3 s   -> Setup/re-link everywhere except Sync, where it arms delete
+static void screenTap()
+{
+    if (confirmDelete) {                       // confirm screen: tap = yes
+        confirmDelete = false;
+        uplinkRequestDeleteUploaded();
+        toast("DELETING");
+        return;
+    }
+    if (!deviceUsable()) return;               // onboarding: tap does nothing
+    switch (uiScreen) {
+    case Screen::Track: toggleRecording(); break;
+    case Screen::Sync:  uplinkRequestSync(); toast("SYNCING"); break;
+    case Screen::Nerd:  break;
+    }
+}
+
+static void screenDoubleTap()
+{
+    if (confirmDelete) { confirmDelete = false; return; }   // confirm screen: cancel
+    if (!deviceUsable()) return;
+    uiScreen = uiScreen == Screen::Track ? Screen::Sync
+             : uiScreen == Screen::Sync  ? Screen::Nerd
+                                         : Screen::Track;
+    if (uiScreen == Screen::Sync) uplinkRequestCounts();    // refresh on entry
+}
+
+static void screenHold()
+{
+    if (confirmDelete) return;
+    if (deviceUsable() && uiScreen == Screen::Sync) {       // arm the delete
+        confirmDelete = true;
+        confirmUntil  = millis() + 10000;
+        return;
+    }
+    linkAttempt();                                          // Track/Nerd/onboarding
+}
+
+// A single tap is only confirmed once the double-tap window closes, so the action
+// fires ~400 ms after release. Invisible next to a 1 Hz log rate.
 static const uint32_t DOUBLE_TAP_MS = 400;
 
 static void checkButton()
@@ -395,6 +447,9 @@ static void checkButton()
     static uint32_t heldSince   = 0;
     static bool     longFired   = false;
     static uint32_t pendingTap  = 0;   // when a tap is awaiting its double-tap window
+
+    // The delete confirmation auto-cancels if the user walks away.
+    if (confirmDelete && millis() > confirmUntil) confirmDelete = false;
 
     bool down = digitalRead(BUTTON_PIN) == LOW;
 
@@ -404,16 +459,14 @@ static void checkButton()
     } else if (down && !longFired && millis() - heldSince > 3000) {
         longFired  = true;
         pendingTap = 0;
-        Serial.println("button held -- setup / re-link");
-        linkAttempt();
+        screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
         if (pendingTap && millis() - pendingTap < DOUBLE_TAP_MS) {
             pendingTap = 0;
-            nerdMode = !nerdMode;
-            Serial.printf("nerd mode %s\n", nerdMode ? "on" : "off");
+            screenDoubleTap();
         } else {
             pendingTap = millis();
         }
@@ -421,7 +474,7 @@ static void checkButton()
 
     if (pendingTap && millis() - pendingTap >= DOUBLE_TAP_MS) {
         pendingTap = 0;
-        toggleRecording();
+        screenTap();
     }
 }
 
@@ -441,8 +494,8 @@ static void handleSerialCommand()
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
             else if (!strncmp(buf, "REC", 3))  toggleRecording();
             else if (!strncmp(buf, "NERD", 4)) {
-                nerdMode = !nerdMode;
-                Serial.printf("nerd mode %s\n", nerdMode ? "on" : "off");
+                uiScreen = (uiScreen == Screen::Nerd) ? Screen::Track : Screen::Nerd;
+                Serial.printf("screen %s\n", uiScreen == Screen::Nerd ? "nerd" : "track");
             }
             else if (!strncmp(buf, "SCAN", 4)) netScan();
             // Rest-of-line, not space-split: SSIDs and passwords contain spaces.
@@ -464,6 +517,11 @@ static void handleSerialCommand()
                               storageRecording() ? "yes -> " : "no",
                               storageRecording() ? storageFilename() : "",
                               (unsigned long)storageRowCount());
+                UplinkStatus us = uplinkGetStatus();
+                Serial.printf("sessions %son device %d, uploaded %d, pending %d\n",
+                              us.countsValid ? "" : "(not scanned yet) ",
+                              us.onDevice, us.uploaded, us.pending);
+                uplinkRequestCounts();   // refresh for the next STATUS
             }
             else if (!strncmp(buf, "SETUP", 5)) {
                 if (netStartPortal("Change the WiFi network or password below.")) {
@@ -520,6 +578,20 @@ void loop()
     }
 
     updateSession();
+
+    // Keep the PCF8563 RTC in step with GPS time, once per boot. Filenames take
+    // their timestamp straight from GPS, so this is a convenience for a brief fix
+    // loss and future uses, not a dependency. The year guard rejects a bogus
+    // pre-fix date.
+    static bool rtcSynced = false;
+    if (!rtcSynced && gps.date.isValid() && gps.time.isValid() && gps.date.year() >= 2025) {
+        boardRtcSet(gps.date.year(), gps.date.month(), gps.date.day(),
+                    gps.time.hour(), gps.time.minute(), gps.time.second());
+        rtcSynced = true;
+        Serial.printf("RTC set from GPS: %04d-%02d-%02d %02d:%02d:%02dZ\n",
+                      gps.date.year(), gps.date.month(), gps.date.day(),
+                      gps.time.hour(), gps.time.minute(), gps.time.second());
+    }
 
     if (millis() - lastTick >= 1000) {
         lastTick = millis();
@@ -621,12 +693,18 @@ void loop()
 
         UiState u;
         u.linked      = netIsClaimed();
-        u.state       = nerdMode              ? AppState::Nerd
-                      : !netHasWifi()         ? AppState::Setup
-                      : !netIsClaimed()       ? AppState::Linking
-                      : storageRecording()    ? AppState::Recording
-                      : gps.location.isValid()? AppState::Ready
-                                              : AppState::Waiting;
+        // Onboarding is forced until usable; after that the user's screen wins.
+        u.state       = !netHasWifi()   ? AppState::Setup
+                      : !netIsClaimed()  ? AppState::Linking
+                      : confirmDelete    ? AppState::DeleteConfirm
+                      : uiScreen == Screen::Sync ? AppState::Sync
+                      : uiScreen == Screen::Nerd ? AppState::Nerd
+                                                 : AppState::Track;
+        u.countsValid = up.countsValid;
+        u.onDevice    = up.onDevice;
+        u.uploaded    = up.uploaded;
+        u.pending     = up.pending;
+        u.syncing     = up.busy;
         u.claimCode   = up.claimCode;
         u.wifiUp      = up.wifiUp;
         u.ssid        = netcfg.ssid;

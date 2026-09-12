@@ -197,9 +197,11 @@ Known and not yet addressed: **the gyro shows a ~9 dps bias at rest.** Treat
 
 ### SD logging
 
-`storageInit()` mounts the card and opens `/track_NNNN.csv`, picking the first
-free index so a previous session is never overwritten. Powered by BLDO1, which
-`initPMU()` already enables.
+`storageInit()` mounts the card (it does **not** open a file — recording is
+deliberate); `storageStartSession(stamp)` opens `/track_YYYYMMDD_HHMMSS.csv` from
+GPS time at record start (NVS-counter fallback `track_n<NNNNNN>.csv` when time is
+unknown), so names are unique and never overwrite a previous session. Powered by
+BLDO1, which `initPMU()` already enables.
 
 **Every row is flushed immediately.** This is deliberate: pulling the USB cable
 is how this device normally gets switched off, and an unflushed buffer means
@@ -286,49 +288,67 @@ possible causes rather than guessing one.
 
 ### States are declared, not inferred
 
-[`docs/device-states-spec.md`](docs/device-states-spec.md) is the contract:
-`Intro → Setup → Linking → Waiting → Ready → Recording`, with `Nerd` overlaying
-any of them. `AppState` is resolved in one place each frame; do not reintroduce
+[`docs/device-states-spec.md`](docs/device-states-spec.md) is the contract
+(firmware ≥ 0.4.0): after onboarding (`Setup`/`Linking`) the device is **not in a
+mode** — it always acquires GPS and always runs the uploader, and the user only
+picks a **screen**: `Track → Sync → Nerd`, cycled by double-tap, with
+`DeleteConfirm` as a transient overlay. `uiSplash()` is the boot animation, not a
+state. `AppState` is resolved in one place each frame; do not reintroduce
 per-screen booleans.
 
-- **Recording requires a fix.** A tap in `Waiting` refuses and shows `NEED GPS`.
-  Starting before a fix produces exactly the fix-less rows that made all 31 of
-  the first uploads return `422`.
+- **Recording requires a fix.** A record attempt on `Track` with no fix refuses
+  and shows `NEED GPS`. Starting before a fix produces exactly the fix-less rows
+  that made all 31 of the first uploads return `422`.
 - **Upload runs on core 0** (`uplinkTaskStart()`), because HTTP blocks for
   seconds and a frozen screen reads as a crash. It draws nothing; it publishes
-  into a mutex-guarded `UplinkStatus` that Nerd mode reads.
+  into a mutex-guarded `UplinkStatus` the UI reads (the Sync screen + Nerd).
 - **Both cores must never hold the SD card.** The sync task checks a yield flag
   *between files* — never mid-file — and `toggleRecording()` calls
   `uplinkYieldCard()` before opening a log. If it cannot get the card it refuses
-  with `BUSY` rather than racing.
-- **Retention keeps the newest 5 sessions regardless of status.** Deleting purely
-  on server confirmation is one server-side bug away from losing a paddle that
-  exists nowhere else. `422` files are never auto-deleted. This is also documented
-  in the data spec, because after a `200` paddlesnitch becomes the system of record.
+  with `BUSY` rather than racing. Count scans and the manual delete also run on
+  the task (core 0) for the same single-owner reason.
+- **Sync fires at boot, on recording-stop, on a `sync now` tap, and every 5 min
+  — never while recording.** The recording-stop trigger is what makes a finished
+  paddle upload promptly instead of waiting for the 5-min tick.
+- **No automatic deletion.** The card is 256 GB and sessions are tiny, so files
+  accumulate until the user clears confirmed uploads from the Sync screen
+  (`hold` → confirm). Deletion removes only server-confirmed files (`200`/`201`/
+  `409`); `422` and un-uploaded files are never touched. (This replaced the old
+  auto-prune-keeping-newest-5.)
 
 ### The UI is in `src/ui.cpp`; tracker logic never touches pixels
 
-`uiDraw(UiState)` picks the screen: onboarding until linked, tracker after.
-`uiSplash()` runs once at boot (a satellite orbiting a "P").
+`uiDraw(UiState)` picks the screen from `s.state`: onboarding until linked, then
+the user-selected `Track`/`Sync`/`Nerd` (plus `DeleteConfirm`). `uiSplash()` runs
+once at boot (a satellite orbiting a "P").
 
-**One button, two gestures** — the board has only one free button (GPIO0; `RST`
-is the AXP2101 power key and not usable for this):
+**One button, three gestures, context-sensitive** — the board has only one free
+button (GPIO0; `RST` is the AXP2101 power key and not usable for this):
 
-- **tap** → start/stop recording
-- **double-tap** → Nerd mode (diagnostics, reachable without a laptop)
-- **hold 3 s** → link / WiFi setup, firing *while held* so the screen changes
-  under your thumb rather than after you let go
+- **tap** → the current screen's primary action (`Track`: start/stop recording;
+  `Sync`: sync now; `DeleteConfirm`: confirm)
+- **double-tap** → cycle screen `Track → Sync → Nerd` (`DeleteConfirm`: cancel)
+- **hold 3 s** → `Setup`/re-link everywhere *except* the `Sync` screen, where it
+  arms the delete-confirm. Fires *while held* so the screen changes under your
+  thumb.
 
 A tap is only confirmed once the 400 ms double-tap window closes. That latency is
-the price of a third gesture on the one free button (`RST` is the AXP2101 power
-key and cannot be used).
+the price of distinguishing the three gestures on the one free button.
 
-**Recording is deliberate, not automatic.** `storageInit()` mounts the card;
-`storageStartSession()` opens a file. Logging and LoRa transmission are both
-gated on it. Before this, every power-on created a file and the card filled with
-bench noise — all 31 sessions uploaded in testing contained no usable track
-points. If you change this back to always-on, update `../../docs/features/device-data.md`:
+**Recording is deliberate, not automatic.** `storageInit()` mounts the card but
+opens no file; `storageStartSession(stamp)` opens one on a tap. Logging and LoRa
+transmission are both gated on it. Before this, every power-on created a file and
+the card filled with bench noise — all 31 sessions uploaded in testing contained
+no usable track points. If you change this, update `../../docs/features/device-data.md`:
 paddlesnitch segments uploads based on what that file promises.
+
+**Session files are named `track_YYYYMMDD_HHMMSS.csv`** from GPS time at record
+start (`storageStartSession(stamp)`), with an NVS-counter fallback
+(`track_n<NNNNNN>.csv`) when wall-clock time is unavailable. This is load-bearing
+for upload: the server dedupes by `deviceId`+filename, so the old reused
+`track_NNNN` names collided after a card reformat and the server `409`-dropped
+the new paddle. Keep names unique. The PCF8563 RTC (`boardRtcSet()`, best-effort)
+is set from GPS on the first fix; the CSV columns are unchanged.
 
 The satellite glyph **blinks while searching and goes solid on a fix** — state
 readable from across a boat without counting anything.

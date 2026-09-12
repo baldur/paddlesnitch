@@ -4,12 +4,14 @@
 // Everything drawn on the OLED lives here, so the tracker logic never touches
 // pixels and the screens can be reasoned about as a set.
 
-// Exactly one state is active. Nerd overlays whatever was active and returns to
-// it. See docs/device-states-spec.md.
-enum class AppState { Intro, Setup, Linking, Waiting, Ready, Recording, Nerd };
+// What to draw this frame. Onboarding (Setup/Linking) is forced until the device
+// is usable; after that the user picks a screen (Track/Sync/Nerd, cycled by
+// double-tap), with DeleteConfirm as a transient overlay. The splash at boot is
+// uiSplash(), not a state. See docs/device-states-spec.md.
+enum class AppState { Setup, Linking, Track, Sync, Nerd, DeleteConfirm };
 
 struct UiState {
-    AppState state = AppState::Waiting;
+    AppState state = AppState::Track;
     // link / onboarding
     bool     linked      = false;
     String   linkTitle;
@@ -38,6 +40,13 @@ struct UiState {
     // transient user feedback, e.g. "NEED GPS" after a refused tap
     String   toast;
     uint32_t toastUntilMs = 0;
+
+    // sync screen tallies
+    bool     countsValid = false;
+    int      onDevice    = 0;
+    int      uploaded    = 0;
+    int      pending     = 0;
+    bool     syncing     = false;   // a sync is in flight (uplink busy)
 
     // nerd mode / diagnostics
     String   ssid;

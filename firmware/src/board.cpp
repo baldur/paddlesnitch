@@ -2,6 +2,7 @@
 #include "board_pins.h"
 #include <Wire.h>
 #include <SPI.h>
+#include "SensorPCF8563.hpp"
 
 XPowersAXP2101 PMU;
 HardwareSerial SerialGPS(1);          // UART1; pins are assigned in begin()
@@ -11,6 +12,7 @@ SX1262         radio = new Module(RADIO_CS_PIN, RADIO_DIO1_PIN,
 DisplayDriver  display(U8G2_R0, U8X8_PIN_NONE);
 SPIClass       sdSPI(HSPI);
 static bool    g_displayOk = false;
+static SensorPCF8563 g_rtc;   // on Wire1 (PMU bus); begun lazily in boardRtcSet
 
 // Rail assignment on the Supreme, per LilyGO's LoRaBoards.cpp. These are not
 // guesses -- ALDO4/ALDO3 in particular are why a "dead" GPS or radio is almost
@@ -226,4 +228,20 @@ float boardBatteryVoltage()
 {
     if (!PMU.isBatteryConnect()) return 0.0f;
     return PMU.getBattVoltage() / 1000.0f;
+}
+
+void boardRtcSet(int year, int month, int day, int hour, int minute, int second)
+{
+    // Begin once, on Wire1 (already brought up in boardInit for the PMU). If the
+    // RTC does not ack, give up quietly: it is a convenience, not a dependency.
+    static bool begun    = false;
+    static bool beginTried = false;
+    if (!begun) {
+        if (beginTried) return;
+        beginTried = true;
+        begun = g_rtc.begin(Wire1, I2C1_SDA, I2C1_SCL);
+        if (!begun) { Serial.println("RTC: PCF8563 did not ack"); return; }
+    }
+    g_rtc.setDateTime(RTC_DateTime((uint16_t)year, (uint8_t)month, (uint8_t)day,
+                                   (uint8_t)hour, (uint8_t)minute, (uint8_t)second));
 }
