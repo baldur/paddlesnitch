@@ -3,6 +3,21 @@
 #include "board_pins.h"
 #include <SD.h>
 #include <FS.h>
+#include <Preferences.h>
+
+// Monotonic session counter for the no-clock fallback name. Lives in its own NVS
+// namespace (NVS is a separate partition, so it survives an SD reformat) -- the
+// whole point is a name that is never reused even with no GPS/RTC time.
+static uint32_t nextFallbackSeq()
+{
+    Preferences p;
+    p.begin("paddlestore", false);
+    uint32_t seq = p.isKey("fseq") ? p.getULong("fseq", 0) : 0;
+    seq++;
+    p.putULong("fseq", seq);
+    p.end();
+    return seq;
+}
 
 static File     logFile;
 static bool     ready = false;
@@ -93,14 +108,22 @@ bool storageInit()
     return true;
 }
 
-bool storageStartSession()
+bool storageStartSession(const char *stamp)
 {
     if (!ready || logFile) return false;
 
-    // Never overwrite a previous session -- find the first free index.
-    for (int i = 1; i < 10000; i++) {
-        snprintf(filename, sizeof(filename), "/track_%04d.csv", i);
-        if (!SD.exists(filename)) break;
+    if (stamp && stamp[0]) {
+        // Timestamped name (GPS time at record-start). Globally unique in normal
+        // use, so the server never sees a reused filename.
+        snprintf(filename, sizeof(filename), "/track_%s.csv", stamp);
+        // Two sessions started in the same second is vanishingly unlikely, but
+        // disambiguate rather than clobber if it ever happens.
+        for (int i = 1; i < 100 && SD.exists(filename); i++)
+            snprintf(filename, sizeof(filename), "/track_%s_%d.csv", stamp, i);
+    } else {
+        // No wall-clock time: fall back to an NVS counter that never repeats.
+        snprintf(filename, sizeof(filename), "/track_n%06lu.csv",
+                 (unsigned long)nextFallbackSeq());
     }
     logFile = SD.open(filename, FILE_WRITE);
     if (!logFile) {
