@@ -29,6 +29,12 @@ export default function RiverLayer({ dark = true }: { dark?: boolean }) {
 
   // Load GeoJSON once on mount
   useEffect(() => {
+    // The overlay is opt-in: /data/rivers.geojson is gitignored (~3 MB gzipped,
+    // regenerated with `pnpm rivers`) and isn't deployed, so fetching it 404s in
+    // dev and 403s in prod — a console error on every map. Only fetch when the
+    // asset is known present (set NEXT_PUBLIC_RIVERS=1 after generating/deploying it).
+    if (process.env.NEXT_PUBLIC_RIVERS !== '1') return
+
     if (!map.getPane(PANE)) {
       map.createPane(PANE).style.zIndex = '350'
     }

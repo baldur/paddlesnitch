@@ -177,7 +177,7 @@ API routes (under `/att/api/`):
 auth/signup           POST — Cognito SignUp + AdminConfirmSignUp, sets tt_id + tt_refresh
 auth/login            POST — Cognito InitiateAuth (USER_PASSWORD_AUTH), sets tt_id + tt_refresh
 auth/logout           POST — clears cookies, revokes refresh token
-auth/me               GET  — returns claims from current ID token or 401
+auth/me               GET  — returns the user claims from the current ID token, or `null` (200) when signed out. Signed-out is a normal state for this probe (the auth cookie is httpOnly, so the client always calls it); it answers 200 with a null body rather than 401 so a logged-out page load doesn't log a console error. Callers treat a null body as "not signed in". Analyse's mirror `GET /analyse/api/me` returns `{ user: AuthUser | null }` (also 200).
 auth/magic-request    POST — 501 Not Implemented (deferred follow-up; see Auth System)
 auth/magic-verify     GET  — redirects to /att/auth?error=magic_disabled (deferred follow-up)
 courses               GET / POST
@@ -453,7 +453,7 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 - `POST /att/api/auth/signup` — Cognito `SignUp` + `AdminConfirmSignUp`, signs in, sets `tt_id` + `tt_refresh`
 - `POST /att/api/auth/login` — Cognito `InitiateAuth` (USER_PASSWORD_AUTH), sets `tt_id` + `tt_refresh`
 - `POST /att/api/auth/logout` — clears both cookies, calls Cognito `RevokeToken`
-- `GET  /att/api/auth/me` — verifies JWT (and silent-refreshes if expired), returns user claims or 401
+- `GET  /att/api/auth/me` — verifies JWT (and silent-refreshes if expired), returns user claims, or `null` with a **200** when signed out (not 401 — a 401 on this always-called probe is logged as a console error on every logged-out page load; callers key off the null body)
 - `GET  /att/api/auth/strava/init` — Strava sign-in: state cookie + redirect to Strava with `profile:read_all`
 - `GET  /att/api/auth/strava/callback` — finds/creates Cognito user, runs `CUSTOM_AUTH` with preset token, sets `tt_id` + `tt_refresh`, redirects to `next`
 - `POST /att/api/auth/magic-request` — disabled in v1 (returns 501 with friendly message)
@@ -930,7 +930,7 @@ Failure artifacts (trace, screenshot, video) upload as `playwright-report` on a 
 - **SSR**: All Leaflet components are `'use client'`. Server Components that need a map use `CourseMapClient.tsx` which wraps `CourseMap` in `next/dynamic` with `{ ssr: false }`. Direct `ssr: false` in Server Components is not allowed in Next.js 16.
 - **Icons**: Leaflet default marker icon URLs are patched on import (webpack breaks the default paths).
 - **Tiles**: **Esri Gray Canvas** (keyless raster) — att maps toggle World_Light_Gray_Base ↔ World_Dark_Gray_Base; analyse maps are Dark Gray only. `maxNativeZoom={16}` (Esri's native cap) + `maxZoom={19}` so Leaflet upscales beyond 16 instead of 404ing. Swapped off CARTO's free basemaps, which started serving an "API key required" nag tile once an IP passed their informal limit. River layer recolours to match: cyan neon on dark, blue on light.
-- **River overlay**: `RiverLayer.tsx` fetches `/data/rivers.geojson` (OSM UK data, downloaded once via `pnpm rivers`) and renders it as non-interactive cyan (`#06b6d4`) lines with a neon glow behind the course lines. Line weight/opacity scales by waterway type (`w` property: `river` | `canal`). Fails silently if file is missing.
+- **River overlay** (opt-in): `RiverLayer.tsx` renders `/data/rivers.geojson` (OSM UK data, `pnpm rivers`) as non-interactive cyan (`#06b6d4`) lines with a neon glow behind the course lines. Line weight/opacity scales by waterway type (`w` property: `river` | `canal`). **Gated behind `NEXT_PUBLIC_RIVERS=1`** and off by default: the geojson is gitignored and not deployed, so fetching it 404s in dev / 403s in prod — a console error on every map. The component skips the fetch entirely unless the flag is set, so the overlay is a no-op (no error) until someone generates the file, deploys it as an asset, and sets the flag.
 - **Coordinates**: `[lat, lng]` throughout — NOT GeoJSON order.
 
 #### River data

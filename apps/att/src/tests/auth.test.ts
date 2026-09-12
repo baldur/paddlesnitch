@@ -140,16 +140,21 @@ describe('GET /att/api/auth/me', () => {
     expect(body.displayName).toBe(email.split('@')[0])
   })
 
-  it('returns 401 with no cookie', async () => {
+  // Signed-out is a normal state for this probe, so it answers 200 with a null
+  // body rather than 401 (a 401 is logged as a console error on every logged-out
+  // page load). Callers treat a null body as "not signed in".
+  it('returns 200 with a null body when no cookie', async () => {
     mockCookies(null)
     const res = await me()
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toBeNull()
   })
 
-  it('returns 401 with garbage cookie', async () => {
+  it('returns 200 with a null body for a garbage cookie', async () => {
     mockCookies('not.a.real.jwt')
     const res = await me()
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toBeNull()
   })
 })
 
