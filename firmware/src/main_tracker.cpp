@@ -57,7 +57,20 @@ static bool     haveLastPos    = false;
 // What to tell the user while the device is not yet linked. Set during setup()
 // and by a retry, so the screen keeps explaining itself instead of showing a
 // tracker UI for a device that cannot yet deliver anything anywhere.
-static bool     nerdMode      = false;
+// Every boot (once usable) lands on the Pick chooser; the user taps to move the
+// highlight and holds to enter a screen. A double-tap in a screen returns to
+// Pick. Onboarding screens (Setup/Linking) are forced separately while the
+// device is not yet usable. DeleteConfirm is a transient overlay on Sync.
+enum class Screen { Track, Sync, Nerd };
+static bool     onPick        = true;            // showing the chooser
+static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
+static Screen   uiScreen      = Screen::Track;   // the entered screen
+static bool     confirmDelete = false;
+static uint32_t confirmUntil  = 0;
+// Track auto-records on entry (once there's a fix); stopping is a deliberate
+// hold -> double-tap, so stopArmed gates the confirm the way confirmDelete does.
+static bool     stopArmed     = false;
+static uint32_t stopArmUntil  = 0;
 static String   toastText;
 static uint32_t toastUntil    = 0;
 
@@ -130,13 +143,18 @@ void setup()
     pktSelfTest();
 #endif
 
-    board.sdcard = storageInit();
-    report("SD", board.sdcard,
-           board.sdcard ? "card ready - tap button to record" : "no card / mount failed");
-
+    // IMU before SD: both are on the shared SPI bus, and mounting the card first
+    // leaves it contending with the IMU's chip-select -- the documented cause of
+    // the intermittent "IMU probe 0xFF / init failed". Probe + init the IMU while
+    // the bus is still clean, then mount the card. (imuInit also rail-cycles and
+    // retries if the chip comes up wedged after a warm reset.)
     imuProbe();
     bool imuOk = imuInit();
     report("IMU", imuOk, imuOk ? "QMI8658 accel+gyro" : "init failed");
+
+    board.sdcard = storageInit();
+    report("SD", board.sdcard,
+           board.sdcard ? "card ready - tap button to record" : "no card / mount failed");
 
     // Uplink runs once, at boot, and only when WiFi is configured: the device
     // is plugged in at home when that is true, and the radio is the largest
@@ -343,7 +361,17 @@ static void toggleRecording()
         return;
     }
 
-    if (storageStartSession()) {
+    // Name the file from GPS time (valid here: we just checked for a fix), so it
+    // is unique for the device's life and never collides with the server's
+    // deviceId+filename dedupe the way the old reused track_NNNN names did. Empty
+    // stamp -> storage falls back to its NVS counter.
+    char stamp[20] = "";
+    if (gps.date.isValid() && gps.time.isValid()) {
+        snprintf(stamp, sizeof(stamp), "%04d%02d%02d_%02d%02d%02d",
+                 gps.date.year(), gps.date.month(), gps.date.day(),
+                 gps.time.hour(), gps.time.minute(), gps.time.second());
+    }
+    if (storageStartSession(stamp[0] ? stamp : nullptr)) {
         sessionMetres = 0;
         haveLastPos   = false;
         firstFixMs    = 0;
@@ -377,17 +405,81 @@ static void linkAttempt()
     netDisconnect();
 }
 
-// One button, two gestures, because the board only has one free button:
-//   tap        -> start/stop recording
-//   hold 3 s   -> link / WiFi setup
-// The long-press fires while still held so it is discoverable: the screen
-// changes under your thumb rather than after you let go and wonder.
-// Three gestures on the one free button (RST is the AXP2101 power key):
-//   tap        -> start/stop recording
-//   double-tap -> nerd mode
-//   hold 3 s   -> setup / re-link
-// A single tap is only confirmed once the double-tap window closes, so recording
-// starts ~400 ms after release. Invisible next to a 1 Hz log rate.
+static bool deviceUsable() { return netHasWifi() && netIsClaimed(); }
+
+static void enterScreen(Screen s)
+{
+    uiScreen = s;
+    onPick   = false;
+    stopArmed = false;
+    if (s == Screen::Sync) uplinkRequestCounts();           // refresh on entry
+    // Track is the recording screen: it auto-starts once a fix is available
+    // (handled in loop()), so there is no "press to record".
+}
+
+// The one free button (RST is the AXP2101 power key), three gestures, their
+// meaning depending on the visible screen. See docs/device-states-spec.md.
+//   Pick:          tap -> move highlight, hold -> open highlighted screen
+//   Track/Sync:    tap -> primary action, double-tap -> back to Pick,
+//                  hold -> Setup (Track) / arm delete (Sync)
+//   DeleteConfirm: tap -> yes, double-tap -> no
+static void screenTap()
+{
+    if (confirmDelete) {                       // confirm screen: tap = yes
+        confirmDelete = false;
+        uplinkRequestDeleteUploaded();
+        toast("DELETING");
+        return;
+    }
+    if (!deviceUsable()) return;               // onboarding: tap does nothing
+    if (onPick) {                              // move the highlight
+        pickHighlight = pickHighlight == Screen::Track ? Screen::Sync
+                      : pickHighlight == Screen::Sync  ? Screen::Nerd
+                                                       : Screen::Track;
+        return;
+    }
+    switch (uiScreen) {
+    case Screen::Track: if (stopArmed) stopArmed = false; break;  // cancel a stop
+    case Screen::Sync:  uplinkRequestSync(); toast("SYNCING"); break;
+    case Screen::Nerd:  break;
+    }
+}
+
+static void screenDoubleTap()
+{
+    if (confirmDelete) { confirmDelete = false; return; }   // confirm screen: cancel
+    if (!deviceUsable()) return;
+    if (onPick) return;                                     // no double-tap on Pick
+    // On Track, a double-tap confirms a stop that a hold armed; otherwise it just
+    // returns to the menu (recording, if any, keeps running in the background).
+    if (uiScreen == Screen::Track && stopArmed) {
+        stopArmed = false;
+        if (storageRecording()) toggleRecording();          // stop + trigger sync
+    }
+    onPick = true;
+    pickHighlight = uiScreen;
+}
+
+static void screenHold()
+{
+    if (confirmDelete) return;
+    if (!deviceUsable()) { linkAttempt(); return; }         // onboarding: WiFi/link
+    if (onPick) { enterScreen(pickHighlight); return; }     // open highlighted screen
+    if (uiScreen == Screen::Sync) {                         // arm the delete
+        confirmDelete = true;
+        confirmUntil  = millis() + 10000;
+        return;
+    }
+    if (uiScreen == Screen::Track && storageRecording()) {  // arm the stop
+        stopArmed    = true;
+        stopArmUntil = millis() + 10000;
+        return;
+    }
+    linkAttempt();                                          // Track(idle)/Nerd -> Setup
+}
+
+// A single tap is only confirmed once the double-tap window closes, so the action
+// fires ~400 ms after release. Invisible next to a 1 Hz log rate.
 static const uint32_t DOUBLE_TAP_MS = 400;
 
 static void checkButton()
@@ -395,6 +487,10 @@ static void checkButton()
     static uint32_t heldSince   = 0;
     static bool     longFired   = false;
     static uint32_t pendingTap  = 0;   // when a tap is awaiting its double-tap window
+
+    // The delete / stop confirmations auto-cancel if the user walks away.
+    if (confirmDelete && millis() > confirmUntil) confirmDelete = false;
+    if (stopArmed && millis() > stopArmUntil)     stopArmed     = false;
 
     bool down = digitalRead(BUTTON_PIN) == LOW;
 
@@ -404,16 +500,24 @@ static void checkButton()
     } else if (down && !longFired && millis() - heldSince > 3000) {
         longFired  = true;
         pendingTap = 0;
-        Serial.println("button held -- setup / re-link");
-        linkAttempt();
+        Serial.println("btn: hold");
+        screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
+        // On the Pick menu a tap acts immediately: there is no double-tap action
+        // there, so waiting out the double-tap window just makes the menu feel
+        // dead, and a release bounce would otherwise land as a no-op double-tap.
+        if (onPick) {
+            Serial.println("btn: tap (pick)");
+            screenTap();
+            return;
+        }
         if (pendingTap && millis() - pendingTap < DOUBLE_TAP_MS) {
             pendingTap = 0;
-            nerdMode = !nerdMode;
-            Serial.printf("nerd mode %s\n", nerdMode ? "on" : "off");
+            Serial.println("btn: double-tap");
+            screenDoubleTap();
         } else {
             pendingTap = millis();
         }
@@ -421,7 +525,8 @@ static void checkButton()
 
     if (pendingTap && millis() - pendingTap >= DOUBLE_TAP_MS) {
         pendingTap = 0;
-        toggleRecording();
+        Serial.println("btn: tap");
+        screenTap();
     }
 }
 
@@ -441,8 +546,8 @@ static void handleSerialCommand()
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
             else if (!strncmp(buf, "REC", 3))  toggleRecording();
             else if (!strncmp(buf, "NERD", 4)) {
-                nerdMode = !nerdMode;
-                Serial.printf("nerd mode %s\n", nerdMode ? "on" : "off");
+                if (!onPick && uiScreen == Screen::Nerd) { onPick = true; Serial.println("screen pick"); }
+                else { enterScreen(Screen::Nerd); Serial.println("screen nerd"); }
             }
             else if (!strncmp(buf, "SCAN", 4)) netScan();
             // Rest-of-line, not space-split: SSIDs and passwords contain spaces.
@@ -464,6 +569,17 @@ static void handleSerialCommand()
                               storageRecording() ? "yes -> " : "no",
                               storageRecording() ? storageFilename() : "",
                               (unsigned long)storageRowCount());
+                UplinkStatus us = uplinkGetStatus();
+                Serial.printf("sessions %son device %d, uploaded %d, pending %d\n",
+                              us.countsValid ? "" : "(not scanned yet) ",
+                              us.onDevice, us.uploaded, us.pending);
+                const char *scr = !deviceUsable() ? "onboarding"
+                    : onPick ? (pickHighlight == Screen::Track ? "pick>track"
+                              : pickHighlight == Screen::Sync  ? "pick>sync" : "pick>nerd")
+                    : uiScreen == Screen::Track ? "track"
+                    : uiScreen == Screen::Sync  ? "sync" : "nerd";
+                Serial.printf("screen   %s\n", scr);
+                uplinkRequestCounts();   // refresh for the next STATUS
             }
             else if (!strncmp(buf, "SETUP", 5)) {
                 if (netStartPortal("Change the WiFi network or password below.")) {
@@ -502,6 +618,20 @@ void loop()
     checkButton();
     imuPoll();
 
+    // Raw motion capture: stream each ~50 Hz IMU sample to the sidecar while
+    // recording (the 1 Hz track row keeps only a summary). See
+    // docs/motion-capture-spec.md. The loop runs faster than 50 Hz, so the
+    // single-slot handoff catches every sample.
+    if (storageRecording()) {
+        ImuRaw r;
+        while (imuTakeRaw(r)) {
+            char line[96];
+            snprintf(line, sizeof(line), "%lu,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f\n",
+                     (unsigned long)r.ms, r.ax, r.ay, r.az, r.gx, r.gy, r.gz);
+            storageLogImuRow(line);
+        }
+    }
+
     while (SerialGPS.available()) {
         char c = SerialGPS.read();
         gps.encode(c);
@@ -521,8 +651,32 @@ void loop()
 
     updateSession();
 
+    // Keep the PCF8563 RTC in step with GPS time, once per boot. Filenames take
+    // their timestamp straight from GPS, so this is a convenience for a brief fix
+    // loss and future uses, not a dependency. The year guard rejects a bogus
+    // pre-fix date.
+    static bool rtcSynced = false;
+    if (!rtcSynced && gps.date.isValid() && gps.time.isValid() && gps.date.year() >= 2025) {
+        boardRtcSet(gps.date.year(), gps.date.month(), gps.date.day(),
+                    gps.time.hour(), gps.time.minute(), gps.time.second());
+        rtcSynced = true;
+        Serial.printf("RTC set from GPS: %04d-%02d-%02d %02d:%02d:%02dZ\n",
+                      gps.date.year(), gps.date.month(), gps.date.day(),
+                      gps.time.hour(), gps.time.minute(), gps.time.second());
+    }
+
     if (millis() - lastTick >= 1000) {
         lastTick = millis();
+
+        // Track is the recording screen: auto-start once a fix is available, so
+        // the user never has to press anything to record. Only fires while on
+        // Track and idle; a confirmed stop returns to the menu, so it never
+        // immediately re-starts. Throttled to this 1 Hz tick. toggleRecording()
+        // self-guards on the fix and the SD card.
+        if (!onPick && uiScreen == Screen::Track && !storageRecording()
+            && gps.location.isValid()) {
+            toggleRecording();
+        }
 
 
         if (gps.location.isValid()) {
@@ -621,12 +775,22 @@ void loop()
 
         UiState u;
         u.linked      = netIsClaimed();
-        u.state       = nerdMode              ? AppState::Nerd
-                      : !netHasWifi()         ? AppState::Setup
-                      : !netIsClaimed()       ? AppState::Linking
-                      : storageRecording()    ? AppState::Recording
-                      : gps.location.isValid()? AppState::Ready
-                                              : AppState::Waiting;
+        // Onboarding is forced until usable; then Pick, then the entered screen.
+        u.state       = !netHasWifi()   ? AppState::Setup
+                      : !netIsClaimed()  ? AppState::Linking
+                      : confirmDelete    ? AppState::DeleteConfirm
+                      : onPick           ? AppState::Pick
+                      : uiScreen == Screen::Sync ? AppState::Sync
+                      : uiScreen == Screen::Nerd ? AppState::Nerd
+                                                 : AppState::Track;
+        u.pickSel     = pickHighlight == Screen::Track ? 0
+                      : pickHighlight == Screen::Sync  ? 1 : 2;
+        u.stopArmed   = stopArmed;
+        u.countsValid = up.countsValid;
+        u.onDevice    = up.onDevice;
+        u.uploaded    = up.uploaded;
+        u.pending     = up.pending;
+        u.syncing     = up.busy;
         u.claimCode   = up.claimCode;
         u.wifiUp      = up.wifiUp;
         u.ssid        = netcfg.ssid;

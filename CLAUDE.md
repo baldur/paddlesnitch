@@ -929,7 +929,7 @@ Failure artifacts (trace, screenshot, video) upload as `playwright-report` on a 
 - **Drawing**: `DrawingMap.tsx` uses click-to-place. Click "SET START LINE", click 2 points across the river, line is drawn. Repeat for finish. Lines can be reset. No Leaflet.draw dependency.
 - **SSR**: All Leaflet components are `'use client'`. Server Components that need a map use `CourseMapClient.tsx` which wraps `CourseMap` in `next/dynamic` with `{ ssr: false }`. Direct `ssr: false` in Server Components is not allowed in Next.js 16.
 - **Icons**: Leaflet default marker icon URLs are patched on import (webpack breaks the default paths).
-- **Tiles**: Default is CartoDB Voyager (light). A toggle button lets users switch to CartoDB Dark Matter (`dark_all`). River layer recolours to match: cyan neon on dark, blue on light.
+- **Tiles**: **Esri Gray Canvas** (keyless raster) — att maps toggle World_Light_Gray_Base ↔ World_Dark_Gray_Base; analyse maps are Dark Gray only. `maxNativeZoom={16}` (Esri's native cap) + `maxZoom={19}` so Leaflet upscales beyond 16 instead of 404ing. Swapped off CARTO's free basemaps, which started serving an "API key required" nag tile once an IP passed their informal limit. River layer recolours to match: cyan neon on dark, blue on light.
 - **River overlay** (opt-in): `RiverLayer.tsx` renders `/data/rivers.geojson` (OSM UK data, `pnpm rivers`) as non-interactive cyan (`#06b6d4`) lines with a neon glow behind the course lines. Line weight/opacity scales by waterway type (`w` property: `river` | `canal`). **Gated behind `NEXT_PUBLIC_RIVERS=1`** and off by default: the geojson is gitignored and not deployed, so fetching it 404s in dev / 403s in prod — a console error on every map. The component skips the fetch entirely unless the flag is set, so the overlay is a no-op (no error) until someone generates the file, deploys it as an asset, and sets the flag.
 - **Coordinates**: `[lat, lng]` throughout — NOT GeoJSON order.
 
@@ -959,7 +959,7 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 | Font | IBM Plex Mono | `--font-mono` | everything — loaded via `next/font/google` |
 
 CSS utilities in `globals.css`: `.tabular` (tabular-nums), `.tt-link`/`.tt-nav-link` (token-based).
-Maps: dark tiles (CartoDB Dark Matter); att maps still default to light with a dark toggle (flip pending — see the spec's follow-ups). No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets ≥ 44px. The historical light palette values (`#ffffff`/`#0f172a`/…) are retained in comments in `tokens.css` as a possible future light mode.
+Maps: dark tiles (Esri World Dark Gray); att maps still default to light with a dark toggle (flip pending — see the spec's follow-ups). No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets ≥ 44px. The historical light palette values (`#ffffff`/`#0f172a`/…) are retained in comments in `tokens.css` as a possible future light mode.
 
 ### Key Conventions
 

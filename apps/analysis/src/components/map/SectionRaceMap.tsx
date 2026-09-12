@@ -4,8 +4,11 @@ import { MapContainer, TileLayer, Polyline, Tooltip, useMap } from 'react-leafle
 import { useEffect } from 'react'
 
 type LL = [number, number]
-const DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-const ATTR = '&copy; OpenStreetMap &copy; CARTO'
+// Esri Dark Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
+// "API key required" nag tile once over their informal limit.) Native tiles cap
+// at z16; maxNativeZoom on the layer upscales beyond so it still zooms to 19.
+const DARK = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+const ATTR = 'Tiles &copy; Esri'
 
 function Fit({ pts }: { pts: LL[] }) {
   const map = useMap()
@@ -27,7 +30,7 @@ export default function SectionRaceMap({ racers, startLine, finishLine }: {
   const all = racers.flatMap(r => r.trackSegment)
   return (
     <MapContainer center={all[0] ?? [51.5, -1]} zoom={14} style={{ height: '100%', width: '100%', background: '#0b1220' }} zoomControl>
-      <TileLayer url={DARK} attribution={ATTR} maxZoom={19} />
+      <TileLayer url={DARK} attribution={ATTR} maxNativeZoom={16} maxZoom={19} />
       <Fit pts={all} />
       {racers.map((r, i) => (
         <Polyline key={i} positions={r.trackSegment} pathOptions={{ color: r.color, weight: 4, opacity: 0.85 }}>

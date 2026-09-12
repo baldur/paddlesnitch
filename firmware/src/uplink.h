@@ -37,12 +37,20 @@ int uplinkSyncSessions();
 
 struct UplinkStatus {
     bool     wifiUp        = false;
-    bool     busy          = false;   // mid-sync, holding the SD card
+    bool     busy          = false;   // mid-sync/scan, holding the SD card
     bool     claiming      = false;
     char     claimCode[8]  = "";
     int      uploadedOk    = 0;
     int      deleted       = 0;
     char     message[64]   = "";
+
+    // Session tallies for the Sync screen. Recomputed after each sync, on
+    // request (uplinkRequestCounts), and after a delete. countsValid is false
+    // until the first scan completes.
+    bool     countsValid   = false;
+    int      onDevice      = 0;   // track_*.csv files on the card
+    int      uploaded      = 0;   // of those, confirmed by the server (200/201/409)
+    int      pending       = 0;   // onDevice - uploaded
 };
 
 void uplinkTaskStart();               // call once, after storage + net are up
@@ -56,3 +64,12 @@ void uplinkResume();
 
 // Kicks off a sync now (e.g. after linking). Non-blocking.
 void uplinkRequestSync();
+
+// Asks the task to recompute the Sync-screen tallies (onDevice/uploaded/pending)
+// next time it is idle. Non-blocking; read the result from uplinkGetStatus().
+void uplinkRequestCounts();
+
+// Asks the task to delete every session the server has confirmed (200/201/409),
+// then recompute counts. Never deletes 422 or un-uploaded files. Non-blocking;
+// runs on core 0 when the card is free, so it never races recording or a sync.
+void uplinkRequestDeleteUploaded();

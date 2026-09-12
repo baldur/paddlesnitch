@@ -93,7 +93,7 @@ export default function PrivacyPolicy() {
           </ul>
           <p className="mt-3">
             We do not use analytics cookies, advertising cookies, or any third-party trackers. The map
-            tiles are fetched from CARTO and OpenStreetMap and do not receive any of your personal data.
+            tiles are fetched from Esri and do not receive any of your personal data.
           </p>
         </Section>
 
@@ -102,7 +102,7 @@ export default function PrivacyPolicy() {
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li><strong>Amazon Web Services</strong> (eu-west-1, Ireland) — hosting, user pool (Cognito), and storage (S3).</li>
             <li><strong>Amazon SES</strong> — to send transactional emails (sign-in codes, password resets) from <code>noreply@paddlesnitch.com</code>.</li>
-            <li><strong>CARTO</strong> and <strong>OpenStreetMap</strong> — map background tiles. Their servers see your IP and the map tile you requested; they do not see any of your account data.</li>
+            <li><strong>Esri</strong> — map background tiles. Their servers see your IP and the map tile you requested; they do not see any of your account data.</li>
           </ul>
           <p className="mt-3">
             We do not sell your data, share it with advertisers, or transfer it outside the European
