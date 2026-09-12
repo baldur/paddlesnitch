@@ -291,10 +291,11 @@ possible causes rather than guessing one.
 [`docs/device-states-spec.md`](docs/device-states-spec.md) is the contract
 (firmware ≥ 0.4.0): after onboarding (`Setup`/`Linking`) the device is **not in a
 mode** — it always acquires GPS and always runs the uploader, and the user only
-picks a **screen**: `Track → Sync → Nerd`, cycled by double-tap, with
-`DeleteConfirm` as a transient overlay. `uiSplash()` is the boot animation, not a
-state. `AppState` is resolved in one place each frame; do not reintroduce
-per-screen booleans.
+picks a **screen**. Every boot lands on the **`Pick`** chooser (tap = move
+highlight, hold = open); a screen's double-tap returns to `Pick`. Screens are
+`Track`/`Sync`/`Nerd`, with `DeleteConfirm` a transient overlay on `Sync`.
+`uiSplash()` is the boot animation, not a state. `AppState` is resolved in one
+place each frame; do not reintroduce per-screen booleans.
 
 - **Recording requires a fix.** A record attempt on `Track` with no fix refuses
   and shows `NEED GPS`. Starting before a fix produces exactly the fix-less rows
@@ -319,21 +320,22 @@ per-screen booleans.
 ### The UI is in `src/ui.cpp`; tracker logic never touches pixels
 
 `uiDraw(UiState)` picks the screen from `s.state`: onboarding until linked, then
-the user-selected `Track`/`Sync`/`Nerd` (plus `DeleteConfirm`). `uiSplash()` runs
-once at boot (a satellite orbiting a "P").
+`Pick` / `Track` / `Sync` / `Nerd` / `DeleteConfirm`. `uiSplash()` runs once at
+boot (a satellite orbiting a "P").
 
 **One button, three gestures, context-sensitive** — the board has only one free
 button (GPIO0; `RST` is the AXP2101 power key and not usable for this):
 
-- **tap** → the current screen's primary action (`Track`: start/stop recording;
-  `Sync`: sync now; `DeleteConfirm`: confirm)
-- **double-tap** → cycle screen `Track → Sync → Nerd` (`DeleteConfirm`: cancel)
-- **hold 3 s** → `Setup`/re-link everywhere *except* the `Sync` screen, where it
-  arms the delete-confirm. Fires *while held* so the screen changes under your
-  thumb.
+- **Pick** (shown every boot): **tap** moves the highlight, **hold** opens the
+  highlighted screen.
+- **Track/Sync/Nerd**: **tap** = the screen's primary action (Track: start/stop
+  recording; Sync: sync now); **double-tap** = back to `Pick`; **hold 3 s** =
+  `Setup`/re-link, except on `Sync` where it arms the delete-confirm.
+- **DeleteConfirm**: **tap** = confirm, **double-tap** = cancel.
 
-A tap is only confirmed once the 400 ms double-tap window closes. That latency is
-the price of distinguishing the three gestures on the one free button.
+Hold fires *while held* so the screen changes under your thumb. A tap is only
+confirmed once the 400 ms double-tap window closes — the price of distinguishing
+the three gestures on one button.
 
 **Recording is deliberate, not automatic.** `storageInit()` mounts the card but
 opens no file; `storageStartSession(stamp)` opens one on a tap. Logging and LoRa

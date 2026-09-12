@@ -5,10 +5,11 @@
 // pixels and the screens can be reasoned about as a set.
 
 // What to draw this frame. Onboarding (Setup/Linking) is forced until the device
-// is usable; after that the user picks a screen (Track/Sync/Nerd, cycled by
-// double-tap), with DeleteConfirm as a transient overlay. The splash at boot is
+// is usable; then every boot lands on the Pick chooser (tap = move highlight,
+// hold = select), which enters Track/Sync/Nerd; a double-tap in a screen returns
+// to Pick. DeleteConfirm is a transient overlay on Sync. The splash at boot is
 // uiSplash(), not a state. See docs/device-states-spec.md.
-enum class AppState { Setup, Linking, Track, Sync, Nerd, DeleteConfirm };
+enum class AppState { Setup, Linking, Pick, Track, Sync, Nerd, DeleteConfirm };
 
 struct UiState {
     AppState state = AppState::Track;
@@ -47,6 +48,9 @@ struct UiState {
     int      uploaded    = 0;
     int      pending     = 0;
     bool     syncing     = false;   // a sync is in flight (uplink busy)
+
+    // pick screen: which option is highlighted (0 Track, 1 Sync, 2 Nerd)
+    int      pickSel     = 0;
 
     // nerd mode / diagnostics
     String   ssid;

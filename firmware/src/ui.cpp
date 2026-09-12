@@ -201,6 +201,32 @@ static void drawSync(const UiState &s)
     display.sendBuffer();
 }
 
+// Pick: the chooser shown at boot (and on double-tap). tap moves the highlight,
+// hold selects. Both GPS and upload run the whole time -- this only picks the view.
+static void drawPick(const UiState &s)
+{
+    display.clearBuffer();
+    drawTopRow(s);
+
+    const char *opts[3] = { "TRACK", "SYNC", "NERD" };
+    display.setFont(u8g2_font_6x10_tf);
+    for (int i = 0; i < 3; i++) {
+        int y = 26 + i * 12;
+        if (i == s.pickSel) {
+            display.drawBox(0, y - 9, 128, 11);          // highlight bar
+            display.setDrawColor(0);
+            display.drawStr(4, y, opts[i]);
+            display.setDrawColor(1);
+        } else {
+            display.drawStr(4, y, opts[i]);
+        }
+    }
+    display.setFont(u8g2_font_5x8_tf);
+    const char *hint = "tap=move  hold=open";
+    display.drawStr(128 - display.getStrWidth(hint), 63, hint);
+    display.sendBuffer();
+}
+
 // Delete confirmation: destructive, so it is a deliberate screen, not a gesture.
 static void drawDeleteConfirm(const UiState &s)
 {
@@ -265,6 +291,7 @@ void uiDraw(const UiState &s)
     if (!board_display_ok()) return;
     switch (s.state) {
     case AppState::Linking:       drawLinking(s);       break;
+    case AppState::Pick:          drawPick(s);          break;
     case AppState::Track:         drawTracker(s);       break;
     case AppState::Sync:          drawSync(s);          break;
     case AppState::Nerd:          drawNerd(s);          break;

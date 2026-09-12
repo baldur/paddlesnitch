@@ -1,11 +1,11 @@
 # Feature spec: device screens, gestures and always-on sync
 
 **Status:** ✅ implemented + verified on hardware 2026-09-12 (firmware 0.4.0).
-Bench-verified: timestamped filename on a real recording (`track_20260912_130850.csv`),
-sync-on-stop uploading it `201` (no reformat collision), Sync-screen counts via
-`STATUS` (`on device 2, uploaded 2, pending 0`), cold-boot sync, screen dispatch.
-Visual/button checks (screen cycling, hold-to-delete confirm, `NEED GPS` toast)
-are the owner's to eyeball on the OLED.
+Verified: boot lands on `pick>track` (serial `STATUS` reports the screen); a real
+recording named `track_20260912_130850.csv` sync-on-stop uploaded `201` (no reformat
+collision); Sync counts via `STATUS`; cold-boot sync; and the owner exercised the
+button path on the device — Pick → Sync → hold-to-delete cleared both confirmed
+uploads, leaving `uploaded.txt` intact and counts at 0/0/0.
 **Owner:** Baldur (product). Targets firmware **0.4.0** on the T-Beam S3 Supreme
 (bumped from 0.3.0; the server reads `X-Device-Firmware`, so the bump ships with this).
 **Related:** [`device-data`](../../docs/features/device-data.md) (what gets recorded),
@@ -57,14 +57,23 @@ can't paper over missing setup:
 | **Setup** | no WiFi saved, or requested | AP name, `192.168.4.1`, and why |
 | **Linking** | on WiFi, no device token | claim code, large, + `paddlesnitch.com` |
 
-Once WiFi is configured and the device is linked, the device shows the **Track** screen
-and the user can switch screens freely.
+Once WiFi is configured and the device is linked, **every boot lands on the Pick
+chooser** (after the splash); the user taps to move the highlight and holds to open a
+screen.
+
+### The Pick chooser
+
+Shown at boot, and returned to by a double-tap from any screen. Lists the three
+screens with a highlight bar; **tap** moves the highlight (Track → Sync → Nerd), **hold**
+opens the highlighted one. GPS and the uploader keep running the whole time — Pick only
+chooses the view, it does not gate anything. The top row (below) shows here too, so fix
+and battery are visible while choosing.
 
 ### The three screens
 
-Peers, cycled with double-tap (**Track → Sync → Nerd → Track**). The **top row** is
-constant on Track and Sync: satellite glyph (blinking until fix, solid after), WiFi/
-signal indicator, REC dot while recording, battery gauge.
+Opened from Pick; a **double-tap** returns to Pick. The **top row** is constant on Track,
+Sync and Pick: satellite glyph (blinking until fix, solid after), WiFi/signal indicator,
+REC dot while recording, battery gauge.
 
 | Screen | Shows | Purpose |
 |---|---|---|
@@ -93,17 +102,17 @@ screen is entered and after a delete. Nerd mode also shows them.
 One button (GPIO0); `RST` is the AXP2101 power key and cannot be used as input. Three
 gestures, now **context-sensitive to the visible screen**:
 
-| Gesture | Track | Sync | Nerd | Onboarding |
-|---|---|---|---|---|
-| **Tap** (<400 ms) | start / stop recording | **sync now** (force an upload attempt) | — | — |
-| **Double-tap** | → Sync | → Nerd | → Track | — |
-| **Hold 3 s** | Setup / re-link | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
+| Gesture | Pick | Track | Sync | Nerd | Onboarding |
+|---|---|---|---|---|---|
+| **Tap** (<400 ms) | move highlight | start / stop recording | **sync now** (force an upload) | — | — |
+| **Double-tap** | — | → Pick | → Pick | → Pick | — |
+| **Hold 3 s** | **open highlighted** | Setup / re-link | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
 
 Notes:
-- **Setup is reachable any time** via Hold on Track (the default screen), Nerd, and
-  onboarding — the escape hatch for a changed router password is preserved. On the Sync
-  screen Hold is repurposed to the delete action; that is the one screen where Hold does
-  not open Setup.
+- **Setup is reachable** via Hold on Track (the screen you open by default) and Nerd, and
+  during onboarding — the escape hatch for a changed router password is preserved. On
+  Pick, Hold opens the highlighted screen; on Sync, Hold arms the delete. Those are the
+  two screens where Hold does not open Setup.
 - A tap is confirmed ~400 ms after release (the double-tap window). Invisible next to a
   1 Hz log rate.
 
