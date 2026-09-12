@@ -240,6 +240,15 @@ static bool uploadOne(WiFiClientSecure &client, const String &name, size_t size)
     return rc == 200 || rc == 201;
 }
 
+// An uploadable session file: track_*.csv, but NOT the raw motion-capture
+// sidecar track_*_imu.csv (that stays on the card for offline analysis and is
+// never uploaded, counted, or auto-deleted). See docs/motion-capture-spec.md.
+static bool isTrackUpload(const String &name)
+{
+    return name.startsWith("track_") && name.endsWith(".csv")
+        && !name.endsWith("_imu.csv");
+}
+
 // Tallies the sessions on the card for the Sync screen: how many track files
 // exist, and how many of those the server has confirmed. Read-only; runs on the
 // uplink task so SD access stays single-owner. Writes the result into `st`.
@@ -253,7 +262,7 @@ static void computeCounts(UplinkStatus &st)
         bool dir = f.isDirectory();
         String name = f.name();
         if (name.startsWith("/")) name = name.substring(1);
-        bool isTrack = name.startsWith("track_") && name.endsWith(".csv");
+        bool isTrack = isTrackUpload(name);
         f.close();
         if (dir || !isTrack) continue;
         on++;
@@ -285,7 +294,7 @@ static int deleteConfirmedAll()
         bool dir = f.isDirectory();
         String name = f.name();
         if (name.startsWith("/")) name = name.substring(1);
-        bool isTrack = name.startsWith("track_") && name.endsWith(".csv");
+        bool isTrack = isTrackUpload(name);
         f.close();
         if (!dir && isTrack) names[n++] = name;
     }
@@ -321,7 +330,7 @@ int uplinkSyncSessions()
         size_t size = f.size();
         f.close();
 
-        if (!name.startsWith("track_") || !name.endsWith(".csv")) continue;
+        if (!isTrackUpload(name)) continue;        // skips the _imu.csv sidecar
         if (name == active) continue;             // still being written to
         if (alreadyUploaded(name)) continue;
         // Checked between files, not mid-file: a recording starting must not

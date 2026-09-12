@@ -63,27 +63,32 @@ screen.
 
 ### The Pick chooser
 
-Shown at boot, and returned to by a double-tap from any screen. Lists the three
-screens with a highlight bar; **tap** moves the highlight (Track → Sync → Nerd), **hold**
-opens the highlighted one. GPS and the uploader keep running the whole time — Pick only
-chooses the view, it does not gate anything. The top row (below) shows here too, so fix
-and battery are visible while choosing.
+Shown at boot, and returned to by a double-tap from any screen. It is **just the
+options** — no status bar — so the chooser reads as a menu: the three screens with a
+highlight bar, **tap** moves the highlight (Track → Sync → Nerd), **hold** opens the
+highlighted one. GPS and the uploader keep running the whole time — Pick only chooses
+the view, it does not gate anything.
 
 ### The three screens
 
-Opened from Pick; a **double-tap** returns to Pick. The **top row** is constant on Track,
-Sync and Pick: satellite glyph (blinking until fix, solid after), WiFi/signal indicator,
-REC dot while recording, battery gauge.
+Opened from Pick; a **double-tap** returns to Pick. The **top row belongs to Track**
+(the screen where you watch it): satellite glyph (blinking until fix, solid after),
+WiFi/signal indicator, REC dot while recording, battery gauge. Pick and Sync do not
+show it — Sync shows its tallies, Pick shows only the options.
 
 | Screen | Shows | Purpose |
 |---|---|---|
-| **Track** | speed, and either `Press to record` (fix) / `NEED GPS` (no fix) / time + distance (recording) | the paddling view |
+| **Track** | speed; `Acquiring GPS...` until a fix, then time + distance with a `hold to stop` hint (recording) | the paddling view — recording |
 | **Sync** | `ACTIVITIES n` · `UPLOADED m` · `PENDING p`, last-sync result, and the delete action | see what's waiting and manage the card |
 | **Nerd** | diagnostics (sats, HDOP, fix age, IP, SSID, device id, claim state, row count, current file, LoRa params, TX counters, battery V, free heap) | on-water diagnosis, no laptop |
 
-**Recording still requires a fix.** A record attempt on Track with no fix shows `NEED GPS`
-and starts nothing — a fix-less session is exactly the junk that returned `422`. The
-satellite glyph must be solid before recording is offered.
+**Track auto-records.** Opening Track *is* the decision to record: the moment a fix is
+available it starts a session on its own — no "press to record". Until the fix lands it
+shows `Acquiring GPS...` (recording still requires a fix; a fix-less session is the junk
+that returned `422`). **Stopping is deliberate:** `hold` arms a `STOP?` confirmation, and
+a `double-tap` confirms — then it stops, syncs, and returns to the menu. A single tap or a
+10 s timeout cancels and keeps recording. A plain `double-tap` (not armed) returns to the
+menu with the recording still running in the background.
 
 ### Sync screen counts — definitions
 
@@ -102,19 +107,20 @@ screen is entered and after a delete. Nerd mode also shows them.
 One button (GPIO0); `RST` is the AXP2101 power key and cannot be used as input. Three
 gestures, now **context-sensitive to the visible screen**:
 
-| Gesture | Pick | Track | Sync | Nerd | Onboarding |
-|---|---|---|---|---|---|
-| **Tap** (<400 ms) | move highlight | start / stop recording | **sync now** (force an upload) | — | — |
-| **Double-tap** | — | → Pick | → Pick | → Pick | — |
-| **Hold 3 s** | **open highlighted** | Setup / re-link | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
+| Gesture | Pick | Track (recording) | Track (armed STOP) | Sync | Nerd | Onboarding |
+|---|---|---|---|---|---|---|
+| **Tap** (<400 ms) | move highlight | — | cancel (keep recording) | **sync now** | — | — |
+| **Double-tap** | — | → Pick (keeps recording) | **confirm stop** → menu | → Pick | → Pick | — |
+| **Hold 3 s** | **open highlighted** | **arm STOP** | — | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
 
 Notes:
-- **Setup is reachable** via Hold on Track (the screen you open by default) and Nerd, and
-  during onboarding — the escape hatch for a changed router password is preserved. On
-  Pick, Hold opens the highlighted screen; on Sync, Hold arms the delete. Those are the
-  two screens where Hold does not open Setup.
-- A tap is confirmed ~400 ms after release (the double-tap window). Invisible next to a
-  1 Hz log rate.
+- **Setup is reachable** via Hold on an **idle** Track (no fix yet) or Nerd, and during
+  onboarding — the escape hatch for a changed router password is preserved. The screens
+  where Hold does something else: Pick (opens the highlighted screen), Sync (arms delete),
+  and a **recording** Track (arms the stop).
+- A tap is confirmed ~400 ms after release (the double-tap window) **except on Pick**,
+  where taps act immediately (no double-tap action there). Invisible next to a 1 Hz log
+  rate.
 
 ### Delete-uploaded confirm flow
 

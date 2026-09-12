@@ -51,6 +51,8 @@ struct UiState {
 
     // pick screen: which option is highlighted (0 Track, 1 Sync, 2 Nerd)
     int      pickSel     = 0;
+    // track screen: a hold has armed "stop recording", awaiting a double-tap
+    bool     stopArmed   = false;
 
     // nerd mode / diagnostics
     String   ssid;

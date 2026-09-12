@@ -24,6 +24,12 @@ static bool     ready = false;
 static char     filename[32] = "";
 static uint32_t rows = 0;
 
+// Raw motion-capture sidecar (see docs/motion-capture-spec.md).
+static File     imuFile;
+static char     imuFilename[48] = "";
+static uint32_t imuRows = 0;
+static const char *IMU_HEADER = "ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n";
+
 // Raw SD protocol probe, bypassing the filesystem entirely.
 //
 // Separates two very different failures that SD.begin() reports identically:
@@ -112,18 +118,23 @@ bool storageStartSession(const char *stamp)
 {
     if (!ready || logFile) return false;
 
+    // Build a base name shared by the track file and its raw-IMU sidecar.
+    char base[32];
     if (stamp && stamp[0]) {
         // Timestamped name (GPS time at record-start). Globally unique in normal
         // use, so the server never sees a reused filename.
-        snprintf(filename, sizeof(filename), "/track_%s.csv", stamp);
+        snprintf(base, sizeof(base), "track_%s", stamp);
+        snprintf(filename, sizeof(filename), "/%s.csv", base);
         // Two sessions started in the same second is vanishingly unlikely, but
         // disambiguate rather than clobber if it ever happens.
-        for (int i = 1; i < 100 && SD.exists(filename); i++)
-            snprintf(filename, sizeof(filename), "/track_%s_%d.csv", stamp, i);
+        for (int i = 1; i < 100 && SD.exists(filename); i++) {
+            snprintf(base, sizeof(base), "track_%s_%d", stamp, i);
+            snprintf(filename, sizeof(filename), "/%s.csv", base);
+        }
     } else {
         // No wall-clock time: fall back to an NVS counter that never repeats.
-        snprintf(filename, sizeof(filename), "/track_n%06lu.csv",
-                 (unsigned long)nextFallbackSeq());
+        snprintf(base, sizeof(base), "track_n%06lu", (unsigned long)nextFallbackSeq());
+        snprintf(filename, sizeof(filename), "/%s.csv", base);
     }
     logFile = SD.open(filename, FILE_WRITE);
     if (!logFile) {
@@ -133,7 +144,17 @@ bool storageStartSession(const char *stamp)
     logFile.print(CSV_HEADER);
     logFile.flush();
     rows = 0;
-    Serial.printf("SD: recording to %s\n", filename);
+
+    // Raw motion-capture sidecar. Best-effort: if it cannot be created, the
+    // session still records the track -- only the offline IMU data is lost.
+    snprintf(imuFilename, sizeof(imuFilename), "/%s_imu.csv", base);
+    imuFile = SD.open(imuFilename, FILE_WRITE);
+    imuRows = 0;
+    if (imuFile) { imuFile.print(IMU_HEADER); imuFile.flush(); }
+    else         { Serial.printf("SD: could not create %s\n", imuFilename); }
+
+    Serial.printf("SD: recording to %s%s%s\n", filename,
+                  imuFile ? " + " : "", imuFile ? imuFilename : "");
     return true;
 }
 
@@ -141,8 +162,16 @@ void storageStopSession()
 {
     if (!logFile) return;
     logFile.close();
-    Serial.printf("SD: stopped %s (%lu rows)\n", filename, (unsigned long)rows);
+    if (imuFile) {
+        imuFile.flush();
+        imuFile.close();
+        Serial.printf("SD: stopped %s (%lu rows) + %s (%lu rows)\n",
+                      filename, (unsigned long)rows, imuFilename, (unsigned long)imuRows);
+    } else {
+        Serial.printf("SD: stopped %s (%lu rows)\n", filename, (unsigned long)rows);
+    }
     filename[0] = 0;
+    imuFilename[0] = 0;
 }
 
 bool storageRecording() { return (bool)logFile; }
@@ -157,6 +186,16 @@ void storageLogRow(const char *csvLine)
     logFile.print(csvLine);
     logFile.flush();        // deliberate: see header comment
     rows++;
+}
+
+void storageLogImuRow(const char *csvLine)
+{
+    if (!ready || !imuFile) return;
+    imuFile.print(csvLine);
+    // Buffered: flush ~once a second (every 50 rows) rather than per row. This
+    // is analysis data, not the authoritative track, so a <1 s loss on an abrupt
+    // power-off is fine, and 50 flushes/second would be needless wear + power.
+    if (++imuRows % 50 == 0) imuFile.flush();
 }
 
 void storageClose()
