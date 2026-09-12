@@ -67,6 +67,10 @@ static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
 static Screen   uiScreen      = Screen::Track;   // the entered screen
 static bool     confirmDelete = false;
 static uint32_t confirmUntil  = 0;
+// Track auto-records on entry (once there's a fix); stopping is a deliberate
+// hold -> double-tap, so stopArmed gates the confirm the way confirmDelete does.
+static bool     stopArmed     = false;
+static uint32_t stopArmUntil  = 0;
 static String   toastText;
 static uint32_t toastUntil    = 0;
 
@@ -139,13 +143,18 @@ void setup()
     pktSelfTest();
 #endif
 
-    board.sdcard = storageInit();
-    report("SD", board.sdcard,
-           board.sdcard ? "card ready - tap button to record" : "no card / mount failed");
-
+    // IMU before SD: both are on the shared SPI bus, and mounting the card first
+    // leaves it contending with the IMU's chip-select -- the documented cause of
+    // the intermittent "IMU probe 0xFF / init failed". Probe + init the IMU while
+    // the bus is still clean, then mount the card. (imuInit also rail-cycles and
+    // retries if the chip comes up wedged after a warm reset.)
     imuProbe();
     bool imuOk = imuInit();
     report("IMU", imuOk, imuOk ? "QMI8658 accel+gyro" : "init failed");
+
+    board.sdcard = storageInit();
+    report("SD", board.sdcard,
+           board.sdcard ? "card ready - tap button to record" : "no card / mount failed");
 
     // Uplink runs once, at boot, and only when WiFi is configured: the device
     // is plugged in at home when that is true, and the radio is the largest
@@ -402,7 +411,10 @@ static void enterScreen(Screen s)
 {
     uiScreen = s;
     onPick   = false;
+    stopArmed = false;
     if (s == Screen::Sync) uplinkRequestCounts();           // refresh on entry
+    // Track is the recording screen: it auto-starts once a fix is available
+    // (handled in loop()), so there is no "press to record".
 }
 
 // The one free button (RST is the AXP2101 power key), three gestures, their
@@ -427,7 +439,7 @@ static void screenTap()
         return;
     }
     switch (uiScreen) {
-    case Screen::Track: toggleRecording(); break;
+    case Screen::Track: if (stopArmed) stopArmed = false; break;  // cancel a stop
     case Screen::Sync:  uplinkRequestSync(); toast("SYNCING"); break;
     case Screen::Nerd:  break;
     }
@@ -438,8 +450,14 @@ static void screenDoubleTap()
     if (confirmDelete) { confirmDelete = false; return; }   // confirm screen: cancel
     if (!deviceUsable()) return;
     if (onPick) return;                                     // no double-tap on Pick
-    onPick = true;                                          // back to the chooser
-    pickHighlight = uiScreen;                               // highlight where we were
+    // On Track, a double-tap confirms a stop that a hold armed; otherwise it just
+    // returns to the menu (recording, if any, keeps running in the background).
+    if (uiScreen == Screen::Track && stopArmed) {
+        stopArmed = false;
+        if (storageRecording()) toggleRecording();          // stop + trigger sync
+    }
+    onPick = true;
+    pickHighlight = uiScreen;
 }
 
 static void screenHold()
@@ -452,7 +470,12 @@ static void screenHold()
         confirmUntil  = millis() + 10000;
         return;
     }
-    linkAttempt();                                          // Track/Nerd -> Setup
+    if (uiScreen == Screen::Track && storageRecording()) {  // arm the stop
+        stopArmed    = true;
+        stopArmUntil = millis() + 10000;
+        return;
+    }
+    linkAttempt();                                          // Track(idle)/Nerd -> Setup
 }
 
 // A single tap is only confirmed once the double-tap window closes, so the action
@@ -465,8 +488,9 @@ static void checkButton()
     static bool     longFired   = false;
     static uint32_t pendingTap  = 0;   // when a tap is awaiting its double-tap window
 
-    // The delete confirmation auto-cancels if the user walks away.
+    // The delete / stop confirmations auto-cancel if the user walks away.
     if (confirmDelete && millis() > confirmUntil) confirmDelete = false;
+    if (stopArmed && millis() > stopArmUntil)     stopArmed     = false;
 
     bool down = digitalRead(BUTTON_PIN) == LOW;
 
@@ -476,13 +500,23 @@ static void checkButton()
     } else if (down && !longFired && millis() - heldSince > 3000) {
         longFired  = true;
         pendingTap = 0;
+        Serial.println("btn: hold");
         screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
+        // On the Pick menu a tap acts immediately: there is no double-tap action
+        // there, so waiting out the double-tap window just makes the menu feel
+        // dead, and a release bounce would otherwise land as a no-op double-tap.
+        if (onPick) {
+            Serial.println("btn: tap (pick)");
+            screenTap();
+            return;
+        }
         if (pendingTap && millis() - pendingTap < DOUBLE_TAP_MS) {
             pendingTap = 0;
+            Serial.println("btn: double-tap");
             screenDoubleTap();
         } else {
             pendingTap = millis();
@@ -491,6 +525,7 @@ static void checkButton()
 
     if (pendingTap && millis() - pendingTap >= DOUBLE_TAP_MS) {
         pendingTap = 0;
+        Serial.println("btn: tap");
         screenTap();
     }
 }
@@ -583,6 +618,20 @@ void loop()
     checkButton();
     imuPoll();
 
+    // Raw motion capture: stream each ~50 Hz IMU sample to the sidecar while
+    // recording (the 1 Hz track row keeps only a summary). See
+    // docs/motion-capture-spec.md. The loop runs faster than 50 Hz, so the
+    // single-slot handoff catches every sample.
+    if (storageRecording()) {
+        ImuRaw r;
+        while (imuTakeRaw(r)) {
+            char line[96];
+            snprintf(line, sizeof(line), "%lu,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f\n",
+                     (unsigned long)r.ms, r.ax, r.ay, r.az, r.gx, r.gy, r.gz);
+            storageLogImuRow(line);
+        }
+    }
+
     while (SerialGPS.available()) {
         char c = SerialGPS.read();
         gps.encode(c);
@@ -618,6 +667,16 @@ void loop()
 
     if (millis() - lastTick >= 1000) {
         lastTick = millis();
+
+        // Track is the recording screen: auto-start once a fix is available, so
+        // the user never has to press anything to record. Only fires while on
+        // Track and idle; a confirmed stop returns to the menu, so it never
+        // immediately re-starts. Throttled to this 1 Hz tick. toggleRecording()
+        // self-guards on the fix and the SD card.
+        if (!onPick && uiScreen == Screen::Track && !storageRecording()
+            && gps.location.isValid()) {
+            toggleRecording();
+        }
 
 
         if (gps.location.isValid()) {
@@ -726,6 +785,7 @@ void loop()
                                                  : AppState::Track;
         u.pickSel     = pickHighlight == Screen::Track ? 0
                       : pickHighlight == Screen::Sync  ? 1 : 2;
+        u.stopArmed   = stopArmed;
         u.countsValid = up.countsValid;
         u.onDevice    = up.onDevice;
         u.uploaded    = up.uploaded;

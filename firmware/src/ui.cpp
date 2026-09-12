@@ -140,32 +140,49 @@ static void drawTracker(const UiState &s)
     display.clearBuffer();
     drawTopRow(s);
 
-    // --- hero ------------------------------------------------------------
-    // Layout stays put whether or not there is a fix -- "--" reads as "no value
-    // yet" without a sentence explaining it. The blinking satellite above is
-    // already saying that we are searching.
-    display.setFont(u8g2_font_logisoso24_tn);
-    if (s.fix) { snprintf(line, sizeof(line), "%.1f", s.speedKmh); display.drawStr(0, 41, line); }
-    else       { display.drawStr(0, 41, "--"); }
-    display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(66, 30, "km/h");
-
-    // --- bottom line -----------------------------------------------------
-    display.setFont(u8g2_font_6x10_tf);
-    if (!s.sdReady) {
-        display.drawStr(0, 63, "No SD card");
-    } else if (s.recording) {
-        snprintf(line, sizeof(line), "%lu:%02lu", (unsigned long)(s.sessionSecs / 60),
-                 (unsigned long)(s.sessionSecs % 60));
-        display.drawStr(0, 63, line);
-        if (s.distanceM >= 1000) snprintf(line, sizeof(line), "%.2f km", s.distanceM / 1000.0);
-        else                     snprintf(line, sizeof(line), "%.0f m", s.distanceM);
-        display.drawStr(128 - display.getStrWidth(line), 63, line);
-    } else {
-        display.drawStr(0, 63, "Press to record");
+    // A hold has armed the stop: make the whole screen the confirmation so it
+    // can't be missed. double-tap confirms, tap (or timeout) keeps recording.
+    if (s.stopArmed) {
+        display.setFont(u8g2_font_helvB12_tf);
+        display.drawStr(0, 34, "STOP?");
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(0, 50, "2x tap = confirm");
+        display.setFont(u8g2_font_5x8_tf);
+        display.drawStr(0, 62, "tap = keep recording");
+        display.sendBuffer();
+        return;
     }
 
-    // Transient feedback (e.g. "NEED GPS" after a refused tap) overlays the hero.
+    // --- hero: speed -----------------------------------------------------
+    display.setFont(u8g2_font_logisoso24_tn);
+    if (s.fix) { snprintf(line, sizeof(line), "%.1f", s.speedKmh); display.drawStr(0, 40, line); }
+    else       { display.drawStr(0, 40, "--"); }
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(66, 28, "km/h");
+
+    // --- bottom ----------------------------------------------------------
+    if (!s.sdReady) {
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(0, 63, "No SD card");
+    } else if (s.recording) {
+        // time + distance on one line, "hold to stop" hint beneath.
+        display.setFont(u8g2_font_6x10_tf);
+        snprintf(line, sizeof(line), "%lu:%02lu", (unsigned long)(s.sessionSecs / 60),
+                 (unsigned long)(s.sessionSecs % 60));
+        display.drawStr(0, 52, line);
+        if (s.distanceM >= 1000) snprintf(line, sizeof(line), "%.2f km", s.distanceM / 1000.0);
+        else                     snprintf(line, sizeof(line), "%.0f m", s.distanceM);
+        display.drawStr(128 - display.getStrWidth(line), 52, line);
+        display.setFont(u8g2_font_5x8_tf);
+        const char *h = "hold to stop";
+        display.drawStr((128 - display.getStrWidth(h)) / 2, 63, h);
+    } else {
+        // Recording auto-starts once there's a fix; until then we're acquiring.
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(0, 63, "Acquiring GPS...");
+    }
+
+    // Transient feedback (e.g. "BUSY") overlays the hero.
     if (s.toastUntilMs > millis() && s.toast.length()) {
         display.setFont(u8g2_font_helvB12_tf);
         display.drawStr(0, 40, s.toast.c_str());
@@ -177,27 +194,26 @@ static void drawTracker(const UiState &s)
 // the background uploader visible, and where the card gets cleared.
 static void drawSync(const UiState &s)
 {
+    // No top row: the status bar is the Track screen's. Sync is its own view.
     char l[32];
     display.clearBuffer();
-    drawTopRow(s);
 
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 24, "SYNC");
-    if (s.syncing) display.drawStr(128 - display.getStrWidth("..."), 24, "...");
+    display.drawStr(0, 10, "SYNC");
+    if (s.syncing) display.drawStr(128 - display.getStrWidth("..."), 10, "...");
+    display.drawHLine(0, 13, 128);
 
-    display.setFont(u8g2_font_6x10_tf);
     if (!s.countsValid) {
-        display.drawStr(0, 40, "scanning card...");
+        display.drawStr(0, 32, "scanning card...");
     } else {
-        snprintf(l, sizeof(l), "on device %d", s.onDevice);  display.drawStr(0, 38, l);
-        snprintf(l, sizeof(l), "uploaded  %d", s.uploaded);  display.drawStr(0, 50, l);
-        snprintf(l, sizeof(l), "pending   %d", s.pending);   display.drawStr(0, 62, l);
+        snprintf(l, sizeof(l), "on device %d", s.onDevice);  display.drawStr(0, 28, l);
+        snprintf(l, sizeof(l), "uploaded  %d", s.uploaded);  display.drawStr(0, 40, l);
+        snprintf(l, sizeof(l), "pending   %d", s.pending);   display.drawStr(0, 52, l);
     }
 
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=sync  hold=delete";
-    display.drawStr(128 - display.getStrWidth(hint), 8, "");   // keep top-row clear
-    display.drawStr(128 - display.getStrWidth(hint), 62, hint);
+    display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
     display.sendBuffer();
 }
 
@@ -205,25 +221,26 @@ static void drawSync(const UiState &s)
 // hold selects. Both GPS and upload run the whole time -- this only picks the view.
 static void drawPick(const UiState &s)
 {
+    // No top row here: the chooser is just the options. The sat/battery status
+    // bar belongs to the Track screen, where it is what you are watching.
     display.clearBuffer();
-    drawTopRow(s);
 
-    const char *opts[3] = { "TRACK", "SYNC", "NERD" };
+    const char *opts[3] = { "TRACK", "SYNC", "NERDMODE" };
     display.setFont(u8g2_font_6x10_tf);
     for (int i = 0; i < 3; i++) {
-        int y = 26 + i * 12;
+        int y = 20 + i * 14;
         if (i == s.pickSel) {
-            display.drawBox(0, y - 9, 128, 11);          // highlight bar
+            display.drawBox(0, y - 10, 128, 13);         // highlight bar
             display.setDrawColor(0);
-            display.drawStr(4, y, opts[i]);
+            display.drawStr(6, y, opts[i]);
             display.setDrawColor(1);
         } else {
-            display.drawStr(4, y, opts[i]);
+            display.drawStr(6, y, opts[i]);
         }
     }
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=move  hold=open";
-    display.drawStr(128 - display.getStrWidth(hint), 63, hint);
+    display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
     display.sendBuffer();
 }
 

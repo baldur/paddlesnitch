@@ -27,6 +27,14 @@ bool     storageRecording();
 const char *storageFilename();
 uint32_t storageRowCount();
 void     storageLogRow(const char *csvLine);
+
+// Appends a row to the raw motion-capture sidecar (`track_<stamp>_imu.csv`),
+// opened alongside the track file by storageStartSession. Buffered (flushed ~1/s,
+// not per row) because it is ~50 Hz analysis data, not the authoritative track.
+// No-op when not recording or the sidecar could not be created.
+// See docs/motion-capture-spec.md.
+void     storageLogImuRow(const char *csvLine);
+
 void     storageClose();
 
 // Serial file access, so logs can be pulled off the card without removing it.
