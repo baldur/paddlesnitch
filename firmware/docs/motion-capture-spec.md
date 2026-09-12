@@ -59,6 +59,19 @@ so each outing yields a dataset to model against.
 
 Scope guard: Phase 1 does **no** detection or modelling on-device. It only records.
 
+### Shared SPI bus: IMU polling pauses while the uploader uses the card
+
+The IMU and the microSD share one SPI bus. The UI/GNSS loop polls the IMU on core 1;
+the uploader scans/syncs/deletes on core 0. Concurrent access corrupts both —
+observed as SD `Select Failed` / `token error` storms that left the Sync screen stuck
+on "scanning card..." (the count scan never finished) once the IMU was alive. Fix:
+the task raises `uplinkSdBusy()` around its SD work and `loop()` skips `imuPoll()`
+while it's set. This only happens when **not recording** (scans/syncs never run during
+a recording — the task yields the card), so no sample that would be logged is lost.
+During recording the opposite holds: the task is yielded and core 1 owns the bus for
+both the IMU read and the SD write, sequentially. (A FreeRTOS mutex around every
+`sdSPI` transaction would be the heavier, fuller alternative if a future need arises.)
+
 ## Phase 2 — model offline (not firmware)
 
 With real sidecar traces: develop the stroke-rate detector (band-pass ~0.3–3 Hz to kill

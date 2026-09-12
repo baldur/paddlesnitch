@@ -616,7 +616,10 @@ void loop()
 {
     handleSerialCommand();
     checkButton();
-    imuPoll();
+    // Don't touch the IMU while the uplink task holds the shared SPI bus (SD
+    // scan/sync/delete) -- concurrent access corrupts both. Only ever set when
+    // not recording, so no sample that would be logged is skipped.
+    if (!uplinkSdBusy()) imuPoll();
 
     // Raw motion capture: stream each ~50 Hz IMU sample to the sidecar while
     // recording (the 1 Hz track row keeps only a summary). See

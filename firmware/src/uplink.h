@@ -73,3 +73,10 @@ void uplinkRequestCounts();
 // then recompute counts. Never deletes 422 or un-uploaded files. Non-blocking;
 // runs on core 0 when the card is free, so it never races recording or a sync.
 void uplinkRequestDeleteUploaded();
+
+// True while the core-0 task is actively using the SD card (scan / sync / delete).
+// The IMU shares the SPI bus, so core 1 must NOT poll it then or the concurrent
+// access corrupts both (SD "Select Failed", garbled IMU). The loop skips imuPoll()
+// while this is set; it is only ever set when not recording, so no samples that
+// would be logged are lost. See docs/motion-capture-spec.md.
+bool uplinkSdBusy();
