@@ -78,7 +78,7 @@ show it — Sync shows its tallies, Pick shows only the options.
 
 | Screen | Shows | Purpose |
 |---|---|---|
-| **Track** | speed; `Acquiring GPS...` until a fix, then time + distance with a `hold to stop` hint (recording) | the paddling view — recording |
+| **Track** | big speed with its unit hugging the number + stroke rate (SPM) on the right; `Acquiring GPS...` until a fix; when recording, time + distance, and a bottom row of blinking `● REC` (left) / `hold to stop` (right) | the paddling view — recording |
 | **Sync** | `ACTIVITIES n` · `UPLOADED m` · `PENDING p`, last-sync result, and the delete action | see what's waiting and manage the card |
 | **Nerd** | diagnostics (sats, HDOP, fix age, IP, SSID, device id, claim state, row count, current file, LoRa params, TX counters, battery V, free heap) | on-water diagnosis, no laptop |
 
@@ -89,6 +89,11 @@ that returned `422`). **Stopping is deliberate:** `hold` arms a `STOP?` confirma
 a `double-tap` confirms — then it stops, syncs, and returns to the menu. A single tap or a
 10 s timeout cancels and keeps recording. A plain `double-tap` (not armed) returns to the
 menu with the recording still running in the background.
+
+**Speed readout toggles on tap.** A tap on Track (when not armed to stop) cycles the speed
+unit: **km/h → m/s → pace per 500 m** (m:ss), one at a time. The **stroke rate (SPM)** sits
+to the right of the speed; it reads `--` until on-device stroke-rate derivation lands (the
+deferred motion-capture Phase 2/3 — the raw IMU is captured now, the estimate is not built).
 
 ### Sync screen counts — definitions
 
@@ -109,7 +114,7 @@ gestures, now **context-sensitive to the visible screen**:
 
 | Gesture | Pick | Track (recording) | Track (armed STOP) | Sync | Nerd | Onboarding |
 |---|---|---|---|---|---|---|
-| **Tap** (<400 ms) | move highlight | — | cancel (keep recording) | **sync now** | — | — |
+| **Tap** (<400 ms) | move highlight | toggle speed unit (km/h/m/s/pace) | cancel (keep recording) | **sync now** | — | — |
 | **Double-tap** | — | → Pick (keeps recording) | **confirm stop** → menu | → Pick | → Pick | — |
 | **Hold 3 s** | **open highlighted** | **arm STOP** | — | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
 
