@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react'
 // Two entry points: a floating button, AND a window event so a header link can
 // open it: `window.dispatchEvent(new CustomEvent('paddlesnitch:open-feedback'))`.
 // Anti-bot fields (`website` honeypot + `elapsedMs` time-trap) match
-// apps/att/src/lib/anti-bot.ts.
+// apps/web/src/lib/anti-bot.ts.
 
 const OPEN_EVENT = 'paddlesnitch:open-feedback'
 

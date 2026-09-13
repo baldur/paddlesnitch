@@ -18,7 +18,7 @@ import { pathToFileURL } from 'url'
 import { join, resolve } from 'path'
 
 const PORT = Number(process.env.LAMBDA_EMULATOR_PORT ?? 9231)
-// infra/ lives at the repo root; this script runs with cwd = apps/att.
+// infra/ lives at the repo root; this script runs with cwd = apps/web.
 const HANDLERS_DIR = resolve(process.cwd(), '../../infra/lambdas/cognito-auth')
 
 // Map Lambda function name → handler file. The names match what the CDK

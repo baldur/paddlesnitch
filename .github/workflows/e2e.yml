@@ -29,7 +29,7 @@ jobs:
       # so a bump invalidates automatically.
       - name: Resolve Playwright version
         id: pw-version
-        working-directory: apps/att
+        working-directory: apps/web
         run: |
           version=$(node -p "require('@playwright/test/package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -43,13 +43,13 @@ jobs:
 
       - name: Install Playwright (chromium + system deps)
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        working-directory: apps/att
+        working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
       # When cache hit: still need the system deps (libs aren't cached).
       - name: Install Playwright system deps (cache hit)
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        working-directory: apps/att
+        working-directory: apps/web
         run: pnpm exec playwright install-deps chromium
 
       - name: Run E2E
@@ -66,6 +66,6 @@ jobs:
         with:
           name: playwright-report
           path: |
-            apps/att/playwright-report/
-            apps/att/test-results/
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 7
