@@ -5,14 +5,19 @@ import AppHeader from '@/components/AppHeader'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
+import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
-type SessionReport = { report: DeviceDataReport; cadence: CadenceReport | null }
+type SessionReport = {
+  report: DeviceDataReport
+  cadence: CadenceReport | null
+  attitude: AttitudeReport | null
+}
 
 const fmtDate = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return iso.slice(0, 16) } }
 const fmtDist = (m?: number) => (m == null ? '—' : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`)
 const fmtDur = (s?: number | null) => { if (s == null) return '—'; const m = Math.floor(s / 60), sec = s % 60; return m ? `${m}m ${sec}s` : `${sec}s` }
 
-function Report({ report, cadence }: SessionReport) {
+function Report({ report, cadence, attitude }: SessionReport) {
   const sr = report.strokeRate
   // Derived from the fields already in the report — no server change.
   const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
@@ -79,6 +84,31 @@ function Report({ report, cadence }: SessionReport) {
           {cadence && !cadence.available && (
             <p className="mt-2 leading-relaxed">Motion sidecar present, but no cadence came out of it: {cadence.reason}</p>
           )}
+        </div>
+      )}
+
+      {attitude?.available && (
+        <div>
+          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Boat attitude</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Roll (rms)" value={`${attitude.rollRmsDeg}°`} />
+            <Stat label="Pitch (rms)" value={`${attitude.pitchRmsDeg}°`} />
+            <Stat label="Roll range" value={`${attitude.rollP5Deg}° … ${attitude.rollP95Deg}°`} />
+            <Stat
+              label="Rock evenness"
+              value={attitude.symmetry ? `${Math.abs(attitude.symmetry.imbalancePct).toFixed(0)}% off` : '—'}
+            />
+          </div>
+          <p className="text-muted leading-relaxed mt-2">
+            {attitude.symmetry && (
+              <>One side swings to {attitude.symmetry.sideADeg}°, the other to {attitude.symmetry.sideBDeg}°.{' '}</>
+            )}
+            Rowing wants roll near zero; kayaking wants it even rather than small, so the
+            imbalance is the number to watch.{' '}
+            {!attitude.axisConfident && 'Roll and pitch were too similar here to tell reliably apart — treat the split with caution. '}
+            Which side is which isn&apos;t recoverable without a magnetometer, and a constant
+            lean can&apos;t be separated from the device being mounted slightly off.
+          </p>
         </div>
       )}
 
@@ -166,7 +196,12 @@ export default function DevicesDataPage() {
     try {
       const res = await fetch(`/api/account/devices/sessions/${key}?deviceId=${encodeURIComponent(s.deviceId)}`)
       const d = await res.json()
-      setReports(r => ({ ...r, [key]: res.ok && d.report ? { report: d.report, cadence: d.cadence ?? null } : 'error' }))
+      setReports(r => ({
+        ...r,
+        [key]: res.ok && d.report
+          ? { report: d.report, cadence: d.cadence ?? null, attitude: d.attitude ?? null }
+          : 'error',
+      }))
     } catch { setReports(r => ({ ...r, [key]: 'error' })) }
   }
 
