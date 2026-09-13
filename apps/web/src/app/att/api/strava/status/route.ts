@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { getStravaTokens } from '@/lib/strava-storage'
+import { getStravaTokens, getStravaAutoImport } from '@/lib/strava-storage'
 
-// Cheap read for the UI: are we connected, and (if so) which athlete? No token
-// refresh here — we don't need a live access token just to render the badge.
+// Cheap read for the UI: are we connected, and (if so) which athlete + is
+// auto-import on? No token refresh here — we don't need a live access token just
+// to render the badge + toggle.
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ connected: false }, { status: 200 })
@@ -12,5 +13,6 @@ export async function GET() {
   return NextResponse.json({
     connected: true,
     athlete: { id: tokens.athleteId, name: tokens.athleteName },
+    autoImport: await getStravaAutoImport(user.id),
   })
 }

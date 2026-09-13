@@ -236,6 +236,10 @@ export class AttStack extends cdk.Stack {
         // plain String (it's public); the secret is a SecureString.
         STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',
         STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',
+        // Strava webhook verify token (shared secret echoed on the subscription
+        // validation handshake). SSM SecureString, fetched at runtime. See
+        // docs/features/strava-auto-import.md.
+        STRAVA_WEBHOOK_VERIFY_TOKEN_PARAM: '/att/strava-webhook-verify-token',
         // The Analyse app is now part of this single server function, so its LLM
         // insight backend (packages/analysis/src/llm.ts) runs here. Bedrock region
         // + model; NODE_ENV=production hard-pins the Bedrock backend. To bump the
@@ -286,6 +290,7 @@ export class AttStack extends cdk.Stack {
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/github-issues-token`,
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-id`,
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-secret`,
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-webhook-verify-token`,
       ],
     }))
     // kms:Decrypt is required to actually decrypt SecureString values. Without
