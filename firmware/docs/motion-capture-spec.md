@@ -80,6 +80,31 @@ roll/pitch/yaw characterisation (fuse accel+gyro to orientation; correlate with 
 and the per-stroke rhythm). Figure out mounting, and what's actually learnable. Iterate
 outing to outing.
 
+### Phase 2 status: done (2026-09-13)
+
+Both halves are built and validated against a real 65-minute capture.
+
+- **Stroke rate** — `@paddlesnitch/timing/cadence`. 58.0 spm, 22 windows, r=0.64–0.83.
+- **Roll/pitch** — `@paddlesnitch/timing/attitude`. Roll rms 4.0°, pitch 1.9°,
+  ratio 2.1:1, 13.5% left/right imbalance.
+
+What the real captures taught us, beyond what this spec predicted:
+
+- **Mounting is learnable, so it need not be fixed.** "Down" comes from the
+  session's own mean gravity and the roll axis from PCA over the tilt. A tracker
+  in a pocket gives the same answer as a deck mount — no consistent mounting
+  required after all.
+- **Accel-only tilt is wrong by ~40 %.** Stroke surge is linear acceleration that
+  reads as lean: 5.6° accel-only against 4.0° fused, same stretch. The
+  complementary filter (τ=2 s) is not optional polish.
+- **Yaw stays out of reach, and so does a constant lean.** No magnetometer means
+  no heading, so port/starboard cannot be named — the report says side A / side B.
+  And a boat held 3° down one side is indistinguishable from a device mounted 3°
+  off, so symmetry is measured about the session's own neutral. Naming sides or
+  measuring a persistent list would need a deliberate calibration pose.
+- **10 Hz is enough for all of it.** The device keeps 50 Hz on the card and
+  uploads a 10 Hz reduction; cadence and attitude are unchanged by that.
+
 ## Phase 3 — distil on-device (later, needs a spec of its own)
 
 Once the offline model is trusted, emit small per-second values into the **uploaded** track

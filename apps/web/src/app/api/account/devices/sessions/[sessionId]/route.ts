@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { getDeviceSessionTrace, getDeviceSessionMotion } from '@/lib/devices'
 import { describeDeviceData } from '@paddlesnitch/timing/device'
 import { deriveCadence } from '@paddlesnitch/timing/cadence'
+import { deriveAttitude } from '@paddlesnitch/timing/attitude'
 
 // GET /api/account/devices/sessions/[sessionId]?deviceId=X — AUTHENTICATED.
 // The raw-data diagnostic for one of the user's device sessions: every column,
@@ -23,14 +24,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ sessionI
   // Best-effort: a missing or unreadable sidecar leaves the existing honest
   // "not derivable from 1 Hz peaks" verdict in place rather than failing the page.
   let cadence = null
+  let attitude = null
   try {
     const motion = await getDeviceSessionMotion(user.id, deviceId, sessionId)
-    if (motion) cadence = deriveCadence(motion.toString('utf8'), { movingRanges: movingRangesFromTrack(csv) })
+    if (motion) {
+      const text = motion.toString('utf8')
+      const movingRanges = movingRangesFromTrack(csv)
+      cadence = deriveCadence(text, { movingRanges })
+      attitude = deriveAttitude(text, { movingRanges })
+    }
   } catch {
     cadence = null
+    attitude = null
   }
 
-  return NextResponse.json({ report, cadence })
+  return NextResponse.json({ report, cadence, attitude })
 }
 
 /**

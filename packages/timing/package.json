@@ -16,6 +16,7 @@
     "./csv": "./src/csv.ts",
     "./device": "./src/device.ts",
     "./cadence": "./src/cadence.ts",
+    "./attitude": "./src/attitude.ts",
     "./speedcoach": "./src/speedcoach.ts",
     "./unzip": "./src/unzip.ts",
     "./weather": "./src/weather.ts",
