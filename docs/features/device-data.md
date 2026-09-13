@@ -166,6 +166,44 @@ Two ways to close it, in increasing order of work:
 
 Recommendation: option 1. Say the word and I will implement it on the device.
 
+## Session diagnostics (added 2026-09-13)
+
+`describeDeviceData` reports four things beyond the column listing, all derived
+from columns firmware 0.3.0 **already writes** — no firmware change was needed to
+surface any of them. Validated against a real 60-minute paddle (`track_0041.csv`,
+3,627 rows), whose numbers appear below as the worked example.
+
+- **`capture`** — did a row actually arrive every interval? The interval is taken
+  from the file (median delta), never assumed to be 1 Hz, so a future firmware
+  logging at another rate is not reported as half-missing. The real session:
+  `intervalS 1, gaps 14, missingRows 14, capturedFraction 0.997` — fourteen
+  single-row drops spread across the hour, roughly one every 5–7 minutes, which
+  looks like the periodic SD/sync work stealing a GPS row. Nothing else surfaced
+  these; the duration alone looked complete.
+- **`gnss`** — `sats` and `hdop` first/last/min/max/median, a `fixTrend`
+  (comparing the opening and closing tenth of the fixed rows, not single rows),
+  and `altitudeSpreadM`. The real session: 8 → 14 sats, HDOP 1.5 → 0.8,
+  `improving`, altitude spread **27.8 m on flat water**. Two conclusions worth
+  keeping: the opening minutes of any trace are the least accurate part of it,
+  and GPS altitude remains unusable (see "Position: good. Altitude: not.").
+- **`motion`** — the IMU peaks split by moving vs stationary. The split is the
+  point. Real session: median 14.2 dps, **p99 while moving 24.8 dps**, peak while
+  stationary **383.3 dps** (and 4.47 g) — the device being picked up and put down.
+  `gyroPeakP99Moving` exists because the bare max is hostage to the landing, where
+  the GPS still reads ~3 km/h ("moving") while the device is being handled; that
+  single row pushed `gyroPeakMaxMoving` to 241 dps. Both are reported.
+- **`deadColumns`** — columns present in the header that are all-empty or
+  all-zero. A column constant at a *non-zero* value is deliberately **not**
+  flagged (`fix=1` all session is good news). Real session: `batt_mv` always 0 —
+  which is **correct, not a bug**: `boardBatteryMv()` returns 0 when
+  `isBatteryConnect()` is false, and that board had no cell fitted. The UI says
+  "nothing was recorded here", not "this is broken".
+
+The stroke-rate verdict now carries an `evidence` line built from the measured
+envelope, so the claim below stops being an assertion: *99% of per-second rotation
+peaks while moving stayed under 24.8 dps, while handling the device off the water
+hit 383.3 dps — that gap is what a real cadence signal would have to clear.*
+
 ## Open questions for paddlesnitch
 
 - **Do you want fix-less rows at all?** The device currently uploads whole files

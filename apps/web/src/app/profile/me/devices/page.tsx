@@ -21,11 +21,55 @@ function Report({ report }: { report: DeviceDataReport }) {
         <Stat label="Distance (gated)" value={fmtDist(report.movementDistanceM)} />
       </div>
 
+      {/* capture + fix quality: a trace can look complete on duration alone */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Stat label="Rows captured" value={`${(report.capture.capturedFraction * 100).toFixed(1)}%`} />
+        <Stat label="Dropped rows" value={report.capture.gaps === 0 ? 'none' : `${report.capture.missingRows} in ${report.capture.gaps} gap${report.capture.gaps === 1 ? '' : 's'}`} />
+        <Stat label="Satellites" value={report.gnss.satsFirst == null ? '—' : `${report.gnss.satsFirst} → ${report.gnss.satsLast}`} />
+        <Stat label="HDOP" value={report.gnss.hdopFirst == null ? '—' : `${report.gnss.hdopFirst} → ${report.gnss.hdopLast}`} />
+      </div>
+
+      {report.gnss.fixTrend && (
+        <p className="text-muted leading-relaxed">
+          {report.gnss.fixTrend === 'improving'
+            ? 'The GPS fix tightened as the session went on, so the opening minutes are the least accurate part of this trace.'
+            : report.gnss.fixTrend === 'degrading'
+              ? 'The GPS fix got worse over the session — worth checking sky view or antenna placement.'
+              : 'The GPS fix held steady across the session.'}
+          {report.gnss.altitudeSpreadM != null && report.gnss.altitudeSpreadM > 10 && (
+            <> Recorded altitude wandered <span className="tabular text-fg">{report.gnss.altitudeSpreadM} m</span> — GPS altitude is noise at this scale, so nothing here uses it.</>
+          )}
+        </p>
+      )}
+
       <div className={`border px-3 py-2 ${sr.available ? 'border-green bg-green/10 text-green' : 'border-border bg-surface text-muted'}`}>
         <span className="tracking-widest text-[10px] uppercase">Stroke rate</span>{' '}
         <span className={sr.available ? 'text-green' : 'text-fg'}>{sr.available ? 'available' : 'not derivable'}</span>
         <p className="mt-1 leading-relaxed">{sr.reason}</p>
+        {sr.evidence && <p className="mt-2 leading-relaxed text-split">{sr.evidence}</p>}
       </div>
+
+      {report.motion && report.motion.gyroPeakMax != null && (
+        <div>
+          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Motion envelope</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Rotation, median" value={`${report.motion.gyroPeakMedian ?? '—'} dps`} />
+            <Stat label="Paddling ceiling (p99)" value={report.motion.gyroPeakP99Moving == null ? '—' : `${report.motion.gyroPeakP99Moving} dps`} />
+            <Stat label="Handling peak" value={report.motion.gyroPeakMaxStationary == null ? '—' : `${report.motion.gyroPeakMaxStationary} dps`} />
+            <Stat label="Peak acceleration" value={report.motion.accelPeakMax == null ? '—' : `${report.motion.accelPeakMax} g`} />
+          </div>
+        </div>
+      )}
+
+      {report.deadColumns.length > 0 && (
+        <p className="text-muted leading-relaxed">
+          <span className="text-red">Logging nothing:</span>{' '}
+          {report.deadColumns.map(c => `${c.name} (${c.kind === 'zero' ? 'always 0' : 'always empty'})`).join(', ')}.
+          {' '}These columns exist in the file but carry no data in this session. That can be correct —
+          battery voltage reads 0 with no cell fitted, and position is empty before the GPS gets a fix —
+          so treat it as &ldquo;nothing was recorded here&rdquo;, not automatically as a fault.
+        </p>
+      )}
 
       {!report.looksUsable && (
         <p className="text-muted">This session doesn&apos;t contain a usable paddle (likely a bench/acquisition log). That&apos;s normal — the device records whenever it has power.</p>
@@ -35,7 +79,16 @@ function Report({ report }: { report: DeviceDataReport }) {
       <div>
         <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Columns ({report.columns.length})</div>
         <div className="flex flex-wrap gap-1">
-          {report.columns.map(c => <span key={c} className="border border-border bg-surface px-2 py-0.5 tabular text-[11px]">{c}</span>)}
+          {report.columns.map(c => {
+            const dead = report.deadColumns.find(d => d.name === c)
+            return (
+              <span
+                key={c}
+                title={dead ? `Present in every row but ${dead.kind === 'zero' ? 'always 0' : 'always empty'}` : undefined}
+                className={`border px-2 py-0.5 tabular text-[11px] ${dead ? 'border-red/40 bg-surface text-red' : 'border-border bg-surface'}`}
+              >{c}</span>
+            )
+          })}
         </div>
       </div>
 
