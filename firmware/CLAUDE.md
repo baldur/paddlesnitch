@@ -371,11 +371,20 @@ the new paddle. Keep names unique. The PCF8563 RTC (`boardRtcSet()`, best-effort
 is set from GPS on the first fix; the CSV columns are unchanged.
 
 **Raw motion sidecar:** during a recording the full ~50 Hz IMU stream is logged to
-`track_<stamp>_imu.csv` (`ms,ax,ay,az,gx,gy,gz`) next to the 1 Hz track file, for
-offline stroke-rate + boat-motion modelling. It **stays on the card** — upload
-sync, the Sync counts, and delete-uploaded all skip `*_imu.csv`. On-device
-stroke-rate/roll/pitch derivation is **not built** (the Track SPM readout shows
-`--`); that's the deferred Phase 2/3. See [`docs/motion-capture-spec.md`](docs/motion-capture-spec.md).
+`track_<stamp>_imu.csv` (`ms,ax,ay,az,gx,gy,gz`) next to the 1 Hz track file.
+
+The full-rate file **stays on the card** (delete-uploaded and the Sync counts
+still skip `*_imu.csv`), but a **10 Hz reduction is now uploaded** in a second
+sync pass after every track — see `writeDecimatedMotion()` in `uplink.cpp`. Two
+rules there are load-bearing: sidecars go **after** all tracks, because the server
+attaches one to an existing session and `409`s otherwise; and a sidecar's `409`
+must **not** be marked uploaded, or the motion data is stranded on the card
+forever.
+
+Server-side derivation is **built** (`@paddlesnitch/timing/cadence` and
+`/attitude`): stroke rate ~58 spm and roll/pitch/evenness come out of that 10 Hz
+stream. **On-device** derivation is still deferred — the Track SPM readout shows
+`--` — and that is Phase 3. See [`docs/motion-capture-spec.md`](docs/motion-capture-spec.md).
 
 The satellite glyph **blinks while searching and goes solid on a fix** — state
 readable from across a boat without counting anything.
