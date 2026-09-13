@@ -12,7 +12,7 @@ import AppAccountNav from '@/components/AppAccountNav'
 const PANEL = 'bg-[#0f172a]/95 border border-[#1e293b] rounded'
 type Result = ViewData & { id: string }
 
-// Shared frame for the entry-screen states so /analyse gets the same platform
+// Shared frame for the entry-screen states so /paddles gets the same platform
 // header (brand + Trials↔Analyse nav + account) as every other page.
 function Frame({ nav, children }: { nav?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -91,7 +91,7 @@ export default function AnalyseNewPage() {
   const analyse = async (body: FormData) => {
     setStatus('busy'); setError(''); setDupId(null)
     try {
-      const r = await fetch('/analyse/api/analyse', { method: 'POST', body })
+      const r = await fetch('/paddles/api/analyse', { method: 'POST', body })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
       const data = await r.json()
       // Already in the library (#178) — point the paddler at the existing one
@@ -115,13 +115,13 @@ export default function AnalyseNewPage() {
       <div className={`${PANEL} w-full max-w-md p-6 text-center`}>
         <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
         <p className="text-xs text-[#64748b] mt-2 mb-5">Sign in to analyse your paddles, save them to your diary, and track progress over time.</p>
-        <a href="/att/auth?next=/analyse/new" className="inline-block px-6 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded hover:bg-[#0284c7]">SIGN IN / SIGN UP</a>
+        <a href="/att/auth?next=/paddles/new" className="inline-block px-6 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded hover:bg-[#0284c7]">SIGN IN / SIGN UP</a>
       </div>
     </Frame>
   )
 
   return (
-    <Frame nav={<Link href="/analyse/library" className="text-muted hover:text-fg tracking-widest transition-colors">MY PADDLES</Link>}>
+    <Frame nav={<Link href="/paddles/library" className="text-muted hover:text-fg tracking-widest transition-colors">MY PADDLES</Link>}>
       <div className={`${PANEL} w-full max-w-md p-6`}>
         <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
         <p className="text-xs text-[#64748b] mt-1 mb-4">See what actually happened — pieces, rests, stroke-rate, wind &amp; flow — and keep a paddling diary.</p>
@@ -135,7 +135,7 @@ export default function AnalyseNewPage() {
         {dupId && (
           <div className="mb-4 text-xs border border-[#334155] bg-[#0b1220] px-3 py-3 rounded">
             <p className="text-[#94a3b8]">You&apos;ve already analysed this paddle — it&apos;s in your library.</p>
-            <Link href={`/analyse/${dupId}`} className="mt-2 inline-block px-4 py-2 bg-[#0369a1] text-white font-bold tracking-widest rounded hover:bg-[#0284c7]">OPEN IT →</Link>
+            <Link href={`/paddles/${dupId}`} className="mt-2 inline-block px-4 py-2 bg-[#0369a1] text-white font-bold tracking-widest rounded hover:bg-[#0284c7]">OPEN IT →</Link>
           </div>
         )}
 

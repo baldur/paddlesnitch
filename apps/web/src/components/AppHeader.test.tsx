@@ -22,8 +22,8 @@ describe('AppHeader (shared AppShell wrapper)', () => {
       </AppHeader>,
     )
     expect(html).toContain('paddlesnitch')      // brand
-    expect(html).toContain('TRIALS')            // cross-app nav
-    expect(html).toContain('ANALYSE')
+    expect(html).toContain('TRIALS')            // cross-section nav
+    expect(html).toContain('PADDLES')
     expect(html).toContain('BREADCRUMB')
     expect(html).toContain('EXTRA')
     // Report/Profile/Settings/Sign out moved into the account dropdown

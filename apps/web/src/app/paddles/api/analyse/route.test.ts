@@ -50,7 +50,7 @@ beforeEach(async () => {
 })
 afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); delete process.env.DATA_DIR })
 
-describe('POST /analyse', () => {
+describe('POST /paddles', () => {
   it('analyses a GPX upload, returns a result, and saves it to the library', async () => {
     const res = await postWith(new File([gpx()], 'paddle.gpx'))
     expect(res.status).toBe(200)

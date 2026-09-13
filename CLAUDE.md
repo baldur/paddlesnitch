@@ -96,7 +96,7 @@ Run `pnpm test` before every commit. If tests fail, fix them — do not disable 
 
 ```
 apps/
-  web/        (pkg "web")             — the whole web app: /att (Trials) + /analyse (Analyse) + /profile + /api/trpc. Next, NO basePath; /att and /analyse are baked into src/app/att/ and src/app/analyse/. (The /att and /analyse URL prefixes are user-facing and unchanged; only the app directory was renamed att→web.)
+  web/        (pkg "web")             — the whole web app: /att (Trials) + /paddles (Paddles, formerly /analyse) + /profile + /api/trpc. Next, NO basePath; /att and /paddles are baked into src/app/att/ and src/app/paddles/. The header tabs are TRIALS and PADDLES. Old /analyse URLs 301-redirect to /paddles (next.config redirects). The Analyse *domain package* stays @paddlesnitch/analysis and the upload route stays /paddles/api/analyse — only the user-facing section prefix moved.
 packages/
   core/       @paddlesnitch/core      — platform primitives (auth, storage, cognito, strava, url, shared types, paddles/paddle-store)
   timing/     @paddlesnitch/timing    — GPS/track domain (geo incl. projectRoute, parsers, weather/flow/conditions, track types)

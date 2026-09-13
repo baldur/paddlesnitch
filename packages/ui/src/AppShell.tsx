@@ -14,7 +14,7 @@ import type { ReactNode } from 'react'
 export default function AppShell({
   active,
   attHref = '/att',
-  analyseHref = '/analyse',
+  analyseHref = '/paddles',
   breadcrumb,
   nav,
   account,
@@ -26,13 +26,9 @@ export default function AppShell({
   nav?: ReactNode        // optional page-specific nav items
   account?: ReactNode    // the host app's wired <AccountNav />
 }) {
-  // Plain <a>, not next/link: these are cross-app boundary links (root, /att,
-  // /analyse). The Analyse app runs under basePath '/analyse', and next/link
-  // prepends the basePath to absolute hrefs — which would turn /att into
-  // /analyse/att, /analyse into /analyse/analyse, etc. A full-nav <a> is correct
-  // here (att and Analyse are separate apps behind one CloudFront anyway) and
-  // works identically in both apps. App-supplied `nav` children stay same-app
-  // links (they SHOULD get the basePath).
+  // Plain <a>, not next/link, for the section tabs — simple full-nav between the
+  // top-level sections (root, /att, /paddles). App-supplied `nav` children can
+  // still use next/link for same-section navigation.
   const tab = (href: string, label: string, on: boolean) => (
     <a href={href} className={`tracking-widest transition-colors ${on ? 'text-fg' : 'text-muted hover:text-fg'}`}>{label}</a>
   )
@@ -42,7 +38,7 @@ export default function AppShell({
         <a href="/" className="font-bold tracking-widest text-fg shrink-0">paddlesnitch</a>
         <nav className="flex gap-3 shrink-0">
           {tab(attHref, 'TRIALS', active === 'att')}
-          {tab(analyseHref, 'ANALYSE', active === 'analyse')}
+          {tab(analyseHref, 'PADDLES', active === 'analyse')}
         </nav>
         {breadcrumb && <div className="min-w-0 text-muted truncate">{breadcrumb}</div>}
       </div>

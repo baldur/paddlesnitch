@@ -7,8 +7,8 @@ import { capture, startAnalytics } from './analytics'
 // capture pump (flush timer + unload listeners) and records a `pageview` on every
 // route change. Uses window.location.pathname (not usePathname) for the captured
 // value so it's the TRUE full path in both apps — under Analyse's basePath
-// '/analyse', usePathname() omits the prefix, which would collide with att paths;
-// the full path keeps `/analyse/library` distinct from att's `/library`.
+// '/paddles', usePathname() omits the prefix, which would collide with att paths;
+// the full path keeps `/paddles/library` distinct from att's `/library`.
 // usePathname is only the change trigger.
 export default function Analytics() {
   const pathname = usePathname()

@@ -26,6 +26,7 @@ export default function AttAccountNav() {
   return (
     <AccountNav
       user={user}
+      paddlesHref="/paddles/library"
       profileHref={user ? "/profile/me" : "/att"}
       accountHref="/profile/me/settings"
       signInHref="/att/auth"

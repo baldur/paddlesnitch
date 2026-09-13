@@ -27,7 +27,7 @@ describe('#210 — landing page is compact on mobile', () => {
 
     expect(html).toContain('Paddle Analysis')
     expect(html).toContain('TRY ANALYSIS')
-    expect(html).toContain('href="/analyse"')
+    expect(html).toContain('href="/paddles"')
   })
 
   it('hides the long marketing paragraphs on mobile (details only from sm: up)', () => {

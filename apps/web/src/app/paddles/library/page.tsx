@@ -29,18 +29,18 @@ export default function LibraryPage() {
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">MY PADDLES</h1>
-          <Link href="/analyse/new" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">+ ANALYSE A PADDLE</Link>
+          <Link href="/paddles/new" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">+ ANALYSE A PADDLE</Link>
         </div>
 
         {sel.length === 2 && (
-          <Link href={`/analyse/compare?a=${sel[0]}&b=${sel[1]}`}
+          <Link href={`/paddles/compare?a=${sel[0]}&b=${sel[1]}`}
             className="block mb-4 px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded text-center">COMPARE SELECTED (2) →</Link>
         )}
         {sel.length === 1 && <p className="text-[11px] text-[#64748b] mb-4">Select one more to compare.</p>}
 
         {sessions === undefined && <p className="text-sm text-[#64748b]">Loading…</p>}
-        {sessions === null && <p className="text-sm text-[#64748b]">Sign in to see your saved paddles. <a href="/att/auth?next=/analyse/library" className="text-[#0369a1]">Sign in</a></p>}
-        {sessions && sessions.length === 0 && <p className="text-sm text-[#64748b]">No paddles yet. <Link href="/analyse/new" className="text-[#0369a1]">Analyse your first one →</Link></p>}
+        {sessions === null && <p className="text-sm text-[#64748b]">Sign in to see your saved paddles. <a href="/att/auth?next=/paddles/library" className="text-[#0369a1]">Sign in</a></p>}
+        {sessions && sessions.length === 0 && <p className="text-sm text-[#64748b]">No paddles yet. <Link href="/paddles/new" className="text-[#0369a1]">Analyse your first one →</Link></p>}
 
         <div className="flex flex-col gap-2">
           {sessions?.map(s => (
@@ -60,7 +60,7 @@ export default function LibraryPage() {
                 {s.note?.trim() && <div className="text-xs text-[#a78bfa] mt-1 truncate">📓 {s.note}</div>}
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
-                <Link href={`/analyse/${s.id}`} className="px-3 py-1.5 bg-[#0369a1] text-white text-[10px] font-bold tracking-widest rounded hover:bg-[#0284c7]">ANALYSE →</Link>
+                <Link href={`/paddles/${s.id}`} className="px-3 py-1.5 bg-[#0369a1] text-white text-[10px] font-bold tracking-widest rounded hover:bg-[#0284c7]">ANALYSE →</Link>
                 <button onClick={() => del(s.id)} className="text-[10px] tracking-widest text-[#64748b] hover:text-[#b91c1c]">DELETE</button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 // Section layout for the Analyse app (now folded into the unified web app under
-// /analyse). The root layout owns <html>/<body>/font/globals/footer; this only
+// /paddles). The root layout owns <html>/<body>/font/globals/footer; this only
 // scopes the page title + description for the analyse routes.
 export const metadata: Metadata = {
   title: 'Paddle Analysis — paddlesnitch',

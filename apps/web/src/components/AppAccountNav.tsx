@@ -18,9 +18,10 @@ export default function AppAccountNav() {
   return (
     <AccountNav
       user={user}
+      paddlesHref="/paddles/library"
       profileHref={user ? "/profile/me" : "/att"}
       accountHref="/profile/me/settings"
-      signInHref="/att/auth?next=/analyse"
+      signInHref="/att/auth?next=/paddles"
       onSignOut={onSignOut}
     />
   )
