@@ -96,7 +96,7 @@ Run `pnpm test` before every commit. If tests fail, fix them — do not disable 
 
 ```
 apps/
-  att/        (pkg "att")             — the whole web app: /att (Trials) + /analyse (Analyse) + /profile + /api/trpc. Next, NO basePath; /att and /analyse are baked into src/app/att/ and src/app/analyse/. (dir still named att; a rename to apps/web is a later cosmetic step)
+  web/        (pkg "web")             — the whole web app: /att (Trials) + /analyse (Analyse) + /profile + /api/trpc. Next, NO basePath; /att and /analyse are baked into src/app/att/ and src/app/analyse/. (The /att and /analyse URL prefixes are user-facing and unchanged; only the app directory was renamed att→web.)
 packages/
   core/       @paddlesnitch/core      — platform primitives (auth, storage, cognito, strava, url, shared types, paddles/paddle-store)
   timing/     @paddlesnitch/timing    — GPS/track domain (geo incl. projectRoute, parsers, weather/flow/conditions, track types)
@@ -321,7 +321,7 @@ The shared UI shell that gives both apps a single-app feel (🚧 in progress —
 
 ## App: ATT — Automated Time Trials
 
-Served at `/att` (from `apps/att`; the `/att` prefix is baked into `src/app/att/`, no Next `basePath`). The sections below describe ATT's domain, auth, and features. Geo/timing/parser code lives in `@paddlesnitch/timing`; auth/storage/cognito/strava in `@paddlesnitch/core` (att keeps re-export shims at the old `src/lib/*` paths).
+Served at `/att` (from `apps/web`; the `/att` prefix is baked into `src/app/att/`, no Next `basePath`). The sections below describe ATT's domain, auth, and features. Geo/timing/parser code lives in `@paddlesnitch/timing`; auth/storage/cognito/strava in `@paddlesnitch/core` (the app keeps re-export shims at the old `src/lib/*` paths).
 
 ### Domain Model
 
@@ -770,7 +770,7 @@ Cross-cutting: how to run the apps, test, deploy, and the shared conventions + d
 
 ### Development Workflow
 
-> **Monorepo note.** One app now: `pnpm dev` = `pnpm --filter att dev` (:3000, serves /att + /analyse + /profile + /api/trpc) and `pnpm test` = `pnpm --filter att test` (the whole suite — att + the moved Analyse tests + tRPC contract tests). There is no more `pnpm dev:analysis`.
+> **Monorepo note.** One app now (`apps/web`, pkg `web`): `pnpm dev` = `pnpm --filter web dev` (:3000, serves /att + /analyse + /profile + /api/trpc) and `pnpm test` = `pnpm --filter web test` (the whole suite — Trials + the merged Analyse tests + tRPC contract tests). There is no more `pnpm dev:analysis`.
 
 #### Day-to-day
 

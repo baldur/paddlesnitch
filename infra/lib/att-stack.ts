@@ -212,7 +212,7 @@ export class AttStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../../apps/att/.open-next/server-functions/default')
+        path.join(__dirname, '../../apps/web/.open-next/server-functions/default')
       ),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(30),
@@ -338,7 +338,7 @@ export class AttStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../../apps/att/.open-next/image-optimization-function')
+        path.join(__dirname, '../../apps/web/.open-next/image-optimization-function')
       ),
       memorySize: 1536,
       timeout: cdk.Duration.seconds(25),
@@ -450,7 +450,7 @@ export class AttStack extends cdk.Stack {
     // changes, invalidate that path manually.
     const deployAssets = new s3deploy.BucketDeployment(this, 'DeployAssets', {
       sources: [
-        s3deploy.Source.asset(path.join(__dirname, '../../apps/att/.open-next/assets')),
+        s3deploy.Source.asset(path.join(__dirname, '../../apps/web/.open-next/assets')),
       ],
       destinationBucket: assetsBucket,
       destinationKeyPrefix: '_assets',
