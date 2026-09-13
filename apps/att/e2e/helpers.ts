@@ -32,7 +32,7 @@ export async function signUpFlow(
   await page.getByLabel(/I have read and agree/i).check()
 
   await page.getByRole('button', { name: 'CREATE ACCOUNT', exact: true }).click()
-  await expect(page).toHaveURL('/att', { timeout: 10_000 })
+  await expect(page).toHaveURL('/', { timeout: 10_000 })
   return { email, displayName }
 }
 
@@ -51,7 +51,7 @@ export async function signInFlow(
   await page.locator('input[type="email"]').first().fill(email)
   await page.locator('input[type="password"]').fill(password)
   await page.locator('button[type="submit"]:has-text("SIGN IN")').click()
-  await expect(page).toHaveURL(/\/att(?:$|\?|\/)/, { timeout: 10_000 })
+  await expect(page).toHaveURL('/', { timeout: 10_000 })
 }
 
 // Clears auth cookies so the rest of the spec runs as an anonymous

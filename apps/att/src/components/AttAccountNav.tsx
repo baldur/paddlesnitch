@@ -20,7 +20,7 @@ export default function AttAccountNav() {
     await fetch('/att/api/auth/logout', { method: 'POST' })
     setUser(null)
     router.refresh()
-    router.push('/att')
+    router.push('/')
   }
 
   return (

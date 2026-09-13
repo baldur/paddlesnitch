@@ -29,7 +29,7 @@ function ResetForm() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error ?? 'Could not reset password')
       // Server auto-signs the user in if it can; if it couldn't, send to login.
-      if (data?.signedIn) router.push('/att')
+      if (data?.signedIn) router.push('/')
       else router.push('/att/auth?reset=ok')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not reset password')

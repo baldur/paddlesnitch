@@ -2,23 +2,25 @@ import { test, expect } from '@playwright/test'
 import { freshEmail, signUpFlow } from '../helpers'
 
 // Critical path #1 of 5: a new user creates an account and lands on the
-// authenticated home page. Covers:
+// authenticated home page (the platform front door `/`, which renders the
+// signed-in paddle dashboard). Covers:
 //   - signup form submission with the ToS checkbox
 //   - automatic sign-in (cookies set on signup response)
-//   - redirect to /att and the page actually rendering
+//   - redirect to / and the page actually rendering
 //
 // This is the cheapest happy-path smoke test. If it breaks, almost
 // nothing else works.
 
-test('a new user can sign up and lands on /att with their session', async ({ page }) => {
+test('a new user can sign up and lands on / with their session', async ({ page }) => {
   const email = freshEmail('signup-spec')
 
   await signUpFlow(page, { email, displayName: 'Signup Tester' })
 
-  // We're on /att and the hero is visible. Anything tighter ties the
-  // test to copy that changes often.
-  await expect(page).toHaveURL('/att')
-  await expect(page.getByRole('heading', { name: /Automated Time Trials/i })).toBeVisible()
+  // We're on the signed-in home `/` — the personal paddle dashboard (its
+  // heading is "<NAME>'S PADDLES"). Anything tighter ties the test to copy
+  // that changes often.
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { level: 1, name: /PADDLES/i })).toBeVisible()
 
   // Verify the session is actually authenticated. When signed in the
   // account nav renders a dropdown trigger (aria-haspopup="menu") that
