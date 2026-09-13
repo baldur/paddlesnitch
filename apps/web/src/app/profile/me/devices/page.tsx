@@ -11,14 +11,27 @@ const fmtDur = (s?: number | null) => { if (s == null) return '—'; const m = M
 
 function Report({ report }: { report: DeviceDataReport }) {
   const sr = report.strokeRate
+  // Derived from the fields already in the report — no server change.
+  const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
+  const sampleRateHz = report.timeSpanS && report.timeSpanS > 0 ? report.rows / report.timeSpanS : null
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
       {/* what we can make of it */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Stat label="Rows" value={String(report.rows)} />
         <Stat label="With GPS fix" value={`${report.fixedRows} / ${report.rows}`} />
+        <Stat label="No-fix rows" value={String(report.noFixRows)} />
         <Stat label="Duration" value={fmtDur(report.timeSpanS)} />
         <Stat label="Distance (gated)" value={fmtDist(report.movementDistanceM)} />
+        <Stat label="Avg speed" value={avgSpeedKmh == null ? '—' : `${avgSpeedKmh.toFixed(1)} km/h`} />
+        <Stat label="Sample rate" value={sampleRateHz == null ? '—' : `${sampleRateHz.toFixed(1)} Hz`} />
+      </div>
+
+      {/* Motion sensors present in the file — accelerometer and gyroscope. */}
+      <div className="border border-border bg-surface px-3 py-2 flex flex-wrap gap-x-6 gap-y-1">
+        <span className="tracking-widest text-[10px] uppercase text-muted">Motion sensors</span>
+        <span>Accelerometer <span className={report.hasImu ? 'text-green' : 'text-muted'}>{report.hasImu ? 'yes' : 'no'}</span></span>
+        <span>Gyroscope <span className={report.hasGyro ? 'text-green' : 'text-muted'}>{report.hasGyro ? 'yes' : 'no'}</span></span>
       </div>
 
       <div className={`border px-3 py-2 ${sr.available ? 'border-green bg-green/10 text-green' : 'border-border bg-surface text-muted'}`}>

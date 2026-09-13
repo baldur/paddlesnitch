@@ -35,7 +35,7 @@ function CompareInner() {
   if (!A || !B) return (
     <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0] flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-[#64748b]">Couldn&apos;t load both paddles.</p>
-      <Link href="/analyse/library" className="text-xs tracking-widest text-[#0369a1]">← MY PADDLES</Link>
+      <Link href="/paddles/library" className="text-xs tracking-widest text-[#0369a1]">← MY PADDLES</Link>
     </div>
   )
 
@@ -49,13 +49,13 @@ function CompareInner() {
       <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">COMPARE</h1>
-          <Link href="/analyse/library" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← MY PADDLES</Link>
+          <Link href="/paddles/library" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← MY PADDLES</Link>
         </div>
 
         <div className="grid grid-cols-[1fr_auto_auto] gap-3 mb-2 text-[10px] tracking-widest text-[#64748b]">
           <span></span>
-          <Link href={`/analyse/${A.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(A.paddledAt)}</Link>
-          <Link href={`/analyse/${B.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(B.paddledAt)}</Link>
+          <Link href={`/paddles/${A.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(A.paddledAt)}</Link>
+          <Link href={`/paddles/${B.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(B.paddledAt)}</Link>
         </div>
 
         <Row label="duration" a={fmtDurWords(ra.durationS)} b={fmtDurWords(rb.durationS)} />

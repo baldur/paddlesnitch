@@ -3,7 +3,7 @@ import { paddleTotals, type PaddleCard } from '@paddlesnitch/core/paddles'
 
 // The signed-in platform home — mirrors the Analyse paddle dashboard so a
 // returning paddler lands on their own stuff, not the marketing page. Rendered
-// server-side from the shared paddle store. Cross-app links to /analyse use
+// server-side from the shared paddle store. Cross-app links to /paddles use
 // plain <a> (the Analyse app runs under its own basePath in prod; two ports in
 // dev — see platform-monorepo docs).
 
@@ -38,7 +38,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 function Card({ c }: { c: PaddleCard }) {
   const tag = c.sourceType === 'strava' ? ' · STRAVA' : c.sourceType === 'trial' ? ' · TIME TRIAL' : c.sourceType === 'device' ? ' · TRACKER' : ''
   return (
-    <a href={`/analyse/${c.id}`} className="border border-border rounded p-3 flex gap-3 items-center hover:border-primary transition-colors">
+    <a href={`/paddles/${c.id}`} className="border border-border rounded p-3 flex gap-3 items-center hover:border-primary transition-colors">
       <RouteThumb route={c.route} size={56} />
       <div className="flex-1 min-w-0">
         <div className="text-[10px] text-muted tracking-widest">{fmtDate(c.paddledAt).toUpperCase()}{tag}{c.boatClass ? <span className="text-split"> · {c.boatClass}</span> : ''}</div>
@@ -56,7 +56,7 @@ export default function PersonalHome({ name, cards }: { name?: string; cards: Pa
     <section className="flex-1 px-4 py-6 max-w-3xl mx-auto w-full">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-bold tracking-widest text-fg">{name ? `${name.toUpperCase()}'S PADDLES` : 'MY PADDLES'}</h1>
-        <a href="/analyse/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest rounded hover:bg-primary transition-colors">+ ANALYSE A PADDLE</a>
+        <a href="/paddles/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest rounded hover:bg-primary transition-colors">+ ANALYSE A PADDLE</a>
       </div>
 
       {/* Profile summary — the paddler's headline stats. */}
@@ -70,14 +70,14 @@ export default function PersonalHome({ name, cards }: { name?: string; cards: Pa
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Recent paddles</h2>
         {cards.length > RECENT && (
-          <a href="/analyse/library" className="text-[11px] tracking-widest text-muted hover:text-fg">VIEW ALL {cards.length} →</a>
+          <a href="/paddles/library" className="text-[11px] tracking-widest text-muted hover:text-fg">VIEW ALL {cards.length} →</a>
         )}
       </div>
 
       {cards.length === 0 ? (
         <div className={`${PANEL} p-6 text-center`}>
           <p className="text-sm text-muted">No paddles yet.</p>
-          <a href="/analyse/new" className="mt-3 inline-block px-5 py-2.5 bg-primary text-white text-xs font-bold tracking-widest rounded hover:bg-primary transition-colors">ANALYSE YOUR FIRST ONE →</a>
+          <a href="/paddles/new" className="mt-3 inline-block px-5 py-2.5 bg-primary text-white text-xs font-bold tracking-widest rounded hover:bg-primary transition-colors">ANALYSE YOUR FIRST ONE →</a>
         </div>
       ) : (
         <div className="flex flex-col gap-2">

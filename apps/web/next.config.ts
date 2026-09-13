@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
     return [
       { source: '/att/u/:id', destination: '/profile/:id', permanent: true },
       { source: '/att/account', destination: '/profile/me/settings', permanent: true },
+      // The Analyse section moved to /paddles ("Analyse" was a verb; paddles are
+      // the thing). Keep old links / bookmarks / shared-paddle URLs working.
+      { source: '/analyse', destination: '/paddles', permanent: true },
+      { source: '/analyse/:path*', destination: '/paddles/:path*', permanent: true },
     ]
   },
 };

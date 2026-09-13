@@ -124,7 +124,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
       setShareState('working')
       try {
         const d = await shareMut.mutateAsync({ id: sessionId })
-        if (d.shareId) setShareUrl(`${window.location.origin}/analyse/shared/${d.shareId}`)
+        if (d.shareId) setShareUrl(`${window.location.origin}/paddles/shared/${d.shareId}`)
       } catch { /* leave the panel open; the paddler can reopen to retry */ }
       finally { setShareState('idle') }
     }
@@ -218,7 +218,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const raceSelected = () => {
     if (!sessionId || aIdx == null || bIdx == null || selected.size === 0) return
     const qs = new URLSearchParams({ src: sessionId, a: String(aIdx), b: String(bIdx), ids: [...selected].join(',') })
-    router.push(`/analyse/compare/section?${qs.toString()}`)
+    router.push(`/paddles/compare/section?${qs.toString()}`)
   }
 
   const analyseSection = async () => {
@@ -323,8 +323,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         <div className="flex flex-wrap justify-end gap-1">
           {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>NEW</button>}
           {readOnly
-            ? <Link href="/analyse/new" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>ANALYSE YOUR OWN →</Link>
-            : <Link href="/analyse/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>}
+            ? <Link href="/paddles/new" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>ANALYSE YOUR OWN →</Link>
+            : <Link href="/paddles/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>}
           {sessionId && !readOnly && <button onClick={toggleShare} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showShare ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>SHARE</button>}
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>DIARY</button>}
           {sessionId && <button onClick={() => setShowBoat(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showBoat ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>BOAT</button>}
