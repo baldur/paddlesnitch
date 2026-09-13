@@ -12,7 +12,7 @@ export default function AppAccountNav() {
   const onSignOut = async () => {
     try { await fetch('/att/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ }
     // Full nav to the platform home (a server component that re-reads auth).
-    window.location.href = '/att'
+    window.location.href = '/'
   }
 
   return (

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const base = canonicalBaseUrl(req)
   // Preserve the `next` query param so we can bounce the user back to where
   // they were trying to go after sign-in.
-  const next = req.nextUrl.searchParams.get('next') ?? '/att'
+  const next = req.nextUrl.searchParams.get('next') ?? '/'
 
   // If the visitor is already signed in, the Strava OAuth round-trip is
   // useless and prone to failure (an expired or single-use authorization
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   // connect button on /profile/me/settings, which has its own flow.
   const existingUser = await getAuthUser()
   if (existingUser) {
-    return NextResponse.redirect(new URL(next.startsWith('/') ? next : '/att', base))
+    return NextResponse.redirect(new URL(next.startsWith('/') ? next : '/', base))
   }
 
   const state = randomBytes(24).toString('hex')

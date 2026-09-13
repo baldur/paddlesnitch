@@ -28,14 +28,14 @@ function mockAuth(idToken: string | null) {
 }
 
 describe('#55 — /att/api/auth/strava/init when already signed in', () => {
-  it('redirects an already-signed-in user back to /att instead of starting OAuth', async () => {
+  it('redirects an already-signed-in user to the home page instead of starting OAuth', async () => {
     const u = await makeUser('Already In')
     mockAuth(u.idToken)
     const res = await stravaInit(new NextRequest('http://x/att/api/auth/strava/init'))
     expect(res.status).toBe(307)
     const location = res.headers.get('location') ?? ''
     expect(location).not.toContain('strava.com')
-    expect(location).toMatch(/\/att\b/)
+    expect(new URL(location).pathname).toBe('/')
   })
 
   it('honours ?next= when bouncing the already-signed-in user', async () => {
@@ -46,16 +46,16 @@ describe('#55 — /att/api/auth/strava/init when already signed in', () => {
     expect(res.headers.get('location') ?? '').toMatch(/\/profile\/me\/settings/)
   })
 
-  it('clamps an open-redirect attempt back to /att', async () => {
+  it('clamps an open-redirect attempt back to the home page', async () => {
     const u = await makeUser('Open Redirect Probe')
     mockAuth(u.idToken)
     const res = await stravaInit(new NextRequest('http://x/att/api/auth/strava/init?next=https://evil.example.com/x'))
     expect(res.status).toBe(307)
     const location = res.headers.get('location') ?? ''
     // We should NOT be sent to evil.example.com — anything that doesn't
-    // start with `/` is treated as untrusted and rewritten to /att.
+    // start with `/` is treated as untrusted and rewritten to the home page `/`.
     expect(location).not.toContain('evil.example.com')
-    expect(location).toMatch(/\/att\b/)
+    expect(new URL(location).pathname).toBe('/')
   })
 
   it('an unauthenticated visitor still gets redirected to Strava', async () => {

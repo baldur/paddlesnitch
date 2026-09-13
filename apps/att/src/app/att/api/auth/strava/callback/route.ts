@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const cookieStore = await cookies()
   const stateCookie = cookieStore.get('strava_signin_state')?.value
-  const nextCookie = cookieStore.get('strava_signin_next')?.value ?? '/att'
+  const nextCookie = cookieStore.get('strava_signin_next')?.value ?? '/'
 
   // Clear both transient cookies regardless of outcome — they're single-use.
   const clearCookies = (res: NextResponse) => {
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
   }
 
   // 5. Set the auth cookies and bounce to where the user was headed.
-  const safeNext = nextCookie.startsWith('/') ? nextCookie : '/att'
+  const safeNext = nextCookie.startsWith('/') ? nextCookie : '/'
   const res = NextResponse.redirect(new URL(safeNext, base))
   setAuthCookies(res.cookies, signInResult.idToken, signInResult.refreshToken)
   return clearCookies(res)

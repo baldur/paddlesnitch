@@ -7,7 +7,7 @@ import StravaButton from '@/components/strava/StravaButton'
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') ?? '/att'
+  const next = searchParams.get('next') ?? '/'
 
   // Redirect if already signed in ( /me now answers 200 with a null body when
   // signed out, so key off the body, not r.ok )
