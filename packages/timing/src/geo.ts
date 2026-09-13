@@ -415,3 +415,28 @@ export function formatTime(seconds: number): string {
   const secs = seconds % 60
   return `${mins}:${secs.toFixed(1).padStart(4, '0')}`
 }
+
+// Equirectangular projection of lat/lng into a w×h box (padding `pad`),
+// aspect-corrected by cos(lat) and fit preserving shape; north is up. Pure +
+// client-safe — used for the share-card polyline and the route thumbnails on
+// both apps (the analysis library/dashboard and the platform home).
+export function projectRoute(
+  points: { lat: number; lng: number }[],
+  w: number, h: number, pad: number,
+): [number, number][] {
+  if (points.length < 2) return []
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  const lats = points.map(p => p.lat)
+  const midLat = (Math.min(...lats) + Math.max(...lats)) / 2
+  const kx = Math.cos((midLat * Math.PI) / 180) || 1e-9
+  const xs = points.map(p => p.lng * kx)
+  const ys = points.map(p => -p.lat) // invert so north is up
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const minY = Math.min(...ys), maxY = Math.max(...ys)
+  const spanX = maxX - minX || 1e-9, spanY = maxY - minY || 1e-9
+  const iw = w - 2 * pad, ih = h - 2 * pad
+  const scale = Math.min(iw / spanX, ih / spanY)
+  const offX = pad + (iw - spanX * scale) / 2
+  const offY = pad + (ih - spanY * scale) / 2
+  return xs.map((_, i) => [round1(offX + (xs[i] - minX) * scale), round1(offY + (ys[i] - minY) * scale)])
+}

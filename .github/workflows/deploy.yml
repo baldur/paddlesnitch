@@ -36,11 +36,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Build att OpenNext bundle
+      # Single unified app (att now serves /att + /analyse); one OpenNext bundle.
+      - name: Build OpenNext bundle
         run: pnpm build:open-next
-
-      - name: Build analysis OpenNext bundle
-        run: pnpm --filter analysis build:open-next
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5

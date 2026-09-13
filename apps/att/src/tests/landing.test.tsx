@@ -44,3 +44,18 @@ describe('#210 — landing page is compact on mobile', () => {
     expect(html).toContain('py-8')
   })
 })
+
+describe('campaign landing variant', () => {
+  it('shows no campaign marker on the default landing', () => {
+    expect(html).not.toContain('data-campaign')
+  })
+
+  it('shows a campaign marker when a variant is rendered', () => {
+    const variantHtml = renderToStaticMarkup(<LandingContent variant="example1" />)
+    expect(variantHtml).toContain('data-campaign="example1"')
+    expect(variantHtml).toContain('campaign: example1')
+    // Same product content as the default — it's the default landing + a marker.
+    expect(variantHtml).toContain('Automated Time Trials')
+    expect(variantHtml).toContain('Paddle Analysis')
+  })
+})

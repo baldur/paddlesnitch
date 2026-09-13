@@ -81,8 +81,10 @@ export class AttStack extends cdk.Stack {
         prefix: '_assets/_next/static/',
         expiration: cdk.Duration.days(90),
       }, {
-        // Same sweep for the analysis app's hashed assets (deployed with
-        // prune:false under _analyse-assets/analyse/, see DeployAnalysisAssets).
+        // Sweep the RETIRED analysis-app asset prefix. The Analyse app is now part
+        // of the single server function (its assets live under _assets/_next/ like
+        // the rest), so nothing new lands here — this rule ages out the leftovers
+        // from the old two-app deploy.
         id: 'expire-orphaned-analysis-hashed-assets',
         prefix: '_analyse-assets/analyse/_next/static/',
         expiration: cdk.Duration.days(90),
@@ -234,10 +236,28 @@ export class AttStack extends cdk.Stack {
         // plain String (it's public); the secret is a SecureString.
         STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',
         STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',
+        // The Analyse app is now part of this single server function, so its LLM
+        // insight backend (packages/analysis/src/llm.ts) runs here. Bedrock region
+        // + model; NODE_ENV=production hard-pins the Bedrock backend. To bump the
+        // narration model, see docs/features/personable-insights.md (the grant
+        // below already covers inference-profile/*).
+        BEDROCK_REGION: 'eu-west-1',
+        LLM_MODEL: 'mistral.mixtral-8x7b-instruct-v0:1',
       },
     })
 
     dataBucket.grantReadWrite(serverFn)
+
+    // Bedrock InvokeModel for the Analyse LLM insight (now served by this
+    // function). Foundation-model ARNs carry no account (AWS-owned); inference
+    // profiles live in this account/region.
+    serverFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['bedrock:InvokeModel'],
+      resources: [
+        'arn:aws:bedrock:*::foundation-model/*',
+        `arn:aws:bedrock:eu-west-1:${this.account}:inference-profile/*`,
+      ],
+    }))
 
     // ses:SendEmail authorises against multiple resources at once — the same
     // trap the Cognito trigger grant documents above. The server function sends
@@ -335,88 +355,6 @@ export class AttStack extends cdk.Stack {
     })
 
     // ---------------------------------------------------------------------------
-    // Analysis app — second OpenNext server Lambda, served at /analyse
-    // ---------------------------------------------------------------------------
-    // Same shared Cognito pool + data bucket as att (one account, per-app S3
-    // key prefixes — the analysis app writes under analysis/{userId}/…). The app
-    // uses Bedrock for its LLM insight (src/lib/llm.ts) and Strava for imports,
-    // so it needs bedrock:InvokeModel + the same Strava SSM/KMS grants ServerFn
-    // has. It does NOT call any Cognito admin API (getAuthUser verifies JWTs via
-    // JWKS), so no cognito-idp permissions here.
-    const analysisFn = new lambda.Function(this, 'AnalysisFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, '../../apps/analysis/.open-next/server-functions/default')
-      ),
-      memorySize: 1024,
-      timeout: cdk.Duration.seconds(30),
-      environment: {
-        DATA_BUCKET: dataBucket.bucketName,
-        NODE_ENV: 'production',
-        NEXT_PUBLIC_BASE_URL: 'https://paddlesnitch.com',
-        COGNITO_USER_POOL_ID: userPool.userPoolId,
-        COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
-        COGNITO_REGION: this.region,
-        // Bedrock region for the LLM insight backend (llm.ts). NODE_ENV=production
-        // hard-pins the Bedrock backend.
-        BEDROCK_REGION: 'eu-west-1',
-        // The Bedrock model the insight generator calls. Mistral Mixtral 8x7b:
-        // ON_DEMAND in eu-west-1 (auto-enables on first invoke — no console
-        // step), and the same base as the local Ollama `dolphin-mixtral:8x7b`
-        // so prompt-tuning maps between dev and prod. Verified via Converse.
-        //
-        // To BUMP the narration model for the personable-insights feature
-        // (docs/features/personable-insights.md), switch this to a Claude Haiku
-        // or Nova Lite eu-west-1 INFERENCE-PROFILE id, e.g.
-        //   'eu.anthropic.claude-3-5-haiku-20241022-v1:0'  (Claude Haiku 3.5)
-        //   'eu.amazon.nova-lite-v1:0'                       (Amazon Nova Lite)
-        // The `BedrockInsighter` already uses model-agnostic Converse, so it's a
-        // one-line change here. Before flipping: (1) enable model access for that
-        // model in the Bedrock console (unlike Mixtral's auto-enable), and (2)
-        // confirm the exact profile id in this region. The IAM grant already
-        // covers `inference-profile/*`. Billed to AWS, NOT the Anthropic quota.
-        LLM_MODEL: 'mistral.mixtral-8x7b-instruct-v0:1',
-        // Strava API credentials — shared with att, fetched from SSM at runtime.
-        STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',
-        STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',
-      },
-    })
-
-    dataBucket.grantReadWrite(analysisFn)
-
-    // Bedrock InvokeModel for the LLM insight. Foundation-model ARNs carry no
-    // account (AWS-owned); inference profiles live in this account/region.
-    analysisFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel'],
-      resources: [
-        'arn:aws:bedrock:*::foundation-model/*',
-        `arn:aws:bedrock:eu-west-1:${this.account}:inference-profile/*`,
-      ],
-    }))
-
-    // Strava credentials via SSM — same grants ServerFn has (see the notes on
-    // the ServerFn SSM + KMS statements above for why kms:Decrypt is required).
-    analysisFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['ssm:GetParameter'],
-      resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-id`,
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-secret`,
-      ],
-    }))
-    analysisFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['kms:Decrypt'],
-      resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
-      conditions: {
-        StringEquals: { 'kms:ViaService': `ssm.${this.region}.amazonaws.com` },
-      },
-    }))
-
-    const analysisUrl = analysisFn.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-    })
-
-    // ---------------------------------------------------------------------------
     // CloudFront — behaviors match OpenNext v4 output manifest
     // Assets are deployed under _assets/ prefix; origin path translates back
     // ---------------------------------------------------------------------------
@@ -431,23 +369,6 @@ export class AttStack extends cdk.Stack {
     // S3 origin with /_assets prefix — CloudFront prepends this when fetching
     const assetsOrigin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket, {
       originPath: '/_assets',
-    })
-
-    // Analysis app server origin (its own OpenNext Lambda function URL).
-    const analysisOrigin = new origins.HttpOrigin(
-      cdk.Fn.select(2, cdk.Fn.split('/', analysisUrl.url))
-    )
-
-    // Analysis assets S3 origin. The analysis app has basePath '/analyse', so the
-    // browser requests assets at /analyse/_next/*. OpenNext still writes them to
-    // disk under _next/* (basePath is applied to emitted URLs, not on-disk paths),
-    // so we deploy them into the shared assets bucket under the key prefix
-    // `_analyse-assets/analyse/…` (DeployAnalysisAssets below). originPath only
-    // PREPENDS — it can't strip the /analyse the request carries — so pointing it
-    // at /_analyse-assets turns a request for /analyse/_next/static/x into the S3
-    // key _analyse-assets/analyse/_next/static/x, which is where the file lands.
-    const analysisAssetsOrigin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket, {
-      originPath: '/_analyse-assets',
     })
 
     const certificate = acm.Certificate.fromCertificateArn(this, 'Certificate',
@@ -493,21 +414,9 @@ export class AttStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-        // Analysis app (basePath /analyse). MUST be listed before /analyse* so
-        // the more specific asset pattern wins — static JS/CSS/fonts served from
-        // S3, everything else (pages + API) from the analysis server Lambda.
-        '/analyse/_next/*': {
-          origin: analysisAssetsOrigin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
-        '/analyse*': {
-          origin: analysisOrigin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        },
+        // /analyse is now part of the single app: its pages + API hit the default
+        // server origin and its assets are under /_next/* (served from S3 above),
+        // so no /analyse-specific behaviors are needed any more.
       },
     })
 
@@ -548,24 +457,11 @@ export class AttStack extends cdk.Stack {
       prune: false,
     })
 
-    // Analysis app assets. Deployed under _analyse-assets/analyse/ so the key
-    // includes the /analyse basePath segment the browser sends (see
-    // analysisAssetsOrigin above). Same prune:false + upload-before-Lambda story.
-    const deployAnalysisAssets = new s3deploy.BucketDeployment(this, 'DeployAnalysisAssets', {
-      sources: [
-        s3deploy.Source.asset(path.join(__dirname, '../../apps/analysis/.open-next/assets')),
-      ],
-      destinationBucket: assetsBucket,
-      destinationKeyPrefix: '_analyse-assets/analyse',
-      prune: false,
-    })
-
-    // Order the deploy so each server Lambda only goes live AFTER its new hashed
+    // Order the deploy so the server Lambda only goes live AFTER its new hashed
     // assets are in S3 (see property 2 above). Without this, CloudFormation may
     // flip the Lambda first, leaving a window where new HTML references chunks
     // that aren't uploaded yet → 404s across the site during every deploy.
     serverFn.node.addDependency(deployAssets)
-    analysisFn.node.addDependency(deployAnalysisAssets)
 
     // ---------------------------------------------------------------------------
     // DNS — www alias pointing to same CloudFront distribution

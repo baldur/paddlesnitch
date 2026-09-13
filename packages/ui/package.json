@@ -8,10 +8,14 @@
     "./AccountNav": "./src/AccountNav.tsx",
     "./ContactBanner": "./src/ContactBanner.tsx",
     "./FeedbackWidget": "./src/FeedbackWidget.tsx",
+    "./RouteThumb": "./src/RouteThumb.tsx",
     "./Analytics": "./src/Analytics.tsx",
     "./analytics": "./src/analytics.ts",
     "./metrics-events": "./src/metrics-events.ts",
     "./tokens.css": "./src/tokens.css"
+  },
+  "dependencies": {
+    "@paddlesnitch/timing": "workspace:*"
   },
   "peerDependencies": {
     "next": "16.2.6",

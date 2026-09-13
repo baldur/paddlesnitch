@@ -1,0 +1,23 @@
+{
+  "name": "@paddlesnitch/analysis",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./analysis": "./src/analysis.ts",
+    "./analysis-store": "./src/analysis-store.ts",
+    "./athlete-profile": "./src/athlete-profile.ts",
+    "./history-stats": "./src/history-stats.ts",
+    "./llm": "./src/llm.ts",
+    "./share-card": "./src/share-card.ts",
+    "./similar": "./src/similar.ts",
+    "./trials": "./src/trials.ts",
+    "./device-sessions": "./src/device-sessions.ts"
+  },
+  "dependencies": {
+    "@paddlesnitch/core": "workspace:*",
+    "@paddlesnitch/timing": "workspace:*",
+    "@aws-sdk/client-bedrock-runtime": "^3.1086.0",
+    "nanoid": "^5.1.11"
+  }
+}
