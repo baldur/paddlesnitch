@@ -488,6 +488,7 @@ Users can connect their Strava account once and then import any recent water-spo
 - **Activity filter**: the picker shows only `Kayaking`, `Canoeing`, `Rowing`, `StandUpPaddling`, `VirtualRow` — see `WATER_SPORT_TYPES` in `strava.ts`. Other sports can still be imported via the URL tab.
 - **Streams → TrackPoint**: `streamsToTrack(latlng, time, startDate)` joins parallel arrays + the activity's start date into the same `TrackPoint[]` shape that GPX/FIT/CSV parsers produce, so `processTrack()` is sport-agnostic.
 - **Persisted "raw trace"**: Strava imports save a JSON snapshot (`strava-{id}.json`) instead of a GPX file. Same directory layout (`trials/{trialId}/entries/{userId}/{entryId}/trace.json`), same audit story.
+- **Auto-import (webhook) — [`strava-auto-import.md`](docs/features/strava-auto-import.md)**: new water-sport activities appear in **My Paddles** automatically via the Strava **Webhook Events API**. Callback `GET|POST /api/strava/webhook` (public — Strava is the caller; GET echoes `hub.challenge`, POST acks 200 fast + processes in `after()`). An `activity create` → map `owner_id`→user via the `strava-athletes/{id}` index → if auto-import is on, `importStravaActivity()` → the shared `analyseAndSave` pipeline (water-sport filtered, de-duped). An `athlete` deauthorize event → disconnect (delete tokens + index). **Opt-in default-ON** per connected user (`users/{userId}/strava-prefs.json`, toggle in Account → Strava). One-time ops: set `/att/strava-webhook-verify-token` (SSM) then `pnpm --filter web strava:webhook create` (Strava allows ONE subscription/app; the callback must be live first — like the SES rule-set activation). Read-only, never posts; fast-ack; deauth deletes tokens — see the record for the full Strava-guideline mapping.
 
 #### Env vars
 
@@ -497,6 +498,8 @@ Users can connect their Strava account once and then import any recent water-spo
 | `STRAVA_CLIENT_ID_PARAM` | env (prod, set by CDK) | Name of SSM String parameter to fetch at runtime: `/att/strava-client-id`. |
 | `STRAVA_CLIENT_SECRET` | `.env.local` (dev only) | Direct override for local dev. |
 | `STRAVA_CLIENT_SECRET_PARAM` | env (prod, set by CDK) | Name of SSM SecureString to fetch at runtime: `/att/strava-client-secret`. |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN` | `.env.local` (dev only) | Direct override — the shared secret echoed on the webhook subscription handshake. |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN_PARAM` | env (prod, set by CDK) | Name of SSM SecureString to fetch at runtime: `/att/strava-webhook-verify-token`. |
 
 Both SSM parameters are set once with the AWS CLI:
 ```bash

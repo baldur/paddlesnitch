@@ -18,7 +18,8 @@
     "cognito:init": "tsx --env-file-if-exists=.env.local scripts/cognito-init.ts",
     "rivers": "tsx scripts/download-rivers.ts",
     "build:open-next": "npx open-next build",
-    "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy"
+    "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy",
+    "strava:webhook": "tsx scripts/strava-webhook.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1086.0",
