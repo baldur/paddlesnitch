@@ -6,6 +6,8 @@
   "exports": {
     "./analysis": "./src/analysis.ts",
     "./analysis-store": "./src/analysis-store.ts",
+    "./pipeline": "./src/pipeline.ts",
+    "./strava-import": "./src/strava-import.ts",
     "./athlete-profile": "./src/athlete-profile.ts",
     "./history-stats": "./src/history-stats.ts",
     "./llm": "./src/llm.ts",

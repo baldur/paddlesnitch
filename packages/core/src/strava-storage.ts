@@ -47,3 +47,19 @@ export async function putAthleteIndex(athleteId: number, userId: string): Promis
 export async function deleteAthleteIndex(athleteId: number): Promise<void> {
   await deleteObject(athleteKey(athleteId))
 }
+
+// ---- Auto-import preference (Strava webhook) ----
+// Whether new water-sport activities are auto-imported as paddles. Stored
+// separately from tokens at users/{userId}/strava-prefs.json. DEFAULT ON: an
+// absent file means enabled, so connecting Strava opts a user in (they can turn
+// it off in Account → Strava). See docs/features/strava-auto-import.md.
+const prefsKey = (userId: string) => `users/${userId}/strava-prefs.json`
+
+export async function getStravaAutoImport(userId: string): Promise<boolean> {
+  const rec = await getJson<{ autoImport?: boolean }>(prefsKey(userId))
+  return rec?.autoImport ?? true
+}
+
+export async function setStravaAutoImport(userId: string, autoImport: boolean): Promise<void> {
+  await putJson(prefsKey(userId), { autoImport })
+}

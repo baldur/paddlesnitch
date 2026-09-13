@@ -23,6 +23,12 @@ const WATER_SPORT_TYPES = new Set([
   'Kayaking', 'Canoeing', 'Rowing', 'StandUpPaddling', 'VirtualRow',
 ])
 
+// True for the sport types we auto-import / surface in the picker. Exported so
+// the webhook can filter a new activity before pulling its streams.
+export function isWaterSport(sportType: string | undefined | null): boolean {
+  return !!sportType && WATER_SPORT_TYPES.has(sportType)
+}
+
 // Both halves of the Strava OAuth app credential live in SSM. Caching is
 // module-level so warm Lambda invocations skip the SSM round-trip; the
 // process.env overrides exist for local dev and tests.
@@ -282,6 +288,65 @@ export async function listActivities(
     // 80% bike rides. The user can still import via URL if they want one.
     .filter(a => WATER_SPORT_TYPES.has(a.sportType))
   return { activities, hasMore: raw.length === perPage }
+}
+
+// The sport type of one activity (GET /activities/{id}). Used by the auto-import
+// webhook to decide whether a newly-created activity is a paddle before pulling
+// its streams. Null if Strava won't return it (deleted / no access).
+export async function getActivitySport(accessToken: string, activityId: number): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/activities/${activityId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) return null
+  const a = (await res.json()) as { sport_type?: string; type?: string }
+  return a.sport_type ?? a.type ?? null
+}
+
+// ---- Webhook (push subscription) — see docs/features/strava-auto-import.md ----
+// The verify token is a shared secret between us and Strava, echoed on the
+// GET validation handshake. Env override for dev/tests; SSM SecureString in prod.
+let cachedVerifyToken: string | undefined
+export async function getWebhookVerifyToken(): Promise<string | undefined> {
+  const direct = process.env.STRAVA_WEBHOOK_VERIFY_TOKEN
+  if (direct) return direct
+  if (cachedVerifyToken) return cachedVerifyToken
+  const paramName = process.env.STRAVA_WEBHOOK_VERIFY_TOKEN_PARAM
+  if (!paramName) return undefined
+  cachedVerifyToken = await fetchSsmParam(paramName, true)
+  return cachedVerifyToken
+}
+
+export type StravaSubscription = { id: number; callback_url: string }
+
+// Strava allows ONE push subscription per API application. These three helpers
+// back the one-time ops script (apps/web/scripts/strava-webhook.ts).
+export async function createWebhookSubscription(callbackUrl: string, verifyToken: string): Promise<StravaSubscription> {
+  const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
+  if (!clientId || !clientSecret) throw new Error('strava_not_configured')
+  const body = new URLSearchParams({
+    client_id: clientId, client_secret: clientSecret,
+    callback_url: callbackUrl, verify_token: verifyToken,
+  })
+  const res = await fetch(`${API_BASE}/push_subscriptions`, { method: 'POST', body })
+  if (!res.ok) throw new Error(`strava_subscribe_failed_${res.status}: ${await res.text()}`)
+  return (await res.json()) as StravaSubscription
+}
+
+export async function viewWebhookSubscriptions(): Promise<StravaSubscription[]> {
+  const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
+  if (!clientId || !clientSecret) throw new Error('strava_not_configured')
+  const qs = new URLSearchParams({ client_id: clientId, client_secret: clientSecret })
+  const res = await fetch(`${API_BASE}/push_subscriptions?${qs}`)
+  if (!res.ok) throw new Error(`strava_view_subs_failed_${res.status}`)
+  return (await res.json()) as StravaSubscription[]
+}
+
+export async function deleteWebhookSubscription(id: number): Promise<void> {
+  const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
+  if (!clientId || !clientSecret) throw new Error('strava_not_configured')
+  const qs = new URLSearchParams({ client_id: clientId, client_secret: clientSecret })
+  const res = await fetch(`${API_BASE}/push_subscriptions/${id}?${qs}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) throw new Error(`strava_delete_sub_failed_${res.status}`)
 }
 
 type StreamSet = {

@@ -12,7 +12,7 @@ import type { AuthUser } from '@/lib/types'
 
 type StravaStatus =
   | { connected: false }
-  | { connected: true; athlete: { id: number; name: string } }
+  | { connected: true; athlete: { id: number; name: string }; autoImport: boolean }
 
 // Banner copy keyed off the ?strava= query param the callback sets when it
 // finishes. Keeps redirects round-trippable instead of relying on session state.
@@ -201,6 +201,21 @@ function AccountPageInner() {
     }
   }
 
+  async function toggleAutoImport(enabled: boolean) {
+    // Optimistic: reflect the choice immediately, revert on failure.
+    setStrava(s => (s?.connected ? { ...s, autoImport: enabled } : s))
+    try {
+      const res = await fetch('/att/api/strava/auto-import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      if (!res.ok) throw new Error('Could not update auto-import')
+    } catch (err) {
+      setStrava(s => (s?.connected ? { ...s, autoImport: !enabled } : s))
+      setError(err instanceof Error ? err.message : 'Could not update auto-import')
+    }
+  }
+
   async function downloadExport() {
     setError('')
     setWorking('export')
@@ -383,6 +398,22 @@ function AccountPageInner() {
                       {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
                     </button>
                   </div>
+                  {/* Auto-import toggle (default on). New water-sport activities
+                      flow into My Paddles automatically via the Strava webhook. */}
+                  <label className="flex items-center justify-between gap-4 border border-border px-4 py-3 mt-2 cursor-pointer">
+                    <span className="text-sm">
+                      <span className="text-fg">Auto-import new paddles</span>
+                      <span className="block text-xs text-muted mt-0.5">
+                        New kayak / canoe / rowing / SUP activities on Strava appear in My Paddles automatically.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="accent-primary w-5 h-5 shrink-0"
+                      checked={strava.autoImport}
+                      onChange={e => toggleAutoImport(e.target.checked)}
+                    />
+                  </label>
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
                   <PoweredByStrava className="mt-2" />
                   <p className="text-xs text-muted mt-2">
