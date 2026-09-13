@@ -17,7 +17,7 @@ const fmtDate = (iso?: string) => { if (!iso) return '—'; try { return new Dat
 const fmtDist = (m?: number) => (m == null ? '—' : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`)
 const fmtDur = (s?: number | null) => { if (s == null) return '—'; const m = Math.floor(s / 60), sec = s % 60; return m ? `${m}m ${sec}s` : `${sec}s` }
 
-function Report({ report, cadence, attitude }: SessionReport) {
+function Report({ report, cadence, attitude, sessionId }: SessionReport & { sessionId: string }) {
   const sr = report.strokeRate
   // Derived from the fields already in the report — no server change.
   const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
@@ -89,7 +89,12 @@ function Report({ report, cadence, attitude }: SessionReport) {
 
       {attitude?.available && (
         <div>
-          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Boat attitude</div>
+          <div className="text-[10px] text-muted tracking-widest uppercase mb-1 flex items-center justify-between gap-2">
+            <span>Boat attitude</span>
+            <Link href={`/profile/me/devices/${sessionId}`} className="text-primary normal-case tracking-normal">
+              SEE THE CHARTS →
+            </Link>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Stat label="Roll (rms)" value={`${attitude.rollRmsDeg}°`} />
             <Stat label="Pitch (rms)" value={`${attitude.pitchRmsDeg}°`} />
@@ -234,7 +239,7 @@ export default function DevicesDataPage() {
                     {reports[s.sessionId] === 'loading' && <p className="text-xs text-muted">Reading…</p>}
                     {reports[s.sessionId] === 'error' && <p className="text-xs text-red">Could not read this session.</p>}
                     {reports[s.sessionId] && reports[s.sessionId] !== 'loading' && reports[s.sessionId] !== 'error' && (
-                      <Report {...(reports[s.sessionId] as SessionReport)} />
+                      <Report {...(reports[s.sessionId] as SessionReport)} sessionId={s.sessionId} />
                     )}
                   </div>
                 )}
