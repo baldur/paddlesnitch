@@ -182,8 +182,17 @@ Build with `-DGPS_ECHO=1` to mirror raw NMEA to serial:
 
 Confirmed by reading its ID register (`0x00`=`0x05`, chip id `0x7C`), not
 assumed. It sits on the **second SPI bus, shared with the microSD card**
-(`IMU_CS` 34, card on `SPI_CS` 47) — probe or configure it before mounting the
-card so two chip-selects are not contending.
+(`IMU_CS` 34, card on `SPI_CS` 47). Two consequences, both now handled:
+- **Init order:** `setup()` now probes + inits the IMU **before** mounting the SD
+  card (they contend on the shared bus otherwise — the documented cause of
+  intermittent `probe 0xFF / init failed`). `imuInit()` also retries with a
+  sensor-rail (ALDO1/ALDO2) power-cycle to recover a chip wedged by a warm reset.
+  **Caveat:** a deeply-wedged chip can still need a true unplug — and flashing is a
+  warm reset, so after a flash the IMU sometimes needs one power-cycle to come back.
+- **Runtime contention:** `imuPoll()` runs on core 1; the uplink task touches the
+  SD on core 0. Concurrent access corrupts both (SD `Select Failed` storms that
+  once hung the Sync screen). The loop skips `imuPoll()` while `uplinkSdBusy()` —
+  only ever set when not recording, so no logged sample is lost.
 
 Verified reading real gravity flat on a desk: `a=(0.01,0.08,1.03)g`, so Z is up
 and the scaling is right. Sampled at 50 Hz but logged at 1 Hz: `imuPoll()`
@@ -232,13 +241,20 @@ Server contracts:
 how far each column can be trusted. **Keep the data spec in step with any change
 to the CSV columns or the sensor pipeline** — paddlesnitch makes segmentation and
 filtering decisions from it.
-**None of those endpoints exist yet** — the firmware reports the HTTP status of
-every call so a missing endpoint shows up as `claim HTTP 404`, not silence.
+**Those endpoints are live** (`/api/devices/claim`, `/api/devices/token`,
+`/api/devices/sessions`, shipped #214/#215/#216) — verified end to end from this
+board (a real session uploaded `201`). The firmware still reports the HTTP status
+of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
 
 - `src/netcfg.*` — WiFi credentials, server URL and device token in **NVS**
   (its own partition, so reflashing the app does not clear them). SoftAP captive
   portal for first-run setup.
-- `src/uplink.*` — the claim handshake and session upload.
+- `src/uplink.*` — the claim handshake and session upload. Also owns the Sync-screen
+  tallies (`computeCounts`), the manual delete of confirmed uploads
+  (`deleteConfirmedAll`, via the Sync screen), and **`uplinkSdBusy()`**: the IMU and
+  SD share the SPI bus, so the loop skips `imuPoll()` while the task scans/syncs/
+  deletes (see the IMU/SD note below). Sync fires at boot, on recording-stop, on a
+  `sync now` tap, and every 5 min — never while recording.
 
 Serial commands (tracker env): `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
 `PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`. `SSID`/`PASS` take the
@@ -255,9 +271,10 @@ Also note `NO_AP_FOUND` means the radio never saw the network — a wrong passwo
 reports an auth failure instead. And the ESP32-S3 is **2.4 GHz only**, so a
 5 GHz-only network produces the same symptom.
 
-Verified end to end on hardware (2026-09-05): portal → WiFi join → DNS → TLS
-against the pinned CA → real HTTP response from paddlesnitch.com (a 404, since
-the endpoints do not exist yet).
+Verified end to end on hardware (2026-09-12): `SYNC` → WiFi → TLS against the
+pinned CA → `POST /api/devices/sessions` with the bearer token → **HTTP 201** for
+real sessions (incl. a 570 KB track). Earlier (2026-09-05) the same path reached a
+404 before the endpoints shipped.
 
 ### Onboarding must never need a laptop
 
@@ -337,12 +354,13 @@ Hold fires *while held* so the screen changes under your thumb. A tap is only
 confirmed once the 400 ms double-tap window closes — the price of distinguishing
 the three gestures on one button.
 
-**Recording is deliberate, not automatic.** `storageInit()` mounts the card but
-opens no file; `storageStartSession(stamp)` opens one on a tap. Logging and LoRa
-transmission are both gated on it. Before this, every power-on created a file and
-the card filled with bench noise — all 31 sessions uploaded in testing contained
-no usable track points. If you change this, update `../../docs/features/device-data.md`:
-paddlesnitch segments uploads based on what that file promises.
+**Recording auto-starts on the Track screen** once there's a fix — opening Track
+*is* the decision to record (no "press to record"). `storageInit()` mounts the
+card but opens no file; `storageStartSession(stamp)` opens one when the Track
+screen has a fix. Still fix-gated (a fix-less session is the junk that made all 31
+early uploads `422`), and still one file per paddle, not per power-on. Stopping is
+a deliberate **hold → double-tap confirm** on Track. The full screen/gesture model
+is [`docs/device-states-spec.md`](docs/device-states-spec.md).
 
 **Session files are named `track_YYYYMMDD_HHMMSS.csv`** from GPS time at record
 start (`storageStartSession(stamp)`), with an NVS-counter fallback
@@ -351,6 +369,13 @@ for upload: the server dedupes by `deviceId`+filename, so the old reused
 `track_NNNN` names collided after a card reformat and the server `409`-dropped
 the new paddle. Keep names unique. The PCF8563 RTC (`boardRtcSet()`, best-effort)
 is set from GPS on the first fix; the CSV columns are unchanged.
+
+**Raw motion sidecar:** during a recording the full ~50 Hz IMU stream is logged to
+`track_<stamp>_imu.csv` (`ms,ax,ay,az,gx,gy,gz`) next to the 1 Hz track file, for
+offline stroke-rate + boat-motion modelling. It **stays on the card** — upload
+sync, the Sync counts, and delete-uploaded all skip `*_imu.csv`. On-device
+stroke-rate/roll/pitch derivation is **not built** (the Track SPM readout shows
+`--`); that's the deferred Phase 2/3. See [`docs/motion-capture-spec.md`](docs/motion-capture-spec.md).
 
 The satellite glyph **blinks while searching and goes solid on a fix** — state
 readable from across a boat without counting anything.
