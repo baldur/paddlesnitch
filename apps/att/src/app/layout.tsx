@@ -6,6 +6,7 @@ import CookieNotice from '@/components/CookieNotice'
 import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
 import AttContactBanner from '@/components/AttContactBanner'
 import Analytics from '@/components/Analytics'
+import TRPCProvider from '@/components/TRPCProvider'
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -28,12 +29,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={ibmPlexMono.className}>
       <body className="min-h-screen flex flex-col bg-bg text-fg">
-        <AttContactBanner />
-        {children}
-        <Footer />
-        <CookieNotice />
-        <FeedbackWidget />
-        <Analytics />
+        <TRPCProvider>
+          <AttContactBanner />
+          {children}
+          <Footer />
+          <CookieNotice />
+          <FeedbackWidget />
+          <Analytics />
+        </TRPCProvider>
       </body>
     </html>
   )

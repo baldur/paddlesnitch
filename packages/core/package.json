@@ -14,7 +14,9 @@
     "./url": "./src/url.ts",
     "./strava": "./src/strava.ts",
     "./strava-storage": "./src/strava-storage.ts",
-    "./devices": "./src/devices.ts"
+    "./devices": "./src/devices.ts",
+    "./paddles": "./src/paddles.ts",
+    "./paddle-store": "./src/paddle-store.ts"
   },
   "dependencies": {
     "@paddlesnitch/timing": "workspace:*",

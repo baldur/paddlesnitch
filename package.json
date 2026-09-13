@@ -4,8 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter att dev",
-    "dev:analysis": "node scripts/dev-analysis.mjs",
-    "build:analysis": "pnpm --filter analysis build",
     "next": "pnpm --filter att next",
     "build": "pnpm --filter att build",
     "start": "pnpm --filter att start",

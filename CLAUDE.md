@@ -92,29 +92,32 @@ Run `pnpm test` before every commit. If tests fail, fix them — do not disable 
 
 ### What this is
 
-**One repo, one pnpm workspace** (`pnpm-workspace.yaml` → `apps/*` + `packages/*`). Two apps over two shared packages:
+**One repo, one pnpm workspace** (`pnpm-workspace.yaml` → `apps/*` + `packages/*`). **ONE Next app over the shared packages** (att + Analyse were merged — see [`unified-app-and-api.md`](docs/features/unified-app-and-api.md)):
 
 ```
 apps/
-  att/        (pkg "att")             — Automated Time Trials, served at /att       (Next; /att baked into src/app/att/, no basePath)
-  analysis/   (pkg "analysis")        — the Analyse app, served at /analyse         (Next, basePath: '/analyse')
+  att/        (pkg "att")             — the whole web app: /att (Trials) + /analyse (Analyse) + /profile + /api/trpc. Next, NO basePath; /att and /analyse are baked into src/app/att/ and src/app/analyse/. (dir still named att; a rename to apps/web is a later cosmetic step)
 packages/
-  core/       @paddlesnitch/core      — platform primitives shared by both apps (auth, storage, cognito, strava, url, shared types)
-  timing/     @paddlesnitch/timing    — GPS/track domain shared by both apps
-  ui/         @paddlesnitch/ui        — shared UI shell + design tokens (both apps) (geo, parsers, weather/flow/conditions, track types)
+  core/       @paddlesnitch/core      — platform primitives (auth, storage, cognito, strava, url, shared types, paddles/paddle-store)
+  timing/     @paddlesnitch/timing    — GPS/track domain (geo incl. projectRoute, parsers, weather/flow/conditions, track types)
+  analysis/   @paddlesnitch/analysis  — the Analyse domain/service layer (analysis engine, analysis-store, similar, trials, device-sessions, llm, share-card, history-stats, athlete-profile)
+  api/        @paddlesnitch/api       — the shared, typed tRPC router (over core/timing/analysis); consumed by web (SSR + client) and, later, mobile
+  ui/         @paddlesnitch/ui        — shared UI shell + design tokens + RouteThumb
 firmware/     LilyGO T-Beam S3 Supreme tracker firmware — C/C++, built with PlatformIO, NOT pnpm
 ```
 
 **`firmware/` is not a workspace package.** It's the hardware tracker's PlatformIO project (`pio run -e tracker|receiver|displayprobe`), deliberately outside the `apps/*`/`packages/*` globs — it has no `package.json`, `pnpm install`/`pnpm test`/`pnpm build` do not touch it, and its `.pio/` build output (~750 MB) is gitignored. Its contract with the platform lives in [`docs/features/device-uplink.md`](docs/features/device-uplink.md) + [`device-data.md`](docs/features/device-data.md) (see the Devices section under Ops); keep firmware and those specs in step. `firmware/CLAUDE.md` covers the firmware itself.
 
-Both apps use the **same** Cognito user pool, S3 bucket, and CloudFront distribution; in prod CloudFront routes by path (`/att/*`, `/analyse/*`) to per-app Lambdas. Locally the two apps run on two ports (`pnpm dev` → att :3000, `pnpm dev:analysis` → analysis :3001).
+One Cognito user pool, one S3 bucket, one CloudFront distribution, **one server Lambda** (`ServerFn`) serving everything. Locally it's **one port** — `pnpm dev` → :3000 serves `/att`, `/analyse`, `/profile`, and `/api/trpc`. (There is no more `pnpm dev:analysis`.)
+
+**API: tRPC.** JSON endpoints are typed tRPC procedures in `@paddlesnitch/api`, mounted at `/api/trpc`. SSR calls the router in-process via `createCaller`; the browser (and, later, an Expo mobile app) call it over HTTP with a shared React client (`@/lib/trpc`, provider in the root layout). Auth context accepts the `tt_id` cookie (web) **or** a `Bearer` Cognito JWT (mobile). **File uploads stay REST** (multipart: `POST /analyse/api/analyse`, the att trace upload) and **firmware device endpoints stay REST**. See [`unified-app-and-api.md`](docs/features/unified-app-and-api.md).
 
 **Conventions that keep the monorepo working:**
-- Import **per-file subpaths** (`@paddlesnitch/core/auth`, `@paddlesnitch/timing/geo`), not the barrel. Both apps `transpilePackages` the two packages in `next.config.ts`.
-- The extraction from att was **in-place**: each moved module left a **re-export shim** at its old `apps/att/src/lib/*.ts` path, so existing att `@/lib/*` imports (and att's domain `types.ts`) resolve unchanged. When adding shared code, put it in the package and keep/add the shim if att already imported it.
-- **Don't duplicate** a domain type/util across apps — if both need it, it belongs in `core` or `timing` (that's how the boat-class model landed in `core`).
+- Import **per-file subpaths** (`@paddlesnitch/core/auth`, `@paddlesnitch/analysis/analysis-store`), not the barrel. The app `transpilePackages` all five packages in `next.config.ts`.
+- Client bundles import only client-safe subpaths (pure). Storage-backed modules are separate server-only subpaths (e.g. `core/paddles` pure vs `core/paddle-store` server; the analysis engine `@paddlesnitch/analysis/analysis` is pure, `analysis-store` is server).
+- **Don't duplicate** a domain type/util — if more than one place needs it, it belongs in a package (`core`/`timing`/`analysis`). The Analyse domain lives in `@paddlesnitch/analysis`, not the app.
 
-See [`platform-monorepo.md`](docs/features/platform-monorepo.md).
+See [`platform-monorepo.md`](docs/features/platform-monorepo.md) (original extraction) and [`unified-app-and-api.md`](docs/features/unified-app-and-api.md) (the merge + tRPC API).
 
 ### Feature design records
 
@@ -767,15 +770,14 @@ Cross-cutting: how to run the apps, test, deploy, and the shared conventions + d
 
 ### Development Workflow
 
-> **Monorepo note.** The root scripts are **att-scoped**: `pnpm dev` = `pnpm --filter att dev` (att on :3000) and `pnpm test` = `pnpm --filter att test`. Run the **Analyse** app with `pnpm dev:analysis` (:3001) and its own suite with `pnpm --filter analysis test`. Both apps must be green before a deploy that touches shared packages. Where the sections below say "pnpm dev"/"pnpm test" unqualified, they mean the att app (historical — the workflow predates the second app).
+> **Monorepo note.** One app now: `pnpm dev` = `pnpm --filter att dev` (:3000, serves /att + /analyse + /profile + /api/trpc) and `pnpm test` = `pnpm --filter att test` (the whole suite — att + the moved Analyse tests + tRPC contract tests). There is no more `pnpm dev:analysis`.
 
 #### Day-to-day
 
 ```
-pnpm dev          # att: cognito-local on :9229, init, Next.js on :3000
-pnpm dev:analysis # analysis app on :3001 (shares the same cognito + data)
+pnpm dev          # cognito-local on :9229, init, Next.js on :3000 (whole app)
 # make changes
-pnpm test         # att vitest suite — must be green before shipping
+pnpm test         # vitest suite — must be green before shipping
 pnpm build        # TypeScript compile check — no errors allowed
 ```
 

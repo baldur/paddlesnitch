@@ -1,5 +1,9 @@
 import Link from 'next/link'
 import AppHeader from '@/components/AppHeader'
+import PersonalHome from '@/components/PersonalHome'
+import { resolveCampaign } from '@/lib/campaigns'
+import { getAuthUser } from '@/lib/auth'
+import { createCaller } from '@paddlesnitch/api'
 
 export const metadata = {
   title: 'paddlesnitch.com — tools for the river',
@@ -39,11 +43,46 @@ const PRODUCTS: Product[] = [
   },
 ]
 
-export default function LandingPage() {
+// The campaign landings we can serve. `example1` reuses the default content
+// with a visible marker; add genuinely different variants here as needed.
+const LANDINGS: Record<'default' | 'example1', (key: string) => React.ReactNode> = {
+  default: () => <LandingContent />,
+  example1: () => <LandingContent variant="example1" />,
+}
+
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ campaign?: string | string[] }>
+}) {
+  // Signed in → the personal paddle dashboard (their stuff, not marketing).
+  // Signed out → the marketing landing, tailored by any ?campaign= variant.
+  const user = await getAuthUser()
+  if (user) {
+    // SSR via the tRPC router in-process (no HTTP hop) — same procedure the
+    // browser + mobile call over the wire.
+    const { cards } = await createCaller({ user }).paddles.list()
+    return (
+      <main className="flex-1 flex flex-col">
+        <AppHeader breadcrumb={<span className="text-muted text-xs tracking-widest hidden sm:inline">TOOLS FOR THE RIVER</span>} />
+        <PersonalHome name={user.displayName} cards={cards} />
+      </main>
+    )
+  }
+
+  const { campaign } = await searchParams
+  const r = resolveCampaign(campaign)
+  // Log every campaign arrival (served variant or fallback) so it's traceable
+  // in the server (CloudWatch) logs. Only logs when a campaign was requested,
+  // so a normal visit stays quiet.
+  if (r.requested) {
+    console.log(`[campaign] ${JSON.stringify({ requested: r.requested, landing: r.landing, found: r.found })}`)
+  }
+  const render = LANDINGS[r.landing] ?? LANDINGS.default
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader breadcrumb={<span className="text-muted text-xs tracking-widest hidden sm:inline">TOOLS FOR THE RIVER</span>} />
-      <LandingContent />
+      {render(r.landing)}
     </main>
   )
 }
@@ -53,10 +92,20 @@ export default function LandingPage() {
 // (#210): a short hero and one-line product cards so both products sit
 // above the fold on a phone; the marketing paragraphs only appear from
 // `sm:` up.
-export function LandingContent() {
+export function LandingContent({ variant }: { variant?: string } = {}) {
   return (
     <>
       <section className="border-b border-border px-4 py-8 md:py-14 text-center bg-surface">
+        {variant && (
+          // Campaign marker — shows this landing came from a tailored source
+          // rather than the default front door.
+          <p
+            data-campaign={variant}
+            className="text-primary text-[10px] tracking-[0.3em] uppercase mb-2"
+          >
+            campaign: {variant}
+          </p>
+        )}
         <p className="text-muted text-[10px] md:text-xs tracking-[0.3em] uppercase mb-2">
           A growing suite
         </p>
