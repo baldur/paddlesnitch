@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
+import type { CadenceReport } from '@paddlesnitch/timing/cadence'
+
+type SessionReport = { report: DeviceDataReport; cadence: CadenceReport | null }
 
 const fmtDate = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return iso.slice(0, 16) } }
 const fmtDist = (m?: number) => (m == null ? '—' : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`)
 const fmtDur = (s?: number | null) => { if (s == null) return '—'; const m = Math.floor(s / 60), sec = s % 60; return m ? `${m}m ${sec}s` : `${sec}s` }
 
-function Report({ report }: { report: DeviceDataReport }) {
+function Report({ report, cadence }: SessionReport) {
   const sr = report.strokeRate
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
@@ -42,12 +45,29 @@ function Report({ report }: { report: DeviceDataReport }) {
         </p>
       )}
 
-      <div className={`border px-3 py-2 ${sr.available ? 'border-green bg-green/10 text-green' : 'border-border bg-surface text-muted'}`}>
-        <span className="tracking-widest text-[10px] uppercase">Stroke rate</span>{' '}
-        <span className={sr.available ? 'text-green' : 'text-fg'}>{sr.available ? 'available' : 'not derivable'}</span>
-        <p className="mt-1 leading-relaxed">{sr.reason}</p>
-        {sr.evidence && <p className="mt-2 leading-relaxed text-split">{sr.evidence}</p>}
-      </div>
+      {/* Real cadence, once the motion sidecar is up. This supersedes the "not
+          derivable" verdict below, which is about the 1 Hz track file alone. */}
+      {cadence?.available ? (
+        <div className="border border-green bg-green/10 px-3 py-2 text-green">
+          <span className="tracking-widest text-[10px] uppercase">Stroke rate</span>{' '}
+          <span className="tabular text-fg">{cadence.medianStrokesPerMin} spm</span>
+          <p className="mt-1 leading-relaxed text-muted">
+            Median across {cadence.windows.length} moving window{cadence.windows.length === 1 ? '' : 's'},
+            from the {cadence.sampleRateHz} Hz motion sidecar.
+            {cadence.windows[0]?.alternating && ' Detected as an alternating left/right stroke, so the rate is twice the measured cycle.'}
+          </p>
+        </div>
+      ) : (
+        <div className={`border px-3 py-2 ${sr.available ? 'border-green bg-green/10 text-green' : 'border-border bg-surface text-muted'}`}>
+          <span className="tracking-widest text-[10px] uppercase">Stroke rate</span>{' '}
+          <span className={sr.available ? 'text-green' : 'text-fg'}>{sr.available ? 'available' : 'not derivable'}</span>
+          <p className="mt-1 leading-relaxed">{sr.reason}</p>
+          {sr.evidence && <p className="mt-2 leading-relaxed text-split">{sr.evidence}</p>}
+          {cadence && !cadence.available && (
+            <p className="mt-2 leading-relaxed">Motion sidecar present, but no cadence came out of it: {cadence.reason}</p>
+          )}
+        </div>
+      )}
 
       {report.motion && report.motion.gyroPeakMax != null && (
         <div>
@@ -115,7 +135,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 export default function DevicesDataPage() {
   const [sessions, setSessions] = useState<DeviceSessionMeta[] | undefined>(undefined)
   const [open, setOpen] = useState<string | null>(null)
-  const [reports, setReports] = useState<Record<string, DeviceDataReport | 'loading' | 'error'>>({})
+  const [reports, setReports] = useState<Record<string, SessionReport | 'loading' | 'error'>>({})
 
   useEffect(() => {
     fetch('/api/account/devices/sessions')
@@ -133,7 +153,7 @@ export default function DevicesDataPage() {
     try {
       const res = await fetch(`/api/account/devices/sessions/${key}?deviceId=${encodeURIComponent(s.deviceId)}`)
       const d = await res.json()
-      setReports(r => ({ ...r, [key]: res.ok && d.report ? d.report : 'error' }))
+      setReports(r => ({ ...r, [key]: res.ok && d.report ? { report: d.report, cadence: d.cadence ?? null } : 'error' }))
     } catch { setReports(r => ({ ...r, [key]: 'error' })) }
   }
 
@@ -166,7 +186,7 @@ export default function DevicesDataPage() {
                     {reports[s.sessionId] === 'loading' && <p className="text-xs text-muted">Reading…</p>}
                     {reports[s.sessionId] === 'error' && <p className="text-xs text-red">Could not read this session.</p>}
                     {reports[s.sessionId] && reports[s.sessionId] !== 'loading' && reports[s.sessionId] !== 'error' && (
-                      <Report report={reports[s.sessionId] as DeviceDataReport} />
+                      <Report {...(reports[s.sessionId] as SessionReport)} />
                     )}
                   </div>
                 )}
