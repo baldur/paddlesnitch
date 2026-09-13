@@ -24,6 +24,15 @@ function Report({ report, cadence, attitude, sessionId }: SessionReport & { sess
   const sampleRateHz = report.timeSpanS && report.timeSpanS > 0 ? report.rows / report.timeSpanS : null
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
+      {/* Always offered, never gated on the motion data being there: the charts
+          page is how you find out WHETHER this session has motion, and hiding the
+          way in until it does makes the feature undiscoverable. */}
+      <div>
+        <Link href={`/profile/me/devices/${sessionId}`} className="text-primary">
+          OPEN FULL VIEW — ROLL &amp; PITCH CHARTS →
+        </Link>
+      </div>
+
       {/* what we can make of it */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Stat label="Rows" value={String(report.rows)} />
@@ -89,12 +98,7 @@ function Report({ report, cadence, attitude, sessionId }: SessionReport & { sess
 
       {attitude?.available && (
         <div>
-          <div className="text-[10px] text-muted tracking-widest uppercase mb-1 flex items-center justify-between gap-2">
-            <span>Boat attitude</span>
-            <Link href={`/profile/me/devices/${sessionId}`} className="text-primary normal-case tracking-normal">
-              SEE THE CHARTS →
-            </Link>
-          </div>
+          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Boat attitude</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Stat label="Roll (rms)" value={`${attitude.rollRmsDeg}°`} />
             <Stat label="Pitch (rms)" value={`${attitude.pitchRmsDeg}°`} />
