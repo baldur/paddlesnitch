@@ -11,17 +11,44 @@ import { analyseTrack } from '@/lib/analysis'
 import { generateInsight, type InsightContext } from '@/lib/llm'
 import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant, type PaddleFacts } from '@/lib/history-stats'
 import { refreshAthleteProfile } from '@/lib/athlete-profile'
-import { saveSession, listSessionSummaries, getSession, getAthleteProfile, paddleFingerprint, findDuplicateSession, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
+import { saveSession, listSessionSummaries, getSession, getAthleteProfile, paddleFingerprint, type AnalysisSession, type AnalysisSource, type SessionSummary } from '@/lib/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
 import { loadDeviceSessionTrack } from '@/lib/devices'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
 // history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated
 // (personal diary/history) — which also means the LLM endpoint isn't public.
+//
+// The whole body is wrapped so a throw anywhere on the path — a malformed
+// upload, a Strava API hiccup, a storage blip — becomes a clean, logged error
+// instead of a raw 500 with a stack. The steps that legitimately fail (weather,
+// flow, history, LLM) each degrade on their own so one of them never fails the
+// analysis.
 export async function POST(req: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Sign in to analyse and save paddles.' }, { status: 401 })
 
+  try {
+    return await analysePaddle(req, user.id)
+  } catch (err) {
+    console.error('[analyse] unhandled error', err)
+    return NextResponse.json(
+      { error: 'Something went wrong analysing that paddle. Please try again.' },
+      { status: 500 },
+    )
+  }
+}
+
+// Resolve a best-effort promise to null on either rejection or a deadline, so a
+// slow external dependency can never hang the request.
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
+  ])
+}
+
+async function analysePaddle(req: NextRequest, userId: string): Promise<NextResponse> {
   const form = await req.formData()
 
   // ---- resolve the track from a file or a Strava activity ----
@@ -35,14 +62,14 @@ export async function POST(req: NextRequest) {
   const deviceIdField = form.get('deviceId')
 
   if (typeof trialEntryId === 'string' && trialEntryId && typeof trialId === 'string' && trialId) {
-    const loaded = await loadTrialEntryTrack(user.id, trialId, trialEntryId)
+    const loaded = await loadTrialEntryTrack(userId, trialId, trialEntryId)
     if (!loaded) return NextResponse.json({ error: 'Could not load that time-trial entry.' }, { status: 404 })
     track = loaded
     // Look up the entry's display info so the saved paddle names its course.
-    const summary = (await listUserTrialEntries(user.id)).find(e => e.entryId === trialEntryId)
+    const summary = (await listUserTrialEntries(userId)).find(e => e.entryId === trialEntryId)
     source = { type: 'trial', trialId, entryId: trialEntryId, courseName: summary?.courseName, filename: summary?.filename }
   } else if (typeof deviceSessionId === 'string' && deviceSessionId && typeof deviceIdField === 'string' && deviceIdField) {
-    const loaded = await loadDeviceSessionTrack(user.id, deviceIdField, deviceSessionId)
+    const loaded = await loadDeviceSessionTrack(userId, deviceIdField, deviceSessionId)
     if (!loaded) return NextResponse.json({ error: 'Could not load that device session.' }, { status: 404 })
     track = loaded
     source = { type: 'device', deviceId: deviceIdField, deviceSessionId }
@@ -60,9 +87,17 @@ export async function POST(req: NextRequest) {
     track = parsed.track
     source = { type: 'file', filename: file.name }
   } else if (stravaId) {
-    const tokens = await getValidStravaTokens(user.id)
+    const tokens = await getValidStravaTokens(userId)
     if (!tokens) return NextResponse.json({ error: 'Connect Strava first (Account → Strava).' }, { status: 400 })
-    const streams = await getActivityStreams(tokens.accessToken, stravaId)
+    // A Strava API failure (rate limit, 5xx, network) is an expected, transient
+    // condition — surface it as a retryable message, not a 500.
+    let streams: Awaited<ReturnType<typeof getActivityStreams>>
+    try {
+      streams = await getActivityStreams(tokens.accessToken, stravaId)
+    } catch (err) {
+      console.error('[analyse] strava streams fetch failed', err)
+      return NextResponse.json({ error: 'Could not reach Strava right now — please try again.' }, { status: 502 })
+    }
     if (!streams) return NextResponse.json({ error: 'Could not read that Strava activity (no GPS stream).' }, { status: 422 })
     track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
     const st = form.get('sportType')
@@ -75,10 +110,13 @@ export async function POST(req: NextRequest) {
   const mid = track[Math.floor(track.length / 2)]
   const when = track[0].timestamp.toISOString()
 
-  // best-effort real conditions (never block the analysis)
+  // best-effort real conditions — bounded so a slow/hanging external API
+  // (Open-Meteo / EA) can't stall the analysis toward the Lambda timeout. The
+  // plain fetches inside these have no timeout of their own, so wrap them: on
+  // error OR timeout we proceed with no conditions. Both run in parallel.
   const [weather, flow] = await Promise.all([
-    getWeatherAt(mid.lat, mid.lng, when).catch(() => null),
-    getFlowAt(mid.lat, mid.lng, when).catch(() => null),
+    withDeadline(getWeatherAt(mid.lat, mid.lng, when), 4000),
+    withDeadline(getFlowAt(mid.lat, mid.lng, when), 4000),
   ])
   const conditions = {
     windKmh: weather?.windSpeedKmh, windDir: weather?.windDirectionDeg,
@@ -90,20 +128,29 @@ export async function POST(req: NextRequest) {
   // metadata but no longer forces doubling.)
   const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
 
-  // Duplicate detection (#178): if this exact paddle is already in the user's
-  // library, don't create a second copy or spend an LLM call — return the
-  // existing one so the client can take them straight to it. Best-effort: a
-  // storage read failure here degrades to a normal (fresh) save, never a 500.
-  try {
-    const dup = await findDuplicateSession(user.id, paddleFingerprint(when, result.durationS, result.distanceKm))
-    if (dup) {
-      const existing = await getSession(user.id, dup.id)
+  // Read the user's library ONCE and reuse it for both duplicate detection and
+  // the memory context below. Reading it twice (as this route used to) doubled
+  // the S3 work on the critical path — every session's full record, including its
+  // track points — and, as a library grew, that crept toward the Lambda timeout
+  // and surfaced to the paddler as "analysis failed". Best-effort: a read failure
+  // degrades to a fresh, no-context analysis, never a 500.
+  let prior: SessionSummary[] = []
+  try { prior = await listSessionSummaries(userId) }
+  catch (err) { console.error('[analyse] history read failed', err) }
+
+  // Duplicate detection (#178): if this exact paddle is already saved, return the
+  // existing one (skipping the LLM call + save) so the client can jump to it.
+  const fp = paddleFingerprint(when, result.durationS, result.distanceKm)
+  const dup = prior.find(s => paddleFingerprint(s.paddledAt, s.durationS, s.distanceKm) === fp)
+  if (dup) {
+    try {
+      const existing = await getSession(userId, dup.id)
       if (existing) return NextResponse.json({
         ...existing.result, id: existing.id, note: existing.note,
         source: existing.source, paddledAt: existing.paddledAt, duplicate: true,
       })
-    }
-  } catch (err) { console.error('[analyse] duplicate check failed', err) }
+    } catch (err) { console.error('[analyse] duplicate fetch failed', err) }
+  }
 
   const now = new Date()
 
@@ -112,15 +159,12 @@ export async function POST(req: NextRequest) {
   // L2 profile), all fed to the model as compact text — grounded facts only.
   // WRAPPED so the enrichment can NEVER fail the analysis: any read/compute error
   // degrades to a plain (no-context) insight rather than 500-ing the request.
-  // Seed with the paddle date + sport (survive even if the memory-context
-  // enrichment below fails) so the model never assumes an import is today and
-  // uses sport-appropriate language. Sport is known for Strava imports; file /
-  // trial imports leave it undefined → the coach stays neutral.
+  // Seeded with the paddle date + sport so the model never assumes an import is
+  // today and uses sport-appropriate language.
   const sportSignal = source.type === 'strava' ? source.sport : undefined
   let ctx: InsightContext = { paddledAt: when, asOf: now.toISOString(), sport: sportSignal }
   try {
-    const prior = await listSessionSummaries(user.id)
-    const profile = await getAthleteProfile(user.id)
+    const profile = await getAthleteProfile(userId)
     const currentFacts: PaddleFacts = {
       paddledAt: when, cruiseSpeed: result.cruiseSpeed, distanceKm: result.distanceKm,
       avgSR: result.avgSR, avgDps: result.avgDps,
@@ -139,7 +183,7 @@ export async function POST(req: NextRequest) {
 
   // auto-save to the user's library
   const session: AnalysisSession = {
-    id: nanoid(), userId: user.id, createdAt: now.toISOString(), paddledAt: when,
+    id: nanoid(), userId, createdAt: now.toISOString(), paddledAt: when,
     source, doubleStrokeRate: false, note: '', insight: result.insight, result,
   }
   await saveSession(session)
@@ -150,9 +194,9 @@ export async function POST(req: NextRequest) {
   // analysis nor push the request past the 30s Lambda timeout. Best-effort.
   after(async () => {
     try {
-      const all = await listSessionSummaries(user.id)
+      const all = await listSessionSummaries(userId)
       const latest = all.find(s => s.id === session.id)
-      if (latest) await refreshAthleteProfile(user.id, latest, all, new Date().toISOString())
+      if (latest) await refreshAthleteProfile(userId, latest, all, new Date().toISOString())
     } catch (err) { console.error('[analyse] profile refresh failed', err) }
   })
 
