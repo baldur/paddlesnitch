@@ -40,15 +40,41 @@ export type AttitudeSymmetry = {
   imbalancePct: number
 }
 
+// One time bucket of the whole session: the RANGE the boat swung through, not a
+// sampled instant. Plain decimation would alias badly — the rocking is ~0.5 Hz,
+// so any chart-sized downsample of it draws a waveform that was never there.
+// Min/max per bucket is honest at every zoom level.
+export type AttitudeBucket = {
+  t: number        // ms, on the track CSV's own millis() clock
+  rollMin: number
+  rollMax: number
+  pitchMin: number
+  pitchMax: number
+}
+
+// A short window at FULL rate, so the actual shape of the stroke is visible —
+// the envelope shows how much, this shows what it looks like.
+export type AttitudeSample = { t: number; roll: number; pitch: number }
+
+// Roll values binned for a distribution plot. Drawn mirrored, this is where an
+// uneven stroke is obvious at a glance: the two lobes don't match.
+export type RollHistogram = { binWidthDeg: number; bins: { centreDeg: number; count: number }[] }
+
 export type AttitudeReport = {
   available: boolean
   reason: string
   sampleRateHz: number | null
   samples: number
+  envelope: AttitudeBucket[]
+  excerpt: AttitudeSample[]
+  rollHistogram: RollHistogram | null
   rollRmsDeg: number | null
   pitchRmsDeg: number | null
   rollP5Deg: number | null
   rollP95Deg: number | null
+  // A robust bound for plotting: the axis charts should scale to, so one lurch
+  // doesn't flatten the rocking everything else is about.
+  plotBoundDeg: number | null
   rollToPitchRatio: number | null
   // False when roll and pitch are too similar in magnitude to tell apart, which
   // makes the roll/pitch split guesswork. The rms figures still describe real
@@ -80,6 +106,10 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 const TAU_S = 2.0
 // Below this roll/pitch ratio the two axes are not meaningfully distinguishable.
 const MIN_ANISOTROPY = 1.2
+// Chart-sized, and small enough that the payload stays a few tens of KB.
+const ENVELOPE_BUCKETS = 240
+const EXCERPT_S = 30
+const HISTOGRAM_BINS = 41   // odd, so one bin is centred on level
 
 import { parseMotionCsv } from './cadence'
 
@@ -89,7 +119,8 @@ export function deriveAttitude(
 ): AttitudeReport {
   const none = (reason: string, fs: number | null, n: number): AttitudeReport => ({
     available: false, reason, sampleRateHz: fs, samples: n,
-    rollRmsDeg: null, pitchRmsDeg: null, rollP5Deg: null, rollP95Deg: null,
+    envelope: [], excerpt: [], rollHistogram: null,
+    rollRmsDeg: null, pitchRmsDeg: null, rollP5Deg: null, rollP95Deg: null, plotBoundDeg: null,
     rollToPitchRatio: null, axisConfident: false, symmetry: null,
   })
 
@@ -152,6 +183,7 @@ export function deriveAttitude(
   const pitchArr = tilt.map(([x, y]) => deg(-(x - mx) * s + (y - my) * c))
 
   const rollSorted = [...roll].sort((a, b) => a - b)
+  const pitchSorted = [...pitchArr].sort((a, b) => a - b)
   const posv = roll.filter(v => v > 0).sort((a, b) => a - b)
   const negv = roll.filter(v => v < 0).sort((a, b) => a - b)
   let symmetry: AttitudeSymmetry | null = null
@@ -169,7 +201,67 @@ export function deriveAttitude(
 
   const rollRms = rms(roll)
   const pitchRms = rms(pitchArr)
+
+  // --- Envelope: min/max per bucket across the whole session.
+  const buckets = Math.min(ENVELOPE_BUCKETS, seg.length)
+  const per = Math.ceil(seg.length / buckets)
+  const envelope: AttitudeBucket[] = []
+  for (let i = 0; i < seg.length; i += per) {
+    const end = Math.min(seg.length, i + per)
+    let rMin = Infinity, rMax = -Infinity, pMin = Infinity, pMax = -Infinity
+    for (let j = i; j < end; j++) {
+      if (roll[j] < rMin) rMin = roll[j]
+      if (roll[j] > rMax) rMax = roll[j]
+      if (pitchArr[j] < pMin) pMin = pitchArr[j]
+      if (pitchArr[j] > pMax) pMax = pitchArr[j]
+    }
+    envelope.push({ t: seg[i].ms, rollMin: r2(rMin), rollMax: r2(rMax), pitchMin: r2(pMin), pitchMax: r2(pMax) })
+  }
+
+  // --- Excerpt: the most REPRESENTATIVE window, not simply the middle. The
+  // middle of a session can land on a turn or a drink break, which then reads as
+  // "this is what your stroke looks like".
+  const excerptLen = Math.min(seg.length, Math.round(EXCERPT_S * fs))
+  let bestStart = 0
+  let bestDelta = Infinity
+  for (let i = 0; i + excerptLen <= seg.length; i += Math.max(1, Math.floor(excerptLen / 2))) {
+    const windowRms = rms(roll.slice(i, i + excerptLen))
+    const delta = Math.abs(windowRms - rollRms)
+    if (delta < bestDelta) { bestDelta = delta; bestStart = i }
+  }
+  const excerpt: AttitudeSample[] = []
+  for (let i = bestStart; i < bestStart + excerptLen; i++) {
+    excerpt.push({ t: seg[i].ms, roll: r2(roll[i]), pitch: r2(pitchArr[i]) })
+  }
+
+  // --- Roll distribution. Drawn mirrored, an uneven stroke shows as lobes that
+  // don't match.
+  //
+  // Binned across a ROBUST range, not the extremes. A real session contains the
+  // odd lurch — a wobble, a passing wash — and on a 65-minute trace one 20 deg
+  // spike against a 6 deg working range would squeeze the whole distribution into
+  // a third of the axis and hide the thing being looked at. Values beyond the
+  // range land in the end bins, so nothing is discarded, only the scale is sane.
+  const absMax = Math.max(
+    Math.abs(pct(rollSorted, 0.01)),
+    Math.abs(pct(rollSorted, 0.99)),
+    1,
+  )
+  const binWidth = (2 * absMax) / HISTOGRAM_BINS
+  const counts = new Array(HISTOGRAM_BINS).fill(0)
+  for (const v of roll) {
+    const idx = Math.min(HISTOGRAM_BINS - 1, Math.max(0, Math.floor((v + absMax) / binWidth)))
+    counts[idx]++
+  }
+  const rollHistogram: RollHistogram = {
+    binWidthDeg: r2(binWidth),
+    bins: counts.map((count, i) => ({ centreDeg: r2(-absMax + (i + 0.5) * binWidth), count })),
+  }
+
   return {
+    envelope,
+    excerpt,
+    rollHistogram,
     available: true,
     reason: `From ${seg.length.toLocaleString('en-GB')} moving samples at ${Math.round(fs)} Hz.`,
     sampleRateHz: r2(fs),
@@ -178,6 +270,7 @@ export function deriveAttitude(
     pitchRmsDeg: r2(pitchRms),
     rollP5Deg: r2(pct(rollSorted, 0.05)),
     rollP95Deg: r2(pct(rollSorted, 0.95)),
+    plotBoundDeg: r2(Math.max(absMax, Math.abs(pct(pitchSorted, 0.01)), Math.abs(pct(pitchSorted, 0.99)), 1) * 1.1),
     rollToPitchRatio: pitchRms > 0 ? r2(rollRms / pitchRms) : null,
     axisConfident: anisotropy >= MIN_ANISOTROPY,
     symmetry,

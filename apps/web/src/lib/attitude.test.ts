@@ -127,6 +127,66 @@ describe('deriveAttitude', () => {
     expect(r.rollRmsDeg!).toBeGreaterThan(4)   // the parked half would have dragged this down
   })
 
+  describe('data for plotting', () => {
+    it('returns an envelope that spans the session and brackets the real motion', () => {
+      const r = deriveAttitude(boat({ seconds: 300, hz: 50, rollAmpDeg: 8 }))
+      expect(r.envelope.length).toBeGreaterThan(20)
+      expect(r.envelope.length).toBeLessThanOrEqual(240)
+      // Every bucket is a RANGE, so max must sit above min.
+      expect(r.envelope.every(b => b.rollMax >= b.rollMin)).toBe(true)
+      // A steady 8 deg roll should show buckets reaching out near that.
+      const widest = Math.max(...r.envelope.map(b => b.rollMax - b.rollMin))
+      expect(widest).toBeGreaterThan(6)
+      // Ordered in time.
+      expect(r.envelope.every((b, i) => i === 0 || b.t >= r.envelope[i - 1].t)).toBe(true)
+    })
+
+    it('keeps the envelope honest where plain decimation would alias', () => {
+      // The rocking is ~0.45 Hz. Sampling one instant per chart-pixel over a long
+      // session draws a waveform that never happened; a min/max band cannot.
+      const r = deriveAttitude(boat({ seconds: 600, hz: 50, rollAmpDeg: 8 }))
+      const reach = Math.max(...r.envelope.map(b => b.rollMax))
+      expect(reach).toBeGreaterThan(5)   // the peaks survive the reduction
+    })
+
+    it('returns a full-rate excerpt to show the stroke shape', () => {
+      const r = deriveAttitude(boat({ seconds: 300, hz: 50, rollAmpDeg: 8 }))
+      expect(r.excerpt.length).toBeGreaterThan(100)
+      const span = (r.excerpt[r.excerpt.length - 1].t - r.excerpt[0].t) / 1000
+      expect(span).toBeGreaterThan(20)
+      expect(span).toBeLessThan(40)
+    })
+
+    it('bins roll into a histogram centred on level', () => {
+      const r = deriveAttitude(boat({ seconds: 300, hz: 50, rollAmpDeg: 8 }))
+      expect(r.rollHistogram).not.toBeNull()
+      const bins = r.rollHistogram!.bins
+      expect(bins.length).toBe(41)
+      // Counts account for every sample.
+      expect(bins.reduce((a, b) => a + b.count, 0)).toBe(r.samples)
+      // Symmetric rocking → the two halves hold roughly equal mass.
+      const left = bins.filter(b => b.centreDeg < 0).reduce((a, b) => a + b.count, 0)
+      const right = bins.filter(b => b.centreDeg > 0).reduce((a, b) => a + b.count, 0)
+      expect(Math.abs(left - right) / (left + right)).toBeLessThan(0.2)
+    })
+
+    it('shows an uneven stroke as a lopsided histogram, and an even one as balanced', () => {
+      // Asserted as a COMPARISON rather than against a tuned constant: the
+      // absolute ratio depends on bin resolution, but an even stroke must come
+      // out near 1 and a lopsided one clearly above it.
+      const lopsidedness = (weakSide: number) => {
+        const r = deriveAttitude(boat({ seconds: 300, hz: 50, rollAmpDeg: 8, weakSide }))
+        const used = r.rollHistogram!.bins.filter(b => b.count > 0).map(b => b.centreDeg)
+        return Math.abs(Math.max(...used)) / Math.abs(Math.min(...used))
+      }
+      const even = lopsidedness(1)
+      const uneven = lopsidedness(0.35)
+      expect(even).toBeGreaterThan(0.8)
+      expect(even).toBeLessThan(1.25)
+      expect(uneven).toBeGreaterThan(even * 1.25)
+    })
+  })
+
   it('refuses data with too few samples instead of guessing', () => {
     const r = deriveAttitude(`${HEADER}\n0,0,0,1,0,0,0\n20,0,0,1,0,0,0`)
     expect(r.available).toBe(false)
