@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getDeviceAuth } from '@/lib/auth'
-import { findUploadedSession, storeDeviceSession } from '@/lib/devices'
+import { findUploadedSession, storeDeviceSession, storeDeviceMotion, motionSidecarTrackName } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import { haversine } from '@paddlesnitch/timing/geo'
+import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
 
 // POST /api/devices/sessions?filename=track_0005.csv — device token (Bearer).
 // Body is the raw CSV streamed from the SD card (not multipart — the device has
 // no heap for that). Reuses parseTrace() UNCHANGED: the firmware emits the
 // existing CSV columns, so there is no device-specific parser. See
 // docs/features/device-uplink.md.
-const MAX_BYTES = 2 * 1024 * 1024
+// A Lambda function URL request tops out around 6 MB, so this can be raised but
+// not removed. 4 MB leaves room for a ~2.6-hour motion sidecar at the 10 Hz the
+// device decimates to (1.51 MB/hour) while staying clear of that ceiling.
+const MAX_BYTES = 4 * 1024 * 1024
 
 export async function POST(req: Request) {
   const auth = await getDeviceAuth(req)
@@ -24,6 +28,20 @@ export async function POST(req: Request) {
 
   const ab = await req.arrayBuffer()
   if (ab.byteLength > MAX_BYTES) return NextResponse.json({ error: 'too_large' }, { status: 413 })
+
+  // A motion sidecar (`track_<stamp>_imu.csv`) is not a paddle: it carries no
+  // position, so parseTrace would correctly reject it. It attaches to the track
+  // of the same name, which must already be uploaded.
+  const trackName = motionSidecarTrackName(filename)
+  if (trackName) {
+    const rows = parseMotionCsv(Buffer.from(ab).toString('utf8')).length
+    if (rows === 0) return NextResponse.json({ error: 'no_motion_rows' }, { status: 422 })
+    const stored = await storeDeviceMotion(auth.deviceId, auth.userId, trackName, Buffer.from(ab), rows)
+    // 409, not 404: the track may simply not have been sent yet, and the device
+    // should retry this file rather than mark it done.
+    if (stored === 'no_track') return NextResponse.json({ error: 'track_not_uploaded', trackFilename: trackName }, { status: 409 })
+    return NextResponse.json({ sessionId: stored.sessionId, motionRows: rows, bytes: ab.byteLength }, { status: 201 })
+  }
 
   const parsed = await parseTrace(filename, ab)
   // No usable points (e.g. an all-unfixed indoor session, whose empty lat/lon

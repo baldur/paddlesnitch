@@ -166,6 +166,94 @@ Two ways to close it, in increasing order of work:
 
 Recommendation: option 1. Say the word and I will implement it on the device.
 
+## Session diagnostics (added 2026-09-13)
+
+`describeDeviceData` reports four things beyond the column listing, all derived
+from columns firmware 0.3.0 **already writes** — no firmware change was needed to
+surface any of them. Validated against a real 60-minute paddle (`track_0041.csv`,
+3,627 rows), whose numbers appear below as the worked example.
+
+- **`capture`** — did a row actually arrive every interval? The interval is taken
+  from the file (median delta), never assumed to be 1 Hz, so a future firmware
+  logging at another rate is not reported as half-missing. The real session:
+  `intervalS 1, gaps 14, missingRows 14, capturedFraction 0.997` — fourteen
+  single-row drops spread across the hour, roughly one every 5–7 minutes, which
+  looks like the periodic SD/sync work stealing a GPS row. Nothing else surfaced
+  these; the duration alone looked complete.
+- **`gnss`** — `sats` and `hdop` first/last/min/max/median, a `fixTrend`
+  (comparing the opening and closing tenth of the fixed rows, not single rows),
+  and `altitudeSpreadM`. The real session: 8 → 14 sats, HDOP 1.5 → 0.8,
+  `improving`, altitude spread **27.8 m on flat water**. Two conclusions worth
+  keeping: the opening minutes of any trace are the least accurate part of it,
+  and GPS altitude remains unusable (see "Position: good. Altitude: not.").
+- **`motion`** — the IMU peaks split by moving vs stationary. The split is the
+  point. Real session: median 14.2 dps, **p99 while moving 24.8 dps**, peak while
+  stationary **383.3 dps** (and 4.47 g) — the device being picked up and put down.
+  `gyroPeakP99Moving` exists because the bare max is hostage to the landing, where
+  the GPS still reads ~3 km/h ("moving") while the device is being handled; that
+  single row pushed `gyroPeakMaxMoving` to 241 dps. Both are reported.
+- **`deadColumns`** — columns present in the header that are all-empty or
+  all-zero. A column constant at a *non-zero* value is deliberately **not**
+  flagged (`fix=1` all session is good news). Real session: `batt_mv` always 0 —
+  which is **correct, not a bug**: `boardBatteryMv()` returns 0 when
+  `isBatteryConnect()` is false, and that board had no cell fitted. The UI says
+  "nothing was recorded here", not "this is broken".
+
+The stroke-rate verdict now carries an `evidence` line built from the measured
+envelope, so the claim below stops being an assertion: *99% of per-second rotation
+peaks while moving stayed under 24.8 dps, while handling the device off the water
+hit 383.3 dps — that gap is what a real cadence signal would have to clear.*
+
+## Stroke rate: closed (2026-09-13)
+
+The gap above is closed, and not the way that section predicted. The 50 Hz motion
+sidecar is now **decimated on-device and uploaded**, and cadence is derived
+server-side in `@paddlesnitch/timing/cadence`.
+
+**The algorithm.** Pick the highest-variance gyro axis (which axis carries the
+stroke depends entirely on how the device is carried, so it cannot be hardcoded),
+autocorrelate, take the best **local** maximum in band, sub-sample the peak
+parabolically. Three failure modes, each found by running it on real data:
+
+- The **global** maximum inside a band sits on the band edge whenever there is
+  broadband high-frequency content. An early version confidently reported exactly
+  2.5 Hz for every stationary window. Requiring a local maximum fixes it.
+- Windows must sit **wholly inside a moving stretch**. A real session opens with
+  ~20 minutes parked at the launch, and a stationary window yields a
+  confident-looking periodicity that has nothing to do with paddling.
+- Alternating left/right strokes are **mirror images**, so the real stroke rate is
+  twice the detected cycle rate. Detected from the *ratio* of half-lag to peak
+  correlation, never an absolute floor — a single-sided pulse train also
+  correlates negatively at half its period (−0.67), so an absolute threshold
+  doubles everything. Real alternating paddling measures −1.07; threshold −0.85.
+  **Calibration debt:** the alternating end is real data, the single-sided end is
+  synthetic. Confirm against a genuine one-sided recording (canoe, SUP).
+
+**Why 10 Hz.** Measured against a real 65-minute session (reference 58.0 spm from
+the full 50 Hz stream):
+
+| rate | MB/hour | median | error |
+|---|---|---|---|
+| 25 Hz | 3.78 | 58.1 | +0.2 % (over cap) |
+| **10 Hz** | **1.51** | **57.7** | **−0.5 %** |
+| 8 Hz | 1.26 | 46.5 | −19.8 % |
+| 5 Hz | 0.76 | 50.6 | −12.8 % |
+
+The collapse below 10 Hz is **lag quantisation, not lost signal**: at 5 Hz one
+autocorrelation lag step is ~10 % of a stroke period. An earlier spot-check
+suggested 5 Hz was lossless; run through the full pipeline with medians it is 13 %
+low. Do not lower the rate to save bytes without re-running that sweep.
+
+**Transport.** The device keeps the full 50 Hz file on its card and uploads only
+the reduction. `POST /api/devices/sessions?filename=track_<stamp>_imu.csv` routes
+past `parseTrace` (a sidecar has no position) and attaches to the already-uploaded
+track of the same name. **409 means the track is not up yet** — the device must
+retry, not mark it done, which is why sidecars upload in a second pass after every
+track. `MAX_BYTES` is 4 MB; a Lambda function URL tops out near 6 MB, so this can
+be raised but never removed.
+
+Result on real data: **58.0 spm**, 22 windows, all alternating, r = 0.64–0.83.
+
 ## Open questions for paddlesnitch
 
 - **Do you want fix-less rows at all?** The device currently uploads whole files

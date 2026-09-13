@@ -209,9 +209,14 @@ ClaimStatus uplinkClaim(uint32_t timeoutMs)
 // Session upload
 // ---------------------------------------------------------------------------
 
-static bool uploadOne(WiFiClientSecure &client, const String &name, size_t size)
+// `path` is what we read from the card; `name` is what the server is told it is.
+// They differ only for a motion sidecar, which is uploaded from a decimated temp
+// file but must still arrive under its real track_<stamp>_imu.csv name so the
+// server can attach it to the right session.
+static bool uploadOne(WiFiClientSecure &client, const String &path, const String &name, size_t size,
+                      bool retryOn409 = false)
 {
-    File f = SD.open("/" + name, FILE_READ);
+    File f = SD.open("/" + path, FILE_READ);
     if (!f) return false;
 
     HTTPClient http;
@@ -234,7 +239,11 @@ static bool uploadOne(WiFiClientSecure &client, const String &name, size_t size)
     // 200 accepted, 409 already have it -- both mean stop trying. 422 means the
     // server parsed it and found no usable track (an indoor session with no
     // fix); recording it as done stops us re-uploading junk every boot.
-    bool done = (rc == 200 || rc == 201 || rc == 409 || rc == 422);
+    //
+    // A sidecar is the exception: its 409 means "the track this belongs to has
+    // not been uploaded yet", which is temporary. Marking that done would strand
+    // the motion data on the card permanently.
+    bool done = (rc == 200 || rc == 201 || rc == 422 || (rc == 409 && !retryOn409));
     Serial.printf("  %s (%u B) -> HTTP %d %s\n", name.c_str(), (unsigned)size, rc,
                   done ? "" : payload.substring(0, 60).c_str());
     if (done) markUploaded(name, rc);
@@ -242,12 +251,90 @@ static bool uploadOne(WiFiClientSecure &client, const String &name, size_t size)
 }
 
 // An uploadable session file: track_*.csv, but NOT the raw motion-capture
-// sidecar track_*_imu.csv (that stays on the card for offline analysis and is
-// never uploaded, counted, or auto-deleted). See docs/motion-capture-spec.md.
+// sidecar track_*_imu.csv, which is uploaded separately and decimated first.
 static bool isTrackUpload(const String &name)
 {
     return name.startsWith("track_") && name.endsWith(".csv")
         && !name.endsWith("_imu.csv");
+}
+
+// The raw motion sidecar. Uploaded AFTER the tracks (the server attaches it to an
+// already-uploaded session and answers 409 otherwise), and never auto-deleted:
+// the full-rate copy stays on the card even once the reduction is safely up.
+static bool isMotionUpload(const String &name)
+{
+    return name.startsWith("track_") && name.endsWith("_imu.csv");
+}
+
+// Target rate for the uploaded reduction. NOT a round number picked for tidiness:
+// measured against a real 65-minute session, cadence comes out within 0.5% of the
+// full 50 Hz answer at 10 Hz, and collapses below it (-12.8% at 5 Hz) as the
+// autocorrelation lag grid gets too coarse to locate the peak between steps.
+// 10 Hz is ~1.5 MB/hour, inside the server's 4 MB cap. Do not lower to save
+// bytes without re-running that sweep.
+static const int MOTION_UPLOAD_HZ = 10;
+static const char *MOTION_TMP = "imu_up.tmp";
+
+// Writes a MOTION_UPLOAD_HZ reduction of `src` to `dst`. Returns the bytes
+// written, or 0 on failure.
+//
+// A temp file rather than transforming the stream in flight: HTTPClient needs the
+// content length up front, so an on-the-fly filter would mean scanning the whole
+// file to compute the length and then scanning it again to send it. Writing the
+// reduction once costs one pass and a little card space, and lets the existing
+// streamed upload run untouched.
+static size_t writeDecimatedMotion(const String &src, const String &dst)
+{
+    File in = SD.open("/" + src, FILE_READ);
+    if (!in) return 0;
+    SD.remove("/" + dst);
+    File out = SD.open("/" + dst, FILE_WRITE);
+    if (!out) { in.close(); return 0; }
+
+    size_t written = 0;
+    String header = in.readStringUntil('\n');
+    if (header.length() && !isdigit((unsigned char)header[0])) {
+        header.trim();
+        out.println(header);
+        written += header.length() + 1;
+    } else {
+        in.seek(0);   // no header, it was already a data row
+    }
+
+    // Sample interval from the first rows, so this follows the logger's real rate
+    // instead of assuming the 20 ms that firmware 0.4.x happens to use.
+    long firstMs = -1, prevMs = -1, stepSum = 0;
+    int stepN = 0;
+    size_t probeStart = in.position();
+    for (int i = 0; i < 64 && in.available(); i++) {
+        String line = in.readStringUntil('\n');
+        long ms = atol(line.c_str());
+        if (ms <= 0) continue;
+        if (firstMs < 0) firstMs = ms;
+        if (prevMs > 0 && ms > prevMs) { stepSum += ms - prevMs; stepN++; }
+        prevMs = ms;
+    }
+    int stepMs = stepN ? (int)(stepSum / stepN) : 20;
+    if (stepMs < 1) stepMs = 1;
+    int factor = (int)lround((1000.0 / stepMs) / MOTION_UPLOAD_HZ);
+    if (factor < 1) factor = 1;
+
+    in.seek(probeStart);
+    long idx = 0;
+    while (in.available()) {
+        String line = in.readStringUntil('\n');
+        if (!line.length()) continue;
+        if (idx++ % factor) continue;
+        line.trim();
+        if (!line.length()) continue;
+        out.println(line);
+        written += line.length() + 1;
+    }
+    out.flush();
+    out.close();
+    in.close();
+    Serial.printf("  decimated %s 1/%d -> %u B\n", src.c_str(), factor, (unsigned)written);
+    return written;
 }
 
 // Tallies the sessions on the card for the Sync screen: how many track files
@@ -331,17 +418,42 @@ int uplinkSyncSessions()
         size_t size = f.size();
         f.close();
 
-        if (!isTrackUpload(name)) continue;        // skips the _imu.csv sidecar
+        if (!isTrackUpload(name)) continue;        // sidecars go in the pass below
         if (name == active) continue;             // still being written to
         if (alreadyUploaded(name)) continue;
         // Checked between files, not mid-file: a recording starting must not
         // find the card busy, and an upload must not be torn in half.
         if (g_yield) { Serial.println("sync: yielding card"); break; }
 
-        if (uploadOne(client, name, size)) accepted++;
+        if (uploadOne(client, name, name, size)) accepted++;
     }
     root.close();
-    Serial.printf("sync: %d session(s) accepted\n", accepted);
+
+    // Second pass: the motion sidecars, decimated. Deliberately after every track
+    // — the server attaches a sidecar to an existing session and answers 409 if
+    // the track has not arrived yet, and a 409 here would mark it done forever.
+    String activeImu = active;
+    if (activeImu.endsWith(".csv")) activeImu = activeImu.substring(0, activeImu.length() - 4) + "_imu.csv";
+    File root2 = SD.open("/");
+    for (File f = root2.openNextFile(); f; f = root2.openNextFile()) {
+        if (f.isDirectory()) { f.close(); continue; }
+        String name = f.name();
+        if (name.startsWith("/")) name = name.substring(1);
+        f.close();
+
+        if (!isMotionUpload(name)) continue;
+        if (name == activeImu) continue;
+        if (alreadyUploaded(name)) continue;
+        if (g_yield) { Serial.println("sync: yielding card"); break; }
+
+        size_t small = writeDecimatedMotion(name, MOTION_TMP);
+        if (!small) { Serial.printf("  %s: could not decimate\n", name.c_str()); continue; }
+        if (uploadOne(client, MOTION_TMP, name, small, /*retryOn409=*/true)) accepted++;
+        SD.remove(String("/") + MOTION_TMP);
+    }
+    root2.close();
+
+    Serial.printf("sync: %d file(s) accepted\n", accepted);
     return accepted;
 }
 

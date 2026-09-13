@@ -171,10 +171,27 @@ export type DeviceSessionMeta = {
   sessionId: string; deviceId: string; userId: string; filename: string
   uploadedAt: string
   startedAt?: string; endedAt?: string; distanceMetres?: number; points: number
+  // Set once the matching `_imu.csv` sidecar has been uploaded for this session.
+  motion?: { uploadedAt: string; bytes: number; rows: number }
+}
+
+/**
+ * `track_<stamp>_imu.csv` -> `track_<stamp>.csv`, or null if this isn't a sidecar.
+ *
+ * The sidecar is addressed by the TRACK it belongs to. A sidecar can only be
+ * stored against an already-uploaded track, which also gives the device a clear
+ * ordering rule: tracks first, then sidecars.
+ */
+export function motionSidecarTrackName(filename: string): string | null {
+  const m = /^(.+)_imu\.csv$/i.exec(filename)
+  return m ? `${m[1]}.csv` : null
 }
 
 const sessionMetaKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/session.json`
 const sessionTraceKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/trace.csv`
+// The decimated motion sidecar, stored beside the track it belongs to rather than
+// as a session of its own — it is not a paddle, it is extra channels for one.
+const sessionMotionKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/motion.csv`
 // Idempotency index: a device numbers files monotonically and never reuses a
 // name, so deviceId+filename is a stable identity — a retry after a dropped
 // response can't create a duplicate.
@@ -200,6 +217,41 @@ export async function storeDeviceSession(
   await putJson(sessionMetaKey(meta.deviceId, sessionId), full)
   await putJson(uploadIndexKey(meta.deviceId, meta.filename), { sessionId })
   return full
+}
+
+/**
+ * Attaches a decimated motion sidecar to an already-uploaded session.
+ *
+ * Returns 'no_track' when the track it names hasn't been uploaded yet — the
+ * device should send the track first and retry, rather than us inventing an
+ * orphan session with no position data in it.
+ */
+export async function storeDeviceMotion(
+  deviceId: string,
+  userId: string,
+  trackFilename: string,
+  csv: Buffer | string,
+  rows: number,
+): Promise<DeviceSessionMeta | 'no_track'> {
+  if (!isDeviceId(deviceId) || !safeName(trackFilename)) return 'no_track'
+  const sessionId = await findUploadedSession(deviceId, trackFilename)
+  if (!sessionId) return 'no_track'
+  const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
+  if (!meta || meta.userId !== userId) return 'no_track'
+
+  const bytes = typeof csv === 'string' ? Buffer.byteLength(csv) : csv.length
+  await putObject(sessionMotionKey(deviceId, sessionId), csv)
+  const updated: DeviceSessionMeta = { ...meta, motion: { uploadedAt: nowIso(), bytes, rows } }
+  await putJson(sessionMetaKey(deviceId, sessionId), updated)
+  return updated
+}
+
+// The stored motion sidecar for one of the user's sessions, or null.
+export async function getDeviceSessionMotion(userId: string, deviceId: string, sessionId: string): Promise<Buffer | null> {
+  if (!isDeviceId(deviceId)) return null
+  const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
+  if (!meta || meta.userId !== userId || !meta.motion) return null
+  return getObject(sessionMotionKey(deviceId, sessionId))
 }
 
 // The signed-in user's device uploads, newest first (owner-filtered).

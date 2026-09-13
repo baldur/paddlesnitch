@@ -166,3 +166,69 @@ describe('device session upload (device-uplink P2)', () => {
     expect((await uploadSession(csvReq('track_0001.csv', DEVICE_CSV, 'bogus'))).status).toBe(401)
   })
 })
+
+const MOTION_CSV = [
+  'ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps',
+  '1000,0.01,0.02,1.00,4.0,20.0,8.0',
+  '1100,0.01,0.03,1.00,3.0,-18.0,7.0',
+  '1200,0.02,0.02,0.99,2.0,19.0,6.0',
+].join('\n')
+
+describe('motion sidecar upload', () => {
+  it('attaches a sidecar to the track it belongs to', async () => {
+    const u = await makeUser('Motion')
+    const dt = await boundToken(u)
+    const trackRes = await uploadSession(csvReq('track_20260913_081130.csv', DEVICE_CSV, dt))
+    const { sessionId } = await trackRes.json()
+
+    const res = await uploadSession(csvReq('track_20260913_081130_imu.csv', MOTION_CSV, dt))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.sessionId).toBe(sessionId)   // same session, not a new one
+    expect(body.motionRows).toBe(3)
+  })
+
+  it('does not run the sidecar through parseTrace — it has no position at all', async () => {
+    // Left to parseTrace this is a 422 "no points". The sidecar is extra channels
+    // for an existing paddle, not a paddle.
+    const u = await makeUser('NoPos')
+    const dt = await boundToken(u)
+    await uploadSession(csvReq('track_0009.csv', DEVICE_CSV, dt))
+    const res = await uploadSession(csvReq('track_0009_imu.csv', MOTION_CSV, dt))
+    expect(res.status).toBe(201)
+  })
+
+  it('returns 409 when the track has not been uploaded yet, so the device retries', async () => {
+    // NOT 404: the ordering is tracks-then-sidecars, and a sidecar arriving first
+    // must be retried rather than dropped.
+    const u = await makeUser('Orphan')
+    const dt = await boundToken(u)
+    const res = await uploadSession(csvReq('track_9999_imu.csv', MOTION_CSV, dt))
+    expect(res.status).toBe(409)
+    expect((await res.json()).trackFilename).toBe('track_9999.csv')
+  })
+
+  it('rejects a sidecar with no parseable rows', async () => {
+    const u = await makeUser('EmptyMotion')
+    const dt = await boundToken(u)
+    await uploadSession(csvReq('track_0011.csv', DEVICE_CSV, dt))
+    const res = await uploadSession(csvReq('track_0011_imu.csv', 'ms,ax_g\nrubbish\n', dt))
+    expect(res.status).toBe(422)
+  })
+
+  it('will not attach a sidecar to another user’s session', async () => {
+    const owner = await makeUser('Owner')
+    const dt = await boundToken(owner)
+    await uploadSession(csvReq('track_0013.csv', DEVICE_CSV, dt))
+
+    // A second device, bound to a different account, naming the same file.
+    const other = await makeUser('Other')
+    const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: 'AABBCCDD', model: 'm', firmware: 'f' }))).json()
+    mockAuth(other.idToken)
+    await link(jreq({ claimCode }))
+    const otherToken = (await (await token(jreq({ deviceId: 'AABBCCDD', claimSecret }))).json()).deviceToken
+
+    const res = await uploadSession(csvReq('track_0013_imu.csv', MOTION_CSV, otherToken))
+    expect(res.status).toBe(409)   // its own device has no such track
+  })
+})
