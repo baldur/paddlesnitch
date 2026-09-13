@@ -592,16 +592,17 @@ static void handleSerialCommand()
                 else Serial.println("setup timed out");
             }
             else if (!strncmp(buf, "SYNC", 4)) {
-                String why;
-                if (!netConnect(15000, &why)) { Serial.printf("no WiFi: %s\n", why.c_str()); }
-                else {
-                    if (!netIsClaimed()) {
-                        ClaimStatus cs = uplinkClaim();
-                        Serial.printf("claim: %s\n", cs.message.c_str());
-                    }
-                    if (netIsClaimed()) uplinkSyncSessions();
-                    netDisconnect();
-                }
+                // ASKS the uplink task to sync; never syncs on this core. The task
+                // (core 0) is the single owner of the SD card and raises
+                // uplinkSdBusy() around its work. Calling uplinkSyncSessions()
+                // straight from here put core 1 on the card while the task's own
+                // scheduled sync could be on it from core 0 — which produces the
+                // sdCommand CRC/token storm that leaves the card unreadable until
+                // a power cycle. Harmless while a sync meant a few hundred KB of
+                // track files; a motion sidecar reads megabytes and writes a temp
+                // file, so the overlap became easy to hit.
+                uplinkRequestSync();
+                Serial.println("sync requested -- watch for progress on the Sync screen");
             }
             else if (!strncmp(buf, "FORGET", 6)) {
                 netcfgForget();

@@ -287,7 +287,7 @@ static size_t writeDecimatedMotion(const String &src, const String &dst)
 {
     File in = SD.open("/" + src, FILE_READ);
     if (!in) return 0;
-    SD.remove("/" + dst);
+    if (SD.exists("/" + dst)) SD.remove("/" + dst);   // removing a missing file logs a VFS error
     File out = SD.open("/" + dst, FILE_WRITE);
     if (!out) { in.close(); return 0; }
 
