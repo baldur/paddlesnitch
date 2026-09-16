@@ -86,10 +86,23 @@ export default function DeviceSessionPage() {
             {!attitude?.available ? (
               <div className="border border-border bg-surface px-4 py-3 text-sm text-muted leading-relaxed">
                 <p className="text-fg mb-1">No motion data for this session yet.</p>
-                <p>
-                  {attitude?.reason
-                    ?? 'Roll and pitch come from the tracker’s motion sidecar, which uploads alongside the track. Sessions recorded before that shipped have no sidecar and never will.'}
-                </p>
+                {/* Two different situations reach here and they need different
+                    answers. `reason` present means a sidecar WAS uploaded but
+                    yielded nothing; absent means no sidecar has arrived — which
+                    could be a session that predates the feature, or simply one
+                    still waiting on the device. Don't tell someone their paddle
+                    from this morning "never will" have motion data. */}
+                {attitude?.reason ? (
+                  <p>{attitude.reason}</p>
+                ) : (
+                  <p>
+                    Roll and pitch come from the tracker&apos;s motion sidecar, which uploads
+                    separately from the track — so a session can appear here with its
+                    track already in and its motion still on the device. If this paddle is
+                    recent, the sidecar is probably still waiting to sync. Sessions recorded
+                    before the tracker started writing sidecars have none at all.
+                  </p>
+                )}
               </div>
             ) : (
               <>
