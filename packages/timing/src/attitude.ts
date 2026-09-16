@@ -107,6 +107,10 @@ const TAU_S = 2.0
 // Below this roll/pitch ratio the two axes are not meaningfully distinguishable.
 const MIN_ANISOTROPY = 1.2
 // Chart-sized, and small enough that the payload stays a few tens of KB.
+// Above this median tilt from the session's own mean gravity, the device was not
+// held in a fixed orientation and attitude is not recoverable. Sits between the
+// two real sessions measured: 7.6 deg (usable) and 34.5 deg (loose in a pocket).
+const MAX_STABLE_TILT_DEG = 20
 const ENVELOPE_BUCKETS = 240
 const EXCERPT_S = 30
 const HISTOGRAM_BINS = 41   // odd, so one bin is centred on level
@@ -143,6 +147,36 @@ export function deriveAttitude(
   // "Down" for this mounting, learned from the session itself.
   const g0 = norm([mean(seg.map(s => s.ax)), mean(seg.map(s => s.ay)), mean(seg.map(s => s.az))])
   if (Math.hypot(g0[0], g0[1], g0[2]) === 0) return none('No usable gravity reference in the motion data.', fs, seg.length)
+
+  // Is the tracker actually HELD in a fixed orientation? Everything below assumes
+  // it is: "down" is learned once, and roll/pitch are deviations from it. A device
+  // loose in a pocket or a bag tumbles freely, there is no fixed device-to-boat
+  // relationship at all, and deviation-from-mean-gravity stops meaning boat
+  // attitude — but the arithmetic still yields confident-looking degrees.
+  //
+  // Measured on real sessions (median exact angle from mean gravity, over the
+  // moving stretches only):
+  //   deck/body-carried, usably stable    7.6 deg   -> 39 deg rms would be absurd
+  //   loose in a pocket, tumbling        34.5 deg   -> 98% of samples past 20 deg
+  //
+  // The exact angle is used here, not the small-angle cross product the rest of
+  // the function relies on, precisely because this test has to stay valid in the
+  // regime where that approximation has already failed.
+  const tilts: number[] = []
+  for (const s of seg) {
+    const m2 = Math.hypot(s.ax, s.ay, s.az)
+    if (m2 <= 0) continue
+    const d = (s.ax * g0[0] + s.ay * g0[1] + s.az * g0[2]) / m2
+    tilts.push((Math.acos(Math.max(-1, Math.min(1, d))) * 180) / Math.PI)
+  }
+  tilts.sort((a, b) => a - b)
+  const medianTilt = tilts.length ? tilts[Math.floor(tilts.length / 2)] : 0
+  if (medianTilt > MAX_STABLE_TILT_DEG) {
+    return none(
+      `The tracker wasn't held in a fixed orientation during this session — it sat a median ${Math.round(medianTilt)}° away from its own average, so it was moving freely rather than with the boat. Roll and pitch can't be separated from the device tumbling. Strap or mount it and this works.`,
+      fs, seg.length,
+    )
+  }
 
   // Any orthonormal basis for the plane perpendicular to gravity. Which one does
   // not matter — PCA below finds the real roll axis inside it.
