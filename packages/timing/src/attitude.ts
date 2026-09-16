@@ -81,6 +81,11 @@ export type AttitudeReport = {
   // motion; only their LABELS become unreliable.
   axisConfident: boolean
   symmetry: AttitudeSymmetry | null
+  // Stretches dropped for being far from the boat's resting orientation — carried,
+  // shouldered, or turned over to empty out. Worth surfacing: on a portage-heavy
+  // paddle this is the difference between a real reading and a discarded session.
+  excludedWindows: number
+  excludedSeconds: number
 }
 
 type Vec = [number, number, number]
@@ -111,11 +116,14 @@ const MIN_ANISOTROPY = 1.2
 // held in a fixed orientation and attitude is not recoverable. Sits between the
 // two real sessions measured: 7.6 deg (usable) and 34.5 deg (loose in a pocket).
 const MAX_STABLE_TILT_DEG = 20
+// Window used to judge stability. Short enough to isolate a portage, long enough
+// not to be fooled by a single wave.
+const STABILITY_WINDOW_S = 20
 const ENVELOPE_BUCKETS = 240
 const EXCERPT_S = 30
 const HISTOGRAM_BINS = 41   // odd, so one bin is centred on level
 
-import { parseMotionCsv } from './cadence'
+import { parseMotionCsv, type MotionSample } from './cadence'
 
 export function deriveAttitude(
   csv: string,
@@ -126,6 +134,7 @@ export function deriveAttitude(
     envelope: [], excerpt: [], rollHistogram: null,
     rollRmsDeg: null, pitchRmsDeg: null, rollP5Deg: null, rollP95Deg: null, plotBoundDeg: null,
     rollToPitchRatio: null, axisConfident: false, symmetry: null,
+    excludedWindows: 0, excludedSeconds: 0,
   })
 
   const all = parseMotionCsv(csv)
@@ -141,12 +150,38 @@ export function deriveAttitude(
   // Only where the boat was actually moving: attitude while parked at the launch
   // describes someone shifting their weight on a stationary hull, not paddling.
   const ranges = opts.movingRanges
-  const seg = ranges?.length ? all.filter(s => ranges.some(([a, b]) => s.ms >= a && s.ms <= b)) : all
+  let seg = ranges?.length ? all.filter(s => ranges.some(([a, b]) => s.ms >= a && s.ms <= b)) : all
   if (seg.length < 128) return none('No moving stretch long enough to describe attitude.', fs, seg.length)
 
-  // "Down" for this mounting, learned from the session itself.
-  const g0 = norm([mean(seg.map(s => s.ax)), mean(seg.map(s => s.ay)), mean(seg.map(s => s.az))])
+  // "Down" for this mounting, learned from the session itself — ROBUSTLY.
+  //
+  // A plain mean is not good enough and this was found the hard way. On a paddle
+  // with six portages the boat is turned over to empty it out, and those inverted
+  // stretches drag the mean orientation ~30 degrees away from the one the boat
+  // actually travels in. Measured against that skewed reference every window looked
+  // 29 degrees off — rock steady at 29 degrees, which is the signature of a FIXED
+  // mounting and a bad reference, not of a tumbling device. The first version read
+  // that as "never settled" and threw an entire 85-minute session away.
+  //
+  // So: mean, then repeatedly re-estimate from the closer half. That converges on
+  // the orientation the device actually spends its time in and lets the upside-down
+  // stretches fall out as the outliers they are.
+  let g0 = norm([mean(seg.map(s => s.ax)), mean(seg.map(s => s.ay)), mean(seg.map(s => s.az))])
   if (Math.hypot(g0[0], g0[1], g0[2]) === 0) return none('No usable gravity reference in the motion data.', fs, seg.length)
+  for (let pass = 0; pass < 4; pass++) {
+    const scored = seg.map(s => {
+      const m2 = Math.hypot(s.ax, s.ay, s.az)
+      const d = m2 > 0 ? (s.ax * g0[0] + s.ay * g0[1] + s.az * g0[2]) / m2 : -1
+      return { s, d }
+    })
+    scored.sort((a, b) => b.d - a.d)          // most aligned with current estimate first
+    const keep = scored.slice(0, Math.max(64, Math.floor(scored.length / 2)))
+    const next = norm([
+      mean(keep.map(k => k.s.ax)), mean(keep.map(k => k.s.ay)), mean(keep.map(k => k.s.az)),
+    ])
+    if (Math.hypot(next[0], next[1], next[2]) === 0) break
+    g0 = next
+  }
 
   // Is the tracker actually HELD in a fixed orientation? Everything below assumes
   // it is: "down" is learned once, and roll/pitch are deviations from it. A device
@@ -162,21 +197,51 @@ export function deriveAttitude(
   // The exact angle is used here, not the small-angle cross product the rest of
   // the function relies on, precisely because this test has to stay valid in the
   // regime where that approximation has already failed.
-  const tilts: number[] = []
-  for (const s of seg) {
+  const tiltFrom = (ref: Vec, s: MotionSample) => {
     const m2 = Math.hypot(s.ax, s.ay, s.az)
-    if (m2 <= 0) continue
-    const d = (s.ax * g0[0] + s.ay * g0[1] + s.az * g0[2]) / m2
-    tilts.push((Math.acos(Math.max(-1, Math.min(1, d))) * 180) / Math.PI)
+    if (m2 <= 0) return 0
+    const d = (s.ax * ref[0] + s.ay * ref[1] + s.az * ref[2]) / m2
+    return (Math.acos(Math.max(-1, Math.min(1, d))) * 180) / Math.PI
   }
-  tilts.sort((a, b) => a - b)
-  const medianTilt = tilts.length ? tilts[Math.floor(tilts.length / 2)] : 0
-  if (medianTilt > MAX_STABLE_TILT_DEG) {
+  const medianOf = (xs: number[]) => {
+    if (!xs.length) return 0
+    const s2 = [...xs].sort((a, b) => a - b)
+    return s2[Math.floor(s2.length / 2)]
+  }
+
+  // Drop the stretches where the boat wasn't the right way up.
+  //
+  // This is PER WINDOW, not a verdict on the whole session, and that distinction
+  // came straight from a real paddle: six portages, the boat turned over each time
+  // to empty water out. Judged globally those inversions dragged the median tilt to
+  // 34.5 deg and the session was thrown away entirely — including an hour of
+  // perfectly good paddling either side of them. A portage is also fast enough to
+  // clear the "moving" speed gate, so it cannot be filtered out by speed.
+  //
+  // Windows far from the session's own resting orientation are carried, inverted,
+  // or on a shoulder; windows near it are afloat. Keep the latter.
+  const winLen = Math.max(16, Math.round(STABILITY_WINDOW_S * fs))
+  const stable: MotionSample[] = []
+  let droppedWindows = 0
+  for (let i = 0; i < seg.length; i += winLen) {
+    const w = seg.slice(i, Math.min(seg.length, i + winLen))
+    if (w.length < 8) continue
+    if (medianOf(w.map(s => tiltFrom(g0, s))) > MAX_STABLE_TILT_DEG) { droppedWindows++; continue }
+    stable.push(...w)
+  }
+
+  if (stable.length < 128) {
+    const overall = Math.round(medianOf(seg.map(s => tiltFrom(g0, s))))
     return none(
-      `The tracker wasn't held in a fixed orientation during this session — it sat a median ${Math.round(medianTilt)}° away from its own average, so it was moving freely rather than with the boat. Roll and pitch can't be separated from the device tumbling. Strap or mount it and this works.`,
+      `The tracker never settled into a steady orientation this session — a median ${overall}° from its own average, so it was being carried or moving freely rather than travelling with the boat. Roll and pitch can't be separated from the device tumbling. Mount it to the boat and this works.`,
       fs, seg.length,
     )
   }
+  seg = stable
+  // Re-learn "down" from the stable stretches only: an inverted portage in the
+  // first pass pulls the reference away from the orientation it actually paddles in.
+  g0 = norm([mean(seg.map(s => s.ax)), mean(seg.map(s => s.ay)), mean(seg.map(s => s.az))])
+
 
   // Any orthonormal basis for the plane perpendicular to gravity. Which one does
   // not matter — PCA below finds the real roll axis inside it.
@@ -297,7 +362,10 @@ export function deriveAttitude(
     excerpt,
     rollHistogram,
     available: true,
-    reason: `From ${seg.length.toLocaleString('en-GB')} moving samples at ${Math.round(fs)} Hz.`,
+    reason: `From ${seg.length.toLocaleString('en-GB')} moving samples at ${Math.round(fs)} Hz.`
+      + (droppedWindows
+        ? ` ${droppedWindows} stretch${droppedWindows === 1 ? '' : 'es'} (about ${Math.round(droppedWindows * STABILITY_WINDOW_S)}s) left out — the boat was well off its resting orientation there, which is what carrying or emptying it looks like.`
+        : ''),
     sampleRateHz: r2(fs),
     samples: seg.length,
     rollRmsDeg: r2(rollRms),
@@ -308,5 +376,7 @@ export function deriveAttitude(
     rollToPitchRatio: pitchRms > 0 ? r2(rollRms / pitchRms) : null,
     axisConfident: anisotropy >= MIN_ANISOTROPY,
     symmetry,
+    excludedWindows: droppedWindows,
+    excludedSeconds: Math.round(droppedWindows * STABILITY_WINDOW_S),
   }
 }
