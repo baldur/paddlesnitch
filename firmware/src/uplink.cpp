@@ -319,17 +319,60 @@ static size_t writeDecimatedMotion(const String &src, const String &dst)
     int factor = (int)lround((1000.0 / stepMs) / MOTION_UPLOAD_HZ);
     if (factor < 1) factor = 1;
 
+    // Block reads and an explicit yield, NOT readStringUntil per line.
+    //
+    // The first version did `String line = in.readStringUntil('\n')` for every
+    // row and never yielded. On an 85-minute paddle that is ~250,000 heap
+    // allocations and ~250,000 single-byte-at-a-time SD reads, running for
+    // minutes without letting the core-0 idle task run. It survived the smaller
+    // sidecars and died on a 10.5 MB one, leaving a zero-length temp file, the SD
+    // driver stopped mid-transaction, and the card latched into a busy state it
+    // held even across power cycles. Because the card and the IMU share one SPI
+    // bus, a stuck card takes the IMU down with it — the board came back only
+    // after the card was reset in a separate reader.
+    //
+    // So: read in blocks, split lines in a fixed buffer, and yield every
+    // YIELD_EVERY rows so the watchdog is fed and the SD stack keeps its turn.
     in.seek(probeStart);
+    const size_t BUF = 2048;
+    const long YIELD_EVERY = 512;
+    uint8_t chunk[BUF];
+    char line[256];
+    size_t lineLen = 0;
     long idx = 0;
+    bool overflow = false;
+
     while (in.available()) {
-        String line = in.readStringUntil('\n');
-        if (!line.length()) continue;
-        if (idx++ % factor) continue;
-        line.trim();
-        if (!line.length()) continue;
-        out.println(line);
-        written += line.length() + 1;
+        int n = in.read(chunk, BUF);
+        if (n <= 0) break;
+        for (int i = 0; i < n; i++) {
+            char c = (char)chunk[i];
+            if (c != '\n' && c != '\r') {
+                if (lineLen < sizeof(line) - 1) line[lineLen++] = c;
+                else overflow = true;          // absurdly long row: drop it, don't corrupt the next
+                continue;
+            }
+            if (lineLen == 0) continue;        // blank / CRLF second half
+            line[lineLen] = 0;
+            if (!overflow && (idx % factor) == 0) {
+                out.write((const uint8_t *)line, lineLen);
+                out.write((const uint8_t *)"\n", 1);
+                written += lineLen + 1;
+            }
+            idx++;
+            lineLen = 0;
+            overflow = false;
+            if ((idx % YIELD_EVERY) == 0) vTaskDelay(1);
+        }
     }
+    // A final row with no trailing newline.
+    if (lineLen && !overflow && (idx % factor) == 0) {
+        line[lineLen] = 0;
+        out.write((const uint8_t *)line, lineLen);
+        out.write((const uint8_t *)"\n", 1);
+        written += lineLen + 1;
+    }
+
     out.flush();
     out.close();
     in.close();

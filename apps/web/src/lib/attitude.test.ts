@@ -187,6 +187,25 @@ describe('deriveAttitude', () => {
     })
   })
 
+  it('refuses a tracker that was tumbling loose rather than held to the boat', () => {
+    // A device rolling around in a pocket has no fixed relationship to the hull,
+    // so "boat attitude" does not exist for it — but the arithmetic still returns
+    // confident-looking degrees unless this is caught. Observed on a real session:
+    // 39 deg rms "roll", from a device that spent the paddle tumbling.
+    const n = 180 * 50
+    const rows = Array.from({ length: n }, (_, i) => {
+      const t = i / 50
+      // Gravity sweeping right around the device rather than oscillating near one
+      // orientation.
+      const th = 2 * Math.PI * 0.05 * t
+      return `${Math.round(t * 1000)},${Math.sin(th).toFixed(4)},${(Math.cos(th) * 0.4).toFixed(4)},${(Math.cos(th) * 0.9).toFixed(4)},5,5,5`
+    })
+    const r = deriveAttitude([HEADER, ...rows].join('\n'))
+    expect(r.available).toBe(false)
+    expect(r.reason).toMatch(/fixed orientation|tumbling|freely/i)
+    expect(r.rollRmsDeg).toBeNull()
+  })
+
   it('refuses data with too few samples instead of guessing', () => {
     const r = deriveAttitude(`${HEADER}\n0,0,0,1,0,0,0\n20,0,0,1,0,0,0`)
     expect(r.available).toBe(false)
