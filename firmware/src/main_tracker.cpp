@@ -65,10 +65,28 @@ enum class Screen { Track, Sync, Nerd };
 // Chooser row for a screen. One mapping, used by both the draw and the selection
 // blink: (int)Screen happens to match the menu order today, and relying on that
 // would break silently the first time the enum is reordered.
+static const char *resetReasonStr()
+{
+    switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  return "poweron";
+    case ESP_RST_SW:       return "sw";
+    case ESP_RST_PANIC:    return "PANIC";
+    case ESP_RST_INT_WDT:  return "int-wdt";
+    case ESP_RST_TASK_WDT: return "TASK-WDT";
+    case ESP_RST_WDT:      return "wdt";
+    case ESP_RST_BROWNOUT: return "BROWNOUT";
+    case ESP_RST_EXT:      return "ext";
+    case ESP_RST_DEEPSLEEP:return "deepsleep";
+    default:               return "unknown";
+    }
+}
+
 static int pickIndex(Screen s) { return s == Screen::Track ? 0 : s == Screen::Sync ? 1 : 2; }
 static bool     onPick        = true;            // showing the chooser
 static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
 static Screen   uiScreen      = Screen::Track;   // the entered screen
+static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
+static const int NERD_PAGES   = 3;
 static bool     confirmDelete = false;
 static uint32_t confirmUntil  = 0;
 // Track auto-records on entry (once there's a fix); stopping is a deliberate
@@ -420,6 +438,7 @@ static void enterScreen(Screen s)
     uiScreen = s;
     onPick   = false;
     stopArmed = false;
+    if (s == Screen::Nerd) nerdPage = 0;                    // always start at page 1
     if (s == Screen::Sync) uplinkRequestCounts();           // refresh on entry
     // Track is the recording screen: it auto-starts once a fix is available
     // (handled in loop()), so there is no "press to record".
@@ -467,6 +486,9 @@ static void screenDoubleTap()
         stopArmed = false;
         if (storageRecording()) toggleRecording();          // stop + trigger sync
     }
+    // On Nerd the gesture pages through the diagnostics first and only leaves after
+    // the last one, so "double-tap = move on" holds on every screen.
+    if (uiScreen == Screen::Nerd && nerdPage + 1 < NERD_PAGES) { nerdPage++; return; }
     onPick = true;
     pickHighlight = uiScreen;
 }
@@ -811,6 +833,23 @@ void loop()
                       : uiScreen == Screen::Nerd ? AppState::Nerd
                                                  : AppState::Track;
         u.pickSel     = pickIndex(pickHighlight);
+        u.nerdPage    = nerdPage;
+        u.nerdPages   = NERD_PAGES;
+        u.onUsb       = boardOnUsb();
+        u.uptimeS     = millis() / 1000;
+        u.heapMin     = ESP.getMinFreeHeap();
+        u.psramFree   = ESP.getFreePsram();
+        u.fwVersion   = FIRMWARE_VERSION;
+        u.resetReason = resetReasonStr();
+        u.rssi        = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+        u.serverHost  = netcfg.baseUrl;
+        u.sdSizeMB    = storageCardSizeMB();
+        u.imuOk       = imuReady();
+        {
+            ImuSample m = imuSnapshot();
+            u.imuTempC   = m.tempC;
+            u.imuSamples = m.samples;
+        }
         u.stopArmed   = stopArmed;
         u.speedUnit   = speedUnit;
         u.strokeRateSpm = -1;          // on-device stroke-rate derivation is TBD

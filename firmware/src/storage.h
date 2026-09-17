@@ -26,6 +26,7 @@ void     storageStopSession();
 bool     storageRecording();
 const char *storageFilename();
 uint32_t storageRowCount();
+uint64_t storageCardSizeMB();   // 0 when no card is mounted
 void     storageLogRow(const char *csvLine);
 
 // Appends a row to the raw motion-capture sidecar (`track_<stamp>_imu.csv`),
