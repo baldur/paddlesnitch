@@ -319,7 +319,7 @@ bool netBringUp()
     if (!netcfg.everConnected) {
         if (netStartPortal(why)) { delay(300); ESP.restart(); }
     } else {
-        screen("WiFi unavailable", netcfg.ssid.c_str(), "Hold BOOT 3s", "for setup");
+        screen("WiFi unavailable", netcfg.ssid.c_str(), "Hold BOOT", "for setup");
         delay(3000);
     }
     return false;

@@ -52,31 +52,38 @@ static void drawPlug(int x, int y)
     display.drawVLine(x + 5, y + 6, 3);
 }
 
+// Power state, top-right, on EVERY screen.
+//
+// The gauge used to live only in the Track screen's status bar, on the reasoning
+// that the status bar was Track's. But "how much battery is left" is not a
+// property of the screen you happen to be looking at — it is the one thing you
+// want to be able to glance at whatever the device is showing, and out on the
+// water there is no other way to find out. Icon only here, no percentage: it has
+// to fit beside each screen's own title without pushing anything around. Track
+// keeps the fuller icon+percent treatment in drawTopRow.
+static void drawBatteryBadge(const UiState &s)
+{
+    if (s.batteryPct >= 0) drawBattery(128 - 16, 0, s.batteryPct, s.charging);
+    else                   drawPlug(128 - 11, 0);
+}
+
 void uiSplash()
 {
     if (!display.begin()) return;
 
-    // A satellite orbiting a "P". Short, and it says what the device is for.
-    const int cx = 64, cy = 33, rx = 44, ry = 21;
-    for (int f = 0; f < 26; f++) {
-        float a = -1.6f + f * 0.30f;
-        display.clearBuffer();
-        display.drawEllipse(cx, cy, rx, ry);
-        display.setFont(u8g2_font_logisoso32_tf);
-        display.drawStr(cx - 11, cy + 17, "P");
-        drawSatellite((int)(cx + cosf(a) * rx) - 6, (int)(cy + sinf(a) * ry) - 4);
-        display.sendBuffer();
-        delay(38);
-    }
-
+    // The wordmark, centred, briefly. Nothing else.
+    //
+    // This used to be a satellite orbiting a "P" over an ellipse — 26 frames and
+    // about 1.6 s before the device would show you anything useful. A boot
+    // animation is a cost paid every single power-on, and it was saying something
+    // the rest of the UI says better: the Track screen's satellite glyph already
+    // tells you about GPS, and it does it when the answer matters.
     display.clearBuffer();
-    display.setFont(u8g2_font_logisoso32_tf);
-    display.drawStr(cx - 11, cy + 11, "P");
     display.setFont(u8g2_font_6x10_tf);
     const char *w = "paddlesnitch";
-    display.drawStr(cx - display.getStrWidth(w) / 2, 62, w);
+    display.drawStr((128 - display.getStrWidth(w)) / 2, 36, w);
     display.sendBuffer();
-    delay(650);
+    delay(200);
 }
 
 // Until the tracker is linked to an account it has nothing useful to say about
@@ -87,7 +94,7 @@ static void drawOnboarding(const UiState &s)
 {
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "PADDLE TRACKER");
+    display.drawStr(0, 10, "Paddle tracker");
     display.drawHLine(0, 13, 128);
 
     display.setFont(u8g2_font_helvB12_tf);
@@ -100,6 +107,7 @@ static void drawOnboarding(const UiState &s)
     char id[32];
     snprintf(id, sizeof(id), "id %s", s.deviceId.c_str());
     display.drawStr(0, 62, id);
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
@@ -138,7 +146,7 @@ static void drawTracker(const UiState &s)
     // can't be missed. double-tap confirms, tap (or timeout) keeps recording.
     if (s.stopArmed) {
         display.setFont(u8g2_font_helvB12_tf);
-        display.drawStr(0, 34, "STOP?");
+        display.drawStr(0, 34, "Stop?");
         display.setFont(u8g2_font_6x10_tf);
         display.drawStr(0, 50, "2x tap = confirm");
         display.setFont(u8g2_font_5x8_tf);
@@ -220,8 +228,8 @@ static void drawSync(const UiState &s)
     display.clearBuffer();
 
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "SYNC");
-    if (s.syncing) display.drawStr(128 - display.getStrWidth("..."), 10, "...");
+    display.drawStr(0, 10, "Sync");
+    if (s.syncing) display.drawStr(128 - 18 - display.getStrWidth("..."), 10, "...");
     display.drawHLine(0, 13, 128);
 
     if (!s.countsValid) {
@@ -235,22 +243,22 @@ static void drawSync(const UiState &s)
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=sync  hold=delete";
     display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
 // Pick: the chooser shown at boot (and on double-tap). tap moves the highlight,
 // hold selects. Both GPS and upload run the whole time -- this only picks the view.
-static void drawPick(const UiState &s)
+// One frame of the chooser. Split out so the selection blink can reuse the exact
+// layout instead of a near-copy that drifts the first time the menu changes.
+static void drawPickFrame(int sel, bool highlight)
 {
-    // No top row here: the chooser is just the options. The sat/battery status
-    // bar belongs to the Track screen, where it is what you are watching.
     display.clearBuffer();
-
-    const char *opts[3] = { "TRACK", "SYNC", "NERDMODE" };
+    const char *opts[3] = { "Track", "Sync", "Nerd mode" };
     display.setFont(u8g2_font_6x10_tf);
     for (int i = 0; i < 3; i++) {
         int y = 20 + i * 14;
-        if (i == s.pickSel) {
+        if (i == sel && highlight) {
             display.drawBox(0, y - 10, 128, 13);         // highlight bar
             display.setDrawColor(0);
             display.drawStr(6, y, opts[i]);
@@ -262,7 +270,30 @@ static void drawPick(const UiState &s)
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=move  hold=open";
     display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+}
+
+static void drawPick(const UiState &s)
+{
+    // No top row here: the chooser is just the options. The sat status bar
+    // belongs to the Track screen, where it is what you are watching.
+    drawPickFrame(s.pickSel, true);
+    drawBatteryBadge(s);
     display.sendBuffer();
+}
+
+// Blinks the highlighted row on its way out.
+//
+// A hold opens the screen under your thumb with no other acknowledgement, so a
+// slow press and a successful one looked identical until the next screen appeared.
+// Two quick flashes of the bar say "that one, and it took" — and they double as
+// the transition, which otherwise cut hard from one layout to another.
+void uiPickFlash(int sel)
+{
+    if (!board_display_ok()) return;
+    for (int i = 0; i < 2; i++) {
+        drawPickFrame(sel, false); display.sendBuffer(); delay(70);
+        drawPickFrame(sel, true);  display.sendBuffer(); delay(70);
+    }
 }
 
 // Delete confirmation: destructive, so it is a deliberate screen, not a gesture.
@@ -271,13 +302,14 @@ static void drawDeleteConfirm(const UiState &s)
     char l[32];
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 12, "DELETE UPLOADED?");
+    display.drawStr(0, 12, "Delete uploaded?");
     display.drawHLine(0, 15, 128);
     display.setFont(u8g2_font_helvB12_tf);
     snprintf(l, sizeof(l), "%d files", s.uploaded);
     display.drawStr(0, 38, l);
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 62, "tap = yes   2x = no");
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
@@ -286,13 +318,14 @@ static void drawLinking(const UiState &s)
 {
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "LINK THIS TRACKER");
+    display.drawStr(0, 10, "Link this tracker");
     display.drawHLine(0, 13, 128);
     display.setFont(u8g2_font_logisoso20_tr);
     display.drawStr(2, 40, s.claimCode.length() ? s.claimCode.c_str() : "....");
     display.setFont(u8g2_font_5x8_tf);
     display.drawStr(0, 54, "paddlesnitch.com");
     display.drawStr(0, 63, "profile > settings");
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 

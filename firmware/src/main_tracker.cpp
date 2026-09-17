@@ -62,6 +62,10 @@ static bool     haveLastPos    = false;
 // Pick. Onboarding screens (Setup/Linking) are forced separately while the
 // device is not yet usable. DeleteConfirm is a transient overlay on Sync.
 enum class Screen { Track, Sync, Nerd };
+// Chooser row for a screen. One mapping, used by both the draw and the selection
+// blink: (int)Screen happens to match the menu order today, and relying on that
+// would break silently the first time the enum is reordered.
+static int pickIndex(Screen s) { return s == Screen::Track ? 0 : s == Screen::Sync ? 1 : 2; }
 static bool     onPick        = true;            // showing the chooser
 static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
 static Screen   uiScreen      = Screen::Track;   // the entered screen
@@ -82,7 +86,7 @@ static void toast(const char *t, uint32_t ms = 1500)
 }
 
 static String linkTitle = "Not linked";
-static String linkHint  = "Hold BOOT 3s";
+static String linkHint  = "Hold BOOT";
 static double   lastLat = 0, lastLon = 0;
 
 static double metresBetween(double lat1, double lon1, double lat2, double lon2)
@@ -333,7 +337,7 @@ static void drawStatus()
     display.sendBuffer();
 }
 
-// Hold the BOOT button for 3 s to reopen the setup portal. Without this, a
+// Hold the BOOT button (HOLD_MS) to reopen the setup portal. Without this, a
 // device that has connected before but whose WiFi password later changes can
 // only be fixed with a laptop and a serial console — which is not a reasonable
 // thing to need in a kit bag.
@@ -383,13 +387,13 @@ static void linkAttempt()
 {
     if (!netHasWifi()) {
         linkTitle = "Setup needed";
-        linkHint  = "Hold BOOT 3s";
+        linkHint  = "Hold BOOT";
         netBringUp();                       // opens the portal itself
         return;
     }
     if (!netBringUp()) {
         linkTitle = "No WiFi";
-        linkHint  = "Hold BOOT 3s to fix";
+        linkHint  = "Hold BOOT to fix";
         return;
     }
     if (!netIsClaimed()) {
@@ -397,7 +401,7 @@ static void linkAttempt()
         if (cs.state != ClaimState::Claimed) {
             Serial.printf("claim: %s\n", cs.message.c_str());
             linkTitle = "Not linked";
-            linkHint  = "Hold BOOT 3s to retry";
+            linkHint  = "Hold BOOT to retry";
             netDisconnect();
             return;
         }
@@ -468,7 +472,9 @@ static void screenHold()
 {
     if (confirmDelete) return;
     if (!deviceUsable()) { linkAttempt(); return; }         // onboarding: WiFi/link
-    if (onPick) { enterScreen(pickHighlight); return; }     // open highlighted screen
+    // Blink the chosen row first: the hold fires while still held, so without an
+    // acknowledgement a successful press and a too-short one look the same.
+    if (onPick) { uiPickFlash(pickIndex(pickHighlight)); enterScreen(pickHighlight); return; }
     if (uiScreen == Screen::Sync) {                         // arm the delete
         confirmDelete = true;
         confirmUntil  = millis() + 10000;
@@ -485,6 +491,16 @@ static void screenHold()
 // A single tap is only confirmed once the double-tap window closes, so the action
 // fires ~400 ms after release. Invisible next to a 1 Hz log rate.
 static const uint32_t DOUBLE_TAP_MS = 400;
+// How long a hold has to be held. Named, because the on-screen hints and two
+// specs used to repeat "3 s" as a literal and drifted the moment it changed.
+//
+// 1200 ms, down from 3000. Three seconds is a long time to stand on a button and
+// made every hold feel like the device had missed the press. It can be this short
+// because a hold fires WHILE HELD, not on release: the screen changes under your
+// thumb, so you hold until it reacts rather than counting. The destructive actions
+// behind a hold (stop recording, delete uploaded) are each confirmed on a second
+// screen anyway, so the hold itself does not need to be the safety.
+static const uint32_t HOLD_MS = 1200;
 
 static void checkButton()
 {
@@ -501,7 +517,7 @@ static void checkButton()
     if (down && heldSince == 0) {
         heldSince = millis();
         longFired = false;
-    } else if (down && !longFired && millis() - heldSince > 3000) {
+    } else if (down && !longFired && millis() - heldSince > HOLD_MS) {
         longFired  = true;
         pendingTap = 0;
         Serial.println("btn: hold");
@@ -791,8 +807,7 @@ void loop()
                       : uiScreen == Screen::Sync ? AppState::Sync
                       : uiScreen == Screen::Nerd ? AppState::Nerd
                                                  : AppState::Track;
-        u.pickSel     = pickHighlight == Screen::Track ? 0
-                      : pickHighlight == Screen::Sync  ? 1 : 2;
+        u.pickSel     = pickIndex(pickHighlight);
         u.stopArmed   = stopArmed;
         u.speedUnit   = speedUnit;
         u.strokeRateSpm = -1;          // on-device stroke-rate derivation is TBD

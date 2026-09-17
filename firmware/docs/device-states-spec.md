@@ -116,7 +116,7 @@ gestures, now **context-sensitive to the visible screen**:
 |---|---|---|---|---|---|---|
 | **Tap** (<400 ms) | move highlight | toggle speed unit (km/h/m/s/pace) | cancel (keep recording) | **sync now** | — | — |
 | **Double-tap** | — | → Pick (keeps recording) | **confirm stop** → menu | → Pick | → Pick | — |
-| **Hold 3 s** | **open highlighted** | **arm STOP** | — | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
+| **Hold** | **open highlighted** | **arm STOP** | — | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
 
 Notes:
 - **Setup is reachable** via Hold on an **idle** Track (no fix yet) or Nerd, and during
@@ -129,7 +129,7 @@ Notes:
 
 ### Delete-uploaded confirm flow
 
-`Hold 3 s` on the Sync screen opens a dedicated **confirm screen**:
+`Hold` on the Sync screen opens a dedicated **confirm screen**:
 
 ```
 DELETE m UPLOADED FILES?

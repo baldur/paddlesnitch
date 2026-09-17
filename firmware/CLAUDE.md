@@ -287,7 +287,7 @@ real sessions (incl. a 570 KB track). Earlier (2026-09-05) the same path reached
   the portal with the failure reason printed at the top of the form.
 - **Credentials that have worked before** → do *not* hijack the device into
   setup mode. It is simply away from home, and it should be tracking.
-- **Hold BOOT for 3 s, any time** → portal. This is the escape hatch for a
+- **Hold BOOT, any time** → portal. This is the escape hatch for a
   changed router password.
 
 ### Diagnose the failure, don't just report it
@@ -340,13 +340,20 @@ place each frame; do not reintroduce per-screen booleans.
 `Pick` / `Track` / `Sync` / `Nerd` / `DeleteConfirm`. `uiSplash()` runs once at
 boot (a satellite orbiting a "P").
 
+Timings live in one place, `HOLD_MS` and `DOUBLE_TAP_MS` in `main_tracker.cpp`:
+**hold 1200 ms**, **double-tap window 400 ms**, **40 ms debounce**. Don't restate
+the numbers elsewhere — the on-screen hints and two specs all said "3 s" and went
+stale the moment the threshold changed. A hold fires **while held**, so the hints
+say "Hold BOOT" with no figure: you hold until the screen reacts rather than
+counting, and a figure that understates just makes people give up early.
+
 **One button, three gestures, context-sensitive** — the board has only one free
 button (GPIO0; `RST` is the AXP2101 power key and not usable for this):
 
 - **Pick** (shown every boot): **tap** moves the highlight, **hold** opens the
   highlighted screen.
 - **Track/Sync/Nerd**: **tap** = the screen's primary action (Track: start/stop
-  recording; Sync: sync now); **double-tap** = back to `Pick`; **hold 3 s** =
+  recording; Sync: sync now); **double-tap** = back to `Pick`; **hold** =
   `Setup`/re-link, except on `Sync` where it arms the delete-confirm.
 - **DeleteConfirm**: **tap** = confirm, **double-tap** = cancel.
 
@@ -374,12 +381,30 @@ is set from GPS on the first fix; the CSV columns are unchanged.
 `track_<stamp>_imu.csv` (`ms,ax,ay,az,gx,gy,gz`) next to the 1 Hz track file.
 
 The full-rate file **stays on the card** (delete-uploaded and the Sync counts
-still skip `*_imu.csv`), but a **10 Hz reduction is now uploaded** in a second
-sync pass after every track — see `writeDecimatedMotion()` in `uplink.cpp`. Two
-rules there are load-bearing: sidecars go **after** all tracks, because the server
-attaches one to an existing session and `409`s otherwise; and a sidecar's `409`
-must **not** be marked uploaded, or the motion data is stranded on the card
-forever.
+still skip it) and is **never uploaded**. What gets uploaded is a second file,
+`track_<stamp>_i10.csv`, written **during recording** at ~11 Hz alongside the 50 Hz
+one — one extra row every 90 ms, which costs nothing next to the full-rate write.
+
+Three things there are load-bearing:
+
+- **Write it while recording, do not re-read at sync.** The first version decimated
+  the full-rate file at sync time. That put the longest, most memory-hungry job in
+  the firmware on the critical path of a sync that runs at **every boot**, and a
+  10.5 MB sidecar took the device down hard enough to boot-loop it — recoverable
+  only by pulling the card. Worse, a stuck SD card holds the shared SPI bus and
+  kills the IMU with it.
+- **Gate on TIME, not every Nth sample.** Measured against a real session, cadence
+  comes out within 0.5 % at 10.9 Hz and **19.8 % low at 8.7 Hz**. The poll is
+  nominally 50 Hz but really runs at ~43.7 Hz, so "every 5th sample" lands in the
+  bad half. `UP_INTERVAL_MS = 90` holds ~11 Hz whatever the poll achieves.
+- **The on-card name and the uploaded name differ on purpose.** The server keys a
+  sidecar to the track of the matching name, so `track_<stamp>_i10.csv` is uploaded
+  as `track_<stamp>_imu.csv` (`uploadOne` takes path and name separately). Sidecars
+  upload in a **second pass after every track**, because the server answers 409
+  when the track has not arrived yet — and a sidecar's 409 must not be marked done.
+
+Sidecars recorded before 0.6.0 have no `_i10` file and will not upload; the
+full-rate file is still on the card if one is ever wanted.
 
 Server-side derivation is **built** (`@paddlesnitch/timing/cadence` and
 `/attitude`): stroke rate ~58 spm and roll/pitch/evenness come out of that 10 Hz
