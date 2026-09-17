@@ -71,27 +71,19 @@ void uiSplash()
 {
     if (!display.begin()) return;
 
-    // A satellite orbiting a "P". Short, and it says what the device is for.
-    const int cx = 64, cy = 33, rx = 44, ry = 21;
-    for (int f = 0; f < 26; f++) {
-        float a = -1.6f + f * 0.30f;
-        display.clearBuffer();
-        display.drawEllipse(cx, cy, rx, ry);
-        display.setFont(u8g2_font_logisoso32_tf);
-        display.drawStr(cx - 11, cy + 17, "P");
-        drawSatellite((int)(cx + cosf(a) * rx) - 6, (int)(cy + sinf(a) * ry) - 4);
-        display.sendBuffer();
-        delay(38);
-    }
-
+    // The wordmark, centred, briefly. Nothing else.
+    //
+    // This used to be a satellite orbiting a "P" over an ellipse — 26 frames and
+    // about 1.6 s before the device would show you anything useful. A boot
+    // animation is a cost paid every single power-on, and it was saying something
+    // the rest of the UI says better: the Track screen's satellite glyph already
+    // tells you about GPS, and it does it when the answer matters.
     display.clearBuffer();
-    display.setFont(u8g2_font_logisoso32_tf);
-    display.drawStr(cx - 11, cy + 11, "P");
     display.setFont(u8g2_font_6x10_tf);
     const char *w = "paddlesnitch";
-    display.drawStr(cx - display.getStrWidth(w) / 2, 62, w);
+    display.drawStr((128 - display.getStrWidth(w)) / 2, 36, w);
     display.sendBuffer();
-    delay(650);
+    delay(450);
 }
 
 // Until the tracker is linked to an account it has nothing useful to say about
@@ -102,7 +94,7 @@ static void drawOnboarding(const UiState &s)
 {
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "PADDLE TRACKER");
+    display.drawStr(0, 10, "Paddle tracker");
     display.drawHLine(0, 13, 128);
 
     display.setFont(u8g2_font_helvB12_tf);
@@ -154,7 +146,7 @@ static void drawTracker(const UiState &s)
     // can't be missed. double-tap confirms, tap (or timeout) keeps recording.
     if (s.stopArmed) {
         display.setFont(u8g2_font_helvB12_tf);
-        display.drawStr(0, 34, "STOP?");
+        display.drawStr(0, 34, "Stop?");
         display.setFont(u8g2_font_6x10_tf);
         display.drawStr(0, 50, "2x tap = confirm");
         display.setFont(u8g2_font_5x8_tf);
@@ -236,7 +228,7 @@ static void drawSync(const UiState &s)
     display.clearBuffer();
 
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "SYNC");
+    display.drawStr(0, 10, "Sync");
     if (s.syncing) display.drawStr(128 - 18 - display.getStrWidth("..."), 10, "...");
     display.drawHLine(0, 13, 128);
 
@@ -263,7 +255,7 @@ static void drawPick(const UiState &s)
     // bar belongs to the Track screen, where it is what you are watching.
     display.clearBuffer();
 
-    const char *opts[3] = { "TRACK", "SYNC", "NERDMODE" };
+    const char *opts[3] = { "Track", "Sync", "Nerd mode" };
     display.setFont(u8g2_font_6x10_tf);
     for (int i = 0; i < 3; i++) {
         int y = 20 + i * 14;
@@ -289,7 +281,7 @@ static void drawDeleteConfirm(const UiState &s)
     char l[32];
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 12, "DELETE UPLOADED?");
+    display.drawStr(0, 12, "Delete uploaded?");
     display.drawHLine(0, 15, 128);
     display.setFont(u8g2_font_helvB12_tf);
     snprintf(l, sizeof(l), "%d files", s.uploaded);
@@ -305,7 +297,7 @@ static void drawLinking(const UiState &s)
 {
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "LINK THIS TRACKER");
+    display.drawStr(0, 10, "Link this tracker");
     display.drawHLine(0, 13, 128);
     display.setFont(u8g2_font_logisoso20_tr);
     display.drawStr(2, 40, s.claimCode.length() ? s.claimCode.c_str() : "....");
