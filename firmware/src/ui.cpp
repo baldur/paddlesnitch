@@ -83,7 +83,7 @@ void uiSplash()
     const char *w = "paddlesnitch";
     display.drawStr((128 - display.getStrWidth(w)) / 2, 36, w);
     display.sendBuffer();
-    delay(450);
+    delay(200);
 }
 
 // Until the tracker is linked to an account it has nothing useful to say about
@@ -249,17 +249,16 @@ static void drawSync(const UiState &s)
 
 // Pick: the chooser shown at boot (and on double-tap). tap moves the highlight,
 // hold selects. Both GPS and upload run the whole time -- this only picks the view.
-static void drawPick(const UiState &s)
+// One frame of the chooser. Split out so the selection blink can reuse the exact
+// layout instead of a near-copy that drifts the first time the menu changes.
+static void drawPickFrame(int sel, bool highlight)
 {
-    // No top row here: the chooser is just the options. The sat/battery status
-    // bar belongs to the Track screen, where it is what you are watching.
     display.clearBuffer();
-
     const char *opts[3] = { "Track", "Sync", "Nerd mode" };
     display.setFont(u8g2_font_6x10_tf);
     for (int i = 0; i < 3; i++) {
         int y = 20 + i * 14;
-        if (i == s.pickSel) {
+        if (i == sel && highlight) {
             display.drawBox(0, y - 10, 128, 13);         // highlight bar
             display.setDrawColor(0);
             display.drawStr(6, y, opts[i]);
@@ -271,8 +270,30 @@ static void drawPick(const UiState &s)
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=move  hold=open";
     display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+}
+
+static void drawPick(const UiState &s)
+{
+    // No top row here: the chooser is just the options. The sat status bar
+    // belongs to the Track screen, where it is what you are watching.
+    drawPickFrame(s.pickSel, true);
     drawBatteryBadge(s);
     display.sendBuffer();
+}
+
+// Blinks the highlighted row on its way out.
+//
+// A hold opens the screen under your thumb with no other acknowledgement, so a
+// slow press and a successful one looked identical until the next screen appeared.
+// Two quick flashes of the bar say "that one, and it took" — and they double as
+// the transition, which otherwise cut hard from one layout to another.
+void uiPickFlash(int sel)
+{
+    if (!board_display_ok()) return;
+    for (int i = 0; i < 2; i++) {
+        drawPickFrame(sel, false); display.sendBuffer(); delay(70);
+        drawPickFrame(sel, true);  display.sendBuffer(); delay(70);
+    }
 }
 
 // Delete confirmation: destructive, so it is a deliberate screen, not a gesture.

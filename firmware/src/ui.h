@@ -72,5 +72,6 @@ struct UiState {
     String   claimCode;
 };
 
-void uiSplash();                 // boot animation; blocks for ~1.5 s
+void uiSplash();                 // holds the wordmark briefly; blocks ~200 ms
+void uiPickFlash(int sel);       // blink the chooser row on selection; blocks ~280 ms
 void uiDraw(const UiState &s);

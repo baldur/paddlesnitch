@@ -113,7 +113,14 @@ BoardStatus boardInit()
         display.setBusClock(400000);
         display.setFont(u8g2_font_6x10_tf);
         display.clearBuffer();
-        display.drawStr(0, 10, "T-Beam Supreme");
+        // The wordmark, in the same place uiSplash() puts it, so the very first
+        // frame is already the product and boot is ONE screen rather than a board
+        // name that flashes past and then the brand. Still proof-of-life: the rest
+        // of boardInit() takes a second or two, and a blank panel in that window is
+        // indistinguishable from a dead one. Duplicated rather than calling into
+        // ui.cpp, which depends on this file.
+        const char *w = "paddlesnitch";
+        display.drawStr((128 - display.getStrWidth(w)) / 2, 36, w);
         display.sendBuffer();
     }
 

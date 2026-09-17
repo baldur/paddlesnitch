@@ -62,6 +62,10 @@ static bool     haveLastPos    = false;
 // Pick. Onboarding screens (Setup/Linking) are forced separately while the
 // device is not yet usable. DeleteConfirm is a transient overlay on Sync.
 enum class Screen { Track, Sync, Nerd };
+// Chooser row for a screen. One mapping, used by both the draw and the selection
+// blink: (int)Screen happens to match the menu order today, and relying on that
+// would break silently the first time the enum is reordered.
+static int pickIndex(Screen s) { return s == Screen::Track ? 0 : s == Screen::Sync ? 1 : 2; }
 static bool     onPick        = true;            // showing the chooser
 static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
 static Screen   uiScreen      = Screen::Track;   // the entered screen
@@ -468,7 +472,9 @@ static void screenHold()
 {
     if (confirmDelete) return;
     if (!deviceUsable()) { linkAttempt(); return; }         // onboarding: WiFi/link
-    if (onPick) { enterScreen(pickHighlight); return; }     // open highlighted screen
+    // Blink the chosen row first: the hold fires while still held, so without an
+    // acknowledgement a successful press and a too-short one look the same.
+    if (onPick) { uiPickFlash(pickIndex(pickHighlight)); enterScreen(pickHighlight); return; }
     if (uiScreen == Screen::Sync) {                         // arm the delete
         confirmDelete = true;
         confirmUntil  = millis() + 10000;
@@ -801,8 +807,7 @@ void loop()
                       : uiScreen == Screen::Sync ? AppState::Sync
                       : uiScreen == Screen::Nerd ? AppState::Nerd
                                                  : AppState::Track;
-        u.pickSel     = pickHighlight == Screen::Track ? 0
-                      : pickHighlight == Screen::Sync  ? 1 : 2;
+        u.pickSel     = pickIndex(pickHighlight);
         u.stopArmed   = stopArmed;
         u.speedUnit   = speedUnit;
         u.strokeRateSpm = -1;          // on-device stroke-rate derivation is TBD
