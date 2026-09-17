@@ -156,6 +156,9 @@ void setup()
     imuProbe();
     bool imuOk = imuInit();
     report("IMU", imuOk, imuOk ? "QMI8658 accel+gyro" : "init failed");
+    // imuInit may have power-cycled the sensor rails (up to three times) to
+    // recover a wedged chip, which leaves the OLED dark for the rest of the run.
+    boardDisplayReinit();
 
     board.sdcard = storageInit();
     report("SD", board.sdcard,
