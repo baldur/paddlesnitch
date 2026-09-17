@@ -287,7 +287,7 @@ real sessions (incl. a 570 KB track). Earlier (2026-09-05) the same path reached
   the portal with the failure reason printed at the top of the form.
 - **Credentials that have worked before** → do *not* hijack the device into
   setup mode. It is simply away from home, and it should be tracking.
-- **Hold BOOT for 3 s, any time** → portal. This is the escape hatch for a
+- **Hold BOOT, any time** → portal. This is the escape hatch for a
   changed router password.
 
 ### Diagnose the failure, don't just report it
@@ -340,13 +340,20 @@ place each frame; do not reintroduce per-screen booleans.
 `Pick` / `Track` / `Sync` / `Nerd` / `DeleteConfirm`. `uiSplash()` runs once at
 boot (a satellite orbiting a "P").
 
+Timings live in one place, `HOLD_MS` and `DOUBLE_TAP_MS` in `main_tracker.cpp`:
+**hold 1200 ms**, **double-tap window 400 ms**, **40 ms debounce**. Don't restate
+the numbers elsewhere — the on-screen hints and two specs all said "3 s" and went
+stale the moment the threshold changed. A hold fires **while held**, so the hints
+say "Hold BOOT" with no figure: you hold until the screen reacts rather than
+counting, and a figure that understates just makes people give up early.
+
 **One button, three gestures, context-sensitive** — the board has only one free
 button (GPIO0; `RST` is the AXP2101 power key and not usable for this):
 
 - **Pick** (shown every boot): **tap** moves the highlight, **hold** opens the
   highlighted screen.
 - **Track/Sync/Nerd**: **tap** = the screen's primary action (Track: start/stop
-  recording; Sync: sync now); **double-tap** = back to `Pick`; **hold 3 s** =
+  recording; Sync: sync now); **double-tap** = back to `Pick`; **hold** =
   `Setup`/re-link, except on `Sync` where it arms the delete-confirm.
 - **DeleteConfirm**: **tap** = confirm, **double-tap** = cancel.
 

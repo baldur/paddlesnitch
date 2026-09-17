@@ -82,7 +82,7 @@ static void toast(const char *t, uint32_t ms = 1500)
 }
 
 static String linkTitle = "Not linked";
-static String linkHint  = "Hold BOOT 3s";
+static String linkHint  = "Hold BOOT";
 static double   lastLat = 0, lastLon = 0;
 
 static double metresBetween(double lat1, double lon1, double lat2, double lon2)
@@ -333,7 +333,7 @@ static void drawStatus()
     display.sendBuffer();
 }
 
-// Hold the BOOT button for 3 s to reopen the setup portal. Without this, a
+// Hold the BOOT button (HOLD_MS) to reopen the setup portal. Without this, a
 // device that has connected before but whose WiFi password later changes can
 // only be fixed with a laptop and a serial console — which is not a reasonable
 // thing to need in a kit bag.
@@ -383,13 +383,13 @@ static void linkAttempt()
 {
     if (!netHasWifi()) {
         linkTitle = "Setup needed";
-        linkHint  = "Hold BOOT 3s";
+        linkHint  = "Hold BOOT";
         netBringUp();                       // opens the portal itself
         return;
     }
     if (!netBringUp()) {
         linkTitle = "No WiFi";
-        linkHint  = "Hold BOOT 3s to fix";
+        linkHint  = "Hold BOOT to fix";
         return;
     }
     if (!netIsClaimed()) {
@@ -397,7 +397,7 @@ static void linkAttempt()
         if (cs.state != ClaimState::Claimed) {
             Serial.printf("claim: %s\n", cs.message.c_str());
             linkTitle = "Not linked";
-            linkHint  = "Hold BOOT 3s to retry";
+            linkHint  = "Hold BOOT to retry";
             netDisconnect();
             return;
         }
@@ -485,6 +485,16 @@ static void screenHold()
 // A single tap is only confirmed once the double-tap window closes, so the action
 // fires ~400 ms after release. Invisible next to a 1 Hz log rate.
 static const uint32_t DOUBLE_TAP_MS = 400;
+// How long a hold has to be held. Named, because the on-screen hints and two
+// specs used to repeat "3 s" as a literal and drifted the moment it changed.
+//
+// 1200 ms, down from 3000. Three seconds is a long time to stand on a button and
+// made every hold feel like the device had missed the press. It can be this short
+// because a hold fires WHILE HELD, not on release: the screen changes under your
+// thumb, so you hold until it reacts rather than counting. The destructive actions
+// behind a hold (stop recording, delete uploaded) are each confirmed on a second
+// screen anyway, so the hold itself does not need to be the safety.
+static const uint32_t HOLD_MS = 1200;
 
 static void checkButton()
 {
@@ -501,7 +511,7 @@ static void checkButton()
     if (down && heldSince == 0) {
         heldSince = millis();
         longFired = false;
-    } else if (down && !longFired && millis() - heldSince > 3000) {
+    } else if (down && !longFired && millis() - heldSince > HOLD_MS) {
         longFired  = true;
         pendingTap = 0;
         Serial.println("btn: hold");

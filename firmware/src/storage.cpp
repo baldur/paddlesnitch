@@ -36,11 +36,18 @@ static File     upFile;
 static char     upFilename[48] = "";
 static uint32_t upRows = 0;
 static long     upLastMs = -1000000;
-// ~11 Hz. Gated on TIME, not every Nth sample, so it holds whatever rate the IMU
-// poll actually achieves. That matters: measured against a real session, cadence
-// comes out within 0.5% at 10.9 Hz and 19.8% LOW at 8.7 Hz, and "every 5th sample"
-// of a nominal-50 Hz poll that really runs at 43.7 Hz lands in the bad half.
-static const long UP_INTERVAL_MS = 90;
+// Gated on TIME, not every Nth sample, so it holds whatever rate the IMU poll
+// actually achieves. That matters: measured against a real session, cadence comes
+// out within 0.5% at 10.9 Hz but 19.8% LOW at 8.7 Hz, and "every 5th sample" of a
+// nominal-50 Hz poll that really runs at 43.7 Hz would land in the bad half.
+//
+// 80 ms, not 90. A 90 ms gate measured 10.06 Hz on the board — samples arrive
+// every ~23 ms, so the first one past the gate lands around 100 ms — which is
+// between the two rates that were actually tested. The cliff is steep and its
+// exact position is unknown, so this brackets the known-good 10.9 Hz from above
+// instead of sitting just under it. Costs ~25% more bytes; still ~1.9 MB/hour,
+// well inside the server's 4 MB cap.
+static const long UP_INTERVAL_MS = 80;
 static uint32_t imuRows = 0;
 static const char *IMU_HEADER = "ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n";
 
