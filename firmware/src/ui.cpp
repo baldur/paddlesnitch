@@ -52,6 +52,21 @@ static void drawPlug(int x, int y)
     display.drawVLine(x + 5, y + 6, 3);
 }
 
+// Power state, top-right, on EVERY screen.
+//
+// The gauge used to live only in the Track screen's status bar, on the reasoning
+// that the status bar was Track's. But "how much battery is left" is not a
+// property of the screen you happen to be looking at — it is the one thing you
+// want to be able to glance at whatever the device is showing, and out on the
+// water there is no other way to find out. Icon only here, no percentage: it has
+// to fit beside each screen's own title without pushing anything around. Track
+// keeps the fuller icon+percent treatment in drawTopRow.
+static void drawBatteryBadge(const UiState &s)
+{
+    if (s.batteryPct >= 0) drawBattery(128 - 16, 0, s.batteryPct, s.charging);
+    else                   drawPlug(128 - 11, 0);
+}
+
 void uiSplash()
 {
     if (!display.begin()) return;
@@ -100,6 +115,7 @@ static void drawOnboarding(const UiState &s)
     char id[32];
     snprintf(id, sizeof(id), "id %s", s.deviceId.c_str());
     display.drawStr(0, 62, id);
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
@@ -221,7 +237,7 @@ static void drawSync(const UiState &s)
 
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 10, "SYNC");
-    if (s.syncing) display.drawStr(128 - display.getStrWidth("..."), 10, "...");
+    if (s.syncing) display.drawStr(128 - 18 - display.getStrWidth("..."), 10, "...");
     display.drawHLine(0, 13, 128);
 
     if (!s.countsValid) {
@@ -235,6 +251,7 @@ static void drawSync(const UiState &s)
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=sync  hold=delete";
     display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
@@ -262,6 +279,7 @@ static void drawPick(const UiState &s)
     display.setFont(u8g2_font_5x8_tf);
     const char *hint = "tap=move  hold=open";
     display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
@@ -278,6 +296,7 @@ static void drawDeleteConfirm(const UiState &s)
     display.drawStr(0, 38, l);
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 62, "tap = yes   2x = no");
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 
@@ -293,6 +312,7 @@ static void drawLinking(const UiState &s)
     display.setFont(u8g2_font_5x8_tf);
     display.drawStr(0, 54, "paddlesnitch.com");
     display.drawStr(0, 63, "profile > settings");
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 

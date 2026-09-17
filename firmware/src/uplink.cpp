@@ -274,6 +274,32 @@ static bool isMotionUpload(const String &name)
 // bytes without re-running that sweep.
 static const int MOTION_UPLOAD_HZ = 10;
 static const char *MOTION_TMP = "imu_up.tmp";
+// Sidecars we have started decimating. See the note at the call site: this exists
+// so a file that crashes the device is tried once, not at every boot forever.
+static const char *MOTION_TRIED = "/imu_try.txt";
+
+static bool motionAttempted(const String &name)
+{
+    File f = SD.open(MOTION_TRIED, FILE_READ);
+    if (!f) return false;
+    bool found = false;
+    while (f.available()) {
+        String line = f.readStringUntil('\n');
+        line.trim();
+        if (line == name) { found = true; break; }
+    }
+    f.close();
+    return found;
+}
+
+static void markMotionAttempt(const String &name)
+{
+    File f = SD.open(MOTION_TRIED, FILE_APPEND);
+    if (!f) return;
+    f.println(name);
+    f.flush();          // must survive the crash it is guarding against
+    f.close();
+}
 
 // Writes a MOTION_UPLOAD_HZ reduction of `src` to `dst`. Returns the bytes
 // written, or 0 on failure.
@@ -488,6 +514,24 @@ int uplinkSyncSessions()
         if (name == activeImu) continue;
         if (alreadyUploaded(name)) continue;
         if (g_yield) { Serial.println("sync: yielding card"); break; }
+
+        // Claim the attempt BEFORE the heavy work, not after.
+        //
+        // Decimating a sidecar is the longest, most memory-hungry thing this
+        // firmware does, and a sync runs at every boot. If it takes the device
+        // down, the next boot starts the identical work and takes it down again —
+        // a 10.5 MB sidecar turned the tracker into a boot loop that could only be
+        // broken by removing the card. Recording the attempt first means a file
+        // that kills us gets exactly one try, and the device stays usable.
+        //
+        // The file is untouched on the card, so a fixed build can clear
+        // /imu_try.txt and pick it up again. Losing one sidecar is a far smaller
+        // problem than a device that will not boot.
+        if (motionAttempted(name)) {
+            Serial.printf("  %s: skipped, a previous attempt did not finish\n", name.c_str());
+            continue;
+        }
+        markMotionAttempt(name);
 
         size_t small = writeDecimatedMotion(name, MOTION_TMP);
         if (!small) { Serial.printf("  %s: could not decimate\n", name.c_str()); continue; }
