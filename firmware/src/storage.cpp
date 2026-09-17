@@ -27,6 +27,20 @@ static uint32_t rows = 0;
 // Raw motion-capture sidecar (see docs/motion-capture-spec.md).
 static File     imuFile;
 static char     imuFilename[48] = "";
+// The reduction that actually gets uploaded, written AS WE RECORD rather than by
+// re-reading the full-rate file at sync time. Re-reading was the wrong shape: it
+// meant the longest, most memory-hungry job in the firmware ran at every sync,
+// and a 10.5 MB sidecar took the device down hard enough to boot-loop it. Writing
+// one extra row every ~90 ms costs nothing next to the 50 Hz file beside it.
+static File     upFile;
+static char     upFilename[48] = "";
+static uint32_t upRows = 0;
+static long     upLastMs = -1000000;
+// ~11 Hz. Gated on TIME, not every Nth sample, so it holds whatever rate the IMU
+// poll actually achieves. That matters: measured against a real session, cadence
+// comes out within 0.5% at 10.9 Hz and 19.8% LOW at 8.7 Hz, and "every 5th sample"
+// of a nominal-50 Hz poll that really runs at 43.7 Hz lands in the bad half.
+static const long UP_INTERVAL_MS = 90;
 static uint32_t imuRows = 0;
 static const char *IMU_HEADER = "ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n";
 
@@ -153,8 +167,16 @@ bool storageStartSession(const char *stamp)
     if (imuFile) { imuFile.print(IMU_HEADER); imuFile.flush(); }
     else         { Serial.printf("SD: could not create %s\n", imuFilename); }
 
-    Serial.printf("SD: recording to %s%s%s\n", filename,
-                  imuFile ? " + " : "", imuFile ? imuFilename : "");
+    snprintf(upFilename, sizeof(upFilename), "/%s_i10.csv", base);
+    upFile = SD.open(upFilename, FILE_WRITE);
+    upRows = 0;
+    upLastMs = -1000000;
+    if (upFile) { upFile.print(IMU_HEADER); upFile.flush(); }
+    else        { Serial.printf("SD: could not create %s\n", upFilename); }
+
+    Serial.printf("SD: recording to %s%s%s%s%s\n", filename,
+                  imuFile ? " + " : "", imuFile ? imuFilename : "",
+                  upFile ? " + " : "", upFile ? upFilename : "");
     return true;
 }
 
@@ -162,16 +184,19 @@ void storageStopSession()
 {
     if (!logFile) return;
     logFile.close();
+    if (upFile) { upFile.flush(); upFile.close(); }
     if (imuFile) {
         imuFile.flush();
         imuFile.close();
-        Serial.printf("SD: stopped %s (%lu rows) + %s (%lu rows)\n",
-                      filename, (unsigned long)rows, imuFilename, (unsigned long)imuRows);
+        Serial.printf("SD: stopped %s (%lu rows) + %s (%lu) + %s (%lu)\n",
+                      filename, (unsigned long)rows, imuFilename, (unsigned long)imuRows,
+                      upFilename, (unsigned long)upRows);
     } else {
         Serial.printf("SD: stopped %s (%lu rows)\n", filename, (unsigned long)rows);
     }
     filename[0] = 0;
     imuFilename[0] = 0;
+    upFilename[0] = 0;
 }
 
 bool storageRecording() { return (bool)logFile; }
@@ -196,6 +221,14 @@ void storageLogImuRow(const char *csvLine)
     // is analysis data, not the authoritative track, so a <1 s loss on an abrupt
     // power-off is fine, and 50 flushes/second would be needless wear + power.
     if (++imuRows % 50 == 0) imuFile.flush();
+
+    // Same row into the upload-rate file when enough time has passed.
+    if (!upFile) return;
+    long ms = atol(csvLine);
+    if (ms - upLastMs < UP_INTERVAL_MS) return;
+    upLastMs = ms;
+    upFile.print(csvLine);
+    if (++upRows % 10 == 0) upFile.flush();
 }
 
 void storageClose()

@@ -261,149 +261,20 @@ static bool isTrackUpload(const String &name)
 // The raw motion sidecar. Uploaded AFTER the tracks (the server attaches it to an
 // already-uploaded session and answers 409 otherwise), and never auto-deleted:
 // the full-rate copy stays on the card even once the reduction is safely up.
+// The pre-written UPLOAD-RATE motion file (~11 Hz), produced during recording by
+// storage.cpp. The full-rate track_*_imu.csv is never uploaded and never touched
+// here: re-reading megabytes at sync time is exactly what boot-looped the device.
 static bool isMotionUpload(const String &name)
 {
-    return name.startsWith("track_") && name.endsWith("_imu.csv");
+    return name.startsWith("track_") && name.endsWith("_i10.csv");
 }
 
-// Target rate for the uploaded reduction. NOT a round number picked for tidiness:
-// measured against a real 65-minute session, cadence comes out within 0.5% of the
-// full 50 Hz answer at 10 Hz, and collapses below it (-12.8% at 5 Hz) as the
-// autocorrelation lag grid gets too coarse to locate the peak between steps.
-// 10 Hz is ~1.5 MB/hour, inside the server's 4 MB cap. Do not lower to save
-// bytes without re-running that sweep.
-static const int MOTION_UPLOAD_HZ = 10;
-static const char *MOTION_TMP = "imu_up.tmp";
-// Sidecars we have started decimating. See the note at the call site: this exists
-// so a file that crashes the device is tried once, not at every boot forever.
-static const char *MOTION_TRIED = "/imu_try.txt";
-
-static bool motionAttempted(const String &name)
+// track_<stamp>_i10.csv -> the name the SERVER keys the sidecar by. It attaches a
+// sidecar to the track of the matching name, so the on-card name and the uploaded
+// name deliberately differ.
+static String motionUploadName(const String &local)
 {
-    File f = SD.open(MOTION_TRIED, FILE_READ);
-    if (!f) return false;
-    bool found = false;
-    while (f.available()) {
-        String line = f.readStringUntil('\n');
-        line.trim();
-        if (line == name) { found = true; break; }
-    }
-    f.close();
-    return found;
-}
-
-static void markMotionAttempt(const String &name)
-{
-    File f = SD.open(MOTION_TRIED, FILE_APPEND);
-    if (!f) return;
-    f.println(name);
-    f.flush();          // must survive the crash it is guarding against
-    f.close();
-}
-
-// Writes a MOTION_UPLOAD_HZ reduction of `src` to `dst`. Returns the bytes
-// written, or 0 on failure.
-//
-// A temp file rather than transforming the stream in flight: HTTPClient needs the
-// content length up front, so an on-the-fly filter would mean scanning the whole
-// file to compute the length and then scanning it again to send it. Writing the
-// reduction once costs one pass and a little card space, and lets the existing
-// streamed upload run untouched.
-static size_t writeDecimatedMotion(const String &src, const String &dst)
-{
-    File in = SD.open("/" + src, FILE_READ);
-    if (!in) return 0;
-    if (SD.exists("/" + dst)) SD.remove("/" + dst);   // removing a missing file logs a VFS error
-    File out = SD.open("/" + dst, FILE_WRITE);
-    if (!out) { in.close(); return 0; }
-
-    size_t written = 0;
-    String header = in.readStringUntil('\n');
-    if (header.length() && !isdigit((unsigned char)header[0])) {
-        header.trim();
-        out.println(header);
-        written += header.length() + 1;
-    } else {
-        in.seek(0);   // no header, it was already a data row
-    }
-
-    // Sample interval from the first rows, so this follows the logger's real rate
-    // instead of assuming the 20 ms that firmware 0.4.x happens to use.
-    long firstMs = -1, prevMs = -1, stepSum = 0;
-    int stepN = 0;
-    size_t probeStart = in.position();
-    for (int i = 0; i < 64 && in.available(); i++) {
-        String line = in.readStringUntil('\n');
-        long ms = atol(line.c_str());
-        if (ms <= 0) continue;
-        if (firstMs < 0) firstMs = ms;
-        if (prevMs > 0 && ms > prevMs) { stepSum += ms - prevMs; stepN++; }
-        prevMs = ms;
-    }
-    int stepMs = stepN ? (int)(stepSum / stepN) : 20;
-    if (stepMs < 1) stepMs = 1;
-    int factor = (int)lround((1000.0 / stepMs) / MOTION_UPLOAD_HZ);
-    if (factor < 1) factor = 1;
-
-    // Block reads and an explicit yield, NOT readStringUntil per line.
-    //
-    // The first version did `String line = in.readStringUntil('\n')` for every
-    // row and never yielded. On an 85-minute paddle that is ~250,000 heap
-    // allocations and ~250,000 single-byte-at-a-time SD reads, running for
-    // minutes without letting the core-0 idle task run. It survived the smaller
-    // sidecars and died on a 10.5 MB one, leaving a zero-length temp file, the SD
-    // driver stopped mid-transaction, and the card latched into a busy state it
-    // held even across power cycles. Because the card and the IMU share one SPI
-    // bus, a stuck card takes the IMU down with it — the board came back only
-    // after the card was reset in a separate reader.
-    //
-    // So: read in blocks, split lines in a fixed buffer, and yield every
-    // YIELD_EVERY rows so the watchdog is fed and the SD stack keeps its turn.
-    in.seek(probeStart);
-    const size_t BUF = 2048;
-    const long YIELD_EVERY = 512;
-    uint8_t chunk[BUF];
-    char line[256];
-    size_t lineLen = 0;
-    long idx = 0;
-    bool overflow = false;
-
-    while (in.available()) {
-        int n = in.read(chunk, BUF);
-        if (n <= 0) break;
-        for (int i = 0; i < n; i++) {
-            char c = (char)chunk[i];
-            if (c != '\n' && c != '\r') {
-                if (lineLen < sizeof(line) - 1) line[lineLen++] = c;
-                else overflow = true;          // absurdly long row: drop it, don't corrupt the next
-                continue;
-            }
-            if (lineLen == 0) continue;        // blank / CRLF second half
-            line[lineLen] = 0;
-            if (!overflow && (idx % factor) == 0) {
-                out.write((const uint8_t *)line, lineLen);
-                out.write((const uint8_t *)"\n", 1);
-                written += lineLen + 1;
-            }
-            idx++;
-            lineLen = 0;
-            overflow = false;
-            if ((idx % YIELD_EVERY) == 0) vTaskDelay(1);
-        }
-    }
-    // A final row with no trailing newline.
-    if (lineLen && !overflow && (idx % factor) == 0) {
-        line[lineLen] = 0;
-        out.write((const uint8_t *)line, lineLen);
-        out.write((const uint8_t *)"\n", 1);
-        written += lineLen + 1;
-    }
-
-    out.flush();
-    out.close();
-    in.close();
-    Serial.printf("  decimated %s 1/%d -> %u B\n", src.c_str(), factor, (unsigned)written);
-    return written;
+    return local.substring(0, local.length() - strlen("_i10.csv")) + "_imu.csv";
 }
 
 // Tallies the sessions on the card for the Sync screen: how many track files
@@ -498,45 +369,33 @@ int uplinkSyncSessions()
     }
     root.close();
 
-    // Second pass: the motion sidecars, decimated. Deliberately after every track
-    // — the server attaches a sidecar to an existing session and answers 409 if
-    // the track has not arrived yet, and a 409 here would mark it done forever.
-    String activeImu = active;
-    if (activeImu.endsWith(".csv")) activeImu = activeImu.substring(0, activeImu.length() - 4) + "_imu.csv";
+    // Second pass: the motion sidecars. Deliberately after every track — the
+    // server attaches a sidecar to an existing session and answers 409 if the
+    // track has not arrived yet, and a 409 here would mark it done forever.
+    //
+    // Nothing heavy happens here any more. The ~11 Hz file was written during
+    // recording, so this is an ordinary streamed upload of a couple of MB, the
+    // same as a track. The version that re-read and decimated the full-rate file
+    // at this point is what boot-looped the device on a 10.5 MB sidecar.
+    String activeUp = active;
+    if (activeUp.endsWith(".csv")) activeUp = activeUp.substring(0, activeUp.length() - 4) + "_i10.csv";
     File root2 = SD.open("/");
     for (File f = root2.openNextFile(); f; f = root2.openNextFile()) {
         if (f.isDirectory()) { f.close(); continue; }
         String name = f.name();
         if (name.startsWith("/")) name = name.substring(1);
+        size_t size = f.size();
         f.close();
 
         if (!isMotionUpload(name)) continue;
-        if (name == activeImu) continue;
+        if (name == activeUp) continue;            // still being written to
         if (alreadyUploaded(name)) continue;
         if (g_yield) { Serial.println("sync: yielding card"); break; }
 
-        // Claim the attempt BEFORE the heavy work, not after.
-        //
-        // Decimating a sidecar is the longest, most memory-hungry thing this
-        // firmware does, and a sync runs at every boot. If it takes the device
-        // down, the next boot starts the identical work and takes it down again —
-        // a 10.5 MB sidecar turned the tracker into a boot loop that could only be
-        // broken by removing the card. Recording the attempt first means a file
-        // that kills us gets exactly one try, and the device stays usable.
-        //
-        // The file is untouched on the card, so a fixed build can clear
-        // /imu_try.txt and pick it up again. Losing one sidecar is a far smaller
-        // problem than a device that will not boot.
-        if (motionAttempted(name)) {
-            Serial.printf("  %s: skipped, a previous attempt did not finish\n", name.c_str());
-            continue;
-        }
-        markMotionAttempt(name);
-
-        size_t small = writeDecimatedMotion(name, MOTION_TMP);
-        if (!small) { Serial.printf("  %s: could not decimate\n", name.c_str()); continue; }
-        if (uploadOne(client, MOTION_TMP, name, small, /*retryOn409=*/true)) accepted++;
-        SD.remove(String("/") + MOTION_TMP);
+        // Uploaded under the name the SERVER keys sidecars by, read from the
+        // on-card name. retryOn409 because a 409 means "the track is not up yet",
+        // which is temporary — marking that done would strand the motion data.
+        if (uploadOne(client, name, motionUploadName(name), size, /*retryOn409=*/true)) accepted++;
     }
     root2.close();
 
