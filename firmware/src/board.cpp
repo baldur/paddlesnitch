@@ -209,6 +209,29 @@ void boardScanI2C(TwoWire &bus, const char *label)
 
 bool board_display_ok() { return g_displayOk; }
 
+// Bring the panel back after something has cut its rail.
+//
+// imuInit() power-cycles ALDO1/ALDO2 to unwedge a QMI8658 that came up bad after a
+// warm reset, and it retries up to three times. The OLED does not survive that:
+// the panel loses its initialisation, nothing re-establishes it, and every draw
+// afterwards goes into a dark screen while the rest of the device runs perfectly
+// happily. The symptom is "the tracker won't turn on" from a board that is holding
+// a GPS fix and reported Display [ok] on the serial bring-up.
+//
+// Cheap and idempotent, so it is called unconditionally after the IMU stage rather
+// than only when the IMU failed — a successful init touches those rails too.
+void boardDisplayReinit()
+{
+    if (!g_displayOk) return;
+    display.begin();
+    display.setBusClock(400000);
+    display.setFont(u8g2_font_6x10_tf);
+    display.clearBuffer();
+    const char *w = "paddlesnitch";
+    display.drawStr((128 - display.getStrWidth(w)) / 2, 36, w);
+    display.sendBuffer();
+}
+
 void radioPrintConfig()
 {
     Serial.printf("LoRa: %.1f MHz  SF%d  BW%.0f kHz  CR4/%d  sync 0x%02X  %d dBm\n",

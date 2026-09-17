@@ -329,31 +329,78 @@ static void drawLinking(const UiState &s)
     display.sendBuffer();
 }
 
-// Everything removed from the normal screens, on one page, reachable without a
-// laptop -- the situations that need it happen on the water.
-static void drawNerd(const UiState &s)
+// Diagnostics, reachable without a laptop -- the situations that need it happen on
+// the water. Paged rather than crammed: a 128x64 panel fits about seven 5x8 lines,
+// and the useful set outgrew one screen. Double-tap advances, and past the last
+// page returns to the chooser, so the gesture still means "move on" here.
+static void drawNerdHeader(const UiState &s, const char *title)
 {
     char l[40];
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 7, title);
+    snprintf(l, sizeof(l), "%d/%d", s.nerdPage + 1, s.nerdPages);
+    display.drawStr(128 - 16 - 3 - display.getStrWidth(l), 7, l);
+    display.drawHLine(0, 10, 128);
+}
+
+static void drawNerd(const UiState &s)
+{
+    char l[48];
     display.clearBuffer();
     display.setFont(u8g2_font_5x8_tf);
 
-    snprintf(l, sizeof(l), "sat %d  hdop %.1f  %s", s.sats, s.hdop, s.fix ? "FIX" : "--");
-    display.drawStr(0, 7, l);
-    snprintf(l, sizeof(l), "id %s  %s", s.deviceId.c_str(), s.linked ? "linked" : "UNLINKED");
-    display.drawStr(0, 16, l);
-    snprintf(l, sizeof(l), "net %s", s.wifiUp ? s.ip.c_str() : (s.ssid.length() ? s.ssid.c_str() : "none"));
-    display.drawStr(0, 25, l);
-    snprintf(l, sizeof(l), "tx %lu/%lu  rows %lu",
-             (unsigned long)s.txOk, (unsigned long)s.txFail, (unsigned long)s.rows);
-    display.drawStr(0, 34, l);
-    snprintf(l, sizeof(l), "%s", s.fileName.length() ? s.fileName.c_str() : "not recording");
-    display.drawStr(0, 43, l);
-    if (s.batteryPct >= 0) snprintf(l, sizeof(l), "bat %.2fV %d%%", s.battVolts, s.batteryPct);
-    else                   snprintf(l, sizeof(l), "bat usb only");
-    display.drawStr(0, 52, l);
-    snprintf(l, sizeof(l), "heap %luk", (unsigned long)(s.freeHeap / 1024));
-    display.drawStr(0, 61, l);
-    display.drawStr(92, 61, "2x=next");
+    if (s.nerdPage == 0) {
+        drawNerdHeader(s, "gnss / session");
+        snprintf(l, sizeof(l), "sat %d  hdop %.1f  %s", s.sats, s.hdop, s.fix ? "FIX" : "--");
+        display.drawStr(0, 20, l);
+        snprintf(l, sizeof(l), "spd %.1f km/h", s.speedKmh);
+        display.drawStr(0, 29, l);
+        snprintf(l, sizeof(l), "dist %.2f km  %lus", s.distanceM / 1000.0, (unsigned long)s.sessionSecs);
+        display.drawStr(0, 38, l);
+        snprintf(l, sizeof(l), "%s", s.fileName.length() ? s.fileName.c_str() : "not recording");
+        display.drawStr(0, 47, l);
+        snprintf(l, sizeof(l), "rows %lu  tx %lu/%lu",
+                 (unsigned long)s.rows, (unsigned long)s.txOk, (unsigned long)s.txFail);
+        display.drawStr(0, 56, l);
+    } else if (s.nerdPage == 1) {
+        drawNerdHeader(s, "power / system");
+        if (s.batteryPct >= 0) snprintf(l, sizeof(l), "bat %.2fV %d%% %s", s.battVolts, s.batteryPct,
+                                        s.charging ? "chg" : (s.onUsb ? "usb" : ""));
+        else                   snprintf(l, sizeof(l), "bat none  %s", s.onUsb ? "on usb" : "??");
+        display.drawStr(0, 20, l);
+        uint32_t up = s.uptimeS;
+        snprintf(l, sizeof(l), "up %luh %02lum %02lus",
+                 (unsigned long)(up / 3600), (unsigned long)((up / 60) % 60), (unsigned long)(up % 60));
+        display.drawStr(0, 29, l);
+        snprintf(l, sizeof(l), "heap %luk  min %luk",
+                 (unsigned long)(s.freeHeap / 1024), (unsigned long)(s.heapMin / 1024));
+        display.drawStr(0, 38, l);
+        snprintf(l, sizeof(l), "psram %luk", (unsigned long)(s.psramFree / 1024));
+        display.drawStr(0, 47, l);
+        // Why it last rebooted. With a watchdog loop this is the first thing worth
+        // knowing, and it is otherwise only visible on a serial console.
+        snprintf(l, sizeof(l), "fw %s  %s", s.fwVersion.c_str(), s.resetReason.c_str());
+        display.drawStr(0, 56, l);
+    } else {
+        drawNerdHeader(s, "radio / storage");
+        snprintf(l, sizeof(l), "id %s %s", s.deviceId.c_str(), s.linked ? "linked" : "UNLINKED");
+        display.drawStr(0, 20, l);
+        if (s.wifiUp) snprintf(l, sizeof(l), "%s %ddBm", s.ip.c_str(), s.rssi);
+        else          snprintf(l, sizeof(l), "wifi %s", s.ssid.length() ? s.ssid.c_str() : "none");
+        display.drawStr(0, 29, l);
+        snprintf(l, sizeof(l), "%s", s.serverHost.length() ? s.serverHost.c_str() : "no server");
+        display.drawStr(0, 38, l);
+        if (s.sdReady) snprintf(l, sizeof(l), "sd %lluMB  %d/%d up",
+                                (unsigned long long)s.sdSizeMB, s.uploaded, s.onDevice);
+        else           snprintf(l, sizeof(l), "sd not mounted");
+        display.drawStr(0, 47, l);
+        if (s.imuOk) snprintf(l, sizeof(l), "imu %.0fC %luHz", s.imuTempC, (unsigned long)s.imuSamples);
+        else         snprintf(l, sizeof(l), "imu FAILED");
+        display.drawStr(0, 56, l);
+    }
+
+    display.drawStr(88, 63, "2x=next");
+    drawBatteryBadge(s);
     display.sendBuffer();
 }
 

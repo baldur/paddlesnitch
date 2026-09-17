@@ -70,6 +70,29 @@ struct UiState {
     uint32_t freeHeap  = 0;
     bool     wifiUp    = false;
     String   claimCode;
+
+    // nerd mode paging. Double-tap advances; after the last page it returns to the
+    // chooser, so the gesture stays "move on" everywhere rather than meaning
+    // something different here.
+    int      nerdPage  = 0;
+    int      nerdPages = 3;
+
+    // page 2: power + system. Things you cannot get at without a laptop, which is
+    // the whole point of the screen existing.
+    bool     onUsb        = false;
+    uint32_t uptimeS      = 0;
+    uint32_t heapMin      = 0;   // low-water mark, not the current free
+    uint32_t psramFree    = 0;
+    String   fwVersion;
+    String   resetReason;        // why it last rebooted -- the boot-loop question
+
+    // page 3: radio + storage
+    int      rssi         = 0;   // 0 when not associated
+    String   serverHost;
+    uint64_t sdSizeMB     = 0;
+    bool     imuOk        = false;
+    float    imuTempC     = 0;
+    uint32_t imuSamples   = 0;   // samples in the last 1 s window
 };
 
 void uiSplash();                 // holds the wordmark briefly; blocks ~200 ms

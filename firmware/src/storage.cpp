@@ -211,6 +211,9 @@ bool storageRecording() { return (bool)logFile; }
 bool        storageReady()    { return ready; }
 const char *storageFilename() { return filename; }
 uint32_t    storageRowCount() { return rows; }
+// Card size in MB. Lives here because storage owns the SD handle -- role files
+// never touch the hardware directly (see the architecture note in CLAUDE.md).
+uint64_t    storageCardSizeMB() { return ready ? SD.cardSize() / (1024ULL * 1024ULL) : 0; }
 
 void storageLogRow(const char *csvLine)
 {

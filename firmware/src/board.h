@@ -54,6 +54,8 @@ bool  boardIsCharging();
 bool  boardOnUsb();
 int   boardBatteryPercent();   // -1 when no battery is fitted
 bool  board_display_ok();      // did the OLED actually ack at boot
+// Re-establish the panel after a rail power-cycle (imuInit does this). Idempotent.
+void  boardDisplayReinit();
 void  radioPrintConfig();      // logs the active LoRa parameters
 void  imuProbe();              // reads ID registers over SPI and logs them
 extern SPIClass sdSPI;         // second SPI bus: microSD + IMU
