@@ -1,8 +1,15 @@
 # Design note: device OTA, and how solid the device auth actually is
 
-🚧 **Not built. Not urgent.** Written 2026-09-17 to have the shape of the problem
-written down before anyone needs it. Two separate questions that turn out to be
-one question, because OTA is only as safe as the thing that authorises it.
+🚧 **Not built.** Written 2026-09-17; updated the same day once it became clear
+several devices are planned, which changes the conclusion. Two separate questions
+that turn out to be one, because OTA is only as safe as the thing that authorises it.
+
+> **The one thing that is time-critical.** The partition table cannot be changed
+> over the air — it lives outside the app slots and `Update.h` only writes app
+> partitions. So **every device flashed with today's single-slot table is
+> permanently cable-only**, and no amount of later work will retrofit OTA onto it.
+> The repartition is a ten-minute job that must happen *before* a device leaves
+> your hands. Everything else in this note can wait; this cannot.
 
 ---
 
@@ -141,14 +148,23 @@ In this order, because each one is a prerequisite for the next being worth doing
 
 Steps 1–3 are worth doing on their own merits whether or not OTA happens.
 
+**But step 5's partition change jumps the queue for any device being built or
+handed over**, because it is the only item on this list that stops being possible
+later. Ship a device on the current table and it is cable-only for life. Flash the
+two-slot table from the start and every other step stays open, in whatever order
+and whenever they are actually needed — the empty `app1` slot costs nothing but
+3 MB of a flash that is 83% unused.
+
 ---
 
 ## Open questions
 
-- **Is OTA actually worth it?** There is one device. Flashing takes 13 seconds over
-  a cable that is already attached for syncing. OTA earns its keep at the point
-  there are devices in other people's hands, and not obviously before — the
-  honest answer today is "not yet".
+- **Is OTA actually worth it?** With one device on a cable, no — a flash takes 13
+  seconds. With several in other people's hands, yes, and that is now the stated
+  direction. The thing to separate is the *mechanism* from the *prerequisite*: the
+  mechanism can wait until there is something to update and someone to update it
+  for; the repartition cannot wait past the first device you hand over. Do the
+  cheap irreversible-if-missed part now, build the rest when it is needed.
 - **Flash encryption and secure boot?** They close the physical-access hole, and
   they make a bricked device genuinely unrecoverable if the keys are mishandled.
   Not for a single hand-built unit.
