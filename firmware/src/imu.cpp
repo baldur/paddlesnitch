@@ -52,6 +52,19 @@ bool imuInit()
         ready = true;
         return true;
     }
+
+    // Park the chip select HIGH before giving up.
+    //
+    // This matters far more than a dead IMU should. The QMI8658 and the microSD
+    // share one SPI bus, and a half-initialised chip left selected keeps driving
+    // MISO — so every SD transaction on that bus gets corrupted. The symptom is
+    // not "no motion data": it is a card that reads fine one minute and fails the
+    // next, a sync that logs `open(): /sd/uploaded.txt does not exist` and uploads
+    // nothing, and sidecars that reach the server truncated and come back 422.
+    // A dead sensor should cost its own data and nothing else.
+    pinMode(IMU_CS, OUTPUT);
+    digitalWrite(IMU_CS, HIGH);
+    Serial.println("IMU: giving up, CS parked high to free the shared SPI bus");
     return false;
 }
 

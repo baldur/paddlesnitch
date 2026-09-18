@@ -228,13 +228,64 @@ static bool uploadOne(WiFiClientSecure &client, const String &path, const String
     // the CSV: column sets and sensor behaviour change between firmware builds.
     http.addHeader("X-Device-Firmware", FIRMWARE_VERSION);
     http.addHeader("X-Device-Model", "lilygo-tbeam-s3-supreme");
+    // HTTPClient's own timeout, which is NOT the 20 s set on the TLS client and
+    // defaults to five seconds. Five seconds is fine for a claim POST and hopeless
+    // for a session: this board sustains a couple of hundred KB/s over TLS, so
+    // anything past roughly half a megabyte times out mid-body and comes back
+    // error(-3) "send payload failed". That is exactly the pattern seen — small
+    // sidecars accepted, a 696 KB track and a 2.4 MB sidecar both failing, and a
+    // 1.6 MB upload that once succeeded on a faster moment of the same link.
+    http.setTimeout(120000);
 
     // Streamed from the card: a session can be hundreds of KB and the device
     // has nowhere near enough heap to hold one as a String.
-    int rc = http.sendRequest("POST", &f, size);
+    // Read the whole file into PSRAM, then POST from memory.
+    //
+    // Streaming straight off the card (`sendRequest(..., &f, size)`) fails on
+    // anything large: HTTPClient pulls from the File while the TLS write is in
+    // flight, an SPI read stalls for a moment, and a short read is reported as
+    // error(-3) "send payload failed". Measured: a 696 KB track and a 2.4 MB
+    // sidecar both died after ~6 s with heap untouched at 268 KB, and the server
+    // accepts a 2.4 MB body in 2.3 s from a laptop — so neither memory, nor the
+    // timeout, nor the server was the problem.
+    //
+    // The board has 8 MB of PSRAM doing nothing. Reading first separates the two
+    // operations completely: the card is read with no TLS active, then the socket
+    // is fed from RAM at full speed. Falls back to streaming if the allocation
+    // fails, which is no worse than before.
+    uint32_t heapBefore = ESP.getFreeHeap();
+    uint32_t t0 = millis();
+    int rc;
+    uint8_t *buf = (uint8_t *)ps_malloc(size);
+    if (buf) {
+        // Loop: File::read() returns what it has, not what was asked for. A single
+        // call came back with 57 KB of a 696 KB file — and that same short read,
+        // hit inside HTTPClient while streaming, is what produced the original
+        // error(-3) "send payload failed". Reading to completion here is the
+        // actual fix; PSRAM just makes it cheap to hold the result.
+        size_t got = 0;
+        while (got < size) {
+            int n = f.read(buf + got, size - got);
+            if (n <= 0) break;
+            got += (size_t)n;
+        }
+        f.close();
+        if (got != size) {
+            Serial.printf("  %s: short read %u/%u\n", name.c_str(), (unsigned)got, (unsigned)size);
+            free(buf);
+            http.end();
+            return false;
+        }
+        rc = http.sendRequest("POST", buf, size);
+        free(buf);
+    } else {
+        Serial.printf("  %s: no PSRAM for %u B, streaming from card\n", name.c_str(), (unsigned)size);
+        rc = http.sendRequest("POST", &f, size);
+    }
+    uint32_t took = millis() - t0;
     String payload = http.getString();
     http.end();
-    f.close();
+    if (f) f.close();
 
     // 200 accepted, 409 already have it -- both mean stop trying. 422 means the
     // server parsed it and found no usable track (an indoor session with no
@@ -244,7 +295,9 @@ static bool uploadOne(WiFiClientSecure &client, const String &path, const String
     // not been uploaded yet", which is temporary. Marking that done would strand
     // the motion data on the card permanently.
     bool done = (rc == 200 || rc == 201 || rc == 422 || (rc == 409 && !retryOn409));
-    Serial.printf("  %s (%u B) -> HTTP %d %s\n", name.c_str(), (unsigned)size, rc,
+    Serial.printf("  %s (%u B) -> HTTP %d in %lums  heap %lu->%lu  %s\n",
+                  name.c_str(), (unsigned)size, rc, (unsigned long)took,
+                  (unsigned long)heapBefore, (unsigned long)ESP.getFreeHeap(),
                   done ? "" : payload.substring(0, 60).c_str());
     if (done) markUploaded(name, rc);
     return rc == 200 || rc == 201;
