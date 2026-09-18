@@ -19,6 +19,11 @@ static uint32_t rawMs  = 0;
 // 50 Hz: fast enough to catch walking cadence and vehicle bumps, slow enough
 // that polling costs nothing next to the GPS serial workload.
 static const uint32_t POLL_INTERVAL_MS = 20;
+// How long the chip may stay silent before it is declared dead. Long enough that
+// a busy bus or a missed read is not mistaken for a failure, short enough that a
+// wedged sensor stops corrupting SD traffic within a couple of seconds.
+static const uint32_t DEAD_AFTER_MS = 3000;
+static uint32_t lastGoodMs = 0;
 
 bool imuInit()
 {
@@ -66,7 +71,33 @@ void imuPoll()
     float ax, ay, az, gx, gy, gz;
     bool gotAccel = qmi.getAccelerometer(ax, ay, az);
     bool gotGyro  = qmi.getGyroscope(gx, gy, gz);
-    if (!gotAccel && !gotGyro) return;
+
+    // Runtime watchdog: give up on a chip that has stopped answering, and let go
+    // of the bus.
+    //
+    // The chip does not only come up wedged, it WEDGES WHILE RUNNING — observed
+    // within about four minutes of a clean cold boot, with a healthy 4.07 V cell
+    // fitted, so it is neither warm-reset-only nor a power problem. What makes
+    // that expensive is the shared SPI bus: a wedged QMI8658 keeps driving MISO,
+    // and the microSD on the same bus starts throwing `sdWait/Select Failed`,
+    // which takes recording and uploads down with it. Every upload failure chased
+    // today traced back here.
+    //
+    // So: once it has been silent for DEAD_AFTER_MS, stop polling and park CS
+    // high. A dead sensor then costs its own data and nothing else, mid-session
+    // and not merely at boot. Recovery needs a power cycle, which is what
+    // imuInit's rail-cycling already does on the next cold start.
+    if (!gotAccel && !gotGyro) {
+        if (lastGoodMs && millis() - lastGoodMs > DEAD_AFTER_MS) {
+            ready = false;
+            pinMode(IMU_CS, OUTPUT);
+            digitalWrite(IMU_CS, HIGH);
+            Serial.printf("IMU: silent for %lums, marking dead and freeing the SPI bus\n",
+                          (unsigned long)(millis() - lastGoodMs));
+        }
+        return;
+    }
+    lastGoodMs = millis();
 
     if (gotAccel) {
         lastAx = ax; lastAy = ay; lastAz = az;
