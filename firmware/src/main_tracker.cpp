@@ -632,6 +632,24 @@ static void handleSerialCommand()
                 }
                 else Serial.println("setup timed out");
             }
+            // SDPROBE <file> — read a file to completion in 64 KB chunks and
+            // report throughput and any stall, with the radio in three different
+            // states. The open question is whether SD reads fail because WiFi is
+            // ASSOCIATED or because TLS is IN FLIGHT, and nothing so far
+            // separates those: every failure has been observed mid-upload.
+            else if (!strncmp(buf, "SDPROBE ", 8)) {
+                const char *fn = buf + 8;
+                for (int phase = 0; phase < 2; phase++) {
+                    if (phase == 0) { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); delay(300); }
+                    else            { String why; netConnect(15000, &why); }
+                    size_t bytes = 0; uint32_t ms = 0;
+                    bool okRead = storageProbeRead(fn, &bytes, &ms);
+                    Serial.printf("SDPROBE wifi=%s: %u bytes in %lums (%lu KB/s)  %s\n",
+                                  phase == 0 ? "OFF" : "ON", (unsigned)bytes, (unsigned long)ms,
+                                  (unsigned long)(ms ? bytes / ms : 0),
+                                  okRead ? "complete" : "STALLED");
+                }
+            }
             else if (!strncmp(buf, "SYNC", 4)) {
                 // ASKS the uplink task to sync; never syncs on this core. The task
                 // (core 0) is the single owner of the SD card and raises

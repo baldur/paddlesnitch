@@ -27,6 +27,9 @@ bool     storageRecording();
 const char *storageFilename();
 uint32_t storageRowCount();
 uint64_t storageCardSizeMB();   // 0 when no card is mounted
+// Diagnostic: read a file to completion, reporting bytes and elapsed ms.
+// Returns false if it stalled or could not be opened.
+bool     storageProbeRead(const char *name, size_t *bytesOut, uint32_t *msOut);
 void     storageLogRow(const char *csvLine);
 
 // Appends a row to the raw motion-capture sidecar (`track_<stamp>_imu.csv`),
