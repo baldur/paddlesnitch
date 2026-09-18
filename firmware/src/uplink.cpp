@@ -1,5 +1,6 @@
 #include "uplink.h"
 #include "netcfg.h"
+#include "mbedtls/sha256.h"
 #include "storage.h"
 #include "board.h"
 #include "root_ca.h"
@@ -264,6 +265,100 @@ static bool isTrackUpload(const String &name)
 // The pre-written UPLOAD-RATE motion file (~11 Hz), produced during recording by
 // storage.cpp. The full-rate track_*_imu.csv is never uploaded and never touched
 // here: re-reading megabytes at sync time is exactly what boot-looped the device.
+// Uploads a motion sidecar in fixed-size chunks.
+//
+// Not a transfer optimisation — a workaround for the card. With the radio
+// associated this board's SD reads stall hard after a few tens of KB: measured
+// 90112 of 2383054 bytes, and 200 retries over two seconds did not recover it,
+// while a CAT of an 8.19 MB file with the radio idle streams end to end. Small
+// reads with a fresh open and an idle gap between them get around that; a single
+// large read does not.
+//
+// Each chunk is its own POST with ?part=N&parts=M, and the server assembles once
+// the last one lands (see storeMotionPart). Parts are idempotent by index, so a
+// reboot mid-sync resumes rather than starting over. The final part carries a
+// sha256 of the whole file, because assembling from pieces introduces a way to
+// produce a silently wrong file that a single PUT never had.
+static const size_t MOTION_CHUNK = 64 * 1024;
+
+static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, const String &name)
+{
+    File f = SD.open("/" + path, FILE_READ);
+    if (!f) return false;
+    const size_t total = f.size();
+    if (total == 0) { f.close(); return false; }
+    const int parts = (int)((total + MOTION_CHUNK - 1) / MOTION_CHUNK);
+
+    uint8_t *buf = (uint8_t *)ps_malloc(MOTION_CHUNK);
+    if (!buf) { Serial.println("  no PSRAM for a chunk"); f.close(); return false; }
+
+    mbedtls_sha256_context sha;
+    mbedtls_sha256_init(&sha);
+    mbedtls_sha256_starts(&sha, 0);
+
+    bool ok = true;
+    for (int part = 1; part <= parts && ok; part++) {
+        size_t want = (part == parts) ? (total - (size_t)(part - 1) * MOTION_CHUNK) : MOTION_CHUNK;
+        size_t got = 0;
+        int stalls = 0;
+        while (got < want) {
+            int n = f.read(buf + got, want - got);
+            if (n > 0) { got += (size_t)n; stalls = 0; continue; }
+            if (++stalls > 100) break;
+            delay(10);
+        }
+        if (got != want) {
+            Serial.printf("  %s part %d/%d: short read %u/%u\n",
+                          name.c_str(), part, parts, (unsigned)got, (unsigned)want);
+            ok = false;
+            break;
+        }
+        mbedtls_sha256_update(&sha, buf, got);
+
+        // The hash is only known in full on the last part, which is also the one
+        // that triggers assembly — so that is where it is sent.
+        String url = netcfg.baseUrl + "/api/devices/sessions?filename=" + name
+                   + "&part=" + String(part) + "&parts=" + String(parts);
+        if (part == parts) {
+            uint8_t digest[32];
+            mbedtls_sha256_finish(&sha, digest);
+            char hex[65];
+            for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", digest[i]);
+            hex[64] = 0;
+            url += "&sha256=" + String(hex);
+        }
+
+        HTTPClient http;
+        if (!http.begin(client, url)) { ok = false; break; }
+        http.addHeader("Content-Type", "text/csv");
+        http.addHeader("Authorization", "Bearer " + netcfg.token);
+        http.addHeader("X-Device-Firmware", FIRMWARE_VERSION);
+        http.addHeader("X-Device-Model", "lilygo-tbeam-s3-supreme");
+        http.setTimeout(60000);
+        int rc = http.sendRequest("POST", buf, got);
+        String payload = http.getString();
+        http.end();
+
+        // 202 = part stored, 201 = assembled. Anything else is a failure worth
+        // seeing; the file is left unmarked so the next sync retries it.
+        if (rc != 202 && rc != 201) {
+            Serial.printf("  %s part %d/%d (%u B) -> HTTP %d %s\n", name.c_str(), part, parts,
+                          (unsigned)got, rc, payload.substring(0, 60).c_str());
+            ok = false;
+            break;
+        }
+        if (part == parts || (part % 8) == 0) {
+            Serial.printf("  %s part %d/%d -> HTTP %d\n", name.c_str(), part, parts, rc);
+        }
+        delay(5);   // let the radio breathe before the next card read
+    }
+
+    mbedtls_sha256_free(&sha);
+    free(buf);
+    f.close();
+    return ok;
+}
+
 static bool isMotionUpload(const String &name)
 {
     return name.startsWith("track_") && name.endsWith("_i10.csv");
@@ -395,7 +490,13 @@ int uplinkSyncSessions()
         // Uploaded under the name the SERVER keys sidecars by, read from the
         // on-card name. retryOn409 because a 409 means "the track is not up yet",
         // which is temporary — marking that done would strand the motion data.
-        if (uploadOne(client, name, motionUploadName(name), size, /*retryOn409=*/true)) accepted++;
+        // Chunked, always: even a small sidecar costs only one extra request, and
+        // one code path is worth more than saving it.
+        (void)size;
+        if (uploadMotionChunked(client, name, motionUploadName(name))) {
+            markUploaded(name, 201);
+            accepted++;
+        }
     }
     root2.close();
 

@@ -197,6 +197,10 @@ const sessionMotionKey = (deviceId: string, sessionId: string) => `devices/${dev
 // response can't create a duplicate.
 const uploadIndexKey = (deviceId: string, filename: string) => `devices/${deviceId}/uploads/${filename}.json`
 
+// 64 KB chunks put a 4 MB file at ~64 parts. This ceiling is a sanity bound on
+// the assembly loop, not a product limit.
+const MAX_MOTION_PARTS = 512
+
 const safeName = (s: string) => /^[\w.-]{1,128}$/.test(s)
 
 // Returns the existing sessionId if this device+filename was already uploaded.
@@ -244,6 +248,105 @@ export async function storeDeviceMotion(
   const updated: DeviceSessionMeta = { ...meta, motion: { uploadedAt: nowIso(), bytes, rows } }
   await putJson(sessionMetaKey(deviceId, sessionId), updated)
   return updated
+}
+
+// One chunk of a motion sidecar, awaiting assembly. Zero-padded so a plain
+// lexicographic key listing is already in part order.
+const motionPartKey = (deviceId: string, sessionId: string, part: number) =>
+  `devices/${deviceId}/sessions/${sessionId}/motion.parts/${String(part).padStart(4, '0')}`
+
+export type MotionPartResult =
+  | { status: 'no_track' }
+  | { status: 'stored'; have: number; parts: number }
+  | { status: 'incomplete'; have: number; parts: number; missing: number[] }
+  | { status: 'assembled'; meta: DeviceSessionMeta; bytes: number }
+  | { status: 'corrupt'; expected: string; actual: string }
+
+/**
+ * Stores one chunk of a motion sidecar, and assembles the file once the last one
+ * lands.
+ *
+ * Why chunks at all: the device cannot get a large file off its own SD card in
+ * one go — reads stall after ~90 KB while the radio is associated, so a 2.4 MB
+ * sidecar never even reaches the socket. Small chunks are short reads with idle
+ * gaps between them, which sidesteps that as well as the transfer itself.
+ *
+ * Why parts-as-objects rather than S3 multipart: S3 objects are immutable (there
+ * is no append), and multipart upload requires every part except the last to be
+ * at least 5 MB — larger than this entire file. So parts are ordinary objects and
+ * the final call concatenates them. At these sizes that is a couple of MB through
+ * Lambda memory and costs nothing; it would be the wrong shape at 100x.
+ *
+ * Assembly is triggered by the LAST part arriving but verifies that every index
+ * is present rather than assuming ordered delivery — a retried part can arrive
+ * after it. `sha256` is checked over the assembled whole, because concatenating
+ * from pieces introduces a way to silently produce a wrong file that a single PUT
+ * never had.
+ */
+export async function storeMotionPart(
+  deviceId: string,
+  userId: string,
+  trackFilename: string,
+  part: number,
+  parts: number,
+  chunk: Buffer,
+  sha256Hex?: string,
+): Promise<MotionPartResult> {
+  if (!isDeviceId(deviceId) || !safeName(trackFilename)) return { status: 'no_track' }
+  if (!Number.isInteger(part) || !Number.isInteger(parts)) return { status: 'no_track' }
+  if (part < 1 || parts < 1 || part > parts || parts > MAX_MOTION_PARTS) return { status: 'no_track' }
+
+  const sessionId = await findUploadedSession(deviceId, trackFilename)
+  if (!sessionId) return { status: 'no_track' }
+  const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
+  if (!meta || meta.userId !== userId) return { status: 'no_track' }
+
+  // Idempotent by index: a retried chunk overwrites rather than duplicating, so a
+  // device that reboots mid-sync resumes instead of starting over.
+  await putObject(motionPartKey(deviceId, sessionId, part), chunk)
+
+  const prefix = `devices/${deviceId}/sessions/${sessionId}/motion.parts/`
+  const have = (await listKeys(prefix)).length
+  if (part !== parts) return { status: 'stored', have, parts }
+
+  // Last part: assemble, but only if every index is actually present.
+  const buffers: Buffer[] = []
+  const missing: number[] = []
+  for (let i = 1; i <= parts; i++) {
+    const b = await getObject(motionPartKey(deviceId, sessionId, i))
+    if (!b) missing.push(i)
+    else buffers.push(b)
+  }
+  if (missing.length) return { status: 'incomplete', have, parts, missing }
+
+  const full = Buffer.concat(buffers)
+  if (sha256Hex) {
+    const actual = createHash('sha256').update(full).digest('hex')
+    if (!hexEqual(actual, sha256Hex.toLowerCase())) {
+      return { status: 'corrupt', expected: sha256Hex.toLowerCase(), actual }
+    }
+  }
+
+  await putObject(sessionMotionKey(deviceId, sessionId), full)
+  const updated: DeviceSessionMeta = {
+    ...meta,
+    motion: { uploadedAt: nowIso(), bytes: full.length, rows: countMotionRows(full) },
+  }
+  await putJson(sessionMetaKey(deviceId, sessionId), updated)
+  // Only now drop the parts: if anything above threw, a retry can still assemble.
+  for (let i = 1; i <= parts; i++) await deleteObject(motionPartKey(deviceId, sessionId, i))
+  return { status: 'assembled', meta: updated, bytes: full.length }
+}
+
+// Data rows in a motion CSV — the header and any blank line don't count. Kept
+// here rather than importing the timing package: core must not depend on it.
+function countMotionRows(buf: Buffer): number {
+  let n = 0
+  for (const line of buf.toString('utf8').split(/\r?\n/)) {
+    const c = line.indexOf(',')
+    if (c > 0 && Number.isFinite(Number(line.slice(0, c)))) n++
+  }
+  return n
 }
 
 // The stored motion sidecar for one of the user's sessions, or null.

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDeviceAuth } from '@/lib/auth'
-import { findUploadedSession, storeDeviceSession, storeDeviceMotion, motionSidecarTrackName } from '@/lib/devices'
+import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeMotionPart, motionSidecarTrackName } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
@@ -19,7 +19,8 @@ export async function POST(req: Request) {
   const auth = await getDeviceAuth(req)
   if (!auth) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const filename = new URL(req.url).searchParams.get('filename') ?? ''
+  const url = new URL(req.url)
+  const filename = url.searchParams.get('filename') ?? ''
   if (!/^[\w.-]{1,128}$/.test(filename)) return NextResponse.json({ error: 'bad_filename' }, { status: 400 })
 
   // Idempotency by deviceId+filename — a retry after a dropped response is a no-op.
@@ -33,6 +34,39 @@ export async function POST(req: Request) {
   // position, so parseTrace would correctly reject it. It attaches to the track
   // of the same name, which must already be uploaded.
   const trackName = motionSidecarTrackName(filename)
+
+  // Chunked sidecar: ?part=N&parts=M, optionally &sha256=<hex> checked over the
+  // assembled whole. The device cannot read a large file off its own SD card in
+  // one go — reads stall after ~90 KB with the radio associated — so a 2.4 MB
+  // sidecar has to arrive in pieces. See storeMotionPart for why these are plain
+  // objects rather than an S3 multipart upload.
+  const partRaw = url.searchParams.get('part')
+  if (trackName && partRaw !== null) {
+    const part = Number(partRaw)
+    const parts = Number(url.searchParams.get('parts'))
+    const sha = url.searchParams.get('sha256') ?? undefined
+    if (sha !== undefined && !/^[0-9a-f]{64}$/i.test(sha)) {
+      return NextResponse.json({ error: 'bad_sha256' }, { status: 400 })
+    }
+    const r = await storeMotionPart(auth.deviceId, auth.userId, trackName, part, parts, Buffer.from(ab), sha)
+    switch (r.status) {
+      // 409, not 404: the track may simply not be up yet, and the device must
+      // retry this part rather than mark it done.
+      case 'no_track':
+        return NextResponse.json({ error: 'track_not_uploaded', trackFilename: trackName }, { status: 409 })
+      case 'stored':
+        return NextResponse.json({ part, parts, have: r.have }, { status: 202 })
+      // Also 409 — the last part arrived before some earlier one. Retrying the
+      // final part once the gap is filled completes the file.
+      case 'incomplete':
+        return NextResponse.json({ error: 'parts_missing', missing: r.missing, parts: r.parts }, { status: 409 })
+      case 'corrupt':
+        return NextResponse.json({ error: 'sha256_mismatch', expected: r.expected, actual: r.actual }, { status: 422 })
+      default:
+        return NextResponse.json({ sessionId: r.meta.sessionId, bytes: r.bytes, motionRows: r.meta.motion?.rows }, { status: 201 })
+    }
+  }
+
   if (trackName) {
     const rows = parseMotionCsv(Buffer.from(ab).toString('utf8')).length
     if (rows === 0) return NextResponse.json({ error: 'no_motion_rows' }, { status: 422 })
