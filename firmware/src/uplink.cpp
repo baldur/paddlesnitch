@@ -345,9 +345,9 @@ static bool isTrackUpload(const String &name)
 // reboot mid-sync resumes rather than starting over. The final part carries a
 // sha256 of the whole file, because assembling from pieces introduces a way to
 // produce a silently wrong file that a single PUT never had.
-static const size_t MOTION_CHUNK = 64 * 1024;
+static const size_t UPLOAD_CHUNK = 64 * 1024;
 
-static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, const String &name)
+static bool uploadChunked(WiFiClientSecure &client, const String &path, const String &name)
 {
     // Opened only to learn the size; each chunk reopens it. Nothing holds a card
     // handle while HTTP is in flight.
@@ -359,9 +359,9 @@ static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, co
         probe.close();
     }
     if (total == 0) return false;
-    const int parts = (int)((total + MOTION_CHUNK - 1) / MOTION_CHUNK);
+    const int parts = (int)((total + UPLOAD_CHUNK - 1) / UPLOAD_CHUNK);
 
-    uint8_t *buf = (uint8_t *)ps_malloc(MOTION_CHUNK);
+    uint8_t *buf = (uint8_t *)ps_malloc(UPLOAD_CHUNK);
     if (!buf) { Serial.println("  no PSRAM for a chunk"); return false; }
 
     mbedtls_sha256_context sha;
@@ -370,7 +370,7 @@ static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, co
 
     bool ok = true;
     for (int part = 1; part <= parts && ok; part++) {
-        size_t want = (part == parts) ? (total - (size_t)(part - 1) * MOTION_CHUNK) : MOTION_CHUNK;
+        size_t want = (part == parts) ? (total - (size_t)(part - 1) * UPLOAD_CHUNK) : UPLOAD_CHUNK;
         // Open, seek, read, CLOSE — once per chunk, with no HTTP in between.
         //
         // The file used to stay open across all 37 requests, and that is what was
@@ -381,7 +381,7 @@ static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, co
         // exactly the pattern the probe proves works.
         File f = SD.open("/" + path, FILE_READ);
         if (!f) { Serial.printf("  %s: cannot reopen for part %d\n", name.c_str(), part); ok = false; break; }
-        const size_t offset = (size_t)(part - 1) * MOTION_CHUNK;
+        const size_t offset = (size_t)(part - 1) * UPLOAD_CHUNK;
         if (!f.seek(offset)) {
             Serial.printf("  %s part %d: seek to +%u failed\n", name.c_str(), part, (unsigned)offset);
             f.close(); ok = false; break;
@@ -548,7 +548,15 @@ int uplinkSyncSessions()
         // find the card busy, and an upload must not be torn in half.
         if (g_yield) { Serial.println("sync: yielding card"); break; }
 
-        if (uploadOne(client, name, name, size)) accepted++;
+        // Chunked, like sidecars. A 696 KB track hits the same wall a 2.4 MB
+        // sidecar does — the card will not deliver it in one read while HTTP is
+        // in flight — and until the track lands its sidecar cannot attach, so
+        // this is the upload that has to work first.
+        (void)size;
+        if (uploadChunked(client, name, name)) {
+            markUploaded(name, 201);
+            accepted++;
+        }
     }
     root.close();
 
@@ -581,7 +589,7 @@ int uplinkSyncSessions()
         // Chunked, always: even a small sidecar costs only one extra request, and
         // one code path is worth more than saving it.
         (void)size;
-        if (uploadMotionChunked(client, name, motionUploadName(name))) {
+        if (uploadChunked(client, name, motionUploadName(name))) {
             markUploaded(name, 201);
             accepted++;
         }
