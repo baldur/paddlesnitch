@@ -150,7 +150,7 @@ void setup()
     uint32_t t0 = millis();
     while (!Serial && millis() - t0 < 2000) delay(10);
 
-    Serial.println("\n=== T-Beam S3 Supreme bring-up ===");
+    Serial.printf("\n=== T-Beam S3 Supreme bring-up (fw %s) ===\n", FIRMWARE_VERSION);
     board = boardInit();
     uiSplash();
 
