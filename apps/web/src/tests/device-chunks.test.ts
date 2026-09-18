@@ -176,12 +176,18 @@ describe('chunked motion sidecar upload', () => {
     expect((await getDeviceSessionMotion(u.id, DEVICE, sessionId))!.toString('utf8')).toBe(csv)
   })
 
-  it('409s a chunk whose track has not been uploaded, so the device retries', async () => {
+  it('409s a sidecar whose track is missing, but only once assembled', async () => {
+    // Chunking is pure transport now, so a part is staged without knowing what
+    // the file is; the track check happens when the whole thing is assembled.
+    // Earlier parts therefore succeed and the LAST one carries the 409, which is
+    // the one the device retries.
     const u = await makeUser('Orphan')
     const dt = await boundToken(u)
-    const res = await uploadSession(put('filename=track_99999999_999999_imu.csv&part=1&parts=2', 'ms,a\n1,2\n', dt))
-    expect(res.status).toBe(409)
-    expect((await res.json()).error).toBe('track_not_uploaded')
+    const first = await uploadSession(put('filename=track_99999999_999999_imu.csv&part=1&parts=2', motionCsv(20), dt))
+    expect(first.status).toBe(202)
+    const last = await uploadSession(put('filename=track_99999999_999999_imu.csv&part=2&parts=2', '1800,0.1,0.02,1.0,5.5,1.2,0.3\n', dt))
+    expect(last.status).toBe(409)
+    expect((await last.json()).error).toBe('track_not_uploaded')
   })
 
   it('still accepts a whole-file sidecar, so small ones need no chunking', async () => {
@@ -201,5 +207,62 @@ describe('chunked motion sidecar upload', () => {
       const res = await uploadSession(put(`filename=track_20260918_061002_imu.csv&${qs}`, 'ms,a\n1,2\n', dt))
       expect(res.status).toBe(409)
     }
+  })
+})
+
+describe('chunked TRACK upload', () => {
+  // The case that was missing, and the one that actually blocked everything: a
+  // sidecar cannot attach until its track is up, so chunking sidecars alone buys
+  // nothing for a large paddle.
+  const bigTrack = (rows: number) => {
+    const out = ['timestamp,ms,fix,lat,lon,alt_m,speed_kmh,course_deg,sats,hdop,batt_mv,tx_seq']
+    const t0 = Date.parse('2026-09-18T06:10:02Z')
+    for (let i = 0; i < rows; i++) {
+      out.push(`${new Date(t0 + i * 1000).toISOString()},${i * 1000},1,${(51.46 + i * 0.00002).toFixed(6)},-0.930000,10,9.5,0,12,0.9,4070,${i}`)
+    }
+    return out.join('\n') + '\n'
+  }
+
+  it('assembles a chunked track and parses it as a paddle', async () => {
+    const u = await makeUser('BigTrack')
+    const dt = await boundToken(u)
+    const csv = bigTrack(2000)
+    const parts = chunk(csv, 6)
+    let sessionId = ''
+    for (let i = 0; i < parts.length; i++) {
+      const res = await uploadSession(
+        put(`filename=track_20260918_061002.csv&part=${i + 1}&parts=${parts.length}`, parts[i], dt))
+      if (i < parts.length - 1) {
+        expect(res.status).toBe(202)
+      } else {
+        expect(res.status).toBe(201)
+        const b = await res.json()
+        expect(b.points).toBe(2000)      // every row survived the reassembly
+        sessionId = b.sessionId
+      }
+    }
+    expect(sessionId).toBeTruthy()
+  })
+
+  it('a chunked track then accepts its sidecar — the whole point of the exercise', async () => {
+    const u = await makeUser('EndToEnd')
+    const dt = await boundToken(u)
+    const tcsv = bigTrack(1200)
+    const tparts = chunk(tcsv, 4)
+    for (let i = 0; i < tparts.length; i++) {
+      await uploadSession(put(`filename=track_20260918_061002.csv&part=${i + 1}&parts=4`, tparts[i], dt))
+    }
+    const mcsv = motionCsv(3000)
+    const mparts = chunk(mcsv, 5)
+    for (let i = 0; i < mparts.length; i++) {
+      const res = await uploadSession(
+        put(`filename=track_20260918_061002_imu.csv&part=${i + 1}&parts=5`, mparts[i], dt))
+      expect(res.status).toBe(i === 4 ? 201 : 202)
+    }
+    const { listUserDeviceSessions } = await import('@/lib/devices')
+    const sessions = await listUserDeviceSessions(u.id)
+    const s = sessions.find(x => x.filename === 'track_20260918_061002.csv')!
+    expect(s.motion?.rows).toBe(3000)
+    expect((await getDeviceSessionMotion(u.id, DEVICE, s.sessionId))!.toString('utf8')).toBe(mcsv)
   })
 })
