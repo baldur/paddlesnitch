@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDeviceAuth } from '@/lib/auth'
-import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeMotionPart, motionSidecarTrackName } from '@/lib/devices'
+import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeUploadPart, clearUploadParts, motionSidecarTrackName } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
@@ -35,49 +35,56 @@ export async function POST(req: Request) {
   // of the same name, which must already be uploaded.
   const trackName = motionSidecarTrackName(filename)
 
-  // Chunked sidecar: ?part=N&parts=M, optionally &sha256=<hex> checked over the
-  // assembled whole. The device cannot read a large file off its own SD card in
-  // one go — reads stall after ~90 KB with the radio associated — so a 2.4 MB
-  // sidecar has to arrive in pieces. See storeMotionPart for why these are plain
-  // objects rather than an S3 multipart upload.
+  // Chunked upload of ANY file: ?part=N&parts=M, optionally &sha256=<hex> over
+  // the assembled whole. Purely transport — once the last part lands, the
+  // assembled buffer falls through to exactly the same handling a single-shot
+  // upload gets. Tracks need this as much as sidecars do: the device cannot read
+  // a large file off its card while HTTP is in flight, and a sidecar cannot
+  // attach until its track has been uploaded.
   const partRaw = url.searchParams.get('part')
-  if (trackName && partRaw !== null) {
+  let body: Buffer = Buffer.from(ab)
+  let assembledParts = 0
+  if (partRaw !== null) {
     const part = Number(partRaw)
     const parts = Number(url.searchParams.get('parts'))
     const sha = url.searchParams.get('sha256') ?? undefined
     if (sha !== undefined && !/^[0-9a-f]{64}$/i.test(sha)) {
       return NextResponse.json({ error: 'bad_sha256' }, { status: 400 })
     }
-    const r = await storeMotionPart(auth.deviceId, auth.userId, trackName, part, parts, Buffer.from(ab), sha)
+    const r = await storeUploadPart(auth.deviceId, filename, part, parts, body, sha)
     switch (r.status) {
-      // 409, not 404: the track may simply not be up yet, and the device must
-      // retry this part rather than mark it done.
-      case 'no_track':
-        return NextResponse.json({ error: 'track_not_uploaded', trackFilename: trackName }, { status: 409 })
+      case 'bad_request':
+        return NextResponse.json({ error: 'bad_part' }, { status: 409 })
       case 'stored':
         return NextResponse.json({ part, parts, have: r.have }, { status: 202 })
-      // Also 409 — the last part arrived before some earlier one. Retrying the
-      // final part once the gap is filled completes the file.
+      // 409 so the device fills the gap and re-sends the final part.
       case 'incomplete':
         return NextResponse.json({ error: 'parts_missing', missing: r.missing, parts: r.parts }, { status: 409 })
       case 'corrupt':
         return NextResponse.json({ error: 'sha256_mismatch', expected: r.expected, actual: r.actual }, { status: 422 })
       default:
-        return NextResponse.json({ sessionId: r.meta.sessionId, bytes: r.bytes, motionRows: r.meta.motion?.rows }, { status: 201 })
+        body = r.body
+        assembledParts = parts
     }
   }
 
   if (trackName) {
-    const rows = parseMotionCsv(Buffer.from(ab).toString('utf8')).length
+    const rows = parseMotionCsv(body.toString('utf8')).length
     if (rows === 0) return NextResponse.json({ error: 'no_motion_rows' }, { status: 422 })
-    const stored = await storeDeviceMotion(auth.deviceId, auth.userId, trackName, Buffer.from(ab), rows)
+    const stored = await storeDeviceMotion(auth.deviceId, auth.userId, trackName, body, rows)
     // 409, not 404: the track may simply not have been sent yet, and the device
     // should retry this file rather than mark it done.
     if (stored === 'no_track') return NextResponse.json({ error: 'track_not_uploaded', trackFilename: trackName }, { status: 409 })
-    return NextResponse.json({ sessionId: stored.sessionId, motionRows: rows, bytes: ab.byteLength }, { status: 201 })
+    if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
+    return NextResponse.json({ sessionId: stored.sessionId, motionRows: rows, bytes: body.length }, { status: 201 })
   }
 
-  const parsed = await parseTrace(filename, ab)
+  // parseTrace takes an ArrayBuffer; `body` may be an assembled Buffer, so give
+  // it exactly this Buffer's bytes rather than the whole backing store.
+  const parsed = await parseTrace(
+    filename,
+    body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer,
+  )
   // No usable points (e.g. an all-unfixed indoor session, whose empty lat/lon
   // rows the parser skips) → 422 so the device marks it uploaded and stops
   // retrying forever. Never invents 0,0 "Null Island" points.
@@ -91,8 +98,9 @@ export async function POST(req: Request) {
 
   const meta = await storeDeviceSession(
     { deviceId: auth.deviceId, userId: auth.userId, filename, startedAt, endedAt, distanceMetres: Math.round(dist), points: track.length },
-    Buffer.from(ab),
+    body,
   )
+  if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
   return NextResponse.json(
     { sessionId: meta.sessionId, points: track.length, startedAt, endedAt, distanceMetres: meta.distanceMetres },
     { status: 201 },

@@ -250,6 +250,79 @@ export async function storeDeviceMotion(
   return updated
 }
 
+// Staging for a chunked upload of ANY file, keyed by filename rather than by
+// session — a track has no session until it has been assembled and parsed, so
+// keying by session cannot work for the file that matters most.
+const uploadPartKey = (deviceId: string, filename: string, part: number) =>
+  `devices/${deviceId}/parts/${filename}/${String(part).padStart(4, '0')}`
+
+export type UploadPartResult =
+  | { status: 'bad_request' }
+  | { status: 'stored'; have: number; parts: number }
+  | { status: 'incomplete'; missing: number[]; parts: number }
+  | { status: 'corrupt'; expected: string; actual: string }
+  | { status: 'assembled'; body: Buffer }
+
+/**
+ * Stores one chunk of any upload, and hands back the whole file once the last
+ * one lands.
+ *
+ * Chunking is a TRANSPORT concern and nothing else: this knows nothing about
+ * tracks or sidecars, and the caller runs its normal handling on the assembled
+ * buffer. The first version of this was tangled into motion storage, which meant
+ * tracks could not use it — and since a sidecar cannot attach until its track is
+ * up, the file that most needed chunking was the one that could not have it.
+ *
+ * Why chunks: the device cannot read a large file off its own SD card in one go
+ * while HTTP is in flight. Why plain objects rather than S3 multipart: S3 objects
+ * are immutable, and multipart requires every part but the last to be >= 5 MB,
+ * larger than these whole files.
+ */
+export async function storeUploadPart(
+  deviceId: string,
+  filename: string,
+  part: number,
+  parts: number,
+  chunk: Buffer,
+  sha256Hex?: string,
+): Promise<UploadPartResult> {
+  if (!isDeviceId(deviceId) || !safeName(filename)) return { status: 'bad_request' }
+  if (!Number.isInteger(part) || !Number.isInteger(parts)) return { status: 'bad_request' }
+  if (part < 1 || parts < 1 || part > parts || parts > MAX_MOTION_PARTS) return { status: 'bad_request' }
+
+  // Idempotent by index: a retried chunk overwrites, so a reboot mid-sync resumes.
+  await putObject(uploadPartKey(deviceId, filename, part), chunk)
+  if (part !== parts) {
+    const have = (await listKeys(`devices/${deviceId}/parts/${filename}/`)).length
+    return { status: 'stored', have, parts }
+  }
+
+  // Last part: assemble, but only once every index is actually present — a
+  // retried part can arrive after the final one.
+  const buffers: Buffer[] = []
+  const missing: number[] = []
+  for (let i = 1; i <= parts; i++) {
+    const b = await getObject(uploadPartKey(deviceId, filename, i))
+    if (!b) missing.push(i)
+    else buffers.push(b)
+  }
+  if (missing.length) return { status: 'incomplete', missing, parts }
+
+  const body = Buffer.concat(buffers)
+  if (sha256Hex) {
+    const actual = createHash('sha256').update(body).digest('hex')
+    if (!hexEqual(actual, sha256Hex.toLowerCase())) {
+      return { status: 'corrupt', expected: sha256Hex.toLowerCase(), actual }
+    }
+  }
+  return { status: 'assembled', body }
+}
+
+/** Drops the staged parts once the caller has successfully handled the whole file. */
+export async function clearUploadParts(deviceId: string, filename: string, parts: number): Promise<void> {
+  for (let i = 1; i <= parts; i++) await deleteObject(uploadPartKey(deviceId, filename, i))
+}
+
 // One chunk of a motion sidecar, awaiting assembly. Zero-padded so a plain
 // lexicographic key listing is already in part order.
 const motionPartKey = (deviceId: string, sessionId: string, part: number) =>
