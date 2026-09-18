@@ -263,12 +263,21 @@ static bool uploadOne(WiFiClientSecure &client, const String &path, const String
         // hit inside HTTPClient while streaming, is what produced the original
         // error(-3) "send payload failed". Reading to completion here is the
         // actual fix; PSRAM just makes it cheap to hold the result.
+        // A zero from read() means "nothing right now", NOT end of file. With the
+        // radio associated, SD reads stall after a few tens of KB — measured at
+        // 12 KB and 70 KB of the same 2.38 MB file, while a CAT of an 8.19 MB file
+        // with WiFi idle streams end to end. So treat a zero as backpressure and
+        // wait, rather than as the end, which is what the first version did.
         size_t got = 0;
+        int stalls = 0;
         while (got < size) {
             int n = f.read(buf + got, size - got);
-            if (n <= 0) break;
-            got += (size_t)n;
+            if (n > 0) { got += (size_t)n; stalls = 0; continue; }
+            if (++stalls > 200) break;       // ~2 s of grace in total, then give up
+            delay(10);
         }
+        if (stalls) Serial.printf("  %s: %d read stall(s), got %u/%u\n",
+                                  name.c_str(), stalls, (unsigned)got, (unsigned)size);
         f.close();
         if (got != size) {
             Serial.printf("  %s: short read %u/%u\n", name.c_str(), (unsigned)got, (unsigned)size);
@@ -523,6 +532,12 @@ static void uplinkTask(void *)
         UplinkStatus st;
         String why;
         st.wifiUp = netConnect(15000, &why);
+        // Drop transmit power once associated. Not for range — for CURRENT. With
+        // no cell fitted the board runs off USB through the PMU, and WiFi TX peaks
+        // look like the thing breaking SD reads: the same card streams an 8.19 MB
+        // file over CAT with the radio idle, but stalls dead after ~90 KB with it
+        // associated. 11 dBm is ample for a device that only syncs at home.
+        if (st.wifiUp) WiFi.setTxPower(WIFI_POWER_11dBm);
         if (!st.wifiUp) {
             snprintf(st.message, sizeof(st.message), "%s", why.c_str());
             statusSet(st);
