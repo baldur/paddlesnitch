@@ -55,6 +55,10 @@ bool imuInit()
         qmi.enableGyroscope();
 
         ready = true;
+        // Arm the watchdog clock. Without this it stays 0, the `lastGoodMs &&`
+        // guard never passes, and a chip that is dead from the very first poll —
+        // the case that actually matters — is never declared dead at all.
+        lastGoodMs = millis();
         return true;
     }
 
