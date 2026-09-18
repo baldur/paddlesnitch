@@ -213,6 +213,33 @@ const char *storageFilename() { return filename; }
 uint32_t    storageRowCount() { return rows; }
 // Card size in MB. Lives here because storage owns the SD handle -- role files
 // never touch the hardware directly (see the architecture note in CLAUDE.md).
+// Reads a file to completion in 64 KB chunks and reports how it went. Lives here
+// because storage owns the SD handle; the caller decides what state the radio is
+// in. Diagnostic only — see the SDPROBE serial command.
+bool storageProbeRead(const char *name, size_t *bytesOut, uint32_t *msOut)
+{
+    *bytesOut = 0; *msOut = 0;
+    if (!ready) return false;
+    File f = SD.open(String("/") + name, FILE_READ);
+    if (!f) return false;
+    const size_t CH = 64 * 1024;
+    uint8_t *b = (uint8_t *)ps_malloc(CH);
+    if (!b) { f.close(); return false; }
+    size_t total = 0;
+    uint32_t t0 = millis();
+    bool stalled = false;
+    while (f.available()) {
+        int n = f.read(b, CH);
+        if (n <= 0) { stalled = true; break; }
+        total += (size_t)n;
+    }
+    *msOut = millis() - t0;
+    *bytesOut = total;
+    free(b);
+    f.close();
+    return !stalled;
+}
+
 uint64_t    storageCardSizeMB() { return ready ? SD.cardSize() / (1024ULL * 1024ULL) : 0; }
 
 void storageLogRow(const char *csvLine)

@@ -317,8 +317,12 @@ static bool uploadOne(WiFiClientSecure &client, const String &path, const String
 // sidecar track_*_imu.csv, which is uploaded separately and decimated first.
 static bool isTrackUpload(const String &name)
 {
+    // Must exclude BOTH sidecar suffixes. _i10.csv was added later and this
+    // predicate was not updated, so the upload-rate file was being uploaded as a
+    // track — which is why the chunked sidecar path never ran at all, and why
+    // every failure looked like a whole-file read of 2383054 bytes.
     return name.startsWith("track_") && name.endsWith(".csv")
-        && !name.endsWith("_imu.csv");
+        && !name.endsWith("_imu.csv") && !name.endsWith("_i10.csv");
 }
 
 // The raw motion sidecar. Uploaded AFTER the tracks (the server attaches it to an
@@ -345,14 +349,20 @@ static const size_t MOTION_CHUNK = 64 * 1024;
 
 static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, const String &name)
 {
-    File f = SD.open("/" + path, FILE_READ);
-    if (!f) return false;
-    const size_t total = f.size();
-    if (total == 0) { f.close(); return false; }
+    // Opened only to learn the size; each chunk reopens it. Nothing holds a card
+    // handle while HTTP is in flight.
+    size_t total = 0;
+    {
+        File probe = SD.open("/" + path, FILE_READ);
+        if (!probe) return false;
+        total = probe.size();
+        probe.close();
+    }
+    if (total == 0) return false;
     const int parts = (int)((total + MOTION_CHUNK - 1) / MOTION_CHUNK);
 
     uint8_t *buf = (uint8_t *)ps_malloc(MOTION_CHUNK);
-    if (!buf) { Serial.println("  no PSRAM for a chunk"); f.close(); return false; }
+    if (!buf) { Serial.println("  no PSRAM for a chunk"); return false; }
 
     mbedtls_sha256_context sha;
     mbedtls_sha256_init(&sha);
@@ -361,17 +371,34 @@ static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, co
     bool ok = true;
     for (int part = 1; part <= parts && ok; part++) {
         size_t want = (part == parts) ? (total - (size_t)(part - 1) * MOTION_CHUNK) : MOTION_CHUNK;
+        // Open, seek, read, CLOSE — once per chunk, with no HTTP in between.
+        //
+        // The file used to stay open across all 37 requests, and that is what was
+        // failing: SDPROBE reads this same 2.38 MB file end to end at 430 KB/s
+        // with the radio off AND associated, so neither the card nor WiFi is the
+        // problem. What breaks it is holding a File handle across seconds of TLS
+        // work between reads. Reading in one uninterrupted go per chunk is
+        // exactly the pattern the probe proves works.
+        File f = SD.open("/" + path, FILE_READ);
+        if (!f) { Serial.printf("  %s: cannot reopen for part %d\n", name.c_str(), part); ok = false; break; }
+        const size_t offset = (size_t)(part - 1) * MOTION_CHUNK;
+        if (!f.seek(offset)) {
+            Serial.printf("  %s part %d: seek to +%u failed\n", name.c_str(), part, (unsigned)offset);
+            f.close(); ok = false; break;
+        }
         size_t got = 0;
         int stalls = 0;
         while (got < want) {
             int n = f.read(buf + got, want - got);
             if (n > 0) { got += (size_t)n; stalls = 0; continue; }
-            if (++stalls > 100) break;
+            if (++stalls > 20) break;
             delay(10);
         }
+        f.close();
         if (got != want) {
-            Serial.printf("  %s part %d/%d: short read %u/%u\n",
-                          name.c_str(), part, parts, (unsigned)got, (unsigned)want);
+            Serial.printf("  %s part %d/%d: short read %u/%u at +%u | cardType=%d heap=%lu\n",
+                          name.c_str(), part, parts, (unsigned)got, (unsigned)want, (unsigned)offset,
+                          (int)SD.cardType(), (unsigned long)ESP.getFreeHeap());
             ok = false;
             break;
         }
@@ -417,7 +444,6 @@ static bool uploadMotionChunked(WiFiClientSecure &client, const String &path, co
 
     mbedtls_sha256_free(&sha);
     free(buf);
-    f.close();
     return ok;
 }
 

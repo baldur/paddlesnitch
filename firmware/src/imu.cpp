@@ -25,6 +25,20 @@ static const uint32_t POLL_INTERVAL_MS = 20;
 static const uint32_t DEAD_AFTER_MS = 3000;
 static uint32_t lastGoodMs = 0;
 
+// WHO_AM_I in a given SPI mode, for diagnosis. Deliberately separate from
+// board.cpp's imuReadReg, which is hardcoded to mode 3 — the point here is to
+// find out whether the mode is what has been wrong.
+static uint8_t imuWhoAmI(uint8_t spiMode)
+{
+    sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, spiMode));
+    digitalWrite(IMU_CS, LOW);
+    sdSPI.transfer(0x00 | 0x80);
+    uint8_t v = sdSPI.transfer(0x00);
+    digitalWrite(IMU_CS, HIGH);
+    sdSPI.endTransaction();
+    return v;
+}
+
 bool imuInit()
 {
     // The chip can come up wedged (SPI reads all 0xFF) after a *warm* reset,
@@ -35,10 +49,19 @@ bool imuInit()
         if (attempt > 0) {
             Serial.printf("IMU: attempt %d failed, power-cycling sensor rail\n", attempt);
             PMU.disableALDO1(); PMU.disableALDO2();
-            delay(120);
+            // 120 ms was not obviously enough to drain the sensor rail's
+            // decoupling, and a chip that never fully loses power never resets.
+            // Lengthened while diagnosing; shorten again only with evidence.
+            delay(400);
             PMU.enableALDO1();  PMU.enableALDO2();
-            delay(150);
+            delay(300);
         }
+        // Read WHO_AM_I both ways before handing over to the library. The chip
+        // supports SPI mode 0 and mode 3, and the probe has only ever tried mode
+        // 3 — so "no response" may have meant "asked in the wrong mode". 0x05 is
+        // the QMI8658's expected answer at register 0x00.
+        Serial.printf("IMU: pre-init who_am_i  mode3=0x%02X  mode0=0x%02X\n",
+                      imuWhoAmI(SPI_MODE3), imuWhoAmI(SPI_MODE0));
         if (!qmi.begin(sdSPI, IMU_CS, SPI_MOSI, SPI_MISO, SPI_SCK)) continue;
 
         Serial.printf("IMU: QMI8658 chip id 0x%02X\n", qmi.getChipID());
@@ -55,6 +78,10 @@ bool imuInit()
         qmi.enableGyroscope();
 
         ready = true;
+        // Arm the watchdog clock. Without this it stays 0, the `lastGoodMs &&`
+        // guard never passes, and a chip that is dead from the very first poll —
+        // the case that actually matters — is never declared dead at all.
+        lastGoodMs = millis();
         return true;
     }
 
