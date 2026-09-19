@@ -87,6 +87,12 @@ static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
 static Screen   uiScreen      = Screen::Track;   // the entered screen
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
 static const int NERD_PAGES   = 3;
+// Sync is paged for the same reason Nerd is, but the motive is safety as much as
+// space: deleting every uploaded file used to be a hold on the status page, so
+// "hold = do the thing on this screen" and "hold = wipe the card" were the same
+// gesture in the same place. Cleanup now lives on its own page you have to tap to.
+static int      syncPage      = 0;
+static const int SYNC_PAGES   = 2;             // 0 status, 1 cleanup
 static bool     confirmDelete = false;
 static uint32_t confirmUntil  = 0;
 // Track auto-records on entry (once there's a fix); stopping is a deliberate
@@ -439,23 +445,37 @@ static void enterScreen(Screen s)
     onPick   = false;
     stopArmed = false;
     if (s == Screen::Nerd) nerdPage = 0;                    // always start at page 1
+    if (s == Screen::Sync) syncPage = 0;                    // never open on cleanup
     if (s == Screen::Sync) uplinkRequestCounts();           // refresh on entry
     // Track is the recording screen: it auto-starts once a fix is available
     // (handled in loop()), so there is no "press to record".
 }
 
-// The one free button (RST is the AXP2101 power key), three gestures, their
-// meaning depending on the visible screen. See docs/device-states-spec.md.
-//   Pick:          tap -> move highlight, hold -> open highlighted screen
-//   Track/Sync:    tap -> primary action, double-tap -> back to Pick,
-//                  hold -> Setup (Track) / arm delete (Sync)
-//   DeleteConfirm: tap -> yes, double-tap -> no
+// The one free button (RST is the AXP2101 power key), three gestures, and ONE
+// meaning for each of them on every screen:
+//
+//   tap        -> move / cycle within this screen. Never acts, never destroys.
+//   hold       -> select, or commit this screen's primary action.
+//   double-tap -> back to the chooser. ALWAYS, from anywhere, including out of a
+//                 confirmation, which it cancels on the way.
+//
+// A confirmation is the single place tap commits, and it says so on the panel.
+// Before this, tap meant "sync now" on Sync and "cycle a unit" on Track, paging
+// was on double-tap, and the two confirmations disagreed with each other about
+// which gesture meant yes -- so the button had to be relearned per screen and
+// the only gesture you could rely on to get out was a guess.
+// See docs/device-states-spec.md.
 static void screenTap()
 {
-    if (confirmDelete) {                       // confirm screen: tap = yes
+    if (confirmDelete) {                       // confirmation: tap = yes
         confirmDelete = false;
         uplinkRequestDeleteUploaded();
         toast("DELETING");
+        return;
+    }
+    if (stopArmed) {                           // Track's stop confirmation
+        stopArmed = false;
+        if (storageRecording()) toggleRecording();     // stop + trigger a sync
         return;
     }
     if (!deviceUsable()) return;               // onboarding: tap does nothing
@@ -465,52 +485,52 @@ static void screenTap()
                                                        : Screen::Track;
         return;
     }
+    // Every one of these wraps. Cycling is only safe to hand to a single button
+    // if you can always get back round to where you were without a second one.
     switch (uiScreen) {
-    case Screen::Track:
-        if (stopArmed) stopArmed = false;             // cancel a pending stop
-        else speedUnit = (speedUnit + 1) % 3;         // toggle km/h -> m/s -> pace
-        break;
-    case Screen::Sync:  uplinkRequestSync(); toast("SYNCING"); break;
-    case Screen::Nerd:  break;
+    case Screen::Track: speedUnit = (speedUnit + 1) % 3; break;   // km/h -> m/s -> pace
+    case Screen::Sync:  syncPage  = (syncPage  + 1) % SYNC_PAGES; break;
+    case Screen::Nerd:  nerdPage  = (nerdPage  + 1) % NERD_PAGES; break;
     }
 }
 
 static void screenDoubleTap()
 {
-    if (confirmDelete) { confirmDelete = false; return; }   // confirm screen: cancel
+    // No exceptions, no "unless" -- that is the entire value of the gesture. A
+    // pending confirmation is cancelled rather than carried back to the chooser,
+    // so leaving a screen can never be the thing that stops a recording or wipes
+    // the card.
+    confirmDelete = false;
+    stopArmed     = false;
     if (!deviceUsable()) return;
-    if (onPick) return;                                     // no double-tap on Pick
-    // On Track, a double-tap confirms a stop that a hold armed; otherwise it just
-    // returns to the menu (recording, if any, keeps running in the background).
-    if (uiScreen == Screen::Track && stopArmed) {
-        stopArmed = false;
-        if (storageRecording()) toggleRecording();          // stop + trigger sync
-    }
-    // On Nerd the gesture pages through the diagnostics first and only leaves after
-    // the last one, so "double-tap = move on" holds on every screen.
-    if (uiScreen == Screen::Nerd && nerdPage + 1 < NERD_PAGES) { nerdPage++; return; }
+    if (onPick) return;                        // already there
     onPick = true;
     pickHighlight = uiScreen;
 }
 
 static void screenHold()
 {
-    if (confirmDelete) return;
-    if (!deviceUsable()) { linkAttempt(); return; }         // onboarding: WiFi/link
+    if (confirmDelete || stopArmed) return;    // a confirmation answers to tap
+    if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
     // Blink the chosen row first: the hold fires while still held, so without an
     // acknowledgement a successful press and a too-short one look the same.
     if (onPick) { uiPickFlash(pickIndex(pickHighlight)); enterScreen(pickHighlight); return; }
-    if (uiScreen == Screen::Sync) {                         // arm the delete
-        confirmDelete = true;
-        confirmUntil  = millis() + 10000;
-        return;
+    switch (uiScreen) {
+    case Screen::Track:
+        // Recording starts itself on a fix, so stopping is the only thing here.
+        if (storageRecording()) { stopArmed = true; stopArmUntil = millis() + 10000; }
+        break;
+    case Screen::Sync:
+        if (syncPage == 0) { uplinkRequestSync(); toast("SYNCING"); }
+        else               { confirmDelete = true; confirmUntil = millis() + 10000; }
+        break;
+    case Screen::Nerd:
+        // Only the radio page has an action, and it is the page already showing
+        // UNLINKED / the SSID -- which is what you are looking at when re-linking
+        // is what you came for.
+        if (nerdPage == NERD_PAGES - 1) linkAttempt();
+        break;
     }
-    if (uiScreen == Screen::Track && storageRecording()) {  // arm the stop
-        stopArmed    = true;
-        stopArmUntil = millis() + 10000;
-        return;
-    }
-    linkAttempt();                                          // Track(idle)/Nerd -> Setup
 }
 
 // A single tap is only confirmed once the double-tap window closes, so the action
@@ -853,6 +873,8 @@ void loop()
         u.pickSel     = pickIndex(pickHighlight);
         u.nerdPage    = nerdPage;
         u.nerdPages   = NERD_PAGES;
+        u.syncPage    = syncPage;
+        u.syncPages   = SYNC_PAGES;
         u.onUsb       = boardOnUsb();
         u.uptimeS     = millis() / 1000;
         u.heapMin     = ESP.getMinFreeHeap();
@@ -876,6 +898,9 @@ void loop()
         u.uploaded    = up.uploaded;
         u.pending     = up.pending;
         u.syncing     = up.busy;
+        u.upFile      = up.upFile;
+        u.upPart      = up.upPart;
+        u.upParts     = up.upParts;
         u.claimCode   = up.claimCode;
         u.wifiUp      = up.wifiUp;
         u.ssid        = netcfg.ssid;

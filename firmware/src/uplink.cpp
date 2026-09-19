@@ -30,6 +30,23 @@ static void statusSet(const UplinkStatus &s)
     xSemaphoreGive(g_lock);
 }
 
+// Publishes chunk progress by poking the three progress fields, rather than
+// writing back a whole snapshot: the sync loop holds a local UplinkStatus across
+// the entire upload, so a read-modify-statusSet here would race it and lose
+// whatever the loop set in the meantime. One short critical section per 64 KB
+// chunk, against a UI that takes the same mutex once a frame -- it cannot starve
+// the display. The statusSet() the loop runs when the sync ends clears these
+// back to the defaults of its own local, so idle needs no explicit reset.
+static void statusProgress(const char *name, int part, int parts)
+{
+    if (!g_lock) return;
+    xSemaphoreTake(g_lock, portMAX_DELAY);
+    snprintf(g_status.upFile, sizeof(g_status.upFile), "%s", name);
+    g_status.upPart  = part;
+    g_status.upParts = parts;
+    xSemaphoreGive(g_lock);
+}
+
 UplinkStatus uplinkGetStatus()
 {
     UplinkStatus copy;
@@ -236,7 +253,11 @@ static bool uploadOne(WiFiClientSecure &client, const String &path, const String
     // error(-3) "send payload failed". That is exactly the pattern seen — small
     // sidecars accepted, a 696 KB track and a 2.4 MB sidecar both failing, and a
     // 1.6 MB upload that once succeeded on a faster moment of the same link.
-    http.setTimeout(120000);
+    // 65535 ms is the ceiling, not a style choice: HTTPClient::setTimeout takes a
+    // uint16_t, so the 120000 that used to be here silently became 54464 -- half
+    // the intended budget, on the one call whose whole purpose was a long one.
+    // The compiler does warn (-Woverflow); it was lost in the RadioLib noise.
+    http.setTimeout(60000);
 
     // Streamed from the card: a session can be hundreds of KB and the device
     // has nowhere near enough heap to hold one as a String.
@@ -370,6 +391,9 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
 
     bool ok = true;
     for (int part = 1; part <= parts && ok; part++) {
+        // Published BEFORE the read, not after the POST: the read is the step
+        // that used to stall, so the screen has to name the chunk it is stuck on.
+        statusProgress(name.c_str(), part, parts);
         size_t want = (part == parts) ? (total - (size_t)(part - 1) * UPLOAD_CHUNK) : UPLOAD_CHUNK;
         // Open, seek, read, CLOSE — once per chunk, with no HTTP in between.
         //

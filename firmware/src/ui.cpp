@@ -143,14 +143,16 @@ static void drawTracker(const UiState &s)
     drawTopRow(s);
 
     // A hold has armed the stop: make the whole screen the confirmation so it
-    // can't be missed. double-tap confirms, tap (or timeout) keeps recording.
+    // can't be missed. Same answers as the delete confirmation -- tap = yes,
+    // double-tap = no. These two used to disagree, which is the worst possible
+    // place for the button to mean different things.
     if (s.stopArmed) {
         display.setFont(u8g2_font_helvB12_tf);
         display.drawStr(0, 34, "Stop?");
         display.setFont(u8g2_font_6x10_tf);
-        display.drawStr(0, 50, "2x tap = confirm");
+        display.drawStr(0, 52, "tap = yes   2x = no");
         display.setFont(u8g2_font_5x8_tf);
-        display.drawStr(0, 62, "tap = keep recording");
+        display.drawStr(0, 62, "no answer = keep recording");
         display.sendBuffer();
         return;
     }
@@ -228,21 +230,57 @@ static void drawSync(const UiState &s)
     display.clearBuffer();
 
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "Sync");
-    if (s.syncing) display.drawStr(128 - 18 - display.getStrWidth("..."), 10, "...");
+    display.drawStr(0, 10, s.syncPage == 0 ? "Sync" : "Sync / cleanup");
+    // ANIMATED, deliberately. The old mark was a static "..." -- indistinguishable
+    // from a wedged uploader, which is the exact failure this firmware spent a
+    // session chasing. A mark that moves is evidence the task is still running.
+    if (s.syncing) {
+        const char frames[] = "|/-\\";
+        char m[2] = { frames[(millis() / 200) % 4], 0 };
+        display.drawStr(128 - 18 - display.getStrWidth(m), 10, m);
+    }
     display.drawHLine(0, 13, 128);
 
     if (!s.countsValid) {
         display.drawStr(0, 32, "scanning card...");
-    } else {
+    } else if (s.syncPage == 0) {
         snprintf(l, sizeof(l), "on device %d", s.onDevice);  display.drawStr(0, 28, l);
         snprintf(l, sizeof(l), "uploaded  %d", s.uploaded);  display.drawStr(0, 40, l);
-        snprintf(l, sizeof(l), "pending   %d", s.pending);   display.drawStr(0, 52, l);
+        if (s.upParts <= 0) { snprintf(l, sizeof(l), "pending   %d", s.pending); display.drawStr(0, 52, l); }
+    } else {
+        // The cleanup page states the count and, more usefully, what survives:
+        // the thing people actually want to know before wiping a card is whether
+        // the un-uploaded paddle goes with it. It does not.
+        snprintf(l, sizeof(l), "delete %d uploaded", s.uploaded);
+        display.drawStr(0, 30, l);
+        display.setFont(u8g2_font_5x8_tf);
+        snprintf(l, sizeof(l), "keeps %d not yet sent", s.pending);
+        display.drawStr(0, 42, l);
+        display.setFont(u8g2_font_6x10_tf);
     }
 
     display.setFont(u8g2_font_5x8_tf);
-    const char *hint = "tap=sync  hold=delete";
-    display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+    if (s.upParts > 0) {
+        // A chunk in flight takes the bottom two rows: which file, how far in, and
+        // a bar. A 2.4 MB sidecar is 37 requests -- several minutes during which
+        // the tallies above do not move at all, so the count is the only real
+        // progress the screen can show.
+        String n = s.upFile;
+        if (n.startsWith("track_")) n = n.substring(6);   // 23 chars of tail fits 128px at 5x8
+        char pl[48];                                      // its own buffer: l[32] is too small here
+        snprintf(pl, sizeof(pl), "%s %d/%d", n.c_str(), s.upPart, s.upParts);
+        display.drawStr(0, 52, pl);
+        display.drawFrame(0, 56, 128, 7);
+        const int inner = (int)(126.0f * s.upPart / s.upParts);
+        if (inner > 0) display.drawBox(1, 57, inner, 5);
+    } else {
+        char pg[8];
+        snprintf(pg, sizeof(pg), "%d/%d", s.syncPage + 1, s.syncPages);
+        display.drawStr(0, 63, pg);
+        const char *hint = s.syncPage == 0 ? "tap=page  hold=sync now"
+                                           : "tap=page  hold=delete";
+        display.drawStr(128 - display.getStrWidth(hint), 63, hint);
+    }
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -331,8 +369,9 @@ static void drawLinking(const UiState &s)
 
 // Diagnostics, reachable without a laptop -- the situations that need it happen on
 // the water. Paged rather than crammed: a 128x64 panel fits about seven 5x8 lines,
-// and the useful set outgrew one screen. Double-tap advances, and past the last
-// page returns to the chooser, so the gesture still means "move on" here.
+// and the useful set outgrew one screen. Tap advances and WRAPS -- paging is a
+// cycle, not a queue you have to walk to the end of -- and double-tap leaves,
+// same as everywhere else.
 static void drawNerdHeader(const UiState &s, const char *title)
 {
     char l[40];
@@ -388,7 +427,11 @@ static void drawNerd(const UiState &s)
         if (s.wifiUp) snprintf(l, sizeof(l), "%s %ddBm", s.ip.c_str(), s.rssi);
         else          snprintf(l, sizeof(l), "wifi %s", s.ssid.length() ? s.ssid.c_str() : "none");
         display.drawStr(0, 29, l);
-        snprintf(l, sizeof(l), "%s", s.serverHost.length() ? s.serverHost.c_str() : "no server");
+        // Re-linking is this page's hold action, so the page has to say so -- and
+        // it says so exactly when it matters, in place of a server host that is
+        // not much use to an unlinked device.
+        if (!s.linked) snprintf(l, sizeof(l), "hold = link this device");
+        else snprintf(l, sizeof(l), "%s", s.serverHost.length() ? s.serverHost.c_str() : "no server");
         display.drawStr(0, 38, l);
         if (s.sdReady) snprintf(l, sizeof(l), "sd %lluMB  %d/%d up",
                                 (unsigned long long)s.sdSizeMB, s.uploaded, s.onDevice);
