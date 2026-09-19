@@ -267,7 +267,20 @@ void setup()
 
     // A device with no credentials cannot be set up without this: the portal
     // needs the display and blocks, so it cannot live in the background task.
-    if (!netHasWifi()) netBringUp();
+    //
+    // ALSO when credentials exist but have NEVER worked. netBringUp() already
+    // reopens the portal in that case and says why -- but it was only called
+    // when there were no credentials at all, so a device saved with a wrong
+    // password never reached that path. It sat on the claim screen retrying an
+    // association that could not succeed, with no route back to setup except
+    // knowing to hold on Settings > Network. A password that has never once
+    // worked is not a flaky router, it is wrong, and the answer is the portal
+    // and its join QR.
+    //
+    // Deliberately NOT on every failure: once these credentials HAVE worked,
+    // a failure means the device is away from home, and hijacking it into
+    // setup mode when it should be out tracking would be worse than useless.
+    if (!netHasWifi() || !netcfg.everConnected) netBringUp();
 
     uplinkTaskStart();   // core 0; the UI and logging keep running on core 1
     // linkAttempt() can block for minutes while polling for the claim code, and
@@ -788,7 +801,8 @@ static void handleSerialCommand()
                     "SETUP / SCAN      captive portal / list WiFi networks\n"
                     "SSID <n>          rest of line is the name (may contain spaces)\n"
                     "PASS <s>          rest of line is the secret\n"
-                    "FORGET            clear WiFi credentials\n"
+                    "UNLINK            clear the device token only (keeps WiFi), then re-claim\n"
+                    "FORGET            clear WiFi credentials AND the token\n"
                     "SYNC              ask the uplink task to sync now\n"
                     "HOLD / RESUME     take the SD card off the uploader / give it back\n"
                     "LS                list files on the card\n"
@@ -1018,6 +1032,19 @@ static void handleSerialCommand()
                 // file, so the overlap became easy to hit.
                 uplinkRequestSync();
                 Serial.println("sync requested -- watch for progress on the Sync screen");
+            }
+            // UNLINK clears ONLY the device token and claim secret, so the
+            // device re-claims on the next sync while keeping its WiFi. FORGET
+            // wipes everything including credentials, which means redoing the
+            // portal just to exercise the claim screen -- too blunt for
+            // testing, and too blunt for support on a device in the field whose
+            // owner changed.
+            else if (!strncmp(buf, "UNLINK", 6)) {
+                netcfgSaveToken("");
+                netcfgSaveClaimSecret("");
+                Serial.println("device token cleared -- keeping wifi; restarting to re-claim");
+                delay(300);
+                ESP.restart();
             }
             else if (!strncmp(buf, "FORGET", 6)) {
                 netcfgForget();
