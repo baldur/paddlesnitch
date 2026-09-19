@@ -1,4 +1,6 @@
 #include "uplink.h"
+#include "spibus.h"
+#include "dbg.h"
 #include "netcfg.h"
 #include "mbedtls/sha256.h"
 #include "storage.h"
@@ -20,6 +22,9 @@ static volatile bool     g_yield   = false;   // "let go of the SD card"
 static volatile bool     g_syncNow = false;
 static volatile bool     g_countNow = false;  // recompute Sync-screen tallies
 static volatile bool     g_deleteNow = false; // delete confirmed-uploaded files
+// Descriptive only now: the Sync screen and the recording-yield handshake ask
+// "is the uploader working the card?". It is NOT what keeps the IMU off the bus
+// any more -- a flag cannot do that (see spibus.h). The mutex does.
 static volatile bool     g_sdBusy   = false;  // task is using the shared SPI bus (SD)
 
 static void statusSet(const UplinkStatus &s)
@@ -67,6 +72,8 @@ static void configureClient(WiFiClientSecure &c)
 
 static bool alreadyUploaded(const String &name)
 {
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return false; }
     File f = SD.open(UPLOADED_INDEX, FILE_READ);
     if (!f) return false;
     bool found = false;
@@ -84,6 +91,8 @@ static bool alreadyUploaded(const String &name)
 // "the server has this" (200/201/409) from "the server could not use it" (422).
 static void markUploaded(const String &name, int rc)
 {
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return ; }
     File f = SD.open(UPLOADED_INDEX, FILE_APPEND);
     if (!f) return;
     f.printf("%s\t%d\n", name.c_str(), rc);
@@ -92,6 +101,8 @@ static void markUploaded(const String &name, int rc)
 
 static bool confirmedUploaded(const String &name)
 {
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return false; }
     File f = SD.open(UPLOADED_INDEX, FILE_READ);
     if (!f) return false;
     bool ok = false;
@@ -374,6 +385,8 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
     // handle while HTTP is in flight.
     size_t total = 0;
     {
+        SpiBusGuard bus(5000);
+        if (!bus) { DBGE("sd", "%s: bus busy sizing", name.c_str()); return false; }
         File probe = SD.open("/" + path, FILE_READ);
         if (!probe) return false;
         total = probe.size();
@@ -403,23 +416,42 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
         // problem. What breaks it is holding a File handle across seconds of TLS
         // work between reads. Reading in one uninterrupted go per chunk is
         // exactly the pattern the probe proves works.
-        File f = SD.open("/" + path, FILE_READ);
-        if (!f) { Serial.printf("  %s: cannot reopen for part %d\n", name.c_str(), part); ok = false; break; }
-        const size_t offset = (size_t)(part - 1) * UPLOAD_CHUNK;
-        if (!f.seek(offset)) {
-            Serial.printf("  %s part %d: seek to +%u failed\n", name.c_str(), part, (unsigned)offset);
-            f.close(); ok = false; break;
-        }
         size_t got = 0;
-        int stalls = 0;
-        while (got < want) {
-            int n = f.read(buf + got, want - got);
-            if (n > 0) { got += (size_t)n; stalls = 0; continue; }
-            if (++stalls > 20) break;
-            delay(10);
+        const size_t offset = (size_t)(part - 1) * UPLOAD_CHUNK;
+        {
+            // The bus is held for THIS READ ONLY, and released before the POST
+            // below. That is the whole point of chunking: the card is idle
+            // while TLS runs, so the IMU keeps sampling between chunks instead
+            // of going silent for the entire sync.
+            SpiBusGuard bus(5000);
+            if (!bus) {
+                DBGE("sd", "%s part %d: bus busy 5s", name.c_str(), part);
+                Serial.printf("  %s part %d: SPI bus busy\n", name.c_str(), part);
+                ok = false; break;
+            }
+            File f = SD.open("/" + path, FILE_READ);
+            if (!f) {
+                DBGE("sd", "%s part %d: reopen failed", name.c_str(), part);
+                Serial.printf("  %s: cannot reopen for part %d\n", name.c_str(), part);
+                ok = false; break;
+            }
+            if (!f.seek(offset)) {
+                DBGE("sd", "%s part %d: seek +%u failed", name.c_str(), part, (unsigned)offset);
+                Serial.printf("  %s part %d: seek to +%u failed\n", name.c_str(), part, (unsigned)offset);
+                f.close(); ok = false; break;
+            }
+            int stalls = 0;
+            while (got < want) {
+                int n = f.read(buf + got, want - got);
+                if (n > 0) { got += (size_t)n; stalls = 0; continue; }
+                if (++stalls > 20) break;
+                delay(10);
+            }
+            f.close();
         }
-        f.close();
         if (got != want) {
+            DBGE("sd", "%s part %d/%d short read %u/%u at +%u",
+                 name.c_str(), part, parts, (unsigned)got, (unsigned)want, (unsigned)offset);
             Serial.printf("  %s part %d/%d: short read %u/%u at +%u | cardType=%d heap=%lu\n",
                           name.c_str(), part, parts, (unsigned)got, (unsigned)want, (unsigned)offset,
                           (int)SD.cardType(), (unsigned long)ESP.getFreeHeap());
@@ -455,6 +487,8 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
         // 202 = part stored, 201 = assembled. Anything else is a failure worth
         // seeing; the file is left unmarked so the next sync retries it.
         if (rc != 202 && rc != 201) {
+            DBGE("sync", "%s part %d/%d -> HTTP %d %s", name.c_str(), part, parts,
+                 rc, payload.substring(0, 40).c_str());
             Serial.printf("  %s part %d/%d (%u B) -> HTTP %d %s\n", name.c_str(), part, parts,
                           (unsigned)got, rc, payload.substring(0, 60).c_str());
             ok = false;
@@ -491,6 +525,9 @@ static void computeCounts(UplinkStatus &st)
 {
     if (!storageReady()) { st.countsValid = false; return; }
 
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "bus busy counting"); st.countsValid = false; return; }
+
     int on = 0, up = 0;
     File root = SD.open("/");
     for (File f = root.openNextFile(); f; f = root.openNextFile()) {
@@ -519,6 +556,9 @@ static void computeCounts(UplinkStatus &st)
 static int deleteConfirmedAll()
 {
     if (!storageReady()) return 0;
+
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "bus busy deleting"); return 0; }
 
     // Collect names first; deleting while iterating the directory handle is
     // asking for trouble.
@@ -556,70 +596,69 @@ int uplinkSyncSessions()
     int accepted = 0;
     String active = storageFilename();
     if (active.startsWith("/")) active = active.substring(1);
-
-    File root = SD.open("/");
-    for (File f = root.openNextFile(); f; f = root.openNextFile()) {
-        if (f.isDirectory()) { f.close(); continue; }
-        String name = f.name();
-        if (name.startsWith("/")) name = name.substring(1);
-        size_t size = f.size();
-        f.close();
-
-        if (!isTrackUpload(name)) continue;        // sidecars go in the pass below
-        if (name == active) continue;             // still being written to
-        if (alreadyUploaded(name)) continue;
-        // Checked between files, not mid-file: a recording starting must not
-        // find the card busy, and an upload must not be torn in half.
-        if (g_yield) { Serial.println("sync: yielding card"); break; }
-
-        // Chunked, like sidecars. A 696 KB track hits the same wall a 2.4 MB
-        // sidecar does — the card will not deliver it in one read while HTTP is
-        // in flight — and until the track lands its sidecar cannot attach, so
-        // this is the upload that has to work first.
-        (void)size;
-        if (uploadChunked(client, name, name)) {
-            markUploaded(name, 201);
-            accepted++;
-        }
-    }
-    root.close();
-
-    // Second pass: the motion sidecars. Deliberately after every track — the
-    // server attaches a sidecar to an existing session and answers 409 if the
-    // track has not arrived yet, and a 409 here would mark it done forever.
-    //
-    // Nothing heavy happens here any more. The ~11 Hz file was written during
-    // recording, so this is an ordinary streamed upload of a couple of MB, the
-    // same as a track. The version that re-read and decimated the full-rate file
-    // at this point is what boot-looped the device on a 10.5 MB sidecar.
     String activeUp = active;
     if (activeUp.endsWith(".csv")) activeUp = activeUp.substring(0, activeUp.length() - 4) + "_i10.csv";
-    File root2 = SD.open("/");
-    for (File f = root2.openNextFile(); f; f = root2.openNextFile()) {
-        if (f.isDirectory()) { f.close(); continue; }
-        String name = f.name();
-        if (name.startsWith("/")) name = name.substring(1);
-        size_t size = f.size();
-        f.close();
 
-        if (!isMotionUpload(name)) continue;
-        if (name == activeUp) continue;            // still being written to
-        if (alreadyUploaded(name)) continue;
-        if (g_yield) { Serial.println("sync: yielding card"); break; }
+    // LIST FIRST, UPLOAD AFTER -- and the listing is the only part that holds
+    // the SPI bus. Iterating the directory handle while uploading from inside
+    // the loop would mean holding the card across every TLS round trip, which
+    // both starves the IMU for the whole sync and keeps a directory handle open
+    // across minutes of network. It is also what makes the per-chunk locking in
+    // uploadChunked possible at all: a scan that held the bus could not call it
+    // without deadlocking on the same mutex.
+    //
+    // 128 is the same bound deleteConfirmedAll uses. A card with more pending
+    // files than that syncs the rest on the next pass.
+    String tracks[128];   int nTracks = 0;
+    String sidecars[128]; int nSide = 0;
+    {
+        SpiBusGuard bus(5000);
+        if (!bus) { DBGE("sync", "bus busy listing"); return 0; }
+        File root = SD.open("/");
+        if (!root) { DBGE("sync", "cannot open root"); return 0; }
+        for (File f = root.openNextFile(); f; f = root.openNextFile()) {
+            if (f.isDirectory()) { f.close(); continue; }
+            String name = f.name();
+            if (name.startsWith("/")) name = name.substring(1);
+            f.close();
+            if (isTrackUpload(name)) {
+                if (name != active && nTracks < 128) tracks[nTracks++] = name;
+            } else if (isMotionUpload(name)) {
+                if (name != activeUp && nSide < 128) sidecars[nSide++] = name;
+            }
+        }
+        root.close();
+    }
+    DBGI("sync", "listed %d track(s), %d sidecar(s)", nTracks, nSide);
 
-        // Uploaded under the name the SERVER keys sidecars by, read from the
-        // on-card name. retryOn409 because a 409 means "the track is not up yet",
-        // which is temporary — marking that done would strand the motion data.
-        // Chunked, always: even a small sidecar costs only one extra request, and
-        // one code path is worth more than saving it.
-        (void)size;
-        if (uploadChunked(client, name, motionUploadName(name))) {
-            markUploaded(name, 201);
+    // Tracks first. A sidecar attaches to an existing session, so the server
+    // answers 409 until its track has landed -- and a 409 marked done would
+    // strand the motion data forever.
+    for (int i = 0; i < nTracks; i++) {
+        if (alreadyUploaded(tracks[i])) continue;
+        // Checked between files, not mid-file: a recording starting must not
+        // find the card busy, and an upload must not be torn in half.
+        if (g_yield) { DBGW("sync", "yielding card"); Serial.println("sync: yielding card"); break; }
+        DBGI("sync", "track %s", tracks[i].c_str());
+        if (uploadChunked(client, tracks[i], tracks[i])) {
+            markUploaded(tracks[i], 201);
             accepted++;
         }
     }
-    root2.close();
 
+    for (int i = 0; i < nSide; i++) {
+        if (alreadyUploaded(sidecars[i])) continue;
+        if (g_yield) { DBGW("sync", "yielding card"); Serial.println("sync: yielding card"); break; }
+        // Uploaded under the name the SERVER keys sidecars by, read from the
+        // on-card name.
+        DBGI("sync", "sidecar %s", sidecars[i].c_str());
+        if (uploadChunked(client, sidecars[i], motionUploadName(sidecars[i]))) {
+            markUploaded(sidecars[i], 201);
+            accepted++;
+        }
+    }
+
+    DBGI("sync", "done, %d accepted", accepted);
     Serial.printf("sync: %d file(s) accepted\n", accepted);
     return accepted;
 }
@@ -696,8 +735,9 @@ static void uplinkTask(void *)
         // look like the thing breaking SD reads: the same card streams an 8.19 MB
         // file over CAT with the radio idle, but stalls dead after ~90 KB with it
         // associated. 11 dBm is ample for a device that only syncs at home.
-        if (st.wifiUp) WiFi.setTxPower(WIFI_POWER_11dBm);
+        if (st.wifiUp) { WiFi.setTxPower(WIFI_POWER_11dBm); DBGI("wifi", "up %s", WiFi.localIP().toString().c_str()); }
         if (!st.wifiUp) {
+            DBGW("wifi", "connect failed: %s", why.c_str());
             snprintf(st.message, sizeof(st.message), "%s", why.c_str());
             statusSet(st);
             netDisconnect();
@@ -727,6 +767,7 @@ static void uplinkTask(void *)
         }
 
         netDisconnect();
+        DBGI("wifi", "down");
         st.wifiUp = false;
         statusSet(st);
         vTaskDelay(pdMS_TO_TICKS(1000));

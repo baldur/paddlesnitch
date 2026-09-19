@@ -1,4 +1,6 @@
 #include "imu.h"
+#include "spibus.h"
+#include "dbg.h"
 #include "board.h"
 #include "board_pins.h"
 #include <SensorQMI8658.hpp>
@@ -106,11 +108,22 @@ void imuPoll()
 {
     if (!ready) return;
     if (millis() - lastPollMs < POLL_INTERVAL_MS) return;
+
+    // TRY, never wait. The card and this chip share SCK/MISO/MOSI, and the SD
+    // driver holds its CS low across a whole multi-command sequence -- so
+    // sampling here while the uplink task is mid-read asserts a second CS on a
+    // live bus and desynchronises the card for the rest of the sync. Skipping
+    // the sample is the cheap side of that trade: sync never runs while
+    // recording, so a sample dropped here is never a sample that was going into
+    // a paddle. Blocking instead would stall core 1's whole loop -- GNSS, UI and
+    // logging -- behind a multi-second card read.
+    if (!spiBusTryTake()) return;
     lastPollMs = millis();
 
     float ax, ay, az, gx, gy, gz;
     bool gotAccel = qmi.getAccelerometer(ax, ay, az);
     bool gotGyro  = qmi.getGyroscope(gx, gy, gz);
+    spiBusGive();
 
     // Runtime watchdog: give up on a chip that has stopped answering, and let go
     // of the bus.
@@ -134,6 +147,8 @@ void imuPoll()
             digitalWrite(IMU_CS, HIGH);
             Serial.printf("IMU: silent for %lums, marking dead and freeing the SPI bus\n",
                           (unsigned long)(millis() - lastGoodMs));
+            DBGE("imu", "silent %lums -> dead, CS parked",
+                 (unsigned long)(millis() - lastGoodMs));
         }
         return;
     }

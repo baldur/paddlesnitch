@@ -11,6 +11,8 @@
 #include "dutycycle.h"
 #include "storage.h"
 #include "imu.h"
+#include "spibus.h"
+#include "dbg.h"
 #include "netcfg.h"
 #include "uplink.h"
 #include "ui.h"
@@ -156,7 +158,13 @@ void setup()
     uint32_t t0 = millis();
     while (!Serial && millis() - t0 < 2000) delay(10);
 
+    // Both before any subsystem starts: the bus mutex must exist before the
+    // first SD or IMU access, and the recorder must exist to catch bring-up,
+    // which is where several of the hard faults have shown themselves.
+    spiBusInit();
+    dbgInit();
     Serial.printf("\n=== T-Beam S3 Supreme bring-up (fw %s) ===\n", FIRMWARE_VERSION);
+    DBGI("boot", "fw %s, reset=%s", FIRMWARE_VERSION, resetReasonStr());
     board = boardInit();
     uiSplash();
 
@@ -179,12 +187,14 @@ void setup()
     // retries if the chip comes up wedged after a warm reset.)
     imuProbe();
     bool imuOk = imuInit();
+    DBGI("imu", "init %s", imuOk ? "ok" : "FAILED");
     report("IMU", imuOk, imuOk ? "QMI8658 accel+gyro" : "init failed");
     // imuInit may have power-cycled the sensor rails (up to three times) to
     // recover a wedged chip, which leaves the OLED dark for the rest of the run.
     boardDisplayReinit();
 
     board.sdcard = storageInit();
+    DBGI("sd", "init %s", board.sdcard ? "ok" : "FAILED");
     report("SD", board.sdcard,
            board.sdcard ? "card ready - tap button to record" : "no card / mount failed");
 
@@ -644,7 +654,20 @@ static void handleSerialCommand()
                     : uiScreen == Screen::Track ? "track"
                     : uiScreen == Screen::Sync  ? "sync" : "nerd";
                 Serial.printf("screen   %s\n", scr);
+                uint32_t kept, lost, bytes;
+                dbgStats(kept, lost, bytes);
+                Serial.printf("debug    %lu entries (%lu overwritten, %luKB ring) -- DBG to dump\n",
+                              (unsigned long)kept, (unsigned long)lost, (unsigned long)(bytes / 1024));
+                Serial.printf("spibus   %lu imu skips, %lu take timeouts\n",
+                              (unsigned long)spiBusSkips(), (unsigned long)spiBusTimeouts());
                 uplinkRequestCounts();   // refresh for the next STATUS
+            }
+            // DBG dumps the flight recorder; DBG CLEAR empties it. The point of
+            // the recorder is that this works AFTER the interesting thing has
+            // happened -- no reflash, no waiting for the fault to recur.
+            else if (!strncmp(buf, "DBG", 3)) {
+                if (!strncmp(buf + 3, " CLEAR", 6)) { dbgClear(); Serial.println("dbg cleared"); }
+                else dbgDump(Serial);
             }
             else if (!strncmp(buf, "SETUP", 5)) {
                 if (netStartPortal("Change the WiFi network or password below.")) {
@@ -703,7 +726,12 @@ void loop()
     // Don't touch the IMU while the uplink task holds the shared SPI bus (SD
     // scan/sync/delete) -- concurrent access corrupts both. Only ever set when
     // not recording, so no sample that would be logged is skipped.
-    if (!uplinkSdBusy()) imuPoll();
+    // No flag check any more. imuPoll() takes the SPI bus itself and skips the
+    // sample if the card has it -- which is the only way to close the window
+    // where this check passed and the uplink task grabbed the card a microsecond
+    // later. It also means the IMU keeps sampling through the HTTP half of a
+    // sync, instead of going silent for the whole thing.
+    imuPoll();
 
     // Raw motion capture: stream each ~50 Hz IMU sample to the sidecar while
     // recording (the 1 Hz track row keeps only a summary). See

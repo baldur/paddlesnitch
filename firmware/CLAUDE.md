@@ -189,10 +189,75 @@ assumed. It sits on the **second SPI bus, shared with the microSD card**
   sensor-rail (ALDO1/ALDO2) power-cycle to recover a chip wedged by a warm reset.
   **Caveat:** a deeply-wedged chip can still need a true unplug — and flashing is a
   warm reset, so after a flash the IMU sometimes needs one power-cycle to come back.
-- **Runtime contention:** `imuPoll()` runs on core 1; the uplink task touches the
-  SD on core 0. Concurrent access corrupts both (SD `Select Failed` storms that
-  once hung the Sync screen). The loop skips `imuPoll()` while `uplinkSdBusy()` —
-  only ever set when not recording, so no logged sample is lost.
+- **Runtime contention:** arbitrated by a recursive mutex in `src/spibus.*`; see
+  below for why the flag that used to do this could not work.
+
+### The shared SPI bus, and why a flag was not enough
+
+The microSD and the QMI8658 IMU sit on one SCK/MISO/MOSI with separate chip
+selects. Access is arbitrated by a **recursive mutex** in `src/spibus.*`. Every
+card operation and every IMU sample holds it for its whole duration.
+
+There used to be a flag instead — `uplinkSdBusy()`, checked by `loop()` before
+calling `imuPoll()` — and it could not work, for two reasons. It had **no
+acknowledgement** (core 0 set it and started reading immediately, without
+waiting for a poll already in flight on core 1), and it was **check-then-act**
+(core 1 could read it clear and enter `imuPoll()` just as core 0 set it). Either
+way both chip selects end up asserted at once, which is fatal rather than untidy
+because **the SD driver holds ITS CS low across a whole multi-command sequence**,
+not merely one SPI transaction — so Arduino's per-transaction SPI lock does not
+serialise them. Two devices then drive MISO together, the card's state machine
+desynchronises, and every later access fails with `sdWait: Wait Failed`,
+`sdSelectCard: Select Failed`, CRC errors and short reads. **One collision
+poisons the rest of the sync.**
+
+This was measured, not reasoned about. On the same file in the same session:
+
+| Reader | Core | Result |
+|---|---|---|
+| `SDPROBE` / `LS` / `CAT` (serial handler, runs in `loop()`) | 1 | 818630 B at **429 KB/s**, radio off *and* associated |
+| the uplink task | 0 | `short read 4096/65536 at +0` |
+
+Every core-1 read succeeded; every core-0 read failed. The card was never the
+problem and neither was WiFi — the comment in `uplink.cpp` blaming WiFi TX
+current for breaking SD reads is **disproved** by the radio-on probe above.
+
+Rules, all of them load-bearing:
+- **`imuPoll()` uses `spiBusTryTake()` and skips the sample** when the card has
+  the bus. It must never block core 1's loop behind a multi-second card read,
+  and a dropped IMU sample is free — a sync never runs while recording.
+- **Never hold the bus across a network call.** `uploadChunked` reads one chunk,
+  releases, *then* POSTs, so the IMU keeps sampling through a multi-minute sync.
+  `uplinkSyncSessions` lists the card under the lock, releases, and only then
+  uploads — which is also what lets it call the per-chunk locking without
+  deadlocking on itself.
+- **The mutex is recursive** because a directory walk that consults the
+  uploaded-index per entry genuinely nests. The one thing recursion makes
+  possible and wrong is holding the bus and then calling `imuPoll()`, whose
+  try-take would succeed against its own task. No path does that; do not add one.
+- `uplinkSdBusy()` still exists but is now **descriptive only** — the Sync screen
+  and the recording-yield handshake. It is not what keeps the IMU off the bus.
+
+### Flight recorder (`DBG`)
+
+`src/dbg.*` keeps an always-on ring of timestamped events in PSRAM, dumped by
+the serial command **`DBG`** (`DBG CLEAR` empties it). It exists because every
+hard bug here has been chased by adding a print, reflashing, and hoping the
+fault recurred — and **reflashing is a warm reset**, which wedges the IMU and
+perturbs the very timing under investigation.
+
+It is built so it cannot itself become the problem:
+- **It never writes to the SD card.** Writing to the card is the fragile thing
+  being debugged; a logger that provokes the fault is worse than no logger.
+- PSRAM, fixed-size slots, overwrite-on-full — it cannot grow, fragment the
+  heap, or stall.
+- Formatting happens on the caller's stack, outside the lock; the critical
+  section is a `memcpy`.
+
+Log **state changes and failures**, never per-sample hot paths — a 50 Hz poll
+would fill the ring in seconds and bury what matters. Use counters for anything
+that repeats; `spiBusSkips()` / `spiBusTimeouts()` are exactly that, and both
+appear in `STATUS` alongside the ring's occupancy.
 
 Verified reading real gravity flat on a desk: `a=(0.01,0.08,1.03)g`, so Z is up
 and the scaling is right. Sampled at 50 Hz but logged at 1 Hz: `imuPoll()`
@@ -262,7 +327,8 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   Holding one File open across all 37 requests is what failed before.
 
 Serial commands (tracker env): `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
-`PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`.
+`PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`,
+`DBG` / `DBG CLEAR`.
 `SSID`/`PASS` take the **rest of the line**, not a space-split token — both can
 contain spaces.
 
@@ -271,8 +337,9 @@ It reads a file to completion in 64 KB chunks with the radio off, then again
 associated, and prints bytes/ms/KB-per-second for each. On the reference card it
 streams 2.38 MB at 430 KB/s both ways — which is how "the SD card cannot keep up"
 and "WiFi is starving the bus" were both ruled out after several confident wrong
-diagnoses. `LS` and `CAT` still **race the uplink task** for the card; run them
-when a sync is not in flight.
+diagnoses. `LS` and `CAT` no longer race the uplink task — every card access now goes
+through the SPI mutex, so the worst case is a wait rather than a corrupted
+read.
 
 **SSIDs are case-sensitive, and phone keyboards capitalise the first letter.**
 `Kruttnet` vs `kruttnet` cost a debugging round trip: the symptom is
