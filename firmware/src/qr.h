@@ -35,7 +35,29 @@ bool qrFits(const char *text);
 // Renders `text` at (x, y) into the shared u8g2 buffer, 2 px per module,
 // dark-on-light, including the quiet zone. The drawn square is qrSizePx()
 // on a side. No-op and returns false if the payload does not fit.
-bool qrDraw(const char *text, int x, int y);
+// `invert` draws LIGHT modules on a DARK field -- the opposite of the default.
+//
+// Worth having because of how an OLED photographs. The panel has no backlight:
+// a "light" pixel is an emitter being refreshed, so a dark-on-light QR is ~2400
+// lit pixels modulating at the panel's refresh rate, which is exactly what a
+// phone's rolling shutter turns into bands across the code. Inverted lights
+// only the modules (~1000 px) and leaves the quiet zone genuinely off, so there
+// is far less for the camera to beat against.
+//
+// The catch: a scanner has to accept an inverted code. iOS and modern Android
+// both do; some dedicated scanner apps do not. So this is a switch to TEST
+// with, not an assumption to build on.
+bool qrDraw(const char *text, int x, int y, bool invert = false);
+
+// Tunes the panel for being photographed: maximum contrast, and the display
+// clock pushed to its fastest (SH1106/SSD1306 command 0xD5, oscillator F,
+// divide 1). The clock is the direct lever on camera banding -- it raises the
+// refresh rate so the beat against a camera's exposure moves out of the range
+// that produces visible bands.
+//
+// Left in place once set: both QR screens are terminal states (portal open, or
+// waiting to be claimed) and the next reboot restores the defaults.
+void qrDisplayTune();
 
 // Side length in pixels of what qrDraw() draws, quiet zone included.
 int qrSizePx();

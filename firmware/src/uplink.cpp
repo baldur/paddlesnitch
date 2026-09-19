@@ -132,38 +132,19 @@ static void showCode(const String &code)
 {
     Serial.printf("\n>>> Enter this code at %s/profile/me/settings : %s\n\n",
                   netcfg.baseUrl.c_str(), code.c_str());
+    // No QR here. The UI repaints the Linking screen at 4 Hz from
+    // drawLinking(), so anything painted from this task is wiped ~250 ms later.
+    // This is a first paint so the code appears the instant it is known; the UI
+    // owns what it looks like from then on.
     if (!display.begin()) return;
     display.clearBuffer();
-
-    // QR left, code right. Scanning it opens /l/<code>, which lands on the
-    // settings page with the code already filled in, so the only thing left to
-    // do is confirm. The characters stay on screen beside it: a dead camera, or
-    // someone reading over a shoulder, still needs them.
-    //
-    // No scheme in the payload -- "https://" is 8 of the 32 available bytes and
-    // would not fit. Phone cameras linkify a bare host.
-    const String link = "paddlesnitch.com/l/" + code;
-    if (qrDraw(link.c_str(), 0, 3)) {
-        const int x = qrSizePx() + 4;
-        display.setFont(u8g2_font_5x8_tf);
-        display.drawStr(x, 10, "SCAN to link");
-        display.setFont(u8g2_font_6x10_tf);
-        display.drawStr(x, 28, code.c_str());
-        display.setFont(u8g2_font_5x8_tf);
-        display.drawStr(x, 44, "or type it at");
-        display.drawStr(x, 54, "paddlesnitch");
-        display.drawStr(x, 63, ".com/l/");
-    } else {
-        Serial.printf("Claim: link payload %u bytes, too long for a QR\n",
-                      (unsigned)link.length());
-        display.setFont(u8g2_font_6x10_tf);
-        display.drawStr(0, 10, "Link this tracker:");
-        display.setFont(u8g2_font_logisoso20_tf);
-        display.drawStr(2, 38, code.c_str());
-        display.setFont(u8g2_font_5x8_tf);
-        display.drawStr(0, 54, "paddlesnitch.com");
-        display.drawStr(0, 63, "profile > settings");
-    }
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 10, "Link this tracker:");
+    display.setFont(u8g2_font_logisoso20_tf);
+    display.drawStr(2, 38, code.c_str());
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 54, "paddlesnitch.com");
+    display.drawStr(0, 63, "profile > settings");
     display.sendBuffer();
 }
 
