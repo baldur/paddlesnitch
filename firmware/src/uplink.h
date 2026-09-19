@@ -47,6 +47,17 @@ struct UplinkStatus {
     // Session tallies for the Sync screen. Recomputed after each sync, on
     // request (uplinkRequestCounts), and after a delete. countsValid is false
     // until the first scan completes.
+    // Chunked-upload progress. A 2.4 MB sidecar is 37 requests and minutes of
+    // work; without this the Sync screen shows a motionless "..." for all of it,
+    // which is indistinguishable from the wedge this firmware spent a whole
+    // session chasing. Zeroed by the statusSet() that follows a sync.
+    // 32, not 20: "track_20260918_061002_imu.csv" is 29 characters, and clipping
+    // it drops the "_imu" -- which would render a track and its sidecar
+    // identically on the one screen whose job is saying which is in flight.
+    char     upFile[32]    = "";  // file being sent, "" when idle
+    int      upPart        = 0;   // 1-based chunk in flight
+    int      upParts       = 0;   // chunks in this file
+
     bool     countsValid   = false;
     int      onDevice      = 0;   // track_*.csv files on the card
     int      uploaded      = 0;   // of those, confirmed by the server (200/201/409)

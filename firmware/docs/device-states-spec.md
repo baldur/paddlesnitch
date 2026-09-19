@@ -86,9 +86,13 @@ show it — Sync shows its tallies, Pick shows only the options.
 available it starts a session on its own — no "press to record". Until the fix lands it
 shows `Acquiring GPS...` (recording still requires a fix; a fix-less session is the junk
 that returned `422`). **Stopping is deliberate:** `hold` arms a `STOP?` confirmation, and
-a `double-tap` confirms — then it stops, syncs, and returns to the menu. A single tap or a
+a **`tap` confirms** — then it stops, syncs, and returns to the menu. A `double-tap` or a
 10 s timeout cancels and keeps recording. A plain `double-tap` (not armed) returns to the
 menu with the recording still running in the background.
+
+> The stop confirmation answered to a `double-tap` before, while the delete confirmation
+> answered to a `tap`. Two confirmations, opposite answers — the worst possible place for
+> the button to mean different things. Both now take `tap = yes, double-tap = no`.
 
 **Speed readout toggles on tap.** A tap on Track (when not armed to stop) cycles the speed
 unit: **km/h → m/s → pace per 500 m** (m:ss), one at a time. The **stroke rate (SPM)** sits
@@ -107,29 +111,63 @@ Counts are **not** recomputed every frame (an SD directory scan is not free). Th
 uploader publishes them after every sync pass, and they are refreshed when the Sync
 screen is entered and after a delete. Nerd mode also shows them.
 
+### Sync screen — upload progress
+
+Because the counts only move when a whole file lands, they say nothing during the minutes
+a large file takes: a 2.4 MB sidecar is 37 chunked requests. The screen therefore shows,
+while a sync is in flight:
+
+- an **animated** mark top-right — a static one is indistinguishable from a wedged
+  uploader, which is the failure this firmware spent a session chasing;
+- the file being sent, `<name> 12/37`, and a progress bar, in place of the hint row.
+
+Fed by `upFile` / `upPart` / `upParts` on `UplinkStatus`, published **before** each chunk
+is read (the read is the step that used to stall, so the screen has to name the chunk it
+is stuck on) and cleared by the `statusSet()` that ends a sync.
+
 ## Gestures
 
 One button (GPIO0); `RST` is the AXP2101 power key and cannot be used as input. Three
-gestures, now **context-sensitive to the visible screen**:
+gestures, and **each one means the same thing on every screen**:
 
-| Gesture | Pick | Track (recording) | Track (armed STOP) | Sync | Nerd | Onboarding |
-|---|---|---|---|---|---|---|
-| **Tap** (<400 ms) | move highlight | toggle speed unit (km/h/m/s/pace) | cancel (keep recording) | **sync now** | — | — |
-| **Double-tap** | — | → Pick (keeps recording) | **confirm stop** → menu | → Pick | → Pick | — |
-| **Hold** | **open highlighted** | **arm STOP** | — | **delete uploaded → confirm** | Setup / re-link | Setup / re-link |
+| Gesture | Means |
+|---|---|
+| **Tap** (<400 ms) | **move / cycle** within this screen. Never acts, never destroys, always wraps. |
+| **Hold** (1200 ms) | **select**, or commit this screen's primary action. |
+| **Double-tap** | **back to Pick.** Always, from anywhere, cancelling any pending confirmation on the way. |
+
+Which gives, per screen:
+
+| Screen | Tap cycles | Hold commits | Double-tap |
+|---|---|---|---|
+| **Pick** | the highlight (Track → Sync → Nerd →) | open the highlighted screen | — (already there) |
+| **Track** | speed unit (km/h → m/s → pace/500 →) | arm `STOP?` (when recording) | → Pick, recording continues |
+| **Sync** | page (status → cleanup →) | page 1: **sync now** · page 2: arm the delete | → Pick |
+| **Nerd** | page (1 → 2 → 3 → 1) | radio page only: Setup / re-link | → Pick |
+| **Confirmation** | **yes** | — | **no**, → Pick |
+| **Onboarding** | — | WiFi / link attempt | — |
 
 Notes:
-- **Setup is reachable** via Hold on an **idle** Track (no fix yet) or Nerd, and during
-  onboarding — the escape hatch for a changed router password is preserved. The screens
-  where Hold does something else: Pick (opens the highlighted screen), Sync (arms delete),
-  and a **recording** Track (arms the stop).
+- **Tap never has a side effect** outside a confirmation. It used to: `tap` on Sync fired
+  a sync, under the same gesture that merely cycled a unit on Track.
+- **Delete moved behind a page.** It was `hold` on the Sync status screen — the same
+  gesture, in the same place, that "hold does this screen's thing" says should start a
+  sync. It now takes tap-to-cleanup → hold → tap, and the cleanup page states how many
+  un-sent files survive the delete (all of them).
+- **Setup / re-link** lives on the Nerd **radio** page, which is the page already showing
+  `UNLINKED` and the SSID; when unlinked it says `hold = link this device` in place of the
+  server host. Still reachable during onboarding by a hold on any screen.
+- **Paging wraps.** Cycling is only safe on a single button if you can get back round
+  without a second one. Nerd no longer exits by paging past the last page — double-tap is
+  the only way out, which is the point.
 - A tap is confirmed ~400 ms after release (the double-tap window) **except on Pick**,
   where taps act immediately (no double-tap action there). Invisible next to a 1 Hz log
   rate.
 
 ### Delete-uploaded confirm flow
 
-`Hold` on the Sync screen opens a dedicated **confirm screen**:
+`Hold` on the Sync **cleanup page** (one tap right of the status page) opens a dedicated
+**confirm screen**:
 
 ```
 DELETE m UPLOADED FILES?
@@ -207,16 +245,26 @@ Interactions to preserve:
 
 Flash with `tools/flash.sh`, read the serial bring-up and the screens:
 
-- Boot shows the spinner, then lands on **Track** once linked; GPS counts climb and the
-  uploader runs without being asked.
-- **Double-tap** cycles Track → Sync → Nerd → Track.
+- Boot shows the wordmark, then **Pick**; GPS counts climb and the uploader runs without
+  being asked, whichever screen is open.
+- **The gesture contract holds on every screen.** Walk it once: `tap` only ever moves
+  something, `hold` only ever commits the thing on screen, and **`double-tap` always
+  lands on Pick** — from Track, Sync page 1, Sync page 2, each Nerd page, and out of both
+  confirmations.
+- **Paging wraps**: `tap` on Nerd goes 1 → 2 → 3 → 1 and never exits; `tap` on Sync
+  toggles status ↔ cleanup.
 - A recording on **Track** creates `track_YYYYMMDD_HHMMSS.csv` (confirm the name over
-  serial `LS`); a second tap closes it; stopping triggers a sync attempt within seconds.
-- **Sync** shows correct `ACTIVITIES / UPLOADED / PENDING`; `tap` forces a sync and the
-  numbers move; after a successful upload `UPLOADED` rises.
-- **Hold on Sync** → confirm screen; `tap` deletes only confirmed files (`LS` shows `422`
-  and un-uploaded files surviving); `double-tap`/timeout cancels.
+  serial `LS`); `hold` arms `STOP?`, **`tap` confirms**, `double-tap`/10 s cancels and
+  keeps recording; stopping triggers a sync within seconds.
+- **Sync** shows correct `on device / uploaded / pending`; `hold` on page 1 forces a sync
+  and the numbers move; after a successful upload `uploaded` rises.
+- **During a sync the screen is visibly alive**: the mark animates and a large file shows
+  `<name> n/N` with a bar that advances. This is the check that matters most — a frozen
+  panel here is the symptom that cost a whole debugging session.
+- **Sync page 2 → `hold`** → confirm screen; `tap` deletes only confirmed files (`LS`
+  shows `422` and un-uploaded files surviving); `double-tap`/timeout cancels.
 - Reformat the card, record a new session, confirm the timestamped name **uploads `201`**
   (not `409`) — the collision is gone.
 - With no fix forced (bench), confirm the NVS-fallback name is used and still uploads.
-- **Hold on Track** still opens Setup.
+- **Setup is still reachable**: `hold` on the Nerd radio page (page 3), and on any screen
+  while unlinked.

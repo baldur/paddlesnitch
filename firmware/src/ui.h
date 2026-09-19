@@ -48,6 +48,11 @@ struct UiState {
     int      uploaded    = 0;
     int      pending     = 0;
     bool     syncing     = false;   // a sync is in flight (uplink busy)
+    // Which chunk of which file is in flight. upParts == 0 means "syncing, but
+    // not inside a chunked file" (scanning, claiming, counting).
+    String   upFile;
+    int      upPart      = 0;
+    int      upParts     = 0;
 
     // pick screen: which option is highlighted (0 Track, 1 Sync, 2 Nerd)
     int      pickSel     = 0;
@@ -76,6 +81,9 @@ struct UiState {
     // something different here.
     int      nerdPage  = 0;
     int      nerdPages = 3;
+    // sync screen: 0 status, 1 cleanup (where the delete lives)
+    int      syncPage  = 0;
+    int      syncPages = 2;
 
     // page 2: power + system. Things you cannot get at without a laptop, which is
     // the whole point of the screen existing.

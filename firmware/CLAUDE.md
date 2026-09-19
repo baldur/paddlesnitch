@@ -364,16 +364,40 @@ counting, and a figure that understates just makes people give up early.
 **One button, three gestures, context-sensitive** — the board has only one free
 button (GPIO0; `RST` is the AXP2101 power key and not usable for this):
 
-- **Pick** (shown every boot): **tap** moves the highlight, **hold** opens the
-  highlighted screen.
-- **Track/Sync/Nerd**: **tap** = the screen's primary action (Track: start/stop
-  recording; Sync: sync now); **double-tap** = back to `Pick`; **hold** =
-  `Setup`/re-link, except on `Sync` where it arms the delete-confirm.
-- **DeleteConfirm**: **tap** = confirm, **double-tap** = cancel.
+Each gesture means **one thing everywhere**, so the button never has to be
+relearned per screen:
 
-Hold fires *while held* so the screen changes under your thumb. A tap is only
-confirmed once the 400 ms double-tap window closes — the price of distinguishing
-the three gestures on one button.
+- **tap** — move / cycle within this screen. Never acts, never destroys, and
+  always **wraps** (Pick highlight, Track speed unit, Sync page, Nerd page).
+- **hold** — select, or commit the screen's primary action. Pick: open the
+  highlighted screen. Track: arm the stop. Sync: `sync now` on page 1, arm the
+  delete on page 2. Nerd: re-link, on the radio page only.
+- **double-tap** — back to `Pick`. **Always**, from anywhere, including out of a
+  confirmation, which it cancels on the way.
+- **Confirmations** (`STOP?`, `Delete uploaded?`) are the one place tap commits:
+  **tap = yes, double-tap = no**, and both say so on the panel.
+
+Two things this fixed rather than merely tidied. `tap` used to mean "sync now"
+on Sync — an *action* under the same gesture that harmlessly cycled a unit on
+Track — and the two confirmations disagreed with each other about which gesture
+meant yes (delete took a tap, stop took a double-tap). **Delete also moved
+behind a page**: it was a hold on the Sync status screen, the same gesture in
+the same place that a user following "hold = do this screen's thing" would
+expect to start a sync. Reaching it is now tap-to-cleanup → hold → tap.
+
+Hold fires *while held* so the screen changes under your thumb, and the chosen
+Pick row blinks to acknowledge it. A tap is only confirmed once the 400 ms
+double-tap window closes — the price of distinguishing the three gestures on one
+button. `HOLD_MS` is 1200.
+
+**The Sync screen shows upload progress.** A 2.4 MB sidecar is 37 requests and
+several minutes, during which the tallies do not move; the old indicator was a
+motionless `...`, which looks exactly like the wedge this firmware spent a
+session chasing. It is now an animated mark plus `<file> 12/37` and a bar, fed
+by `upFile`/`upPart`/`upParts` on `UplinkStatus`. `statusProgress()` pokes only
+those three fields under the existing mutex rather than writing a whole snapshot
+back — the sync loop holds a local `UplinkStatus` across the entire upload, so a
+read-modify-`statusSet` here would race it.
 
 **Recording auto-starts on the Track screen** once there's a fix — opening Track
 *is* the decision to record (no "press to record"). `storageInit()` mounts the
