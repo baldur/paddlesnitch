@@ -326,7 +326,15 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   open/seek/read/**close** and nothing holds a card handle across a TLS round trip.
   Holding one File open across all 37 requests is what failed before.
 
-Serial commands (tracker env): `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
+**Flash layout is OTA-capable as of 2026-09-19.** `partitions.csv` carries
+`app0` + `app1` at 3.9375 MB each; `spiffs` was removed (1.625 MB, referenced by
+nothing — sessions live on the SD card). `nvs` deliberately kept its offset and
+size, so the reflash preserved the WiFi credentials and the device token —
+verified, not assumed. **A partition table cannot be changed over the air**, so
+this had to happen by cable while there was one device on a bench; the same
+applies to ever resizing a slot. `STATUS` reports the live state.
+
+Serial commands (tracker env): `HELP`, `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
 `PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`,
 `DBG` / `DBG CLEAR`.
 `SSID`/`PASS` take the **rest of the line**, not a space-split token — both can

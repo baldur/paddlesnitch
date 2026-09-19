@@ -4,12 +4,19 @@
 several devices are planned, which changes the conclusion. Two separate questions
 that turn out to be one, because OTA is only as safe as the thing that authorises it.
 
-> **The one thing that is time-critical.** The partition table cannot be changed
-> over the air — it lives outside the app slots and `Update.h` only writes app
-> partitions. So **every device flashed with today's single-slot table is
-> permanently cable-only**, and no amount of later work will retrofit OTA onto it.
-> The repartition is a ten-minute job that must happen *before* a device leaves
-> your hands. Everything else in this note can wait; this cannot.
+> **DONE, 2026-09-19.** This note used to open by saying the partition table was
+> the one time-critical thing, because it cannot be changed over the air and
+> every device flashed with the single-slot table would be permanently
+> cable-only. That window was closed while there was still exactly one device on
+> a bench. `partitions.csv` now carries `app0` + `app1` and the device reports:
+>
+> ```
+> ota      running=app0 4032KB  target=app1  -> OTA possible
+> ```
+>
+> The rest of this note — the actual update mechanism — is still unbuilt, but it
+> is now ordinary work that can happen whenever, rather than work with a
+> deadline attached to it.
 
 ---
 
@@ -90,34 +97,43 @@ the device accepts remote firmware.
 
 ## Part 2 — OTA
 
-### The blocker nobody will expect
+### The blocker nobody will expect — resolved
 
-`firmware/partitions.csv` has `otadata` and `app0 (ota_0)` — but **no `app1`**.
-There is one app slot, so the ESP32's OTA machinery cannot do anything: an A/B
-update needs two.
+`firmware/partitions.csv` used to declare `otadata` and type `app0` as `ota_0`
+while defining **no `app1`**. One app slot, so the ESP32's OTA machinery could
+do nothing whatever the code above it looked like — the half-configured state
+that reads as finished from the application side.
 
-Current app size is ~1.08 MB in a 6.25 MB slot, so there is plenty of room to
-repartition an 8 MB flash:
+The table now shipped:
 
 ```
 nvs,      data, nvs,      0x9000,   0x5000
 otadata,  data, ota,      0xe000,   0x2000
-app0,     app,  ota_0,    0x10000,  0x300000     3 MB
-app1,     app,  ota_1,    0x310000, 0x300000     3 MB
-spiffs,   data, spiffs,   0x610000, 0x1E0000
-coredump, data, coredump, 0x7f0000, 0x10000
+app0,     app,  ota_0,    0x10000,  0x3F0000     3.9375 MB
+app1,     app,  ota_1,    0x400000, 0x3F0000     3.9375 MB
+coredump, data, coredump, 0x7F0000, 0x10000
 ```
 
-3 MB per slot is ~2.7× the current binary — room for TLS, BLE, whatever comes.
+Two differences from the sketch this note originally carried. The slots are
+3.9375 MB rather than 3 MB (3.6× the ~1.09 MB binary), and **`spiffs` is gone**:
+it was 1.625 MB and nothing referenced it — no SPIFFS, LittleFS or FFat anywhere
+in `src/`. Sessions live on the microSD card, which is the point of the card.
+Shrinking a slot later needs a cable too, so the headroom was worth taking while
+the cable was already attached.
 
-**`nvs` stays at the same offset and size**, so WiFi credentials and the device
-token *should* survive the repartition. Verify rather than assume: a full-erase
-flash would wipe them and force re-onboarding, which on a device whose whole point
-is not needing a laptop is a bad surprise.
+**`nvs` kept its original offset and size, and that was verified rather than
+assumed.** After reflashing, the device still reported `wifi kruttnet`,
+`joined yes, previously` and `claimed yes` — credentials and the device token
+both survived, so no re-onboarding. PlatformIO also rewrites `boot_app0.bin` at
+`0xe000` during a cable flash, which resets `otadata`, so a stale pointer into
+the old layout is not a hazard on this path.
+
+`STATUS` now reports the live state (`ota running=… target=… -> OTA possible`),
+so this is checkable on any device rather than inferred from a config file.
 
 ### Shape of the implementation
 
-1. **Repartition** (above), flash once over the wire. One-time cost, requires
+1. ~~**Repartition**~~ — **done 2026-09-19**, see above. One-time cost, required
    physical access — which is the point at which to also decide about (2).
 2. **Sign the images.** OTA without signature verification means anything that can
    answer the device's update request can run arbitrary code on it, which is a far

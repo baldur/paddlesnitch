@@ -11,6 +11,7 @@
 #include "dutycycle.h"
 #include "storage.h"
 #include "imu.h"
+#include <esp_ota_ops.h>
 #include "spibus.h"
 #include "dbg.h"
 #include "netcfg.h"
@@ -189,6 +190,20 @@ void setup()
     dbgInit();
     Serial.printf("\n=== T-Beam S3 Supreme bring-up (fw %s) ===\n", FIRMWARE_VERSION);
     DBGI("boot", "fw %s, reset=%s", FIRMWARE_VERSION, resetReasonStr());
+    // Prove the OTA layout rather than assert it. The previous table declared
+    // otadata and typed app0 as ota_0 but had no app1, so this line would have
+    // printed "OTA: NOT POSSIBLE" -- which is the whole reason it exists.
+    {
+        const esp_partition_t *run  = esp_ota_get_running_partition();
+        const esp_partition_t *next = esp_ota_get_next_update_partition(nullptr);
+        Serial.printf("  OTA      [%s] running=%s  target=%s (%luKB/slot)\n",
+                      next ? " ok " : "FAIL",
+                      run  ? run->label  : "?",
+                      next ? next->label : "none -- no second app slot",
+                      (unsigned long)((run ? run->size : 0) / 1024));
+        DBGI("boot", "ota run=%s next=%s", run ? run->label : "?",
+             next ? next->label : "NONE");
+    }
     board = boardInit();
     uiSplash();
 
@@ -683,6 +698,15 @@ static void handleSerialCommand()
                 dbgStats(kept, lost, bytes);
                 Serial.printf("debug    %lu entries (%lu overwritten, %luKB ring) -- DBG to dump\n",
                               (unsigned long)kept, (unsigned long)lost, (unsigned long)(bytes / 1024));
+                {
+                    const esp_partition_t *run  = esp_ota_get_running_partition();
+                    const esp_partition_t *next = esp_ota_get_next_update_partition(nullptr);
+                    Serial.printf("ota      running=%s %luKB  target=%s  -> %s\n",
+                                  run  ? run->label  : "?",
+                                  (unsigned long)((run ? run->size : 0) / 1024),
+                                  next ? next->label : "none",
+                                  next ? "OTA possible" : "OTA IMPOSSIBLE (no second app slot)");
+                }
                 Serial.printf("spibus   %lu imu skips, %lu take timeouts, %lu UNGUARDED\n",
                               (unsigned long)spiBusSkips(), (unsigned long)spiBusTimeouts(),
                               (unsigned long)spiBusUnguarded());
