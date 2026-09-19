@@ -561,9 +561,11 @@ static int deleteConfirmedAll()
     if (!bus) { DBGE("sd", "bus busy deleting"); return 0; }
 
     // Collect names first; deleting while iterating the directory handle is
-    // asking for trouble.
-    String names[128];
+    // asking for trouble. Static for the same stack reason as uplinkSyncSessions
+    // above -- this runs on the same 8 KB task.
+    static String names[128];
     int n = 0;
+    for (int i = 0; i < 128; i++) names[i] = "";
     File root = SD.open("/");
     for (File f = root.openNextFile(); f && n < 128; f = root.openNextFile()) {
         bool dir = f.isDirectory();
@@ -609,8 +611,14 @@ int uplinkSyncSessions()
     //
     // 128 is the same bound deleteConfirmedAll uses. A card with more pending
     // files than that syncs the rest on the next pass.
-    String tracks[128];   int nTracks = 0;
-    String sidecars[128]; int nSide = 0;
+    // STATIC, not stack. The uplink task has an 8 KB stack that already carries a
+    // WiFiClientSecure and its TLS buffers; 256 Strings on top of that overflows
+    // it and the task double-faults the instant a sync starts (Guru Meditation,
+    // core 0, corrupted backtrace). Static is safe here because this task is the
+    // only caller and syncs never overlap.
+    static String tracks[128];   int nTracks = 0;
+    static String sidecars[128]; int nSide = 0;
+    for (int i = 0; i < 128; i++) { tracks[i] = ""; sidecars[i] = ""; }
     {
         SpiBusGuard bus(5000);
         if (!bus) { DBGE("sync", "bus busy listing"); return 0; }

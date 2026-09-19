@@ -665,6 +665,19 @@ static void handleSerialCommand()
             // DBG dumps the flight recorder; DBG CLEAR empties it. The point of
             // the recorder is that this works AFTER the interesting thing has
             // happened -- no reflash, no waiting for the fault to recur.
+            // HOLD makes the uploader let go of the card so LS/CAT/SDPROBE can
+            // have it; RESUME gives it back. Without this, an uploader stuck
+            // retrying a failing card starves every diagnostic that could say
+            // why -- exactly the hole this fell into on 19 Sep, when CAT could
+            // not read a file the uploader had already failed to send.
+            else if (!strncmp(buf, "HOLD", 4)) {
+                Serial.println(uplinkYieldCard(5000) ? "uploader released the card"
+                                                     : "uploader did not let go in 5s");
+            }
+            else if (!strncmp(buf, "RESUME", 6)) {
+                uplinkResume();
+                Serial.println("uploader resumed");
+            }
             else if (!strncmp(buf, "DBG", 3)) {
                 if (!strncmp(buf + 3, " CLEAR", 6)) { dbgClear(); Serial.println("dbg cleared"); }
                 else dbgDump(Serial);
