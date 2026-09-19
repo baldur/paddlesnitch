@@ -1,6 +1,6 @@
 # Unified web app + shared tRPC API
 
-✅ **Phases 1–3 built, green, deploying — 2026-09-13.** (Phase 4, the Expo mobile
+✅ **Phases 1–3 shipped and deployed — 2026-09-13.** (Since then the `/analyse` section moved to `/paddles`; old URLs 301.) (Phase 4, the Expo mobile
 app, is a later track.) Consolidates the two Next apps into one and introduces a
 shared, typed tRPC API that web + mobile + firmware consume. Supersedes the two-app split from
 [`platform-monorepo.md`](platform-monorepo.md) for the *web tier* (the shared

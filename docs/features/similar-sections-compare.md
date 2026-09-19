@@ -1,6 +1,9 @@
 # Feature spec: Compare similar sections across paddles
 
-**Status:** 💭 design (2026-07-20). Living design record — build after review.
+**Status:** ✅ **shipped 2026-08 (#163, merged + deployed).** Written as a design record on 2026-07-20 and built largely as described.
+
+> **Since this was written:** `apps/att` + `apps/analysis` became the single `apps/web`, and the `/analyse` section moved to `/paddles` (old URLs 301). Paths below are as-built at the time; `CLAUDE.md` is authoritative for today.
+
 **Owners:** Baldur (product), Claude (implementation).
 **App:** `apps/analysis` (the analyse stack). Extends the existing `/analyse/compare` flow.
 

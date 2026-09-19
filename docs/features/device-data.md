@@ -1,6 +1,10 @@
 # Feature spec: what the paddle tracker captures
 
-**Status:** 📋 reference — describes firmware `0.3.0` as shipped on device `5A43CA48`.
+**Status:** 📋 reference — describes firmware `0.3.0`. **Firmware is now 0.9.0** and
+several claims here have been overtaken: stroke rate IS now derivable (a ~12 Hz
+motion sidecar is uploaded and `deriveCadence` resolves it), boat attitude is
+derived too, and uploads are chunked. The column-by-column reference and the
+sampling-rate measurements remain accurate and are why this is kept.
 **Owner:** Baldur (product). Counterpart: the `gps_device` repo.
 **Companion:** [`device-uplink.md`](device-uplink.md) covers *how* the file arrives;
 this covers *what is in it* and how much of it to believe.
