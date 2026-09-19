@@ -33,9 +33,17 @@ export function proxy(req: NextRequest) {
       !pathname.startsWith('/att/api/auth'))
 
   if (requiresAuth && !req.cookies.get('tt_id')) {
+    // `next` carries the QUERY STRING as well as the path. It used to be the
+    // pathname alone, while the clone kept the original params — so a gated URL
+    // like /profile/me/settings?code=ABC123 redirected to
+    // /att/auth?code=ABC123&next=/profile/me/settings and the code was silently
+    // dropped on the way back. That breaks the scan-to-link QR for anyone not
+    // already signed in, which is most people setting up a device.
+    const target = pathname + req.nextUrl.search
     const url = req.nextUrl.clone()
     url.pathname = '/att/auth'
-    url.searchParams.set('next', pathname)
+    url.search = ''
+    url.searchParams.set('next', target)
     return NextResponse.redirect(url)
   }
 

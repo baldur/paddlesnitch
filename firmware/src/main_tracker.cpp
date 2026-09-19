@@ -12,6 +12,7 @@
 #include "storage.h"
 #include "imu.h"
 #include <esp_ota_ops.h>
+#include "qr.h"
 #include "spibus.h"
 #include "dbg.h"
 #include "netcfg.h"
@@ -742,7 +743,8 @@ static void handleSerialCommand()
                     "MISOSCAN          who holds MISO: cycles the sensor + card rails\n"
                     "MISOTEST          is MISO driven right now?\n"
                     "MISOCLOCK         retest after one 0xFF release byte\n"
-                    "MISORELEASE       sweep 1..64 release bytes\n"));
+                    "MISORELEASE       sweep 1..64 release bytes\n"
+                    "QRDUMP <text>     print a QR module grid (checks for inversion)\n"));
             }
             else if (!strncmp(buf, "HOLD", 4)) {
                 Serial.println(uplinkYieldCard(5000) ? "uploader released the card"
@@ -837,6 +839,12 @@ static void handleSerialCommand()
             // actively driving, and the ESP32's ~45k internal pull-down is too
             // weak to separate those. Distinguishing them needs a scope or a
             // stronger external pull-down.
+            // QRDUMP <text> — the module grid over serial. The panel is 58 px
+            // square; you cannot tell an inverted or over-sized code from a
+            // photograph of it, and you can from this.
+            else if (!strncmp(buf, "QRDUMP ", 7)) {
+                qrDumpSerial(buf + 7);
+            }
             else if (!strncmp(buf, "MISOSCAN", 8)) {
                 SpiBusGuard bus(5000);
                 if (!bus) { Serial.println("MISOSCAN: bus busy"); }

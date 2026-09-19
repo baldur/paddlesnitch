@@ -334,9 +334,22 @@ verified, not assumed. **A partition table cannot be changed over the air**, so
 this had to happen by cable while there was one device on a bench; the same
 applies to ever resizing a slot. `STATUS` reports the live state.
 
+**Setup shows a QR (2026-09-19, phone-untested).** The portal AP is now
+`PT-<3 hex>` with an 8-character random password stored in NVS as `apkey`, and
+the screen shows a `WIFI:` join QR beside the text. The claim screen shows a
+`paddlesnitch.com/l/<code>` QR beside the code. **The whole design is governed
+by one number:** a version-2 QR at ECC L holds **32 bytes**, and that is what
+fits 64 px of panel at 2 px/module with a 2-module quiet zone. Exceed it and
+`qrFits()` refuses and the screen falls back to text. The AP name is
+`substring(5)`, not `substring(4)` — four hex characters makes the payload 33
+bytes. `QRDUMP <text>` prints the module grid over serial, which is how you
+check for an inverted or over-promoted code without a camera. See
+[`docs/features/qr-onboarding.md`](../docs/features/qr-onboarding.md); phone
+scanning is NOT yet verified.
+
 Serial commands (tracker env): `HELP`, `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
 `PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`,
-`DBG` / `DBG CLEAR`.
+`DBG` / `DBG CLEAR`, `QRDUMP <text>`.
 `SSID`/`PASS` take the **rest of the line**, not a space-split token — both can
 contain spaces.
 
