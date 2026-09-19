@@ -21,6 +21,7 @@ static uint32_t nextFallbackSeq()
     return seq;
 }
 
+static uint32_t droppedRows  = 0;   // track rows lost to a busy bus -- shown on Track
 static uint64_t cachedCardMB = 0;   // cleared on (re)mount -- see storageInit
 static File     logFile;
 static bool     ready = false;
@@ -258,6 +259,8 @@ bool storageProbeRead(const char *name, size_t *bytesOut, uint32_t *msOut)
     return !stalled;
 }
 
+uint32_t storageDroppedRows() { return droppedRows; }
+
 uint64_t storageCardSizeMB()
 {
     if (!ready) return 0;
@@ -277,7 +280,14 @@ void storageLogRow(const char *csvLine)
     // The authoritative track row: wait a long time for the bus, because losing
     // one of these loses a second of the paddle.
     SpiBusGuard bus(2000);
-    if (!bus) { DBGE("sd", "bus busy: track row DROPPED"); return; }
+    if (!bus) {
+        // DATA LOSS. A dropped track row is a lost second of the paddle, and
+        // this is the one thing the device exists to produce -- so it goes on
+        // the screen, not only into a log nobody reads on the water.
+        droppedRows++;
+        DBGE("sd", "bus busy: track row DROPPED (total %lu)", (unsigned long)droppedRows);
+        return;
+    }
 
     if (!ready || !logFile) return;
     spiBusAssertHeld("storageLogRow");

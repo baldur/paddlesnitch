@@ -205,7 +205,16 @@ static void drawTracker(const UiState &s)
         if ((millis() / 600) % 2) display.drawDisc(3, 60, 3);   // blinking circle
         display.setFont(u8g2_font_5x8_tf);
         display.drawStr(9, 63, "REC");
+        // Lost rows displace the hint. A dropped row is a missing second of the
+        // paddle, and the documented rule here is that anything the user must
+        // act on lives on the screen -- it should never be visible, so when it
+        // is, it matters more than a hint they have already read.
+        char h2[24];
         const char *h = "hold to stop";
+        if (s.droppedRows) {
+            snprintf(h2, sizeof(h2), "!%lu ROWS LOST", (unsigned long)s.droppedRows);
+            h = h2;
+        }
         display.drawStr(128 - display.getStrWidth(h), 63, h);
     } else {
         // Recording auto-starts once there's a fix; until then we're acquiring.

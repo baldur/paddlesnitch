@@ -1,10 +1,30 @@
-# Custom partition table. The default 1.31 MB app partition is not enough once
-# WiFi + TLS are linked in alongside LoRa, GNSS, SD and the IMU.
-# The board has 8 MB of flash; this gives the app 6.25 MB and keeps NVS (device
-# token, WiFi credentials) and a coredump region.
+# Custom partition table for the 8 MB flash on the T-Beam S3 Supreme.
+#
+# TWO app slots, because OTA needs somewhere to write the new image while the
+# old one is still running. The previous table declared otadata and typed app0
+# as ota_0 but never defined app1, so OTA could not work however much plumbing
+# existed above it -- the half-configured state that looks done from the code
+# side.
+#
+# THE DEADLINE THAT MATTERS: a partition table cannot be changed over the air.
+# It is written by the bootloader region, so switching to an OTA-capable layout
+# requires a cable. Do it while there is one device on a bench; once several are
+# deployed, the window has closed and every one of them needs collecting.
+#
+# Sizes: the tracker binary is ~1.09 MB, so 3.9375 MB a slot is 3.6x headroom --
+# generous on purpose, because shrinking a slot later also needs a cable.
+#
+# spiffs is GONE. It was 1.625 MB and nothing referenced it: no SPIFFS, LittleFS
+# or FFat anywhere in src/. Session data lives on the microSD card, which is the
+# whole point of the card. That dead space is now app headroom.
+#
+# nvs and otadata keep their original offsets and sizes ON PURPOSE. nvs holds
+# the WiFi credentials and the device token, so leaving it untouched means
+# reflashing this table does not unpair the device or lose the network.
+#
 # Name,     Type, SubType,  Offset,   Size
 nvs,        data, nvs,      0x9000,   0x5000
 otadata,    data, ota,      0xe000,   0x2000
-app0,       app,  ota_0,    0x10000,  0x640000
-spiffs,     data, spiffs,   0x650000, 0x1A0000
+app0,       app,  ota_0,    0x10000,  0x3F0000
+app1,       app,  ota_1,    0x400000, 0x3F0000
 coredump,   data, coredump, 0x7F0000, 0x10000

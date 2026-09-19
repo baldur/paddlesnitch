@@ -27,6 +27,9 @@ bool     storageRecording();
 const char *storageFilename();
 uint32_t storageRowCount();
 uint64_t storageCardSizeMB();   // 0 when no card is mounted
+// Track rows lost because the SPI bus was busy. Should be 0; anything else is
+// missing seconds of a paddle and is surfaced on the Track screen.
+uint32_t    storageDroppedRows();
 // Diagnostic: read a file to completion, reporting bytes and elapsed ms.
 // Returns false if it stalled or could not be opened.
 bool     storageProbeRead(const char *name, size_t *bytesOut, uint32_t *msOut);

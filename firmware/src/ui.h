@@ -57,6 +57,8 @@ struct UiState {
     // pick screen: which option is highlighted (0 Track, 1 Sync, 2 Nerd)
     int      pickSel     = 0;
     // track screen: a hold has armed "stop recording", awaiting a double-tap
+    // Track rows lost to a busy bus. Nonzero means the paddle has holes in it.
+    uint32_t droppedRows = 0;
     bool     stopArmed   = false;
     // track speed readout unit, toggled by tap: 0 km/h, 1 m/s, 2 pace per 500 m
     int      speedUnit   = 0;
