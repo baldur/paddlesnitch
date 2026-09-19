@@ -14,7 +14,13 @@
 enum class AppState { Setup, Linking, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm };
 
 // Network details for the Settings > Network screen.
-struct UiNet { String ssid; String ip; int rssi = 0; bool up = false; };
+struct UiNet {
+    String ssid;
+    String ip;
+    int    rssi = 0;
+    bool   up   = false;   // associated RIGHT NOW -- true only during a sync
+    bool   everConnected = false;   // has this SSID ever worked?
+};
 
 struct UiState {
     AppState state = AppState::Track;

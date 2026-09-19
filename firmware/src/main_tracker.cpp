@@ -1170,6 +1170,7 @@ void loop()
         u.net.up      = WiFi.status() == WL_CONNECTED;
         u.net.ip      = u.net.up ? WiFi.localIP().toString() : String();
         u.net.rssi    = u.net.up ? WiFi.RSSI() : 0;
+        u.net.everConnected = netcfg.everConnected;
         u.nerdPage    = nerdPage;
         u.nerdPages   = NERD_PAGES;
         u.syncPage    = syncPage;

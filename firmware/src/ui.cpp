@@ -367,8 +367,18 @@ static void drawNetwork(const UiState &s)
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 26, s.net.ssid.length() ? s.net.ssid.c_str() : "no network set");
     display.setFont(u8g2_font_5x8_tf);
-    if (s.net.up) snprintf(l, sizeof(l), "%s  %d dBm", s.net.ip.c_str(), s.net.rssi);
-    else          snprintf(l, sizeof(l), "not connected");
+    // "not connected" was true and misleading. The radio is DOWN almost always
+    // by design -- it comes up for about a second per sync (boot,
+    // recording-stop, a sync-now tap, every 5 min) and is off the rest of the
+    // time to save current. Reporting that as "not connected" tells the user
+    // something is broken when the device is working exactly as intended.
+    //
+    // So: distinguish idle-but-fine from never-worked. `everConnected` is the
+    // one that actually needs action.
+    if (s.net.up)                    snprintf(l, sizeof(l), "%s  %d dBm", s.net.ip.c_str(), s.net.rssi);
+    else if (!s.net.ssid.length())   snprintf(l, sizeof(l), "hold to choose a network");
+    else if (s.net.everConnected)    snprintf(l, sizeof(l), "idle - connects to sync");
+    else                             snprintf(l, sizeof(l), "never connected - check pass");
     display.drawStr(0, 38, l);
     display.drawStr(0, 50, "hold = change network");
     const char *hint = "2x = back";
