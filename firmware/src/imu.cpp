@@ -9,6 +9,7 @@ static SensorQMI8658 qmi;
 static bool ready = false;
 
 static float    accelMagMax = 0, gyroMagMax = 0;
+static float    lastTempC = 0;   // reported when the bus is busy; the value is cosmetic
 static uint32_t windowSamples = 0;
 static float    lastAx = 0, lastAy = 0, lastAz = 0;
 static float    lastGx = 0, lastGy = 0, lastGz = 0;
@@ -120,6 +121,7 @@ void imuPoll()
     if (!spiBusTryTake()) return;
     lastPollMs = millis();
 
+    spiBusAssertHeld("imuPoll");
     float ax, ay, az, gx, gy, gz;
     bool gotAccel = qmi.getAccelerometer(ax, ay, az);
     bool gotGyro  = qmi.getGyroscope(gx, gy, gz);
@@ -189,7 +191,19 @@ ImuSample imuSnapshot()
     s.gx = lastGx; s.gy = lastGy; s.gz = lastGz;
     s.accelMagMax = accelMagMax;
     s.gyroMagMax  = gyroMagMax;
-    s.tempC       = qmi.getTemperature_C();
+
+    // getTemperature_C() is a REAL SPI transaction, and this runs from the 4 Hz
+    // UI refresh. It was the largest hole in the arbitration: imuPoll() was
+    // locked and this was not, so four times a second IMU_CS went low on a bus
+    // the uploader might have been holding mid-sequence. Try, and report a
+    // stale temperature rather than block the UI -- the value is cosmetic.
+    if (spiBusTryTake()) {
+        s.tempC = qmi.getTemperature_C();
+        spiBusGive();
+        lastTempC = s.tempC;
+    } else {
+        s.tempC = lastTempC;
+    }
     s.samples     = windowSamples;
 
     accelMagMax = 0;

@@ -47,6 +47,17 @@ void spiBusGive();
 
 // How often the IMU had to skip a sample because the card held the bus, and how
 // often a take timed out. Both are pure diagnostics, surfaced by `DBG`.
+// True when THIS task currently owns the bus. The point is the assertion below:
+// a mutex only helps if every path that touches sdSPI actually takes it, and the
+// way that guarantee rots is a new call site added without one.
+bool spiBusHeldByMe();
+
+// Records a DBGE when `who` touches the bus without holding it. Deliberately
+// NOT an abort: a missing lock should be loud in the flight recorder, not a
+// reboot on the water. Call it at the top of anything that drives sdSPI.
+void spiBusAssertHeld(const char *who);
+
+uint32_t spiBusUnguarded();   // count of lock-less bus touches caught by the assertion
 uint32_t spiBusSkips();
 uint32_t spiBusTimeouts();
 

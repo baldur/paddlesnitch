@@ -107,6 +107,11 @@ static const char *CSV_HEADER =
 
 bool storageInit()
 {
+    // Before the uplink task exists, so uncontended -- guarded regardless, so
+    // "every sdSPI path holds the lock" is a rule with no exceptions to
+    // remember.
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "bus busy: init"); return false; }
     // BLDO1 powers the card; initPMU() has already enabled it. The bus is
     // shared with the IMU, so it is brought up once in boardInit().
     // Try progressively slower clocks. Cards vary a lot in what they tolerate
@@ -139,6 +144,9 @@ bool storageInit()
 
 bool storageStartSession(const char *stamp)
 {
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("sd", "bus busy: start session"); return false; }
+
     if (!ready || logFile) return false;
 
     // Build a base name shared by the track file and its raw-IMU sidecar.
@@ -191,6 +199,9 @@ bool storageStartSession(const char *stamp)
 
 void storageStopSession()
 {
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("sd", "bus busy: stop session"); return ; }
+
     if (!logFile) return;
     logFile.close();
     if (upFile) { upFile.flush(); upFile.close(); }
@@ -245,7 +256,20 @@ bool storageProbeRead(const char *name, size_t *bytesOut, uint32_t *msOut)
     return !stalled;
 }
 
-uint64_t    storageCardSizeMB() { return ready ? SD.cardSize() / (1024ULL * 1024ULL) : 0; }
+uint64_t storageCardSizeMB()
+{
+    if (!ready) return 0;
+    // 4 Hz, from the UI refresh, and SD.cardSize() talks to the card. Cached
+    // after the first read: the capacity cannot change while the card is
+    // mounted, so re-asking four times a second was pure bus traffic -- and
+    // unguarded bus traffic at that.
+    static uint64_t cachedMB = 0;
+    if (cachedMB) return cachedMB;
+    SpiBusGuard bus(1000);
+    if (!bus) return 0;
+    cachedMB = SD.cardSize() / (1024ULL * 1024ULL);
+    return cachedMB;
+}
 
 void storageLogRow(const char *csvLine)
 {
@@ -255,6 +279,7 @@ void storageLogRow(const char *csvLine)
     if (!bus) { DBGE("sd", "bus busy: track row DROPPED"); return; }
 
     if (!ready || !logFile) return;
+    spiBusAssertHeld("storageLogRow");
     logFile.print(csvLine);
     logFile.flush();        // deliberate: see header comment
     rows++;
@@ -286,6 +311,9 @@ void storageLogImuRow(const char *csvLine)
 
 void storageClose()
 {
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("sd", "bus busy: close"); return ; }
+
     storageStopSession();
     ready = false;
 }

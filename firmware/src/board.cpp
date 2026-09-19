@@ -168,7 +168,11 @@ BoardStatus boardInit()
 //   MPU9250 -> reg 0x75 = 0x71
 static uint8_t imuReadReg(uint8_t reg)
 {
-    sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
+    // MODE0, matching the card and SensorLib's own default. Modes 0 and 3 both
+    // sample on the rising edge so framing is identical -- this read worked
+    // either way -- but mixing polarities on a shared bus is a variable with no
+    // upside, so the whole bus is mode 0 now.
+    sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
     digitalWrite(IMU_CS, LOW);
     sdSPI.transfer(reg | 0x80);
     uint8_t v = sdSPI.transfer(0x00);
