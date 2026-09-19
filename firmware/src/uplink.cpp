@@ -150,20 +150,16 @@ static void showCode(const String &code)
 {
     Serial.printf("\n>>> Enter this code at %s/profile/me/settings : %s\n\n",
                   netcfg.baseUrl.c_str(), code.c_str());
-    // No QR here. The UI repaints the Linking screen at 4 Hz from
-    // drawLinking(), so anything painted from this task is wiped ~250 ms later.
-    // This is a first paint so the code appears the instant it is known; the UI
-    // owns what it looks like from then on.
-    if (!display.begin()) return;
-    display.clearBuffer();
-    display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "Link this tracker:");
-    display.setFont(u8g2_font_logisoso20_tf);
-    display.drawStr(2, 38, code.c_str());
-    display.setFont(u8g2_font_5x8_tf);
-    display.drawStr(0, 54, "paddlesnitch.com");
-    display.drawStr(0, 63, "profile > settings");
-    display.sendBuffer();
+    // DRAWS NOTHING, on purpose. This runs on the uplink task while the UI
+    // repaints drawLinking() from core 1 at 4 Hz, so painting here does not
+    // "get there first" -- the two alternate, and the screen visibly flickers
+    // between the characters and the QR. Calling it a first paint was wrong on
+    // two counts: uplinkClaim() runs again on every retry, and two cores
+    // driving one I2C display with no lock between them is not safe even when
+    // it looks fine.
+    //
+    // statusClaimCode() publishes the code the instant it is known and
+    // drawLinking() renders it. The screen has one owner.
 }
 
 ClaimStatus uplinkClaim(uint32_t timeoutMs)

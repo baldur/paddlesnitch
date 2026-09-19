@@ -140,7 +140,7 @@ There are **two menus**, not one:
 
 ```
 Pick       Track | Sync | Settings
-Settings   Nerd mode | Network
+Settings   Nerd mode | Network | Factory reset
 ```
 
 Nerd mode and Network live under Settings so the top level stays the three
@@ -159,7 +159,7 @@ Which gives, per screen:
 | Screen | Tap cycles | Hold commits | Double-tap |
 |---|---|---|---|
 | **Pick** | the highlight (Track → Sync → Settings →) | open the highlighted row | — (already there) |
-| **Settings** | the highlight (Nerd mode → Network →) | open the highlighted screen | → Pick |
+| **Settings** | the highlight (Nerd mode → Network → Factory reset →) | open it, or arm the reset | → Pick |
 | **Network** | — | open the WiFi portal | → Settings |
 | **Track** | speed unit (km/h → m/s → pace/500 →) | arm `STOP?` (when recording) | → Pick, recording continues |
 | **Sync** | page (status → cleanup →) | page 1: **sync now** · page 2: arm the delete | → Pick |
@@ -183,6 +183,29 @@ Notes:
 - A tap is confirmed ~400 ms after release (the double-tap window) **except on Pick**,
   where taps act immediately (no double-tap action there). Invisible next to a 1 Hz log
   rate.
+
+### Factory reset — Settings > Factory reset
+
+There was no way to reset a device without a serial console, which is not a
+thing to need in a kit bag. It is now the third row of Settings; `hold` arms a
+`Factory reset?` confirmation, `tap` = yes, `double-tap` = no, 10 s timeout.
+
+**A seven-tap gesture was built for this first, and removed.** It worked, but
+it overloaded `tap` — the one gesture the entire contract rests on — on every
+screen including Track while recording, which is exactly the per-screen
+exception the contract exists to prevent. It was also undiscoverable: nobody
+remembers a secret tap count six months later. A menu row costs one line, reuses
+the confirmation machinery, and keeps state out of the button hot path.
+
+The one thing the gesture did better was working during onboarding, where the
+menu is unreachable. That case is now covered from the other end: a device whose
+credentials have never worked reopens the setup portal by itself, so the
+situation that most needs a reset resolves without one. `FORGET` and `UNLINK`
+over serial remain for anything stranger.
+
+The confirmation states what goes and what stays: it clears WiFi and the account
+link, and **keeps every session on the SD card**. That is the question anyone
+actually has before pressing yes.
 
 ### Delete-uploaded confirm flow
 

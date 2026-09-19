@@ -104,11 +104,19 @@ static Menu parentOf(Screen s)
 {
     return (s == Screen::Track || s == Screen::Sync) ? Menu::Pick : Menu::Settings;
 }
-static int  menuCount(Menu m) { return m == Menu::Settings ? 2 : 3; }
+static int  menuCount(Menu m) { return 3; }   // Pick and Settings both have three
 
 static Menu     menu     = Menu::Pick;     // None = a screen is showing
 static int      menuSel  = 0;              // highlighted row of `menu`
 static Screen   uiScreen      = Screen::Track;   // the entered screen
+// Factory reset lives on the Settings menu, NOT on a tap count. Seven taps was
+// tried and removed: the button means "cycle" on every screen, so a magic count
+// overloads the one gesture the whole contract rests on -- including on Track
+// while recording -- and nobody would remember it in six months. A menu row is
+// discoverable, reuses the confirmation machinery that already exists, and
+// keeps state out of the button hot path.
+static bool     confirmReset  = false;
+static uint32_t resetUntil    = 0;
 static int      linkPage      = 0;      // Linking screen: 0 QR, 1 characters
 static bool     qrTestHold    = false;   // QRTEST owns the panel until any other command
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
@@ -553,6 +561,14 @@ static void enterScreen(Screen s)
 // See docs/device-states-spec.md.
 static void screenTap()
 {
+    if (confirmReset) {                        // confirmation: tap = yes
+        confirmReset = false;
+        Serial.println("factory reset -- clearing credentials and token");
+        netcfgForget();
+        delay(300);
+        ESP.restart();
+        return;
+    }
     if (confirmDelete) {                       // confirmation: tap = yes
         confirmDelete = false;
         uplinkRequestDeleteUploaded();
@@ -583,6 +599,7 @@ static void screenTap()
 
 static void screenDoubleTap()
 {
+    if (confirmReset) { confirmReset = false; return; }   // 2x = no
     // No exceptions, no "unless" -- that is the entire value of the gesture. A
     // pending confirmation is cancelled rather than carried back to the chooser,
     // so leaving a screen can never be the thing that stops a recording or wipes
@@ -602,7 +619,7 @@ static void screenDoubleTap()
 
 static void screenHold()
 {
-    if (confirmDelete || stopArmed) return;    // a confirmation answers to tap
+    if (confirmDelete || stopArmed || confirmReset) return;   // confirmations answer to tap
     if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
     // Blink the chosen row first: the hold fires while still held, so without an
     // acknowledgement a successful press and a too-short one look the same.
@@ -614,6 +631,9 @@ static void screenHold()
             if (menuSel == 2) { menu = Menu::Settings; menuSel = 0; return; }
             enterScreen(menuSel == 0 ? Screen::Track : Screen::Sync);
         } else {
+            // Settings: Nerd mode | Network | Factory reset. The reset is a
+            // confirmation rather than a screen, like the delete.
+            if (menuSel == 2) { confirmReset = true; resetUntil = millis() + 10000; return; }
             enterScreen(menuSel == 0 ? Screen::Nerd : Screen::Network);
         }
         return;
@@ -665,6 +685,7 @@ static void checkButton()
     static uint32_t pendingTap  = 0;   // when a tap is awaiting its double-tap window
 
     // The delete / stop confirmations auto-cancel if the user walks away.
+    if (confirmReset  && millis() > resetUntil)   confirmReset  = false;
     if (confirmDelete && millis() > confirmUntil) confirmDelete = false;
     if (stopArmed && millis() > stopArmUntil)     stopArmed     = false;
 
@@ -682,6 +703,7 @@ static void checkButton()
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
+
         // PICK ONLY. A tap acts immediately here because Pick is the top level
         // and has no double-tap action, so waiting out the window would just
         // make it feel dead.
@@ -814,7 +836,9 @@ static void handleSerialCommand()
                     "MISOTEST          is MISO driven right now?\n"
                     "MISOCLOCK         retest after one 0xFF release byte\n"
                     "MISORELEASE       sweep 1..64 release bytes\n"
-                    "QRDUMP <text>     print a QR module grid (checks for inversion)\n"));
+                    "QRDUMP <text>     print a QR module grid (checks for inversion)\n"
+                    "\n"
+                    "On the device: Settings > Factory reset (hold), or FORGET/UNLINK here.\n"));
             }
             else if (!strncmp(buf, "HOLD", 4)) {
                 Serial.println(uplinkYieldCard(5000) ? "uploader released the card"
@@ -1236,6 +1260,7 @@ void loop()
         // Onboarding is forced until usable; then Pick, then the entered screen.
         u.state       = !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
+                      : confirmReset     ? AppState::ResetConfirm
                       : confirmDelete    ? AppState::DeleteConfirm
                       : menu == Menu::Pick        ? AppState::Pick
                       : menu == Menu::Settings    ? AppState::Settings

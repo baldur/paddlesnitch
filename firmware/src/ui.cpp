@@ -302,7 +302,7 @@ static void drawSync(const UiState &s)
 // things you touch on the water. Track and Sync are one hold away as before;
 // the diagnostics are one more, which is the right way round.
 static const char *PICK_OPTS[3]     = { "Track", "Sync", "Settings" };
-static const char *SETTINGS_OPTS[2] = { "Nerd mode", "Network" };
+static const char *SETTINGS_OPTS[3] = { "Nerd mode", "Network", "Factory reset" };
 
 // One frame of a menu. Split out so the selection blink reuses the exact
 // layout instead of a near-copy that drifts the first time a menu changes.
@@ -349,7 +349,7 @@ static void drawPick(const UiState &s)
 
 static void drawSettings(const UiState &s)
 {
-    drawMenuFrame(SETTINGS_OPTS, 2, s.menuSel, true, "Settings");
+    drawMenuFrame(SETTINGS_OPTS, 3, s.menuSel, true, "Settings");
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -398,7 +398,7 @@ void uiPickFlash(int sel, bool settings)
 {
     if (!board_display_ok()) return;
     const char **opts = settings ? SETTINGS_OPTS : PICK_OPTS;
-    const int    n    = settings ? 2 : 3;
+    const int    n    = 3;
     const char  *ttl  = settings ? "Settings" : nullptr;
     for (int i = 0; i < 2; i++) {
         drawMenuFrame(opts, n, sel, false, ttl); display.sendBuffer(); delay(70);
@@ -417,6 +417,25 @@ static void drawDeleteConfirm(const UiState &s)
     display.setFont(u8g2_font_helvB12_tf);
     snprintf(l, sizeof(l), "%d files", s.uploaded);
     display.drawStr(0, 38, l);
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 62, "tap = yes   2x = no");
+    drawBatteryBadge(s);
+    display.sendBuffer();
+}
+
+// Factory reset confirmation, reached from Settings > Factory reset.
+//
+// Spells out what goes and what stays, because "reset" is doing a lot of work
+// in one word and the answer to "will I lose my paddles?" is no.
+static void drawResetConfirm(const UiState &s)
+{
+    display.clearBuffer();
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 12, "Factory reset?");
+    display.drawHLine(0, 15, 128);
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 29, "clears wifi + account link");
+    display.drawStr(0, 40, "KEEPS paddles on the card");
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 62, "tap = yes   2x = no");
     drawBatteryBadge(s);
@@ -563,6 +582,7 @@ void uiDraw(const UiState &s)
     case AppState::Sync:          drawSync(s);          break;
     case AppState::Nerd:          drawNerd(s);          break;
     case AppState::DeleteConfirm: drawDeleteConfirm(s); break;
+    case AppState::ResetConfirm:  drawResetConfirm(s);  break;
     case AppState::Setup:
     default:                      drawOnboarding(s);    break;
     }
