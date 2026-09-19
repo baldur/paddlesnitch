@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "qr.h"
 #include "board.h"
 
 // A 12x9 satellite: two solar panels, a body, and a stub antenna. Drawn with
@@ -426,14 +427,39 @@ static void drawDeleteConfirm(const UiState &s)
 static void drawLinking(const UiState &s)
 {
     display.clearBuffer();
-    display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 10, "Link this tracker");
-    display.drawHLine(0, 13, 128);
-    display.setFont(u8g2_font_logisoso20_tr);
-    display.drawStr(2, 40, s.claimCode.length() ? s.claimCode.c_str() : "....");
-    display.setFont(u8g2_font_5x8_tf);
-    display.drawStr(0, 54, "paddlesnitch.com");
-    display.drawStr(0, 63, "profile > settings");
+
+    // The QR lives HERE, not in uplink.cpp's showCode(). showCode ran on the
+    // uplink task and painted once; this function repaints the same screen at
+    // 4 Hz, so whatever showCode drew was wiped about 250 ms later. The code
+    // survived only because drawLinking happened to draw it too. Anything the
+    // Linking screen shows has to be drawn by the thing that owns the screen.
+    // UPPERCASE so the whole string is in QR alphanumeric mode's character set,
+    // which packs 2 chars per 11 bits instead of 8 bits each. That drops the
+    // code from version 2 to version 1 -- 21 modules instead of 25, at the same
+    // 2 px each, with a 5-module quiet zone instead of 3. Smaller symbol AND a
+    // bigger border, which is the combination a camera wants. Domains are
+    // case-insensitive so this costs nothing; the /L/ path is redirected.
+    const String link = "PADDLESNITCH.COM/L/" + s.claimCode;
+    if (s.claimCode.length() && qrDraw(link.c_str(), 0, 3)) {
+        const int x = qrSizePx() + 4;
+        display.setFont(u8g2_font_5x8_tf);
+        display.drawStr(x, 10, "SCAN to link");
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(x, 28, s.claimCode.c_str());
+        display.setFont(u8g2_font_5x8_tf);
+        display.drawStr(x, 44, "or type it at");
+        display.drawStr(x, 54, "paddlesnitch");
+        display.drawStr(x, 63, ".com/l/");
+    } else {
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(0, 10, "Link this tracker");
+        display.drawHLine(0, 13, 128);
+        display.setFont(u8g2_font_logisoso20_tr);
+        display.drawStr(2, 40, s.claimCode.length() ? s.claimCode.c_str() : "....");
+        display.setFont(u8g2_font_5x8_tf);
+        display.drawStr(0, 54, "paddlesnitch.com");
+        display.drawStr(0, 63, "profile > settings");
+    }
     drawBatteryBadge(s);
     display.sendBuffer();
 }
