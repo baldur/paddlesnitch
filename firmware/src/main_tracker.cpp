@@ -109,6 +109,7 @@ static int  menuCount(Menu m) { return m == Menu::Settings ? 2 : 3; }
 static Menu     menu     = Menu::Pick;     // None = a screen is showing
 static int      menuSel  = 0;              // highlighted row of `menu`
 static Screen   uiScreen      = Screen::Track;   // the entered screen
+static int      linkPage      = 0;      // Linking screen: 0 QR, 1 characters
 static bool     qrTestHold    = false;   // QRTEST owns the panel until any other command
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
 static const int NERD_PAGES   = 3;
@@ -550,7 +551,10 @@ static void screenTap()
         if (storageRecording()) toggleRecording();     // stop + trigger a sync
         return;
     }
-    if (!deviceUsable()) return;               // onboarding: tap does nothing
+    // Onboarding: tap flips the Linking screen between the QR and the
+    // characters. Tap means "cycle what is on this screen" everywhere else, and
+    // this screen has exactly two things to show.
+    if (!deviceUsable()) { linkPage ^= 1; return; }
     if (menu != Menu::None) {                  // move the highlight, wrapping
         menuSel = (menuSel + 1) % menuCount(menu);
         return;
@@ -1256,6 +1260,7 @@ void loop()
         u.upPart      = up.upPart;
         u.upParts     = up.upParts;
         u.claimCode   = up.claimCode;
+        u.linkPage    = linkPage;
         u.wifiUp      = up.wifiUp;
         u.ssid        = netcfg.ssid;
         u.ip          = WiFi.localIP().toString();
