@@ -64,7 +64,20 @@ static bool     haveLastPos    = false;
 // highlight and holds to enter a screen. A double-tap in a screen returns to
 // Pick. Onboarding screens (Setup/Linking) are forced separately while the
 // device is not yet usable. DeleteConfirm is a transient overlay on Sync.
-enum class Screen { Track, Sync, Nerd };
+enum class Screen { Track, Sync, Nerd, Network };
+
+// Two menus, not one. Nerd mode and Network live under Settings so the top
+// level stays the three things you touch on the water; the diagnostics are one
+// hold further in, which is the right way round.
+//
+//   Pick      Track | Sync | Settings
+//   Settings  Nerd mode | Network
+//
+// DOUBLE-TAP GOES UP ONE LEVEL, not straight to the top. The contract is "it
+// always takes you back", and with a nested menu "back" is the parent: a screen
+// returns to the menu that opened it, and Settings returns to Pick. Two
+// double-taps reach the top from anywhere, and nothing is ever a dead end.
+enum class Menu { None, Pick, Settings };
 // Chooser row for a screen. One mapping, used by both the draw and the selection
 // blink: (int)Screen happens to match the menu order today, and relying on that
 // would break silently the first time the enum is reordered.
@@ -84,9 +97,16 @@ static const char *resetReasonStr()
     }
 }
 
-static int pickIndex(Screen s) { return s == Screen::Track ? 0 : s == Screen::Sync ? 1 : 2; }
-static bool     onPick        = true;            // showing the chooser
-static Screen   pickHighlight = Screen::Track;   // highlighted option on Pick
+// Which menu a screen belongs to, so a double-tap returns to the one that
+// opened it rather than always to the top.
+static Menu parentOf(Screen s)
+{
+    return (s == Screen::Track || s == Screen::Sync) ? Menu::Pick : Menu::Settings;
+}
+static int  menuCount(Menu m) { return m == Menu::Settings ? 2 : 3; }
+
+static Menu     menu     = Menu::Pick;     // None = a screen is showing
+static int      menuSel  = 0;              // highlighted row of `menu`
 static Screen   uiScreen      = Screen::Track;   // the entered screen
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
 static const int NERD_PAGES   = 3;
@@ -492,7 +512,7 @@ static bool deviceUsable() { return netHasWifi() && netIsClaimed(); }
 static void enterScreen(Screen s)
 {
     uiScreen = s;
-    onPick   = false;
+    menu     = Menu::None;
     stopArmed = false;
     if (s == Screen::Nerd) nerdPage = 0;                    // always start at page 1
     if (s == Screen::Sync) syncPage = 0;                    // never open on cleanup
@@ -529,10 +549,8 @@ static void screenTap()
         return;
     }
     if (!deviceUsable()) return;               // onboarding: tap does nothing
-    if (onPick) {                              // move the highlight
-        pickHighlight = pickHighlight == Screen::Track ? Screen::Sync
-                      : pickHighlight == Screen::Sync  ? Screen::Nerd
-                                                       : Screen::Track;
+    if (menu != Menu::None) {                  // move the highlight, wrapping
+        menuSel = (menuSel + 1) % menuCount(menu);
         return;
     }
     // Every one of these wraps. Cycling is only safe to hand to a single button
@@ -553,9 +571,14 @@ static void screenDoubleTap()
     confirmDelete = false;
     stopArmed     = false;
     if (!deviceUsable()) return;
-    if (onPick) return;                        // already there
-    onPick = true;
-    pickHighlight = uiScreen;
+    // Up ONE level. From a screen, back to the menu that opened it; from
+    // Settings, back to Pick; at Pick there is nowhere above.
+    if (menu == Menu::Settings) { menu = Menu::Pick; menuSel = 2; return; }
+    if (menu == Menu::Pick)     return;
+    const Menu parent = parentOf(uiScreen);
+    menu    = parent;
+    menuSel = parent == Menu::Settings ? (uiScreen == Screen::Nerd ? 0 : 1)
+                                       : (uiScreen == Screen::Track ? 0 : 1);
 }
 
 static void screenHold()
@@ -564,7 +587,18 @@ static void screenHold()
     if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
     // Blink the chosen row first: the hold fires while still held, so without an
     // acknowledgement a successful press and a too-short one look the same.
-    if (onPick) { uiPickFlash(pickIndex(pickHighlight)); enterScreen(pickHighlight); return; }
+    if (menu != Menu::None) {
+        uiPickFlash(menuSel, menu == Menu::Settings);
+        if (menu == Menu::Pick) {
+            // Row 2 is Settings, which is a MENU, not a screen -- so it opens a
+            // menu rather than going through enterScreen().
+            if (menuSel == 2) { menu = Menu::Settings; menuSel = 0; return; }
+            enterScreen(menuSel == 0 ? Screen::Track : Screen::Sync);
+        } else {
+            enterScreen(menuSel == 0 ? Screen::Nerd : Screen::Network);
+        }
+        return;
+    }
     switch (uiScreen) {
     case Screen::Track:
         // Recording starts itself on a fix, so stopping is the only thing here.
@@ -579,6 +613,14 @@ static void screenHold()
         // UNLINKED / the SSID -- which is what you are looking at when re-linking
         // is what you came for.
         if (nerdPage == NERD_PAGES - 1) linkAttempt();
+        break;
+    case Screen::Network:
+        // The portal. A hold, not a tap, because opening it drops the current
+        // connection -- and because hold is what commits on every other screen.
+        if (netStartPortal("Change the WiFi network or password below.")) {
+            Serial.println("saved -- restarting"); delay(300); ESP.restart();
+        }
+        toast("NO CHANGE");
         break;
     }
 }
@@ -621,11 +663,12 @@ static void checkButton()
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
-        // On the Pick menu a tap acts immediately: there is no double-tap action
-        // there, so waiting out the double-tap window just makes the menu feel
-        // dead, and a release bounce would otherwise land as a no-op double-tap.
-        if (onPick) {
-            Serial.println("btn: tap (pick)");
+        // In a MENU a tap acts immediately: double-tap only means "go up", and
+        // Pick has nowhere to go, so waiting out the window just makes the menu
+        // feel dead. Inside Settings the wait would be correct, but an
+        // inconsistent menu feel is worse than a 400 ms back gesture there.
+        if (menu != Menu::None) {
+            Serial.println("btn: tap (menu)");
             screenTap();
             return;
         }
@@ -661,7 +704,7 @@ static void handleSerialCommand()
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
             else if (!strncmp(buf, "REC", 3))  toggleRecording();
             else if (!strncmp(buf, "NERD", 4)) {
-                if (!onPick && uiScreen == Screen::Nerd) { onPick = true; Serial.println("screen pick"); }
+                if (menu == Menu::None && uiScreen == Screen::Nerd) { menu = Menu::Settings; menuSel = 0; Serial.println("screen settings"); }
                 else { enterScreen(Screen::Nerd); Serial.println("screen nerd"); }
             }
             else if (!strncmp(buf, "SCAN", 4)) netScan();
@@ -689,8 +732,8 @@ static void handleSerialCommand()
                               us.countsValid ? "" : "(not scanned yet) ",
                               us.onDevice, us.uploaded, us.pending);
                 const char *scr = !deviceUsable() ? "onboarding"
-                    : onPick ? (pickHighlight == Screen::Track ? "pick>track"
-                              : pickHighlight == Screen::Sync  ? "pick>sync" : "pick>nerd")
+                    : menu == Menu::Pick     ? (menuSel == 0 ? "pick>track" : menuSel == 1 ? "pick>sync" : "pick>settings")
+                    : menu == Menu::Settings ? (menuSel == 0 ? "settings>nerd" : "settings>network")
                     : uiScreen == Screen::Track ? "track"
                     : uiScreen == Screen::Sync  ? "sync" : "nerd";
                 Serial.printf("screen   %s\n", scr);
@@ -1004,7 +1047,7 @@ void loop()
         // Track and idle; a confirmed stop returns to the menu, so it never
         // immediately re-starts. Throttled to this 1 Hz tick. toggleRecording()
         // self-guards on the fix and the SD card.
-        if (!onPick && uiScreen == Screen::Track && !storageRecording()
+        if (menu == Menu::None && uiScreen == Screen::Track && !storageRecording()
             && gps.location.isValid()) {
             toggleRecording();
         }
@@ -1110,11 +1153,17 @@ void loop()
         u.state       = !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
                       : confirmDelete    ? AppState::DeleteConfirm
-                      : onPick           ? AppState::Pick
-                      : uiScreen == Screen::Sync ? AppState::Sync
-                      : uiScreen == Screen::Nerd ? AppState::Nerd
-                                                 : AppState::Track;
-        u.pickSel     = pickIndex(pickHighlight);
+                      : menu == Menu::Pick        ? AppState::Pick
+                      : menu == Menu::Settings    ? AppState::Settings
+                      : uiScreen == Screen::Sync    ? AppState::Sync
+                      : uiScreen == Screen::Nerd    ? AppState::Nerd
+                      : uiScreen == Screen::Network ? AppState::Network
+                                                    : AppState::Track;
+        u.menuSel     = menuSel;
+        u.net.ssid    = netcfg.ssid;
+        u.net.up      = WiFi.status() == WL_CONNECTED;
+        u.net.ip      = u.net.up ? WiFi.localIP().toString() : String();
+        u.net.rssi    = u.net.up ? WiFi.RSSI() : 0;
         u.nerdPage    = nerdPage;
         u.nerdPages   = NERD_PAGES;
         u.syncPage    = syncPage;

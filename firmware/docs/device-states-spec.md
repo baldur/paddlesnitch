@@ -65,7 +65,7 @@ screen.
 
 Shown at boot, and returned to by a double-tap from any screen. It is **just the
 options** — no status bar — so the chooser reads as a menu: the three screens with a
-highlight bar, **tap** moves the highlight (Track → Sync → Nerd), **hold** opens the
+highlight bar, **tap** moves the highlight (Track → Sync → Settings), **hold** opens the
 highlighted one. GPS and the uploader keep running the whole time — Pick only chooses
 the view, it does not gate anything.
 
@@ -134,13 +134,33 @@ gestures, and **each one means the same thing on every screen**:
 |---|---|
 | **Tap** (<400 ms) | **move / cycle** within this screen. Never acts, never destroys, always wraps. |
 | **Hold** (1200 ms) | **select**, or commit this screen's primary action. |
-| **Double-tap** | **back to Pick.** Always, from anywhere, cancelling any pending confirmation on the way. |
+| **Double-tap** | **back one level.** Always, from anywhere, cancelling any pending confirmation on the way. |
+
+There are **two menus**, not one:
+
+```
+Pick       Track | Sync | Settings
+Settings   Nerd mode | Network
+```
+
+Nerd mode and Network live under Settings so the top level stays the three
+things you touch on the water; the diagnostics are one hold further in, which is
+the right way round.
+
+**"Back one level", not "back to the top".** With a nested menu the two readings
+of the original contract diverge, and the parent is the useful one: a screen
+returns to the menu that opened it, and Settings returns to Pick with the
+Settings row still highlighted. Two double-taps reach the top from anywhere, and
+nothing is a dead end. The alternative — always jumping to Pick — would make
+stepping between Nerd mode and Network a four-gesture round trip.
 
 Which gives, per screen:
 
 | Screen | Tap cycles | Hold commits | Double-tap |
 |---|---|---|---|
-| **Pick** | the highlight (Track → Sync → Nerd →) | open the highlighted screen | — (already there) |
+| **Pick** | the highlight (Track → Sync → Settings →) | open the highlighted row | — (already there) |
+| **Settings** | the highlight (Nerd mode → Network →) | open the highlighted screen | → Pick |
+| **Network** | — | open the WiFi portal | → Settings |
 | **Track** | speed unit (km/h → m/s → pace/500 →) | arm `STOP?` (when recording) | → Pick, recording continues |
 | **Sync** | page (status → cleanup →) | page 1: **sync now** · page 2: arm the delete | → Pick |
 | **Nerd** | page (1 → 2 → 3 → 1) | radio page only: Setup / re-link | → Pick |
