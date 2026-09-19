@@ -324,7 +324,7 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
         server.send(200, "text/html", p);
     };
 
-    server.on("/", [&]() { renderForm(errorNote); });
+    server.on("/", [&]() { Serial.println("Portal: served the form"); renderForm(errorNote); });
     server.on("/save", HTTP_POST, [&]() {
         String ssid = server.arg("ssid");
         String pass = server.arg("pass");
@@ -351,7 +351,20 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
     server.begin();
 
     uint32_t t0 = millis();
+    // Report stations joining and leaving the AP. Without this the portal is a
+    // black box for its whole 10-minute life -- serial commands are not
+    // serviced in here -- and "I scanned the code and nothing happened" is
+    // indistinguishable between three different failures: the code did not
+    // read, the phone read it but would not join, or the phone joined and the
+    // captive portal never fired. This separates the first two from the third.
+    int lastStations = -1;
     while (!saved && millis() - t0 < timeoutMs) {
+        const int n = WiFi.softAPgetStationNum();
+        if (n != lastStations) {
+            lastStations = n;
+            Serial.printf("Portal: %d device(s) joined the AP%s\n",
+                          n, n ? "" : " -- waiting");
+        }
         dns.processNextRequest();
         server.handleClient();
         delay(5);
