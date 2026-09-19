@@ -663,12 +663,18 @@ static void checkButton()
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
-        // In a MENU a tap acts immediately: double-tap only means "go up", and
-        // Pick has nowhere to go, so waiting out the window just makes the menu
-        // feel dead. Inside Settings the wait would be correct, but an
-        // inconsistent menu feel is worse than a 400 ms back gesture there.
-        if (menu != Menu::None) {
-            Serial.println("btn: tap (menu)");
+        // PICK ONLY. A tap acts immediately here because Pick is the top level
+        // and has no double-tap action, so waiting out the window would just
+        // make it feel dead.
+        //
+        // Settings must NOT take this path. It DOES have a double-tap action
+        // (go up to Pick), and acting immediately consumed both taps as
+        // highlight moves, so the gesture could never fire and there was no way
+        // out of Settings with the button at all. An earlier version of this
+        // comment argued a consistent menu feel was worth the 400 ms; that was
+        // wrong -- it did not delay the gesture, it removed it.
+        if (menu == Menu::Pick) {
+            Serial.println("btn: tap (pick)");
             screenTap();
             return;
         }
