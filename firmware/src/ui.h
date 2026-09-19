@@ -11,7 +11,7 @@
 // uiSplash(), not a state. See docs/device-states-spec.md.
 // Two MENUS (Pick, Settings) and the screens they open. Nerd and Network moved
 // under Settings so the top level stays the three things you use on the water.
-enum class AppState { Setup, Linking, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm };
+enum class AppState { Setup, Linking, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm, ResetConfirm };
 
 // Network details for the Settings > Network screen.
 struct UiNet {

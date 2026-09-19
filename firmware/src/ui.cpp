@@ -423,6 +423,27 @@ static void drawDeleteConfirm(const UiState &s)
     display.sendBuffer();
 }
 
+// Factory reset confirmation. Reached by seven taps, which is deliberate: the
+// button means "cycle" everywhere, so a reset cannot be a gesture that also
+// does something else, and it has to be something nobody does by accident.
+//
+// Spells out what goes and what stays, because "reset" is doing a lot of work
+// in one word and the answer to "will I lose my paddles?" is no.
+static void drawResetConfirm(const UiState &s)
+{
+    display.clearBuffer();
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 12, "Factory reset?");
+    display.drawHLine(0, 15, 128);
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 29, "clears wifi + account link");
+    display.drawStr(0, 40, "KEEPS paddles on the card");
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 62, "tap = yes   2x = no");
+    drawBatteryBadge(s);
+    display.sendBuffer();
+}
+
 // Linking: the code is the only thing that matters, so it gets the whole panel.
 static void drawLinking(const UiState &s)
 {
@@ -563,6 +584,7 @@ void uiDraw(const UiState &s)
     case AppState::Sync:          drawSync(s);          break;
     case AppState::Nerd:          drawNerd(s);          break;
     case AppState::DeleteConfirm: drawDeleteConfirm(s); break;
+    case AppState::ResetConfirm:  drawResetConfirm(s);  break;
     case AppState::Setup:
     default:                      drawOnboarding(s);    break;
     }

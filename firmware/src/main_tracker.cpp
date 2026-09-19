@@ -109,6 +109,16 @@ static int  menuCount(Menu m) { return m == Menu::Settings ? 2 : 3; }
 static Menu     menu     = Menu::Pick;     // None = a screen is showing
 static int      menuSel  = 0;              // highlighted row of `menu`
 static Screen   uiScreen      = Screen::Track;   // the entered screen
+// Seven taps inside RESET_TAP_WINDOW arms a factory reset. Seven because the
+// button already means "cycle" on every screen, so the count has to be high
+// enough that nobody reaches it while flicking through pages -- and the reset
+// is still gated behind a confirmation after that.
+static const int      RESET_TAPS       = 7;
+static const uint32_t RESET_TAP_WINDOW = 3000;
+static int      resetTaps     = 0;
+static uint32_t resetTapFirst = 0;
+static bool     confirmReset  = false;
+static uint32_t resetUntil    = 0;
 static int      linkPage      = 0;      // Linking screen: 0 QR, 1 characters
 static bool     qrTestHold    = false;   // QRTEST owns the panel until any other command
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
@@ -553,6 +563,14 @@ static void enterScreen(Screen s)
 // See docs/device-states-spec.md.
 static void screenTap()
 {
+    if (confirmReset) {                        // confirmation: tap = yes
+        confirmReset = false;
+        Serial.println("factory reset -- clearing credentials and token");
+        netcfgForget();
+        delay(300);
+        ESP.restart();
+        return;
+    }
     if (confirmDelete) {                       // confirmation: tap = yes
         confirmDelete = false;
         uplinkRequestDeleteUploaded();
@@ -581,8 +599,27 @@ static void screenTap()
     }
 }
 
+// Counts taps towards the reset gesture. Called for every recognised tap,
+// whatever else that tap did -- the count runs alongside the normal meaning
+// rather than replacing it, so nothing has to be given up to make room for it.
+static void noteTapForReset()
+{
+    const uint32_t now = millis();
+    if (!resetTaps || now - resetTapFirst > RESET_TAP_WINDOW) {
+        resetTaps = 1;
+        resetTapFirst = now;
+        return;
+    }
+    if (++resetTaps < RESET_TAPS) return;
+    resetTaps = 0;
+    confirmReset = true;
+    resetUntil = now + 10000;
+    Serial.println("btn: seven taps -- factory reset armed (tap = yes, 2x = no)");
+}
+
 static void screenDoubleTap()
 {
+    if (confirmReset) { confirmReset = false; return; }   // 2x = no
     // No exceptions, no "unless" -- that is the entire value of the gesture. A
     // pending confirmation is cancelled rather than carried back to the chooser,
     // so leaving a screen can never be the thing that stops a recording or wipes
@@ -602,7 +639,7 @@ static void screenDoubleTap()
 
 static void screenHold()
 {
-    if (confirmDelete || stopArmed) return;    // a confirmation answers to tap
+    if (confirmDelete || stopArmed || confirmReset) return;   // confirmations answer to tap
     if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
     // Blink the chosen row first: the hold fires while still held, so without an
     // acknowledgement a successful press and a too-short one look the same.
@@ -665,6 +702,7 @@ static void checkButton()
     static uint32_t pendingTap  = 0;   // when a tap is awaiting its double-tap window
 
     // The delete / stop confirmations auto-cancel if the user walks away.
+    if (confirmReset  && millis() > resetUntil)   confirmReset  = false;
     if (confirmDelete && millis() > confirmUntil) confirmDelete = false;
     if (stopArmed && millis() > stopArmUntil)     stopArmed     = false;
 
@@ -682,6 +720,13 @@ static void checkButton()
         uint32_t held = millis() - heldSince;
         heldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
+
+        // Counted on the RAW RELEASE, before tap/double-tap interpretation.
+        // Seven quick presses are read as three double-taps and a tap, so
+        // counting dispatched taps would never reach seven however fast you
+        // pressed. The press is the thing the user is doing; what it also
+        // means on this screen is irrelevant to the count.
+        noteTapForReset();
         // PICK ONLY. A tap acts immediately here because Pick is the top level
         // and has no double-tap action, so waiting out the window would just
         // make it feel dead.
@@ -814,7 +859,9 @@ static void handleSerialCommand()
                     "MISOTEST          is MISO driven right now?\n"
                     "MISOCLOCK         retest after one 0xFF release byte\n"
                     "MISORELEASE       sweep 1..64 release bytes\n"
-                    "QRDUMP <text>     print a QR module grid (checks for inversion)\n"));
+                    "QRDUMP <text>     print a QR module grid (checks for inversion)\n"
+                    "\n"
+                    "On the device: SEVEN taps in 3s arms a factory reset (tap=yes 2x=no).\n"));
             }
             else if (!strncmp(buf, "HOLD", 4)) {
                 Serial.println(uplinkYieldCard(5000) ? "uploader released the card"
@@ -1236,6 +1283,7 @@ void loop()
         // Onboarding is forced until usable; then Pick, then the entered screen.
         u.state       = !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
+                      : confirmReset     ? AppState::ResetConfirm
                       : confirmDelete    ? AppState::DeleteConfirm
                       : menu == Menu::Pick        ? AppState::Pick
                       : menu == Menu::Settings    ? AppState::Settings

@@ -165,6 +165,7 @@ Which gives, per screen:
 | **Sync** | page (status → cleanup →) | page 1: **sync now** · page 2: arm the delete | → Pick |
 | **Nerd** | page (1 → 2 → 3 → 1) | radio page only: Setup / re-link | → Pick |
 | **Confirmation** | **yes** | — | **no**, → Pick |
+| **Anywhere** | **seven taps in 3 s** arms a factory reset | | |
 | **Onboarding** | — | WiFi / link attempt | — |
 
 Notes:
@@ -183,6 +184,26 @@ Notes:
 - A tap is confirmed ~400 ms after release (the double-tap window) **except on Pick**,
   where taps act immediately (no double-tap action there). Invisible next to a 1 Hz log
   rate.
+
+### Factory reset — seven taps
+
+There was no way to reset a device without a serial console, which is not a
+thing to need in a kit bag, and `FORGET` over serial is the only other route.
+
+**Seven taps within 3 seconds, anywhere**, arms a `Factory reset?` confirmation;
+`tap` = yes, `double-tap` = no, 10 s timeout. Counted on the RAW BUTTON RELEASE,
+before tap/double-tap interpretation — seven quick presses are otherwise read as
+three double-taps and a tap, so counting dispatched taps would never reach seven
+however fast you pressed.
+
+Seven because the button means "cycle" on every screen, so the count has to be
+past anything reached by flicking through pages. The count runs *alongside* the
+normal meaning of each tap rather than replacing it, so no screen loses a
+gesture to make room.
+
+The confirmation states what goes and what stays: it clears WiFi and the account
+link, and **keeps every session on the SD card**. That is the question anyone
+actually has before pressing yes.
 
 ### Delete-uploaded confirm flow
 
