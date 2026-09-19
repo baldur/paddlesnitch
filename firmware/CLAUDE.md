@@ -456,12 +456,18 @@ Each gesture means **one thing everywhere**, so the button never has to be
 relearned per screen:
 
 - **tap** — move / cycle within this screen. Never acts, never destroys, and
-  always **wraps** (Pick highlight, Track speed unit, Sync page, Nerd page).
+  always **wraps** (menu highlight, Track speed unit, Sync page, Nerd page).
 - **hold** — select, or commit the screen's primary action. Pick: open the
   highlighted screen. Track: arm the stop. Sync: `sync now` on page 1, arm the
   delete on page 2. Nerd: re-link, on the radio page only.
-- **double-tap** — back to `Pick`. **Always**, from anywhere, including out of a
-  confirmation, which it cancels on the way.
+- **double-tap** — **back one level**. Always, from anywhere, including out of a
+  confirmation, which it cancels on the way. There are two menus —
+  `Pick` (Track / Sync / **Settings**) and `Settings` (Nerd mode / Network) —
+  so a screen returns to the menu that opened it and Settings returns to Pick.
+  Nerd mode and Network moved under Settings so the top level stays the three
+  things you touch on the water. `Settings > Network` shows the current SSID /
+  IP / RSSI and **hold** opens the WiFi portal, which is also what the `SETUP`
+  serial command does.
 - **Confirmations** (`STOP?`, `Delete uploaded?`) are the one place tap commits:
   **tap = yes, double-tap = no**, and both say so on the panel.
 

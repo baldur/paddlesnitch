@@ -9,12 +9,24 @@
 // hold = select), which enters Track/Sync/Nerd; a double-tap in a screen returns
 // to Pick. DeleteConfirm is a transient overlay on Sync. The splash at boot is
 // uiSplash(), not a state. See docs/device-states-spec.md.
-enum class AppState { Setup, Linking, Pick, Track, Sync, Nerd, DeleteConfirm };
+// Two MENUS (Pick, Settings) and the screens they open. Nerd and Network moved
+// under Settings so the top level stays the three things you use on the water.
+enum class AppState { Setup, Linking, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm };
+
+// Network details for the Settings > Network screen.
+struct UiNet {
+    String ssid;
+    String ip;
+    int    rssi = 0;
+    bool   up   = false;   // associated RIGHT NOW -- true only during a sync
+    bool   everConnected = false;   // has this SSID ever worked?
+};
 
 struct UiState {
     AppState state = AppState::Track;
     // link / onboarding
     bool     linked      = false;
+    UiNet    net;
     String   linkTitle;
     String   linkHint;
     String   deviceId;
@@ -54,8 +66,10 @@ struct UiState {
     int      upPart      = 0;
     int      upParts     = 0;
 
-    // pick screen: which option is highlighted (0 Track, 1 Sync, 2 Nerd)
-    int      pickSel     = 0;
+    // Highlighted row of whichever menu is showing. One field for both: the
+    // menus are never on screen at once, and giving each its own would invite
+    // them drifting out of sync with the enum they index.
+    int      menuSel     = 0;
     // track screen: a hold has armed "stop recording", awaiting a double-tap
     // Track rows lost to a busy bus. Nonzero means the paddle has holes in it.
     uint32_t droppedRows = 0;
@@ -106,5 +120,7 @@ struct UiState {
 };
 
 void uiSplash();                 // holds the wordmark briefly; blocks ~200 ms
-void uiPickFlash(int sel);       // blink the chooser row on selection; blocks ~280 ms
+// Blink a menu row on selection; blocks ~280 ms. `settings` picks which menu's
+// labels to draw, so the flash matches the menu the user is actually looking at.
+void uiPickFlash(int sel, bool settings = false);
 void uiDraw(const UiState &s);

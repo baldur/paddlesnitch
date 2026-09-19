@@ -294,17 +294,33 @@ static void drawSync(const UiState &s)
     display.sendBuffer();
 }
 
-// Pick: the chooser shown at boot (and on double-tap). tap moves the highlight,
-// hold selects. Both GPS and upload run the whole time -- this only picks the view.
-// One frame of the chooser. Split out so the selection blink can reuse the exact
-// layout instead of a near-copy that drifts the first time the menu changes.
-static void drawPickFrame(int sel, bool highlight)
+// The two menus. Kept here rather than passed in via UiState: the labels are
+// presentation, and the tracker already tells us which menu is showing.
+//
+// Nerd mode and Network sit under Settings so the top level stays the three
+// things you touch on the water. Track and Sync are one hold away as before;
+// the diagnostics are one more, which is the right way round.
+static const char *PICK_OPTS[3]     = { "Track", "Sync", "Settings" };
+static const char *SETTINGS_OPTS[2] = { "Nerd mode", "Network" };
+
+// One frame of a menu. Split out so the selection blink reuses the exact
+// layout instead of a near-copy that drifts the first time a menu changes.
+static void drawMenuFrame(const char **opts, int n, int sel, bool highlight, const char *title)
 {
     display.clearBuffer();
-    const char *opts[3] = { "Track", "Sync", "Nerd mode" };
     display.setFont(u8g2_font_6x10_tf);
-    for (int i = 0; i < 3; i++) {
-        int y = 20 + i * 14;
+    // A title only where there is one: Pick is the top level and needs no
+    // label, but inside Settings you need to know where you are.
+    int y0 = 20;
+    if (title) {
+        display.setFont(u8g2_font_5x8_tf);
+        display.drawStr(0, 8, title);
+        display.drawHLine(0, 11, 128);
+        display.setFont(u8g2_font_6x10_tf);
+        y0 = 26;
+    }
+    for (int i = 0; i < n; i++) {
+        int y = y0 + i * 14;
         if (i == sel && highlight) {
             display.drawBox(0, y - 10, 128, 13);         // highlight bar
             display.setDrawColor(0);
@@ -315,7 +331,9 @@ static void drawPickFrame(int sel, bool highlight)
         }
     }
     display.setFont(u8g2_font_5x8_tf);
-    const char *hint = "tap=move  hold=open";
+    // Inside Settings the way out is worth stating; at the top level there is
+    // nowhere to go back to.
+    const char *hint = title ? "tap=move hold=open 2x=back" : "tap=move  hold=open";
     display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
 }
 
@@ -323,7 +341,48 @@ static void drawPick(const UiState &s)
 {
     // No top row here: the chooser is just the options. The sat status bar
     // belongs to the Track screen, where it is what you are watching.
-    drawPickFrame(s.pickSel, true);
+    drawMenuFrame(PICK_OPTS, 3, s.menuSel, true, nullptr);
+    drawBatteryBadge(s);
+    display.sendBuffer();
+}
+
+static void drawSettings(const UiState &s)
+{
+    drawMenuFrame(SETTINGS_OPTS, 2, s.menuSel, true, "Settings");
+    drawBatteryBadge(s);
+    display.sendBuffer();
+}
+
+// Settings > Network: what the device is on, and the way to change it. The
+// portal is the screen's primary action, so it is a hold -- consistent with
+// every other screen, and deliberately not a tap, because opening the portal
+// drops the current connection.
+static void drawNetwork(const UiState &s)
+{
+    char l[40];
+    display.clearBuffer();
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 8, "Settings > Network");
+    display.drawHLine(0, 11, 128);
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 26, s.net.ssid.length() ? s.net.ssid.c_str() : "no network set");
+    display.setFont(u8g2_font_5x8_tf);
+    // "not connected" was true and misleading. The radio is DOWN almost always
+    // by design -- it comes up for about a second per sync (boot,
+    // recording-stop, a sync-now tap, every 5 min) and is off the rest of the
+    // time to save current. Reporting that as "not connected" tells the user
+    // something is broken when the device is working exactly as intended.
+    //
+    // So: distinguish idle-but-fine from never-worked. `everConnected` is the
+    // one that actually needs action.
+    if (s.net.up)                    snprintf(l, sizeof(l), "%s  %d dBm", s.net.ip.c_str(), s.net.rssi);
+    else if (!s.net.ssid.length())   snprintf(l, sizeof(l), "hold to choose a network");
+    else if (s.net.everConnected)    snprintf(l, sizeof(l), "idle - connects to sync");
+    else                             snprintf(l, sizeof(l), "never connected - check pass");
+    display.drawStr(0, 38, l);
+    display.drawStr(0, 50, "hold = change network");
+    const char *hint = "2x = back";
+    display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -334,12 +393,15 @@ static void drawPick(const UiState &s)
 // slow press and a successful one looked identical until the next screen appeared.
 // Two quick flashes of the bar say "that one, and it took" — and they double as
 // the transition, which otherwise cut hard from one layout to another.
-void uiPickFlash(int sel)
+void uiPickFlash(int sel, bool settings)
 {
     if (!board_display_ok()) return;
+    const char **opts = settings ? SETTINGS_OPTS : PICK_OPTS;
+    const int    n    = settings ? 2 : 3;
+    const char  *ttl  = settings ? "Settings" : nullptr;
     for (int i = 0; i < 2; i++) {
-        drawPickFrame(sel, false); display.sendBuffer(); delay(70);
-        drawPickFrame(sel, true);  display.sendBuffer(); delay(70);
+        drawMenuFrame(opts, n, sel, false, ttl); display.sendBuffer(); delay(70);
+        drawMenuFrame(opts, n, sel, true,  ttl); display.sendBuffer(); delay(70);
     }
 }
 
@@ -451,7 +513,10 @@ static void drawNerd(const UiState &s)
         display.drawStr(0, 56, l);
     }
 
-    display.drawStr(88, 63, "2x=next");
+    // Was "2x=next", from when double-tap paged. Tap pages now and wraps;
+    // double-tap leaves. Saying the wrong thing is worse than saying nothing.
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(74, 63, "tap=next 2x=back");
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -462,6 +527,8 @@ void uiDraw(const UiState &s)
     switch (s.state) {
     case AppState::Linking:       drawLinking(s);       break;
     case AppState::Pick:          drawPick(s);          break;
+    case AppState::Settings:      drawSettings(s);      break;
+    case AppState::Network:       drawNetwork(s);       break;
     case AppState::Track:         drawTracker(s);       break;
     case AppState::Sync:          drawSync(s);          break;
     case AppState::Nerd:          drawNerd(s);          break;
