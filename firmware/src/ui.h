@@ -27,6 +27,8 @@ struct UiState {
     // link / onboarding
     bool     linked      = false;
     UiNet    net;
+    // Linking screen: 0 = the QR alone on the whole panel, 1 = the characters.
+    int      linkPage    = 0;
     String   linkTitle;
     String   linkHint;
     String   deviceId;

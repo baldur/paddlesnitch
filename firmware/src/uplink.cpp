@@ -56,6 +56,24 @@ static void statusProgress(const char *name, int part, int parts)
     xSemaphoreGive(g_lock);
 }
 
+// Publishes the claim code the INSTANT it is known, rather than when the claim
+// finishes. uplinkClaim() then blocks for minutes polling for the user to enter
+// it -- and the UI repaints drawLinking() at 4 Hz throughout, so a code that is
+// only published after the poll returns is published after it was needed. The
+// screen showed "...." for the entire window in which the user had to read it.
+//
+// Pokes the one field rather than writing a whole snapshot back, for the same
+// reason statusProgress() does: the caller holds a local UplinkStatus across
+// the whole operation and a read-modify-set here would race it.
+static void statusClaimCode(const char *code)
+{
+    if (!g_lock) return;
+    xSemaphoreTake(g_lock, portMAX_DELAY);
+    snprintf(g_status.claimCode, sizeof(g_status.claimCode), "%s", code);
+    g_status.claiming = true;
+    xSemaphoreGive(g_lock);
+}
+
 UplinkStatus uplinkGetStatus()
 {
     UplinkStatus copy;
@@ -196,6 +214,7 @@ ClaimStatus uplinkClaim(uint32_t timeoutMs)
         netcfgSaveClaimSecret(secret);
     }
 
+    statusClaimCode(code.c_str());   // BEFORE the poll, not after it
     showCode(code);
     st.code  = code;
     st.state = ClaimState::AwaitingUser;
