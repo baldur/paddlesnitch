@@ -302,7 +302,7 @@ static void drawSync(const UiState &s)
 // things you touch on the water. Track and Sync are one hold away as before;
 // the diagnostics are one more, which is the right way round.
 static const char *PICK_OPTS[3]     = { "Track", "Sync", "Settings" };
-static const char *SETTINGS_OPTS[2] = { "Nerd mode", "Network" };
+static const char *SETTINGS_OPTS[3] = { "Nerd mode", "Network", "Factory reset" };
 
 // One frame of a menu. Split out so the selection blink reuses the exact
 // layout instead of a near-copy that drifts the first time a menu changes.
@@ -349,7 +349,7 @@ static void drawPick(const UiState &s)
 
 static void drawSettings(const UiState &s)
 {
-    drawMenuFrame(SETTINGS_OPTS, 2, s.menuSel, true, "Settings");
+    drawMenuFrame(SETTINGS_OPTS, 3, s.menuSel, true, "Settings");
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -398,7 +398,7 @@ void uiPickFlash(int sel, bool settings)
 {
     if (!board_display_ok()) return;
     const char **opts = settings ? SETTINGS_OPTS : PICK_OPTS;
-    const int    n    = settings ? 2 : 3;
+    const int    n    = 3;
     const char  *ttl  = settings ? "Settings" : nullptr;
     for (int i = 0; i < 2; i++) {
         drawMenuFrame(opts, n, sel, false, ttl); display.sendBuffer(); delay(70);
@@ -423,9 +423,7 @@ static void drawDeleteConfirm(const UiState &s)
     display.sendBuffer();
 }
 
-// Factory reset confirmation. Reached by seven taps, which is deliberate: the
-// button means "cycle" everywhere, so a reset cannot be a gesture that also
-// does something else, and it has to be something nobody does by accident.
+// Factory reset confirmation, reached from Settings > Factory reset.
 //
 // Spells out what goes and what stays, because "reset" is doing a lot of work
 // in one word and the answer to "will I lose my paddles?" is no.

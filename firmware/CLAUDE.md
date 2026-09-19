@@ -462,7 +462,7 @@ relearned per screen:
   delete on page 2. Nerd: re-link, on the radio page only.
 - **double-tap** — **back one level**. Always, from anywhere, including out of a
   confirmation, which it cancels on the way. There are two menus —
-  `Pick` (Track / Sync / **Settings**) and `Settings` (Nerd mode / Network) —
+  `Pick` (Track / Sync / **Settings**) and `Settings` (Nerd mode / Network / Factory reset) —
   so a screen returns to the menu that opened it and Settings returns to Pick.
   Nerd mode and Network moved under Settings so the top level stays the three
   things you touch on the water. `Settings > Network` shows the current SSID /
