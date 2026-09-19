@@ -455,7 +455,15 @@ static void drawLinking(const UiState &s)
     display.drawStr(2, 40, s.claimCode.length() ? s.claimCode.c_str() : "....");
     display.setFont(u8g2_font_5x8_tf);
     display.drawStr(0, 54, "paddlesnitch.com/l/");
-    display.drawStr(0, 63, s.claimCode.length() ? "tap = show QR" : "getting a code...");
+    // Do not claim to be fetching a code when the device cannot reach the
+    // network to fetch one. "getting a code..." forever is what this screen
+    // showed while WiFi was failing to associate, and it pointed at the wrong
+    // thing entirely.
+    const char *foot = s.claimCode.length() ? "tap = show QR"
+                     : (s.net.ssid.length() && !s.net.everConnected)
+                           ? "wifi: check password"
+                           : "getting a code...";
+    display.drawStr(0, 63, foot);
     drawBatteryBadge(s);
     display.sendBuffer();
 }

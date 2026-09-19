@@ -237,7 +237,7 @@ code{color:#7fb5ef}
 <p class=hint>Case-sensitive. Phone keyboards like to capitalise the first letter.</p>
 <label>WiFi password</label>
 <input name=pass type=password value="" autocapitalize=off autocorrect=off spellcheck=false>
-<p class=hint>Leave blank to keep the saved one.</p>
+<p class=hint>%PASSHINT%</p>
 <label>Server</label><input name=url value="%URL%" autocapitalize=off spellcheck=false>
 <button type=submit>Save and connect</button></form></div>)HTML";
 
@@ -320,6 +320,12 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
         p.replace("%SSID%", netcfg.ssid);
         p.replace("%URL%", netcfg.baseUrl);
         p.replace("%OPTIONS%", opts);
+        // Only promise to keep a password when one exists. On a fresh device
+        // nothing is stored, and "leave blank to keep the saved one" invites
+        // exactly the blank submit that saves an EMPTY password.
+        p.replace("%PASSHINT%", netcfg.pass.length()
+                      ? "Leave blank to keep the saved one."
+                      : "Required.");
         p.replace("%ERROR%", note.length() ? "<p class=err>" + note + "</p>" : "");
         server.send(200, "text/html", p);
     };
@@ -330,8 +336,17 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
         String pass = server.arg("pass");
         String url  = server.arg("url");
         if (!ssid.length()) { renderForm("Please choose a network."); return; }
-        // Blank password keeps the stored one, so a re-run to fix a typo in the
-        // SSID does not force the user to retype the password on a phone.
+        // Blank keeps the stored password -- so a re-run to fix a typo in the
+        // SSID does not force a retype on a phone. But ONLY if there is one to
+        // keep. On a fresh device (or after FORGET) there is not, so a blank
+        // submit saved an EMPTY password, the device could not associate, and
+        // the only symptom was a claim screen that waited forever for a code it
+        // could never fetch. Every new device meets this on its first setup,
+        // which is the worst possible place for it.
+        if (!pass.length() && !netcfg.pass.length()) {
+            renderForm("Enter the password for \"" + ssid + "\".");
+            return;
+        }
         netcfgSaveWifi(ssid, pass.length() ? pass : netcfg.pass,
                        url.length() ? url : netcfg.baseUrl);
         server.send(200, "text/html",

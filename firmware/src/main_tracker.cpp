@@ -788,7 +788,8 @@ static void handleSerialCommand()
                     "SETUP / SCAN      captive portal / list WiFi networks\n"
                     "SSID <n>          rest of line is the name (may contain spaces)\n"
                     "PASS <s>          rest of line is the secret\n"
-                    "FORGET            clear WiFi credentials\n"
+                    "UNLINK            clear the device token only (keeps WiFi), then re-claim\n"
+                    "FORGET            clear WiFi credentials AND the token\n"
                     "SYNC              ask the uplink task to sync now\n"
                     "HOLD / RESUME     take the SD card off the uploader / give it back\n"
                     "LS                list files on the card\n"
@@ -1018,6 +1019,19 @@ static void handleSerialCommand()
                 // file, so the overlap became easy to hit.
                 uplinkRequestSync();
                 Serial.println("sync requested -- watch for progress on the Sync screen");
+            }
+            // UNLINK clears ONLY the device token and claim secret, so the
+            // device re-claims on the next sync while keeping its WiFi. FORGET
+            // wipes everything including credentials, which means redoing the
+            // portal just to exercise the claim screen -- too blunt for
+            // testing, and too blunt for support on a device in the field whose
+            // owner changed.
+            else if (!strncmp(buf, "UNLINK", 6)) {
+                netcfgSaveToken("");
+                netcfgSaveClaimSecret("");
+                Serial.println("device token cleared -- keeping wifi; restarting to re-claim");
+                delay(300);
+                ESP.restart();
             }
             else if (!strncmp(buf, "FORGET", 6)) {
                 netcfgForget();
