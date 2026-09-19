@@ -1,4 +1,5 @@
 #include "netcfg.h"
+#include "qr.h"
 #include "board.h"
 #include "board_pins.h"
 #include <Preferences.h>
@@ -91,6 +92,38 @@ static void screen(const char *l1, const char *l2 = "", const char *l3 = "",
     display.drawStr(0, 27, l2);
     display.drawStr(0, 43, l3);
     display.drawStr(0, 59, l4);
+    display.sendBuffer();
+}
+
+// Setup screen: join-QR on the left, the same information as text on the right.
+// Both at once rather than alternating -- the QR is 58 px on a 128 px panel, so
+// there is room, and a user without a working camera should not have to wait
+// three seconds for the characters to come back round.
+static void screenJoinQr(const String &ssid, const String &pass, const String &ip)
+{
+    if (!display.begin()) return;
+    const String payload = "WIFI:S:" + ssid + ";T:WPA;P:" + pass + ";;";
+    display.clearBuffer();
+    if (!qrDraw(payload.c_str(), 0, 3)) {
+        // Over budget: show text only rather than a QR that overflows the panel
+        // or silently promotes to a version that will not scan.
+        Serial.printf("Portal: join payload %u bytes, too long for a QR\n",
+                      (unsigned)payload.length());
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(0, 11, "SETUP - join wifi:");
+        display.drawStr(0, 27, ssid.c_str());
+        display.drawStr(0, 43, pass.c_str());
+        display.drawStr(0, 59, ip.c_str());
+        display.sendBuffer();
+        return;
+    }
+    const int x = qrSizePx() + 4;
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(x, 10, "SCAN or");
+    display.drawStr(x, 20, "join wifi");
+    display.drawStr(x, 32, ssid.c_str());
+    display.drawStr(x, 42, pass.c_str());
+    display.drawStr(x, 56, ip.c_str());
     display.sendBuffer();
 }
 
@@ -208,24 +241,60 @@ code{color:#7fb5ef}
 <label>Server</label><input name=url value="%URL%" autocapitalize=off spellcheck=false>
 <button type=submit>Save and connect</button></form></div>)HTML";
 
+// The AP password, generated once and kept. Deliberately NOT derived from the
+// efuse MAC: the SSID already carries part of that MAC, so a MAC-derived key
+// would be computable by anyone who can see the network name. A stored random
+// value costs one NVS string and is not guessable.
+//
+// Eight characters because WPA2 requires at least eight, and because the join
+// QR has exactly 32 bytes and this field is what the budget was spent on.
+static String apPassword()
+{
+    prefs.begin(NS, false);
+    String k = prefs.isKey("apkey") ? prefs.getString("apkey") : String();
+    prefs.end();
+    if (k.length() == 8) return k;
+    static const char AL[] = "abcdefghijkmnpqrstuvwxyz23456789";   // no l/o/0/1
+    char out[9];
+    for (int i = 0; i < 8; i++) out[i] = AL[esp_random() % (sizeof(AL) - 1)];
+    out[8] = 0;
+    k = String(out);
+    put("apkey", k);
+    return k;
+}
+
 bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
 {
     WebServer server(80);
     DNSServer dns;
     bool saved = false;
 
-    String apName = "PaddleTracker-" + netDeviceId().substring(4);
+    // "PT-A48", not "PaddleTracker-A48". Six characters, because the join QR
+    // payload is WIFI:S:<ssid>;T:WPA;P:<8>;; and that is 32 bytes EXACTLY with a
+    // 6-character name -- the whole version-2 budget. Lengthening this name
+    // silently promotes the QR to version 3, which does not fit the panel.
+    // substring(5), giving THREE hex characters: "PT-A48". The spec said
+    // substring(4), but the device id is 8 characters, so that yields "PT-CA48"
+    // and a 33-byte payload -- one over the 32-byte version-2 budget, which
+    // makes the join QR refuse to render and silently fall back to text. The
+    // spec's own example payload used the 6-character form; the formula beside
+    // it did not agree with it. Three hex characters is 4096 values, ample when
+    // the only collision that matters is two devices in setup mode in one room.
+    String apName = "PT-" + netDeviceId().substring(5);
+    String apPass = apPassword();
 
     WiFi.mode(WIFI_AP_STA);          // STA side stays up so we can scan
-    WiFi.softAP(apName.c_str());
+    WiFi.softAP(apName.c_str(), apPass.c_str());
     dns.start(53, "*", WiFi.softAPIP());
 
-    Serial.printf("Portal: join WiFi \"%s\" then open http://%s/\n",
-                  apName.c_str(), WiFi.softAPIP().toString().c_str());
+    Serial.printf("Portal: join WiFi \"%s\" pass \"%s\" then open http://%s/\n",
+                  apName.c_str(), apPass.c_str(), WiFi.softAPIP().toString().c_str());
     if (errorNote.length()) Serial.printf("Portal: %s\n", errorNote.c_str());
 
-    screen("SETUP - join wifi:", apName.c_str(), "then open",
-           WiFi.softAPIP().toString().c_str());
+    // QR left, text right -- not alternating. A 58 px code on a 128 px panel
+    // leaves 70 px, which is 14 characters at 5x8, so the fallback can simply
+    // always be there. Alternating would make a user with no camera wait.
+    screenJoinQr(apName, apPass, WiFi.softAPIP().toString());
 
     // Scanned once up front: strongest first, de-duplicated, so a mesh with the
     // same SSID on three channels appears once rather than three times.

@@ -21,7 +21,18 @@ const LINK_ERR: Record<string, string> = {
 
 export default function DevicesSection() {
   const [devices, setDevices] = useState<Device[] | undefined>(undefined)
-  const [code, setCode] = useState('')
+  // Prefilled from ?code= when the user arrived by scanning the QR on the
+  // device (via /l/<code>), so the only remaining action is to confirm.
+  //
+  // LAZY initialiser, not an effect: the repo rule is never to store
+  // useSearchParams() in state, because the state initialises before the effect
+  // that would set it. Reading window.search once at mount is the same pattern
+  // the trial upload page uses for ?invite=, and it is SSR-safe because this is
+  // a client component that only runs this on the client.
+  const [code, setCode] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return new URLSearchParams(window.location.search).get('code')?.toUpperCase() ?? ''
+  })
   const [name, setName] = useState('')
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
