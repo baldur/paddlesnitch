@@ -60,11 +60,19 @@ int qrSizePx() { return (modulesFor(2) + 2 * quietFor(2)) * QR_PX; }
 
 void qrDisplayTune()
 {
-    static bool done = false;
-    if (done) return;
-    done = true;
+    // NOT one-shot, and that matters. Every screen calls display.begin() before
+    // drawing, u8g2's begin() re-runs the controller's init sequence, and that
+    // resets 0xD5 to its default. A `static bool done` guard here -- which is
+    // what this had -- applied the setting once and let the very next draw wipe
+    // it, so the main anti-banding lever was not actually in effect. Two I2C
+    // bytes per draw is nothing; re-assert them.
+    //
     // 0xD5: high nibble oscillator frequency, low nibble divide ratio - 1.
-    // 0xF0 = fastest oscillator, no division. Default is 0x80.
+    // 0xF0 = fastest oscillator, no division; default 0x80. Frame rate is
+    // roughly Fosc / (divide x phases x 64 rows), so this is the one knob that
+    // moves the panel's scan rate away from a camera's exposure -- the scan
+    // itself cannot be stopped, because only one row of a passive-matrix OLED
+    // emits at a time.
     display.sendF("ca", 0xD5, 0xF0);
     display.setContrast(255);
 }
