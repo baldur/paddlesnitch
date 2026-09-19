@@ -256,5 +256,6 @@ Honest list. Nothing here is fixed.
 | `/L/:code` → `/l/:code` | claim QR target; uppercase for QR alphanumeric mode | wrong case 404s without the redirect |
 | `/l/:code` | → `/profile/me/settings?code=…#devices` | relative redirect, so it cannot leak the Lambda origin |
 | `/profile/me/settings` → Devices | enter or confirm the code | `unknown_code` / `claim_expired` / `already_linked` are all worded for a human |
-| `/profile/me/devices` | per-device data + diagnostics | — |
+| `/profile/me/devices` | MY DEVICES — one card per tracker (sessions, distance, last seen) | empty state points at Account → Devices; a revoked tracker still shows, flagged `not linked`, because its uploads outlive the binding |
+| `/profile/me/devices/d/[deviceId]` | one tracker's uploads + per-session diagnostics | `No uploads from this tracker yet` |
 | `/profile/me/devices/[sessionId]` | motion charts for one session | `No motion data for this session yet` when no sidecar |

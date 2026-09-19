@@ -3,10 +3,19 @@ import { getAuthUser } from '@/lib/auth'
 import { listUserDevices, revokeDevice } from '@/lib/devices'
 
 // GET /api/account/devices — AUTHENTICATED. The signed-in user's linked devices.
+//
+// `tokenHash` is stripped rather than shipped: it is sha256 of the device's
+// bearer token, it authenticates nothing on the browser side, and it has no
+// business in a client bundle. Serialise the fields explicitly so a field added
+// to DeviceRecord later isn't published by accident.
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  return NextResponse.json({ devices: await listUserDevices(user.id) })
+  const devices = (await listUserDevices(user.id)).map(d => ({
+    deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware,
+    linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt,
+  }))
+  return NextResponse.json({ devices })
 }
 
 // DELETE /api/account/devices — AUTHENTICATED. Revoke one device ({ deviceId }):

@@ -116,6 +116,14 @@ Sets `userId` on the claim record. Errors: `404 unknown_code`,
 
 List the signed-in user's devices; revoke one. Revocation deletes the token
 record — the device then gets 401 on its next sync and falls back to claiming.
+It deletes the device's *metadata* too, but **not its uploaded sessions**, which
+is why MY DEVICES still shows a revoked tracker (flagged `not linked`).
+
+The GET projects an explicit field set — `deviceId`, `name`, `model`,
+`firmware`, `linkedAt`, `lastSeenAt` — rather than serialising `DeviceRecord`
+whole. `DeviceRecord.tokenHash` is sha256 of the device bearer token: it lets
+the owner revoke server-side and authenticates nothing in a browser, so it does
+not go over the wire. Regression test in `apps/web/src/tests/devices.test.ts`.
 
 ### `POST /api/devices/sessions?filename=track_0005.csv` — device token
 

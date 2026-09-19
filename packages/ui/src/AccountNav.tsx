@@ -26,6 +26,7 @@ export type NavUser = { id: string; displayName: string }
 export default function AccountNav({
   user,
   paddlesHref,
+  devicesHref,
   profileHref,
   accountHref,
   signInHref,
@@ -33,6 +34,9 @@ export default function AccountNav({
 }: {
   user: NavUser | null | undefined   // undefined = still loading
   paddlesHref?: string               // optional "MY PADDLES" quick link
+  devicesHref?: string               // optional "MY DEVICES" quick link — omitted
+                                     // when the viewer has no tracker linked, so
+                                     // the row never points at an empty page
   profileHref: string
   accountHref: string
   signInHref: string
@@ -76,6 +80,7 @@ export default function AccountNav({
       {open && (
         <div role="menu" className="absolute right-0 top-full mt-2 min-w-[10rem] border border-border bg-surface shadow-md z-[1200] flex flex-col py-1">
           {paddlesHref && <a role="menuitem" href={paddlesHref} className={`${item} text-fg hover:bg-surface-2`}>MY PADDLES</a>}
+          {devicesHref && <a role="menuitem" href={devicesHref} className={`${item} text-fg hover:bg-surface-2`}>MY DEVICES</a>}
           <a role="menuitem" href={profileHref} className={`${item} text-fg hover:bg-surface-2`}>MY PROFILE</a>
           <a role="menuitem" href={accountHref} className={`${item} text-muted hover:bg-surface-2 hover:text-fg`}>SETTINGS</a>
           <button

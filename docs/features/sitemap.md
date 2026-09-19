@@ -26,8 +26,14 @@ and non-GET `/att/api` + `/api/account`; everything else passes and gates deeper
 /profile/[id]             P  public paddler profile (opt-in; 404 if private) [att]
 /profile/me               A  redirect to your own public profile            [att]
 /profile/me/settings      A  account settings (Strava, profile, handle, ToS, devices, export/delete) [att]
-/profile/me/devices       A  hardware-tracker data page                     [att]
+/profile/me/devices       A  MY DEVICES — one card per tracker              [att]
+/profile/me/devices/d/[deviceId]  A  one tracker's uploads + per-session diagnostics [att]
+/profile/me/devices/[sessionId]   A  roll/pitch charts for one session       [att]
 ```
+
+`MY DEVICES` also appears in the account dropdown, but **only for a viewer who
+has a tracker linked** — the nav asks `GET /api/account/devices` once per page
+load and omits the row otherwise, so it never points at an empty page.
 
 ### ATT — Automated Time Trials (served at `/att`; `apps/att`, no basePath)
 ```
