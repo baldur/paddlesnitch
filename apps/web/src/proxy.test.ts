@@ -40,4 +40,18 @@ describe('proxy auth gate', () => {
   it('keeps auth endpoints public', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/auth/otp-request')))).toBe(false)
   })
+
+  it('carries the query string through sign-in, not just the path', () => {
+    // Regression: `next` was set to the pathname alone while the cloned URL
+    // kept the original params, so /profile/me/settings?code=ABC123 became
+    // /att/auth?code=ABC123&next=/profile/me/settings and the code was dropped
+    // on the way back. That silently breaks scan-to-link for anyone not
+    // already signed in -- i.e. most people setting up a device.
+    const res = proxy(req('GET', '/profile/me/settings?code=ABC123'))
+    const loc = new URL(res.headers.get('location') ?? '', 'https://paddlesnitch.com')
+    expect(loc.pathname).toBe('/att/auth')
+    expect(loc.searchParams.get('next')).toBe('/profile/me/settings?code=ABC123')
+    // ...and the code must not be left loose on the auth URL itself.
+    expect(loc.searchParams.get('code')).toBeNull()
+  })
 })
