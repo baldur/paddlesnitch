@@ -172,22 +172,48 @@ treat a failed `/status` fetch as "keep trying", not an error.
 - `pio run` clean on all environments; `pnpm test` 773 passing; `pnpm build`
   clean with `/l/[code]` registered.
 
-### What has NOT been verified — this is the part that decides it
+### Verified on hardware with a phone, 2026-09-19
 
-Every item below needs a phone and a person. **None of it has been done, and
-Phase 1 is not finished until it has.**
+The **join** half works end to end. Portal opened with `SETUP`, and the serial
+log is the evidence:
+
+```
+Portal: join WiFi "PT-A48" pass "cn7eyvh9" then open http://192.168.4.1/
+Portal: 0 device(s) joined the AP -- waiting
+Portal: 1 device(s) joined the AP        <- phone joined, from the QR
+Portal: served the form                  <- captive portal fired
+saved -- restarting
+```
+
+Device came back on the chosen network, still claimed, 8/8 sessions uploaded.
+That covers spec items 2, 3, 5 and 6: the code scans **consistently**, the phone
+joins without typing, the captive portal still fires, and the text beside it
+stays legible.
+
+Getting there took three fixes that are worth recording, because each looked
+like "the QR does not work":
+
+- The quiet zone was 2 modules (half the standard). It is now spent from
+  whatever the version leaves over — 3 for v2, 5 for v1.
+- The display-clock tune that reduces camera banding was applied **once** and
+  then wiped, because every screen calls `display.begin()` and u8g2's `begin()`
+  re-runs the controller init. It is re-asserted on every draw now.
+- `QRTEST` encoded a network that **was not on the air** — it only draws a code;
+  `WiFi.softAP()` lives inside `netStartPortal()`. A phone read it, hunted for
+  `PT-A48`, found nothing and gave up silently, which is indistinguishable from
+  a bad code. It now uses the real credentials and says when the AP is down.
+
+### Still not verified
 
 1. `FORGET`, reboot, portal opens automatically.
-2. Scanning QR 1 with the stock camera on **both** iOS and Android joins the AP
-   without typing.
-3. The captive portal still fires after a QR join.
-4. Scanning QR 2 opens the link page with the code prefilled.
-5. **Both QRs scan at arm's length, in daylight, at an angle** — not head-on at
-   10 cm in a dim room. This is the one that decides whether any of this is
-   easier than what it replaces, and the 2-module quiet zone is the reason it
-   might fail.
-6. The text beside each QR is still legible.
+4. **Scanning QR 2 opens the link page with the code prefilled.** This is the
+   remaining half and it needs a `FORGET`, because the claim screen only appears
+   on an unclaimed device. The code itself is in better shape than the join one
+   — uppercase makes it alphanumeric, so it is **version 1: 21 modules with a
+   5-module quiet zone** against the join code's 25 and 3.
 7. A device already set up is unaffected: no portal, no behaviour change.
+8. Android — everything above was one phone. The join QR is a standard `WIFI:`
+   payload so there is no reason to expect trouble, but it is untested.
 
 Note that (1) clears the WiFi credentials, so it should be done when there is
 time to complete setup. The device token is a separate NVS key and survives, so

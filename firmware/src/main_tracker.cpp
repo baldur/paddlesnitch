@@ -109,6 +109,7 @@ static int  menuCount(Menu m) { return m == Menu::Settings ? 2 : 3; }
 static Menu     menu     = Menu::Pick;     // None = a screen is showing
 static int      menuSel  = 0;              // highlighted row of `menu`
 static Screen   uiScreen      = Screen::Track;   // the entered screen
+static bool     qrTestHold    = false;   // QRTEST owns the panel until any other command
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
 static const int NERD_PAGES   = 3;
 // Sync is paged for the same reason Nerd is, but the motive is safety as much as
@@ -707,6 +708,8 @@ static void handleSerialCommand()
             if (!n) continue;
             buf[n] = 0;
             n = 0;
+            // Any command other than QRTEST hands the panel back to the UI.
+            if (strncmp(buf, "QRTEST", 6) != 0) qrTestHold = false;
             if      (!strncmp(buf, "LS", 2))   storageList();
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
             else if (!strncmp(buf, "REC", 3))  toggleRecording();
@@ -891,6 +894,39 @@ static void handleSerialCommand()
             // QRDUMP <text> — the module grid over serial. The panel is 58 px
             // square; you cannot tell an inverted or over-sized code from a
             // photograph of it, and you can from this.
+            // QRTEST [INV] — draw the REAL join QR full-screen so it can be
+            // scan-tested without opening the portal (which drops WiFi).
+            // INV draws light-on-dark: fewer emitting pixels, which is the
+            // lever when a phone camera is banding on the panel refresh.
+            // Any other key returns to the normal UI.
+            else if (!strncmp(buf, "QRTEST", 6)) {
+                qrTestHold = true;
+                const bool inv = strstr(buf, "INV") != nullptr;
+                // The REAL credentials, not a plausible-looking fake. The first
+                // version of this encoded "testpass", so a phone that read the
+                // code perfectly still could not join anything.
+                const String pay = "WIFI:S:" + netApSsid() + ";T:WPA;P:" + netApPass() + ";;";
+                display.clearBuffer();
+                if (qrDraw(pay.c_str(), (128 - qrSizePx()) / 2, (64 - qrSizePx()) / 2, inv)) {
+                    display.sendBuffer();
+                    Serial.printf("QRTEST %s: %s (%u bytes) -- centred, %dpx.\n",
+                                  inv ? "INVERTED" : "normal", pay.c_str(),
+                                  (unsigned)pay.length(), qrSizePx());
+                    // Say it plainly, because the failure is silent and looks
+                    // like the QR not working: the phone reads the code, hunts
+                    // for a network that is not on the air, and gives up
+                    // without saying anything.
+                    if (!netApActive()) {
+                        Serial.println("  NOTE: the AP is NOT broadcasting. This tests whether the");
+                        Serial.println("  code READS, nothing more -- scanning it will appear to do");
+                        Serial.println("  nothing. For an end-to-end join, open the portal instead:");
+                        Serial.println("  SETUP, or on the device Settings > Network > hold.");
+                    }
+                    Serial.println("  Any other command restores the UI.");
+                } else {
+                    Serial.printf("QRTEST: payload %u bytes, too long\n", (unsigned)pay.length());
+                }
+            }
             else if (!strncmp(buf, "QRDUMP ", 7)) {
                 qrDumpSerial(buf + 7);
             }
@@ -1157,7 +1193,10 @@ void loop()
     // Interval AND duty cycle must both allow it; the duty guard wins.
     // Redrawn at 4 Hz so the blinking satellite and the pulsing REC dot actually
     // blink. At the 1 Hz logging rate they aliased into looking static.
-    if (millis() - lastDraw >= 250) {
+    // QRTEST holds the panel: the repaint below would wipe the test code about
+    // 250 ms after it was drawn, which is the same trap the claim QR fell into.
+    if (qrTestHold) { /* panel held for scan testing */ }
+    else if (millis() - lastDraw >= 250) {
         lastDraw = millis();
         UplinkStatus up = uplinkGetStatus();
 

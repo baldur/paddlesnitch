@@ -16,12 +16,14 @@ static void the_qr_square_fits_the_panel(void)
     // 25 modules + 2 quiet either side = 29, at 2 px = 58, against 64 px of
     // panel height. Version 3 would be 33 modules = 66 px and would not fit,
     // which is the entire reason the payload budget is 32 bytes.
-    TEST_ASSERT_EQUAL_INT(58, qrSizePx());
+    // 62, not 58: the quiet zone now spends whatever the version leaves over,
+    // because a thin border is the likeliest scan failure.
+    TEST_ASSERT_EQUAL_INT(62, qrSizePx());
     TEST_ASSERT_TRUE(qrSizePx() <= 64);
 
     // And it leaves room on a 128 px panel for the text fallback BESIDE it,
     // rather than alternating with it.
-    TEST_ASSERT_TRUE(128 - qrSizePx() >= 70);
+    TEST_ASSERT_TRUE(128 - qrSizePx() >= 64);
 }
 
 static void the_wifi_join_payload_fits_exactly(void)
@@ -62,6 +64,18 @@ static void the_claim_link_payload_fits_with_room(void)
     TEST_ASSERT_FALSE(qrFits(withScheme));
 }
 
+static void uppercasing_the_claim_link_buys_a_smaller_version(void)
+{
+    // Lowercase forces BYTE mode: 25 chars needs version 2.
+    TEST_ASSERT_TRUE(qrFits("paddlesnitch.com/l/ABC123"));
+    // Uppercase is all inside ALPHANUMERIC mode's set, where 25 chars is
+    // exactly version 1's capacity -- fewer modules and a wider quiet zone at
+    // the same module size.
+    TEST_ASSERT_TRUE(qrFits("PADDLESNITCH.COM/L/ABC123"));
+    // Still refused when genuinely too long, in either mode.
+    TEST_ASSERT_FALSE(qrFits("HTTPS://PADDLESNITCH.COM/L/ABC123/AND/MORE/AND/MORE/X"));
+}
+
 static void nothing_silly_is_accepted(void)
 {
     TEST_ASSERT_FALSE(qrFits(0));
@@ -74,6 +88,7 @@ int main(int, char **)
     RUN_TEST(the_qr_square_fits_the_panel);
     RUN_TEST(the_wifi_join_payload_fits_exactly);
     RUN_TEST(the_claim_link_payload_fits_with_room);
+    RUN_TEST(uppercasing_the_claim_link_buys_a_smaller_version);
     RUN_TEST(nothing_silly_is_accepted);
     return UNITY_END();
 }
