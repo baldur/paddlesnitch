@@ -2,6 +2,8 @@
 #include "board.h"
 #include "board_pins.h"
 #include <SD.h>
+#include "spibus.h"
+#include "dbg.h"
 #include <FS.h>
 #include <Preferences.h>
 
@@ -218,6 +220,9 @@ uint32_t    storageRowCount() { return rows; }
 // in. Diagnostic only — see the SDPROBE serial command.
 bool storageProbeRead(const char *name, size_t *bytesOut, uint32_t *msOut)
 {
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("sd", "bus busy: SDPROBE"); return false; }
+
     *bytesOut = 0; *msOut = 0;
     if (!ready) return false;
     File f = SD.open(String("/") + name, FILE_READ);
@@ -244,6 +249,11 @@ uint64_t    storageCardSizeMB() { return ready ? SD.cardSize() / (1024ULL * 1024
 
 void storageLogRow(const char *csvLine)
 {
+    // The authoritative track row: wait a long time for the bus, because losing
+    // one of these loses a second of the paddle.
+    SpiBusGuard bus(2000);
+    if (!bus) { DBGE("sd", "bus busy: track row DROPPED"); return; }
+
     if (!ready || !logFile) return;
     logFile.print(csvLine);
     logFile.flush();        // deliberate: see header comment
@@ -253,6 +263,12 @@ void storageLogRow(const char *csvLine)
 void storageLogImuRow(const char *csvLine)
 {
     if (!ready || !imuFile) return;
+    // 200 ms, not seconds: this runs at ~50 Hz inside loop(), so a long wait
+    // here would stall GNSS reads and the UI. A dropped motion row costs a
+    // sample out of thousands; a stalled loop costs the session. In practice
+    // it is never contended -- a sync does not run while recording.
+    SpiBusGuard bus(200);
+    if (!bus) { DBGW("sd", "bus busy: imu row dropped"); return; }
     imuFile.print(csvLine);
     // Buffered: flush ~once a second (every 50 rows) rather than per row. This
     // is analysis data, not the authoritative track, so a <1 s loss on an abrupt
@@ -276,6 +292,9 @@ void storageClose()
 
 void storageList()
 {
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("sd", "bus busy: LS"); return ; }
+
     Serial.println("<<<LS>>>");
     if (ready) {
         File root = SD.open("/");
@@ -290,6 +309,9 @@ void storageList()
 
 void storageCat(const char *name)
 {
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("sd", "bus busy: CAT"); return ; }
+
     // Blocking on purpose: the loop is single-threaded, so nothing else can
     // interleave status lines into the middle of the dump.
     char path[64];
