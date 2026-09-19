@@ -189,6 +189,9 @@ importers:
       '@aws-sdk/client-ssm':
         specifier: ^3.1057.0
         version: 3.1062.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.1048.0
+        version: 3.1048.0
       '@paddlesnitch/timing':
         specifier: workspace:*
         version: link:../timing

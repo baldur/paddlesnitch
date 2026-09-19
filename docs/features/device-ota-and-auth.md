@@ -1,7 +1,10 @@
 # Device OTA, and how solid the device auth actually is
 
-**Status:** Phase 0 (repartition) **shipped** — #256, 2026-09-19. Phases 1–4 are
-spec, not built. The auth review in Part 1 describes what exists today.
+**Status:** Phase 0 (repartition) **shipped** — #256, 2026-09-19.
+**Phases 1, 2 and 4 — the whole server side — shipped 2026-09-19.** Phase 3
+(firmware) is still spec: nothing on a device does OTA yet, and until it does
+the server half is inert by design. The auth review in Part 1 describes what
+exists today.
 **Owner:** Baldur (product).
 **Related:** [`device-uplink.md`](device-uplink.md) (the transport and auth this
 reuses), [`device-screen-map.md`](device-screen-map.md) (screens and the error
@@ -247,7 +250,12 @@ second chance: a partition table cannot be changed over the air.
 
 ---
 
-## Phase 1 — server: manifest, presigned URL, and the signal
+## Phase 1 — server: manifest, presigned URL, and the signal · ✅ BUILT
+
+Built as specified, with the differences and additions recorded at the end of
+this phase. **Verified by the test suite, not on hardware** — no device speaks
+any of this yet.
+
 
 ### 1.1 Storage layout
 
@@ -348,7 +356,12 @@ enough, and the audit line is the part that matters.
 
 ---
 
-## Phase 2 — observability
+## Phase 2 — observability · ✅ BUILT (not yet observed)
+
+The EMF lines and the dashboard exist. **No metric has ever been emitted in
+production**, because nothing has been promoted and no device asks — so the
+dashboard is currently a set of empty charts. That is the correct state.
+
 
 ### 2.1 CloudWatch metrics
 
@@ -483,7 +496,12 @@ updated, and the notes. That is where someone will look after noticing a change.
 
 ---
 
-## Phase 4 — GitHub Actions
+## Phase 4 — GitHub Actions · ✅ BUILT (never yet run)
+
+`.github/workflows/firmware-release.yml`. **It has not executed once** — it
+fires on a push to `main` touching `firmware/**`, which this branch will be, so
+its first real run is the merge that ships it. Watch that run.
+
 
 New workflow `.github/workflows/firmware-release.yml`. **Build on merge, release
 on a human action** — these are two separate things and conflating them means a
@@ -512,6 +530,95 @@ and it already has. It has read `0.9.0` across every change merged on
 Make one source of truth: a `firmware/VERSION` file read by both the build flag
 and the workflow, and fail the build if `VERSION` is unchanged from the previous
 commit on `main` while `firmware/src/**` changed.
+
+---
+
+## What actually shipped on the server (2026-09-19)
+
+Deviations and additions against the spec above, so the next person does not
+have to diff the code to find them.
+
+**`firmware/VERSION` is now the single source of truth**, read by
+`firmware/scripts/version.py` (a PlatformIO `pre:` script on `[hw]`, so every
+board environment gets it) and by the release workflow. The literal in
+`platformio.ini` is gone. Set to **0.10.0** — it had been `0.9.0` across every
+behaviour change merged on 2026-09-19, which the server would have read as
+"already current". Proven rather than assumed: `strings firmware.bin` contains
+`0.10.0` and no `0.0.0-dev`, so the `#ifndef` fallback is not what is compiling
+in.
+
+**Publishing refuses to overwrite.** Once `firmware/<version>/firmware.bin`
+exists the build job fails rather than replacing it. Some device may already be
+running those bytes; changing them under the same version number makes every
+record of that version a lie.
+
+**Promoting verifies the image exists** (`promoteFirmware` checks both the
+manifest and the binary, and so does the workflow). A channel pointing at
+missing bytes would turn every device's next sync into a failed download.
+
+**The channel read is cached in-process for 60 s.** `X-PS-Firmware` goes on
+every device-authenticated response including each of ~48 chunk responses in one
+sync, so an uncached read would be a storage call per chunk. The cost is that a
+promotion takes up to 60 s to reach a warm Lambda container — irrelevant against
+a 5-minute sync interval. `promoteFirmware` drops the cache, so a rollback is
+not delayed by it.
+
+**`withDeviceAuth` (`apps/web/src/lib/device-route.ts`) is new** and is how the
+signal is guaranteed. The spec says "add it in one place in the device auth
+middleware"; there was no such middleware — each route called `getDeviceAuth`
+itself. The upload route returns from **fourteen** places, so the header is
+stamped by the wrapper rather than by any of them. It is stamped on errors and
+on the 401 too: a device that is failing or re-claiming is exactly one that
+should still learn a new version exists.
+
+**No header at all when nothing is promoted.** An absent `X-PS-Firmware` means
+"no opinion", not "you are current" — the firmware must not act on its absence.
+
+**A 15-minute presigned URL, and a dev equivalent.** There is no S3 in local
+dev, so `presignGetUrl` returns a same-origin URL to
+`/api/devices/firmware/download` carrying an HMAC over (key, expiry). The
+contract the device sees is identical either way — no credentials, one object,
+expires — which is what makes the flow testable end to end without AWS. That
+route refuses to run at all outside dev, and refuses any key that is not a
+firmware image even with a valid signature.
+
+**Platform admin is a new concept** (`apps/web/src/lib/admin.ts`): an env
+allowlist of Cognito `sub`s, `ADMIN_USER_IDS`. Not group-admin, which is about
+one club's courses. Deliberately not a flag in storage — no route can grant it,
+so escalating requires a deploy. **Unset means nobody.** It is passed through
+`deploy.yml` from a repository *variable*; forgetting that would silently blank
+the allowlist on the next deploy.
+
+**The admin route is not in `proxy.ts`.** It is an API meant to be curled, and a
+307 to a sign-in page is a worse answer than 401/403 JSON. The route's own
+`getAuthUser` + `isPlatformAdmin` check is the gate, and there are tests for
+signed-out, signed-in-non-admin, unset-allowlist, and a device token (which must
+never satisfy it).
+
+**A rollback is never recorded as a successful boot**, whatever the device
+claims — `bootOk` and `rolledBack` are independent fields on the wire and a
+firmware bug could set both.
+
+### Not done, and deliberately
+
+- **Phase 3 (firmware).** Nothing on a device does any of this.
+- **Prerequisites 1–3** (key claims by `deviceId`, rate-limit the unauthenticated
+  device endpoints, token expiry/rotation). The spec says to do at least the
+  first two *before promoting anything to stable*. That remains true and nothing
+  here changes it — see the gate below.
+- **Image signing.** Still the proper fix, still a follow-up.
+
+### The gate before the first promotion
+
+Building this does not make it safe to use. Before `channels/stable.json` is
+ever written for real:
+
+1. Prerequisites 1 and 2 above.
+2. Phase 3, including verification item 4 — deliberately ship a broken image and
+   confirm the rollback fires.
+3. Confirm the bucket policy allows writes to `firmware/` only from the release
+   workflow's OIDC role. Today the workflow reuses the deploy role, so anything
+   that can deploy can also release.
 
 ---
 ## Security: what this spec does and does not give you

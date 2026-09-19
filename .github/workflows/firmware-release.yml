@@ -1,0 +1,178 @@
+name: Firmware build & release
+
+# Building and releasing are two different things and this workflow keeps them
+# that way (docs/features/device-ota-and-auth.md, Phase 4).
+#
+#   push to main touching firmware/**  -> BUILD. Uploads firmware/<version>/ to
+#                                         the data bucket. No device sees it.
+#   workflow_dispatch with a version   -> RELEASE. Writes channels/stable.json.
+#                                         Every device gets it on its next sync.
+#
+# Conflating them means one bad merge reaches every tracker at once, and a
+# tracker that will not boot needs a cable and a person holding it.
+
+on:
+  push:
+    branches: [main]
+    paths: ['firmware/**']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to promote to the stable channel (must already be built)'
+        required: true
+        type: string
+      channel:
+        description: 'Channel'
+        required: true
+        default: 'stable'
+        type: choice
+        options: [stable, beta]
+
+permissions:
+  id-token: write        # OIDC — no long-lived AWS keys in secrets
+  contents: read
+
+env:
+  AWS_REGION: eu-west-1
+  DATA_BUCKET: paddlesnitch-data-prod
+
+jobs:
+  build:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Need the previous commit to tell whether VERSION moved with the source.
+          fetch-depth: 2
+
+      - name: Read version
+        id: v
+        run: |
+          VERSION="$(tr -d '[:space:]' < firmware/VERSION)"
+          if [ -z "$VERSION" ]; then echo "firmware/VERSION is empty"; exit 1; fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "firmware/VERSION is not a semver: $VERSION"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # The guard that makes VERSION worth having. Firmware changed but the
+      # version did not means two different binaries would claim to be the same
+      # build — and a device already running that number would never take the
+      # update, because "current == channel" is the whole comparison.
+      - name: Refuse a source change that forgot to bump VERSION
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -q '^firmware/src/'; then
+            if git diff --quiet HEAD^ HEAD -- firmware/VERSION; then
+              echo "::error::firmware/src changed but firmware/VERSION did not (still ${{ steps.v.outputs.version }}). Bump it."
+              exit 1
+            fi
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+      - run: pip install --upgrade platformio
+
+      - name: Build tracker
+        working-directory: firmware
+        run: pio run -e tracker
+
+      # Cheap and it has already caught a real bug class: the host tests exist
+      # because a wrong track-vs-sidecar predicate cost a full debugging session.
+      - name: Host tests
+        working-directory: firmware
+        run: pio test -e native
+
+      - name: Build manifest
+        id: m
+        working-directory: firmware
+        run: |
+          BIN=.pio/build/tracker/firmware.bin
+          test -f "$BIN" || { echo "no firmware.bin at $BIN"; exit 1; }
+          SHA="$(sha256sum "$BIN" | cut -d' ' -f1)"
+          SIZE="$(stat -c%s "$BIN")"
+          NOTES="$(git log -1 --pretty=%s)"
+          jq -n --arg v "${{ steps.v.outputs.version }}" --arg s "$SHA" \
+                --argjson n "$SIZE" --arg notes "$NOTES" \
+                --arg built "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sha "$GITHUB_SHA" \
+            '{version:$v, sha256:$s, sizeBytes:$n, notes:$notes, builtAt:$built, gitSha:$sha}' \
+            > manifest.json
+          cat manifest.json
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE"  >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Refuse to overwrite a version that already exists. Once a build is
+      # published, some device may already be running it; replacing the bytes
+      # under a version number makes every record of that version a lie.
+      - name: Publish (never overwrite)
+        working-directory: firmware
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          if aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/firmware.bin" >/dev/null 2>&1; then
+            echo "::error::firmware/$V already published. Bump firmware/VERSION."
+            exit 1
+          fi
+          aws s3 cp .pio/build/tracker/firmware.bin "s3://$DATA_BUCKET/firmware/$V/firmware.bin"
+          aws s3 cp manifest.json "s3://$DATA_BUCKET/firmware/$V/manifest.json"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Firmware ${{ steps.v.outputs.version }} built"
+            echo ""
+            echo "- size: ${{ steps.m.outputs.size }} bytes"
+            echo "- sha256: \`${{ steps.m.outputs.sha256 }}\`"
+            echo ""
+            echo "**Not released.** No device will see this until it is promoted:"
+            echo "run this workflow via *Run workflow* with version \`${{ steps.v.outputs.version }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # A GitHub Environment turns promotion into something with a required
+    # reviewer and a deployment record, which is the point: this is the step
+    # that reaches real hardware.
+    environment: firmware-release
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Promoting a version whose bytes are missing would turn every device's
+      # next sync into a failed download, so check BOTH objects first.
+      - name: Verify the build exists
+        run: |
+          V="${{ inputs.version }}"
+          printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || { echo "::error::not a semver: $V"; exit 1; }
+          aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/firmware.bin"   >/dev/null
+          aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/manifest.json" >/dev/null
+
+      - name: Promote
+        run: |
+          V="${{ inputs.version }}"
+          jq -n --arg v "$V" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+             --arg by "${{ github.actor }}" \
+            '{version:$v, promotedAt:$at, promotedBy:$by}' > channel.json
+          aws s3 cp channel.json "s3://$DATA_BUCKET/firmware/channels/${{ inputs.channel }}.json"
+          {
+            echo "### Promoted ${{ inputs.version }} to ${{ inputs.channel }}"
+            echo ""
+            echo "Devices pick this up on their next sync (within ~5 minutes, plus up to"
+            echo "60s of channel cache). Watch the \`paddlesnitch-firmware\` dashboard:"
+            echo "any \`FirmwareBootFailed\` is the signal to promote the previous version back."
+          } >> "$GITHUB_STEP_SUMMARY"
