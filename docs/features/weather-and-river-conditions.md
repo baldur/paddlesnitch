@@ -1,6 +1,6 @@
 # Feature spec: Weather & river-flow conditions
 
-**Status:** 🚧 building. Designed 2026-07-02 from issue #106.
+**Status:** ✅ **shipped** — `@paddlesnitch/timing/conditions` (+ `weather`, `river-flow`) is live and feeds analysis and the section-compare board. Designed 2026-07-02 from issue #106.
 **Owners:** Baldur (product), Claude (implementation).
 
 ## Why

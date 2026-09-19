@@ -1,6 +1,11 @@
 # App: paddle analysis
 
-**Status: 💭 spec (2026-07). Living design record — refined through prototyping on
+**Status: ✅ shipped 2026-08.** Was a living design record refined through prototyping; kept as the record of why the engine works the way it does.
+
+> **Since this was written:** `apps/att` + `apps/analysis` became the single `apps/web`, and the `/analyse` section moved to `/paddles` (old URLs 301). Paths below are as-built at the time; `CLAUDE.md` is authoritative for today.
+
+<!-- original status line follows -->
+**Originally: 💭 spec (2026-07). Living design record — refined through prototyping on
 real traces. Build starts once the monorepo lands (see [platform-monorepo](platform-monorepo.md)).**
 
 Lives at `apps/analysis`, `basePath: /analysis`, on `@paddlesnitch/core` (users,

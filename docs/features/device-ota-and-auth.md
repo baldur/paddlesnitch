@@ -134,6 +134,73 @@ card would put a multi-megabyte write on the most fragile path in the system.
 
 ---
 
+## The shape of it, end to end
+
+Three views. The first is the happy path; the other two are the parts that
+decide whether this is safe to point at a device that is not on your desk.
+
+### Signal, download, verify, commit
+
+Note there is **no polling in the steady state** — the version arrives on a
+response the device was already going to receive.
+
+```mermaid
+flowchart TD
+    sync(["sync fires<br/>boot / stop / tap / 5 min"]) --> req["POST /api/devices/sessions<br/>(the upload it was doing anyway)"]
+    req --> hdr{{"response carries<br/>X-PS-Firmware: 0.10.0"}}
+    hdr --> cmp{"differs from<br/>FIRMWARE_VERSION?"}
+    cmp -- no --> done(["nothing. no extra request, ever"])
+    cmp -- yes --> gates{"all gates pass?"}
+
+    gates -- no --> wait(["wait for the next sync"])
+    gates -- yes --> man["GET /api/devices/firmware?current=…<br/>→ manifest + 15-min presigned URL"]
+    man --> dl["stream S3 → Update.writeStream()<br/>straight into the inactive slot"]
+    dl --> sha{"sha256 over the stream<br/>matches the manifest?"}
+    sha -- no --> abort(["abort, count a failure,<br/>otadata untouched"])
+    sha -- yes --> commit["Update.end(true)<br/>set boot partition<br/>NVS: ota_pending, ota_boots=0"]
+    commit --> reboot(["reboot"])
+```
+
+### The gates — all must hold
+
+Conservative on purpose: a bricked device on the water needs a cable to recover.
+
+```mermaid
+flowchart LR
+    G1["pending flag set<br/>(or 7-day fallback probe)"] --> G2["not recording"]
+    G2 --> G3["WiFi up AND everConnected<br/>i.e. the home network"]
+    G3 --> G4["charging OR battery > 3800 mV"]
+    G4 --> G5["this version has not<br/>failed 3 times"]
+    G5 --> GO(["allowed to update"])
+```
+
+### First boot on the new image — and how it un-does itself
+
+This is the half that matters. Power loss mid-download is safe by construction:
+`otadata` is not touched until `Update.end()` succeeds, so an interrupted
+download leaves a half-written slot that is simply never booted.
+
+```mermaid
+flowchart TD
+    boot(["boot"]) --> pend{"ota_pending<br/>set?"}
+    pend -- no --> normal(["normal start"])
+    pend -- yes --> count{"ota_boots >= 3?"}
+
+    count -- yes --> roll["set boot partition back<br/>clear ota_pending<br/>record rolledBack"]
+    roll --> rb(["reboot into the OLD image"])
+
+    count -- no --> inc["ota_boots++"] --> self{"self-check:<br/>PMU, display,<br/>GPS UART, card"}
+    self -- fails --> again(["reboot → counts towards 3"])
+    self -- passes --> ok["clear ota_pending<br/>esp_ota_mark_app_valid_cancel_rollback()"]
+    ok --> ack["next sync: POST /firmware/ack<br/>bootOk true"]
+    ack --> show(["'Updated to 0.10.0' + notes,<br/>until any button press"])
+
+    rb --> ackfail["next sync: ack rolledBack true"]
+    ackfail --> metric(["FirmwareBootFailed → unpromote"])
+```
+
+---
+
 ## Phase 0 — repartition · ✅ DONE (#256, 2026-09-19)
 
 Shipped, but **not** as sketched below the line. What actually went in:

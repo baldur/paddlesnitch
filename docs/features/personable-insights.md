@@ -1,6 +1,6 @@
 # Feature spec: Personable, memory-aware LLM commentary
 
-**Status:** 🚧 built, in local review (2026-08-03; branch `personable-insights-build`). Layers 1–3 implemented + wired; the model bump is documented + one-line-switchable but NOT flipped in prod (needs Bedrock verification). Verified end-to-end on the real local library via Ollama.
+**Status:** ✅ **shipped 2026-08 (#168, merged + deployed).** Originally written as: 🚧 built, in local review (2026-08-03; branch `personable-insights-build`). Layers 1–3 implemented + wired; the model bump is documented + one-line-switchable but NOT flipped in prod (needs Bedrock verification). Verified end-to-end on the real local library via Ollama.
 **Owners:** Baldur (product), Claude (implementation).
 **App:** `apps/analysis` (the analyse stack). Extends the existing insight in `src/lib/llm.ts`.
 

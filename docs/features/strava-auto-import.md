@@ -1,6 +1,8 @@
 # Strava auto-import (webhooks)
 
-🚧 **In progress — 2026-09-13.** New water-sport activities on a connected
+✅ **Shipped — 2026-09-13**, with ONE ops step outstanding: the Strava push subscription must be created once (`pnpm --filter web strava:webhook create`) or nothing arrives in production.
+
+🚧 **Originally in progress — 2026-09-13.** New water-sport activities on a connected
 athlete's Strava appear as paddles automatically, via the Strava **Webhook
 Events API** — no manual "FROM STRAVA" click. Builds on the existing on-demand
 import ([`paddle-analysis.md`](paddle-analysis.md)); reuses the same import

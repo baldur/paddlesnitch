@@ -1,6 +1,8 @@
 # Feature spec: QR onboarding — scan to join, scan to link
 
-**Status:** Phase 1 **built, not verified with a phone**. Phase 2 not started.
+**Status:** Phase 1 built. **The join half is verified on hardware with a phone**
+(scan → AP joined → captive portal → saved); the claim half is built but its QR
+has not yet been scanned. Phase 2 not started.
 Spec written 2026-09-19; Phase 1 implemented the same day.
 **Owner:** Baldur (product).
 **Related:** `firmware/src/netcfg.cpp` (the portal), `firmware/src/qr.{h,cpp}`,

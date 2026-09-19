@@ -1,6 +1,6 @@
 # Feature spec: hardware tracker uplink (device claim + session upload)
 
-**Status:** 📋 proposed — device side implemented, server side not started.
+**Status:** ✅ **shipped 2026-09 (#214/#215/#216)** — both sides. Since then the transport changed substantially: **every upload is chunked** (`?part=N&parts=M&sha256=`). See the Devices section of `CLAUDE.md` and [`device-screen-map.md`](device-screen-map.md).
 **Owner:** Baldur (product). App: `apps/att` (platform-level routes, served at the root).
 **Counterpart:** the `gps_device` repo — LilyGO T-Beam S3 Supreme firmware, device
 id `5A43CA48`. This document is the contract between the two; keep them in step.

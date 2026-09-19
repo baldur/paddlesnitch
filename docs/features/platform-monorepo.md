@@ -1,6 +1,9 @@
 # Platform: multi-app monorepo
 
-**Status: 🚧 planned (2026-07). Migration is gradual and in-place — see phases.**
+**Status: ✅ shipped 2026-08 — all phases A1–A5.** Then **superseded** by [`unified-app-and-api.md`](unified-app-and-api.md), which merged the two apps into one. This record describes the extraction that got us there.
+
+> **Since this was written:** `apps/att` + `apps/analysis` became the single `apps/web`, and the `/analyse` section moved to `/paddles` (old URLs 301). Paths below are as-built at the time; `CLAUDE.md` is authoritative for today.
+
 
 ## Why
 
