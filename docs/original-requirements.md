@@ -1,6 +1,22 @@
-# ATTS — Requirements
+# ATTS — the original requirements (historical)
 
-> Living document. Update as decisions are made. Implementation status tracked at the bottom.
+> **This is a historical record, not current behaviour.** It is the brief for
+> **ATTS**, the single-purpose time-trial app that became the `/att` section of
+> paddlesnitch. Kept because it is the origin story and shows what the product
+> was before it grew a session-analysis section and a hardware tracker.
+>
+> It called itself a living document and then stopped living, so several claims
+> are now **the opposite of the truth**:
+>
+> | It says | Actually |
+> |---|---|
+> | "Anyone can create a trial on any course" ✅ | Gated to a group's owner/admins |
+> | "No private courses or hidden results" | Visibility is public / private / group |
+> | Magic link auth ✅ built | Returns `501`; verify redirects `magic_disabled` |
+> | AWS production infrastructure 🔲 not built | Live on CloudFront + Lambda + CDK |
+> | UI redesign "light, minimal, dense" ✅ | The platform is **dark** |
+>
+> **[`CLAUDE.md`](../CLAUDE.md) is the source of truth for current behaviour.**
 
 ---
 
