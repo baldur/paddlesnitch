@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 // The target of the claim QR on the device's screen.
 //
 // Short on purpose. The QR is version 2 at ECC L, which holds exactly 32 bytes,
@@ -26,5 +24,15 @@ export async function GET(
   const target = clean
     ? `/profile/me/settings?code=${encodeURIComponent(clean)}#devices`
     : '/profile/me/settings#devices'
-  return NextResponse.redirect(new URL(target, process.env.NEXT_PUBLIC_SITE_URL ?? _req.url))
+  // A RELATIVE Location, deliberately. NextResponse.redirect() demands an
+  // absolute URL, and behind CloudFront -> Lambda `req.url` is the Lambda
+  // function URL, not paddlesnitch.com -- so building from it sent the user to
+  // `<hash>.lambda-url.eu-west-1.on.aws`. The auth cookie is scoped to
+  // paddlesnitch.com, so they would arrive SIGNED OUT, which breaks
+  // scan-to-link for precisely the people it exists for.
+  //
+  // HTTP allows a relative Location and the browser resolves it against what it
+  // asked for, which is the real hostname. That is origin-agnostic and needs no
+  // env var or header sniffing.
+  return new Response(null, { status: 307, headers: { Location: target } })
 }
