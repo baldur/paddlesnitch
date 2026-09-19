@@ -1,4 +1,5 @@
 #include "spibus.h"
+#include "dbg.h"
 
 // RECURSIVE, and that is load-bearing rather than lazy. Several card operations
 // legitimately nest -- computeCounts() walks the directory holding the bus and
@@ -24,6 +25,15 @@ bool spiBusTryTake()
     if (!g_bus) return true;
     if (xSemaphoreTakeRecursive(g_bus, 0) == pdTRUE) return true;
     g_skips++;
+    // Who actually has it? Rate-limited to once a second so the ring is not
+    // flooded. Diagnostic; remove once the answer is known.
+    static uint32_t lastWhine = 0;
+    if (millis() - lastWhine > 1000) {
+        lastWhine = millis();
+        TaskHandle_t h = xSemaphoreGetMutexHolder(g_bus);
+        DBGW("spibus", "skip; holder=%s skips=%lu",
+             h ? pcTaskGetName(h) : "(none)", (unsigned long)g_skips);
+    }
     return false;
 }
 
