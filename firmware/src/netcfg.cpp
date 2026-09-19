@@ -263,6 +263,12 @@ static String apPassword()
     return k;
 }
 
+static volatile bool g_apActive = false;
+
+String netApSsid() { return "PT-" + netDeviceId().substring(5); }
+String netApPass() { return apPassword(); }
+bool   netApActive() { return g_apActive; }
+
 bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
 {
     WebServer server(80);
@@ -280,11 +286,12 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
     // spec's own example payload used the 6-character form; the formula beside
     // it did not agree with it. Three hex characters is 4096 values, ample when
     // the only collision that matters is two devices in setup mode in one room.
-    String apName = "PT-" + netDeviceId().substring(5);
+    String apName = netApSsid();
     String apPass = apPassword();
 
     WiFi.mode(WIFI_AP_STA);          // STA side stays up so we can scan
     WiFi.softAP(apName.c_str(), apPass.c_str());
+    g_apActive = true;
     dns.start(53, "*", WiFi.softAPIP());
 
     Serial.printf("Portal: join WiFi \"%s\" pass \"%s\" then open http://%s/\n",
@@ -352,6 +359,7 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
     delay(500);                      // let the response flush before teardown
     server.stop();
     dns.stop();
+    g_apActive = false;
     WiFi.softAPdisconnect(true);
     return saved;
 }

@@ -902,15 +902,27 @@ static void handleSerialCommand()
             else if (!strncmp(buf, "QRTEST", 6)) {
                 qrTestHold = true;
                 const bool inv = strstr(buf, "INV") != nullptr;
-                const String pay = "WIFI:S:PT-" + netDeviceId().substring(5) +
-                                   ";T:WPA;P:testpass;;";
+                // The REAL credentials, not a plausible-looking fake. The first
+                // version of this encoded "testpass", so a phone that read the
+                // code perfectly still could not join anything.
+                const String pay = "WIFI:S:" + netApSsid() + ";T:WPA;P:" + netApPass() + ";;";
                 display.clearBuffer();
                 if (qrDraw(pay.c_str(), (128 - qrSizePx()) / 2, (64 - qrSizePx()) / 2, inv)) {
                     display.sendBuffer();
-                    Serial.printf("QRTEST %s: %s (%u bytes) -- centred, %dpx. "
-                                  "Any other command restores the UI.\n",
+                    Serial.printf("QRTEST %s: %s (%u bytes) -- centred, %dpx.\n",
                                   inv ? "INVERTED" : "normal", pay.c_str(),
                                   (unsigned)pay.length(), qrSizePx());
+                    // Say it plainly, because the failure is silent and looks
+                    // like the QR not working: the phone reads the code, hunts
+                    // for a network that is not on the air, and gives up
+                    // without saying anything.
+                    if (!netApActive()) {
+                        Serial.println("  NOTE: the AP is NOT broadcasting. This tests whether the");
+                        Serial.println("  code READS, nothing more -- scanning it will appear to do");
+                        Serial.println("  nothing. For an end-to-end join, open the portal instead:");
+                        Serial.println("  SETUP, or on the device Settings > Network > hold.");
+                    }
+                    Serial.println("  Any other command restores the UI.");
                 } else {
                     Serial.printf("QRTEST: payload %u bytes, too long\n", (unsigned)pay.length());
                 }

@@ -28,6 +28,17 @@ void netcfgSaveToken(const String &token);
 void netcfgSaveClaimSecret(const String &secret);
 void netcfgForget();
 
+// The setup AP's real credentials. Exposed so a scan test shows the payload
+// the portal will ACTUALLY broadcast rather than a plausible-looking fake --
+// the first version of that test encoded a made-up password, so a phone that
+// read it perfectly still could not join.
+// netApPass() mints and stores the key on first call; idempotent after that.
+String netApSsid();
+String netApPass();
+// Is the setup AP broadcasting right now? False outside netStartPortal(), which
+// is the difference between "the QR is readable" and "the QR does something".
+bool netApActive();
+
 bool netHasWifi();
 bool netIsClaimed();
 void netDisconnect();
