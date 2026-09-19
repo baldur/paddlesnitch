@@ -706,6 +706,13 @@ static void handleSerialCommand()
                                   okRead ? "complete" : "STALLED");
                 }
             }
+            // SDPROBE0 <file> — the same probe, but run BY THE UPLINK TASK.
+            // This is the control for the one thing measured and not explained:
+            // core 1 reads a file at 429 KB/s that core 0 cannot read at all.
+            else if (!strncmp(buf, "SDPROBE0 ", 9)) {
+                uplinkRequestProbe(buf + 9);
+                Serial.println("queued a core-0 probe; watch for SDPROBE0 lines");
+            }
             else if (!strncmp(buf, "SYNC", 4)) {
                 // ASKS the uplink task to sync; never syncs on this core. The task
                 // (core 0) is the single owner of the SD card and raises

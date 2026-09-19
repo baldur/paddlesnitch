@@ -21,6 +21,8 @@ static UplinkStatus      g_status;
 static volatile bool     g_yield   = false;   // "let go of the SD card"
 static volatile bool     g_syncNow = false;
 static volatile bool     g_countNow = false;  // recompute Sync-screen tallies
+static volatile bool     g_probeNow = false;  // run a card probe on THIS task
+static char              g_probeFile[64] = "";
 static volatile bool     g_deleteNow = false; // delete confirmed-uploaded files
 // Descriptive only now: the Sync screen and the recording-yield handshake ask
 // "is the uploader working the card?". It is NOT what keeps the IMU off the bus
@@ -688,6 +690,12 @@ bool uplinkYieldCard(uint32_t timeoutMs)
 }
 
 void uplinkResume()               { g_yield = false; }
+void uplinkRequestProbe(const char *filename)
+{
+    snprintf(g_probeFile, sizeof(g_probeFile), "%s", filename);
+    g_probeNow = true;
+}
+
 void uplinkRequestSync()          { g_syncNow = true; }
 void uplinkRequestCounts()        { g_countNow = true; }
 void uplinkRequestDeleteUploaded(){ g_deleteNow = true; }
@@ -708,6 +716,32 @@ static void uplinkTask(void *)
     uint32_t lastAttempt = 0;
 
     for (;;) {
+        // The core-0 control probe. Deliberately the first thing in the loop and
+        // outside every other branch, so it runs in the plainest possible task
+        // context -- no sync in progress, no listing, nothing else holding the
+        // bus. If this reads at 429 KB/s like the core-1 SDPROBE does, the task
+        // is not the variable and the fault is somewhere in what the sync does.
+        // If it stalls, the task context IS the variable.
+        if (g_probeNow) {
+            g_probeNow = false;
+            for (int phase = 0; phase < 2; phase++) {
+                if (phase == 0) { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); delay(300); }
+                else            { String why; netConnect(15000, &why); }
+                size_t bytes = 0; uint32_t ms = 0;
+                g_sdBusy = true;
+                bool okRead = storageProbeRead(g_probeFile, &bytes, &ms);
+                g_sdBusy = false;
+                Serial.printf("SDPROBE0 (core0) wifi=%s: %u bytes in %lums (%lu KB/s)  %s\n",
+                              phase == 0 ? "OFF" : "ON", (unsigned)bytes, (unsigned long)ms,
+                              (unsigned long)(ms ? bytes / ms : 0),
+                              okRead ? "complete" : "STALLED");
+                DBGI("probe", "core0 wifi=%s %u B in %lums %s",
+                     phase == 0 ? "off" : "on", (unsigned)bytes, (unsigned long)ms,
+                     okRead ? "ok" : "STALLED");
+            }
+            netDisconnect();
+        }
+
         // Local SD maintenance first -- counts and the manual delete need no
         // WiFi, and run only when the card is free (not recording, not yielded)
         // so SD access stays single-owner on this core.

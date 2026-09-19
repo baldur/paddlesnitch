@@ -73,6 +73,14 @@ UplinkStatus uplinkGetStatus();       // thread-safe snapshot
 bool uplinkYieldCard(uint32_t timeoutMs = 3000);
 void uplinkResume();
 
+// Runs storageProbeRead() ON THE UPLINK TASK (core 0) and prints the result,
+// radio off then associated. The point is the CONTROL: the SDPROBE serial
+// command runs the identical read on core 1 and gets 429 KB/s on a file the
+// uplink task cannot read at all. Same code, same card, same file -- the only
+// remaining variable is which task does the reading, and nothing so far
+// separates "core 0" from "something else the sync does". Non-blocking.
+void uplinkRequestProbe(const char *filename);
+
 // Kicks off a sync now (e.g. after linking). Non-blocking.
 void uplinkRequestSync();
 
