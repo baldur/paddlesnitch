@@ -12,6 +12,7 @@
 static SemaphoreHandle_t g_bus = nullptr;
 static uint32_t          g_skips = 0;
 static uint32_t          g_timeouts = 0;
+static uint32_t          g_unguarded = 0;  // calls that touched the bus without the lock
 
 void spiBusInit()
 {
@@ -48,6 +49,26 @@ bool spiBusTake(uint32_t timeoutMs)
 void spiBusGive()
 {
     if (g_bus) xSemaphoreGiveRecursive(g_bus);
+}
+
+bool spiBusHeldByMe()
+{
+    if (!g_bus) return true;
+    return xSemaphoreGetMutexHolder(g_bus) == xTaskGetCurrentTaskHandle();
+}
+
+uint32_t spiBusUnguarded() { return g_unguarded; }
+
+void spiBusAssertHeld(const char *who)
+{
+    if (spiBusHeldByMe()) return;
+    g_unguarded++;
+    // Rate-limited: an unguarded call in a 4 Hz path would otherwise fill the
+    // ring and hide everything else.
+    static uint32_t last = 0;
+    if (millis() - last < 1000) return;
+    last = millis();
+    DBGE("spibus", "UNGUARDED sdSPI access in %s (n=%lu)", who, (unsigned long)g_unguarded);
 }
 
 uint32_t spiBusSkips()    { return g_skips; }

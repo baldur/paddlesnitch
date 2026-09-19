@@ -30,7 +30,14 @@ struct ImuRaw {
 bool imuInit();
 bool imuReady();
 void imuPoll();                       // cheap; call every loop iteration
-ImuSample imuSnapshot();              // read peaks and reset the window
+ImuSample imuSnapshot();              // read peaks AND close the window
+// Same reading, WITHOUT closing the window. For anything that just displays the
+// numbers. Getting this wrong is not cosmetic: the UI refreshes at 4 Hz, so
+// while it called imuSnapshot() every 1 Hz CSV row carried the peak over the
+// last ~250 ms instead of the last second, and `imu_samples` logged 10-11 where
+// the design intent is 43-50. Confirmed in real uploaded data before the fix.
+// There must be exactly ONE window-closing consumer: the logger.
+ImuSample imuPeek();
 
 // Drains the single most-recent ~50 Hz sample, if one arrived since the last
 // call. Returns false when there is nothing new. The caller (the recording loop)

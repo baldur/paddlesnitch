@@ -150,6 +150,30 @@ static void report(const char *name, bool ok, const char *detail = "")
     Serial.printf("  %-8s %s %s\n", name, ok ? "[ ok ]" : "[FAIL]", detail);
 }
 
+// Reads MISO as a plain GPIO under an internal pull-up and then a pull-down.
+// A free line follows the pull (1 then 0); a driven line -- OR a line with an
+// external pull-up resistor stronger than the ESP32's ~45k internal pull-down
+// -- reads the same under both. That ambiguity is exactly why this is sampled
+// at three points during bring-up rather than once: if MISO already reads
+// "driven" BEFORE either chip is initialised, it is a board pull-up and means
+// nothing. If it goes from free to driven at imuInit, the sensor is holding it;
+// at storageInit, the card is.
+static void misoCheck(const char *when)
+{
+    pinMode(SPI_MISO, INPUT_PULLUP);
+    delayMicroseconds(200);
+    int hi = digitalRead(SPI_MISO);
+    pinMode(SPI_MISO, INPUT_PULLDOWN);
+    delayMicroseconds(200);
+    int lo = digitalRead(SPI_MISO);
+    // Hand the pad back to the SPI peripheral rather than leaving it a bare
+    // INPUT. This is a PR about not disturbing the bus.
+    sdSPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, -1);
+    const char *verdict = (hi == 1 && lo == 0) ? "free" : "driven/pulled";
+    Serial.printf("MISO @%-16s pullup=%d pulldown=%d -> %s\n", when, hi, lo, verdict);
+    DBGI("miso", "%s pu=%d pd=%d %s", when, hi, lo, verdict);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -447,6 +471,7 @@ static void linkAttempt()
     netDisconnect();
 }
 
+
 static bool deviceUsable() { return netHasWifi() && netIsClaimed(); }
 
 static void enterScreen(Screen s)
@@ -658,8 +683,9 @@ static void handleSerialCommand()
                 dbgStats(kept, lost, bytes);
                 Serial.printf("debug    %lu entries (%lu overwritten, %luKB ring) -- DBG to dump\n",
                               (unsigned long)kept, (unsigned long)lost, (unsigned long)(bytes / 1024));
-                Serial.printf("spibus   %lu imu skips, %lu take timeouts\n",
-                              (unsigned long)spiBusSkips(), (unsigned long)spiBusTimeouts());
+                Serial.printf("spibus   %lu imu skips, %lu take timeouts, %lu UNGUARDED\n",
+                              (unsigned long)spiBusSkips(), (unsigned long)spiBusTimeouts(),
+                              (unsigned long)spiBusUnguarded());
                 uplinkRequestCounts();   // refresh for the next STATUS
             }
             // DBG dumps the flight recorder; DBG CLEAR empties it. The point of
@@ -709,6 +735,128 @@ static void handleSerialCommand()
             // SDPROBE0 <file> — the same probe, but run BY THE UPLINK TASK.
             // This is the control for the one thing measured and not explained:
             // core 1 reads a file at 429 KB/s that core 0 cannot read at all.
+            // MISOTEST — is anything still driving MISO with every CS high?
+            //
+            // Park both chip selects, then read MISO as a plain GPIO with the
+            // internal pull-up and again with the pull-down. A properly
+            // tri-stated line FOLLOWS the pull (reads 1 then 0). A line someone
+            // is still driving reads the SAME under both. Run after an SD access
+            // and after an IMU access to see which device, if either, holds on.
+            //
+            // Worth knowing before blaming the sensor: SD cards in SPI mode are
+            // documented NOT to release DO when CS goes high -- they need eight
+            // further clocks first -- and Arduino SD.h does not reliably issue
+            // them. So the card is at least as likely to be the one holding the
+            // line during an IMU read.
+            else if (!strncmp(buf, "MISOTEST", 8)) {
+                SpiBusGuard bus(3000);
+                if (!bus) { Serial.println("MISOTEST: bus busy"); }
+                else {
+                    digitalWrite(SPI_CS, HIGH);
+                    digitalWrite(IMU_CS, HIGH);
+                    delayMicroseconds(50);
+                    pinMode(SPI_MISO, INPUT_PULLUP);
+                    delayMicroseconds(200);
+                    int hi = digitalRead(SPI_MISO);
+                    pinMode(SPI_MISO, INPUT_PULLDOWN);
+                    delayMicroseconds(200);
+                    int lo = digitalRead(SPI_MISO);
+                    pinMode(SPI_MISO, INPUT);
+                    Serial.printf("MISOTEST pullup=%d pulldown=%d -> %s\n", hi, lo,
+                                  (hi == 1 && lo == 0) ? "tri-stated (line is free)"
+                                                       : "DRIVEN (something is holding MISO)");
+                    DBGI("miso", "pullup=%d pulldown=%d %s", hi, lo,
+                         (hi == 1 && lo == 0) ? "free" : "DRIVEN");
+                }
+            }
+            // MISOCLOCK — the mitigation for the SD-holds-DO case: raise CS and
+            // clock out one 0xFF byte, then retest. If MISO frees only after
+            // this, the card was the one holding the line and every handover
+            // needs the same eight clocks.
+            // MISORELEASE — how many dummy bytes, if any, make the card let go.
+            // FatFs deselect() sends exactly one; if that is not enough here,
+            // the question is whether N is merely larger or whether this card
+            // never releases, which decides if a software mitigation exists.
+            // MISOSCAN — powers each chip separately and reports who holds MISO.
+            // A COMMAND, not boot code: it cycles the sensor and card rails, and
+            // a PR about not disturbing the bus has no business doing that on
+            // every boot. Re-mounts the card afterwards.
+            //
+            // Reading it: "rails-off free" means there is no board pull-up, so
+            // the method works at all. Then whichever single rail turns the line
+            // to "driven/pulled" is the chip presenting something -- though note
+            // an internal pull-up on the card's DO reads identically to the card
+            // actively driving, and the ESP32's ~45k internal pull-down is too
+            // weak to separate those. Distinguishing them needs a scope or a
+            // stronger external pull-down.
+            else if (!strncmp(buf, "MISOSCAN", 8)) {
+                SpiBusGuard bus(5000);
+                if (!bus) { Serial.println("MISOSCAN: bus busy"); }
+                else {
+                    storageClose();
+                    digitalWrite(IMU_CS, HIGH); digitalWrite(SPI_CS, HIGH);
+                    PMU.disableALDO1(); PMU.disableALDO2(); PMU.disableBLDO1();
+                    delay(250); misoCheck("rails-off");
+                    PMU.enableALDO1(); PMU.enableALDO2();
+                    delay(250); misoCheck("imu-only");
+                    PMU.disableALDO1(); PMU.disableALDO2();
+                    delay(150);
+                    PMU.enableBLDO1();
+                    delay(250); misoCheck("sd-only");
+                    PMU.enableALDO1(); PMU.enableALDO2();
+                    delay(300); misoCheck("both-rails");
+                    Serial.println("MISOSCAN: remounting card + IMU");
+                }
+                imuInit();
+                storageInit();
+            }
+            else if (!strncmp(buf, "MISORELEASE", 11)) {
+                SpiBusGuard bus(3000);
+                if (!bus) { Serial.println("MISORELEASE: bus busy"); }
+                else {
+                    digitalWrite(SPI_CS, HIGH);
+                    digitalWrite(IMU_CS, HIGH);
+                    sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+                    for (int n = 1; n <= 64; n++) {
+                        sdSPI.transfer(0xFF);
+                        if (n != 1 && n != 2 && n != 4 && n != 8 && n != 16 && n != 32 && n != 64) continue;
+                        sdSPI.endTransaction();
+                        pinMode(SPI_MISO, INPUT_PULLDOWN);
+                        delayMicroseconds(200);
+                        int lo = digitalRead(SPI_MISO);
+                        sdSPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, -1);
+                        Serial.printf("MISORELEASE after %2d byte(s): pulldown=%d %s\n",
+                                      n, lo, lo == 0 ? "<-- RELEASED" : "still driven");
+                        if (lo == 0) break;
+                        sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+                    }
+                    sdSPI.endTransaction();
+                }
+            }
+            else if (!strncmp(buf, "MISOCLOCK", 9)) {
+                SpiBusGuard bus(3000);
+                if (!bus) { Serial.println("MISOCLOCK: bus busy"); }
+                else {
+                    digitalWrite(SPI_CS, HIGH);
+                    digitalWrite(IMU_CS, HIGH);
+                    sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+                    sdSPI.transfer(0xFF);          // the eight release clocks
+                    sdSPI.endTransaction();
+                    delayMicroseconds(50);
+                    pinMode(SPI_MISO, INPUT_PULLUP);
+                    delayMicroseconds(200);
+                    int hi = digitalRead(SPI_MISO);
+                    pinMode(SPI_MISO, INPUT_PULLDOWN);
+                    delayMicroseconds(200);
+                    int lo = digitalRead(SPI_MISO);
+                    pinMode(SPI_MISO, INPUT);
+                    Serial.printf("MISOCLOCK pullup=%d pulldown=%d -> %s\n", hi, lo,
+                                  (hi == 1 && lo == 0) ? "freed by the release clocks"
+                                                       : "STILL DRIVEN");
+                    DBGI("miso", "after 0xFF: pullup=%d pulldown=%d %s", hi, lo,
+                         (hi == 1 && lo == 0) ? "freed" : "still driven");
+                }
+            }
             else if (!strncmp(buf, "SDPROBE0 ", 9)) {
                 uplinkRequestProbe(buf + 9);
                 Serial.println("queued a core-0 probe; watch for SDPROBE0 lines");
@@ -934,7 +1082,13 @@ void loop()
         u.sdSizeMB    = storageCardSizeMB();
         u.imuOk       = imuReady();
         {
-            ImuSample m = imuSnapshot();
+            // PEEK, never snapshot. This block runs at 4 Hz and imuSnapshot()
+            // closes the accumulation window as a side effect, so calling it
+            // here made every 1 Hz CSV row report the peak over ~250 ms instead
+            // of the last second -- `imu_samples` logged 10-11 against a design
+            // intent of 43-50, confirmed in real uploaded data. The logger at
+            // 1 Hz is the one and only window-closing consumer.
+            ImuSample m = imuPeek();
             u.imuTempC   = m.tempC;
             u.imuSamples = m.samples;
         }

@@ -9,6 +9,7 @@ static SensorQMI8658 qmi;
 static bool ready = false;
 
 static float    accelMagMax = 0, gyroMagMax = 0;
+static float    lastTempC = 0;   // reported when the bus is busy; the value is cosmetic
 static uint32_t windowSamples = 0;
 static float    lastAx = 0, lastAy = 0, lastAz = 0;
 static float    lastGx = 0, lastGy = 0, lastGz = 0;
@@ -28,10 +29,13 @@ static const uint32_t DEAD_AFTER_MS = 3000;
 static uint32_t lastGoodMs = 0;
 
 // WHO_AM_I in a given SPI mode, for diagnosis. Deliberately separate from
-// board.cpp's imuReadReg, which is hardcoded to mode 3 — the point here is to
+// board.cpp's imuReadReg, which is also mode 0 now — the point here is to
 // find out whether the mode is what has been wrong.
 static uint8_t imuWhoAmI(uint8_t spiMode)
 {
+    // A leaf that issues a real transfer, so the assert belongs HERE rather than
+    // beside an acquisition where it cannot fire.
+    spiBusAssertHeld("imuWhoAmI");
     sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, spiMode));
     digitalWrite(IMU_CS, LOW);
     sdSPI.transfer(0x00 | 0x80);
@@ -58,13 +62,20 @@ bool imuInit()
             PMU.enableALDO1();  PMU.enableALDO2();
             delay(300);
         }
-        // Read WHO_AM_I both ways before handing over to the library. The chip
-        // supports SPI mode 0 and mode 3, and the probe has only ever tried mode
-        // 3 — so "no response" may have meant "asked in the wrong mode". 0x05 is
-        // the QMI8658's expected answer at register 0x00.
-        Serial.printf("IMU: pre-init who_am_i  mode3=0x%02X  mode0=0x%02X\n",
-                      imuWhoAmI(SPI_MODE3), imuWhoAmI(SPI_MODE0));
-        if (!qmi.begin(sdSPI, IMU_CS, SPI_MOSI, SPI_MISO, SPI_SCK)) continue;
+        // Read WHO_AM_I before handing over to the library. 0x05 is the
+        // QMI8658's expected answer at register 0x00. Mode 0 only now: modes 0
+        // and 3 both sample on the rising edge and this read returned the same
+        // value either way, so probing both proved nothing and only kept a
+        // second clock polarity alive on a shared bus.
+        //
+        // Holding the bus across the probe AND the library's own init: both
+        // drive IMU_CS, and the rule is that nothing touches sdSPI without it.
+        {
+            SpiBusGuard bus(3000);
+            if (!bus) { DBGE("imu", "bus busy during init"); continue; }
+            Serial.printf("IMU: pre-init who_am_i  mode0=0x%02X\n", imuWhoAmI(SPI_MODE0));
+            if (!qmi.begin(sdSPI, IMU_CS, SPI_MOSI, SPI_MISO, SPI_SCK)) continue;
+        }
 
         Serial.printf("IMU: QMI8658 chip id 0x%02X\n", qmi.getChipID());
 
@@ -180,7 +191,8 @@ bool imuTakeRaw(ImuRaw &out)
     return true;
 }
 
-ImuSample imuSnapshot()
+// The shared body. `closeWindow` is what separates the logger from the display.
+static ImuSample imuRead(bool closeWindow)
 {
     ImuSample s;
     if (!ready) return s;
@@ -189,11 +201,28 @@ ImuSample imuSnapshot()
     s.gx = lastGx; s.gy = lastGy; s.gz = lastGz;
     s.accelMagMax = accelMagMax;
     s.gyroMagMax  = gyroMagMax;
-    s.tempC       = qmi.getTemperature_C();
+
+    // getTemperature_C() is a REAL SPI transaction, and this runs from the 4 Hz
+    // UI refresh. It was the largest hole in the arbitration: imuPoll() was
+    // locked and this was not, so four times a second IMU_CS went low on a bus
+    // the uploader might have been holding mid-sequence. Try, and report a
+    // stale temperature rather than block the UI -- the value is cosmetic.
+    if (spiBusTryTake()) {
+        s.tempC = qmi.getTemperature_C();
+        spiBusGive();
+        lastTempC = s.tempC;
+    } else {
+        s.tempC = lastTempC;
+    }
     s.samples     = windowSamples;
 
-    accelMagMax = 0;
-    gyroMagMax  = 0;
-    windowSamples = 0;
+    if (closeWindow) {
+        accelMagMax = 0;
+        gyroMagMax  = 0;
+        windowSamples = 0;
+    }
     return s;
 }
+
+ImuSample imuSnapshot() { return imuRead(true); }    // the 1 Hz logger, and only it
+ImuSample imuPeek()     { return imuRead(false); }   // the UI
