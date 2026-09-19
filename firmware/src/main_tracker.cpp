@@ -696,6 +696,30 @@ static void handleSerialCommand()
             // retrying a failing card starves every diagnostic that could say
             // why -- exactly the hole this fell into on 19 Sep, when CAT could
             // not read a file the uploader had already failed to send.
+            // HELP. Eighteen commands with no way to list them is its own bug.
+            // Not a command table -- CLAUDE.md favours flatness and warns off
+            // speculative abstraction, and the strncmp chain has no live prefix
+            // collision (checked: "SDPROBE " carries a trailing space, so
+            // SDPROBE0 falls through correctly). This is the cheap half.
+            else if (!strncmp(buf, "HELP", 4) || buf[0] == '?') {
+                Serial.println(F(
+                    "STATUS            state, counts, spibus + debug-ring stats\n"
+                    "SETUP / SCAN      captive portal / list WiFi networks\n"
+                    "SSID <n>          rest of line is the name (may contain spaces)\n"
+                    "PASS <s>          rest of line is the secret\n"
+                    "FORGET            clear WiFi credentials\n"
+                    "SYNC              ask the uplink task to sync now\n"
+                    "HOLD / RESUME     take the SD card off the uploader / give it back\n"
+                    "LS                list files on the card\n"
+                    "CAT <f>           dump a file (framed <<<CAT>>> .. <<<END>>>)\n"
+                    "SDPROBE <f>       read a file on CORE 1, radio off then on\n"
+                    "SDPROBE0 <f>      the same read on CORE 0 (the uplink task)\n"
+                    "DBG [CLEAR]       dump / clear the flight recorder\n"
+                    "MISOSCAN          who holds MISO: cycles the sensor + card rails\n"
+                    "MISOTEST          is MISO driven right now?\n"
+                    "MISOCLOCK         retest after one 0xFF release byte\n"
+                    "MISORELEASE       sweep 1..64 release bytes\n"));
+            }
             else if (!strncmp(buf, "HOLD", 4)) {
                 Serial.println(uplinkYieldCard(5000) ? "uploader released the card"
                                                      : "uploader did not let go in 5s");
@@ -1092,6 +1116,7 @@ void loop()
             u.imuTempC   = m.tempC;
             u.imuSamples = m.samples;
         }
+        u.droppedRows = storageDroppedRows();
         u.stopArmed   = stopArmed;
         u.speedUnit   = speedUnit;
         u.strokeRateSpm = -1;          // on-device stroke-rate derivation is TBD

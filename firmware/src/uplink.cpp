@@ -1,5 +1,6 @@
 #include "uplink.h"
 #include "spibus.h"
+#include "naming.h"
 #include "dbg.h"
 #include "netcfg.h"
 #include "mbedtls/sha256.h"
@@ -349,15 +350,10 @@ static bool uploadOne(WiFiClientSecure &client, const String &path, const String
 
 // An uploadable session file: track_*.csv, but NOT the raw motion-capture
 // sidecar track_*_imu.csv, which is uploaded separately and decimated first.
-static bool isTrackUpload(const String &name)
-{
-    // Must exclude BOTH sidecar suffixes. _i10.csv was added later and this
-    // predicate was not updated, so the upload-rate file was being uploaded as a
-    // track — which is why the chunked sidecar path never ran at all, and why
-    // every failure looked like a whole-file read of 2383054 bytes.
-    return name.startsWith("track_") && name.endsWith(".csv")
-        && !name.endsWith("_imu.csv") && !name.endsWith("_i10.csv");
-}
+// Thin wrappers over naming.h, which is host-tested. The predicates themselves
+// deliberately live outside this file: getting one wrong here cost a full
+// debugging session, and `pio test -e native` now catches that in 0.5s.
+static bool isTrackUpload(const String &name) { return nameIsTrackUpload(name.c_str()); }
 
 // The raw motion sidecar. Uploaded AFTER the tracks (the server attaches it to an
 // already-uploaded session and answers 409 otherwise), and never auto-deleted:
@@ -395,7 +391,7 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
         probe.close();
     }
     if (total == 0) return false;
-    const int parts = (int)((total + UPLOAD_CHUNK - 1) / UPLOAD_CHUNK);
+    const int parts = chunkCount(total, UPLOAD_CHUNK);
 
     uint8_t *buf = (uint8_t *)ps_malloc(UPLOAD_CHUNK);
     if (!buf) { Serial.println("  no PSRAM for a chunk"); return false; }
@@ -409,7 +405,7 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
         // Published BEFORE the read, not after the POST: the read is the step
         // that used to stall, so the screen has to name the chunk it is stuck on.
         statusProgress(name.c_str(), part, parts);
-        size_t want = (part == parts) ? (total - (size_t)(part - 1) * UPLOAD_CHUNK) : UPLOAD_CHUNK;
+        const size_t want = chunkLength(total, UPLOAD_CHUNK, part);
         // Open, seek, read, CLOSE — once per chunk, with no HTTP in between.
         //
         // The file used to stay open across all 37 requests, and that is what was
@@ -507,17 +503,15 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
     return ok;
 }
 
-static bool isMotionUpload(const String &name)
-{
-    return name.startsWith("track_") && name.endsWith("_i10.csv");
-}
+static bool isMotionUpload(const String &name) { return nameIsMotionUpload(name.c_str()); }
 
 // track_<stamp>_i10.csv -> the name the SERVER keys the sidecar by. It attaches a
 // sidecar to the track of the matching name, so the on-card name and the uploaded
 // name deliberately differ.
 static String motionUploadName(const String &local)
 {
-    return local.substring(0, local.length() - strlen("_i10.csv")) + "_imu.csv";
+    char out[64];
+    return nameMotionUploadName(local.c_str(), out, sizeof(out)) ? String(out) : String();
 }
 
 // Tallies the sessions on the card for the Sync screen: how many track files
@@ -772,11 +766,15 @@ static void uplinkTask(void *)
         UplinkStatus st;
         String why;
         st.wifiUp = netConnect(15000, &why);
-        // Drop transmit power once associated. Not for range — for CURRENT. With
-        // no cell fitted the board runs off USB through the PMU, and WiFi TX peaks
-        // look like the thing breaking SD reads: the same card streams an 8.19 MB
-        // file over CAT with the radio idle, but stalls dead after ~90 KB with it
-        // associated. 11 dBm is ample for a device that only syncs at home.
+        // Drop transmit power once associated. Kept for CURRENT, not range: a
+        // device that only ever syncs at home needs nothing more, and less TX
+        // current is free.
+        //
+        // The reason originally written here -- that WiFi TX peaks were breaking
+        // SD reads -- is FALSE and was measured to be false: SDPROBE reads the
+        // same 818630-byte file at 429 KB/s with the radio off and 429 KB/s with
+        // it associated. Deleted rather than annotated, because a stale claim in
+        // a comment is read as authoritative and steers the next fix wrong.
         if (st.wifiUp) { WiFi.setTxPower(WIFI_POWER_11dBm); DBGI("wifi", "up %s", WiFi.localIP().toString().c_str()); }
         if (!st.wifiUp) {
             DBGW("wifi", "connect failed: %s", why.c_str());
