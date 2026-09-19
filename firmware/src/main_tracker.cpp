@@ -267,7 +267,20 @@ void setup()
 
     // A device with no credentials cannot be set up without this: the portal
     // needs the display and blocks, so it cannot live in the background task.
-    if (!netHasWifi()) netBringUp();
+    //
+    // ALSO when credentials exist but have NEVER worked. netBringUp() already
+    // reopens the portal in that case and says why -- but it was only called
+    // when there were no credentials at all, so a device saved with a wrong
+    // password never reached that path. It sat on the claim screen retrying an
+    // association that could not succeed, with no route back to setup except
+    // knowing to hold on Settings > Network. A password that has never once
+    // worked is not a flaky router, it is wrong, and the answer is the portal
+    // and its join QR.
+    //
+    // Deliberately NOT on every failure: once these credentials HAVE worked,
+    // a failure means the device is away from home, and hijacking it into
+    // setup mode when it should be out tracking would be worse than useless.
+    if (!netHasWifi() || !netcfg.everConnected) netBringUp();
 
     uplinkTaskStart();   // core 0; the UI and logging keep running on core 1
     // linkAttempt() can block for minutes while polling for the claim code, and
