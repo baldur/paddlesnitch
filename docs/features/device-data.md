@@ -252,6 +252,20 @@ retry, not mark it done, which is why sidecars upload in a second pass after eve
 track. `MAX_BYTES` is 4 MB; a Lambda function URL tops out near 6 MB, so this can
 be raised but never removed.
 
+Both files arrive **chunked** — `&part=N&parts=M&sha256=<hex>`, 64 KB a part, 202
+per part and 201 once the whole thing is assembled and handled. That is a pure
+transport wrapper: the assembled buffer takes exactly the path a single-shot
+upload would. It applies to the **track** as much as to the sidecar, which matters
+more than it sounds — a sidecar cannot attach until its track has landed, so
+chunking sidecars alone would have bought nothing. Two constraints ruled out S3's
+own multipart: objects are immutable (there is no append), and every part but the
+last must be ≥5 MB, which is larger than these entire files. Hence parts as
+ordinary objects under `devices/{deviceId}/parts/{filename}/`, concatenated
+server-side; the `sha256` is checked over the assembled whole, because building a
+file out of pieces introduces a silent-corruption path a single PUT never had.
+Because the track check happens at assembly, a sidecar whose track is missing 409s
+on its **last** part, not its first.
+
 Result on real data: **58.0 spm**, 22 windows, all alternating, r = 0.64–0.83.
 
 ## Open questions for paddlesnitch

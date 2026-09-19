@@ -254,11 +254,25 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   (`deleteConfirmedAll`, via the Sync screen), and **`uplinkSdBusy()`**: the IMU and
   SD share the SPI bus, so the loop skips `imuPoll()` while the task scans/syncs/
   deletes (see the IMU/SD note below). Sync fires at boot, on recording-stop, on a
-  `sync now` tap, and every 5 min — never while recording.
+  `sync now` tap, and every 5 min — never while recording. **Every upload goes
+  through `uploadChunked`** (`&part=N&parts=M`, 64 KB a part, `sha256` on the
+  final part), tracks included: the device cannot read a large file off its own
+  card in one uninterrupted go while HTTP is in flight, so each chunk does its own
+  open/seek/read/**close** and nothing holds a card handle across a TLS round trip.
+  Holding one File open across all 37 requests is what failed before.
 
 Serial commands (tracker env): `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
-`PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`. `SSID`/`PASS` take the
-**rest of the line**, not a space-split token — both can contain spaces.
+`PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`.
+`SSID`/`PASS` take the **rest of the line**, not a space-split token — both can
+contain spaces.
+
+**`SDPROBE <file>` is the tool to reach for before theorising about the card.**
+It reads a file to completion in 64 KB chunks with the radio off, then again
+associated, and prints bytes/ms/KB-per-second for each. On the reference card it
+streams 2.38 MB at 430 KB/s both ways — which is how "the SD card cannot keep up"
+and "WiFi is starving the bus" were both ruled out after several confident wrong
+diagnoses. `LS` and `CAT` still **race the uplink task** for the card; run them
+when a sync is not in flight.
 
 **SSIDs are case-sensitive, and phone keyboards capitalise the first letter.**
 `Kruttnet` vs `kruttnet` cost a debugging round trip: the symptom is
@@ -382,8 +396,8 @@ is set from GPS on the first fix; the CSV columns are unchanged.
 
 The full-rate file **stays on the card** (delete-uploaded and the Sync counts
 still skip it) and is **never uploaded**. What gets uploaded is a second file,
-`track_<stamp>_i10.csv`, written **during recording** at ~11 Hz alongside the 50 Hz
-one — one extra row every 90 ms, which costs nothing next to the full-rate write.
+`track_<stamp>_i10.csv`, written **during recording** at ~12 Hz alongside the 50 Hz
+one — one extra row every 80 ms, which costs nothing next to the full-rate write.
 
 Three things there are load-bearing:
 
@@ -396,12 +410,18 @@ Three things there are load-bearing:
 - **Gate on TIME, not every Nth sample.** Measured against a real session, cadence
   comes out within 0.5 % at 10.9 Hz and **19.8 % low at 8.7 Hz**. The poll is
   nominally 50 Hz but really runs at ~43.7 Hz, so "every 5th sample" lands in the
-  bad half. `UP_INTERVAL_MS = 90` holds ~11 Hz whatever the poll achieves.
+  bad half. `UP_INTERVAL_MS = 80` holds ~12 Hz whatever the poll achieves.
 - **The on-card name and the uploaded name differ on purpose.** The server keys a
   sidecar to the track of the matching name, so `track_<stamp>_i10.csv` is uploaded
   as `track_<stamp>_imu.csv` (`uploadOne` takes path and name separately). Sidecars
   upload in a **second pass after every track**, because the server answers 409
   when the track has not arrived yet — and a sidecar's 409 must not be marked done.
+- **`isTrackUpload` must exclude every sidecar suffix.** This is the bug that cost
+  a whole debugging session: introducing `_i10.csv` without adding it to the
+  exclusion meant the *track* pass picked sidecars up and the chunked path never
+  ran at all. The predicate is `startsWith("track_") && endsWith(".csv") &&
+  !endsWith("_imu.csv") && !endsWith("_i10.csv")` — add a suffix here whenever you
+  add one to the recorder.
 
 Sidecars recorded before 0.6.0 have no `_i10` file and will not upload; the
 full-rate file is still on the card if one is ever wanted.
