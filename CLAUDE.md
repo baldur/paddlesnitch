@@ -106,7 +106,9 @@ packages/
 firmware/     LilyGO T-Beam S3 Supreme tracker firmware — C/C++, built with PlatformIO, NOT pnpm
 ```
 
-**`firmware/` is not a workspace package.** It's the hardware tracker's PlatformIO project (`pio run -e tracker|receiver|displayprobe`), deliberately outside the `apps/*`/`packages/*` globs — it has no `package.json`, `pnpm install`/`pnpm test`/`pnpm build` do not touch it, and its `.pio/` build output (~750 MB) is gitignored. Its contract with the platform lives in [`docs/features/device-uplink.md`](docs/features/device-uplink.md) + [`device-data.md`](docs/features/device-data.md) (see the Devices section under Ops); keep firmware and those specs in step. `firmware/CLAUDE.md` covers the firmware itself.
+**`firmware/` is not a workspace package.** It's the hardware tracker's PlatformIO project (`pio run -e tracker|receiver|displayprobe`), deliberately outside the `apps/*`/`packages/*` globs — it has no `package.json`, `pnpm install`/`pnpm test`/`pnpm build` do not touch it, and its `.pio/` build output (~750 MB) is gitignored. Its contract with the platform lives in [`docs/features/device-uplink.md`](docs/features/device-uplink.md) + [`device-data.md`](docs/features/device-data.md) (see the Devices section under Ops); keep firmware and those specs in step. `firmware/CLAUDE.md` covers the firmware itself, and `firmware/docs/` holds its
+specs — `device-states-spec.md` (screens, the one-meaning-per-gesture contract,
+and the bench acceptance walk-through) and `motion-capture-spec.md`.
 
 One Cognito user pool, one S3 bucket, one CloudFront distribution, **one server Lambda** (`ServerFn`) serving everything. Locally it's **one port** — `pnpm dev` → :3000 serves `/att`, `/analyse`, `/profile`, and `/api/trpc`. (There is no more `pnpm dev:analysis`.)
 
@@ -202,6 +204,17 @@ account               DELETE — full account erasure (GDPR Art. 17)
 account/profile       GET / PATCH — read or set the viewer's profile visibility ({ public: boolean }); profiles are opt-in (private by default)
 account/handle        GET (?check=) / PUT / DELETE — check availability, claim/change, or release the viewer's vanity profile handle
 ```
+
+**Platform-level route: `GET /l/:code`** (`apps/web/src/app/l/[code]/route.ts`) —
+the target of the QR on a device's claim screen. Normalises the code and
+redirects to `/profile/me/settings?code=…#devices`. `/L/:code` redirects to it
+(next.config) because the QR payload is **uppercase** — that is what puts it in
+QR alphanumeric mode and drops the code to version 1, which is what makes it
+scannable on a 64 px panel. Two things are load-bearing: the path stays **short**
+(the payload has 32 bytes and `https://` alone is 8 of them), and the redirect
+`Location` is **relative** — building an absolute URL from `req.url` sends the
+user to the raw Lambda hostname, where the `tt_id` cookie does not apply and a
+signed-in user arrives signed out.
 
 **Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId.
 
@@ -900,6 +913,16 @@ Pattern: pure lib functions get unit tests; API routes get integration tests aga
 
 Run: `pnpm test`
 
+**Firmware has a host test environment now** — `cd firmware && pio test -e native`,
+~0.5 s, no board. It compiles only `src/naming.cpp` (the pure track-vs-sidecar
+predicates and the chunk maths) against `firmware/test/`. It exists because
+`isTrackUpload` not excluding the `_i10.csv` suffix cost a full debugging
+session and five wrong diagnoses; that is now three lines of test that run
+before the first flash. **Pure logic that has burned us belongs there.** Anything
+needing Arduino, the SD card or the radio stays in a hardware env — `[env]` was
+split into `[hw]` precisely so `native` inherits neither a board nor the arduino
+framework.
+
 ### Test pyramid
 
 Two tiers. Don't blur them — they catch different bugs and the cost profiles are very different.
@@ -975,6 +998,13 @@ Maps: dark tiles (Esri World Dark Gray); att maps still default to light with a 
 - Start/finish lines: exactly `[[lat, lng], [lat, lng]]`.
 - Course distance: auto-calculated (Haversine between midpoints of start and finish lines). Not stored as user input.
 - `next/dynamic` with `{ ssr: false }` must only appear inside `'use client'` components. Use `CourseMapClient.tsx` pattern.
+- **`src/proxy.ts` puts `pathname + search` in `next`, not just the path.** It
+  used to set the pathname alone while the cloned URL kept the original query,
+  so `/profile/me/settings?code=ABC123` redirected to
+  `/att/auth?code=ABC123&next=/profile/me/settings` and the parameter was
+  silently dropped on the way back. That broke device scan-to-link for anyone
+  not already signed in, and it affected every gated page with a query string.
+  Covered by a regression test in `proxy.test.ts`.
 - **Never store `useSearchParams()` values in `useState`** — the state initialises before the effect that reads params, causing race conditions. Derive values directly: `const next = searchParams.get('next') ?? '/att'`.
 - **Route prefix `/att` is baked into the source** (`src/app/att/`) — no Next.js `basePath` config. All `href`, `fetch()`, and `router.push()` calls include `/att` explicitly.
 - YAGNI + KISS: don't build what isn't needed; simplest thing that works.
