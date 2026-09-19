@@ -21,6 +21,7 @@ static uint32_t nextFallbackSeq()
     return seq;
 }
 
+static uint64_t cachedCardMB = 0;   // cleared on (re)mount -- see storageInit
 static File     logFile;
 static bool     ready = false;
 static char     filename[32] = "";
@@ -112,6 +113,7 @@ bool storageInit()
     // remember.
     SpiBusGuard bus(5000);
     if (!bus) { DBGE("sd", "bus busy: init"); return false; }
+    cachedCardMB = 0;    // a different card may have been inserted
     // BLDO1 powers the card; initPMU() has already enabled it. The bus is
     // shared with the IMU, so it is brought up once in boardInit().
     // Try progressively slower clocks. Cards vary a lot in what they tolerate
@@ -263,12 +265,11 @@ uint64_t storageCardSizeMB()
     // after the first read: the capacity cannot change while the card is
     // mounted, so re-asking four times a second was pure bus traffic -- and
     // unguarded bus traffic at that.
-    static uint64_t cachedMB = 0;
-    if (cachedMB) return cachedMB;
+    if (cachedCardMB) return cachedCardMB;
     SpiBusGuard bus(1000);
     if (!bus) return 0;
-    cachedMB = SD.cardSize() / (1024ULL * 1024ULL);
-    return cachedMB;
+    cachedCardMB = SD.cardSize() / (1024ULL * 1024ULL);
+    return cachedCardMB;
 }
 
 void storageLogRow(const char *csvLine)
@@ -294,6 +295,9 @@ void storageLogImuRow(const char *csvLine)
     // it is never contended -- a sync does not run while recording.
     SpiBusGuard bus(200);
     if (!bus) { DBGW("sd", "bus busy: imu row dropped"); return; }
+    // At the transfer, not beside the acquisition: it cannot fire today, and
+    // that is the point -- it fires the day someone removes the guard above.
+    spiBusAssertHeld("storageLogImuRow");
     imuFile.print(csvLine);
     // Buffered: flush ~once a second (every 50 rows) rather than per row. This
     // is analysis data, not the authoritative track, so a <1 s loss on an abrupt

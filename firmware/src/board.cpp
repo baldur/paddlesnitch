@@ -1,4 +1,6 @@
 #include "board.h"
+#include "spibus.h"
+#include "dbg.h"
 #include "board_pins.h"
 #include <Wire.h>
 #include <SPI.h>
@@ -172,6 +174,9 @@ static uint8_t imuReadReg(uint8_t reg)
     // sample on the rising edge so framing is identical -- this read worked
     // either way -- but mixing polarities on a shared bus is a variable with no
     // upside, so the whole bus is mode 0 now.
+    // Leaf transfer: the assert belongs here, where a caller that forgot the
+    // lock is actually caught.
+    spiBusAssertHeld("imuReadReg");
     sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
     digitalWrite(IMU_CS, LOW);
     sdSPI.transfer(reg | 0x80);
@@ -183,6 +188,11 @@ static uint8_t imuReadReg(uint8_t reg)
 
 void imuProbe()
 {
+    // Three back-to-back register reads on the shared bus. Caught by the leaf
+    // assertion in imuReadReg the moment that assertion moved somewhere it
+    // could actually fire -- it had been the last unguarded IMU transaction.
+    SpiBusGuard bus(3000);
+    if (!bus) { DBGE("imu", "bus busy during probe"); return; }
     uint8_t r00 = imuReadReg(0x00);
     uint8_t r0F = imuReadReg(0x0F);
     uint8_t r75 = imuReadReg(0x75);

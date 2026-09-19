@@ -166,7 +166,9 @@ static void misoCheck(const char *when)
     pinMode(SPI_MISO, INPUT_PULLDOWN);
     delayMicroseconds(200);
     int lo = digitalRead(SPI_MISO);
-    pinMode(SPI_MISO, INPUT);
+    // Hand the pad back to the SPI peripheral rather than leaving it a bare
+    // INPUT. This is a PR about not disturbing the bus.
+    sdSPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, -1);
     const char *verdict = (hi == 1 && lo == 0) ? "free" : "driven/pulled";
     Serial.printf("MISO @%-16s pullup=%d pulldown=%d -> %s\n", when, hi, lo, verdict);
     DBGI("miso", "%s pu=%d pd=%d %s", when, hi, lo, verdict);
@@ -208,14 +210,7 @@ void setup()
     // the bus is still clean, then mount the card. (imuInit also rail-cycles and
     // retries if the chip comes up wedged after a warm reset.)
     imuProbe();
-    // BEFORE anything drives the bus: establishes whether the board itself
-    // pulls MISO up, which would invalidate every later reading.
-    pinMode(IMU_CS, OUTPUT);  digitalWrite(IMU_CS, HIGH);
-    pinMode(SPI_CS, OUTPUT);  digitalWrite(SPI_CS, HIGH);
-    misoCheck("pre-imu-pre-sd");
-
     bool imuOk = imuInit();
-    misoCheck("post-imu-pre-sd");
     DBGI("imu", "init %s", imuOk ? "ok" : "FAILED");
     report("IMU", imuOk, imuOk ? "QMI8658 accel+gyro" : "init failed");
     // imuInit may have power-cycled the sensor rails (up to three times) to
@@ -223,7 +218,6 @@ void setup()
     boardDisplayReinit();
 
     board.sdcard = storageInit();
-    misoCheck("post-sd");
     DBGI("sd", "init %s", board.sdcard ? "ok" : "FAILED");
     report("SD", board.sdcard,
            board.sdcard ? "card ready - tap button to record" : "no card / mount failed");
@@ -779,6 +773,66 @@ static void handleSerialCommand()
             // clock out one 0xFF byte, then retest. If MISO frees only after
             // this, the card was the one holding the line and every handover
             // needs the same eight clocks.
+            // MISORELEASE — how many dummy bytes, if any, make the card let go.
+            // FatFs deselect() sends exactly one; if that is not enough here,
+            // the question is whether N is merely larger or whether this card
+            // never releases, which decides if a software mitigation exists.
+            // MISOSCAN — powers each chip separately and reports who holds MISO.
+            // A COMMAND, not boot code: it cycles the sensor and card rails, and
+            // a PR about not disturbing the bus has no business doing that on
+            // every boot. Re-mounts the card afterwards.
+            //
+            // Reading it: "rails-off free" means there is no board pull-up, so
+            // the method works at all. Then whichever single rail turns the line
+            // to "driven/pulled" is the chip presenting something -- though note
+            // an internal pull-up on the card's DO reads identically to the card
+            // actively driving, and the ESP32's ~45k internal pull-down is too
+            // weak to separate those. Distinguishing them needs a scope or a
+            // stronger external pull-down.
+            else if (!strncmp(buf, "MISOSCAN", 8)) {
+                SpiBusGuard bus(5000);
+                if (!bus) { Serial.println("MISOSCAN: bus busy"); }
+                else {
+                    storageClose();
+                    digitalWrite(IMU_CS, HIGH); digitalWrite(SPI_CS, HIGH);
+                    PMU.disableALDO1(); PMU.disableALDO2(); PMU.disableBLDO1();
+                    delay(250); misoCheck("rails-off");
+                    PMU.enableALDO1(); PMU.enableALDO2();
+                    delay(250); misoCheck("imu-only");
+                    PMU.disableALDO1(); PMU.disableALDO2();
+                    delay(150);
+                    PMU.enableBLDO1();
+                    delay(250); misoCheck("sd-only");
+                    PMU.enableALDO1(); PMU.enableALDO2();
+                    delay(300); misoCheck("both-rails");
+                    Serial.println("MISOSCAN: remounting card + IMU");
+                }
+                imuInit();
+                storageInit();
+            }
+            else if (!strncmp(buf, "MISORELEASE", 11)) {
+                SpiBusGuard bus(3000);
+                if (!bus) { Serial.println("MISORELEASE: bus busy"); }
+                else {
+                    digitalWrite(SPI_CS, HIGH);
+                    digitalWrite(IMU_CS, HIGH);
+                    sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+                    for (int n = 1; n <= 64; n++) {
+                        sdSPI.transfer(0xFF);
+                        if (n != 1 && n != 2 && n != 4 && n != 8 && n != 16 && n != 32 && n != 64) continue;
+                        sdSPI.endTransaction();
+                        pinMode(SPI_MISO, INPUT_PULLDOWN);
+                        delayMicroseconds(200);
+                        int lo = digitalRead(SPI_MISO);
+                        sdSPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, -1);
+                        Serial.printf("MISORELEASE after %2d byte(s): pulldown=%d %s\n",
+                                      n, lo, lo == 0 ? "<-- RELEASED" : "still driven");
+                        if (lo == 0) break;
+                        sdSPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+                    }
+                    sdSPI.endTransaction();
+                }
+            }
             else if (!strncmp(buf, "MISOCLOCK", 9)) {
                 SpiBusGuard bus(3000);
                 if (!bus) { Serial.println("MISOCLOCK: bus busy"); }
@@ -1028,7 +1082,13 @@ void loop()
         u.sdSizeMB    = storageCardSizeMB();
         u.imuOk       = imuReady();
         {
-            ImuSample m = imuSnapshot();
+            // PEEK, never snapshot. This block runs at 4 Hz and imuSnapshot()
+            // closes the accumulation window as a side effect, so calling it
+            // here made every 1 Hz CSV row report the peak over ~250 ms instead
+            // of the last second -- `imu_samples` logged 10-11 against a design
+            // intent of 43-50, confirmed in real uploaded data. The logger at
+            // 1 Hz is the one and only window-closing consumer.
+            ImuSample m = imuPeek();
             u.imuTempC   = m.tempC;
             u.imuSamples = m.samples;
         }
