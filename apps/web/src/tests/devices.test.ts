@@ -109,6 +109,22 @@ describe('device pairing (#212 device-uplink)', () => {
     expect(await getDeviceAuth(bearer(deviceToken))).toBeNull()
   })
 
+  it('never ships tokenHash to the browser', async () => {
+    // The device record stores sha256(deviceToken) so the owner can revoke it.
+    // That digest authenticates nothing client-side and belongs nowhere near a
+    // browser bundle — the list endpoint projects an explicit field set.
+    const u = await makeUser('Owner Four')
+    const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
+    mockAuth(u.idToken)
+    await link(jreq({ claimCode }))
+    await token(jreq({ deviceId: DEVICE, claimSecret }))
+
+    mockAuth(u.idToken)
+    const { devices } = await (await listDevices()).json()
+    expect(devices).toHaveLength(1)
+    expect(Object.keys(devices[0]).sort()).toEqual(['deviceId', 'firmware', 'lastSeenAt', 'linkedAt', 'model', 'name'])
+  })
+
   it('rejects a malformed deviceId at claim', async () => {
     expect((await claim(jreq({ deviceId: 'nope', model: 'm', firmware: 'f' }))).status).toBe(400)
   })

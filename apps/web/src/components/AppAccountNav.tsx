@@ -1,6 +1,7 @@
 'use client'
 import AccountNav from '@paddlesnitch/ui/AccountNav'
 import { trpc } from '@/lib/trpc'
+import { useHasDevice } from '@/lib/use-has-device'
 
 // Analyse's thin adapter around the shared AccountNav: reads the signed-in user
 // via the tRPC `me` procedure and points profile/account/sign-in at the shared
@@ -8,6 +9,8 @@ import { trpc } from '@/lib/trpc'
 export default function AppAccountNav() {
   const q = trpc.me.useQuery()
   const user = q.isPending ? undefined : (q.data?.user ?? null)
+
+  const hasDevice = useHasDevice(!!user)
 
   const onSignOut = async () => {
     try { await fetch('/att/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ }
@@ -19,6 +22,7 @@ export default function AppAccountNav() {
     <AccountNav
       user={user}
       paddlesHref="/paddles/library"
+      devicesHref={hasDevice ? '/profile/me/devices' : undefined}
       profileHref={user ? "/profile/me" : "/att"}
       accountHref="/profile/me/settings"
       signInHref="/att/auth?next=/paddles"

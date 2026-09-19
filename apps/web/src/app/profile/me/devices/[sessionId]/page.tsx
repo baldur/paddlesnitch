@@ -60,9 +60,18 @@ export default function DeviceSessionPage() {
     return () => { cancelled = true }
   }, [sessionId])
 
+  // Back to the tracker this session came from once we know which one it was;
+  // until then (and for a session that isn't ours) the device index is the only
+  // honest destination.
+  const known = meta && meta !== 'missing' ? meta : null
+
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader breadcrumb={<Link href="/profile/me/devices" className="tt-nav-link text-sm shrink-0">← DEVICE DATA</Link>} />
+      <AppHeader breadcrumb={
+        <Link href={known ? `/profile/me/devices/d/${known.deviceId}` : '/profile/me/devices'} className="tt-nav-link text-sm shrink-0">
+          {known ? '← SESSIONS' : '← MY DEVICES'}
+        </Link>
+      } />
       <div className="flex-1 px-4 py-8 max-w-4xl mx-auto w-full flex flex-col gap-6">
         {state === 'loading' && <LoadingState label="Reading session" />}
         {state === 'error' && <p className="text-sm text-red">Could not read this session.</p>}
@@ -70,7 +79,7 @@ export default function DeviceSessionPage() {
         {state === 'ready' && meta === 'missing' && (
           <p className="text-sm text-muted">
             No such session, or it isn&apos;t yours.{' '}
-            <Link href="/profile/me/devices" className="text-primary">Back to device data</Link>.
+            <Link href="/profile/me/devices" className="text-primary">Back to my devices</Link>.
           </p>
         )}
 

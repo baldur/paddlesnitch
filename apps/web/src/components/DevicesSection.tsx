@@ -78,8 +78,8 @@ export default function DevicesSection() {
       <p className="text-sm text-muted mb-4 leading-relaxed">
         Link a paddlesnitch tracker so it uploads sessions on its own. On the device screen you&apos;ll
         see a 6-character code — enter it here while signed in. Uploaded sessions appear under{' '}
-        <span className="text-fg">MY TRACKER</span> in Analyse, and you can inspect the raw data on the{' '}
-        <Link href="/profile/me/devices" className="text-primary">device data</Link> page.
+        <span className="text-fg">MY TRACKER</span> in Analyse, and you can inspect the raw data under{' '}
+        <Link href="/profile/me/devices" className="text-primary">my devices</Link>.
       </p>
 
       <form onSubmit={linkDevice} className="flex flex-wrap items-center gap-2 mb-3">
@@ -115,6 +115,7 @@ export default function DevicesSection() {
               <div className="text-sm min-w-0">
                 <span className="text-fg truncate">{d.name}</span>
                 <span className="block text-xs text-muted tabular">{d.model} · {d.deviceId} · last seen {fmtWhen(d.lastSeenAt)}</span>
+                <Link href={`/profile/me/devices/d/${d.deviceId}`} className="text-xs text-primary">VIEW DATA →</Link>
               </div>
               <button type="button" onClick={() => revoke(d.deviceId)} disabled={busy}
                 className="px-4 py-2 border border-muted text-muted text-xs tracking-widest hover:bg-surface-2 hover:text-red disabled:opacity-50 transition-colors shrink-0">
