@@ -1,4 +1,5 @@
 #pragma once
+#include "tutorial.h"   // TutStep, for the first-run gesture lesson
 #include <Arduino.h>
 
 // Everything drawn on the OLED lives here, so the tracker logic never touches
@@ -11,7 +12,7 @@
 // uiSplash(), not a state. See docs/device-states-spec.md.
 // Two MENUS (Pick, Settings) and the screens they open. Nerd and Network moved
 // under Settings so the top level stays the three things you use on the water.
-enum class AppState { Setup, Linking, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm, ResetConfirm };
+enum class AppState { Setup, Linking, Tutorial, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm, ResetConfirm };
 
 // Network details for the Settings > Network screen.
 struct UiNet {
@@ -130,6 +131,14 @@ struct UiState {
     String   otaMessage;
     bool     otaUpdated   = false;   // first boot on a new image, until dismissed
     String   otaNotes;
+
+    // First-run gesture tutorial. It exists so the other screens do NOT have to
+    // carry a permanent "tap=... hold=..." line: teach the contract once, then
+    // give the panel back to content.
+    TutStep  tutStep      = TutStep::Tap;
+    uint8_t  tutSel       = 0;    // highlighted practice choice
+    uint8_t  tutHoldPct   = 0;    // 0-100, fills the choice while held
+    bool     tutWrapped   = false;
 };
 
 void uiSplash();                 // holds the wordmark briefly; blocks ~200 ms
