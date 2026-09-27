@@ -107,17 +107,34 @@ static TutState tutState;
 // the button loop owns that one, and this is read-only presentation.
 static uint32_t tutHeldSince = 0;
 
+// Cached, and the cache is the point.
+//
+// TWO bugs lived in the first version of this, both found by flashing it:
+//
+//  1. It returned TRUE when the namespace could not be opened, reasoning "do
+//     not nag". But Preferences.begin(ns, true) FAILS on a namespace that has
+//     never been written -- which is every device that has never finished the
+//     tutorial. So "have you done this?" answered "yes" for everyone and the
+//     tutorial never ran at all. It was dead on arrival and compiled fine.
+//  2. It was called from the UI tick at 4 Hz, so it also hammered flash to
+//     answer a question whose answer changes once in a device's life.
+//
+// Absent namespace now means NOT done, which is what it actually means.
+static int8_t tutDoneCache = -1;   // -1 unknown, 0 not done, 1 done
+
 static bool tutorialDoneStored()
 {
+    if (tutDoneCache >= 0) return tutDoneCache == 1;
     Preferences p;
-    if (!p.begin("ui", true)) return true;   // cannot read -> do not nag
-    bool done = p.getBool("tutdone", false);
+    if (!p.begin("ui", true)) { tutDoneCache = 0; return false; }   // never written
+    tutDoneCache = p.getBool("tutdone", false) ? 1 : 0;
     p.end();
-    return done;
+    return tutDoneCache == 1;
 }
 
 static void tutorialMarkDone()
 {
+    tutDoneCache = 1;
     Preferences p;
     if (!p.begin("ui", false)) return;
     p.putBool("tutdone", true);
@@ -803,7 +820,15 @@ static void checkButton()
         // out of Settings with the button at all. An earlier version of this
         // comment argued a consistent menu feel was worth the 400 ms; that was
         // wrong -- it did not delay the gesture, it removed it.
-        if (menu == Menu::Pick) {
+        // NOT during the tutorial. This fast path returns without arming
+        // pendingTap, so a double-tap can never form -- and the tutorial runs
+        // while `menu` is still Pick, which made its double-tap lesson
+        // impossible to pass and the whole sequence a dead end.
+        //
+        // The host test asserts no gesture sequence can trap the user, and it
+        // still passes: the trap was never in the state machine, it was one
+        // layer up in input routing, where the event simply never arrived.
+        if (!tutRunning && menu == Menu::Pick) {
             Serial.println("btn: tap (pick)");
             screenTap();
             return;
