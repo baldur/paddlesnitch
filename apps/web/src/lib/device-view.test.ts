@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
-import { deviceSummaries, fmtDist, fmtDur, type DeviceView } from './device-view'
+import { deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, fmtDur, type DeviceView } from './device-view'
 import type { DeviceSessionMeta } from '@/lib/devices'
 
 const dev = (deviceId: string, over: Partial<DeviceView> = {}): DeviceView =>
@@ -64,5 +64,43 @@ describe('formatters', () => {
     expect(fmtDur(45)).toBe('45s')
     expect(fmtDur(125.4)).toBe('2m 5s')
     expect(fmtDur(null)).toBe('—')
+  })
+})
+
+describe('fleet state — version drift and liveness', () => {
+  it('will not claim "up to date" when either version is unknown', () => {
+    // A null answer must render as neither behind nor current. Showing an
+    // unknown device as up to date is the one wrong answer available here.
+    expect(deviceIsBehind(undefined, '0.14.0')).toBeNull()
+    expect(deviceIsBehind('0.12.0', null)).toBeNull()
+    expect(deviceIsBehind(undefined, null)).toBeNull()
+  })
+
+  it('reports a device behind the released version', () => {
+    expect(deviceIsBehind('0.12.0', '0.14.0')).toBe(true)
+    expect(deviceIsBehind('0.14.0', '0.14.0')).toBe(false)
+  })
+
+  it('treats a device never heard from as quiet', () => {
+    expect(deviceIsQuiet(undefined)).toBe(true)
+    expect(deviceIsQuiet('not-a-date')).toBe(true)
+  })
+
+  it('flags silence past the quiet threshold, not before', () => {
+    const now = Date.parse('2026-09-27T12:00:00Z')
+    const recent = new Date(now - 60 * 60 * 1000).toISOString()        // 1h
+    const stale  = new Date(now - 3 * 24 * 3600 * 1000).toISOString()  // 3d
+    expect(deviceIsQuiet(recent, now)).toBe(false)
+    expect(deviceIsQuiet(stale, now)).toBe(true)
+  })
+
+  it('formats an age a person can read at a glance', () => {
+    const now = Date.parse('2026-09-27T12:00:00Z')
+    const ago = (ms: number) => fmtAgo(new Date(now - ms).toISOString(), now)
+    expect(ago(30 * 1000)).toBe('30s ago')
+    expect(ago(10 * 60 * 1000)).toBe('10m ago')
+    expect(ago(5 * 3600 * 1000)).toBe('5h ago')
+    expect(ago(3 * 24 * 3600 * 1000)).toBe('3d ago')
+    expect(fmtAgo(undefined)).toBe('never')
   })
 })

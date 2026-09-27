@@ -84,12 +84,18 @@ jobs:
       # build — and a device already running that number would never take the
       # update, because "current == channel" is the whole comparison.
       - name: Refuse a source change that forgot to bump VERSION
+        id: src
         run: |
           if git diff --name-only HEAD^ HEAD | grep -q '^firmware/src/'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             if git diff --quiet HEAD^ HEAD -- firmware/VERSION; then
               echo "::error::firmware/src changed but firmware/VERSION did not (still ${{ steps.v.outputs.version }}). Bump it."
               exit 1
             fi
+          else
+            # A docs-only change under firmware/ -- firmware/CLAUDE.md, docs/,
+            # tools/. The binary is unchanged, so VERSION rightly did not move.
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-python@v5
@@ -140,16 +146,33 @@ jobs:
       # Refuse to overwrite a version that already exists. Once a build is
       # published, some device may already be running it; replacing the bytes
       # under a version number makes every record of that version a lie.
+      # Never overwrite published bytes -- some device may already be running
+      # them, and replacing them under the same version number makes every
+      # record of that version a lie.
+      #
+      # But "already published" is only an ERROR when the source actually
+      # changed. A docs-only change under firmware/ (CLAUDE.md, docs/, tools/)
+      # legitimately keeps the same VERSION and rebuilds the same binary, and
+      # failing that was a self-inflicted wound: it turned every firmware docs
+      # edit into a red build AND -- because promote needs build -- silently
+      # skipped the release. That is exactly how merging the auto-promote change
+      # itself failed to promote anything.
       - name: Publish (never overwrite)
         working-directory: firmware
         run: |
           V="${{ steps.v.outputs.version }}"
           if aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/firmware.bin" >/dev/null 2>&1; then
-            echo "::error::firmware/$V already published. Bump firmware/VERSION."
-            exit 1
+            if [ "${{ steps.src.outputs.changed }}" = "true" ]; then
+              echo "::error::firmware/$V already published but firmware/src changed -- that would overwrite different bytes under a published version. Bump firmware/VERSION."
+              exit 1
+            fi
+            echo "firmware/$V already published and src is unchanged -- keeping the published bytes."
+            echo "PUBLISHED_NOW=false" >> "$GITHUB_ENV"
+            exit 0
           fi
           aws s3 cp .pio/build/tracker/firmware.bin "s3://$DATA_BUCKET/firmware/$V/firmware.bin"
           aws s3 cp manifest.json "s3://$DATA_BUCKET/firmware/$V/manifest.json"
+          echo "PUBLISHED_NOW=true" >> "$GITHUB_ENV"
 
       - name: Summary
         run: |

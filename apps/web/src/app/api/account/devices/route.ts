@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { listUserDevices, revokeDevice } from '@/lib/devices'
+import { getChannelVersion } from '@/lib/firmware'
 
 // GET /api/account/devices — AUTHENTICATED. The signed-in user's linked devices.
 //
@@ -15,7 +16,12 @@ export async function GET() {
     deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware,
     linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt,
   }))
-  return NextResponse.json({ devices })
+  // What the stable channel currently offers, so the page can say whether a
+  // device is BEHIND rather than just printing a version nobody can calibrate.
+  // Never fails the request: a device list is useful without it.
+  let stableVersion: string | null = null
+  try { stableVersion = await getChannelVersion('stable') } catch { /* non-fatal */ }
+  return NextResponse.json({ devices, stableVersion })
 }
 
 // DELETE /api/account/devices — AUTHENTICATED. Revoke one device ({ deviceId }):

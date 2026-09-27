@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
 import type { DeviceSessionMeta } from '@/lib/devices'
-import { type DeviceSummary, type DeviceView, deviceSummaries, fmtDate, fmtDay, fmtDist } from '@/lib/device-view'
+import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDate, fmtDist } from '@/lib/device-view'
 
 // MY DEVICES — the tracker-first view. This page used to be a flat list of every
 // upload across every device, with a raw hex id on each row; with more than one
@@ -12,12 +12,16 @@ import { type DeviceSummary, type DeviceView, deviceSummaries, fmtDate, fmtDay, 
 
 export default function MyDevicesPage() {
   const [rows, setRows] = useState<DeviceSummary[] | undefined>(undefined)
+  // What the stable channel offers, so a version can be shown as up-to-date or
+  // behind rather than as a number the reader has to calibrate themselves.
+  const [stable, setStable] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
       fetch('/api/account/devices').then(r => (r.ok ? r.json() : { devices: [] })).catch(() => ({ devices: [] })),
       fetch('/api/account/devices/sessions').then(r => (r.ok ? r.json() : { sessions: [] })).catch(() => ({ sessions: [] })),
-    ]).then(([d, s]: [{ devices?: DeviceView[] }, { sessions?: DeviceSessionMeta[] }]) => {
+    ]).then(([d, s]: [{ devices?: DeviceView[]; stableVersion?: string | null }, { sessions?: DeviceSessionMeta[] }]) => {
+      setStable(d.stableVersion ?? null)
       setRows(deviceSummaries(d.devices ?? [], s.sessions ?? []))
     })
   }, [])
@@ -59,9 +63,26 @@ export default function MyDevicesPage() {
                   <span className="block text-xs text-muted tabular">
                     {d.deviceId}
                     {d.model ? ` · ${d.model}` : ''}
-                    {d.firmware ? ` · fw ${d.firmware}` : ''}
-                    {d.linked ? ` · last seen ${fmtDay(d.lastSeenAt)}` : ''}
                   </span>
+                  {d.linked && (
+                    <span className="block text-xs tabular mt-1">
+                      {/* Running version, and whether it is the released one.
+                          Both come from what the device actually reported on its
+                          last request, not from what it claimed when paired. */}
+                      <span className="text-muted">fw </span>
+                      <span className="text-fg">{d.firmware || 'unknown'}</span>
+                      {deviceIsBehind(d.firmware, stable) === true && (
+                        <span className="text-split"> · update pending ({stable})</span>
+                      )}
+                      {deviceIsBehind(d.firmware, stable) === false && (
+                        <span className="text-green"> · up to date</span>
+                      )}
+                      <span className="text-muted"> · seen </span>
+                      <span className={deviceIsQuiet(d.lastSeenAt) ? 'text-red' : 'text-fg'}>
+                        {fmtAgo(d.lastSeenAt)}
+                      </span>
+                    </span>
+                  )}
                   <span className="block text-xs text-muted tabular mt-1">
                     {d.sessions === 0
                       ? 'no uploads yet'
