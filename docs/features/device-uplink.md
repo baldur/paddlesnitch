@@ -125,6 +125,42 @@ whole. `DeviceRecord.tokenHash` is sha256 of the device bearer token: it lets
 the owner revoke server-side and authenticates nothing in a browser, so it does
 not go over the wire. Regression test in `apps/web/src/tests/devices.test.ts`.
 
+### Pairing, end to end
+
+Worth a picture because the storage keying changed on 2026-09-27 and the rate
+limits are derived from the poll loop drawn here.
+
+```mermaid
+sequenceDiagram
+    participant D as Device
+    participant S as Server
+    participant U as User in a browser
+
+    D->>S: POST /api/devices/claim {deviceId, model, firmware}
+    Note over S: deviceId validated BEFORE the limiter,<br/>so junk cannot spend a real device's quota<br/>limit: 10/h per device, 30/h per IP
+    S->>S: write device-claims/{deviceId}<br/>+ device-claim-codes/{code} → deviceId<br/>SUPERSEDES any previous claim for this device
+    S-->>D: claimCode + claimSecret, returned once
+    D->>D: show the code + QR on the OLED
+
+    U->>S: POST /api/account/devices/link {claimCode}
+    S->>S: code index → deviceId, then one read
+    Note over S: verify claim.claimCode === the code used —<br/>a stale index must never bind a LATER claim
+    S->>S: claim.userId = the signed-in user
+
+    loop every 5 s for up to 5 min — about 60 polls
+        D->>S: POST /api/devices/token {deviceId, claimSecret}
+        Note over S: limit 300/h per device = 5 full rounds.<br/>Derived from THIS loop — the 30/h once<br/>proposed would cut the device off mid-window
+        S->>S: ONE direct read by deviceId<br/>(previously: list + read EVERY claim)
+        S-->>D: 202 pending
+    end
+
+    S-->>D: 200 deviceToken, claim tombstoned,<br/>code index deleted so it cannot be reused
+```
+
+Every miss on the `/token` path — unknown device, wrong secret, superseded claim
+— answers `202 pending`, identical to "the user has not typed the code yet", so
+nothing here reveals whether a device or a secret is real.
+
 ### `GET /api/devices/firmware?current=<semver>` — device token
 
 The OTA manifest. `304` (ETag = the version) when the device already runs the
