@@ -1,11 +1,22 @@
 name: Firmware build & release
 
-# MERGING RELEASES. A push to main touching firmware/** builds, publishes AND
-# promotes to stable, so devices pick it up on their next sync.
+# MERGING RELEASES. EVERY push to main promotes the latest firmware to stable,
+# so devices pick it up on their next sync.
 #
 #   push to main touching firmware/**  -> build, publish, promote to stable
+#   any other push to main             -> promote firmware/VERSION if it is not
+#                                         already current (no build)
 #   workflow_dispatch with a version   -> promote any ALREADY-BUILT version.
 #                                         This is the rollback lever.
+#
+# Why every push and not only firmware/** ones: a promote that failed or was
+# skipped used to stay missed until the next firmware change. That is how 0.14.0
+# sat published-but-unpromoted -- the fix (#276) only touched this workflow,
+# which is outside firmware/**, so nothing re-ran and a device stayed on 0.12.0.
+#
+# The one thing a merge will NOT do is undo a rollback: if stable was set by
+# hand after firmware/VERSION was built, the merge skips (see
+# .github/scripts/firmware-promote-decision.sh). Bump VERSION to supersede it.
 #
 # This used to require a separate manual promote, on the reasoning that one bad
 # merge would otherwise reach every tracker at once. The reasoning was sound but
@@ -35,7 +46,6 @@ name: Firmware build & release
 on:
   push:
     branches: [main]
-    paths: ['firmware/**']
   workflow_dispatch:
     inputs:
       version:
@@ -57,12 +67,40 @@ env:
   AWS_REGION: eu-west-1
   DATA_BUCKET: paddlesnitch-data-prod
 
+# Two merges in quick succession must not race each other's promote.
+concurrency:
+  group: firmware-release
+  cancel-in-progress: false
+
 jobs:
-  build:
+  # The trigger no longer filters on firmware/**, so decide here whether this
+  # push needs a BUILD. Every push still reaches promote.
+  changes:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.v.outputs.version }}
+      firmware: ${{ steps.d.outputs.firmware }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: d
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BEFORE="HEAD^"
+          fi
+          if git diff --name-only "$BEFORE" HEAD | grep -q '^firmware/'; then
+            echo "firmware=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "firmware=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: [changes]
+    if: needs.changes.outputs.firmware == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
@@ -192,16 +230,24 @@ jobs:
     #
     # `always()` because `build` is SKIPPED on a manual run, and a skipped
     # dependency would otherwise skip this too.
-    needs: [build]
+    #
+    # On a push, build is SKIPPED when no firmware changed -- that still
+    # promotes, because the point is that every merge lands the latest build.
+    # A FAILED build does not promote.
+    needs: [changes, build]
     if: |
       always() &&
-      (github.event_name == 'workflow_dispatch' || needs.build.result == 'success')
+      (github.event_name == 'workflow_dispatch' ||
+       (needs.changes.result == 'success' &&
+        (needs.build.result == 'success' || needs.build.result == 'skipped')))
     runs-on: ubuntu-latest
     # No `environment:` gate. It would prompt for approval on every merge, which
     # is exactly the step this change removes. If devices ever ship to people who
     # cannot reach them with a cable, put it back on the auto path -- NOT on the
     # manual one, which is the rollback and must stay fast.
     steps:
+      - uses: actions/checkout@v5
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -219,7 +265,9 @@ jobs:
             echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
             echo "how=manual" >> "$GITHUB_OUTPUT"
           else
-            echo "version=${{ needs.build.outputs.version }}" >> "$GITHUB_OUTPUT"
+            # Read VERSION from the checkout, not from build's output: build is
+            # skipped on a push that did not touch firmware/.
+            echo "version=$(tr -d '[:space:]' < firmware/VERSION)" >> "$GITHUB_OUTPUT"
             echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "how=merge" >> "$GITHUB_OUTPUT"
           fi
@@ -231,7 +279,30 @@ jobs:
           aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/firmware.bin"   >/dev/null
           aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/manifest.json" >/dev/null
 
+      # Merge path only. A manual run is an explicit decision (usually a
+      # rollback) and always goes through.
+      - name: Decide
+        id: d
+        run: |
+          if [ "${{ steps.t.outputs.how }}" = "manual" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          bash .github/scripts/firmware-promote-decision.test.sh
+          V="${{ steps.t.outputs.version }}"
+          C="${{ steps.t.outputs.channel }}"
+          aws s3 cp "s3://$DATA_BUCKET/firmware/$V/manifest.json" manifest.json --quiet
+          if aws s3 cp "s3://$DATA_BUCKET/firmware/channels/$C.json" current.json --quiet 2>/dev/null; then
+            CUR=current.json
+          else
+            CUR=-
+          fi
+          DECISION="$(bash .github/scripts/firmware-promote-decision.sh "$V" "$CUR" manifest.json)"
+          echo "$DECISION"
+          echo "- $DECISION" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${DECISION%% *}" = "promote" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "go=false" >> "$GITHUB_OUTPUT"; fi
+
       - name: Promote
+        if: steps.d.outputs.go == 'true'
         run: |
           V="${{ steps.t.outputs.version }}"
           C="${{ steps.t.outputs.channel }}"
