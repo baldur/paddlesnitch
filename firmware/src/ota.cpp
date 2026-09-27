@@ -427,12 +427,24 @@ bool otaMaybeUpdate()
     // Clear the signalled version too, so a header that raced a promotion does
     // not make us re-ask on every sync.
     if (rc == 304) {
+        DBGI("ota", "asked: already current (%s)", FIRMWARE_VERSION);
         setProgress(OtaPhase::Idle, 0, "", "");
         g_serverVersion = "";
         return false;
     }
-    // 404 no_channel is the normal state before the first release. Quiet.
-    if (rc == 404) { setProgress(OtaPhase::Idle, 0, "", ""); return false; }
+    // 404 no_channel is the normal state before the first release -- but LOG it.
+    //
+    // This used to return silently, on the reasoning that a normal state is not
+    // worth a line. That was wrong, and it cost a real debugging session: the
+    // ring showed "asking outright" and then nothing, so "asked, and nothing is
+    // released" looked identical to "the request never happened". A device that
+    // checked and found nothing has done its job, and the log is the only place
+    // that can say so.
+    if (rc == 404) {
+        DBGI("ota", "asked: nothing promoted to stable yet");
+        setProgress(OtaPhase::Idle, 0, "", "");
+        return false;
+    }
     if (rc != 200) {
         if (haveSignal) recordFailure(g_serverVersion, (String("manifest http ") + rc).c_str());
         else            DBGW("ota", "probe failed http %d", rc);
@@ -442,6 +454,7 @@ bool otaMaybeUpdate()
     // Now the version is known for certain -- which matters on the probe path,
     // where we had nothing to check a failure count against until this moment.
     if (!otaVersionDiffers(FIRMWARE_VERSION, version.c_str())) {
+        DBGI("ota", "asked: stable is %s, already running it", version.c_str());
         setProgress(OtaPhase::Idle, 0, "", "");
         g_serverVersion = "";
         return false;
@@ -457,6 +470,7 @@ bool otaMaybeUpdate()
     Preferences p;
     if (p.begin(NVS_NS, false)) { p.putString(K_NOTES, notes); p.end(); }
 
+    DBGI("ota", "offered %s (%u B), starting", version.c_str(), (unsigned)size);
     Serial.printf("OTA: %s -> %s (%u bytes)\n", FIRMWARE_VERSION, version.c_str(), (unsigned)size);
     if (!downloadAndFlash(url, version, size, sha)) return false;
 
