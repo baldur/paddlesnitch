@@ -48,4 +48,13 @@ jobs:
 
       - name: Deploy
         working-directory: infra
+        env:
+          # Platform administrators (Cognito `sub`s, comma-separated), baked into
+          # the Lambda's environment at synth time. It MUST be passed here: the
+          # stack reads process.env at synth, so a deploy without it would
+          # silently blank the allowlist and lock everyone out of the admin
+          # routes. Set it as a repository VARIABLE (Settings -> Variables), not
+          # a secret — a Cognito sub is an opaque id, not a credential, and a
+          # secret would be masked in every log that mentions it.
+          ADMIN_USER_IDS: ${{ vars.ADMIN_USER_IDS }}
         run: npm run deploy

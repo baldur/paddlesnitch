@@ -125,6 +125,36 @@ whole. `DeviceRecord.tokenHash` is sha256 of the device bearer token: it lets
 the owner revoke server-side and authenticates nothing in a browser, so it does
 not go over the wire. Regression test in `apps/web/src/tests/devices.test.ts`.
 
+### `GET /api/devices/firmware?current=<semver>` — device token
+
+The OTA manifest. `304` (ETag = the version) when the device already runs the
+promoted version or sends a matching `If-None-Match`; `404 no_channel` when
+nothing has been promoted, which is the normal state; `200` with
+`{version, sha256, sizeBytes, notes, url, expiresInSeconds}` otherwise. The
+`url` is a 15-minute presigned GET for that one image, generated per request —
+issuance is what gets recorded, so a URL is never shared between devices.
+
+**This is not the steady-state path.** A device only calls it after
+`X-PS-Firmware` told it there is something new.
+
+### `POST /api/devices/firmware/ack` — device token
+
+`{version, previousVersion, bootOk, resetReason, rolledBack}` → `204`.
+Idempotent on (deviceId, version): the ack rides on a sync and a sync can fail,
+so a retry must not double-count a boot failure. A `rolledBack` device is never
+recorded as a successful boot regardless of what `bootOk` says.
+
+### `X-PS-Firmware` — on every device-authenticated response
+
+The version the stable channel points at, stamped by `withDeviceAuth`
+(`apps/web/src/lib/device-route.ts`) on **every** response from a device route,
+including errors, the 401, and each of the ~48 chunk responses in one sync.
+
+This header is the entire OTA signal: the device compares it against its
+compiled `FIRMWARE_VERSION` and, in the steady state, makes no firmware request
+ever. **The header is absent when nothing is promoted** — absent means "no
+opinion", NOT "you are current".
+
 ### `POST /api/devices/sessions?filename=track_0005.csv` — device token
 
 ```

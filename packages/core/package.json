@@ -15,14 +15,16 @@
     "./strava": "./src/strava.ts",
     "./strava-storage": "./src/strava-storage.ts",
     "./devices": "./src/devices.ts",
+    "./firmware": "./src/firmware.ts",
     "./paddles": "./src/paddles.ts",
     "./paddle-store": "./src/paddle-store.ts"
   },
   "dependencies": {
-    "@paddlesnitch/timing": "workspace:*",
     "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
     "@aws-sdk/client-s3": "^3.1048.0",
     "@aws-sdk/client-ssm": "^3.1057.0",
+    "@aws-sdk/s3-request-presigner": "^3.1048.0",
+    "@paddlesnitch/timing": "workspace:*",
     "aws-jwt-verify": "^5.1.1"
   },
   "peerDependencies": {

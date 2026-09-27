@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getDeviceAuth } from '@/lib/auth'
+import { withDeviceAuth } from '@/lib/device-route'
 import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeUploadPart, clearUploadParts, motionSidecarTrackName } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import { haversine } from '@paddlesnitch/timing/geo'
@@ -15,10 +15,12 @@ import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
 // device decimates to (1.51 MB/hour) while staying clear of that ceiling.
 const MAX_BYTES = 4 * 1024 * 1024
 
-export async function POST(req: Request) {
-  const auth = await getDeviceAuth(req)
-  if (!auth) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-
+// Wrapped in withDeviceAuth rather than calling getDeviceAuth inline: besides
+// the 401, the wrapper stamps `X-PS-Firmware` on every response this returns.
+// That header IS the OTA signal — the device learns a new version exists from a
+// sync it was making anyway — and this handler returns from fourteen different
+// places, which is far too many to remember a header in.
+export const POST = withDeviceAuth(async (req, auth) => {
   const url = new URL(req.url)
   const filename = url.searchParams.get('filename') ?? ''
   if (!/^[\w.-]{1,128}$/.test(filename)) return NextResponse.json({ error: 'bad_filename' }, { status: 400 })
@@ -105,4 +107,4 @@ export async function POST(req: Request) {
     { sessionId: meta.sessionId, points: track.length, startedAt, endedAt, distanceMetres: meta.distanceMetres },
     { status: 201 },
   )
-}
+})

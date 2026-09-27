@@ -63,6 +63,15 @@ export class AttStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       versioned: false,
+      lifecycleRules: [{
+        // Firmware rollout records (which device was offered which build, and
+        // how it booted). Troubleshooting data, not an audit trail — and it
+        // ties a physical device to a user account, so it expires rather than
+        // accumulating forever. See docs/features/device-ota-and-auth.md 1.4.
+        id: 'expire-firmware-events',
+        prefix: 'firmware-events/',
+        expiration: cdk.Duration.days(90),
+      }],
     })
 
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
@@ -247,6 +256,12 @@ export class AttStack extends cdk.Stack {
         // below already covers inference-profile/*).
         BEDROCK_REGION: 'eu-west-1',
         LLM_MODEL: 'mistral.mixtral-8x7b-instruct-v0:1',
+        // Platform administrators (Cognito `sub`s, comma-separated) — the only
+        // people who may read cross-account operational data such as one
+        // device's firmware history. Deliberately a deploy-time allowlist and
+        // not a flag in storage: no route can grant it, so escalating needs a
+        // deploy. Unset means nobody, which is the safe default.
+        ADMIN_USER_IDS: process.env.ADMIN_USER_IDS ?? '',
       },
     })
 
@@ -686,6 +701,101 @@ export class AttStack extends cdk.Stack {
     )
 
     // ---------------------------------------------------------------------------
+    // Firmware rollout dashboard (docs/features/device-ota-and-auth.md 2.2)
+    // ---------------------------------------------------------------------------
+    // Separate namespace and separate dashboard from the product one, because
+    // these answer a different question: not "what are people doing" but "did
+    // the fleet take the update, and did it boot".
+    //
+    // Dimensions are Version and Model only. NEVER deviceId - unbounded
+    // cardinality, and it would turn a metrics bill into a per-device tracking
+    // system. Per-device detail lives in the firmware-events records (expiring
+    // after 90 days) behind the admin route.
+    const firmwareMetric = (name: string, period: cdk.Duration) =>
+      new cloudwatch.Metric({
+        namespace: 'Paddlesnitch/Firmware',
+        metricName: name,
+        statistic: 'Sum',
+        period,
+        label: name,
+      })
+
+    const firmwareDashboard = new cloudwatch.Dashboard(this, 'FirmwareDashboard', {
+      dashboardName: 'paddlesnitch-firmware',
+      defaultInterval: cdk.Duration.days(30),
+    })
+
+    firmwareDashboard.addWidgets(
+      // The GAP between these two lines is the rollout's real completion state:
+      // an offer issued is a device that was handed an image, a boot confirmed
+      // is one that actually came back up on it.
+      new cloudwatch.GraphWidget({
+        title: 'Offers issued vs boots confirmed / day',
+        left: [
+          firmwareMetric('FirmwareOfferIssued', cdk.Duration.days(1)),
+          firmwareMetric('FirmwareBootConfirmed', cdk.Duration.days(1)),
+        ],
+        width: 24,
+        height: 8,
+      }),
+    )
+
+    firmwareDashboard.addWidgets(
+      // Any non-zero value here is the signal to promote the previous version
+      // back. It is charted on its own so it cannot hide under a busy line.
+      new cloudwatch.GraphWidget({
+        title: 'Boot failures + rollbacks / day  (non-zero = unpromote)',
+        left: [firmwareMetric('FirmwareBootFailed', cdk.Duration.days(1))],
+        width: 12,
+        height: 6,
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'Selected range - totals',
+        metrics: [
+          firmwareMetric('FirmwareOfferIssued', cdk.Duration.days(1)),
+          firmwareMetric('FirmwareBootConfirmed', cdk.Duration.days(1)),
+          firmwareMetric('FirmwareBootFailed', cdk.Duration.days(1)),
+          firmwareMetric('FirmwareCheckNotModified', cdk.Duration.days(1)),
+        ],
+        width: 12,
+        height: 6,
+        setPeriodToTimeRange: true,
+      }),
+    )
+
+    // "How many devices are on each version" is a distinct-count, which a metric
+    // cannot answer (deviceId is deliberately not a dimension) - so it comes
+    // from the EMF log lines instead, where the per-device detail does live.
+    firmwareDashboard.addWidgets(
+      new cloudwatch.LogQueryWidget({
+        title: 'Version + model mix (last 7 days)',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter ispresent(FirmwareCheckNotModified) or ispresent(FirmwareOfferIssued)',
+          'stats count(*) as checks by Version, Model',
+          'sort checks desc',
+          'limit 30',
+        ],
+        width: 12,
+        height: 8,
+      }),
+      new cloudwatch.LogQueryWidget({
+        title: 'Admin reads of device firmware history (audit)',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter audit = "admin.firmware_events.read"',
+          'fields at, actorEmail, deviceId',
+          'sort at desc',
+          'limit 50',
+        ],
+        width: 12,
+        height: 8,
+      }),
+    )
+
+    // ---------------------------------------------------------------------------
     // Outputs
     // ---------------------------------------------------------------------------
     new cdk.CfnOutput(this, 'CloudFrontUrl', {
@@ -694,6 +804,10 @@ export class AttStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DashboardUrl', {
       value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards/dashboard/paddlesnitch-app`,
       description: 'CloudWatch dashboard for product events + server health',
+    })
+    new cdk.CfnOutput(this, 'FirmwareDashboardUrl', {
+      value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards/dashboard/paddlesnitch-firmware`,
+      description: 'CloudWatch dashboard for firmware rollout (offers, boots, failures)',
     })
     new cdk.CfnOutput(this, 'DataBucketName', {
       value: dataBucket.bucketName,
