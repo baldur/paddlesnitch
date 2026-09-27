@@ -1072,4 +1072,6 @@ A LilyGO T-Beam S3 Supreme uploads paddle sessions itself (no phone, no card cop
 - API Gateway: $1/million requests
 - Cognito: free up to 50,000 MAU
 
+**Cost attribution — the `project=paddlesnitch` tag.** The AWS account is shared with unrelated projects, so paddlesnitch spend is isolated by tag, not by account. `infra/bin/att.ts` applies `cdk.Tags.of(app).add('project', 'paddlesnitch')` at the app root, which reaches every taggable resource in the stack (Lambdas, buckets, CloudFront, Cognito pool, IAM roles, dashboards). Tag changes are in-place updates (including the Cognito pool's `UserPoolTags` — no replacement). Not covered by CDK, tagged once by hand: Lambda-created log groups (`/aws/lambda/AttStack-*`, `/aws/lambda/att-*`) and the imported `paddlesnitch.com` hosted zone. `project` must be **activated** once as a cost allocation tag (Billing → Cost allocation tags) before Cost Explorer can group by it. Tag-blind charges: SES sending, on-demand Bedrock invocations (would need an application inference profile), tax, and the shared CDK bootstrap bucket.
+
 Migration path to add a database: replace S3 JSON reads with DynamoDB; processing Lambda writes to both S3 (raw) and DynamoDB (indexed). Leaderboard becomes a DynamoDB query instead of reading `leaderboard.json`.
