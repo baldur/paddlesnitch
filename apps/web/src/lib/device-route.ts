@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getDeviceAuth } from '@/lib/auth'
 import type { DeviceAuth } from '@paddlesnitch/core/devices'
 import { getChannelVersion } from '@/lib/firmware'
+import { touchDevice } from '@/lib/devices'
 
 // The one place a device-authenticated route is defined.
 //
@@ -43,6 +44,11 @@ export type DeviceHandler = (req: Request, auth: DeviceAuth) => Promise<Response
 export function withDeviceAuth(handler: DeviceHandler) {
   return async (req: Request): Promise<Response> => {
     const auth = await getDeviceAuth(req)
+    // Record what this device says it is running, on every authenticated
+    // request. Here rather than in each route for the same reason the firmware
+    // header is stamped here: the upload route alone returns from fourteen
+    // places. Rate-limited internally, and it never throws.
+    if (auth) await touchDevice(auth.deviceId, { firmware: reportedFirmware(req), model: reportedModel(req) })
     const res = auth
       ? await handler(req, auth)
       : NextResponse.json({ error: 'unauthorized' }, { status: 401 })

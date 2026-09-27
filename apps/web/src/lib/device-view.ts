@@ -27,6 +27,38 @@ export type DeviceView = {
   linkedAt?: string; lastSeenAt?: string
 }
 
+/** How long without a word before a tracker is worth flagging. Two days: a
+ *  device syncs every 5 minutes when it is powered and on a known network, so
+ *  silence this long means it is off, away, or stuck — all worth noticing. */
+export const DEVICE_QUIET_MS = 2 * 24 * 60 * 60 * 1000
+
+export function deviceIsQuiet(lastSeenAt?: string, now: number = Date.now()): boolean {
+  if (!lastSeenAt) return true
+  const t = Date.parse(lastSeenAt)
+  return !Number.isFinite(t) || now - t > DEVICE_QUIET_MS
+}
+
+/** Is this device behind the released firmware? Null when either side is
+ *  unknown — an unknown answer must not render as "up to date". */
+export function deviceIsBehind(firmware?: string, stableVersion?: string | null): boolean | null {
+  if (!firmware || !stableVersion) return null
+  return firmware !== stableVersion
+}
+
+/** "3 minutes ago" / "2 days ago". Short, because it sits in a dense row. */
+export function fmtAgo(iso?: string, now: number = Date.now()): string {
+  if (!iso) return 'never'
+  const t = Date.parse(iso)
+  if (!Number.isFinite(t)) return 'never'
+  const s = Math.max(0, Math.floor((now - t) / 1000))
+  if (s < 90) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 90) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
 export type DeviceSummary = DeviceView & {
   /** false = the device record is gone (revoked) but its uploads are still ours.
    *  Sessions outlive the binding, so dropping them from the page would hide

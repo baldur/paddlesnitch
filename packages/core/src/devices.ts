@@ -31,6 +31,12 @@ export type DeviceClaim = {
 export type DeviceTokenRecord = { deviceId: string; userId: string; createdAt: string; lastSeenAt: string }
 export type DeviceRecord = {
   deviceId: string; userId: string; name: string; model: string; firmware: string
+  // `firmware` and `lastSeenAt` are the RUNNING version and the LAST TIME THIS
+  // DEVICE SPOKE TO US -- both refreshed by touchDevice() on every authenticated
+  // request. They used to be written once at claim time and never again, which
+  // made them quietly wrong: a device's stored version stayed at whatever it was
+  // wearing the day it was paired, and "last seen" on the website was frozen at
+  // the moment of pairing. Both looked plausible and neither was true.
   linkedAt: string; lastSeenAt: string
   tokenHash: string   // sha256(token) — lets the owner revoke the token record
 }
@@ -193,6 +199,42 @@ export async function resolveDeviceToken(token: string): Promise<DeviceAuth | nu
   if (!rec) return null
   try { rec.lastSeenAt = nowIso(); await putJson(tokenKey(sha256(token)), rec) } catch { /* non-fatal */ }
   return { deviceId: rec.deviceId, userId: rec.userId }
+}
+
+/**
+ * Record that a device just spoke to us, and what it says it is running.
+ *
+ * The device already sends `X-Device-Firmware` and `X-Device-Model` on every
+ * request; until now the server read them for metrics and threw them away, so
+ * nothing anywhere could answer "what version is this device on, and when did I
+ * last hear from it" -- the two questions you actually ask about a fleet.
+ *
+ * Deliberately a NO-OP WRITE when nothing changed and the last touch was recent.
+ * This is on the hot path (every chunk of every upload), and a device syncing a
+ * 2.4 MB sidecar makes ~37 requests in a row; rewriting the same record 37 times
+ * is pure cost. A minute of granularity is far finer than the 5-minute sync.
+ */
+const TOUCH_MIN_INTERVAL_MS = 60_000
+
+export async function touchDevice(
+  deviceId: string,
+  seen: { firmware?: string | null; model?: string | null },
+): Promise<void> {
+  if (!isDeviceId(deviceId)) return
+  try {
+    const d = await getJson<DeviceRecord>(deviceKey(deviceId))
+    if (!d) return
+    const now = Date.now()
+    const last = Date.parse(d.lastSeenAt || '') || 0
+    const fw = seen.firmware && seen.firmware.length <= 32 ? seen.firmware : d.firmware
+    const model = seen.model && seen.model.length <= 64 ? seen.model : d.model
+    // Write when something actually changed, or when the clock has moved on.
+    const changed = fw !== d.firmware || model !== d.model
+    if (!changed && now - last < TOUCH_MIN_INTERVAL_MS) return
+    await putJson(deviceKey(deviceId), { ...d, firmware: fw, model, lastSeenAt: new Date(now).toISOString() })
+  } catch {
+    // Never fail a device request because bookkeeping failed.
+  }
 }
 
 // The signed-in user's devices (owner-filtered).
