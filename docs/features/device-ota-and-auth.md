@@ -1,9 +1,10 @@
 # Device OTA, and how solid the device auth actually is
 
 **Status:** Phase 0 (repartition) **shipped** — #256, 2026-09-19.
-**Phases 1, 2 and 4 — the whole server side — shipped 2026-09-19.** Phase 3
-(firmware) is still spec: nothing on a device does OTA yet, and until it does
-the server half is inert by design. The auth review in Part 1 describes what
+**Phases 1, 2 and 4 — the whole server side — shipped 2026-09-19.**
+**Phase 3 (firmware) built 2026-09-27 and NOT yet verified on hardware** —
+it compiles, all three roles link, the policy is host-tested, and no device has
+ever taken an update. The auth review in Part 1 describes what
 exists today.
 **Owner:** Baldur (product).
 **Related:** [`device-uplink.md`](device-uplink.md) (the transport and auth this
@@ -397,7 +398,41 @@ Define it in the existing `infra/` IaC, not by hand in the console.
 
 ---
 
-## Phase 3 — firmware
+## Phase 3 — firmware · 🔨 BUILT 2026-09-27, UNVERIFIED ON HARDWARE
+
+`src/ota.{h,cpp}` plus a pure, host-tested `src/ota_policy.{h,cpp}`. **Three
+deliberate deviations from what is written below, each caught while building it:**
+
+**1. USB power alone satisfies the power gate.** 3.2 below says
+`boardIsCharging() || boardBatteryMv() > 3800`. On a device with **no cell
+fitted** — the obvious bench rig — `boardBatteryMv()` returns 0 (it
+short-circuits on `!isBatteryConnect()`) and nothing is charging, so that rule
+refuses every update forever and the only symptom is silence. `boardOnUsb()`
+(`PMU.isVbusIn()`) already existed and is the right signal: wall power does not
+brown out during `Update.end()`. There is a host test named after this case.
+
+**2. The self-check does not require the SD card**, though 3.5 lists it. A
+missing card is a user action — they pulled it to copy paddles off — not evidence
+that the new image is bad, and requiring it would roll a good update back after
+three card-less reboots with no explanation. PMU, display and GPS UART are what
+indicate the binary came up.
+
+**3. The fallback probe is hourly, not 7-daily** (3.3). The signal is supposed to
+ride on requests the device already makes, but `uplinkSyncSessions()` returns
+early when the card has no pending files and so makes **no authenticated request
+at all** — an idle device receives no header ever, and a bench device with an
+empty card could never update, which makes the whole feature untestable. It now
+asks outright at most once an hour and **only** when it has heard nothing that
+boot; a device that is uploading still costs zero extra requests.
+
+One more thing worth recording because it is easy to miss: **HTTPClient discards
+every response header unless you call `collectHeaders()` before the request.**
+Without that line the signal silently never arrives and the device falls back to
+probing — which is exactly what the design exists to avoid.
+
+Still **not** built: nothing surfaces the running version on the web app's device
+page (3.7's last line).
+
 
 ### 3.1 New module: `src/ota.{h,cpp}`
 

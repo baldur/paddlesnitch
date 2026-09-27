@@ -51,6 +51,13 @@ void gpsConfigureOutput();            // call once NMEA is flowing, not before
 float boardBatteryVoltage();   // millivolts -> volts, 0 if unavailable
 uint16_t boardBatteryMv();     // 0 if no battery fitted
 bool  boardIsCharging();
+
+// Why the chip last reset, as a short word for the log, the boot banner and the
+// OTA ack. Lives here rather than in main_tracker.cpp (where it used to be a
+// static) because ota.cpp reports it to the server on the first boot after an
+// update, and a brownout or a panic is exactly what distinguishes a bad image
+// from a good one.
+const char *resetReasonStr();
 bool  boardOnUsb();
 int   boardBatteryPercent();   // -1 when no battery is fitted
 bool  board_display_ok();      // did the OLED actually ack at boot

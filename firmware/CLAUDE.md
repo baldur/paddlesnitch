@@ -326,6 +326,64 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   open/seek/read/**close** and nothing holds a card handle across a TLS round trip.
   Holding one File open across all 37 requests is what failed before.
 
+### OTA (firmware 0.11.0) — built, NOT yet proven on hardware
+
+`src/ota.{h,cpp}` does the work; `src/ota_policy.{h,cpp}` holds the DECISIONS and
+is host-tested (`pio test -e native`, 15 cases). That split is the point: the
+gate logic is what can brick a device or silently never update one, so it is the
+part that runs without a board.
+
+Everything runs on the **uplink task (core 0)** like every other network
+operation, draws nothing, and **never touches the SD card** — the image streams
+from TLS straight into the inactive slot, because the card shares an SPI bus with
+the IMU and that bus is this firmware's worst bug class.
+
+How an update reaches the device:
+
+1. `uploadChunked` calls `http.collectHeaders({"X-PS-Firmware"})` **before** the
+   request — HTTPClient discards every response header otherwise — and feeds the
+   value to `otaNoteServerVersion()` on every response, failures included.
+2. After a sync, the task sends any pending ack, then calls `otaMaybeUpdate()`.
+3. Gates (`otaEvaluateGates`): something pending, version differs, not recording,
+   WiFi up **and** `everConnected`, power OK, and this version has not failed 3×.
+4. Manifest → stream to the inactive slot → **sha256 checked over the stream**
+   → `Update.end(true)` → NVS `pending`/`boots` → reboot.
+
+**Three deliberate deviations from the spec, each for a reason:**
+
+- **USB power alone satisfies the power gate.** The spec said
+  `charging || batteryMv > 3800`. With no cell fitted `boardBatteryMv()` returns
+  0 (it short-circuits on `!isBatteryConnect()`) and nothing is charging — so a
+  bench device on USB could **never** update, and the only symptom would be
+  silence. There is a host test named after exactly this.
+- **The self-check does NOT require the SD card.** A missing card is a user
+  action, not evidence of a bad image; requiring it would roll back a good update
+  after three card-less reboots. PMU + display + GPS are what indicate the binary
+  came up.
+- **The fallback probe is hourly, not 7-daily.** The signal rides on responses,
+  but `uplinkSyncSessions()` returns early when there is nothing to upload and
+  therefore makes **no request at all** — so an idle device receives no header
+  ever. It now asks outright, at most once an hour, and **only** when it has
+  heard nothing that boot. A device that uploads still costs zero extra requests.
+
+**Rollback is app-level.** `otaBootCheck()` runs first thing in `setup()`, before
+any hardware init, and counts boots against `OTA_MAX_BOOTS` (3). `otaMarkValid()`
+runs once bring-up succeeds and cancels it. An image that faults *before*
+`otaBootCheck()` is beyond app-level rescue and needs a cable — that limit is
+real, and whether the prebuilt Arduino bootloader has
+`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE` set is **unverified**.
+
+**Power loss mid-download is safe by construction:** `otadata` is untouched until
+`Update.end()` succeeds, so an interrupted download leaves a half-written
+inactive slot that is simply never booted.
+
+**NOT verified on hardware.** It compiles, all three roles link, and the policy
+is host-tested. Nothing has been flashed and no device has ever taken an update.
+The verification list is in
+[`../docs/features/device-ota-and-auth.md`](../docs/features/device-ota-and-auth.md);
+item 4 — deliberately ship a broken image and confirm the rollback fires — is the
+one that decides whether this is safe to point at a device that is not on a desk.
+
 **Flash layout is OTA-capable as of 2026-09-19.** `partitions.csv` carries
 `app0` + `app1` at 3.9375 MB each; `spiffs` was removed (1.625 MB, referenced by
 nothing — sessions live on the SD card). `nvs` deliberately kept its offset and
@@ -346,6 +404,13 @@ bytes. `QRDUMP <text>` prints the module grid over serial, which is how you
 check for an inverted or over-promoted code without a camera. See
 [`docs/features/qr-onboarding.md`](../docs/features/qr-onboarding.md); phone
 scanning is NOT yet verified.
+
+The version string comes from **`firmware/VERSION`**, read by
+`scripts/version.py` (a PlatformIO `pre:` script on `[hw]`). It is NOT a literal
+in `platformio.ini` any more — that drifted and sat at 0.9.0 across several
+behaviour changes, and with OTA a stale version means a device never updates or
+updates in a loop. The release workflow fails a build where `firmware/src`
+changed and `VERSION` did not.
 
 Serial commands (tracker env): `HELP`, `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
 `PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`,
