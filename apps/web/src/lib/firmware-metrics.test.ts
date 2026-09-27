@@ -35,3 +35,24 @@ describe('firmware EMF', () => {
     expect(doc._aws.CloudWatchMetrics[0].Dimensions).toEqual([['Version', 'Model']])
   })
 })
+
+describe('DeviceSeen — the fleet heartbeat', () => {
+  it('carries deviceId as a PROPERTY, never as a dimension', () => {
+    // This is the whole design. A dimension mints a billable time series per
+    // value; a property is queryable in Logs Insights and costs nothing per
+    // value. count_distinct(deviceId) answers "how many devices" from the log
+    // line without the fleet size ever showing up on the metrics bill.
+    const doc = buildFirmwareEmf('DeviceSeen', { version: '0.14.0', model: 'lilygo-tbeam-s3-supreme' },
+                                 { deviceId: '5A43CA48' })
+    expect(doc._aws.CloudWatchMetrics[0].Dimensions).toEqual([['Version', 'Model']])
+    expect((doc as Record<string, unknown>).deviceId).toBe('5A43CA48')
+    // And it must not have leaked into the dimension list under any spelling.
+    expect(JSON.stringify(doc._aws.CloudWatchMetrics[0].Dimensions).toLowerCase()).not.toContain('device')
+  })
+
+  it('is emitted under its own metric name so it can be counted', () => {
+    const doc = buildFirmwareEmf('DeviceSeen', { version: '0.14.0' })
+    expect(doc._aws.CloudWatchMetrics[0].Metrics).toEqual([{ Name: 'DeviceSeen', Unit: 'Count' }])
+    expect((doc as Record<string, unknown>).DeviceSeen).toBe(1)
+  })
+})
