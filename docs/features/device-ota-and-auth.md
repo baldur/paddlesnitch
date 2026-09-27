@@ -89,8 +89,10 @@ access to the board → read the flash → recover the token → upload arbitrar
 sessions to that user's account. Severity is low (the blast radius is "junk
 paddles appear in one account"), but it is unbounded in time because of (1).
 
-**3. `POST /api/devices/claim` is unauthenticated and unthrottled.** Anyone can
-mint claim codes for any `deviceId`. Two consequences:
+**3. `POST /api/devices/claim` is unauthenticated and unthrottled.**
+**✅ BOTH FIXED 2026-09-27 — see "Prerequisites 1 and 2" below.** Claims are now
+keyed by `deviceId` (redemption is a single read) and both endpoints are rate
+limited. The original finding is kept for the record:
    - *Storage/DoS:* unbounded claim records, and `redeemToken` **lists and reads
      every claim** on each poll (`listKeys('device-claims/')`), so the cost of a
      poll grows with the number of outstanding claims. This is the one I'd fix
@@ -104,6 +106,7 @@ mint claim codes for any `deviceId`. Two consequences:
 
 **4. Rate limiting is deferred** (already recorded in CLAUDE.md). The two device
 endpoints are unauthenticated, which is exactly where a limit belongs.
+**✅ DONE 2026-09-27** — fixed-window limiter, see below.
 
 **5. `resolveDeviceToken` writes on every request** to update `lastSeenAt`. Not a
 security issue; a write per API call is worth knowing about before traffic grows.
@@ -613,12 +616,109 @@ firmware bug could set both.
 Building this does not make it safe to use. Before `channels/stable.json` is
 ever written for real:
 
-1. Prerequisites 1 and 2 above.
+1. ~~Prerequisites 1 and 2 above.~~ **✅ done 2026-09-27.**
 2. Phase 3, including verification item 4 — deliberately ship a broken image and
    confirm the rollback fires.
 3. Confirm the bucket policy allows writes to `firmware/` only from the release
    workflow's OIDC role. Today the workflow reuses the deploy role, so anything
    that can deploy can also release.
+4. Add a required reviewer to the `firmware-release` GitHub Environment. A
+   workflow referencing an environment that does not exist **auto-creates it with
+   no protection rules**, so the promote gate is nominal until someone sets one.
+
+---
+
+## Prerequisites 1 and 2 — shipped 2026-09-27
+
+Both were the stated gate before anything may be promoted to `stable`, and both
+were worth doing on their own merits.
+
+### 1. Claims are keyed by `deviceId`
+
+`device-claims/{deviceId}.json`, plus a `device-claim-codes/{code}.json ->
+{deviceId}` index for the browser half (the user types a code; the device never
+knows its own code).
+
+**The scan it removes was the real cost.** The device polls `/api/devices/token`
+every 5 seconds for up to five minutes, and `redeemToken` used to `listKeys` the
+whole claim prefix and read every record on *each* of those ~60 polls. Onboarding
+one device therefore got slower as anyone's outstanding claims accumulated, on an
+unauthenticated endpoint. It is now a single direct read.
+
+**A second property falls out, and it is the one to remember: a device can only
+have ONE outstanding claim.** A new claim supersedes the previous one. That
+bounds storage under a flood, and it kills the old code:
+
+- `createClaim` deletes the superseded code's index entry.
+- `linkClaim` additionally verifies `claim.claimCode === code` after resolving
+  the index. Without that check a stale index entry would bind whatever claim the
+  device holds *now* — someone who saw an earlier code could type it and capture
+  a later claim. Belt and braces, because an interrupted write must not open it.
+- Redeeming deletes the code index, so a spent code resolves to nothing.
+
+**No migration.** Claims live 10 minutes, so any in flight at deploy time is
+simply lost and the device re-claims on its next attempt. Writing a migration for
+a 10-minute-lived record would be more risk than the thing it protects.
+
+**This changed one existing test, legitimately.** `devices.test.ts` created two
+claims *for the same device* to get two simultaneously-live claims; with
+per-device keying the second supersedes the first, so it now uses two devices.
+The superseding behaviour got its own tests rather than being absorbed silently.
+
+### 2. Rate limits — and why the spec's number was wrong
+
+`packages/core/src/rate-limit.ts`: a fixed-window counter in the object store.
+Limits in `apps/web/src/lib/device-limits.ts`.
+
+| Endpoint | Limit |
+|---|---|
+| `/api/devices/claim` | 10/hour per `deviceId`, 30/hour per IP |
+| `/api/devices/token` | 300/hour per `deviceId` |
+
+**Part 1 item 4 suggested 30/hour per device on `/token`. Applying that would
+have broken onboarding.** `uplinkClaim()` (`firmware/src/uplink.cpp`) polls on a
+`delay(5000)` loop for `timeoutMs`, default `300000` — so **one legitimate claim
+attempt is ~60 requests in five minutes**. A 30/hour cap cuts the device off two
+and a half minutes into its own five-minute window, and it would have presented
+as *"claim code expired"*: a self-inflicted bug that costs an afternoon to find.
+300/hour is five full rounds, derived from that measured rate, and there is a
+test that replays a full 60-poll round.
+
+Deliberate choices, all with a reason:
+
+- **Validation before the limiter**, on both routes, so a malformed `deviceId`
+  cannot spend a real device's allowance and the limiter's storage key is always
+  a validated 8-hex string.
+- **A bad `deviceId` on `/token` still answers `202 pending`**, not a distinct
+  error — that endpoint's whole design is that no response reveals whether a
+  device or secret is real.
+- **No per-IP limit on `/token`**: 60 polls per round means any IP cap low enough
+  to matter is lower than two devices onboarding behind one router.
+- **No IP header → per-device limit only.** A shared `unknown` bucket would make
+  every device in local dev compete for one allowance.
+- **Only the first `x-forwarded-for` entry** is used; the rest are caller-supplied
+  and trivially spoofed.
+- **429 + `Retry-After`.** The firmware does not read it today (it treats any
+  unexpected status as retry, which is the right default), but a limiter that
+  cannot say when to come back is one nobody can integrate against.
+
+Two limitations, stated rather than discovered later:
+
+- **The increment is not atomic.** No compare-and-swap in the storage layer, so
+  parallel requests can lose a write and an attacker undercounts. A serial poller
+  — which is what the device is — counts exactly. Precise accounting needs
+  DynamoDB conditional writes or ElastiCache, the "real store" this spec defers
+  to. This is a speed bump for cost and storage, **not** a WAF, and not a
+  brute-force defence: the claim secret is 32 random bytes, so guessing it was
+  never the threat.
+- **It fails OPEN.** A storage error allows the request. Being locked out of
+  onboarding by a transient S3 blip is worse than serving one extra request.
+  There is a test for this, and it was mutation-checked — flipping it to fail
+  closed makes the test fail.
+
+Counters live under `rate/` with a **1-day bucket lifecycle rule** (windows are
+one hour; nothing deletes them inline because a delete would cost more than the
+object it removes).
 
 ---
 ## Security: what this spec does and does not give you
@@ -645,9 +745,9 @@ least the first two before promoting anything to `stable`.
 
 In this order, because each one is a prerequisite for the next being worth doing:
 
-1. Key claims by `deviceId` (kills the O(n) scan).
-2. Rate-limit the two unauthenticated device endpoints.
-3. Expiry + rotation for device tokens.
+1. ~~Key claims by `deviceId` (kills the O(n) scan).~~ **✅ done 2026-09-27.**
+2. ~~Rate-limit the two unauthenticated device endpoints.~~ **✅ done 2026-09-27.**
+3. Expiry + rotation for device tokens. **Still open** — the next one.
 4. Signed images.
 5. ~~Repartition + A/B~~ — **done, #256.** See Phase 0.
 

@@ -27,6 +27,9 @@ const jreq = (body: unknown, headers: Record<string, string> = {}) =>
 const bearer = (t: string) => new Request('http://x', { headers: { authorization: `Bearer ${t}` } })
 
 const DEVICE = '5A43CA48'
+// A second, distinct device. Claims are keyed by deviceId now, so any test
+// needing two simultaneously-live claims needs two devices.
+const OTHER_DEVICE = '5A43CA49'
 
 describe('device pairing (#212 device-uplink)', () => {
   it('claim → link → token issues a token exactly once; a second token call is 410', async () => {
@@ -71,8 +74,11 @@ describe('device pairing (#212 device-uplink)', () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(new Date('2026-09-05T12:00:00Z'))
+      // TWO DEVICES, deliberately. Claims are keyed by deviceId, so a second
+      // claim for the same device supersedes the first (covered separately
+      // below) and this test would then be asserting the wrong thing.
       const forToken = await createClaim(DEVICE, 'm', 'f')
-      const forLink = await createClaim(DEVICE, 'm', 'f')
+      const forLink = await createClaim(OTHER_DEVICE, 'm', 'f')
       vi.setSystemTime(new Date('2026-09-05T12:11:00Z')) // +11 min, past the 10-min TTL
 
       const tok = await token(jreq({ deviceId: DEVICE, claimSecret: forToken.claimSecret }))
@@ -123,6 +129,41 @@ describe('device pairing (#212 device-uplink)', () => {
     const { devices } = await (await listDevices()).json()
     expect(devices).toHaveLength(1)
     expect(Object.keys(devices[0]).sort()).toEqual(['deviceId', 'firmware', 'lastSeenAt', 'linkedAt', 'model', 'name'])
+  })
+
+  it('a second claim supersedes the first for that device, and the old code dies with it', async () => {
+    // Claims are keyed by deviceId, so a device can only ever have ONE
+    // outstanding claim. That is what makes redemption a single read instead of
+    // a scan of every claim in the bucket, and it means a flood of claim
+    // requests for one device overwrites rather than accumulating.
+    const u = await makeUser('Superseded')
+    const first = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
+    const second = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
+    expect(second.claimCode).not.toBe(first.claimCode)
+
+    // The old code no longer resolves to anything — otherwise someone who saw
+    // an earlier code could type it and capture the device's current claim.
+    expect(await linkClaim(first.claimCode, u.id)).toEqual({ error: 'unknown_code' })
+
+    // The old secret is equally dead, and says `pending` like every other
+    // non-match rather than revealing that it was once real.
+    const stale = await token(jreq({ deviceId: DEVICE, claimSecret: first.claimSecret }))
+    expect(stale.status).toBe(202)
+
+    // The current claim still works end to end.
+    expect(await linkClaim(second.claimCode, u.id)).toMatchObject({ deviceId: DEVICE })
+    const ok = await token(jreq({ deviceId: DEVICE, claimSecret: second.claimSecret }))
+    expect(ok.status).toBe(200)
+  })
+
+  it('redeeming a claim consumes its code, so the code cannot be reused', async () => {
+    const u = await makeUser('Consumed Code')
+    const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
+    mockAuth(u.idToken)
+    await link(jreq({ claimCode }))
+    expect((await token(jreq({ deviceId: DEVICE, claimSecret }))).status).toBe(200)
+    // The code index is dropped the moment the token is issued.
+    expect(await linkClaim(claimCode, u.id)).toEqual({ error: 'unknown_code' })
   })
 
   it('rejects a malformed deviceId at claim', async () => {
