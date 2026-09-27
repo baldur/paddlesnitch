@@ -541,6 +541,77 @@ commit on `main` while `firmware/src/**` changed.
 Deviations and additions against the spec above, so the next person does not
 have to diff the code to find them.
 
+### The server flow, as built
+
+The three diagrams higher up are **design** sketches, and two of them describe
+firmware that does not exist yet. This one is the server as it actually is, and
+is the one to review if you want to know what a device will meet today.
+
+```mermaid
+flowchart TD
+    req(["GET /api/devices/firmware?current=X"]) --> auth{"Bearer token resolves?"}
+    auth -- no --> r401["401 unauthorized<br/>still carries X-PS-Firmware"]
+    auth -- yes --> chan{"is anything promoted<br/>to the stable channel?"}
+    chan -- no --> r404["404 no_channel<br/>the normal state until a release"]
+    chan -- yes --> same{"current == channel version?"}
+    same -- yes --> r304a["304, ETag = the version<br/>no body · no manifest read · no presign"]
+    same -- no --> inm{"If-None-Match matches?"}
+    inm -- yes --> r304b["304 + ETag<br/>same cost as above"]
+    inm -- no --> man{"does that version's<br/>manifest exist?"}
+    man -- no --> r503["503 manifest_missing<br/>OUR release mistake — logged loudly,<br/>never a quiet 304"]
+    man -- yes --> rec["write the 'offered' record<br/>emit FirmwareOfferIssued"]
+    rec --> r200["200 manifest<br/>+ a 15-minute presigned URL,<br/>minted per request"]
+```
+
+### How traffic is kept down — and it is not mainly the 304
+
+There are three layers, and they are worth separating because the first one does
+almost all the work:
+
+**Layer 1 — the signal. It removes the request entirely.** `X-PS-Firmware` is
+stamped on every device-authenticated response by `withDeviceAuth`, so the device
+compares versions locally against something it was already receiving. A device
+that is up to date makes **no firmware request at all, ever** — not a cheap one, none.
+
+```mermaid
+flowchart TD
+    s(["sync fires — boot / recording stop / tap / every 5 min"]) --> up["POST /api/devices/sessions<br/>the upload it was doing anyway"]
+    up --> h["response carries X-PS-Firmware<br/>stamped in ONE place, so no route can forget it"]
+    h --> q{"differs from the compiled<br/>FIRMWARE_VERSION?"}
+    q -- "no — the steady state" --> z(["no firmware request.<br/>~288 syncs a day, zero extra calls"])
+    q -- yes --> f["GET /api/devices/firmware<br/>one call, then the download"]
+    q -. "header absent = no opinion,<br/>NOT 'you are current'" .-> z
+```
+
+**Layer 2 — the 304, for when it does ask.** A device that asks anyway (it raced
+a promotion, or retried after a failed download) gets `304` with the version as
+its `ETag`, so its next `If-None-Match` is answered without reading a manifest or
+signing a URL. No body either.
+
+**Layer 3 — the channel read is cached 60 s in-process.** This is what makes
+Layer 1 affordable: the header would otherwise cost a storage read on every one
+of the ~48 chunk responses in a single sync. `promoteFirmware` drops the cache, so
+a rollback is not delayed by it.
+
+### The honest caveat: a 304 is not free
+
+Worth knowing before anyone leans on the 304 as the saving. **Every**
+device-authenticated request — a 304 included — costs one storage **read plus one
+write**, because `resolveDeviceToken` bumps `lastSeenAt` on every call:
+
+| Response | Auth read | Auth write | Manifest read | Presign |
+|---|---|---|---|---|
+| `304` | yes | yes | no | no |
+| `404 no_channel` | yes | yes | no | no |
+| `200` | yes | yes | yes | yes |
+
+So the 304 saves the manifest read, the signature and the body — but the auth
+write dominates it either way. That per-request write is **Part 1 weakness 5,
+still unfixed**, and it is the thing to attack if device traffic ever actually
+costs money. Layer 1 is what keeps that from mattering: the request does not
+happen at all.
+
+
 **`firmware/VERSION` is now the single source of truth**, read by
 `firmware/scripts/version.py` (a PlatformIO `pre:` script on `[hw]`, so every
 board environment gets it) and by the release workflow. The literal in
