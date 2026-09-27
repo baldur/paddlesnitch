@@ -405,6 +405,12 @@ check for an inverted or over-promoted code without a camera. See
 [`docs/features/qr-onboarding.md`](../docs/features/qr-onboarding.md); phone
 scanning is NOT yet verified.
 
+**Merging `firmware/**` to `main` RELEASES.** The workflow builds, publishes and
+promotes to stable in one run, so a merged change reaches devices on their next
+sync. Running it manually (`workflow_dispatch`) promotes any already-built
+version and is the **rollback** lever. Test by cable before you merge — that is
+now the gate, along with the firmware's own three-failed-boots rollback.
+
 The version string comes from **`firmware/VERSION`**, read by
 `scripts/version.py` (a PlatformIO `pre:` script on `[hw]`). It is NOT a literal
 in `platformio.ini` any more — that drifted and sat at 0.9.0 across several

@@ -1,15 +1,36 @@
 name: Firmware build & release
 
-# Building and releasing are two different things and this workflow keeps them
-# that way (docs/features/device-ota-and-auth.md, Phase 4).
+# MERGING RELEASES. A push to main touching firmware/** builds, publishes AND
+# promotes to stable, so devices pick it up on their next sync.
 #
-#   push to main touching firmware/**  -> BUILD. Uploads firmware/<version>/ to
-#                                         the data bucket. No device sees it.
-#   workflow_dispatch with a version   -> RELEASE. Writes channels/stable.json.
-#                                         Every device gets it on its next sync.
+#   push to main touching firmware/**  -> build, publish, promote to stable
+#   workflow_dispatch with a version   -> promote any ALREADY-BUILT version.
+#                                         This is the rollback lever.
 #
-# Conflating them means one bad merge reaches every tracker at once, and a
-# tracker that will not boot needs a cable and a person holding it.
+# This used to require a separate manual promote, on the reasoning that one bad
+# merge would otherwise reach every tracker at once. The reasoning was sound but
+# the gate was in the wrong place for how this repo actually works: firmware is
+# flashed and tested by cable BEFORE the PR is merged, so by merge time the
+# decision to release has already been made with a device in hand. A second
+# confirmation of a decision already taken is ceremony, and ceremony gets
+# skipped or forgotten -- 0.13.0 sat published-but-invisible for exactly that
+# reason.
+#
+# WHAT NOW STANDS BETWEEN A BAD MERGE AND A DEAD DEVICE, in order:
+#   1. Flashing and testing on hardware before opening the PR.
+#   2. The VERSION-bump guard and the never-overwrite guard below.
+#   3. THE APP-LEVEL ROLLBACK IN THE FIRMWARE -- three failed boots and the
+#      device puts the old image back (src/ota.cpp, otaBootCheck).
+#
+# (3) is now load-bearing rather than a backstop. Removing the human gate moves
+# the weight onto the automatic one, so a broken-image rollback test is not
+# optional before this points at devices in other people's hands.
+#
+# Staged rollout is deliberately NOT built here. The channel mechanism already
+# supports it -- the server reads firmware/channels/<channel>.json and this
+# workflow can already write `beta` -- so when there are enough devices to make
+# it meaningful, the change is to have some devices ask for `beta` and to point
+# the auto-promote at that channel instead.
 
 on:
   push:
@@ -18,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to promote to the stable channel (must already be built)'
+        description: 'Version to promote (must already be built). Use this to ROLL BACK.'
         required: true
         type: string
       channel:
@@ -40,6 +61,8 @@ jobs:
   build:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -136,17 +159,25 @@ jobs:
             echo "- size: ${{ steps.m.outputs.size }} bytes"
             echo "- sha256: \`${{ steps.m.outputs.sha256 }}\`"
             echo ""
-            echo "**Not released.** No device will see this until it is promoted:"
-            echo "run this workflow via *Run workflow* with version \`${{ steps.v.outputs.version }}\`."
+            echo "Promoting to **stable** next — devices take it on their next sync."
           } >> "$GITHUB_STEP_SUMMARY"
 
   promote:
-    if: github.event_name == 'workflow_dispatch'
+    # Both paths land here: a merge promotes what it just built, and a manual
+    # run promotes whatever version you name. One implementation, so the
+    # rollback lever cannot drift from the thing that does the releasing.
+    #
+    # `always()` because `build` is SKIPPED on a manual run, and a skipped
+    # dependency would otherwise skip this too.
+    needs: [build]
+    if: |
+      always() &&
+      (github.event_name == 'workflow_dispatch' || needs.build.result == 'success')
     runs-on: ubuntu-latest
-    # A GitHub Environment turns promotion into something with a required
-    # reviewer and a deployment record, which is the point: this is the step
-    # that reaches real hardware.
-    environment: firmware-release
+    # No `environment:` gate. It would prompt for approval on every merge, which
+    # is exactly the step this change removes. If devices ever ship to people who
+    # cannot reach them with a cable, put it back on the auto path -- NOT on the
+    # manual one, which is the rollback and must stay fast.
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -155,24 +186,43 @@ jobs:
 
       # Promoting a version whose bytes are missing would turn every device's
       # next sync into a failed download, so check BOTH objects first.
+      - name: Resolve what to promote
+        id: t
+        run: |
+          # A merge promotes what it just built; a manual run promotes the named
+          # version. Channel defaults to stable on the merge path.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+            echo "how=manual" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ needs.build.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "how=merge" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Verify the build exists
         run: |
-          V="${{ inputs.version }}"
+          V="${{ steps.t.outputs.version }}"
           printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || { echo "::error::not a semver: $V"; exit 1; }
           aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/firmware.bin"   >/dev/null
           aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/manifest.json" >/dev/null
 
       - name: Promote
         run: |
-          V="${{ inputs.version }}"
+          V="${{ steps.t.outputs.version }}"
+          C="${{ steps.t.outputs.channel }}"
           jq -n --arg v "$V" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-             --arg by "${{ github.actor }}" \
-            '{version:$v, promotedAt:$at, promotedBy:$by}' > channel.json
-          aws s3 cp channel.json "s3://$DATA_BUCKET/firmware/channels/${{ inputs.channel }}.json"
+             --arg by "${{ github.actor }}" --arg how "${{ steps.t.outputs.how }}" \
+            '{version:$v, promotedAt:$at, promotedBy:$by, via:$how}' > channel.json
+          aws s3 cp channel.json "s3://$DATA_BUCKET/firmware/channels/$C.json"
           {
-            echo "### Promoted ${{ inputs.version }} to ${{ inputs.channel }}"
+            echo "### Released $V to $C"
             echo ""
-            echo "Devices pick this up on their next sync (within ~5 minutes, plus up to"
-            echo "60s of channel cache). Watch the \`paddlesnitch-firmware\` dashboard:"
-            echo "any \`FirmwareBootFailed\` is the signal to promote the previous version back."
+            echo "Devices take it on their next sync (~5 min, plus up to 60 s of channel cache)."
+            echo "A device with nothing to upload makes no request, so it finds this via its"
+            echo "hourly probe instead — power-cycle one to see it immediately."
+            echo ""
+            echo "**To roll back:** run this workflow manually with the previous version."
+            echo "Watch \`paddlesnitch-firmware\` — any \`FirmwareBootFailed\` is the signal."
           } >> "$GITHUB_STEP_SUMMARY"
