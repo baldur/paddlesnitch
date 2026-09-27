@@ -8,6 +8,7 @@
 #include "storage.h"
 #include "board.h"
 #include "root_ca.h"
+#include "ota.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -498,8 +499,17 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
         http.addHeader("X-Device-Firmware", FIRMWARE_VERSION);
         http.addHeader("X-Device-Model", "lilygo-tbeam-s3-supreme");
         http.setTimeout(60000);
+        // THE OTA SIGNAL. HTTPClient throws away every response header unless it
+        // is asked for one by name BEFORE the request, so without this line the
+        // device would never learn a new version exists and would fall back to
+        // polling -- which is exactly what the design avoids.
+        static const char *kCollect[] = { "X-PS-Firmware" };
+        http.collectHeaders(kCollect, 1);
         int rc = http.sendRequest("POST", buf, got);
         String payload = http.getString();
+        // Read it on EVERY response, including the failures below: a device
+        // whose uploads are failing is exactly one that may need a new build.
+        otaNoteServerVersion(http.header("X-PS-Firmware").c_str());
         http.end();
 
         // 202 = part stored, 201 = assembled. Anything else is a failure worth
@@ -824,6 +834,15 @@ static void uplinkTask(void *)
             g_sdBusy = false;
             st.busy       = false;
             statusSet(st);
+        }
+
+        // OTA, while the radio is still up and the card is free. Order matters:
+        // the ack first (it is small, and a rollback report is the thing we most
+        // want to reach the server), then the update, which never returns if it
+        // succeeds -- it reboots.
+        if (netIsClaimed() && !g_yield) {
+            if (otaAckPending()) otaSendAck();
+            otaMaybeUpdate();
         }
 
         netDisconnect();

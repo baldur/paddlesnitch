@@ -12,6 +12,7 @@
 #include "storage.h"
 #include "imu.h"
 #include <esp_ota_ops.h>
+#include "ota.h"
 #include "qr.h"
 #include "spibus.h"
 #include "dbg.h"
@@ -82,22 +83,6 @@ enum class Menu { None, Pick, Settings };
 // Chooser row for a screen. One mapping, used by both the draw and the selection
 // blink: (int)Screen happens to match the menu order today, and relying on that
 // would break silently the first time the enum is reordered.
-static const char *resetReasonStr()
-{
-    switch (esp_reset_reason()) {
-    case ESP_RST_POWERON:  return "poweron";
-    case ESP_RST_SW:       return "sw";
-    case ESP_RST_PANIC:    return "PANIC";
-    case ESP_RST_INT_WDT:  return "int-wdt";
-    case ESP_RST_TASK_WDT: return "TASK-WDT";
-    case ESP_RST_WDT:      return "wdt";
-    case ESP_RST_BROWNOUT: return "BROWNOUT";
-    case ESP_RST_EXT:      return "ext";
-    case ESP_RST_DEEPSLEEP:return "deepsleep";
-    default:               return "unknown";
-    }
-}
-
 // Which menu a screen belongs to, so a double-tap returns to the one that
 // opened it rather than always to the top.
 static Menu parentOf(Screen s)
@@ -221,6 +206,10 @@ void setup()
     dbgInit();
     Serial.printf("\n=== T-Beam S3 Supreme bring-up (fw %s) ===\n", FIRMWARE_VERSION);
     DBGI("boot", "fw %s, reset=%s", FIRMWARE_VERSION, resetReasonStr());
+    // BEFORE any hardware init. If this image is on trial and has already failed
+    // to come up three times, this puts the old one back and reboots -- and it
+    // has to run before the thing that is crashing gets a chance to crash again.
+    otaBootCheck();
     // Prove the OTA layout rather than assert it. The previous table declared
     // otadata and typed app0 as ota_0 but had no app1, so this line would have
     // printed "OTA: NOT POSSIBLE" -- which is the whole reason it exists.
@@ -289,6 +278,27 @@ void setup()
     // a failure means the device is away from home, and hijacking it into
     // setup mode when it should be out tracking would be worse than useless.
     if (!netHasWifi() || !netcfg.everConnected) netBringUp();
+
+    // The self-check that makes an update permanent. Everything above has run:
+    // PMU, display, GPS UART and the card all reported in. If this image were
+    // going to fail, it would have failed by now -- so cancel the rollback and
+    // queue the ack. On a normal boot this is a no-op.
+    // DELIBERATELY NOT including board.sdcard, which the spec's self-check lists.
+    // A missing card is a USER ACTION -- they pulled it to copy paddles off --
+    // not evidence that the new image is bad. Requiring it would roll back a
+    // perfectly good update after three card-less reboots, and the person would
+    // have no idea why their device went backwards. PMU, display and GPS UART
+    // are the ones that actually indicate whether this binary came up.
+    if (board.pmu && board.display && board.gps) {
+        if (!board.sdcard) DBGW("ota", "validating without a card -- card absence is not an image fault");
+        otaMarkValid();
+    } else {
+        // Deliberately NOT marking valid on a partial bring-up: a new image that
+        // cannot see the card or the screen is exactly what rollback is for, and
+        // staying silent lets the boot counter do its job.
+        DBGW("ota", "bring-up incomplete (pmu=%d disp=%d gps=%d) -- not validating",
+             board.pmu, board.display, board.gps);
+    }
 
     uplinkTaskStart();   // core 0; the UI and logging keep running on core 1
     // linkAttempt() can block for minutes while polling for the claim code, and
@@ -690,6 +700,24 @@ static void checkButton()
     if (stopArmed && millis() > stopArmUntil)     stopArmed     = false;
 
     bool down = digitalRead(BUTTON_PIN) == LOW;
+
+    // While an image is being written, the button does nothing at all -- the
+    // screen says so. Acting on a gesture mid-flash could start a recording or
+    // open the portal underneath a task that is about to reboot the device.
+    if (otaGetProgress().phase == OtaPhase::Downloading ||
+        otaGetProgress().phase == OtaPhase::Verifying) {
+        heldSince = 0;
+        return;
+    }
+
+    // "Updated to X" is dismissed by ANY press, which is the promise the screen
+    // makes. Consumed here so the same press does not also act on the screen
+    // underneath it.
+    if (!down && heldSince && otaJustUpdated()) {
+        heldSince = 0;
+        otaDismissUpdatedNotice();
+        return;
+    }
 
     if (down && heldSince == 0) {
         heldSince = millis();
@@ -1284,6 +1312,24 @@ void loop()
         u.psramFree   = ESP.getFreePsram();
         u.fwVersion   = FIRMWARE_VERSION;
         u.resetReason = resetReasonStr();
+        {
+            // Read once per UI tick rather than per draw: otaGetProgress takes a
+            // critical section, and the draw path runs at 4 Hz on core 1 while
+            // the writer is the uplink task on core 0.
+            OtaProgress op = otaGetProgress();
+            u.otaActive  = (op.phase == OtaPhase::Checking || op.phase == OtaPhase::Downloading ||
+                            op.phase == OtaPhase::Verifying || op.phase == OtaPhase::Done);
+            u.otaPercent = op.percent;
+            u.otaVersion = op.version;
+            u.otaMessage = op.message;
+            // The post-update notice. NVS-backed, so it survives the reboot that
+            // installed the image -- which is the only way it can ever be shown.
+            if (!u.otaActive && otaJustUpdated()) {
+                u.otaUpdated = true;
+                u.otaVersion = otaJustUpdatedVersion();
+                u.otaNotes   = otaJustUpdatedNotes();
+            }
+        }
         u.rssi        = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
         u.serverHost  = netcfg.baseUrl;
         u.sdSizeMB    = storageCardSizeMB();

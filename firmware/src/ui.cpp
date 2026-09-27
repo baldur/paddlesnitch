@@ -570,9 +570,73 @@ static void drawNerd(const UiState &s)
     display.sendBuffer();
 }
 
+// A firmware write, with a bar that actually moves. The spec calls for this in
+// as many words, and this firmware has already paid once for a motionless
+// screen being indistinguishable from a wedge.
+static void drawOtaProgress(const UiState &s)
+{
+    display.clearBuffer();
+    display.setFont(u8g2_font_6x10_tf);
+    char title[32];
+    snprintf(title, sizeof(title), "Updating %s", s.otaVersion.c_str());
+    display.drawStr(0, 12, title);
+    display.drawHLine(0, 15, 128);
+
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 29, s.otaMessage.c_str());
+
+    char pct[8];
+    snprintf(pct, sizeof(pct), "%u%%", (unsigned)s.otaPercent);
+    display.drawStr(0, 42, pct);
+    display.drawFrame(0, 46, 128, 9);
+    const int inner = (int)(126.0f * s.otaPercent / 100.0f);
+    if (inner > 0) display.drawBox(1, 47, inner, 7);
+
+    // Says the two things a person standing over it needs: do not unplug, and
+    // the buttons are not broken, they are ignored.
+    display.drawStr(0, 63, "keep power on - buttons off");
+    display.sendBuffer();
+}
+
+// Shown once, on the first boot of a new version, until any button press. The
+// whole point of surfacing it: someone who knows something changed can tell you
+// when something breaks.
+static void drawOtaUpdated(const UiState &s)
+{
+    display.clearBuffer();
+    display.setFont(u8g2_font_6x10_tf);
+    char title[32];
+    snprintf(title, sizeof(title), "Updated to %s", s.otaVersion.c_str());
+    display.drawStr(0, 12, title);
+    display.drawHLine(0, 15, 128);
+
+    display.setFont(u8g2_font_5x8_tf);
+    // Wrap the release note across two rows: 5x8 fits ~25 characters per line,
+    // and a truncated note is worse than none because it reads as complete.
+    String n = s.otaNotes;
+    if (n.length() > 50) n = n.substring(0, 49);
+    if (n.length() <= 25) {
+        display.drawStr(0, 30, n.c_str());
+    } else {
+        int cut = n.lastIndexOf(' ', 25);
+        if (cut <= 0) cut = 25;
+        display.drawStr(0, 30, n.substring(0, cut).c_str());
+        display.drawStr(0, 40, n.substring(cut + 1).c_str());
+    }
+
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 62, "any button = ok");
+    drawBatteryBadge(s);
+    display.sendBuffer();
+}
+
 void uiDraw(const UiState &s)
 {
     if (!board_display_ok()) return;
+    // Both OTA screens pre-empt whatever else was showing. An update is not a
+    // screen you navigate to; it is something happening TO the device.
+    if (s.otaActive)  { drawOtaProgress(s); return; }
+    if (s.otaUpdated) { drawOtaUpdated(s);  return; }
     switch (s.state) {
     case AppState::Linking:       drawLinking(s);       break;
     case AppState::Pick:          drawPick(s);          break;

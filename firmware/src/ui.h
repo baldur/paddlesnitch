@@ -119,6 +119,17 @@ struct UiState {
     bool     imuOk        = false;
     float    imuTempC     = 0;
     uint32_t imuSamples   = 0;   // samples in the last 1 s window
+
+    // OTA. Both of these take over the WHOLE panel when set (see uiDraw), which
+    // is deliberate: a firmware write is the one moment where a screen still
+    // showing the Sync tallies would be actively misleading about what the
+    // device is doing and whether it is safe to unplug.
+    bool     otaActive    = false;
+    uint8_t  otaPercent   = 0;
+    String   otaVersion;
+    String   otaMessage;
+    bool     otaUpdated   = false;   // first boot on a new image, until dismissed
+    String   otaNotes;
 };
 
 void uiSplash();                 // holds the wordmark briefly; blocks ~200 ms

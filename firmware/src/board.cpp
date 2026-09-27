@@ -1,4 +1,5 @@
 #include "board.h"
+#include <esp_system.h>
 #include "spibus.h"
 #include "dbg.h"
 #include "board_pins.h"
@@ -260,6 +261,22 @@ uint16_t boardBatteryMv()
 }
 
 bool boardIsCharging() { return PMU.isCharging(); }
+
+const char *resetReasonStr()
+{
+    switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  return "poweron";
+    case ESP_RST_SW:       return "sw";
+    case ESP_RST_PANIC:    return "PANIC";
+    case ESP_RST_INT_WDT:  return "int-wdt";
+    case ESP_RST_TASK_WDT: return "TASK-WDT";
+    case ESP_RST_WDT:      return "wdt";
+    case ESP_RST_BROWNOUT: return "BROWNOUT";
+    case ESP_RST_EXT:      return "ext";
+    case ESP_RST_DEEPSLEEP:return "deepsleep";
+    default:               return "unknown";
+    }
+}
 bool boardOnUsb()      { return PMU.isVbusIn(); }
 
 int boardBatteryPercent()
