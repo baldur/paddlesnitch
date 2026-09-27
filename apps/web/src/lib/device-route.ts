@@ -3,6 +3,7 @@ import { getDeviceAuth } from '@/lib/auth'
 import type { DeviceAuth } from '@paddlesnitch/core/devices'
 import { getChannelVersion } from '@/lib/firmware'
 import { touchDevice } from '@/lib/devices'
+import { emitFirmwareMetric } from '@/lib/firmware-metrics'
 
 // The one place a device-authenticated route is defined.
 //
@@ -48,7 +49,14 @@ export function withDeviceAuth(handler: DeviceHandler) {
     // request. Here rather than in each route for the same reason the firmware
     // header is stamped here: the upload route alone returns from fourteen
     // places. Rate-limited internally, and it never throws.
-    if (auth) await touchDevice(auth.deviceId, { firmware: reportedFirmware(req), model: reportedModel(req) })
+    if (auth) {
+      const t = await touchDevice(auth.deviceId, { firmware: reportedFirmware(req), model: reportedModel(req) })
+      // One heartbeat line per device per minute at most -- touchDevice's own
+      // rate limit governs this too. deviceId is a PROPERTY, never a dimension.
+      if (t.wrote) {
+        emitFirmwareMetric('DeviceSeen', { version: t.firmware, model: t.model }, { deviceId: auth.deviceId })
+      }
+    }
     const res = auth
       ? await handler(req, auth)
       : NextResponse.json({ error: 'unauthorized' }, { status: 401 })

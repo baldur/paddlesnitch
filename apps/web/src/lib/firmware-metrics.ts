@@ -20,10 +20,24 @@ export type FirmwareMetric =
   | 'FirmwareCheckNotModified'
   | 'FirmwareBootConfirmed'
   | 'FirmwareBootFailed'
+  | 'DeviceSeen'
 
 export const FIRMWARE_METRICS: readonly FirmwareMetric[] = [
   'FirmwareOfferIssued', 'FirmwareCheckNotModified', 'FirmwareBootConfirmed', 'FirmwareBootFailed',
+  'DeviceSeen',
 ]
+
+// `DeviceSeen` is the FLEET HEARTBEAT, and it exists because the firmware
+// metrics above cannot answer "how many devices are out there".
+//
+// The OTA design is signal-not-poll: a device that is up to date and has
+// something to upload never calls /api/devices/firmware at all, so it emits
+// none of the metrics above. The healthiest devices are the quietest ones, and
+// a fleet count built on firmware checks would systematically miss them.
+//
+// This rides on `touchDevice`, which runs on EVERY authenticated device request
+// and is rate-limited to one write a minute -- so that limit bounds the log
+// volume too. One line per device per minute, at most.
 
 // A dimension VALUE is part of the metric's identity in CloudWatch, so an
 // unexpected one creates a new metric that is then billed forever. Clamp both.
@@ -54,8 +68,17 @@ export function buildFirmwareEmf(
   }
 }
 
-/** Emit one firmware metric. Never throws — telemetry must not break a device
- *  sync, which is the request these ride on. */
+/**
+ * Emit one firmware metric. Never throws — telemetry must not break a device
+ * sync, which is the request these ride on.
+ *
+ * **`props` is the right home for anything high-cardinality**, `deviceId` above
+ * all. A property lands in the log line and is queryable in Logs Insights; it
+ * does NOT create a metric per value. Putting `deviceId` in `dims` instead would
+ * mint a billable time series per device and turn operational telemetry into a
+ * per-device tracking system — which is why the dimension list is fixed at
+ * Version + Model and should stay that way.
+ */
 export function emitFirmwareMetric(
   metric: FirmwareMetric,
   dims: { version?: string | null; model?: string | null },

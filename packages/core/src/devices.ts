@@ -216,24 +216,30 @@ export async function resolveDeviceToken(token: string): Promise<DeviceAuth | nu
  */
 const TOUCH_MIN_INTERVAL_MS = 60_000
 
+export type TouchResult = { wrote: false } | { wrote: true; firmware: string; model: string }
+
 export async function touchDevice(
   deviceId: string,
   seen: { firmware?: string | null; model?: string | null },
-): Promise<void> {
-  if (!isDeviceId(deviceId)) return
+): Promise<TouchResult> {
+  if (!isDeviceId(deviceId)) return { wrote: false }
   try {
     const d = await getJson<DeviceRecord>(deviceKey(deviceId))
-    if (!d) return
+    if (!d) return { wrote: false }
     const now = Date.now()
     const last = Date.parse(d.lastSeenAt || '') || 0
     const fw = seen.firmware && seen.firmware.length <= 32 ? seen.firmware : d.firmware
     const model = seen.model && seen.model.length <= 64 ? seen.model : d.model
     // Write when something actually changed, or when the clock has moved on.
     const changed = fw !== d.firmware || model !== d.model
-    if (!changed && now - last < TOUCH_MIN_INTERVAL_MS) return
+    if (!changed && now - last < TOUCH_MIN_INTERVAL_MS) return { wrote: false }
     await putJson(deviceKey(deviceId), { ...d, firmware: fw, model, lastSeenAt: new Date(now).toISOString() })
+    // The caller emits a heartbeat metric off the back of this, so the rate
+    // limit above governs BOTH the write and the log volume.
+    return { wrote: true, firmware: fw, model }
   } catch {
     // Never fail a device request because bookkeeping failed.
+    return { wrote: false }
   }
 }
 

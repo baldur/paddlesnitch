@@ -775,9 +775,62 @@ export class AttStack extends cdk.Stack {
     // "How many devices are on each version" is a distinct-count, which a metric
     // cannot answer (deviceId is deliberately not a dimension) - so it comes
     // from the EMF log lines instead, where the per-device detail does live.
+    // ---- the fleet: how many devices, on what, seen when --------------------
+    //
+    // All three come from the DeviceSeen heartbeat (one line per device per
+    // minute at most), and all three are LOGS INSIGHTS queries rather than
+    // metrics. That is the whole point: `deviceId` rides in the log line as a
+    // property, so count_distinct can answer "how many devices" without ever
+    // minting a metric per device. Put deviceId in a metric dimension and the
+    // bill grows with the fleet and the telemetry becomes per-device tracking.
+    //
+    // Deliberately NOT built on the firmware-check metrics: a device that is up
+    // to date AND has uploads never calls /api/devices/firmware at all (the OTA
+    // design is signal-not-poll), so a fleet count built on those would miss
+    // precisely the healthiest devices.
+    firmwareDashboard.addWidgets(
+      new cloudwatch.SingleValueWidget({
+        title: 'Devices seen — selected range',
+        metrics: [firmwareMetric('DeviceSeen', cdk.Duration.days(1))],
+        width: 6,
+        height: 6,
+        setPeriodToTimeRange: true,
+      }),
+      new cloudwatch.LogQueryWidget({
+        title: 'How many devices, on which version (distinct, last 7 days)',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter ispresent(DeviceSeen)',
+          'stats count_distinct(deviceId) as devices by Version, Model',
+          'sort devices desc',
+          'limit 30',
+        ],
+        width: 9,
+        height: 6,
+      }),
+      new cloudwatch.LogQueryWidget({
+        // The per-device roll call. `latest(@timestamp)` is the answer to "when
+        // was this one last active", and sorting by it puts the silent ones at
+        // the bottom where they are noticeable.
+        title: 'Every device: version + when it was last active',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter ispresent(DeviceSeen)',
+          'stats latest(Version) as version, latest(Model) as model,'
+            + ' latest(@timestamp) as lastActive, count(*) as beats by deviceId',
+          'sort lastActive desc',
+          'limit 100',
+        ],
+        width: 9,
+        height: 6,
+      }),
+    )
+
     firmwareDashboard.addWidgets(
       new cloudwatch.LogQueryWidget({
-        title: 'Version + model mix (last 7 days)',
+        title: 'Firmware checks by version + model (last 7 days)',
         logGroupNames: [serverLogGroup],
         view: cloudwatch.LogQueryVisualizationType.TABLE,
         queryLines: [
