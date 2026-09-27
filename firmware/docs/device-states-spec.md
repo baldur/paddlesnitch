@@ -92,7 +92,14 @@ menu with the recording still running in the background.
 
 > The stop confirmation answered to a `double-tap` before, while the delete confirmation
 > answered to a `tap`. Two confirmations, opposite answers — the worst possible place for
-> the button to mean different things. Both now take `tap = yes, double-tap = no`.
+> the button to mean different things. **As of 0.12.0 they take `hold = yes,
+> double-tap = no`** — the same contract as every other screen. They were the one
+> exception (`tap = yes`), and that exception sat on the three most destructive
+> screens, which is the worst possible place for the button to mean something
+> else. It also put stop-recording, delete-uploaded and factory-reset behind the
+> gesture easiest to fire by accident; a hold is deliberate, which is the point.
+> A tap on a confirmation now does nothing at all — deliberately not "cancel"
+> either, so a mis-press cannot silently abandon what you meant to do.
 
 **Speed readout toggles on tap.** A tap on Track (when not armed to stop) cycles the speed
 unit: **km/h → m/s → pace per 500 m** (m:ss), one at a time. The **stroke rate (SPM)** sits

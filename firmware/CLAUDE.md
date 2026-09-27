@@ -533,8 +533,12 @@ relearned per screen:
   things you touch on the water. `Settings > Network` shows the current SSID /
   IP / RSSI and **hold** opens the WiFi portal, which is also what the `SETUP`
   serial command does.
-- **Confirmations** (`STOP?`, `Delete uploaded?`) are the one place tap commits:
-  **tap = yes, double-tap = no**, and both say so on the panel.
+- **Confirmations** (`STOP?`, `Delete uploaded?`, `Factory reset?`) follow the
+  same contract as everything else as of **0.12.0**: **hold = yes, double-tap =
+  no**, and a tap does nothing. They used to be the one exception (`tap = yes`)
+  — which contradicted the rule the first-run tutorial teaches, on the three
+  screens where a mis-press costs the most, and put the destructive action
+  behind the gesture easiest to fire by accident.
 
 Two things this fixed rather than merely tidied. `tap` used to mean "sync now"
 on Sync — an *action* under the same gesture that harmlessly cycled a unit on
@@ -548,6 +552,37 @@ Hold fires *while held* so the screen changes under your thumb, and the chosen
 Pick row blinks to acknowledge it. A tap is only confirmed once the 400 ms
 double-tap window closes — the price of distinguishing the three gestures on one
 button. `HOLD_MS` is 1200.
+
+### The gestures are TAUGHT, not printed on every screen (0.12.0)
+
+A first-run tutorial (`src/tutorial.{h,cpp}`, pure and host-tested;
+`drawTutorial` in `ui.cpp`) teaches the three gestures once, and **five
+permanent on-screen hints were removed** in exchange.
+
+Why: those hints cost a whole row of a 128x64 panel on every screen, on every
+frame, forever, to restate a contract you learn in twenty seconds — and they had
+**already gone stale**, saying "3 s" for a hold long after `HOLD_MS` stopped
+being 3000. Text repeated in five places rots in five places.
+
+- **Runs once**, after the device is usable (WiFi configured AND claimed) and
+  before the first `Pick`. Not during setup: the user is looking at their phone
+  then, and the lesson is about menus that do not exist yet.
+- **Replayable** from **Settings > How to use** (Settings now has four rows;
+  `drawMenuFrame` tightens its row pitch for four, because at the three-row
+  spacing the fourth lands at y=68 on a 64 px panel — off the bottom, silently).
+- **"Done" lives in NVS** (`ui`/`tutdone`), so a factory reset brings it back.
+- **The state machine is host-tested**, including a brute-force check that **no
+  sequence of gestures can trap the user**. That is the failure that matters:
+  every gesture is spent teaching a gesture, so there is no spare one to escape
+  with, and a missing transition is an unusable device rather than a cosmetic bug.
+
+**What did NOT go:** anything the user must act on. `No wifi-hold BOOT`,
+`NEED GPS`, page counters, TX/SD tallies all stay — that is state, not
+instruction, and it exists because boot-time messages are invisible to anyone
+who looked away for ten seconds. The rule applied was **say what the action is,
+not which gesture does it**: `SYNC NOW` and `CHANGE NETWORK` rather than
+`hold = sync now` and `hold = change network`. No amount of teaching tells you a
+page can delete things.
 
 **The Sync screen shows upload progress.** A 2.4 MB sidecar is 37 requests and
 several minutes, during which the tallies do not move; the old indicator was a

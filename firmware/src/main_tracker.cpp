@@ -13,6 +13,8 @@
 #include "imu.h"
 #include <esp_ota_ops.h>
 #include "ota.h"
+#include "tutorial.h"
+#include <Preferences.h>
 #include "qr.h"
 #include "spibus.h"
 #include "dbg.h"
@@ -89,7 +91,44 @@ static Menu parentOf(Screen s)
 {
     return (s == Screen::Track || s == Screen::Sync) ? Menu::Pick : Menu::Settings;
 }
-static int  menuCount(Menu m) { return 3; }   // Pick and Settings both have three
+// Pick has three; Settings has four since "How to use" joined it -- the tutorial
+// has to be replayable, or removing the on-screen hints would make the gestures
+// unrecoverable for anyone who skipped it or picked the device up second-hand.
+static int  menuCount(Menu m) { return m == Menu::Settings ? 4 : 3; }
+
+// First-run gesture tutorial. `tutRunning` is RAM-only; whether it has ever been
+// completed lives in NVS (namespace "ui", key "tutdone") so a factory reset
+// brings it back -- a reset is someone starting over, and the lesson is part of
+// starting over.
+static bool     tutRunning = false;
+static TutState tutState;
+// Mirrors the button loop's heldSince so the tutorial can draw a fill while the
+// button is still down. Separate variable rather than making heldSince global:
+// the button loop owns that one, and this is read-only presentation.
+static uint32_t tutHeldSince = 0;
+
+static bool tutorialDoneStored()
+{
+    Preferences p;
+    if (!p.begin("ui", true)) return true;   // cannot read -> do not nag
+    bool done = p.getBool("tutdone", false);
+    p.end();
+    return done;
+}
+
+static void tutorialMarkDone()
+{
+    Preferences p;
+    if (!p.begin("ui", false)) return;
+    p.putBool("tutdone", true);
+    p.end();
+}
+
+static void tutorialStart()
+{
+    tutState   = TutState();
+    tutRunning = true;
+}
 
 static Menu     menu     = Menu::Pick;     // None = a screen is showing
 static int      menuSel  = 0;              // highlighted row of `menu`
@@ -563,33 +602,22 @@ static void enterScreen(Screen s)
 //   double-tap -> back to the chooser. ALWAYS, from anywhere, including out of a
 //                 confirmation, which it cancels on the way.
 //
-// A confirmation is the single place tap commits, and it says so on the panel.
-// Before this, tap meant "sync now" on Sync and "cycle a unit" on Track, paging
-// was on double-tap, and the two confirmations disagreed with each other about
-// which gesture meant yes -- so the button had to be relearned per screen and
-// the only gesture you could rely on to get out was a guess.
+// Confirmations follow the SAME contract as everything else: hold commits,
+// double-tap cancels. They used to be the one exception (tap = yes), which was
+// a problem twice over. It contradicted the rule the first-run tutorial now
+// teaches -- on the three most destructive screens, which is the worst possible
+// place for the button to mean something else -- and it put stop-recording,
+// delete-uploaded and factory-reset behind the gesture that is easiest to fire
+// by accident. A hold is a deliberate act; that is the point of using it here.
 // See docs/device-states-spec.md.
 static void screenTap()
 {
-    if (confirmReset) {                        // confirmation: tap = yes
-        confirmReset = false;
-        Serial.println("factory reset -- clearing credentials and token");
-        netcfgForget();
-        delay(300);
-        ESP.restart();
-        return;
-    }
-    if (confirmDelete) {                       // confirmation: tap = yes
-        confirmDelete = false;
-        uplinkRequestDeleteUploaded();
-        toast("DELETING");
-        return;
-    }
-    if (stopArmed) {                           // Track's stop confirmation
-        stopArmed = false;
-        if (storageRecording()) toggleRecording();     // stop + trigger a sync
-        return;
-    }
+    if (tutRunning) { tutState = tutorialAdvance(tutState, TutEvent::Tap); return; }
+    // A tap on a confirmation does NOTHING now. Deliberately not "cancel"
+    // either: double-tap is how you back out of everything else, and making a
+    // stray tap dismiss the screen would mean a mis-press silently abandons what
+    // you meant to do. It just waits.
+    if (confirmReset || confirmDelete || stopArmed) return;
     // Onboarding: tap flips the Linking screen between the QR and the
     // characters. Tap means "cycle what is on this screen" everywhere else, and
     // this screen has exactly two things to show.
@@ -609,7 +637,8 @@ static void screenTap()
 
 static void screenDoubleTap()
 {
-    if (confirmReset) { confirmReset = false; return; }   // 2x = no
+    if (tutRunning) { tutState = tutorialAdvance(tutState, TutEvent::DoubleTap); return; }
+    if (confirmReset) { confirmReset = false; return; }   // 2x = cancel
     // No exceptions, no "unless" -- that is the entire value of the gesture. A
     // pending confirmation is cancelled rather than carried back to the chooser,
     // so leaving a screen can never be the thing that stops a recording or wipes
@@ -629,7 +658,35 @@ static void screenDoubleTap()
 
 static void screenHold()
 {
-    if (confirmDelete || stopArmed || confirmReset) return;   // confirmations answer to tap
+    if (tutRunning) {
+        tutState = tutorialAdvance(tutState, TutEvent::Hold);
+        if (tutorialComplete(tutState)) {
+            tutRunning = false;
+            tutorialMarkDone();
+            menu = Menu::Pick; menuSel = 0;   // hand over to the top level
+        }
+        return;
+    }
+    // Confirmations commit on a hold, like every other screen's primary action.
+    if (confirmReset) {
+        confirmReset = false;
+        Serial.println("factory reset -- clearing credentials and token");
+        netcfgForget();
+        delay(300);
+        ESP.restart();
+        return;
+    }
+    if (confirmDelete) {
+        confirmDelete = false;
+        uplinkRequestDeleteUploaded();
+        toast("DELETING");
+        return;
+    }
+    if (stopArmed) {
+        stopArmed = false;
+        if (storageRecording()) toggleRecording();     // stop + trigger a sync
+        return;
+    }
     if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
     // Blink the chosen row first: the hold fires while still held, so without an
     // acknowledgement a successful press and a too-short one look the same.
@@ -641,9 +698,10 @@ static void screenHold()
             if (menuSel == 2) { menu = Menu::Settings; menuSel = 0; return; }
             enterScreen(menuSel == 0 ? Screen::Track : Screen::Sync);
         } else {
-            // Settings: Nerd mode | Network | Factory reset. The reset is a
-            // confirmation rather than a screen, like the delete.
-            if (menuSel == 2) { confirmReset = true; resetUntil = millis() + 10000; return; }
+            // Settings: Nerd mode | Network | How to use | Factory reset.
+            // The reset is a confirmation rather than a screen, like the delete.
+            if (menuSel == 2) { tutorialStart(); return; }
+            if (menuSel == 3) { confirmReset = true; resetUntil = millis() + 10000; return; }
             enterScreen(menuSel == 0 ? Screen::Nerd : Screen::Network);
         }
         return;
@@ -721,15 +779,18 @@ static void checkButton()
 
     if (down && heldSince == 0) {
         heldSince = millis();
+        tutHeldSince = heldSince;      // so the tutorial can draw the fill
         longFired = false;
     } else if (down && !longFired && millis() - heldSince > HOLD_MS) {
         longFired  = true;
+        tutHeldSince = 0;
         pendingTap = 0;
         Serial.println("btn: hold");
         screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;
         heldSince = 0;
+        tutHeldSince = 0;
         if (longFired || held <= 40) return;              // 40 ms debounce
 
         // PICK ONLY. A tap acts immediately here because Pick is the top level
@@ -1284,10 +1345,20 @@ void loop()
         UplinkStatus up = uplinkGetStatus();
 
         UiState u;
+        // Auto-start the lesson the first time this device is actually usable --
+        // i.e. WiFi configured AND claimed. Checked here rather than at boot
+        // because a device claimed for the first time mid-session should get it
+        // without waiting for a reboot. The NVS flag makes it once-ever.
+        if (!tutRunning && deviceUsable() && !tutorialDoneStored()) tutorialStart();
+
         u.linked      = netIsClaimed();
         // Onboarding is forced until usable; then Pick, then the entered screen.
+        // Tutorial sits AFTER onboarding and BEFORE the menus: during setup the
+        // user is looking at their phone, not the device, and the lesson is
+        // about driving menus that do not exist yet.
         u.state       = !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
+                      : tutRunning       ? AppState::Tutorial
                       : confirmReset     ? AppState::ResetConfirm
                       : confirmDelete    ? AppState::DeleteConfirm
                       : menu == Menu::Pick        ? AppState::Pick
@@ -1297,6 +1368,17 @@ void loop()
                       : uiScreen == Screen::Network ? AppState::Network
                                                     : AppState::Track;
         u.menuSel     = menuSel;
+        u.tutStep     = tutState.step;
+        u.tutSel      = tutState.sel;
+        // Fill the selection as the hold progresses. Without this a hold that
+        // was 100 ms short looks identical to one that did nothing, which is
+        // exactly the confusion the lesson exists to remove. heldSince is the
+        // button loop's own timer, read here rather than duplicated.
+        u.tutHoldPct  = (tutHeldSince && tutState.step != TutStep::Tap)
+                      ? (uint8_t)(millis() - tutHeldSince >= HOLD_MS ? 100
+                                  : ((millis() - tutHeldSince) * 100) / HOLD_MS)
+                      : 0;
+        u.tutWrapped  = tutState.wrapped;
         u.net.ssid    = netcfg.ssid;
         u.net.up      = WiFi.status() == WL_CONNECTED;
         u.net.ip      = u.net.up ? WiFi.localIP().toString() : String();

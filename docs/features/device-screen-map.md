@@ -76,14 +76,14 @@ flowchart TD
 
     SETTINGS -->|"hold on Nerd mode"| NerdScr["NERD 1/3 2/3 3/3"]
     SETTINGS -->|"hold on Network"| NetScr["NETWORK"]
-    SETTINGS -->|"hold on Factory reset"| RC["Factory reset?<br/>tap = yes, 2x = no"]
+    SETTINGS -->|"hold on Factory reset"| RC["Factory reset?<br/>hold = yes, 2x = no"]
 
     TrackScr -->|"2x"| PICK
     SyncScr -->|"2x"| PICK
     NerdScr -->|"2x"| SETTINGS
     NetScr -->|"2x"| SETTINGS
     SETTINGS -->|"2x"| PICK
-    RC -->|"2x = no"| SETTINGS
+    RC -->|"2x = cancel"| SETTINGS
 ```
 
 Nerd mode and Network sit under Settings so the top level stays the three things

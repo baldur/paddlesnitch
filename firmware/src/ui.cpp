@@ -144,16 +144,17 @@ static void drawTracker(const UiState &s)
     drawTopRow(s);
 
     // A hold has armed the stop: make the whole screen the confirmation so it
-    // can't be missed. Same answers as the delete confirmation -- tap = yes,
-    // double-tap = no. These two used to disagree, which is the worst possible
-    // place for the button to mean different things.
+    // can't be missed. Same answers as the delete confirmation -- hold = yes,
+    // double-tap = no, matching every other screen. These used to be the one
+    // exception (tap = yes), which contradicted the contract on exactly the
+    // screens where a mis-press costs the most.
     if (s.stopArmed) {
         display.setFont(u8g2_font_helvB12_tf);
         display.drawStr(0, 34, "Stop?");
         display.setFont(u8g2_font_6x10_tf);
-        display.drawStr(0, 52, "tap = yes   2x = no");
+        display.drawStr(0, 52, "HOLD to stop");
         display.setFont(u8g2_font_5x8_tf);
-        display.drawStr(0, 62, "no answer = keep recording");
+        display.drawStr(0, 62, "double-tap or wait = keep going");
         display.sendBuffer();
         return;
     }
@@ -287,9 +288,11 @@ static void drawSync(const UiState &s)
         char pg[8];
         snprintf(pg, sizeof(pg), "%d/%d", s.syncPage + 1, s.syncPages);
         display.drawStr(0, 63, pg);
-        const char *hint = s.syncPage == 0 ? "tap=page  hold=sync now"
-                                           : "tap=page  hold=delete";
-        display.drawStr(128 - display.getStrWidth(hint), 63, hint);
+        // WHAT the action is, not WHICH GESTURE does it. The gesture is taught
+        // once by the tutorial; the action still has to be discoverable, because
+        // no amount of teaching tells you this page can delete things.
+        const char *action = s.syncPage == 0 ? "SYNC NOW" : "DELETE UPLOADED";
+        display.drawStr(128 - display.getStrWidth(action), 63, action);
     }
     drawBatteryBadge(s);
     display.sendBuffer();
@@ -302,7 +305,7 @@ static void drawSync(const UiState &s)
 // things you touch on the water. Track and Sync are one hold away as before;
 // the diagnostics are one more, which is the right way round.
 static const char *PICK_OPTS[3]     = { "Track", "Sync", "Settings" };
-static const char *SETTINGS_OPTS[3] = { "Nerd mode", "Network", "Factory reset" };
+static const char *SETTINGS_OPTS[4] = { "Nerd mode", "Network", "How to use", "Factory reset" };
 
 // One frame of a menu. Split out so the selection blink reuses the exact
 // layout instead of a near-copy that drifts the first time a menu changes.
@@ -312,16 +315,20 @@ static void drawMenuFrame(const char **opts, int n, int sel, bool highlight, con
     display.setFont(u8g2_font_6x10_tf);
     // A title only where there is one: Pick is the top level and needs no
     // label, but inside Settings you need to know where you are.
+    // Row pitch adapts to the count, because the panel is 64 px and four rows do
+    // not fit at the three-row spacing: Settings gained "How to use", and at
+    // y0=26 step 14 the fourth row lands at y=68 -- off the bottom, silently.
+    const int step = (n >= 4) ? 13 : 14;
     int y0 = 20;
     if (title) {
         display.setFont(u8g2_font_5x8_tf);
         display.drawStr(0, 8, title);
         display.drawHLine(0, 11, 128);
         display.setFont(u8g2_font_6x10_tf);
-        y0 = 26;
+        y0 = (n >= 4) ? 21 : 26;
     }
     for (int i = 0; i < n; i++) {
-        int y = y0 + i * 14;
+        int y = y0 + i * step;
         if (i == sel && highlight) {
             display.drawBox(0, y - 10, 128, 13);         // highlight bar
             display.setDrawColor(0);
@@ -332,10 +339,9 @@ static void drawMenuFrame(const char **opts, int n, int sel, bool highlight, con
         }
     }
     display.setFont(u8g2_font_5x8_tf);
-    // Inside Settings the way out is worth stating; at the top level there is
-    // nowhere to go back to.
-    const char *hint = title ? "tap=move hold=open 2x=back" : "tap=move  hold=open";
-    display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+    // No gesture hint, here or on any other menu. The first-run tutorial teaches
+    // tap/hold/double-tap once and Settings > How to use replays it, so this row
+    // is worth more as blank space than as a line nobody reads twice.
 }
 
 static void drawPick(const UiState &s)
@@ -349,7 +355,7 @@ static void drawPick(const UiState &s)
 
 static void drawSettings(const UiState &s)
 {
-    drawMenuFrame(SETTINGS_OPTS, 3, s.menuSel, true, "Settings");
+    drawMenuFrame(SETTINGS_OPTS, 4, s.menuSel, true, "Settings");
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -381,9 +387,8 @@ static void drawNetwork(const UiState &s)
     else if (s.net.everConnected)    snprintf(l, sizeof(l), "idle - connects to sync");
     else                             snprintf(l, sizeof(l), "never connected - check pass");
     display.drawStr(0, 38, l);
-    display.drawStr(0, 50, "hold = change network");
-    const char *hint = "2x = back";
-    display.drawStr((128 - display.getStrWidth(hint)) / 2, 63, hint);
+    display.drawStr(0, 50, "CHANGE NETWORK");
+    // (no gesture hint -- see drawTutorial)
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -418,7 +423,12 @@ static void drawDeleteConfirm(const UiState &s)
     snprintf(l, sizeof(l), "%d files", s.uploaded);
     display.drawStr(0, 38, l);
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 62, "tap = yes   2x = no");
+    // HOLD, not tap. Destructive actions now follow the same contract as every
+    // other screen -- and a hold is deliberate where a tap is easy to fire by
+    // accident, which on this screen means losing files.
+    display.drawStr(0, 53, "HOLD to delete");
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 63, "double-tap to cancel");
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -434,10 +444,12 @@ static void drawResetConfirm(const UiState &s)
     display.drawStr(0, 12, "Factory reset?");
     display.drawHLine(0, 15, 128);
     display.setFont(u8g2_font_5x8_tf);
-    display.drawStr(0, 29, "clears wifi + account link");
-    display.drawStr(0, 40, "KEEPS paddles on the card");
+    display.drawStr(0, 27, "clears wifi + account link");
+    display.drawStr(0, 37, "KEEPS paddles on the card");
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(0, 62, "tap = yes   2x = no");
+    display.drawStr(0, 53, "HOLD to reset");
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 63, "double-tap to cancel");
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -565,7 +577,8 @@ static void drawNerd(const UiState &s)
     // Was "2x=next", from when double-tap paged. Tap pages now and wraps;
     // double-tap leaves. Saying the wrong thing is worse than saying nothing.
     display.setFont(u8g2_font_5x8_tf);
-    display.drawStr(74, 63, "tap=next 2x=back");
+    // (no gesture hint -- see drawTutorial); the page counter stays, since
+    // "which of how many" is state, not instruction.
     drawBatteryBadge(s);
     display.sendBuffer();
 }
@@ -630,6 +643,74 @@ static void drawOtaUpdated(const UiState &s)
     display.sendBuffer();
 }
 
+// The first-run gesture lesson. Four practice choices, one highlighted, and a
+// prompt that changes as each gesture is learned.
+//
+// This screen is the reason the other screens no longer carry a gesture hint.
+// Five of them used to spend a whole row of a 128x64 panel, on every frame,
+// forever, restating a contract you learn in twenty seconds -- and those hints
+// had already gone stale once, saying "3 s" for a hold long after HOLD_MS
+// stopped being 3000. Teach it once here, then give the panel back to content.
+static void drawTutorial(const UiState &s)
+{
+    display.clearBuffer();
+
+    display.setFont(u8g2_font_6x10_tf);
+    const char *prompt = tutorialPrompt(s.tutStep);
+    display.drawStr((128 - display.getStrWidth(prompt)) / 2, 11, prompt);
+    display.drawHLine(0, 15, 128);
+
+    if (s.tutStep == TutStep::Ready) {
+        display.setFont(u8g2_font_5x8_tf);
+        const char *l1 = "tap moves  hold selects";
+        const char *l2 = "double-tap goes back";
+        display.drawStr((128 - display.getStrWidth(l1)) / 2, 31, l1);
+        display.drawStr((128 - display.getStrWidth(l2)) / 2, 42, l2);
+        display.setFont(u8g2_font_6x10_tf);
+        const char *go = tutorialAction(s.tutStep);
+        display.drawStr((128 - display.getStrWidth(go)) / 2, 60, go);
+        display.sendBuffer();
+        return;
+    }
+
+    // The practice row. Boxes rather than words: the lesson is the MOTION of the
+    // highlight, and words here would just be more text to read.
+    const int n = TUT_CHOICES;
+    const int bw = 22, bh = 18, gap = 6;
+    const int total = n * bw + (n - 1) * gap;
+    const int x0 = (128 - total) / 2;
+    for (int i = 0; i < n; i++) {
+        const int x = x0 + i * (bw + gap);
+        if (i == s.tutSel) {
+            display.drawFrame(x, 24, bw, bh);
+            // While held, the selection fills from the bottom -- so a hold is
+            // visibly a thing in progress rather than a press that did nothing.
+            // This is also why the hints never name a number of seconds: you
+            // hold until the screen reacts.
+            if (s.tutHoldPct > 0) {
+                const int fh = (bh - 4) * s.tutHoldPct / 100;
+                if (fh > 0) display.drawBox(x + 2, 24 + bh - 2 - fh, bw - 4, fh);
+            }
+        } else {
+            display.drawFrame(x + 6, 24 + 6, bw - 12, bh - 12);
+        }
+    }
+
+    display.setFont(u8g2_font_5x8_tf);
+    const char *act = tutorialAction(s.tutStep);
+    display.drawStr((128 - display.getStrWidth(act)) / 2, 54, act);
+
+    // Three dots, one per lesson, filled as each is passed. Somebody who starts
+    // a tutorial wants to know how much of it there is.
+    const int dotY = 61, dotX = 128 / 2 - 10;
+    for (int i = 0; i < 3; i++) {
+        const bool done = (int)s.tutStep > i;
+        if (done) display.drawDisc(dotX + i * 10, dotY, 2);
+        else      display.drawCircle(dotX + i * 10, dotY, 2);
+    }
+    display.sendBuffer();
+}
+
 void uiDraw(const UiState &s)
 {
     if (!board_display_ok()) return;
@@ -638,6 +719,7 @@ void uiDraw(const UiState &s)
     if (s.otaActive)  { drawOtaProgress(s); return; }
     if (s.otaUpdated) { drawOtaUpdated(s);  return; }
     switch (s.state) {
+    case AppState::Tutorial:      drawTutorial(s);      break;
     case AppState::Linking:       drawLinking(s);       break;
     case AppState::Pick:          drawPick(s);          break;
     case AppState::Settings:      drawSettings(s);      break;
