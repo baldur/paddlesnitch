@@ -3,11 +3,12 @@
 //
 // Two ideas shape this file:
 //
-// 1. **Uploading a build is not releasing it.** A build lands at
-//    `firmware/<version>/` and is invisible to every device until someone
-//    promotes it by writing `firmware/channels/stable.json`. Those are separate
-//    actions with separate permissions (see .github/workflows/firmware-release.yml),
-//    because conflating them means a bad commit reaches every device.
+// 1. **A build is invisible until a channel points at it.** Storing
+//    `firmware/<version>/` does nothing on its own; `firmware/channels/stable.json`
+//    is what devices read. Since 2026-09-27 a merge does BOTH (build, publish,
+//    promote) because firmware is tested by cable before the PR lands — but they
+//    remain separate operations here, which is what makes rollback possible:
+//    promoting an older version is the whole recovery mechanism.
 //
 // 2. **Signal, don't probe.** The channel version rides along on responses the
 //    device was already receiving (`X-PS-Firmware`), so in the steady state a

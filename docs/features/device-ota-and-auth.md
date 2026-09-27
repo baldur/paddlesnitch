@@ -541,9 +541,34 @@ fires on a push to `main` touching `firmware/**`, which this branch will be, so
 its first real run is the merge that ships it. Watch that run.
 
 
-New workflow `.github/workflows/firmware-release.yml`. **Build on merge, release
-on a human action** — these are two separate things and conflating them means a
-bad commit reaches every device.
+New workflow `.github/workflows/firmware-release.yml`.
+
+> **SUPERSEDED 2026-09-27: merging now releases.** The split below was built as
+> specified and then changed, because the gate sat in the wrong place for how
+> this repo works — firmware is flashed and tested by cable **before** the PR is
+> merged, so by merge time the decision to release has already been taken with a
+> device in hand. Requiring a second confirmation of a settled decision is
+> ceremony, and it got skipped: 0.13.0 sat published-but-invisible until someone
+> asked why OTA "did not work".
+>
+> A push to `main` touching `firmware/**` now builds, publishes **and promotes
+> to stable**. `workflow_dispatch` promotes any already-built version and is the
+> **rollback lever**; both paths share one promote job so the two cannot drift.
+>
+> **What this moves the weight onto.** The human gate is gone, so what stands
+> between a bad merge and a dead device is, in order: testing on hardware before
+> the PR, the VERSION-bump and never-overwrite guards, and **the app-level
+> rollback in `otaBootCheck()`**. That last one is now load-bearing rather than a
+> backstop, which makes the deliberately-broken-image test (Verification item 4)
+> a prerequisite rather than a nice-to-have.
+>
+> **Staged rollout** — the thing the split was really reaching for — is not
+> built, but nothing blocks it: the server already reads
+> `firmware/channels/<channel>.json` and the workflow can already write `beta`.
+> When there are enough devices for it to mean anything, point some at `beta`
+> and aim the auto-promote there.
+
+The original design, for the record:
 
 **On push to `main` touching `firmware/**`:**
 
