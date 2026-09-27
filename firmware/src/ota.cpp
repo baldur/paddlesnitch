@@ -39,6 +39,17 @@ static String failKey(const String &v) { return "f_" + v; }
 
 static String   g_serverVersion;     // latest X-PS-Firmware seen this boot
 static uint32_t g_lastProbeMs = 0;   // 0 = never probed this boot
+
+// The "Updated to X" notice, cached in RAM.
+//
+// These used to read NVS on every call, and the UI tick calls otaJustUpdated()
+// at 4 Hz -- so a device with no `ota` namespace yet (every device, until the
+// first update) logged two nvs_open NOT_FOUND errors eight times a second,
+// burying the serial log that is this firmware's main diagnostic. Reading flash
+// at 4 Hz to answer a question that changes twice in a device's life was the
+// real mistake; the log spam just made it visible.
+static String g_showVersion;
+static String g_showNotes;
 static OtaProgress g_progress;
 
 // How often a device that has heard NOTHING may ask outright.
@@ -82,6 +93,11 @@ void otaBootCheck()
 {
     Preferences p;
     if (!p.begin(NVS_NS, false)) { DBGE("ota", "nvs open failed"); return; }
+
+    // Load the notice into RAM while the namespace is already open read-write.
+    // This is the ONLY place it is read from flash.
+    g_showVersion = p.getString(K_SHOWVER, "");
+    g_showNotes   = p.getString(K_NOTES, "");
 
     String pending = p.getString(K_PENDING, "");
     if (pending.isEmpty()) {
@@ -141,6 +157,9 @@ void otaMarkValid()
     p.putBool(K_ACKRB, false);
     p.putString(K_SHOWVER, pending);
     p.end();
+    // RAM copy too: the accessors read RAM, and this runs long after the boot
+    // load above, so without this the notice would not appear until a reboot.
+    g_showVersion = pending;
 
     // Tells the bootloader this image is good. Harmless when rollback is not
     // enabled in the prebuilt Arduino bootloader — the app-level counter above
@@ -151,35 +170,15 @@ void otaMarkValid()
     Serial.printf("OTA: %s validated\n", pending.c_str());
 }
 
-bool otaJustUpdated()
-{
-    Preferences p;
-    if (!p.begin(NVS_NS, true)) return false;
-    bool has = !p.getString(K_SHOWVER, "").isEmpty();
-    p.end();
-    return has;
-}
-
-String otaJustUpdatedVersion()
-{
-    Preferences p;
-    if (!p.begin(NVS_NS, true)) return "";
-    String v = p.getString(K_SHOWVER, "");
-    p.end();
-    return v;
-}
-
-String otaJustUpdatedNotes()
-{
-    Preferences p;
-    if (!p.begin(NVS_NS, true)) return "";
-    String n = p.getString(K_NOTES, "");
-    p.end();
-    return n;
-}
+bool   otaJustUpdated()        { return !g_showVersion.isEmpty(); }
+String otaJustUpdatedVersion() { return g_showVersion; }
+String otaJustUpdatedNotes()   { return g_showNotes; }
 
 void otaDismissUpdatedNotice()
 {
+    if (g_showVersion.isEmpty()) return;      // nothing to clear, no flash write
+    g_showVersion = "";
+    g_showNotes   = "";
     Preferences p;
     if (!p.begin(NVS_NS, false)) return;
     p.remove(K_SHOWVER);
