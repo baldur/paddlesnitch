@@ -40,7 +40,23 @@ const CLAIM_TTL_MS = 10 * 60 * 1000
 // No 0/O, 1/I, U/V — the code is read off a tiny mono OLED and typed by hand.
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ'
 
-const claimKey = (code: string) => `device-claims/${code}.json`
+// Claims are keyed by DEVICE ID, with a separate code -> deviceId index.
+//
+// They used to be keyed by the claim code alone, which made redemption a scan:
+// the device polls /token with {deviceId, claimSecret} and has no idea what its
+// own code is, so `redeemToken` had to LIST every outstanding claim and read
+// each one looking for a deviceId match. The device polls every 5 seconds for
+// five minutes, so the cost of onboarding one device grew with the number of
+// outstanding claims anyone had ever minted — a performance bug before it is a
+// security one, and an unauthenticated endpoint is a bad place to have one.
+//
+// Keying by deviceId makes redemption a single direct read, and has a second
+// effect worth having: a device can only ever have ONE outstanding claim, so a
+// flood of claim requests for the same device overwrites rather than accumulates.
+const claimKey = (deviceId: string) => `device-claims/${deviceId}.json`
+// code -> deviceId, so the browser half (the user types a code) stays one extra
+// read rather than a scan. Its own TTL is the claim's.
+const claimCodeKey = (code: string) => `device-claim-codes/${code}.json`
 const tokenKey = (tokenHash: string) => `device-tokens/${tokenHash}.json`
 const deviceKey = (deviceId: string) => `devices/${deviceId}/metadata.json`
 
@@ -69,12 +85,25 @@ export function isDeviceId(v: unknown): v is string {
 export async function createClaim(deviceId: string, model: string, firmware: string): Promise<{ claimCode: string; claimSecret: string; expiresAt: string }> {
   // Avoid clobbering a live code (collisions are astronomically rare; retry a few).
   let claimCode = randomCode()
-  for (let i = 0; i < 5 && (await getJson<DeviceClaim>(claimKey(claimCode))); i++) claimCode = randomCode()
+  for (let i = 0; i < 5 && (await getJson<{ deviceId: string }>(claimCodeKey(claimCode))); i++) claimCode = randomCode()
   const claimSecret = randomBytes(32).toString('base64url')
   const createdAt = nowIso()
   const expiresAt = new Date(Date.now() + CLAIM_TTL_MS).toISOString()
+
+  // A new claim supersedes any previous one for this device (the user pressed
+  // reset, or the last attempt timed out). Drop the OLD code's index entry, or
+  // it would outlive the claim it pointed at and keep resolving to this device.
+  const prev = await getJson<DeviceClaim>(claimKey(deviceId))
+  if (prev?.claimCode && prev.claimCode !== claimCode) {
+    await deleteObject(claimCodeKey(prev.claimCode)).catch(() => {})
+  }
+
   const record: DeviceClaim = { claimCode, claimSecretHash: sha256(claimSecret), deviceId, model, firmware, createdAt, expiresAt }
-  await putJson(claimKey(claimCode), record)
+  // Index first, then the record: a code that resolves to a device with no claim
+  // yet reads as unknown_code, which is correct. The reverse order would briefly
+  // leave a claim that the user's code cannot reach.
+  await putJson(claimCodeKey(claimCode), { deviceId, expiresAt })
+  await putJson(claimKey(deviceId), record)
   return { claimCode, claimSecret, expiresAt }
 }
 
@@ -84,13 +113,26 @@ const isExpired = (c: DeviceClaim) => Date.now() > Date.parse(c.expiresAt)
 // their account. Does not mint the token — the device collects that on its next
 // poll (so the secret never has to travel to the browser).
 export async function linkClaim(claimCode: string, userId: string, name?: string): Promise<{ deviceId: string; model: string } | { error: 'unknown_code' | 'claim_expired' | 'already_linked' }> {
-  const c = await getJson<DeviceClaim>(claimKey(claimCode))
+  const idx = await getJson<{ deviceId: string }>(claimCodeKey(claimCode))
+  if (!idx?.deviceId) return { error: 'unknown_code' }
+  const c = await getJson<DeviceClaim>(claimKey(idx.deviceId))
   if (!c) return { error: 'unknown_code' }
-  if (isExpired(c)) { await deleteObject(claimKey(claimCode)); return { error: 'claim_expired' } }
+
+  // The record must still bear the code we looked up. Without this check a stale
+  // index entry would bind whatever claim the device has NOW: someone who saw an
+  // old code could type it and capture a later claim. Belt and braces alongside
+  // createClaim dropping the old index — an interrupted write must not open it.
+  if (c.claimCode !== claimCode) return { error: 'unknown_code' }
+
+  if (isExpired(c)) {
+    await deleteObject(claimKey(idx.deviceId))
+    await deleteObject(claimCodeKey(claimCode))
+    return { error: 'claim_expired' }
+  }
   if (c.userId) return { error: 'already_linked' }
   c.userId = userId
   if (name) c.name = name
-  await putJson(claimKey(claimCode), c)
+  await putJson(claimKey(idx.deviceId), c)
   return { deviceId: c.deviceId, model: c.model }
 }
 
@@ -104,33 +146,44 @@ type RedeemResult =
 // indistinguishable from "not entered yet" (both → pending). On success: mint
 // the token, write the device record, consume the claim (single use).
 export async function redeemToken(deviceId: string, claimSecret: string): Promise<RedeemResult> {
-  const secretHash = sha256(claimSecret)
-  const keys = await listKeys('device-claims/')
-  for (const key of keys) {
-    const c = await getJson<DeviceClaim>(key)
-    if (!c || c.deviceId !== deviceId) continue
-    if (!hexEqual(c.claimSecretHash, secretHash)) continue
-    // Consumed (single-use) or expired → 410. We keep a consumed tombstone
-    // rather than hard-deleting on success, so a repeat poll returns 410 not a
-    // misleading "pending"; it's swept once past its TTL.
-    if (c.consumedAt || isExpired(c)) {
-      if (Date.now() > Date.parse(c.expiresAt)) await deleteObject(key)
-      return { status: 'expired' }
+  // ONE read, whatever else is outstanding in the bucket. This is the whole
+  // point of keying claims by deviceId: the device polls this every 5 seconds
+  // for up to five minutes, and it used to be a full listing plus a read per
+  // claim on each of those polls.
+  if (!isDeviceId(deviceId)) return { status: 'pending' }
+  const key = claimKey(deviceId)
+  const c = await getJson<DeviceClaim>(key)
+  // Every miss below returns `pending`, identical to "the user has not typed the
+  // code yet" — so this never reveals whether a deviceId or secret is real.
+  if (!c || c.deviceId !== deviceId) return { status: 'pending' }
+  if (!hexEqual(c.claimSecretHash, sha256(claimSecret))) return { status: 'pending' }
+
+  // Consumed (single-use) or expired → 410. We keep a consumed tombstone rather
+  // than hard-deleting on success, so a repeat poll returns 410 not a misleading
+  // "pending"; it's swept once past its TTL.
+  if (c.consumedAt || isExpired(c)) {
+    if (Date.now() > Date.parse(c.expiresAt)) {
+      await deleteObject(key)
+      await deleteObject(claimCodeKey(c.claimCode))
     }
-    if (!c.userId) return { status: 'pending' }
-    const token = randomBytes(32).toString('base64url')
-    const tokenHash = sha256(token)
-    const ts = nowIso()
-    await putJson(tokenKey(tokenHash), { deviceId, userId: c.userId, createdAt: ts, lastSeenAt: ts } satisfies DeviceTokenRecord)
-    await putJson(deviceKey(deviceId), {
-      deviceId, userId: c.userId, name: c.name ?? `Tracker ${deviceId}`, model: c.model, firmware: c.firmware,
-      linkedAt: ts, lastSeenAt: ts, tokenHash,
-    } satisfies DeviceRecord)
-    c.consumedAt = ts
-    await putJson(key, c)  // tombstone — single use, repeat poll → 410
-    return { status: 'bound', deviceToken: token, userId: c.userId, deviceName: c.name }
+    return { status: 'expired' }
   }
-  return { status: 'pending' }  // no match — never reveal that the device/secret was wrong
+  if (!c.userId) return { status: 'pending' }
+
+  const token = randomBytes(32).toString('base64url')
+  const tokenHash = sha256(token)
+  const ts = nowIso()
+  await putJson(tokenKey(tokenHash), { deviceId, userId: c.userId, createdAt: ts, lastSeenAt: ts } satisfies DeviceTokenRecord)
+  await putJson(deviceKey(deviceId), {
+    deviceId, userId: c.userId, name: c.name ?? `Tracker ${deviceId}`, model: c.model, firmware: c.firmware,
+    linkedAt: ts, lastSeenAt: ts, tokenHash,
+  } satisfies DeviceRecord)
+  c.consumedAt = ts
+  await putJson(key, c)  // tombstone — single use, repeat poll → 410
+  // The code is spent the moment the token is issued; drop its index so it
+  // cannot resolve to anything again.
+  await deleteObject(claimCodeKey(c.claimCode))
+  return { status: 'bound', deviceToken: token, userId: c.userId, deviceName: c.name }
 }
 
 // Resolve a bearer token to its device+user, or null. Best-effort lastSeenAt bump.

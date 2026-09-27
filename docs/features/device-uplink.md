@@ -191,6 +191,9 @@ S3 bucket:
 ```
 device-claims/{claimCode}.json          — short-lived, deleted on consumption
 device-tokens/{sha256(token)}.json      — { deviceId, userId, createdAt, lastSeenAt }
+device-claims/{deviceId}.json           — the ONE outstanding claim for a device
+device-claim-codes/{claimCode}.json     — { deviceId } index, so the browser half
+                                          (user types a code) is a read, not a scan
 devices/{deviceId}/metadata.json        — { deviceId, userId, name, model, firmware, linkedAt, lastSeenAt }
 devices/{deviceId}/sessions/{sessionId}/trace.csv
 devices/{deviceId}/sessions/{sessionId}/session.json
@@ -227,6 +230,14 @@ entry the same way an uploaded file is. *(Wiring uploads into trial submission i
 out of scope here — phase 3.)*
 
 ## Abuse and rate limits
+
+**Rate limits are IMPLEMENTED as of 2026-09-27** — 10/hour per `deviceId` and
+30/hour per IP on `/claim`, 300/hour per `deviceId` on `/token`. The `/token`
+figure is derived from the firmware polling every 5 s for a 5-minute window (~60
+requests per legitimate claim attempt); the 30/hour originally proposed below
+would have cut a device off halfway through its own onboarding. See
+[`device-ota-and-auth.md`](device-ota-and-auth.md) → "Prerequisites 1 and 2".
+The original proposal, kept for the record:
 
 - `/api/devices/claim`: 5/hour per `deviceId`, 20/hour per IP. Unauthenticated
   and it mints records, so it is the exposed surface.

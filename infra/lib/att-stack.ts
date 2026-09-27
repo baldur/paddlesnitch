@@ -71,6 +71,15 @@ export class AttStack extends cdk.Stack {
         id: 'expire-firmware-events',
         prefix: 'firmware-events/',
         expiration: cdk.Duration.days(90),
+      }, {
+        // Rate-limit counters (packages/core/src/rate-limit.ts). Each is one
+        // fixed window and is worthless the moment that window closes, but
+        // nothing deletes them inline — the limiter does a read and at most one
+        // write per request and adding a delete would cost more than the object.
+        // One day is far longer than the one-hour windows in use.
+        id: 'expire-rate-limit-counters',
+        prefix: 'rate/',
+        expiration: cdk.Duration.days(1),
       }],
     })
 
