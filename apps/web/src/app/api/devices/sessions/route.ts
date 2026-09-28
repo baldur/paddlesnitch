@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { withDeviceAuth } from '@/lib/device-route'
 import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeUploadPart, clearUploadParts, motionSidecarTrackName } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
-import { haversine } from '@paddlesnitch/timing/geo'
+import { movementDistanceM } from '@paddlesnitch/timing/device'
 import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
 
 // POST /api/devices/sessions?filename=track_0005.csv — device token (Bearer).
@@ -95,8 +95,9 @@ export const POST = withDeviceAuth(async (req, auth) => {
   const track = parsed.track
   const startedAt = track[0].timestamp.toISOString()
   const endedAt = track[track.length - 1].timestamp.toISOString()
-  let dist = 0
-  for (let i = 1; i < track.length; i++) dist += haversine([track[i - 1].lat, track[i - 1].lng], [track[i].lat, track[i].lng])
+  // Movement-gated, never a raw sum of fixes: GPS scatter on a tracker sitting
+  // still invents distance (~1.4 km in ten minutes on a jetty).
+  const dist = movementDistanceM(track.map(p => ({ lat: p.lat, lng: p.lng, tMs: p.timestamp.getTime() })))
 
   const meta = await storeDeviceSession(
     { deviceId: auth.deviceId, userId: auth.userId, filename, startedAt, endedAt, distanceMetres: Math.round(dist), points: track.length },
