@@ -43,7 +43,8 @@ function makeClient(): CognitoIdentityProviderClient {
 // aws-jwt-verify's default fetcher rejects http://, so we wrap native fetch instead.
 class HttpJwksFetcher {
   async fetch(uri: string): Promise<ArrayBuffer> {
-    const res = await fetch(uri)
+    // Timed out: on a cold start every sign-in check waits on this fetch.
+    const res = await fetch(uri, { signal: AbortSignal.timeout(5_000) })
     if (!res.ok) throw new Error(`JWKS fetch failed (${res.status}) for ${uri}`)
     return res.arrayBuffer()
   }
