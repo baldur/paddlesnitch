@@ -34,6 +34,7 @@ extern DisplayDriver display;
 struct BoardStatus {
     bool pmu     = false;
     bool display = false;
+    uint8_t displayAddr = 0;   // the I2C address the panel answered at, 0 if none
     bool gps     = false;  // module powered + UART open (not "has a fix")
     bool radio   = false;
     bool sdcard  = false;  // set by storageInit(), not boardInit()

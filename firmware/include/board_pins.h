@@ -54,8 +54,9 @@
 
 #define RTC_INT         14
 
-// VERIFIED ON HARDWARE: the OLED answers at 0x3D, not the 0x3C that LilyGO's
-// header implies. Something else occupies 0x3C on this bus (unidentified).
-// Confirmed with `tools/flash.sh -e displayprobe`, which renders a digit per
-// candidate; only the 0x3D candidates appeared.
-#define DISPLAY_I2C_ADDR 0x3D
+// The OLED's I2C address differs between board batches: 0x3D on the first
+// tracker (where something else, unidentified, acks at 0x3C), 0x3C on the
+// 2026-09 batch. Both verified with `tools/flash.sh -e displayprobe`. The
+// firmware probes and picks one at boot; see include/display_addr.h.
+#define DISPLAY_I2C_ADDR     0x3D
+#define DISPLAY_I2C_ADDR_ALT 0x3C
