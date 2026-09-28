@@ -2,7 +2,7 @@ import Link from 'next/link'
 import AppHeader from '@/components/AppHeader'
 
 export const metadata = {
-  title: 'Privacy Policy — paddlesnitch.com',
+  title: 'Privacy policy',
 }
 
 export default function PrivacyPolicy() {
@@ -11,7 +11,7 @@ export default function PrivacyPolicy() {
       <AppHeader
         breadcrumb={
           <>
-            <Link href="/att" className="tt-nav-link text-sm">
+            <Link href="/" className="tt-nav-link text-sm">
               ← HOME
             </Link>
             <span className="text-muted">/</span>

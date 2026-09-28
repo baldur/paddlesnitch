@@ -1,27 +1,37 @@
 'use client'
 import type { ReactNode } from 'react'
 
-// The platform header, shared by both apps. Left: the paddlesnitch brand +
-// cross-app nav (Trials ↔ Analyse) so the two apps feel like one product. Right:
+// The platform header. Left: the paddlesnitch brand + the section tabs
+// (TRIALS, PADDLES). Right:
 // an optional page-specific (section) nav slot + the account nav (passed as
 // `account` so the host app supplies the wired AccountNav). Everything common to
 // every page — My profile, Settings, Report an issue, Sign out — now lives inside
 // the account dropdown, so the top-level header stays uncluttered. Theme-aware
 // (semantic tokens).
 //
-// `active` highlights the current app in the cross-app nav.
+// `active` highlights the current section's tab; leave it out on pages that
+// belong to neither (home, profile, account, devices, legal).
+
+export type Section = 'trials' | 'paddles'
+
+// Which top-level tab a path belongs to, if any.
+export function sectionFor(pathname: string): Section | undefined {
+  if (pathname === '/att' || pathname.startsWith('/att/')) return 'trials'
+  if (pathname === '/paddles' || pathname.startsWith('/paddles/')) return 'paddles'
+  return undefined
+}
 
 export default function AppShell({
   active,
-  attHref = '/att',
-  analyseHref = '/paddles',
+  trialsHref = '/att',
+  paddlesHref = '/paddles',
   breadcrumb,
   nav,
   account,
 }: {
-  active: 'att' | 'analyse'
-  attHref?: string
-  analyseHref?: string
+  active?: Section
+  trialsHref?: string
+  paddlesHref?: string
   breadcrumb?: ReactNode
   nav?: ReactNode        // optional page-specific nav items
   account?: ReactNode    // the host app's wired <AccountNav />
@@ -37,8 +47,8 @@ export default function AppShell({
       <div className="flex items-center gap-4 min-w-0">
         <a href="/" className="font-bold tracking-widest text-fg shrink-0">paddlesnitch</a>
         <nav className="flex gap-3 shrink-0">
-          {tab(attHref, 'TRIALS', active === 'att')}
-          {tab(analyseHref, 'PADDLES', active === 'analyse')}
+          {tab(trialsHref, 'TRIALS', active === 'trials')}
+          {tab(paddlesHref, 'PADDLES', active === 'paddles')}
         </nav>
         {breadcrumb && <div className="min-w-0 text-muted truncate">{breadcrumb}</div>}
       </div>

@@ -147,7 +147,7 @@ export default function TrialAdminPage({
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm shrink-0">
-              ← HOME
+              ← TRIALS
             </Link>
             <span className="text-muted shrink-0">/</span>
             <a

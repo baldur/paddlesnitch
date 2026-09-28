@@ -68,7 +68,7 @@ export default async function CoursesCataloguePage() {
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm">
-              ← HOME
+              ← TRIALS
             </Link>
             <span className="text-muted">/</span>
             <span className="text-fg text-sm">COURSES</span>

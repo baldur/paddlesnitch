@@ -15,7 +15,7 @@ export default async function TosPage() {
       <AppHeader
         breadcrumb={
           <>
-            <Link href="/att" className="tt-nav-link text-sm">← HOME</Link>
+            <Link href="/" className="tt-nav-link text-sm">← HOME</Link>
             <span className="text-muted">/</span>
             <span className="text-fg text-sm">TERMS OF SERVICE</span>
           </>

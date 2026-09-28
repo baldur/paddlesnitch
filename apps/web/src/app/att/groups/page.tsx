@@ -66,7 +66,7 @@ export default function GroupsCataloguePage() {
       <AppHeader
         breadcrumb={
           <>
-            <Link href="/att" className="tt-nav-link text-sm">← HOME</Link>
+            <Link href="/att" className="tt-nav-link text-sm">← TRIALS</Link>
             <span className="text-muted">/</span>
             <span className="text-fg text-sm">GROUPS</span>
           </>

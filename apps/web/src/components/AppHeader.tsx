@@ -1,13 +1,13 @@
+'use client'
 import type { ReactNode } from 'react'
-import AppShell from '@paddlesnitch/ui/AppShell'
+import { usePathname } from 'next/navigation'
+import AppShell, { sectionFor } from '@paddlesnitch/ui/AppShell'
 import AttAccountNav from '@/components/AttAccountNav'
 
-// att's page header — now a thin wrapper over the shared platform AppShell so att
-// and Analyse share ONE header (brand + cross-app Trials↔Analyse nav + REPORT +
-// account). The per-page API is unchanged (`breadcrumb` + optional nav
-// `children`), so all ~17 callers keep working; the shell supplies the account
-// nav (AttAccountNav) and the REPORT trigger (opens the shared FeedbackWidget via
-// a window event).
+// The page header used by every page outside /paddles: the shared AppShell with
+// the account menu wired in. The highlighted tab comes from the URL, so a page
+// that is in neither section (home, profile, account, devices, legal) lights up
+// neither tab. It used to pass "att" always, so TRIALS was lit everywhere.
 export default function AppHeader({
   breadcrumb,
   children,
@@ -15,7 +15,8 @@ export default function AppHeader({
   breadcrumb: ReactNode
   children?: ReactNode
 }) {
+  const pathname = usePathname() ?? ''
   return (
-    <AppShell active="att" breadcrumb={breadcrumb} nav={children} account={<AttAccountNav />} />
+    <AppShell active={sectionFor(pathname)} breadcrumb={breadcrumb} nav={children} account={<AttAccountNav />} />
   )
 }

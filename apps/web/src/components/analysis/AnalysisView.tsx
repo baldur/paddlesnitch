@@ -94,7 +94,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const [matches, setMatches] = useState<Racer[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sectionErr, setSectionErr] = useState('')
-  const [sectionInsight, setSectionInsight] = useState<{ text: string; model?: string } | null>(null)
+  const [sectionInsight, setSectionInsight] = useState<{ text: string } | null>(null)
   const [insightLoading, setInsightLoading] = useState(false)
 
   useEffect(() => {
@@ -230,7 +230,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         setSectionErr('Pick a longer stretch (≥200 m).')
         return
       }
-      setSectionInsight({ text: res.insight, model: res.insightModel })
+      setSectionInsight({ text: res.insight })
     } catch { setSectionErr('Could not analyse that section.') }
     finally { setInsightLoading(false) }
   }
@@ -277,7 +277,6 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                 </div>
               )}
               <p className="mt-2 leading-relaxed text-[#e2e8f0] border-l-2 border-[#0369a1] pl-2">{data.insight}</p>
-              {data.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {data.insightModel}</div>}
             </div>
           )}
         </div>
@@ -470,7 +469,6 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {sectionInsight && (
             <div className="mt-2 border-l-2 border-[#a78bfa] pl-2 text-[#e2e8f0] leading-relaxed">
               {sectionInsight.text}
-              {sectionInsight.model && <div className="text-[10px] text-[#64748b] mt-1">narrated by {sectionInsight.model}</div>}
             </div>
           )}
           <div className="flex gap-2 mt-2 flex-wrap">

@@ -16,7 +16,7 @@ function fmtSince(iso: string) { try { return new Date(iso).toLocaleDateString(u
 function Frame({ nav, children }: { nav?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
-      <AppShell active="analyse" nav={nav} account={<AppAccountNav />} />
+      <AppShell active="paddles" nav={nav} account={<AppAccountNav />} />
       {children}
     </div>
   )

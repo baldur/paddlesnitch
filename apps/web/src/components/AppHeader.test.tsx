@@ -5,6 +5,8 @@ import { describe, it, expect, vi } from 'vitest'
 // can test AppHeader's markup in isolation. AppHeader is now a thin wrapper over
 // the shared @paddlesnitch/ui AppShell.
 vi.mock('@/components/AttAccountNav', () => ({ default: () => <span>ACCOUNTNAV</span> }))
+let pathname = '/att'
+vi.mock('next/navigation', () => ({ usePathname: () => pathname }))
 
 import AppHeader from './AppHeader'
 
@@ -31,5 +33,26 @@ describe('AppHeader (shared AppShell wrapper)', () => {
     expect(html).not.toContain('REPORT')
     expect(html).toContain('ACCOUNTNAV')
     expect(html.indexOf('EXTRA')).toBeLessThan(html.indexOf('ACCOUNTNAV'))
+  })
+})
+
+// The header used to pass active="att" everywhere, so TRIALS was lit on home,
+// profile, account and devices pages too.
+describe('the highlighted tab follows the URL', () => {
+  const lit = (html: string) => {
+    const on = [...html.matchAll(/<a href="([^"]+)" class="tracking-widest transition-colors text-fg"/g)].map(m => m[1])
+    return on
+  }
+  it.each([
+    ['/att', ['/att']],
+    ['/att/trials/abc', ['/att']],
+    ['/paddles/xyz', ['/paddles']],
+    ['/', []],
+    ['/profile/abc', []],
+    ['/account', []],
+    ['/devices', []],
+  ])('%s lights %j', (path, expected) => {
+    pathname = path
+    expect(lit(renderToStaticMarkup(<AppHeader breadcrumb={null} />))).toEqual(expected)
   })
 })

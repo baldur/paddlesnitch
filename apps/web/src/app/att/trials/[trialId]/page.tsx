@@ -50,7 +50,7 @@ export default async function TrialPage({
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm shrink-0">
-              ← HOME
+              ← TRIALS
             </Link>
             <span className="text-muted shrink-0">/</span>
             <span className="text-fg text-sm truncate">{trial.name.toUpperCase()}</span>

@@ -75,7 +75,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-sm text-muted">This entry doesn&apos;t exist, or you can&apos;t see it.</p>
-        <Link href="/att" className="tt-nav-link text-xs tracking-widest">← HOME</Link>
+        <Link href="/att" className="tt-nav-link text-xs tracking-widest">← TRIALS</Link>
       </main>
     )
   }

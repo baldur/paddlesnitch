@@ -57,7 +57,7 @@ export default async function ProfilePage({
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={<Link href="/att" className="tt-nav-link text-sm shrink-0">← HOME</Link>}
+        breadcrumb={<Link href="/" className="tt-nav-link text-sm shrink-0">← HOME</Link>}
       >
         {isOwner && <Link href="/profile/me/settings" className="tt-nav-link text-sm">SETTINGS</Link>}
       </AppHeader>

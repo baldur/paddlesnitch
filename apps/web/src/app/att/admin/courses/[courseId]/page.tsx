@@ -203,7 +203,7 @@ export default function CourseAdminPage({
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm shrink-0">
-              ← HOME
+              ← TRIALS
             </Link>
             <span className="text-muted shrink-0">/</span>
             <span className="text-fg text-sm truncate">{course.name.toUpperCase()}</span>
@@ -282,7 +282,7 @@ export default function CourseAdminPage({
 
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted tracking-widest">
-                  GEOMETRY ({course.type.replace('_', ' ')})
+                  COURSE LINES ({course.type.replaceAll('_', ' ')})
                 </label>
                 <p className="text-xs text-muted">
                   Existing lines are highlighted. Click on the map to re-draw any
@@ -332,10 +332,9 @@ export default function CourseAdminPage({
 
               {trials.length > 0 && (
                 <div className="border border-border bg-surface-2 px-3 py-2 text-fg text-xs">
-                  This course already has trials. Editing the lines or course type
-                  will create a NEW course (the original stays intact so historical
-                  leaderboards aren&apos;t invalidated). Name and sport edits stay on
-                  this course.
+                  If this course has results, its lines can&apos;t be changed, so past
+                  results stay valid. You can still change its name, sport and
+                  visibility.
                 </div>
               )}
 
