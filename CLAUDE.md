@@ -146,6 +146,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`device-screen-map.md`](docs/features/device-screen-map.md) | 📋 reference | Tracker screens and the web pages they lead to |
 | [`qr-onboarding.md`](docs/features/qr-onboarding.md) | Phase 1 built | Scan to join WiFi, scan to add a tracker |
 | [`sitemap.md`](docs/features/sitemap.md) | ✅ current map | Every route, as of the 2026-09 navigation clean-up |
+| [`security-audit-2026-09.md`](docs/features/security-audit-2026-09.md) | 🔍 audit, 2026-09-29 | Security, privacy, resilience (firmware, web, live AWS). Fixes: PRs #303–#320. The rest: 15 decisions with trade-offs. Read "Read this first" before handing trackers to testers |
 | [`behavioural-analytics.md`](docs/features/behavioural-analytics.md) | 🚧 spec, not built | Consent-gated struggle signals |
 
 ### Tech Stack
