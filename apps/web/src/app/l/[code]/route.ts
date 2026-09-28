@@ -22,8 +22,8 @@ export async function GET(
   // both paths pass through.
   const clean = (code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)
   const target = clean
-    ? `/account?code=${encodeURIComponent(clean)}#devices`
-    : '/account#devices'
+    ? `/devices?code=${encodeURIComponent(clean)}#add`
+    : '/devices#add'
   // A RELATIVE Location, deliberately. NextResponse.redirect() demands an
   // absolute URL, and behind CloudFront -> Lambda `req.url` is the Lambda
   // function URL, not paddlesnitch.com -- so building from it sent the user to

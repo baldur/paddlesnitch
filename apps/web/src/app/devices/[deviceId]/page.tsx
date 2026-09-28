@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
+import RemoveTrackerButton from '@/components/devices/RemoveTrackerButton'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { type DeviceView, fmtDate, fmtDay, fmtDist, fmtDur } from '@/lib/device-view'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
@@ -21,7 +22,7 @@ type SessionReport = {
   attitude: AttitudeReport | null
 }
 
-function Report({ report, cadence, attitude, sessionId }: SessionReport & { sessionId: string }) {
+function Report({ report, cadence, attitude, sessionId, deviceId }: SessionReport & { sessionId: string; deviceId: string }) {
   const sr = report.strokeRate
   // Derived from the fields already in the report — no server change.
   const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
@@ -32,7 +33,7 @@ function Report({ report, cadence, attitude, sessionId }: SessionReport & { sess
           page is how you find out WHETHER this session has motion, and hiding the
           way in until it does makes the feature undiscoverable. */}
       <div>
-        <Link href={`/profile/me/devices/${sessionId}`} className="text-primary">
+        <Link href={`/devices/${deviceId}/${sessionId}`} className="text-primary">
           OPEN FULL VIEW — ROLL &amp; PITCH CHARTS →
         </Link>
       </div>
@@ -233,7 +234,7 @@ export default function DeviceDetailPage() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader breadcrumb={<Link href="/profile/me/devices" className="tt-nav-link text-sm shrink-0">← MY DEVICES</Link>} />
+      <AppHeader breadcrumb={<Link href="/devices" className="tt-nav-link text-sm shrink-0">← DEVICES</Link>} />
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-fg tracking-wide">{title}</h1>
@@ -245,15 +246,11 @@ export default function DeviceDetailPage() {
           </p>
           {device === null && (
             <p className="text-xs text-muted mt-2 border border-border bg-surface px-3 py-2">
-              This tracker is no longer linked to your account, but the sessions it uploaded are
-              still yours. Link it again in <Link href="/account" className="text-primary">Account</Link> to
-              start receiving new ones.
+              This tracker is no longer on your account, but its recordings are still yours.{' '}
+              <Link href="/devices#add" className="text-primary">Add it again</Link> to get new ones.
             </p>
           )}
-          <p className="text-sm text-muted mt-2">
-            Everything this tracker has uploaded. Expand a session to see all its columns and what
-            we can (and can&apos;t) make of it.
-          </p>
+          <p className="text-sm text-muted mt-2">Everything this tracker has recorded. Tap one for its details.</p>
         </div>
 
         {sessions === undefined ? (
@@ -276,12 +273,18 @@ export default function DeviceDetailPage() {
                     {reports[s.sessionId] === 'loading' && <p className="text-xs text-muted">Reading…</p>}
                     {reports[s.sessionId] === 'error' && <p className="text-xs text-red">Could not read this session.</p>}
                     {reports[s.sessionId] && reports[s.sessionId] !== 'loading' && reports[s.sessionId] !== 'error' && (
-                      <Report {...(reports[s.sessionId] as SessionReport)} sessionId={s.sessionId} />
+                      <Report {...(reports[s.sessionId] as SessionReport)} sessionId={s.sessionId} deviceId={s.deviceId} />
                     )}
                   </div>
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {device && (
+          <div className="border-t border-border pt-6">
+            <RemoveTrackerButton deviceId={deviceId} />
           </div>
         )}
       </div>

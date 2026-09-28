@@ -3,6 +3,22 @@ import { NextRequest, NextResponse } from 'next/server'
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // The tracker's claim QR carries an UPPERCASE URL on purpose: all-caps puts it
+  // in QR alphanumeric mode, which packs 2 characters per 11 bits and drops the
+  // code to QR version 1 -- fewer modules and a wider quiet zone on a 64 px
+  // panel, which is what makes it scannable. Serve /L/ from the /l/ handler
+  // here, with an exact, case-sensitive check. This used to be a next.config
+  // redirect, but Next matches those case-INsensitively, so /l/ matched /L/:code
+  // too and redirected to itself forever; it only worked in prod because the
+  // hosting layer's router happens to be case-sensitive. A REWRITE, not a
+  // redirect: internal, so no extra hop and no absolute URL (behind CloudFront
+  // the request URL is the Lambda's own host; see app/l/[code]/route.ts).
+  if (pathname.startsWith('/L/')) {
+    const to = req.nextUrl.clone()
+    to.pathname = `/l/${pathname.slice(3)}`
+    return NextResponse.rewrite(to)
+  }
+
   // Auth routes always public
   if (pathname.startsWith('/att/auth') || pathname.startsWith('/att/api/auth')) {
     return NextResponse.next()
@@ -29,6 +45,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith('/att/admin') ||
     pathname.startsWith('/profile/me') ||
     pathname === '/account' || pathname.startsWith('/account/') ||
+    pathname === '/devices' || pathname.startsWith('/devices/') ||
     (req.method !== 'GET' &&
       (pathname.startsWith('/att/api') || pathname.startsWith('/api/account')) &&
       !pathname.startsWith('/att/api/auth'))
@@ -36,8 +53,8 @@ export function proxy(req: NextRequest) {
   if (requiresAuth && !req.cookies.get('tt_id')) {
     // `next` carries the QUERY STRING as well as the path. It used to be the
     // pathname alone, while the clone kept the original params — so a gated URL
-    // like /account?code=ABC123 redirected to
-    // /att/auth?code=ABC123&next=/account and the code was silently
+    // like /devices?code=ABC123 redirected to
+    // /att/auth?code=ABC123&next=/devices and the code was silently
     // dropped on the way back. That breaks the scan-to-link QR for anyone not
     // already signed in, which is most people setting up a device.
     const target = pathname + req.nextUrl.search

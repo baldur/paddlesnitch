@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import StravaButton from '@/components/strava/StravaButton'
-import DevicesSection from '@/components/DevicesSection'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
@@ -425,7 +424,13 @@ function AccountPageInner() {
               )}
             </section>
 
-            <DevicesSection />
+            <section>
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Devices</h2>
+              <p className="text-sm text-muted leading-relaxed">
+                Add, remove and see your paddlesnitch trackers on the{' '}
+                <Link href="/devices" className="text-primary">Devices</Link> page.
+              </p>
+            </section>
 
             <section id="profile">
               <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
