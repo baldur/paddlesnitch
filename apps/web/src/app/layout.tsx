@@ -15,8 +15,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'ATTS — Automated Time Trials System',
-  description: 'GPS-verified river racing — splits, leaderboards, and biometric data for kayak and rowing',
+  title: 'paddlesnitch',
+  description: 'Time trials and paddle analysis for kayakers and rowers.',
 }
 
 export const viewport: Viewport = {
