@@ -50,14 +50,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => ({}))
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+  if (!email) return NextResponse.json({ error: 'Enter an email address.' }, { status: 400 })
 
   const invitee = await findUserByEmail(email)
   if (!invitee) {
     // We deliberately distinguish "no such user" from other failures so the
     // UI can prompt the inviter to double-check the address. Pre-signup
     // invitations (queue the email, merge in on signup) are phase 4 scope.
-    return NextResponse.json({ error: 'No account found for that email' }, { status: 422 })
+    return NextResponse.json({ error: 'No one has an account with that email.' }, { status: 422 })
   }
 
   // Idempotent: re-inviting an already-invited sub is a no-op.

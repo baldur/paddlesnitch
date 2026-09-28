@@ -41,13 +41,13 @@ export async function POST(req: NextRequest) {
   const { name, sport, type = 'point_to_point', startLine, finishLine, distanceMetres, minValidSeconds, gateDirection, gates, visibility, groupId } = body
   const hasGates = type === 'gate' && Array.isArray(gates) && gates.length >= 2
   if (!name || !sport || (!startLine && !hasGates)) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Give the course a name and a sport, and draw its lines.' }, { status: 400 })
   }
   if ((type === 'point_to_point' || type === 'one_way') && !finishLine) {
-    return NextResponse.json({ error: 'Point-to-point courses require a finish line' }, { status: 400 })
+    return NextResponse.json({ error: 'A point-to-point course needs a finish line.' }, { status: 400 })
   }
   if (type === 'gate' && (!gates || gates.length < 2)) {
-    return NextResponse.json({ error: 'Gate courses require at least 2 gates' }, { status: 400 })
+    return NextResponse.json({ error: 'A gate course needs at least 2 gates.' }, { status: 400 })
   }
 
   // Creation is gated to group owners/admins (phase 2). Every course belongs to

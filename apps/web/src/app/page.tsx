@@ -8,7 +8,7 @@ import { redirect } from 'next/navigation'
 
 const DEFAULT_METADATA: Metadata = {
   title: 'paddlesnitch.com — tools for the river',
-  description: 'A growing suite of software for paddlers, rowers, and river groups.',
+  description: 'Time trials and paddle analysis for kayakers and rowers.',
 }
 
 // A campaign link is usually shared on social media, so it gets its own title,
@@ -48,22 +48,22 @@ type Product = {
 
 const PRODUCTS: Product[] = [
   {
-    name: 'Automated Time Trials',
-    short: 'GPS-verified river racing for kayak & rowing.',
+    name: 'Time trials',
+    short: 'Race a course, timed from your GPS file.',
     details:
-      'Organisers draw start and finish lines on a map; paddlers and rowers upload their GPS traces from any device. The system extracts the segment between the lines and ranks results, with 500 m splits, boat-class filtering, and crew listings.',
+      'Organisers draw start and finish lines on a map. You upload your GPS file and get your time, 500 m splits and a place on the leaderboard.',
     status: 'available',
     href: '/att',
-    cta: 'OPEN ATT',
+    cta: 'OPEN TRIALS',
   },
   {
-    name: 'Paddle Analysis',
-    short: 'Upload a paddle, see what actually happened.',
+    name: 'Paddles',
+    short: 'See what happened on every paddle.',
     details:
-      'Drop a GPS trace from any device and get an instant read of the session: your pieces and rest, stroke-rate consistency, distance-per-stroke, and the day’s wind and river flow — on an interactive map coloured by speed or stroke rate.',
+      'Upload a GPS file, or bring one in from Strava or the tracker. See your speed, stroke rate, efforts and rests, and the wind and river flow that day, on a map.',
     status: 'available',
     href: '/paddles',
-    cta: 'TRY ANALYSIS',
+    cta: 'OPEN PADDLES',
   },
 ]
 
@@ -113,26 +113,14 @@ export default async function LandingPage({
 export function LandingContent({ variant }: { variant?: string } = {}) {
   return (
     <>
-      <section className="border-b border-border px-4 py-8 md:py-14 text-center bg-surface">
-        {variant && (
-          // Campaign marker — shows this landing came from a tailored source
-          // rather than the default front door.
-          <p
-            data-campaign={variant}
-            className="text-primary text-[10px] tracking-[0.3em] uppercase mb-2"
-          >
-            campaign: {variant}
-          </p>
-        )}
-        <p className="text-muted text-[10px] md:text-xs tracking-[0.3em] uppercase mb-2">
-          A growing suite
-        </p>
+      {/* A campaign landing is marked in the markup (for tests and analytics),
+          never in text a visitor can see. */}
+      <section data-campaign={variant} className="border-b border-border px-4 py-8 md:py-14 text-center bg-surface">
         <h1 className="text-2xl md:text-5xl font-bold text-fg mb-2">
-          Software for paddlers, rowers, and river groups.
+          Tools for paddlers and rowers.
         </h1>
         <p className="text-muted text-sm max-w-xl mx-auto leading-relaxed hidden sm:block">
-          Practical tools that disappear into the river day. Honest, no-bloat,
-          designed for people who&apos;d rather be on the water.
+          Time your races from a GPS file, and see what happened on every paddle.
         </p>
       </section>
 
@@ -184,8 +172,7 @@ export function LandingContent({ variant }: { variant?: string } = {}) {
         </div>
 
         <p className="text-xs text-muted text-center mt-10">
-          More tools are on the way. Use the &quot;Report an issue&quot; widget below
-          to tell us what you&apos;d like to see.
+          Tell us what you&apos;d like next with Report an issue.
         </p>
       </section>
     </>

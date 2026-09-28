@@ -28,13 +28,13 @@ export default function ForgotPasswordPage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data?.error ?? 'Could not send reset code')
+        throw new Error(data?.error ?? 'Couldn’t send the reset code. Please try again.')
       }
       // Send them to the next step regardless of whether the email exists —
       // the next page accepts the code and shows the same UX either way.
       router.push(`/att/auth/reset?email=${encodeURIComponent(email)}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send reset code')
+      setError(err instanceof Error ? err.message : 'Couldn’t send the reset code. Please try again.')
       setLoading(false)
     }
   }
@@ -44,8 +44,8 @@ export default function ForgotPasswordPage() {
   return (
     <main className="flex-1 flex flex-col">
       <header className="border-b border-border px-4 py-3">
-        <Link href="/att">
-          <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
+        <Link href="/">
+          <span className="text-fg font-bold text-lg tracking-widest">paddlesnitch</span>
         </Link>
       </header>
       <div className="flex-1 flex items-start justify-center pt-16 px-4">

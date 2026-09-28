@@ -27,7 +27,7 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   }
   if (userId === group.ownerId) {
     return NextResponse.json(
-      { error: 'Cannot remove the group owner. Transfer ownership first.' },
+      { error: 'The group’s owner can’t be removed.' },
       { status: 400 }
     )
   }

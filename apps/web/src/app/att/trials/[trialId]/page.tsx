@@ -78,7 +78,7 @@ export default async function TrialPage({
           <span>{trial.date}</span>
           {course && (
             <span>
-              {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
+              {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} m
             </span>
           )}
           <span

@@ -49,12 +49,12 @@ export default function GroupsCataloguePage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Could not create group')
+        throw new Error(data.error ?? 'Couldn’t create the group. Please try again.')
       }
       const group = await res.json()
       router.push(`/att/groups/${group.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create group')
+      setError(err instanceof Error ? err.message : 'Couldn’t create the group. Please try again.')
       setCreating(false)
     }
   }
@@ -77,7 +77,7 @@ export default function GroupsCataloguePage() {
         <section>
           <h1 className="text-lg font-bold text-fg tracking-widest mb-2">YOUR GROUPS</h1>
           <p className="text-sm text-muted mb-6">
-            Groups scope courses and trials to a closed group of members.
+            A group is a club or squad. It runs courses and trials for its members.
           </p>
 
           {groups === null && <LoadingState className="py-8" />}

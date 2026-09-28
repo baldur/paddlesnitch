@@ -31,12 +31,12 @@ function Inner() {
     { enabled: valid, retry: false },
   )
   const race = !valid ? null : q.isPending ? undefined : (q.data?.race ?? null)
-  const err = q.data?.reason === 'section_too_short' ? 'That section is too short to race.' : (q.isError ? 'Could not build the race.' : '')
+  const err = q.data?.reason === 'section_too_short' ? 'That section is too short to compare.' : (q.isError ? 'Couldn’t compare these paddles. Please try again.' : '')
 
-  if (race === undefined) return <div className="min-h-screen bg-bg text-muted flex items-center justify-center text-sm">Building the race…</div>
+  if (race === undefined) return <div className="min-h-screen bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
   if (!race || race.racers.length === 0) return (
     <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
-      <p className="text-sm text-muted">{err || 'Nothing to race here.'}</p>
+      <p className="text-sm text-muted">{err || 'Nothing to compare here.'}</p>
       <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
     </div>
   )
@@ -58,7 +58,7 @@ function Inner() {
       <div className="h-[46vh] w-full relative">
         <SectionRaceMapClient racers={overlay} startLine={race.startLine} finishLine={race.finishLine} />
         <div className="absolute top-3 left-3 z-[1000] bg-surface/95 border border-border px-3 py-2 text-xs">
-          <div className="text-[10px] text-muted tracking-widest">SECTION RACE</div>
+          <div className="text-[10px] text-muted tracking-widest">SECTION COMPARE</div>
           <div className="tabular text-sm font-bold">{(race.sectionM / 1000).toFixed(2)} km · {racers.length} paddles</div>
         </div>
         <Link href={src ? `/paddles/${src}` : '/paddles'} className="absolute top-3 right-3 z-[1000] bg-surface/95 border border-border px-3 py-2 text-[10px] tracking-widest text-muted hover:text-fg">← BACK</Link>
@@ -68,13 +68,13 @@ function Inner() {
         {/* coach narrative — reasons about whether conditions explain the gap */}
         {race.insight && (
           <div className="mb-6">
-            <div className="text-[10px] text-muted tracking-widest mb-1">WHAT THE NUMBERS SAY</div>
+            <div className="text-[10px] text-muted tracking-widest mb-1">SUMMARY</div>
             <p className="text-sm leading-relaxed border-l-2 border-primary pl-3">{race.insight}</p>
           </div>
         )}
 
         {/* comparison table — dates across the top, metrics down the side */}
-        <div className="text-[10px] text-muted tracking-widest mb-2">COMPARISON · zeroed at the start line</div>
+        <div className="text-[10px] text-muted tracking-widest mb-2">TIMES FROM THE START LINE</div>
         <div className="overflow-x-auto mb-6">
           <table className="w-full text-sm tabular border-collapse">
             <thead>
@@ -90,44 +90,45 @@ function Inner() {
             </thead>
             <tbody>
               <tr className="border-t border-border">
-                <td className="text-left py-1.5 pr-3 text-muted">time</td>
+                <td className="text-left py-1.5 pr-3 text-muted">TIME</td>
                 {racers.map(r => <td key={r.sessionId} className={`text-right py-1.5 pl-3 font-bold ${r.elapsedS === fastest ? 'text-green' : 'text-fg'}`}>{fmtDur(r.elapsedS)}</td>)}
               </tr>
               <tr className="border-t border-border">
-                <td className="text-left py-1 pr-3 text-muted">vs you</td>
+                <td className="text-left py-1 pr-3 text-muted">VS YOU</td>
                 {racers.map(r => { const d = r.elapsedS - source.elapsedS; return <td key={r.sessionId} className={`text-right py-1 pl-3 ${r.isSource ? 'text-muted' : d < 0 ? 'text-green' : d > 0 ? 'text-red' : 'text-muted'}`}>{r.isSource ? '—' : signed(d)}</td> })}
               </tr>
               <tr className="border-t border-border">
-                <td className="text-left py-1 pr-3 text-muted">pace /500</td>
+                <td className="text-left py-1 pr-3 text-muted">PACE /500</td>
                 {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted">{split500(r.cruiseSpeed)}</td>)}
               </tr>
               <tr className="border-t border-border">
-                <td className="text-left py-1 pr-3 text-muted">stroke rate</td>
+                <td className="text-left py-1 pr-3 text-muted">STROKE RATE</td>
                 {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted">{r.avgSR != null ? `${Math.round(r.avgSR)} spm` : '—'}</td>)}
               </tr>
               <tr className="border-t border-border">
-                <td className="text-left py-1 pr-3 text-muted">dist / stroke</td>
+                <td className="text-left py-1 pr-3 text-muted">DISTANCE PER STROKE</td>
                 {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted">{r.avgDps != null ? `${r.avgDps.toFixed(1)} m` : '—'}</td>)}
               </tr>
               <tr className="border-t border-border">
-                <td className="text-left py-1 pr-3 text-muted">wind</td>
+                <td className="text-left py-1 pr-3 text-muted">WIND</td>
                 {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted whitespace-nowrap">{r.conditions?.windKmh != null ? `${Math.round(r.conditions.windKmh)} km/h${compass(r.conditions.windDir)}` : '—'}</td>)}
               </tr>
               <tr className="border-t border-border">
-                <td className="text-left py-1 pr-3 text-muted">flow</td>
+                <td className="text-left py-1 pr-3 text-muted">RIVER FLOW</td>
                 {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#22d3ee] whitespace-nowrap">{r.conditions?.flowM3s != null ? `${r.conditions.flowM3s.toFixed(1)} m³/s` : '—'}</td>)}
               </tr>
             </tbody>
           </table>
           {racers.every(r => !r.conditions?.windKmh && !r.conditions?.flowM3s) && (
-            <div className="text-[11px] text-muted mt-1">No wind/flow captured for these paddles — re-analyse with a network connection to add it.</div>
+            <div className="text-[11px] text-muted mt-1">No wind or river flow data for these paddles.</div>
           )}
         </div>
 
         {/* per-500 splits over the section */}
         {boundaries.length > 0 && (
           <>
-            <div className="text-[10px] text-muted tracking-widest mb-2">SPLITS · elapsed at each 500 m of the section</div>
+            <div className="text-[10px] text-muted tracking-widest">SPLITS</div>
+            <div className="text-[10px] text-muted mb-2">Time at each 500 m of the section.</div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm tabular border-collapse">
                 <thead>

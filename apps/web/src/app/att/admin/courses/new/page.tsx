@@ -24,24 +24,24 @@ type CourseTypeOption = {
 const COURSE_TYPES: CourseTypeOption[] = [
   {
     value: 'point_to_point',
-    label: 'Point to Point',
+    label: 'Point to point',
     linesLabel: '2 lines',
     summary: 'Separate start and finish at different locations.',
-    detail: 'Draw a start line and a finish line. The clock starts when the athlete crosses the start line and stops when they cross the finish line. Use this for straight stretches of river where start and finish are in different places.',
+    detail: 'Draw a start line and a finish line. The clock starts when a paddler crosses the start line and stops when they cross the finish line. Use this for straight stretches of river where start and finish are in different places.',
   },
   {
     value: 'loop',
     label: 'Loop',
     linesLabel: '1 line',
-    summary: 'Cross the same line twice — go out, do your course, come back through.',
-    detail: 'Draw one line. The clock starts when the athlete crosses it for the first time and stops the next time they cross it, regardless of direction. Works for out-and-back courses, circular loops, or any course where athletes return through the same line. Set a minimum time to filter out false starts from warmup crossings.',
+    summary: 'Cross the same line twice: go out, do the course, come back through.',
+    detail: 'Draw one line. The clock starts the first time a paddler crosses it and stops the next time, in either direction. Works for out-and-back courses, loops, or any course that comes back through the same line. Set a minimum time to filter out false starts from warmup crossings.',
   },
   {
     value: 'gate',
     label: 'Gate',
     linesLabel: '2+ gates',
-    summary: 'Ordered gates each with a crossing direction — proves athletes navigated the full course correctly.',
-    detail: 'Add a start gate and finish gate (minimum), plus any intermediate gates around turning buoys. Each gate is a drawn line with a direction; athletes must cross every gate in the defined direction, in order. The clock starts at gate 1 and stops at the last gate. Athletes who miss a gate or cross in the wrong direction are automatically disqualified.',
+    summary: 'Gates passed in order, each in one direction. Checks that paddlers followed the whole course.',
+    detail: 'Add a start gate and finish gate (minimum), plus any intermediate gates around turning buoys. Each gate is a line with a direction. Paddlers must cross every gate, in order, the right way. The clock starts at gate 1 and stops at the last gate. A paddler who misses a gate or crosses one the wrong way gets no time.',
   },
 ]
 
@@ -153,7 +153,7 @@ export default function NewCoursePage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error ?? 'Failed to create course')
+        throw new Error(data.error ?? 'Couldn’t create the course. Please try again.')
       }
       const course = await res.json()
       router.push(`/att/admin/courses/${course.id}`)

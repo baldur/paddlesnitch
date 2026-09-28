@@ -76,7 +76,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   // minimise the two text-heavy ones (summary + segments) to reveal the map. (#187)
   const [hudOpen, setHudOpen] = useState(true)
   const [effortsOpen, setEffortsOpen] = useState(true)
-  // Boat metadata — the type of outing + which seat the paddler was in.
+  // Boat metadata — the boat class + which seat the paddler was in.
   const [boatClass, setBoatClass] = useState<BoatClass | ''>(initialBoatClass ?? '')
   const [seat, setSeat] = useState<Seat | ''>(initialSeat ?? '')
   const [showBoat, setShowBoat] = useState(false)
@@ -209,11 +209,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
     try {
       const res = await utils.similar.find.fetch({ sourceId: sessionId, aIdx, bIdx })
       if (!res.ok) {
-        setSectionErr(res.reason === 'section_too_short' ? 'Pick a longer stretch (≥200 m).' : 'Could not search your paddles.')
+        setSectionErr(res.reason === 'section_too_short' ? 'Pick a longer section (at least 200 m).' : 'Couldn’t search your paddles. Please try again.')
         setFindState('error'); return
       }
       setMatches(res.matches ?? []); setSelected(new Set()); setFindState('done')
-    } catch { setSectionErr('Could not search your paddles.'); setFindState('error') }
+    } catch { setSectionErr('Couldn’t search your paddles. Please try again.'); setFindState('error') }
   }
 
   const raceSelected = () => {
@@ -228,11 +228,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
     try {
       const res = await utils.similar.sectionInsight.fetch({ sourceId: sessionId, aIdx, bIdx })
       if (res.reason === 'section_too_short') {
-        setSectionErr('Pick a longer stretch (≥200 m).')
+        setSectionErr('Pick a longer section (at least 200 m).')
         return
       }
       setSectionInsight({ text: res.insight })
-    } catch { setSectionErr('Could not analyse that section.') }
+    } catch { setSectionErr('Couldn’t analyse that section. Please try again.') }
     finally { setInsightLoading(false) }
   }
 
@@ -287,16 +287,16 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         {!sectionMode && (data.surges.length > 0 || data.sets.some(s => s.count > 1)) && (
           <div className={`${PANEL} max-w-[300px] min-h-0 p-3 text-xs overflow-auto pointer-events-auto`}>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-muted tracking-widest">SEGMENTS</span>
+              <span className="text-[10px] text-muted tracking-widest">EFFORTS AND RESTS</span>
               <button onClick={() => setEffortsOpen(o => !o)} aria-label={effortsOpen ? 'Minimise segments' : 'Expand segments'}
                 className="w-5 h-5 leading-none text-muted hover:text-fg">{effortsOpen ? '–' : '+'}</button>
             </div>
             {effortsOpen && (<>
             {data.sets.some(s => s.count > 1) && (
               <div className="mb-2">
-                <div className="text-[10px] text-muted tracking-widest mb-1">GROUPED</div>
+                <div className="text-[10px] text-muted tracking-widest mb-1">REPEATS</div>
                 {data.sets.map((s, i) => (
-                  <div key={i} className="tabular">{s.count} × ~{fmtDur(s.avgDurS)} @ {split500(s.avgSpeed)}{s.avgSR != null ? `, ~${Math.round(s.avgSR)} spm` : ''}{s.count > 1 && <span className="text-primary"> ← set</span>}</div>
+                  <div key={i} className="tabular">{s.count} × {fmtDur(s.avgDurS)} at {split500(s.avgSpeed)}/500{s.avgSR != null ? `, ${Math.round(s.avgSR)} spm` : ''}</div>
                 ))}
               </div>
             )}
@@ -310,7 +310,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                 </div>
               ))}
             </div>
-            {data.stops.length > 0 && <div className="mt-2 text-[10px] text-muted">rests: {data.stops.map(s => `${fmtDur(s.fromT)} (${Math.round(s.durS)}s)`).join(' · ')}</div>}
+            {data.stops.length > 0 && <div className="mt-2 text-[10px] text-muted">RESTS: {data.stops.map(s => `${fmtDur(s.fromT)} (${Math.round(s.durS)} s)`).join(' · ')}</div>}
             </>)}
           </div>
         )}
@@ -328,7 +328,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {sessionId && !readOnly && <button onClick={toggleShare} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showShare ? 'text-split' : 'text-muted hover:text-fg'}`}>SHARE</button>}
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-split' : 'text-muted hover:text-fg'}`}>DIARY</button>}
           {sessionId && <button onClick={() => setShowBoat(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showBoat ? 'text-split' : 'text-muted hover:text-fg'}`}>BOAT</button>}
-          {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Zoom into any stretch for a deeper, coached read — or race it against your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-split' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : '🔍 ANALYSE A SECTION'}</button>}
+          {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Pick part of this paddle to look at closely, or compare with your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-split' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : 'PICK A SECTION'}</button>}
         </div>
         {!sectionMode && (
           <div className={`${PANEL} p-1.5 flex items-center gap-1`}>
@@ -342,8 +342,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           </div>
         )}
         {!sectionMode && dataProp.avgSR != null && (
-          <div className={`${PANEL} p-1.5 flex items-center gap-1`} title="Kayak/SUP stroke rate is counted per full cycle, so we double it. Turn off for rowing.">
-            <span className="text-[10px] text-muted tracking-widest px-1">STROKE ×2 (SUP→KAYAK)</span>
+          <div className={`${PANEL} p-1.5 flex items-center gap-1`} title="Kayak and SUP files often count one stroke per left-and-right cycle. Turn this on to count each side. Leave it off for rowing.">
+            <span className="text-[10px] text-muted tracking-widest px-1">DOUBLE STROKE RATE</span>
             <button onClick={toggleDouble} disabled={srSaving}
               className={`px-2 py-1 text-[10px] tracking-widest disabled:opacity-50 ${srDoubled ? 'bg-primary text-white' : 'text-muted hover:text-fg'}`}>
               {srDoubled ? 'ON' : 'OFF'}
@@ -352,7 +352,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
         {showShare && sessionId && !readOnly && (
           <div className={`${PANEL} p-2 w-[280px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">SHARE — anyone with the link can view this paddle</div>
+            <div className="text-[10px] text-muted tracking-widest mb-1">SHARE</div>
+            <div className="text-[10px] text-muted mb-1">Anyone with the link can see this paddle.</div>
             {shareState === 'working' && !shareUrl ? (
               <div className="text-xs text-muted">Creating link…</div>
             ) : shareUrl ? (
@@ -373,7 +374,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                   className="w-full mt-1 px-3 py-1.5 text-[10px] tracking-widest text-muted border border-border hover:text-fg hover:border-primary">
                   DOWNLOAD IMAGE
                 </button>
-                <div className="text-[10px] text-muted mt-1 leading-snug">The link is tappable, and unfurls with a route+stats card on social. DOWNLOAD IMAGE gives you that card as a photo.</div>
+                <div className="text-[10px] text-muted mt-1 leading-snug">Posts of this link show a map and stats. DOWNLOAD IMAGE saves that picture.</div>
                 {data.source?.type === 'strava' && (
                   <div className="mt-2 pt-2 border-t border-border">
                     {data.source.stravaActivityId && (
@@ -382,7 +383,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                         OPEN MY STRAVA ACTIVITY ↗
                       </a>
                     )}
-                    <div className="text-[10px] text-muted mt-1 leading-snug">Paste the link into your activity&apos;s description — Strava makes it tappable — and add the image as a photo.</div>
+                    <div className="text-[10px] text-muted mt-1 leading-snug">Paste the link into your Strava description, and add the image as a photo.</div>
                   </div>
                 )}
               </>
@@ -393,7 +394,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
         {showDiary && sessionId && (
           <div className={`${PANEL} p-2 w-[280px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">DIARY — how did it feel?</div>
+            <div className="text-[10px] text-muted tracking-widest mb-1">DIARY</div>
+            <div className="text-[10px] text-muted mb-1">How did it feel?</div>
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={5}
               className="w-full text-xs bg-bg border border-border p-2 text-fg resize-none" placeholder="Catch felt sharp today; wind picked up on the way back…" />
             <button onClick={saveNote} disabled={noteState === 'saving'}
@@ -404,7 +406,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         )}
         {showBoat && sessionId && (
           <div className={`${PANEL} p-2 w-[240px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">BOAT — type of outing {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved ✓' : ''}</div>
+            <div className="text-[10px] text-muted tracking-widest mb-1">BOAT CLASS {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved ✓' : ''}</div>
             <label className="block text-[10px] text-muted mb-0.5">Class</label>
             <select value={boatClass} onChange={e => onBoatClass(e.target.value as BoatClass | '')}
               className="w-full text-xs bg-bg border border-border p-1.5 text-fg mb-2">
@@ -428,7 +430,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         {sectionMode && findState === 'done' && (
           <div className={`${PANEL} p-2 w-[300px] max-h-[52vh] overflow-auto`}>
             <div className="text-[10px] text-muted tracking-widest mb-1">
-              {matches.length ? `${matches.length} OF YOUR PADDLES RACED THIS` : 'NO OTHER PADDLES RACED THIS'}
+              {matches.length ? `${matches.length} OTHER ${matches.length === 1 ? 'PADDLE COVERS' : 'PADDLES COVER'} THIS SECTION` : 'NO OTHER PADDLES COVER THIS SECTION'}
             </div>
             {matches.map(m => {
               const on = selected.has(m.sessionId)
@@ -437,7 +439,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                   <input type="checkbox" checked={on} onChange={() => setSelected(s => { const n = new Set(s); n.has(m.sessionId) ? n.delete(m.sessionId) : n.add(m.sessionId); return n })} className="accent-primary" />
                   <span className="flex-1 min-w-0">
                     <span className="text-fg">{fmtMatchDate(m.paddledAt)}</span>
-                    <span className="text-muted"> · {Math.round(m.score * 100)}% match</span>
+                    <span className="text-muted"> · {Math.round(m.score * 100)}% same route</span>
                   </span>
                   <span className="tabular text-muted">{fmtDur(m.elapsedS)} · {split500(m.cruiseSpeed)}/500</span>
                 </label>
@@ -458,12 +460,12 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
       {/* bottom-center: replay scrubber, OR the section-selection panel */}
       {sectionMode ? (
         <div className={`${PANEL} absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] p-3 w-[min(520px,86vw)] text-xs`}>
-          <div className="text-[10px] text-split tracking-widest mb-1">🔍 ANALYSE A SECTION — GO DEEPER</div>
+          <div className="text-[10px] text-split tracking-widest mb-1">PICK A SECTION</div>
           <div className="text-fg leading-relaxed">
-            {aIdx == null && 'Zoom into any stretch of this paddle. Click the START of the stretch on your track.'}
-            {aIdx != null && bIdx == null && 'Now click the FINISH of the stretch.'}
+            {aIdx == null && 'Tap where the section starts on your track.'}
+            {aIdx != null && bIdx == null && 'Now tap where it ends.'}
             {aIdx != null && bIdx != null && (
-              <span>Section: <b className="tabular text-fg">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-green">start</span> to <span className="text-red">finish</span>. Get a coached read on this stretch, or race it against your other paddles.</span>
+              <span>Section: <b className="tabular text-fg">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-green">start</span> to <span className="text-red">finish</span>. Look at this section closely, or compare it with your other paddles.</span>
             )}
           </div>
           {sectionErr && <div className="text-red mt-1">{sectionErr}</div>}
@@ -479,7 +481,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             </button>
             <button onClick={findSimilar} disabled={aIdx == null || bIdx == null || findState === 'loading'}
               className="px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
-              {findState === 'loading' ? 'SEARCHING…' : 'FIND MY OTHER PADDLES →'}
+              {findState === 'loading' ? 'SEARCHING…' : 'COMPARE WITH OTHER PADDLES →'}
             </button>
             {(aIdx != null || bIdx != null) && <button onClick={resetSection} className="px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg border border-border">RESET</button>}
           </div>

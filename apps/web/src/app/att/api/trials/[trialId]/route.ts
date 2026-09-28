@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (flippingToPublic && body.acknowledged !== true) {
       return NextResponse.json(
         {
-          error: 'Making a trial public requires an explicit acknowledgement that participants’ performance times will become visible to anyone.',
+          error: 'Tick the box to confirm that everyone’s times will be public.',
           code: 'make_public_ack_required',
         },
         { status: 422 }

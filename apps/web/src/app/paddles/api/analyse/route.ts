@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { getAuthUser } from '@paddlesnitch/core/auth'
 import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
 import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
-import { parseTrace } from '@paddlesnitch/timing/parse'
+import { parseTrace, parseFailureMessage } from '@paddlesnitch/timing/parse'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { analyseAndSave } from '@paddlesnitch/analysis/pipeline'
 import { type AnalysisSource } from '@paddlesnitch/analysis/analysis-store'
@@ -48,32 +48,26 @@ async function analysePaddle(req: NextRequest, userId: string): Promise<NextResp
 
   if (typeof trialEntryId === 'string' && trialEntryId && typeof trialId === 'string' && trialId) {
     const loaded = await loadTrialEntryTrack(userId, trialId, trialEntryId)
-    if (!loaded) return NextResponse.json({ error: 'Could not load that time-trial entry.' }, { status: 404 })
+    if (!loaded) return NextResponse.json({ error: 'Couldn’t load that time-trial result.' }, { status: 404 })
     track = loaded
     // Look up the entry's display info so the saved paddle names its course.
     const summary = (await listUserTrialEntries(userId)).find(e => e.entryId === trialEntryId)
     source = { type: 'trial', trialId, entryId: trialEntryId, courseName: summary?.courseName, filename: summary?.filename }
   } else if (typeof deviceSessionId === 'string' && deviceSessionId && typeof deviceIdField === 'string' && deviceIdField) {
     const loaded = await loadDeviceSessionTrack(userId, deviceIdField, deviceSessionId)
-    if (!loaded) return NextResponse.json({ error: 'Could not load that device session.' }, { status: 404 })
+    if (!loaded) return NextResponse.json({ error: 'Couldn’t load that tracker recording.' }, { status: 404 })
     track = loaded
     source = { type: 'device', deviceId: deviceIdField, deviceSessionId }
   } else if (file instanceof File && file.size > 0) {
     const parsed = await parseTrace(file.name, await file.arrayBuffer())
     if (!parsed.ok) {
-      const msg: Record<string, string> = {
-        kml_no_timing: 'KML has no timestamps — export GPX, FIT, or TCX instead.',
-        unknown_format: 'Unsupported file type. Use GPX, FIT, TCX, CSV, or a Garmin .zip.',
-        empty: 'No GPS track points found in that file.',
-        parse_error: 'Could not read that file.',
-      }
-      return NextResponse.json({ error: msg[parsed.reason] ?? parsed.reason }, { status: 422 })
+      return NextResponse.json({ error: parseFailureMessage(parsed.reason) }, { status: 422 })
     }
     track = parsed.track
     source = { type: 'file', filename: file.name }
   } else if (stravaId) {
     const tokens = await getValidStravaTokens(userId)
-    if (!tokens) return NextResponse.json({ error: 'Connect Strava first (Account → Strava).' }, { status: 400 })
+    if (!tokens) return NextResponse.json({ error: 'Connect Strava in your account first.' }, { status: 400 })
     // A Strava API failure (rate limit, 5xx, network) is an expected, transient
     // condition — surface it as a retryable message, not a 500.
     let streams: Awaited<ReturnType<typeof getActivityStreams>>
@@ -81,16 +75,16 @@ async function analysePaddle(req: NextRequest, userId: string): Promise<NextResp
       streams = await getActivityStreams(tokens.accessToken, stravaId)
     } catch (err) {
       console.error('[analyse] strava streams fetch failed', err)
-      return NextResponse.json({ error: 'Could not reach Strava right now — please try again.' }, { status: 502 })
+      return NextResponse.json({ error: 'Couldn’t reach Strava. Please try again.' }, { status: 502 })
     }
-    if (!streams) return NextResponse.json({ error: 'Could not read that Strava activity (no GPS stream).' }, { status: 422 })
+    if (!streams) return NextResponse.json({ error: 'That Strava activity has no GPS track.' }, { status: 422 })
     track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
     const st = form.get('sportType')
     source = { type: 'strava', stravaActivityId: stravaId, sport: typeof st === 'string' && st ? st : undefined }
   } else {
-    return NextResponse.json({ error: 'Provide a file or a Strava activity.' }, { status: 400 })
+    return NextResponse.json({ error: 'Choose a file or a Strava activity.' }, { status: 400 })
   }
-  if (track.length < 2) return NextResponse.json({ error: 'Not enough GPS points to analyse.' }, { status: 422 })
+  if (track.length < 2) return NextResponse.json({ error: 'That file has too few GPS points to analyse.' }, { status: 422 })
 
   // Shared pipeline: conditions → analysis → duplicate detection → memory-aware
   // LLM narrative → save. The profile-refresh follow-up runs via `after()` so it

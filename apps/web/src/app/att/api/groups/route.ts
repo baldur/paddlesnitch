@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}))
   const name = typeof body.name === 'string' ? body.name.trim() : ''
-  if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+  if (!name) return NextResponse.json({ error: 'Give the group a name.' }, { status: 400 })
   const description = typeof body.description === 'string' ? body.description : ''
 
   const group = newGroup({ name, description, ownerId: user.id })

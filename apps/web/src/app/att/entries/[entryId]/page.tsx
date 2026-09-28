@@ -61,10 +61,10 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note }),
       })
-      if (!res.ok) throw new Error('Could not save')
+      if (!res.ok) throw new Error('Couldn’t save. Please try again.')
       setNoteMsg('Saved.')
     } catch {
-      setNoteMsg('Could not save your note.')
+      setNoteMsg('Couldn’t save your note. Please try again.')
     } finally {
       setNoteSaving(false)
     }

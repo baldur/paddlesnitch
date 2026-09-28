@@ -10,11 +10,11 @@ export async function POST(req: NextRequest) {
   const { email, displayName, password, acceptedTosVersion } = await req.json()
 
   if (!email || !displayName || !password) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter your email, name and password.' }, { status: 400 })
   }
   if (password.length < 8) {
     return NextResponse.json(
-      { error: 'Password must be at least 8 characters' },
+      { error: 'Use at least 8 characters, with an uppercase letter, a lowercase letter and a number.' },
       { status: 400 }
     )
   }
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   // version the user never saw.
   if (acceptedTosVersion !== CURRENT_TOS_VERSION) {
     return NextResponse.json(
-      { error: `You must accept the Terms of Service (version ${CURRENT_TOS_VERSION}) to create an account.` },
+      { error: 'Please accept the Terms of Service to create an account.' },
       { status: 422 }
     )
   }
@@ -33,19 +33,19 @@ export async function POST(req: NextRequest) {
   const created = await signUp(normalised, String(displayName).trim(), password)
   if ('error' in created) {
     if (created.error === 'email_exists') {
-      return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
+      return NextResponse.json({ error: 'There’s already an account with that email. Sign in instead.' }, { status: 409 })
     }
     if (created.error === 'invalid_password') {
       return NextResponse.json({
-        error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+        error: 'Use at least 8 characters, with an uppercase letter, a lowercase letter and a number.',
       }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Sign-up failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Couldn’t sign you up. Please try again.' }, { status: 500 })
   }
 
   const tokens = await signIn(normalised, password)
   if ('error' in tokens) {
-    return NextResponse.json({ error: 'Signed up but auto-login failed — please sign in.' }, { status: 500 })
+    return NextResponse.json({ error: 'Your account is ready. Please sign in.' }, { status: 500 })
   }
 
   // Record acceptance before we hand back the cookie so the user lands on

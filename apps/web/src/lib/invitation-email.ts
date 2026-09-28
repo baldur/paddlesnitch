@@ -26,14 +26,14 @@ export function pendingInviteEmail({ group, inviterName, baseUrl, role }: Args) 
   const text = [
     `${inviterName} has invited you to join ${group.name} on paddlesnitch.com${role === 'admin' ? ' as an admin' : ''}.`,
     '',
-    'paddlesnitch is a GPS-verified time-trial service for kayak and rowing crews. Groups use it to run regular sprints and longer head-races without a stopwatch.',
+    'paddlesnitch times river races from your GPS file, so groups can run time trials without a stopwatch. It also shows you what happened on every paddle.',
     '',
     'Create your account here:',
     signupUrl.toString(),
     '',
     'Once signed up you\'ll join the group automatically. The invitation expires in 30 days.',
     '',
-    'If you don\'t know the person who invited you, you can safely ignore this email — your address won\'t be added to anything.',
+    'If you don\'t know who invited you, ignore this email. Your address won\'t be added to anything.',
   ].join('\n')
 
   return { subject, text }

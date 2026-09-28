@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
-import { parseTrace } from '@/lib/parse'
+import { parseTrace, parseFailureMessage } from '@/lib/parse'
 import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint } from '@/lib/geo'
 import { captureConditions } from '@/lib/conditions'
 import { emitMetric } from '@/lib/metrics'
@@ -52,22 +52,26 @@ function resolveActivityUrl(url: string): string | null {
 
 // Parses the `crew` form field (JSON string in multipart, array in JSON body)
 // and normalises the seat values (incoming JSON may have seat: "1" instead of 1).
+// One message for any malformed crew field: the form builds it, so a person
+// only sees this if something went wrong in between.
+const CREW_ERROR = 'Crew details are incomplete. Please check each seat.'
+
 function parseCrewField(raw: unknown): CrewMember[] | { error: string } {
   let parsed: unknown = raw
   if (typeof raw === 'string') {
-    try { parsed = JSON.parse(raw) } catch { return { error: 'crew is not valid JSON' } }
+    try { parsed = JSON.parse(raw) } catch { return { error: CREW_ERROR } }
   }
-  if (!Array.isArray(parsed)) return { error: 'crew must be an array' }
+  if (!Array.isArray(parsed)) return { error: CREW_ERROR }
   const out: CrewMember[] = []
   for (const m of parsed) {
-    if (!m || typeof m !== 'object') return { error: 'crew member must be an object' }
+    if (!m || typeof m !== 'object') return { error: CREW_ERROR }
     const rec = m as { name?: unknown; seat?: unknown }
     if (typeof rec.name !== 'string') return { error: 'crew member name must be a string' }
     let seat: number | 'C'
     if (rec.seat === 'C' || rec.seat === 'c') seat = 'C'
     else if (typeof rec.seat === 'number' && Number.isInteger(rec.seat) && rec.seat > 0) seat = rec.seat
     else if (typeof rec.seat === 'string' && /^\d+$/.test(rec.seat)) seat = parseInt(rec.seat, 10)
-    else return { error: 'crew member seat must be a positive integer or "C"' }
+    else return { error: CREW_ERROR }
     out.push({ name: rec.name.trim(), seat })
   }
   return out
@@ -87,13 +91,7 @@ async function processBuffer(
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
   if (!parseResult.ok) {
-    const messages: Record<typeof parseResult.reason, string> = {
-      kml_no_timing: 'KML files don’t contain timestamps, so we can’t compute a time from one. Export your activity as GPX, FIT, or TCX instead.',
-      unknown_format: 'Unsupported file type. Upload a GPX, FIT, TCX, or CSV file (a Garmin .zip export is fine too).',
-      empty: 'We couldn’t find any GPS track points with coordinates and timestamps in that file. Export the full activity as GPX, FIT, or TCX.',
-      parse_error: 'We couldn’t read that file — it may be corrupted or an unexpected format. Try re-exporting as GPX, FIT, or TCX.',
-    }
-    return NextResponse.json({ error: messages[parseResult.reason] }, { status: 422 })
+    return NextResponse.json({ error: parseFailureMessage(parseResult.reason) }, { status: 422 })
   }
   return processTrack(parseResult.track, Buffer.from(arrayBuffer), filename, course, user, trialId, boatClass, crew, trialDate)
 }
@@ -221,7 +219,7 @@ export async function POST(
     return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
   }
   if (trial.status !== 'open')
-    return NextResponse.json({ error: 'Trial is closed' }, { status: 400 })
+    return NextResponse.json({ error: 'This trial is closed.' }, { status: 400 })
 
   const course = await getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`)
   if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 })
@@ -232,10 +230,10 @@ export async function POST(
     const body = await req.json()
     const { url, stravaActivityId, boatClass, crew: rawCrew } = body
     if (!url && !stravaActivityId) {
-      return NextResponse.json({ error: 'No URL or Strava activity provided' }, { status: 400 })
+      return NextResponse.json({ error: 'Choose a file, a link or a Strava activity.' }, { status: 400 })
     }
     if (!isBoatClass(boatClass)) {
-      return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Choose a boat class.' }, { status: 400 })
     }
     const crew = parseCrewField(rawCrew)
     if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
@@ -247,16 +245,16 @@ export async function POST(
     if (stravaActivityId) {
       const idNum = Number(stravaActivityId)
       if (!Number.isFinite(idNum) || idNum <= 0) {
-        return NextResponse.json({ error: 'Invalid Strava activity ID' }, { status: 400 })
+        return NextResponse.json({ error: 'That doesn’t look like a Strava activity.' }, { status: 400 })
       }
       const tokens = await getValidStravaTokens(user.id)
       if (!tokens) {
-        return NextResponse.json({ error: 'Strava is not connected for this account' }, { status: 409 })
+        return NextResponse.json({ error: 'Connect Strava in your account first.' }, { status: 409 })
       }
       const streams = await getActivityStreams(tokens.accessToken, idNum)
       if (!streams) {
         return NextResponse.json(
-          { error: 'Could not load this Strava activity (no GPS data, or you do not have access).' },
+          { error: 'Couldn’t load that Strava activity. It may have no GPS track, or be private.' },
           { status: 422 }
         )
       }
@@ -278,7 +276,7 @@ export async function POST(
     const resolvedUrl = resolveActivityUrl(url)
     if (!resolvedUrl) {
       return NextResponse.json(
-        { error: 'Unsupported URL format. Provide a Strava activity URL or a direct .gpx link.' },
+        { error: 'Use a Strava activity link or a direct link to a .gpx file.' },
         { status: 422 }
       )
     }
@@ -290,14 +288,14 @@ export async function POST(
       })
     } catch {
       return NextResponse.json(
-        { error: 'Could not fetch activity — make sure it is public' },
+        { error: 'Couldn’t fetch that activity. Make sure it’s public.' },
         { status: 422 }
       )
     }
 
     if (!fetchRes.ok) {
       return NextResponse.json(
-        { error: 'Could not fetch activity — make sure it is public' },
+        { error: 'Couldn’t fetch that activity. Make sure it’s public.' },
         { status: 422 }
       )
     }
@@ -309,10 +307,10 @@ export async function POST(
   // File upload (multipart/form-data)
   const formData = await req.formData()
   const file = formData.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+  if (!file) return NextResponse.json({ error: 'Choose a file to upload.' }, { status: 400 })
   const boatClassRaw = formData.get('boatClass')
   if (!isBoatClass(boatClassRaw)) {
-    return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Choose a boat class.' }, { status: 400 })
   }
   const crew = parseCrewField(formData.get('crew'))
   if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })

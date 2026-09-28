@@ -176,3 +176,23 @@ describe('paddleTotals', () => {
     expect(t.count).toBe(1)
   })
 })
+
+// The plain summary shows when the AI one can't, and on shared paddles. It used
+// slang ("3 digs and 2 breathers", "rock-steady") and diagnosed "fatigue" from
+// a GPS trace.
+describe('plain summary wording', () => {
+  it('uses plain words and no slang', async () => {
+    const { analyseTrack } = await import('@paddlesnitch/analysis/analysis')
+    const t0 = Date.parse('2026-09-20T08:00:00Z')
+    let lat = 51.46
+    const track = Array.from({ length: 1200 }, (_, i) => {
+      const v = i > 400 && i < 520 ? 0.2 : i > 700 && i < 880 ? 4.2 : 3.2
+      lat += v / 111000
+      return { lat, lng: -0.93, timestamp: new Date(t0 + i * 1000), strokeRate: 58 }
+    })
+    const r = analyseTrack(track, {})
+    expect(r.insight).toMatch(/^A \S+ paddle at about \d+:\d+\/500, 58 spm, with 1 hard effort and 1 rest\./)
+    expect(r.insight).not.toMatch(/dig|breather|rock-steady|drifted|wandered|—/)
+    for (const s of r.surges) expect(s.trend ?? 'steady').not.toMatch(/fatigue|negative split|built/)
+  })
+})

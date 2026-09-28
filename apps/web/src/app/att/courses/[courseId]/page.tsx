@@ -72,7 +72,7 @@ export default async function CourseDetailPage({
             {course.name.toUpperCase()}
           </h1>
           <p className="text-xs text-muted mb-4">
-            {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
+            {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} m
             {course.type === 'loop' && ' · LOOP'}
           </p>
           <CourseMapClient course={course} />

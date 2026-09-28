@@ -90,13 +90,13 @@ export default function AddPaddlePage() {
     setStatus('busy'); setError(''); setDupId(null)
     try {
       const r = await fetch('/paddles/api/analyse', { method: 'POST', body })
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Couldn’t analyse that paddle. Please try again.')
       const data = await r.json()
       // Already in the library (#178) — point the paddler at the existing one
       // instead of silently creating a second copy.
       if (data.duplicate) setDupId(data.id as string)
       else setRes(data)
-    } catch (err) { setError(err instanceof Error ? err.message : 'Analysis failed') }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Couldn’t analyse that paddle. Please try again.') }
     finally { setStatus('idle') }
   }
   const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
@@ -158,7 +158,7 @@ export default function AddPaddlePage() {
             {acts && acts.length > 0 && stravaMore && (
               <button disabled={stravaLoadingMore} onClick={loadMoreStrava}
                 className="block w-full text-center px-3 py-2 mt-1 text-[11px] tracking-widest text-muted border border-border hover:border-primary hover:text-fg disabled:opacity-40">
-                {stravaLoadingMore ? 'LOADING…' : 'GET MORE'}
+                {stravaLoadingMore ? 'LOADING…' : 'LOAD MORE'}
               </button>
             )}
           </div>

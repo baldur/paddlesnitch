@@ -9,7 +9,7 @@ import { CURRENT_TOS_VERSION } from '@/lib/types'
 export async function GET() {
   const body = await readTosDoc(CURRENT_TOS_VERSION)
   if (!body) {
-    return NextResponse.json({ error: 'ToS document missing' }, { status: 500 })
+    return NextResponse.json({ error: 'The Terms can’t be shown right now.' }, { status: 500 })
   }
   return NextResponse.json({ version: CURRENT_TOS_VERSION, body })
 }

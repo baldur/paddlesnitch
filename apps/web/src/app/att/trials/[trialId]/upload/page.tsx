@@ -213,7 +213,7 @@ export default function UploadPage({
       .then(async r => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}))
-          throw new Error(body.error ?? 'Could not load activities')
+          throw new Error(body.error ?? 'Couldn’t load your Strava activities. Please try again.')
         }
         return r.json()
       })
@@ -285,9 +285,9 @@ export default function UploadPage({
         method: 'POST',
         body: formData,
       })
-      await handleUploadResponse(res, 'Upload failed')
+      await handleUploadResponse(res, 'Couldn’t upload your file. Please try again.')
     } catch {
-      setError('Upload failed')
+      setError('Couldn’t upload your file. Please try again.')
       setStatus('error')
     }
   }
@@ -308,9 +308,9 @@ export default function UploadPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stravaActivityId, boatClass, crew }),
       })
-      await handleUploadResponse(res, 'Import failed')
+      await handleUploadResponse(res, 'Couldn’t import that activity. Please try again.')
     } catch {
-      setError('Import failed')
+      setError('Couldn’t import that activity. Please try again.')
       setStatus('error')
     }
   }
@@ -331,9 +331,9 @@ export default function UploadPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: activityUrl.trim(), boatClass, crew }),
       })
-      await handleUploadResponse(res, 'Upload failed')
+      await handleUploadResponse(res, 'Couldn’t upload your file. Please try again.')
     } catch {
-      setError('Upload failed')
+      setError('Couldn’t upload your file. Please try again.')
       setStatus('error')
     }
   }
@@ -368,7 +368,7 @@ export default function UploadPage({
               href={`/att/auth?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
               className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
             >
-              SIGN IN / SIGN UP
+              SIGN IN
             </a>
           </div>
         ) : submitGate === undefined ? (
@@ -408,9 +408,8 @@ export default function UploadPage({
               SUBMIT YOUR ENTRY
             </h1>
             <p className="text-sm text-muted -mt-4">
-              Upload your full session — warmup and cooldown included. The system
-              automatically finds the segment between the start and finish lines
-              and extracts your time.
+              Upload your whole session, warm-up included. We find the part between
+              the start and finish lines and time it.
             </p>
 
             {/* Mode toggle */}
@@ -464,7 +463,7 @@ export default function UploadPage({
                     className="bg-bg border border-border px-3 py-2 text-fg text-sm file:bg-surface-2 file:text-fg file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer hover:border-primary transition-colors cursor-pointer w-full"
                   />
                   <p className="text-xs text-muted">
-                    Export your full activity from Garmin Connect, Strava, a SpeedCoach, or any GPS device. GPX, FIT, TCX, and CSV are all supported — including a Garmin Connect .zip export (we unpack the activity inside). For paddlers, the FIT export usually carries stroke rate; GPX often doesn&apos;t. Heart rate is discarded; stroke rate is kept.
+                    GPX, FIT, TCX or CSV, or a Garmin .zip export. FIT files usually include stroke rate; GPX often doesn&apos;t. Heart rate is never stored.
                   </p>
                 </div>
 
@@ -502,7 +501,7 @@ export default function UploadPage({
                     className={inputClass}
                   />
                   <p className="text-xs text-muted">
-                    Paste a public Strava activity URL or a direct .gpx link. Your full session is fine — no need to trim it. Heart rate is discarded; stroke rate is kept.
+                    Paste a public Strava activity link or a direct link to a .gpx file. The whole session is fine.
                   </p>
                 </div>
 
@@ -538,8 +537,8 @@ export default function UploadPage({
                     </p>
                     <StravaButton href="/att/api/strava/connect" className="self-start" />
                     <p className="text-xs text-muted">
-                      You&apos;ll be redirected to Strava to approve. Manage the connection any time from your{' '}
-                      <a href="/account" className="tt-link">account page</a>.
+                      Strava asks you to approve. You can disconnect any time in your{' '}
+                      <a href="/account" className="tt-link">account</a>.
                     </p>
                   </div>
                 )}
@@ -628,8 +627,8 @@ export default function UploadPage({
                 </label>
                 <p className="text-xs text-muted">
                   {diagnostic.gateAnalysis?.blocking
-                    ? <>Your track is blue. The gate that blocked the match is highlighted in red — check it crosses that gate in the right direction and order.</>
-                    : <>Your track is blue; the start line is green and the finish line red. If your track doesn&apos;t pass cleanly through both lines, your GPS may not have been recording there, or the course lines may need adjusting.</>}
+                    ? <>Your track is blue. The gate it missed is red: check your track crosses it, the right way and in order.</>
+                    : <>Your track is blue, the start line green and the finish line red. If your track misses a line, your GPS may not have been recording there.</>}
                 </p>
                 <CourseMapClient
                   course={diagnostic.course}

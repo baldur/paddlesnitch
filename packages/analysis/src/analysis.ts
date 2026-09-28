@@ -138,7 +138,8 @@ export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boo
       const ts = rows.filter(p => p.sr != null).map(p => p.t)
       const srSlope = srs.length > 2 ? slope(ts, srs) * 60 : 0
       const spSlope = slope(rows.map(p => p.t), rows.map(p => p.speed)) * 60
-      trend = srSlope > 3 ? `built +${srSlope.toFixed(0)} spm/min` : spSlope < -0.1 && Math.abs(srSlope) < 3 ? `faded (fatigue)` : spSlope > 0.08 ? `negative split` : 'held'
+      // Plain words, and no causes the data can't show ("fatigue" was one).
+      trend = srSlope > 3 ? `rate rising +${srSlope.toFixed(0)} spm/min` : spSlope < -0.1 && Math.abs(srSlope) < 3 ? 'slowed' : spSlope > 0.08 ? 'got faster' : 'steady'
     }
     return { kind: r.kind, fromT: rows[0].t, toT: rows[rows.length - 1].t, durS, distM: avgSpeed * durS, avgSpeed, splitPer500: avgSpeed > 0.2 ? 500 / avgSpeed : 0, avgSR: srs.length ? mean(srs) : null, srCv: srs.length ? cv(srs) * 100 : null, avgDps: dpsv.length ? mean(dpsv) : null, trend }
   }
@@ -191,13 +192,14 @@ export function plainInsight(r: AnalysisResult): string {
 function buildInsight(a: { durationS: number; distanceKm: number; surges: Segment[]; stops: Segment[]; sets: SessionSet[]; allSR: number[]; cruise: number; conditions?: Conditions }): string {
   const dur = fmtDurAdj(a.durationS)
   const nS = a.surges.length, nR = a.stops.length
-  const srTxt = a.allSR.length ? ` at ~${Math.round(mean(a.allSR))} spm` : ''
-  const cruiseTxt = `~${split500(a.cruise)}/500`
-  const flow = a.conditions?.flowM3s != null ? ` Flow was ${a.conditions.flowM3s.toFixed(1)} m³/s.` : ''
-  if (nS === 0) return `A steady ${dur} paddle, cruising ${cruiseTxt}${srTxt}${nR ? ` with ${nR} short ${nR === 1 ? 'break' : 'breaks'}` : ' — no stops'}.${flow}`
+  const srTxt = a.allSR.length ? `, ${Math.round(mean(a.allSR))} spm` : ''
+  const cruiseTxt = `about ${split500(a.cruise)}/500`
+  const flow = a.conditions?.flowM3s != null ? ` River flow was ${a.conditions.flowM3s.toFixed(1)} m³/s.` : ''
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  if (nS === 0) return `A steady ${dur} paddle at ${cruiseTxt}${srTxt}. ${nR ? `${plural(nR, 'short rest', 'short rests')}.` : 'No stops.'}${flow}`
   const set = a.sets.find(s => s.count >= 2)
   const consist = a.surges.map(s => s.srCv).filter((x): x is number => x != null)
-  const consistTxt = consist.length ? (Math.max(...consist) < 5 ? ' Rate held tight throughout.' : Math.min(...consist) < 5 ? ' Some efforts were rock-steady, others drifted.' : ' Stroke rate wandered within the efforts.') : ''
-  const setTxt = set ? ` Looks like a set of ${set.count} × ~${fmtDur(set.avgDurS)} @ ${split500(set.avgSpeed)}/500.` : ''
-  return `A ${dur} paddle, mostly cruising ${cruiseTxt}${srTxt} — but not flat: ${nS} ${nS === 1 ? 'dig' : 'digs'}${nR ? ` and ${nR} ${nR === 1 ? 'breather' : 'breathers'}` : ''}.${setTxt}${consistTxt}${flow}`
+  const consistTxt = consist.length ? (Math.max(...consist) < 5 ? ' Stroke rate was steady in every effort.' : Math.min(...consist) < 5 ? ' Stroke rate was steady in some efforts, not others.' : ' Stroke rate varied within the efforts.') : ''
+  const setTxt = set ? ` Looks like ${set.count} × ${fmtDur(set.avgDurS)} at ${split500(set.avgSpeed)}/500.` : ''
+  return `A ${dur} paddle at ${cruiseTxt}${srTxt}, with ${plural(nS, 'hard effort', 'hard efforts')}${nR ? ` and ${plural(nR, 'rest', 'rests')}` : ''}.${setTxt}${consistTxt}${flow}`
 }

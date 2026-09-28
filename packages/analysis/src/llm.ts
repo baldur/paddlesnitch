@@ -21,7 +21,7 @@ const SYSTEM = [
   'personal and progressive — reference their trajectory, their goals, and how this session compares to their own record —',
   'but use ONLY the facts provided; never invent numbers.',
   'The session date is given below. It may be a recent paddle OR an older one just imported, so narrate it for WHEN it',
-  'actually happened — never assume it is today, and only say "today"/"this morning" if the date really is today.',
+  'happened — never assume it is today, and only say "today"/"this morning" if the date really is today.',
   'Vary how you open; avoid generic praise and filler. Sound like a real person who has watched them paddle before.',
   'Match your vocabulary to the sport stated below — rowing and kayak/canoe/SUP use different words for the stroke,',
   'the rate, and the glide, so never mix them; if no sport is stated, use neutral paddling language and do not assume',

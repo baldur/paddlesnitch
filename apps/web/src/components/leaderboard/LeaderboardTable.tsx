@@ -235,7 +235,7 @@ export default function LeaderboardTable({
                               <th className="text-left pr-8 py-1 font-normal">MARK</th>
                               <th className="text-right pr-8 py-1 font-normal">ELAPSED</th>
                               <th className="text-right pr-8 py-1 font-normal">SPLIT</th>
-                              <th className="text-right pr-8 py-1 font-normal">PACE /500M</th>
+                              <th className="text-right pr-8 py-1 font-normal">PACE /500 m</th>
                               <th className="text-right pr-6 py-1 font-normal">KM/H</th>
                               <th className="text-right py-1 font-normal">M/S</th>
                             </tr>

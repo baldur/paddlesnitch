@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const version = typeof body.version === 'string' ? body.version : CURRENT_TOS_VERSION
   if (version !== CURRENT_TOS_VERSION) {
     return NextResponse.json(
-      { error: `Only the current ToS version (${CURRENT_TOS_VERSION}) can be accepted` },
+      { error: 'Please accept the latest Terms to continue.' },
       { status: 422 }
     )
   }

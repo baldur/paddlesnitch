@@ -27,9 +27,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 export default function PaddlesPage() {
   const [sel, setSel] = useState<string[]>([])
   const [confirming, setConfirming] = useState<string | null>(null)
-  // Protected procedures, so an UNAUTHORIZED error is simply the signed-out state.
-  const list = trpc.paddles.list.useQuery(undefined, { retry: false })
-  const q = trpc.paddles.sessions.useQuery(undefined, { retry: false })
+  // Ask who's signed in first: the paddle queries are protected, and firing them
+  // signed out logged a 401 in the console on every visit.
+  const me = trpc.me.useQuery()
+  const signedIn = !!me.data?.user
+  const list = trpc.paddles.list.useQuery(undefined, { retry: false, enabled: signedIn })
+  const q = trpc.paddles.sessions.useQuery(undefined, { retry: false, enabled: signedIn })
   const utils = trpc.useUtils()
   const delMut = trpc.paddles.delete.useMutation({
     onSuccess: () => { utils.paddles.sessions.invalidate(); utils.paddles.list.invalidate() },
@@ -45,7 +48,7 @@ export default function PaddlesPage() {
 
   const header = <AppHeader breadcrumb={null} />
 
-  if (q.isError) return (
+  if (me.data && !me.data.user) return (
     <main className="flex-1 flex flex-col">
       {header}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">

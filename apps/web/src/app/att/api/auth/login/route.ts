@@ -7,17 +7,17 @@ export async function POST(req: NextRequest) {
   const { email, password } = await req.json()
 
   if (!email || !password) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter your email and password.' }, { status: 400 })
   }
 
   const tokens = await signIn(String(email).toLowerCase().trim(), password)
   if ('error' in tokens) {
-    return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    return NextResponse.json({ error: 'That email and password don’t match.' }, { status: 401 })
   }
 
   const user = await verifyIdToken(tokens.idToken)
   if (!user) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 500 })
+    return NextResponse.json({ error: 'Sign-in didn’t finish. Please try again.' }, { status: 500 })
   }
 
   emitMetric('login')

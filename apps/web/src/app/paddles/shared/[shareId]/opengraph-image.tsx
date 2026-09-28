@@ -73,7 +73,7 @@ export default async function Image({ params }: { params: Promise<{ shareId: str
     // Fallback: no session / revoked link — generic branded card, no leak.
     <div style={{ display: 'flex', width: '100%', height: '100%', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: BG, color: FG, padding: 56 }}>
       {wordmark}
-      <div style={{ display: 'flex', fontSize: 30, color: MUTED, marginTop: 16 }}>See what actually happened on your paddle.</div>
+      <div style={{ display: 'flex', fontSize: 30, color: MUTED, marginTop: 16 }}>Paddle stats and maps.</div>
       <div style={{ display: 'flex', fontSize: 24, color: MUTED, marginTop: 24 }}>paddlesnitch.com</div>
     </div>
   )

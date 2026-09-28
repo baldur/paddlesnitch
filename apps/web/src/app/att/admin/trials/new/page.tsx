@@ -26,7 +26,7 @@ function NewTrialForm() {
     fetch('/att/api/courses?manageable=1')
       .then(r => r.json())
       .then(setCourses)
-      .catch(() => setError('Could not load courses'))
+      .catch(() => setError('Couldn’t load the courses. Please try again.'))
   }, [])
 
   const submit = async (e: React.FormEvent) => {
@@ -50,7 +50,7 @@ function NewTrialForm() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error ?? 'Failed to create trial')
+        throw new Error(data.error ?? 'Couldn’t create the trial. Please try again.')
       }
       const trial = await res.json()
       router.push(`/att/admin/trials/${trial.id}`)
@@ -178,7 +178,7 @@ function NewTrialForm() {
             {selectedCourse?.visibility === 'private'
               ? 'This course is private, so any trial on it must be private too.'
               : selectedCourse?.visibility === 'group'
-                ? 'This course is scoped to its group, so the trial is too.'
+                ? 'This course is for its group only, so the trial is too.'
                 : visibility === 'public'
                   ? 'The leaderboard will be visible to anyone.'
                   : visibility === 'group'
