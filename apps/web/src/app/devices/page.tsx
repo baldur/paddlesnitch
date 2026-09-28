@@ -4,12 +4,37 @@ import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
 import AddTrackerForm from '@/components/devices/AddTrackerForm'
 import type { DeviceSessionMeta } from '@/lib/devices'
+import { setupProgress } from '@/lib/guide'
 import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDate, fmtDist } from '@/lib/device-view'
 
 // DEVICES: your trackers, one card each (the tracker is the unit; its
 // recordings live one level down at /devices/<deviceId>), and the box to add a
 // tracker. Adding used to live on the account page and viewing here, and each
 // page sent you to the other; removing a tracker is on its own page.
+
+// Until the first recording arrives: what's done and what's next, each linking
+// to the guide step for it.
+function GettingStarted({ rows }: { rows: DeviceSummary[] }) {
+  const { items, complete } = setupProgress(rows)
+  if (complete) return null
+  const next = items.find(i => !i.done)
+  return (
+    <section className="border border-primary px-4 py-4 flex flex-col gap-2" aria-label="Getting started">
+      <h2 className="text-xs text-fg tracking-widest uppercase">Getting started</h2>
+      <ol className="flex flex-col gap-1 text-sm">
+        {items.map(i => (
+          <li key={i.label} className="flex gap-2">
+            <span aria-hidden="true" className={i.done ? 'text-green' : 'text-muted'}>{i.done ? '✓' : '○'}</span>
+            {i.done
+              ? <span className="text-muted line-through">{i.label}</span>
+              : <Link href={i.href} className={i === next ? 'text-primary' : 'text-fg'}>{i.label}{i === next ? ' →' : ''}</Link>}
+            <span className="sr-only">{i.done ? '(done)' : '(to do)'}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
 
 export default function DevicesPage() {
   const [rows, setRows] = useState<DeviceSummary[] | undefined>(undefined)
@@ -42,8 +67,13 @@ export default function DevicesPage() {
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full flex flex-col gap-4">
         <div>
           <h1 className="text-lg font-bold text-fg tracking-widest">DEVICES</h1>
-          <p className="text-sm text-muted mt-1">Your paddlesnitch trackers and what each one has recorded.</p>
+          <p className="text-sm text-muted mt-1">
+            Your paddlesnitch trackers and what each one has recorded. Setting one up?{' '}
+            <Link href="/guide" className="text-primary">Follow the guide</Link>.
+          </p>
         </div>
+
+        {rows !== undefined && <GettingStarted rows={rows} />}
 
         {rows === undefined ? (
           <p className="text-sm text-muted">Loading…</p>

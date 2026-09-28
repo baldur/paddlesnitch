@@ -9,6 +9,7 @@ import { metadata as paddles } from '@/app/paddles/layout'
 import { metadata as profile } from '@/app/profile/layout'
 import { metadata as privacy } from '@/app/att/privacy/page'
 import { metadata as devices } from '@/app/devices/layout'
+import { metadata as guide } from '@/app/guide/layout'
 
 describe('page titles', () => {
   it('the site adds its name to every page title', () => {
@@ -21,6 +22,7 @@ describe('page titles', () => {
     ['Paddles', paddles.title],
     ['Profile', profile.title],
     ['Devices', devices.title],
+    ['Guide', guide.title],
   ])('%s names itself and keeps the site-name template for its pages', (expected, title) => {
     expect(title).toEqual({ default: expected, template: '%s · paddlesnitch' })
   })
@@ -29,7 +31,7 @@ describe('page titles', () => {
     expect(privacy.title).toBe('Privacy policy')
   })
   it('nothing is still titled ATTS', () => {
-    for (const m of [root, trials, paddles, profile, privacy, devices]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)
+    for (const m of [root, trials, paddles, profile, privacy, devices, guide]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)
   })
 })
 

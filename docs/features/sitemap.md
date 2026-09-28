@@ -32,6 +32,9 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /devices/[deviceId]          A  one tracker's recordings (plain summary + TECHNICAL
                                 DETAILS), REMOVE TRACKER
 /devices/[deviceId]/[sessionId]  A  BOAT MOTION charts for one recording
+/guide                       P  tracker setup guide: overview + one page per step
+/guide/<step>                P  account, switch-on, wifi, link, boat, record, upload
+/guide/troubleshooting       P  problems by symptom, each linkable (#wifi, #code, …)
 /profile/[id-or-handle]      P  public profile (opt-in; 404 if private). Owner sees
                                 EDIT PROFILE → /account#profile
 /profile/me                  A  → your own profile
