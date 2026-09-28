@@ -63,3 +63,29 @@ export async function getStravaAutoImport(userId: string): Promise<boolean> {
 export async function setStravaAutoImport(userId: string, autoImport: boolean): Promise<void> {
   await putJson(prefsKey(userId), { autoImport })
 }
+
+// Has this user really revoked our Strava access? The webhook says so with a
+// deauthorisation event, but that endpoint is public and athlete ids are
+// public, so a forged event could disconnect anyone. Ask Strava with the
+// user's own token: a revoked grant fails the refresh or answers 401.
+// 'unknown' (network trouble, Strava down) must not delete anything.
+export async function stravaAccessRevoked(userId: string): Promise<boolean | 'unknown'> {
+  const stored = await getStravaTokens(userId)
+  if (!stored) return true
+  let tokens: StravaTokens
+  try {
+    tokens = await refreshIfExpired(stored)
+  } catch (e) {
+    return /strava_refresh_failed_(400|401)/.test(String(e)) ? true : 'unknown'
+  }
+  try {
+    const res = await fetch('https://www.strava.com/api/v3/athlete', {
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (res.status === 401) return true
+    return res.ok ? false : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}

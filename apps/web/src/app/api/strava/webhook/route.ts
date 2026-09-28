@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { getWebhookVerifyToken } from '@paddlesnitch/core/strava'
 import {
   getUserIdByAthleteId, getStravaAutoImport,
-  deleteStravaTokens, deleteAthleteIndex,
+  deleteStravaTokens, deleteAthleteIndex, stravaAccessRevoked,
 } from '@paddlesnitch/core/strava-storage'
 import { importStravaActivity } from '@paddlesnitch/analysis/strava-import'
 
@@ -56,6 +56,13 @@ async function processEvent(ev: StravaEvent): Promise<void> {
     // guideline compliance.)
     if (ev.object_type === 'athlete' && ev.updates?.authorized === 'false') {
       const userId = await getUserIdByAthleteId(ownerId)
+      // Anyone can POST here and athlete ids are public, so confirm with
+      // Strava before disconnecting (security audit 2026-09).
+      const revoked = userId ? await stravaAccessRevoked(userId) : false
+      if (userId && revoked !== true) {
+        console.warn(`[strava webhook] deauthorization for athlete ${ownerId} not confirmed by Strava (${revoked}); ignored`)
+        return
+      }
       if (userId) {
         await deleteStravaTokens(userId)
         await deleteAthleteIndex(ownerId)
