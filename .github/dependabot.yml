@@ -1,0 +1,20 @@
+# Security audit 2026-09: nothing watched the dependencies. Weekly, grouped so
+# it's one PR per ecosystem rather than one per package. Security updates
+# (for a known advisory) are raised as soon as GitHub knows about them,
+# regardless of this schedule, once "Dependabot security updates" is enabled
+# in Settings > Code security.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ['*']
