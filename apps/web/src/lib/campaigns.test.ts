@@ -16,6 +16,10 @@ describe('resolveCampaign', () => {
     expect(resolveCampaign('ffoooare')).toEqual({ requested: 'ffoooare', landing: 'default', found: false })
   })
 
+  it('serves the beta testers landing', () => {
+    expect(resolveCampaign('betatesters')).toEqual({ requested: 'betatesters', landing: 'betatesters', found: true })
+  })
+
   it('takes the first value when the param is repeated', () => {
     expect(resolveCampaign(['example1', 'other'])).toEqual({ requested: 'example1', landing: 'example1', found: true })
   })

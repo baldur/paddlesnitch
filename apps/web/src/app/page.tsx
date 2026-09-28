@@ -1,13 +1,38 @@
 import Link from 'next/link'
 import AppHeader from '@/components/AppHeader'
 import PersonalHome from '@/components/PersonalHome'
-import { resolveCampaign } from '@/lib/campaigns'
+import type { Metadata } from 'next'
+import BetaTestersLanding from '@/components/campaigns/BetaTestersLanding'
+import { resolveCampaign, type CampaignLanding } from '@/lib/campaigns'
 import { getAuthUser } from '@/lib/auth'
 import { createCaller } from '@paddlesnitch/api'
 
-export const metadata = {
+const DEFAULT_METADATA: Metadata = {
   title: 'paddlesnitch.com — tools for the river',
   description: 'A growing suite of software for paddlers, rowers, and river groups.',
+}
+
+// A campaign link is usually shared on social media, so it gets its own title,
+// description and preview image.
+const CAMPAIGN_METADATA: Partial<Record<CampaignLanding, Metadata>> = {
+  betatesters: {
+    title: 'Beta testers wanted — paddlesnitch',
+    description: 'Help test the paddlesnitch tracker on the water. You need to paddle or row, and be able to keep the tracker reasonably dry.',
+    openGraph: {
+      title: 'Beta testers wanted — paddlesnitch',
+      description: 'Help test the paddlesnitch tracker on the water.',
+      images: ['https://paddlesnitch.com/campaigns/betatesters.jpg'],
+    },
+  },
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ campaign?: string | string[] }>
+}): Promise<Metadata> {
+  const r = resolveCampaign((await searchParams).campaign)
+  return (r.found && CAMPAIGN_METADATA[r.landing as CampaignLanding]) || DEFAULT_METADATA
 }
 
 // The available products. Add a `{ status: 'coming-soon' }` entry to show an
@@ -45,9 +70,10 @@ const PRODUCTS: Product[] = [
 
 // The campaign landings we can serve. `example1` reuses the default content
 // with a visible marker; add genuinely different variants here as needed.
-const LANDINGS: Record<'default' | 'example1', (key: string) => React.ReactNode> = {
+const LANDINGS: Record<'default' | CampaignLanding, (key: string) => React.ReactNode> = {
   default: () => <LandingContent />,
   example1: () => <LandingContent variant="example1" />,
+  betatesters: () => <BetaTestersLanding />,
 }
 
 export default async function LandingPage({
@@ -55,9 +81,14 @@ export default async function LandingPage({
 }: {
   searchParams: Promise<{ campaign?: string | string[] }>
 }) {
-  // Signed in → the personal paddle dashboard (their stuff, not marketing).
-  // Signed out → the marketing landing, tailored by any ?campaign= variant.
-  const user = await getAuthUser()
+  // A known campaign link shows its landing to everyone: people share these
+  // links, and a signed-in paddler who taps one should see what was shared, not
+  // their dashboard.
+  // Otherwise: signed in → the personal paddle dashboard (their stuff, not
+  // marketing); signed out → the default marketing landing.
+  const { campaign } = await searchParams
+  const r = resolveCampaign(campaign)
+  const user = r.found ? null : await getAuthUser()
   if (user) {
     // SSR via the tRPC router in-process (no HTTP hop) — same procedure the
     // browser + mobile call over the wire.
@@ -70,8 +101,6 @@ export default async function LandingPage({
     )
   }
 
-  const { campaign } = await searchParams
-  const r = resolveCampaign(campaign)
   // Log every campaign arrival (served variant or fallback) so it's traceable
   // in the server (CloudWatch) logs. Only logs when a campaign was requested,
   // so a normal visit stays quiet.

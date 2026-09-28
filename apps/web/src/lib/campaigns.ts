@@ -11,7 +11,7 @@
 
 // The set of campaign ids that have a landing variant. `default` is implicit
 // (the normal landing) and is never listed here.
-export const CAMPAIGN_LANDINGS = ['example1'] as const
+export const CAMPAIGN_LANDINGS = ['example1', 'betatesters'] as const
 export type CampaignLanding = (typeof CAMPAIGN_LANDINGS)[number]
 
 export type CampaignResolution = {
