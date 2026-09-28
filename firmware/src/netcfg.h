@@ -24,6 +24,7 @@ void netcfgLoad();
 void netcfgSaveWifi(const String &ssid, const String &pass, const String &baseUrl);
 void netcfgSetSsid(const String &ssid);
 void netcfgSetPass(const String &pass);
+void netcfgSetUrl(const String &url);   // serial only: the portal no longer offers it
 void netcfgSaveToken(const String &token);
 void netcfgSaveClaimSecret(const String &secret);
 void netcfgForget();

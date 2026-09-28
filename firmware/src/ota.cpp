@@ -209,7 +209,7 @@ static void configureClient(WiFiClientSecure &c)
     // The pinned root, never setInsecure(). The presigned URL points at S3,
     // a different host from paddlesnitch.com, but S3 also chains to Amazon
     // Root CA 1 so the same pin covers both.
-    c.setCACert(AMAZON_ROOT_CA1);
+    c.setCACert(AMAZON_ROOT_CAS);
     c.setTimeout(20000);
 }
 
