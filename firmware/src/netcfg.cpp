@@ -2,6 +2,7 @@
 #include "qr.h"
 #include "board.h"
 #include "board_pins.h"
+#include "device_id.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -11,12 +12,36 @@ NetConfig netcfg;
 static Preferences prefs;
 static const char *NS = "paddle";
 
+// The device ID is decided ONCE and stored, so it never changes under a tracker
+// (see include/device_id.h for why two schemes exist). It lives in its own NVS
+// namespace, "ident", so a factory reset -- which clears "paddle" -- keeps it:
+// the board is still the same board.
 String netDeviceId()
 {
-    uint64_t mac = ESP.getEfuseMac();
-    char id[9];
-    snprintf(id, sizeof(id), "%08X", (uint32_t)(mac & 0xFFFFFFFF));
-    return String(id);
+    static String cached;
+    if (cached.length()) return cached;
+
+    Preferences ident;
+    ident.begin("ident", false);
+    if (ident.isKey("devid")) {
+        cached = ident.getString("devid");
+    } else {
+        // Already on an account under the legacy ID? The token is the sign. Read
+        // it straight from NVS: this can run before netcfgLoad().
+        Preferences p;
+        p.begin(NS, false);   // writable: read-only logs NOT_FOUND on a fresh board
+        bool claimed = p.isKey("token") && p.getString("token").length() > 0;
+        p.end();
+
+        char id[9];
+        uint64_t mac = ESP.getEfuseMac();
+        if (deviceIdUseLegacy(claimed)) deviceIdLegacy(mac, id);
+        else deviceIdUnique(mac, id);
+        cached = String(id);
+        ident.putString("devid", cached);
+    }
+    ident.end();
+    return cached;
 }
 
 void netcfgLoad()
@@ -265,7 +290,10 @@ static String apPassword()
 
 static volatile bool g_apActive = false;
 
-String netApSsid() { return "PT-" + netDeviceId().substring(5); }
+// The last four ID characters. With the legacy ID these were "A48" on every
+// board of a batch (all share the OUI), so several trackers set up side by side
+// all offered the same "PT-A48".
+String netApSsid() { String id = netDeviceId(); return "PT-" + id.substring(id.length() - 4); }
 String netApPass() { return apPassword(); }
 bool   netApActive() { return g_apActive; }
 
