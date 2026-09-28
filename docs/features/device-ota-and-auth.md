@@ -51,7 +51,7 @@ before Phase 1 is verified on hardware.
 ```
 device  POST /api/devices/claim   {deviceId, model, firmware}
         → 6-char claimCode (shown on the OLED) + 32-byte claimSecret (kept)
-user    enters the code at /profile/me/settings while signed in
+user    enters the code at /devices while signed in
         → the claim record gains a userId
 device  POST /api/devices/token   {deviceId, claimSecret}   (polls)
         → 32-byte deviceToken, once
@@ -398,7 +398,7 @@ Define it in the existing `infra/` IaC, not by hand in the console.
 
 ---
 
-## Phase 3 — firmware · 🔨 BUILT 2026-09-27, UNVERIFIED ON HARDWARE
+## Phase 3 — firmware · ✅ BUILT 2026-09-27; updates over the air since 2026-09-28, app-level rollback seen on hardware 2026-09-28 (paddle02)
 
 `src/ota.{h,cpp}` plus a pure, host-tested `src/ota_policy.{h,cpp}`. **Three
 deliberate deviations from what is written below, each caught while building it:**

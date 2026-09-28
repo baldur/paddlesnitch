@@ -1,6 +1,6 @@
 # Feature: platform profile + account routes
 
-**Status:** ✅ **shipped.** `/profile/{id-or-handle}`, `/profile/me/settings` and `/api/account/*` are live; the old `/att/u/:id` and `/att/account` 301-redirect. Written 2026-08-09.
+**Status:** ✅ **shipped.** `/profile/{id-or-handle}` and `/api/account/*` are live. **Update 2026-09-28:** account settings moved on to **`/account`** (and devices to `/devices`); `/profile/me/settings` 308s there; the old `/att/u/:id` and `/att/account` 301-redirect. Written 2026-08-09.
 **Owner:** Baldur (product), Claude (implementation). App: `apps/att` (served at the platform root).
 
 ## Why

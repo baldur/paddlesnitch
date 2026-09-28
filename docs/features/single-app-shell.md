@@ -1,6 +1,6 @@
 # Feature spec: Single-app feel — shared UI shell + one dark theme
 
-**Status:** 🚧 built, in review (2026-08-09). **P1–P4 done; P5 core done.**
+**Status:** ✅ shipped (#181/#182, 2026-08). Since then the two apps became one (`apps/web`), and the 2026-09-28 clean-up gave every page one `AppHeader` + `AccountMenu`.
 **Owners:** Baldur (product), Claude (implementation).
 **Apps:** both `apps/att` (`/att`) and `apps/analysis` (`/analyse`); new `packages/ui`.
 

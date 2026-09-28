@@ -301,8 +301,8 @@ in `board_pins.h` is correct for the card slot.
 ## Uplink to paddlesnitch.com
 
 Server contracts:
-[`../../docs/features/device-uplink.md`](../../docs/features/device-uplink.md) — auth and transport.
-[`../../docs/features/device-data.md`](../../docs/features/device-data.md) — what the CSV contains and
+[`../docs/features/device-uplink.md`](../docs/features/device-uplink.md) — auth and transport.
+[`../docs/features/device-data.md`](../docs/features/device-data.md) — what the CSV contains and
 how far each column can be trusted. **Keep the data spec in step with any change
 to the CSV columns or the sensor pipeline** — paddlesnitch makes segmentation and
 filtering decisions from it.
@@ -316,9 +316,9 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   portal for first-run setup.
 - `src/uplink.*` — the claim handshake and session upload. Also owns the Sync-screen
   tallies (`computeCounts`), the manual delete of confirmed uploads
-  (`deleteConfirmedAll`, via the Sync screen), and **`uplinkSdBusy()`**: the IMU and
-  SD share the SPI bus, so the loop skips `imuPoll()` while the task scans/syncs/
-  deletes (see the IMU/SD note below). Sync fires at boot, on recording-stop, on a
+  (`deleteConfirmedAll`, via the Sync screen). The IMU and SD share the SPI bus;
+  that is arbitrated by a mutex (`src/spibus.h`), not by skipping `imuPoll()` —
+  `uplinkSdBusy()` is descriptive only (see the IMU/SD note below). Sync fires at boot, on recording-stop, on a
   `sync now` tap, and every 5 min — never while recording. **Every upload goes
   through `uploadChunked`** (`&part=N&parts=M`, 64 KB a part, `sha256` on the
   final part), tracks included: the device cannot read a large file off its own
@@ -326,7 +326,7 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   open/seek/read/**close** and nothing holds a card handle across a TLS round trip.
   Holding one File open across all 37 requests is what failed before.
 
-### OTA (firmware 0.11.0) — built, NOT yet proven on hardware
+### OTA (introduced in firmware 0.11.0) — working over the air; rollback seen on hardware
 
 `src/ota.{h,cpp}` does the work; `src/ota_policy.{h,cpp}` holds the DECISIONS and
 is host-tested (`pio test -e native`, 15 cases). That split is the point: the
@@ -368,7 +368,7 @@ How an update reaches the device:
 
 **Rollback is app-level.** `otaBootCheck()` runs first thing in `setup()`, before
 any hardware init, and counts boots against `OTA_MAX_BOOTS` (3). `otaMarkValid()`
-runs once bring-up succeeds and cancels it. An image that faults *before*
+runs once bring-up succeeds and cancels it. This path has worked on a real tracker (2026-09-28: paddle02 was sent back to 0.14.0, which could not start its new-batch screen, and restored 0.15.0 by itself). An image that faults *before*
 `otaBootCheck()` is beyond app-level rescue and needs a cable — that limit is
 real, and whether the prebuilt Arduino bootloader has
 `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE` set is **unverified**.
@@ -692,10 +692,11 @@ Other constraints worth keeping:
 - **No secret is compiled into the firmware.** The device is issued its own
   revocable token via the claim flow; a shared key in a binary can be read off
   any device's flash.
-- **WiFi runs only at boot**, then the radio is switched off. It is the largest
-  power draw on the board and the device is plugged in at home when syncing.
-- The app partition is now **6.25 MB** (`partitions.csv`). The default 1.31 MB
-  scheme overflows once WiFi + TLS link in — the build is ~1.09 MB.
+- **WiFi is used for sync:** at boot, on recording-stop, on a `sync now` tap and
+  every 5 minutes while not recording (never while recording). It is the largest
+  power draw on the board.
+- **Two OTA app slots** (`partitions.csv`, see the partition note above); the
+  build is ~1.1 MB. The default 1.31 MB single-slot scheme can't do OTA.
 
 ## Board-specific gotchas
 
@@ -749,8 +750,9 @@ Other constraints worth keeping:
   the user explicitly asking.
 - **USB-CDC serial**: `setup()` waits at most 2 s for a host. Never loop forever
   on `!Serial` — the board has to run on battery with nothing attached.
-- Flash use is measured against a **1.31 MB** app partition from `default.csv`,
-  despite 8 MB of flash. Adding BLE + WiFi + OTA will need a custom partition table.
+- Flash use is measured against one OTA app slot from `partitions.csv` (not the
+  8 MB of flash). A partition table can't be changed over the air: a tracker
+  still on an older table must be reflashed by cable.
 
 ## Verifying a change on real hardware
 
