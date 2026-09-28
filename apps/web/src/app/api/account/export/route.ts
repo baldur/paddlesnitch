@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, listKeys } from '@/lib/storage'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
+import { getUserGroupIds, getGroup, groupRoleOf } from '@/lib/groups'
+import { getStravaTokens } from '@paddlesnitch/core/strava-storage'
+import { listSessions, getAthleteProfile } from '@paddlesnitch/analysis/analysis-store'
+import { exportUserDevices } from '@paddlesnitch/core/devices'
 
 // GDPR Art. 15 (right of access) + Art. 20 (right to data portability) endpoint.
 // Returns a JSON document containing everything the system holds about the
@@ -39,6 +43,29 @@ export async function GET() {
   const failedUploads = (await Promise.all(failedKeys.map(k => getJson(k))))
     .filter((e): e is Record<string, unknown> => e !== null)
 
+  // Paddles (with diary notes) and the coach's running profile of them.
+  const paddles = await listSessions(user.id)
+  const coachProfile = await getAthleteProfile(user.id)
+
+  // Account records under users/{id}/. Strava tokens are credentials, so only
+  // the fact of the connection and the athlete id are exported.
+  const strava = await getStravaTokens(user.id)
+  const account = {
+    profile: await getJson(`users/${user.id}/profile.json`),
+    contact: await getJson(`users/${user.id}/contact.json`),
+    termsAccepted: await getJson(`users/${user.id}/tos-consent.json`),
+    strava: strava ? { connected: true, athleteId: strava.athleteId } : { connected: false },
+    stravaAutoImport: await getJson(`users/${user.id}/strava-prefs.json`),
+  }
+
+  const groups = (await Promise.all((await getUserGroupIds(user.id)).map(id => getGroup(id))))
+    .filter((g): g is NonNullable<typeof g> => g !== null)
+    .map(g => ({ id: g.id, name: g.name, role: groupRoleOf(g, user.id) }))
+
+  // Trackers and the recordings they uploaded (metadata; the raw CSV files are
+  // too large for one download and are available on request).
+  const { trackers, recordings: trackerRecordings } = await exportUserDevices(user.id)
+
   const body = {
     exportedAt: new Date().toISOString(),
     user: {
@@ -50,9 +77,16 @@ export async function GET() {
     ownedTrials,
     submittedEntries,
     failedUploads,
+    paddles,
+    coachProfile,
+    account,
+    groups,
+    trackers,
+    trackerRecordings,
     notes: [
       'This file contains all personal data paddlesnitch.com holds about you.',
-      'Heart rate and cadence are intentionally never collected — see the privacy policy.',
+      'Heart rate is never stored. Stroke rate is kept when your file has it.',
+      'Raw tracker recordings are not included because of their size. Email privacy@paddlesnitch.com for a copy.',
       'Passwords are held by Amazon Cognito and are never exposed via this export.',
     ],
   }

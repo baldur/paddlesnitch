@@ -252,3 +252,41 @@ export function newInvitation(input: {
     status: 'pending',
   }
 }
+
+// ---------------- GDPR erasure ----------------
+
+// Take a departing user out of every group. Groups they belong to lose them from
+// the admin/member lists. A group they OWN passes to its first admin, else its
+// first member; only a group with nobody else in it is deleted, so an account
+// deletion never takes a club's courses and trials away from the people still
+// running them. Invitations to them and join requests from them go too.
+export async function removeUserFromAllGroups(userId: string): Promise<void> {
+  for (const group of await listAllGroups()) {
+    for (const inv of await listGroupInvitations(group.id)) {
+      if (inv.toUserId === userId) await deleteInvitation(group.id, inv.id)
+    }
+    for (const req of await listJoinRequests(group.id)) {
+      if (req.userId === userId) await deleteJoinRequest(group.id, req.id)
+    }
+
+    const admins = group.adminUserIds.filter(id => id !== userId)
+    const members = group.memberUserIds.filter(id => id !== userId)
+    if (group.ownerId !== userId) {
+      if (admins.length !== group.adminUserIds.length || members.length !== group.memberUserIds.length) {
+        await putGroup({ ...group, adminUserIds: admins, memberUserIds: members })
+      }
+      continue
+    }
+    const heir = admins[0] ?? members[0]
+    if (!heir) {
+      await deleteGroup(group.id)
+      continue
+    }
+    await putGroup({
+      ...group,
+      ownerId: heir,
+      adminUserIds: admins.filter(id => id !== heir),
+      memberUserIds: members.filter(id => id !== heir),
+    })
+  }
+}

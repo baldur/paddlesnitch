@@ -547,3 +547,42 @@ export async function getDeviceSessionTrace(userId: string, deviceId: string, se
   if (!meta || meta.userId !== userId) return null
   return getObject(sessionTraceKey(deviceId, sessionId))
 }
+
+// ── GDPR ─────────────────────────────────────────────────────────────────────
+
+// What export shows of a tracker: everything but the token hash (a credential).
+export type ExportedDevice = Omit<DeviceRecord, 'tokenHash'>
+
+export async function exportUserDevices(userId: string): Promise<{ trackers: ExportedDevice[]; recordings: DeviceSessionMeta[] }> {
+  const trackers = (await listUserDevices(userId)).map(({ tokenHash: _t, ...rest }) => rest)
+  return { trackers, recordings: await listUserDeviceSessions(userId) }
+}
+
+// Erasure: unlink every tracker the user owns, and delete every recording they
+// uploaded. Scoped by owner, never by device prefix: a tracker that changed
+// hands still holds the previous owner's recordings, and those are not ours to
+// delete.
+export async function eraseUserDevices(userId: string): Promise<void> {
+  // 1. Recordings they uploaded (track, motion sidecar, staged motion parts)
+  //    and the idempotency-index entry that points at each one.
+  for (const s of await listUserDeviceSessions(userId)) {
+    for (const k of await listKeys(`devices/${s.deviceId}/sessions/${s.sessionId}/`)) await deleteObject(k)
+    const idx = await getJson<{ sessionId: string }>(uploadIndexKey(s.deviceId, s.filename))
+    if (idx?.sessionId === s.sessionId) await deleteObject(uploadIndexKey(s.deviceId, s.filename))
+  }
+  // 2. Trackers they own: the token (so the tracker is signed out), the record,
+  //    any half-uploaded parts (only the current owner's tracker uploads), and
+  //    the claim that bound it to them.
+  for (const d of await listUserDevices(userId)) {
+    if (d.tokenHash) await deleteObject(tokenKey(d.tokenHash))
+    await deleteObject(deviceKey(d.deviceId))
+    for (const k of await listKeys(`devices/${d.deviceId}/parts/`)) await deleteObject(k)
+  }
+  // 3. Claims they linked, including any still outstanding, and their code index.
+  for (const k of await listKeys('device-claims/')) {
+    const c = await getJson<DeviceClaim>(k)
+    if (c?.userId !== userId) continue
+    await deleteObject(claimCodeKey(c.claimCode))
+    await deleteObject(k)
+  }
+}

@@ -199,8 +199,8 @@ strava/status         GET  — { connected, athlete? }
 strava/disconnect     POST — revokes on Strava, deletes local tokens
 strava/activities     GET  — recent water-sport activities, refreshes token if needed
 feedback              POST — files a customer-reported GitHub issue (anti-bot gate, see below)
-account/export        GET  — JSON archive of the signed-in user's data (GDPR Art. 15)
-account               DELETE — full account erasure (GDPR Art. 17)
+account/export        GET  — JSON archive of the signed-in user's data (GDPR Art. 15) — courses, trials, entries, failed uploads, paddles + notes, coach profile, users/ records (Strava as connected+athleteId only, never tokens), groups + role, trackers (no tokenHash) + recording metadata (raw tracker CSVs on request: too big for one response)
+account               DELETE — full account erasure (GDPR Art. 17). Also: `eraseUserAnalysis` (paddles, coach profile, share index), `eraseUserDevices` (owned trackers unlinked, claims, parts; recordings deleted by OWNER not device prefix — a tracker that changed hands keeps the previous owner's), `removeUserFromAllGroups` (owned group → first admin, else first member, deleted only if empty), Strava deauthorised + athlete index removed. Every kind of personal data needs a line here AND in export — see `src/tests/account-data-complete.test.ts`.
 account/profile       GET / PATCH — read or set the viewer's profile visibility ({ public: boolean }); profiles are opt-in (private by default)
 account/handle        GET (?check=) / PUT / DELETE — check availability, claim/change, or release the viewer's vanity profile handle
 ```

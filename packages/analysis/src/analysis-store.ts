@@ -105,6 +105,16 @@ export async function deleteSession(userId: string, id: string): Promise<void> {
   await deleteObject(key(userId, id))
 }
 
+// GDPR erasure: every paddle, the coach profile, and the public share index of
+// any shared paddle (it lives outside the user's prefix, so it needs an explicit
+// delete or a shared link would keep resolving).
+export async function eraseUserAnalysis(userId: string): Promise<void> {
+  for (const s of await listSessions(userId)) {
+    if (s.shareId) await deleteObject(sharedKey(s.shareId))
+  }
+  for (const k of await listKeys(`analysis/${userId}/`)) await deleteObject(k)
+}
+
 // ---- Sharing: an opt-in, unlisted public link for one paddle (#202) ----
 // A share index at analysis/shared/{shareId}.json points back at the owning
 // user + session, so the public view resolves a paddle from the token alone
