@@ -65,13 +65,18 @@ describe('beta testers carousel', () => {
   it('flips on a swipe', async () => {
     await mount()
     const deck = container.querySelector('[aria-roledescription="carousel"]')!
-    const touch = (type: string, x: number) => {
+    const touch = (type: string, x: number, y = 0) => {
       const e = new Event(type, { bubbles: true }) as Event & Record<string, unknown>
-      e[type === 'touchstart' ? 'touches' : 'changedTouches'] = [{ clientX: x }]
+      e[type === 'touchstart' ? 'touches' : 'changedTouches'] = [{ clientX: x, clientY: y }]
       deck.dispatchEvent(e)
     }
     await act(async () => { touch('touchstart', 300); touch('touchend', 100) })
     expect(visible()).toEqual(['Second'])
+    await act(async () => { touch('touchstart', 100); touch('touchend', 300) })
+    expect(visible()).toEqual(['First'])
+    // A page scroll that drifts sideways (mostly vertical) must not flip.
+    await act(async () => { touch('touchstart', 200, 500); touch('touchend', 140, 200) })
+    expect(visible()).toEqual(['First'])
   })
 
   it('makes CLICK TO SNITCH bounce only on the last card, and not for reduced motion', async () => {

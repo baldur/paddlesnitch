@@ -11,7 +11,7 @@ export type Slide = { eyebrow: string; title: string; body: string }
 export default function BetaSlides({ slides }: { slides: Slide[] }) {
   const [i, setI] = useState(0)
   const last = slides.length - 1
-  const touchX = useRef<number | null>(null)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
   const go = (n: number) => setI(Math.max(0, Math.min(last, n)))
 
   useEffect(() => {
@@ -35,13 +35,17 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
         <div
           className="flex-1"
           aria-roledescription="carousel"
-          onTouchStart={e => { touchX.current = e.touches[0].clientX }}
+          onTouchStart={e => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
           onTouchEnd={e => {
-            if (touchX.current == null) return
-            const dx = e.changedTouches[0].clientX - touchX.current
-            touchX.current = null
-            if (dx < -40) go(i + 1)
-            if (dx > 40) go(i - 1)
+            const start = touchStart.current
+            touchStart.current = null
+            if (!start) return
+            const dx = e.changedTouches[0].clientX - start.x
+            const dy = e.changedTouches[0].clientY - start.y
+            // Only a mainly-sideways swipe flips; a page scroll that drifts
+            // sideways must not.
+            if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+            go(dx < 0 ? i + 1 : i - 1)
           }}
         >
           {slides.map((s, n) => (
