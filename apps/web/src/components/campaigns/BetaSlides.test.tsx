@@ -41,6 +41,9 @@ describe('beta testers carousel', () => {
     expect(cards.every(c => c.className.includes('[grid-area:1/1]'))).toBe(true)
     expect(cards.filter(c => c.className.includes('invisible'))).toHaveLength(2)
     expect(cards.filter(c => c.hasAttribute('inert'))).toHaveLength(2)
+    // A forced square breaks the stacking: the tallest card sets the height,
+    // the square then forces that as the width, and the card spills off-centre.
+    expect(cards.some(c => c.className.includes('aspect-square'))).toBe(false)
   })
 
   it('starts on the first card with Previous disabled', async () => {

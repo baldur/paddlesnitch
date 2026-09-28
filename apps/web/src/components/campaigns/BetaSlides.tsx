@@ -62,7 +62,7 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
               inert={n !== i}
               aria-roledescription="slide"
               aria-label={`${n + 1} of ${slides.length}`}
-              className={`[grid-area:1/1] ${n === i ? '' : 'invisible'} sm:aspect-square border bg-bg/80 backdrop-blur-sm px-14 py-8 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
+              className={`[grid-area:1/1] ${n === i ? '' : 'invisible'} sm:min-h-[30rem] border bg-bg/80 backdrop-blur-sm px-14 py-8 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
             >
               {n === 0
                 ? <h1 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h1>
