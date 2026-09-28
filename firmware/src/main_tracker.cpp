@@ -15,6 +15,7 @@
 #include "ota.h"
 #include "tutorial.h"
 #include "track_policy.h"
+#include "setup_policy.h"
 #include <Preferences.h>
 #include "qr.h"
 #include "spibus.h"
@@ -711,7 +712,11 @@ static void screenHold()
         if (nav.menuOpen) { menu = Menu::Pick; menuSel = 0; }
         return;
     }
-    if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
+    // onboarding: WiFi/link -- but not while a code is on screen (setup_policy.h)
+    if (!deviceUsable()) {
+        if (linkHoldRetries(uplinkGetStatus().claiming)) linkAttempt();
+        return;
+    }
     // Blink the chosen row first: the hold fires while still held, so without an
     // acknowledgement a successful press and a too-short one look the same.
     if (menu != Menu::None) {

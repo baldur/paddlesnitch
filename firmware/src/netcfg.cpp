@@ -3,6 +3,7 @@
 #include "board.h"
 #include "board_pins.h"
 #include "device_id.h"
+#include "setup_policy.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -70,6 +71,13 @@ static void put(const char *k, const String &v)
 
 void netcfgSaveWifi(const String &ssid, const String &pass, const String &baseUrl)
 {
+    // New details have to work once before they count as "have worked"
+    // (setup_policy.h), so a mistyped new password brings setup back.
+    if (netcfg.everConnected &&
+        !wifiStillProven(true, netcfg.ssid.c_str(), netcfg.pass.c_str(), ssid.c_str(), pass.c_str())) {
+        prefs.begin(NS, false); prefs.remove("okonce"); prefs.end();
+        netcfg.everConnected = false;
+    }
     put("ssid", ssid); put("pass", pass); put("url", baseUrl);
     netcfg.ssid = ssid; netcfg.pass = pass; netcfg.baseUrl = baseUrl;
 }
