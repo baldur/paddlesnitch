@@ -111,7 +111,7 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
                 className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors" />
             </div>
             {error && <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">{error}</div>}
-            <p className="text-xs text-muted">We&apos;ll automatically include the page you&apos;re on, your browser, and (if signed in) your account name — so you don&apos;t need to repeat it.</p>
+            <p className="text-xs text-muted">Reports are posted publicly on GitHub, so don&apos;t include personal details. We add the page and your browser. Your name and email stay private.</p>
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => setOpen(false)} disabled={status === 'sending'} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 transition-colors">CANCEL</button>
               <button type="submit" disabled={status === 'sending' || description.trim().length < 10} className="px-4 py-2 bg-primary text-white text-xs tracking-widest hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">{status === 'sending' ? 'SENDING…' : 'SEND REPORT'}</button>
