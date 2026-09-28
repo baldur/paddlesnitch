@@ -61,7 +61,8 @@ struct UplinkStatus {
     bool     countsValid   = false;
     int      onDevice      = 0;   // track_*.csv files on the card
     int      uploaded      = 0;   // of those, confirmed by the server (200/201/409)
-    int      pending       = 0;   // onDevice - uploaded
+    int      pending       = 0;   // onDevice - uploaded - rejected
+    int      rejected      = 0;   // the server can never use these (upload_policy.h)
 };
 
 void uplinkTaskStart();               // call once, after storage + net are up

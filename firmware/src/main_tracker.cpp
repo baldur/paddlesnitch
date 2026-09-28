@@ -1467,6 +1467,7 @@ void loop()
         u.onDevice    = up.onDevice;
         u.uploaded    = up.uploaded;
         u.pending     = up.pending;
+        u.rejected    = up.rejected;
         u.syncing     = up.busy;
         u.upFile      = up.upFile;
         u.upPart      = up.upPart;

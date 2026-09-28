@@ -267,6 +267,12 @@ static void drawSync(const UiState &s)
         display.setFont(u8g2_font_5x8_tf);
         snprintf(l, sizeof(l), "keeps %d not yet sent", s.pending);
         display.drawStr(0, 42, l);
+        // Recordings the website can never use (an indoor one with no GPS, say).
+        // Not "pending": they will not upload, and are kept on the card.
+        if (s.rejected > 0) {
+            snprintf(l, sizeof(l), "%d couldn't be used", s.rejected);
+            display.drawStr(0, 51, l);
+        }
         display.setFont(u8g2_font_6x10_tf);
     }
 
