@@ -62,6 +62,7 @@ struct UiState {
     int      onDevice    = 0;
     int      uploaded    = 0;
     int      pending     = 0;
+    int      rejected    = 0;   // shown on the cleanup page, not counted as pending
     bool     syncing     = false;   // a sync is in flight (uplink busy)
     // Which chunk of which file is in flight. upParts == 0 means "syncing, but
     // not inside a chunked file" (scanning, claiming, counting).

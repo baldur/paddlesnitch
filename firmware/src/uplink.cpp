@@ -9,6 +9,7 @@
 #include "board.h"
 #include "root_ca.h"
 #include "ota.h"
+#include "upload_policy.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -122,26 +123,28 @@ static void markUploaded(const String &name, int rc)
     f.close();
 }
 
-static bool confirmedUploaded(const String &name)
+// The HTTP code the index recorded for a file, or 0 if it has none.
+static int indexRc(const String &name)
 {
     SpiBusGuard bus(5000);
-    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return false; }
+    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return 0; }
     File f = SD.open(UPLOADED_INDEX, FILE_READ);
-    if (!f) return false;
-    bool ok = false;
+    if (!f) return 0;
+    int found = 0;
     while (f.available()) {
         String line = f.readStringUntil('\n');
         line.trim();
         int tab = line.indexOf('\t');
         if (tab < 0) continue;
         if (line.substring(0, tab) != name) continue;
-        int rc = line.substring(tab + 1).toInt();
-        ok = (rc == 200 || rc == 201 || rc == 409);
+        found = line.substring(tab + 1).toInt();
         break;
     }
     f.close();
-    return ok;
+    return found;
 }
+
+static bool confirmedUploaded(const String &name) { return indexRcConfirmed(indexRc(name)); }
 
 // ---------------------------------------------------------------------------
 // Claim
@@ -398,30 +401,36 @@ static bool isTrackUpload(const String &name) { return nameIsTrackUpload(name.c_
 // produce a silently wrong file that a single PUT never had.
 static const size_t UPLOAD_CHUNK = 64 * 1024;
 
-static bool uploadChunked(WiFiClientSecure &client, const String &path, const String &name)
+// Returns what the server's reply means for the file (upload_policy.h) and, in
+// rcOut, the HTTP code to record in the index.
+static UploadOutcome uploadChunked(WiFiClientSecure &client, const String &path, const String &name, int &rcOut)
 {
+    rcOut = 0;
     // Opened only to learn the size; each chunk reopens it. Nothing holds a card
     // handle while HTTP is in flight.
     size_t total = 0;
     {
         SpiBusGuard bus(5000);
-        if (!bus) { DBGE("sd", "%s: bus busy sizing", name.c_str()); return false; }
+        if (!bus) { DBGE("sd", "%s: bus busy sizing", name.c_str()); return UploadOutcome::Retry; }
         File probe = SD.open("/" + path, FILE_READ);
-        if (!probe) return false;
+        if (!probe) return UploadOutcome::Retry;
         total = probe.size();
         probe.close();
     }
-    if (total == 0) return false;
+    // An empty file has nothing the server could use (it would answer 422), and
+    // left alone it would count as pending for ever.
+    if (total == 0) { rcOut = 422; return UploadOutcome::Rejected; }
     const int parts = chunkCount(total, UPLOAD_CHUNK);
 
     uint8_t *buf = (uint8_t *)ps_malloc(UPLOAD_CHUNK);
-    if (!buf) { Serial.println("  no PSRAM for a chunk"); return false; }
+    if (!buf) { Serial.println("  no PSRAM for a chunk"); return UploadOutcome::Retry; }
 
     mbedtls_sha256_context sha;
     mbedtls_sha256_init(&sha);
     mbedtls_sha256_starts(&sha, 0);
 
     bool ok = true;
+    UploadOutcome failed = UploadOutcome::Retry;   // what a failed part means
     for (int part = 1; part <= parts && ok; part++) {
         // Published BEFORE the read, not after the POST: the read is the step
         // that used to stall, so the screen has to name the chunk it is stuck on.
@@ -512,9 +521,12 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
         otaNoteServerVersion(http.header("X-PS-Firmware").c_str());
         http.end();
 
-        // 202 = part stored, 201 = assembled. Anything else is a failure worth
-        // seeing; the file is left unmarked so the next sync retries it.
+        rcOut = rc;
+        // 202 = part stored, 201 = assembled. Anything else stops this file, and
+        // uploadOutcome() says whether it is done anyway (409 already_uploaded),
+        // can never work (400/413/422), or should be tried again next sync.
         if (rc != 202 && rc != 201) {
+            failed = uploadOutcome(rc, payload.c_str());
             DBGE("sync", "%s part %d/%d -> HTTP %d %s", name.c_str(), part, parts,
                  rc, payload.substring(0, 40).c_str());
             Serial.printf("  %s part %d/%d (%u B) -> HTTP %d %s\n", name.c_str(), part, parts,
@@ -530,7 +542,7 @@ static bool uploadChunked(WiFiClientSecure &client, const String &path, const St
 
     mbedtls_sha256_free(&sha);
     free(buf);
-    return ok;
+    return ok ? UploadOutcome::Accepted : failed;
 }
 
 static bool isMotionUpload(const String &name) { return nameIsMotionUpload(name.c_str()); }
@@ -554,7 +566,7 @@ static void computeCounts(UplinkStatus &st)
     SpiBusGuard bus(5000);
     if (!bus) { DBGE("sd", "bus busy counting"); st.countsValid = false; return; }
 
-    int on = 0, up = 0;
+    int on = 0, up = 0, rejected = 0;
     File root = SD.open("/");
     for (File f = root.openNextFile(); f; f = root.openNextFile()) {
         bool dir = f.isDirectory();
@@ -564,13 +576,16 @@ static void computeCounts(UplinkStatus &st)
         f.close();
         if (dir || !isTrack) continue;
         on++;
-        if (confirmedUploaded(name)) up++;
+        const int rc = indexRc(name);
+        if (indexRcConfirmed(rc)) up++;
+        else if (indexRcRejected(rc)) rejected++;
     }
     root.close();
 
     st.onDevice = on;
     st.uploaded = up;
-    st.pending  = on - up;
+    st.rejected = rejected;
+    st.pending  = on - up - rejected;   // rejected ones will never upload
     st.countsValid = true;
 }
 
@@ -674,9 +689,18 @@ int uplinkSyncSessions()
         // find the card busy, and an upload must not be torn in half.
         if (g_yield) { DBGW("sync", "yielding card"); Serial.println("sync: yielding card"); break; }
         DBGI("sync", "track %s", tracks[i].c_str());
-        if (uploadChunked(client, tracks[i], tracks[i])) {
-            markUploaded(tracks[i], 201);
+        int rc = 0;
+        const UploadOutcome out = uploadChunked(client, tracks[i], tracks[i], rc);
+        if (out == UploadOutcome::Accepted) {
+            markUploaded(tracks[i], rc == 409 ? 409 : 201);
             accepted++;
+        } else if (out == UploadOutcome::Rejected) {
+            // Recorded so it is never sent again. Its motion file can't attach
+            // to a track the server doesn't have, so it goes the same way.
+            DBGW("sync", "%s rejected (HTTP %d), not retrying", tracks[i].c_str(), rc);
+            markUploaded(tracks[i], rc);
+            char side[64];
+            if (sidecarForTrack(tracks[i].c_str(), side, sizeof side)) markUploaded(String(side), rc);
         }
     }
 
@@ -686,9 +710,14 @@ int uplinkSyncSessions()
         // Uploaded under the name the SERVER keys sidecars by, read from the
         // on-card name.
         DBGI("sync", "sidecar %s", sidecars[i].c_str());
-        if (uploadChunked(client, sidecars[i], motionUploadName(sidecars[i]))) {
-            markUploaded(sidecars[i], 201);
+        int rc = 0;
+        const UploadOutcome out = uploadChunked(client, sidecars[i], motionUploadName(sidecars[i]), rc);
+        if (out == UploadOutcome::Accepted) {
+            markUploaded(sidecars[i], rc == 409 ? 409 : 201);
             accepted++;
+        } else if (out == UploadOutcome::Rejected) {
+            DBGW("sync", "%s rejected (HTTP %d), not retrying", sidecars[i].c_str(), rc);
+            markUploaded(sidecars[i], rc);
         }
     }
 

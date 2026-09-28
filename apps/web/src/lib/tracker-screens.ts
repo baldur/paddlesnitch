@@ -124,7 +124,7 @@ export const SCREENS = {
     { topRow: { fix: true, bars: 4, pct: 72 } },
     { text: 'Stop?', x: 0, y: 34, font: 'l' },
     { text: 'HOLD to stop', x: 0, y: 52, font: 'm' },
-    { text: 'double-tap or wait = keep going', x: 0, y: 62, font: 's' },
+    { text: 'double-tap = keep going', x: 0, y: 62, font: 's' },
   ] },
 
   sync: { label: 'Sync', els: [
@@ -156,7 +156,7 @@ export const SCREENS = {
 
   reset: { label: 'Factory reset', els: [
     { text: 'Factory reset?', x: 0, y: 12, font: 'm' }, { hline: 15 },
-    { text: 'clears wifi + account link', x: 0, y: 27, font: 's' },
+    { text: 'clears wifi, account link', x: 0, y: 27, font: 's' },
     { text: 'KEEPS paddles on the card', x: 0, y: 37, font: 's' },
     { text: 'HOLD to reset', x: 0, y: 53, font: 'm' },
     { text: 'double-tap to cancel', x: 0, y: 63, font: 's' },

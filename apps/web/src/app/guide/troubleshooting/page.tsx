@@ -87,8 +87,9 @@ export default function Troubleshooting() {
           <TrackerScreen name="network" />
         </Screens>
         <p>
-          If your WiFi password changes, do this straight away: a tracker that has joined a network
-          before doesn’t open setup by itself when the password stops working.
+          If you type the new password wrong, setup opens again by itself. But if your router’s
+          password changes, the tracker can’t tell that from being away from home, so change it here
+          straight away.
         </p>
       </Problem>
 
@@ -105,10 +106,7 @@ export default function Troubleshooting() {
           reach the internet. <strong>wifi: check password</strong> means it couldn’t join your WiFi:
           switch it off and on, and it opens setup so you can correct the password.
         </p>
-        <p>
-          While the code is showing, don’t hold BOOT: that asks for a new code and the one you’re
-          typing stops working. A tap only switches between the picture and the letters.
-        </p>
+        <p>A tap switches the code between the picture and the letters.</p>
       </Problem>
 
       <Problem id="gps" title="It says “Acquiring GPS...” and never records">
@@ -138,8 +136,10 @@ export default function Troubleshooting() {
             (<Link href="/guide/upload">step 7</Link>).</li>
         </ul>
         <p>
-          If <strong>pending</strong> stays above 0 for half an hour on WiFi, tell us. We know of one
-          case where a recording the website can’t read keeps being tried and never clears.
+          A recording the website can’t use, like one made indoors with no GPS, isn’t counted as
+          pending. The second page of <strong>Sync</strong> lists how many <strong>couldn’t be
+          used</strong>, and keeps them on the card. If <strong>pending</strong> stays above 0 for
+          half an hour on WiFi, tell us.
         </p>
       </Problem>
 
@@ -155,7 +155,7 @@ export default function Troubleshooting() {
       <Problem id="updating" title="It’s stuck on “Updating”">
         <p>
           While an update downloads, the screen shows <strong>Updating</strong>, a progress bar and{' '}
-          <strong>keep power on - buttons off</strong>. The buttons do nothing until it’s finished.
+          <strong>keep powered, buttons off</strong>. The buttons do nothing until it’s finished.
           If it sits at <strong>0%</strong> for more than a few minutes,
           switch it off and on. An update that fails is safe: the tracker goes back to the version it
           had.
