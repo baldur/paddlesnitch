@@ -3,6 +3,16 @@ name: Test and Deploy
 on:
   push:
     branches: [main]
+  # Redeploy main by hand (e.g. after reverting a bad change in the console).
+  workflow_dispatch:
+
+# One deploy at a time, in order. Two quick merges used to start two deploys;
+# the second failed on CloudFormation's UPDATE_IN_PROGRESS and main was left
+# undeployed. Queued, never cancelled: a cancelled deploy can leave the stack
+# mid-update (resilience audit 2026-09).
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 
 permissions:
   id-token: write
@@ -62,3 +72,20 @@ jobs:
           # secret would be masked in every log that mentions it.
           ADMIN_USER_IDS: ${{ vars.ADMIN_USER_IDS }}
         run: npm run deploy
+
+      # Did the site come back? Nothing checked after a deploy, so a broken
+      # release was found by users. Fails the run (and emails whoever merged)
+      # if the home page, Trials, the API or a static asset doesn't answer.
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          BASE=https://paddlesnitch.com
+          check() { code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE$1"); echo "$1 -> $code"; [ "$code" = "$2" ]; }
+          for i in 1 2 3; do check / 200 && break || sleep 15; done
+          check / 200
+          check /att 200
+          check /guide 200
+          check '/api/trpc/me' 200
+          asset=$(curl -s --max-time 20 "$BASE/" | grep -oE '/_next/static/[^"]+\.js' | head -1)
+          [ -n "$asset" ] && check "$asset" 200
+
