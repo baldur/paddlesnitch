@@ -46,7 +46,7 @@ export default function PrivacyPolicy() {
             <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
             <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, your recent paddles and your diary notes to an AI model on Amazon Bedrock. We keep a short written profile of your paddling to make later summaries relevant.</li>
             <li><strong>Issue reports</strong>: what you write, the page you were on and your browser. If you&apos;re signed in, or add an email, we keep your name and email privately so we can reply.</li>
-            <li><strong>Beta tester applications</strong>: your name, email, what you paddle or row, and how often. We use it only to choose and contact beta testers, and delete it when the beta ends or when you ask.</li>
+            <li><strong>Beta tester applications</strong>: your name, email, how you paddle (kayak, rowing and so on), and how often. We use it only to choose and contact beta testers, and delete it when the beta ends or when you ask.</li>
             <li><strong>Page-view counts</strong>: which pages are opened, with a random ID that lasts until you close the tab. It isn&apos;t linked to your account.</li>
           </ul>
           <p className="mt-3">

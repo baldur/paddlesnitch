@@ -60,7 +60,8 @@ describe('POST /api/beta-signup', () => {
   it.each([
     [{ name: '' }, /name/],
     [{ email: 'not-an-email' }, /email/],
-    [{ sport: 'golf' }, /paddle or row/],
+    [{ sport: 'golf' }, /how you paddle/],
+    [{ sport: 'rowing' }, /how you paddle/],
     [{ frequency: 'never' }, /how often/],
   ])('rejects %o with a plain message', async (patch, msg) => {
     const res = await post({ ...good, ...patch })

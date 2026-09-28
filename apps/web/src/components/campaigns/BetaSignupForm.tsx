@@ -7,7 +7,7 @@ import { useRef, useState } from 'react'
 // the time since the form was shown).
 
 const SPORTS = [
-  ['kayak', 'Kayak'], ['canoe', 'Canoe'], ['sup', 'Paddleboard (SUP)'], ['rowing', 'Rowing'], ['other', 'Other'],
+  ['kayak', 'Kayak'], ['single-scull', 'Single scull'], ['crew-rowing', 'Crew rowing'], ['sup', 'Paddleboard (SUP)'], ['canoe', 'Canoe'],
 ] as const
 const FREQUENCIES = [
   ['most-weeks', 'Most weeks'], ['few-a-month', 'A few times a month'], ['now-and-then', 'Now and then'],
@@ -71,7 +71,7 @@ export default function BetaSignupForm() {
         <input required type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={200} className={field} />
       </label>
       <label className="flex flex-col gap-1">
-        <span className={label}>What do you paddle or row?</span>
+        <span className={label}>How do you paddle?</span>
         <select required value={sport} onChange={e => setSport(e.target.value)} className={field}>
           <option value="" disabled>Choose one</option>
           {SPORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}

@@ -54,6 +54,15 @@ describe('beta tester application pop-up', () => {
     expect(form.querySelector('textarea, input[type=checkbox]')).toBeNull()
   })
 
+  it('asks "How do you paddle?" with kayak, single scull, crew rowing, SUP, canoe in that order', async () => {
+    await mount()
+    await openIt()
+    const form = dialog()!.querySelector('form')!
+    expect(form.textContent).toContain('How do you paddle?')
+    const options = [...form.querySelectorAll('select')[0].querySelectorAll('option:not([disabled])')].map(o => o.textContent)
+    expect(options).toEqual(['Kayak', 'Single scull', 'Crew rowing', 'Paddleboard (SUP)', 'Canoe'])
+  })
+
   it('closes on Escape and on a click on the dimmed background, but not on a click inside', async () => {
     await mount()
     await openIt()

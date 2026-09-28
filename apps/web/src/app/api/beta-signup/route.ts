@@ -14,7 +14,7 @@ import { sendEmail } from '@/lib/email'
 // owner's inbox by the SES receipt rule, so no new address or config is needed.
 const NOTIFY_TO = process.env.BETA_NOTIFY_TO ?? 'privacy@paddlesnitch.com'
 
-const SPORT_LABEL: Record<string, string> = { kayak: 'Kayak', canoe: 'Canoe', sup: 'Paddleboard (SUP)', rowing: 'Rowing', other: 'Other' }
+const SPORT_LABEL: Record<string, string> = { kayak: 'Kayak', 'single-scull': 'Single scull', 'crew-rowing': 'Crew rowing', sup: 'Paddleboard (SUP)', canoe: 'Canoe' }
 const FREQ_LABEL: Record<string, string> = { 'most-weeks': 'Most weeks', 'few-a-month': 'A few times a month', 'now-and-then': 'Now and then' }
 
 export async function POST(req: Request) {
@@ -24,8 +24,7 @@ export async function POST(req: Request) {
   const parsed = parseBetaApplication(body)
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
-  const saved = await saveBetaApplication(parsed.app)
-  const repeat = saved.appliedAt !== saved.updatedAt
+  const { record: saved, repeat } = await saveBetaApplication(parsed.app)
 
   // Best effort: the application is saved, so a failed notification must not
   // turn into an error for the applicant.

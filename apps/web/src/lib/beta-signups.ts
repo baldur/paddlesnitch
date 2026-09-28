@@ -8,7 +8,8 @@ import { getJson, putJson, deleteObject } from './storage'
 // up. Personal data: account erasure deletes the record for the account's email
 // and export includes it; someone without an account asks by email.
 
-export const BETA_SPORTS = ['kayak', 'canoe', 'sup', 'rowing', 'other'] as const
+// In the order the form lists them.
+export const BETA_SPORTS = ['kayak', 'single-scull', 'crew-rowing', 'sup', 'canoe'] as const
 export const BETA_FREQUENCIES = ['most-weeks', 'few-a-month', 'now-and-then'] as const
 
 export type BetaApplication = {
@@ -34,7 +35,7 @@ export function parseBetaApplication(
   const frequency = str(body.frequency, 20)
   if (!name) return { ok: false, error: 'Please enter your name.' }
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'Please enter a valid email address.' }
-  if (!(BETA_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'Please choose what you paddle or row.' }
+  if (!(BETA_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'Please choose how you paddle.' }
   if (!(BETA_FREQUENCIES as readonly string[]).includes(frequency)) return { ok: false, error: 'Please choose how often you get out on the water.' }
   return {
     ok: true,
@@ -49,13 +50,17 @@ export function parseBetaApplication(
 const keyFor = (email: string) =>
   `beta-signups/${createHash('sha256').update(email.trim().toLowerCase()).digest('hex')}.json`
 
-// Save (or update) an application. Keeps the original appliedAt.
-export async function saveBetaApplication(app: Omit<BetaApplication, 'appliedAt' | 'updatedAt'>): Promise<BetaApplication> {
+// Save (or update) an application. Keeps the original appliedAt. `repeat` says
+// whether this email had applied before (not inferred from timestamps, which
+// can be equal when two applications land in the same millisecond).
+export async function saveBetaApplication(
+  app: Omit<BetaApplication, 'appliedAt' | 'updatedAt'>,
+): Promise<{ record: BetaApplication; repeat: boolean }> {
   const now = new Date().toISOString()
   const prev = await getJson<BetaApplication>(keyFor(app.email))
   const record: BetaApplication = { ...app, appliedAt: prev?.appliedAt ?? now, updatedAt: now }
   await putJson(keyFor(app.email), record)
-  return record
+  return { record, repeat: prev !== null }
 }
 
 export async function getBetaApplication(email: string): Promise<BetaApplication | null> {
