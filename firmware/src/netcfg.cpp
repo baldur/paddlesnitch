@@ -2,6 +2,7 @@
 #include "qr.h"
 #include "board.h"
 #include "board_pins.h"
+#include "device_id.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -11,12 +12,34 @@ NetConfig netcfg;
 static Preferences prefs;
 static const char *NS = "paddle";
 
+// The device ID is decided once and stored with the account token (see
+// include/device_id.h for why two schemes exist), so it never changes under a
+// tracker while it is on an account. It lives in the "paddle" namespace ON
+// PURPOSE: a factory reset clears that namespace, so a reset tracker -- no token
+// any more -- gets the unique ID. That is how a tracker that went onto an
+// account under a clashing legacy ID sheds it before going to someone else.
 String netDeviceId()
 {
-    uint64_t mac = ESP.getEfuseMac();
-    char id[9];
-    snprintf(id, sizeof(id), "%08X", (uint32_t)(mac & 0xFFFFFFFF));
-    return String(id);
+    static String cached;
+    if (cached.length()) return cached;
+
+    Preferences p;
+    p.begin(NS, false);   // writable: read-only logs NOT_FOUND on a fresh board
+    if (p.isKey("devid")) {
+        cached = p.getString("devid");
+    } else {
+        // Already on an account under the legacy ID? The token is the sign.
+        // Read it straight from NVS: this can run before netcfgLoad().
+        bool claimed = p.isKey("token") && p.getString("token").length() > 0;
+        char id[9];
+        uint64_t mac = ESP.getEfuseMac();
+        if (deviceIdUseLegacy(claimed)) deviceIdLegacy(mac, id);
+        else deviceIdUnique(mac, id);
+        cached = String(id);
+        p.putString("devid", cached);
+    }
+    p.end();
+    return cached;
 }
 
 void netcfgLoad()
@@ -265,7 +288,10 @@ static String apPassword()
 
 static volatile bool g_apActive = false;
 
-String netApSsid() { return "PT-" + netDeviceId().substring(5); }
+// The last four ID characters. With the legacy ID these were "A48" on every
+// board of a batch (all share the OUI), so several trackers set up side by side
+// all offered the same "PT-A48".
+String netApSsid() { String id = netDeviceId(); return "PT-" + id.substring(id.length() - 4); }
 String netApPass() { return apPassword(); }
 bool   netApActive() { return g_apActive; }
 
