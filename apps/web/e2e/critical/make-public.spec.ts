@@ -37,11 +37,11 @@ test('the owner can flip a private trial to public via the ack confirm', async (
   // server requires acknowledged: true in the body, which the page's
   // toggleVisibility handler only sends after the confirm returns.
   page.once('dialog', dialog => dialog.accept())
-  await page.getByRole('button', { name: /PRIVATE.*↔.*PUBLIC/ }).click()
+  await page.getByRole('button', { name: 'MAKE PUBLIC' }).click()
 
   // After the PATCH succeeds, the admin page re-renders with the
   // inverted button label.
-  await expect(page.getByRole('button', { name: /PUBLIC.*↔.*PRIVATE/ }))
+  await expect(page.getByRole('button', { name: 'MAKE PRIVATE' }))
     .toBeVisible({ timeout: 10_000 })
 
   // Sign out and confirm the trial detail page is now reachable to
