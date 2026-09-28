@@ -690,13 +690,16 @@ Other constraints worth keeping:
 
 ## Board-specific gotchas
 
-- **The device ID is decided once and stored (NVS namespace `ident`, key `devid`),
-  and survives a factory reset.** Up to 0.15.0 it was the efuse MAC's low 32 bits
+- **The device ID is decided once and stored (NVS namespace `paddle`, key `devid`,
+  next to the token), and a factory reset clears it.** Up to 0.15.0 it was the efuse MAC's low 32 bits
   (`%08X`), which is three Espressif OUI bytes + ONE board byte: only 256 values,
   and paddle03 (`48:ca:43:5a:ba:b0`) came out as `5A43CA48`, the same as the first
   tracker. From 0.16.0 a tracker with no stored ID gets `MAC[2..5]` (paddle03 →
   `435ABAB0`), but one that is already claimed (has a token) keeps the legacy ID
-  the server knows it by. Logic in `include/device_id.h`, host-tested. **A new
+  the server knows it by, until a factory reset: that clears token and ID
+  together, so the reset tracker comes back with the unique ID. **Reset a tracker
+  before it goes to a new owner** — that is also how one claimed under a clashing
+  legacy ID sheds it. Logic in `include/device_id.h`, host-tested. **A new
   board must run 0.16.0+ BEFORE it is claimed**, and an unclaimed tracker cannot
   OTA (the firmware endpoints need its token), so flash new boards by cable.
   The setup hotspot is `PT-` + the last four ID characters (it was `PT-A48` on

@@ -12,35 +12,33 @@ NetConfig netcfg;
 static Preferences prefs;
 static const char *NS = "paddle";
 
-// The device ID is decided ONCE and stored, so it never changes under a tracker
-// (see include/device_id.h for why two schemes exist). It lives in its own NVS
-// namespace, "ident", so a factory reset -- which clears "paddle" -- keeps it:
-// the board is still the same board.
+// The device ID is decided once and stored with the account token (see
+// include/device_id.h for why two schemes exist), so it never changes under a
+// tracker while it is on an account. It lives in the "paddle" namespace ON
+// PURPOSE: a factory reset clears that namespace, so a reset tracker -- no token
+// any more -- gets the unique ID. That is how a tracker that went onto an
+// account under a clashing legacy ID sheds it before going to someone else.
 String netDeviceId()
 {
     static String cached;
     if (cached.length()) return cached;
 
-    Preferences ident;
-    ident.begin("ident", false);
-    if (ident.isKey("devid")) {
-        cached = ident.getString("devid");
+    Preferences p;
+    p.begin(NS, false);   // writable: read-only logs NOT_FOUND on a fresh board
+    if (p.isKey("devid")) {
+        cached = p.getString("devid");
     } else {
-        // Already on an account under the legacy ID? The token is the sign. Read
-        // it straight from NVS: this can run before netcfgLoad().
-        Preferences p;
-        p.begin(NS, false);   // writable: read-only logs NOT_FOUND on a fresh board
+        // Already on an account under the legacy ID? The token is the sign.
+        // Read it straight from NVS: this can run before netcfgLoad().
         bool claimed = p.isKey("token") && p.getString("token").length() > 0;
-        p.end();
-
         char id[9];
         uint64_t mac = ESP.getEfuseMac();
         if (deviceIdUseLegacy(claimed)) deviceIdLegacy(mac, id);
         else deviceIdUnique(mac, id);
         cached = String(id);
-        ident.putString("devid", cached);
+        p.putString("devid", cached);
     }
-    ident.end();
+    p.end();
     return cached;
 }
 
