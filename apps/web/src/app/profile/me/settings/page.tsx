@@ -501,9 +501,9 @@ function AccountPageInner() {
                 Download my data
               </h2>
               <p className="text-sm text-muted mb-4 leading-relaxed">
-                Get a JSON file containing every piece of personal data paddlesnitch.com holds about you:
-                your profile, every course and trial you created, every entry you submitted. Backs your
-                right of access (UK GDPR Art. 15) and data portability (Art. 20).
+                Download everything we hold about you as a JSON file: your account, paddles and diary
+                notes, trials, courses and results, groups, and trackers. Backs your right of access
+                (UK GDPR Art. 15) and data portability (Art. 20).
               </p>
               <button
                 type="button"
@@ -520,9 +520,10 @@ function AccountPageInner() {
                 Delete my account
               </h2>
               <p className="text-sm text-muted mb-4 leading-relaxed">
-                Permanently removes your account from Cognito, every course and trial you created,
-                every entry you submitted across all trials (their leaderboards rebuild without you),
-                and clears your sign-in cookies. <strong className="text-red">This is immediate and cannot be undone.</strong> Backs
+                Deletes your account, your paddles and diary notes, the courses and trials you created,
+                your results (leaderboards update without you), your shared links and your tracker
+                recordings. Your trackers are unlinked and Strava is disconnected. A group you own passes
+                to one of its admins or members. <strong className="text-red">This happens at once and can&apos;t be undone.</strong> Backs
                 your right to erasure (UK GDPR Art. 17).
               </p>
 

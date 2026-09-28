@@ -4,6 +4,11 @@ import { getAuthUser, clearAuthCookies } from '@/lib/auth'
 import { getJson, listKeys, deleteObject } from '@/lib/storage'
 import { deleteUser, revoke } from '@/lib/cognito'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
+import { removeUserFromAllGroups } from '@/lib/groups'
+import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
+import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
+import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
+import { eraseUserDevices } from '@paddlesnitch/core/devices'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
 // GDPR Art. 17 (right to erasure). Permanently removes:
@@ -11,6 +16,11 @@ import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 //   - every course they own and every trial that runs on those courses
 //   - every entry they ever submitted, in any trial, owned or not
 //   - every failed-upload diagnostic (GPS track) they left, in any trial
+//   - every paddle, the coach profile, and the share link of any shared paddle
+//   - every tracker they own (signed out) and every recording they uploaded
+//   - their Strava link (deauthorised, and the athlete -> account index)
+//   - their place in groups; a group they own passes to an admin or member
+//   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent.
 export async function DELETE() {
@@ -70,6 +80,24 @@ export async function DELETE() {
   // 6. Delete owned course metadata.
   for (const courseId of ownedCourseIds) {
     await deleteObject(`courses/${courseId}/metadata.json`)
+  }
+
+  // 6a. Paddles, trackers, groups, Strava. These live outside users/{userId}/,
+  //     so the prefix wipe below never reached them (GDPR gap until 2026-09).
+  //     Strava goes before the users/ wipe because the tokens live there.
+  await eraseUserAnalysis(user.id)
+  await eraseUserDevices(user.id)
+  await removeUserFromAllGroups(user.id)
+  const strava = await getStravaTokens(user.id)
+  if (strava) await revokeStrava(strava.accessToken)
+  // A Strava sign-in account may have no tokens left, but its synthetic email
+  // still names the athlete.
+  const athleteIds = new Set<number>()
+  if (strava?.athleteId) athleteIds.add(strava.athleteId)
+  const synthetic = /^strava-(\d+)@noreply\.paddlesnitch\.com$/.exec(user.email)
+  if (synthetic) athleteIds.add(Number(synthetic[1]))
+  for (const id of athleteIds) {
+    if ((await getUserIdByAthleteId(id)) === user.id) await deleteAthleteIndex(id)
   }
 
   // 6b. Release a claimed vanity handle (the usernames/{slug} index lives
