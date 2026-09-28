@@ -57,14 +57,14 @@ export default function BetaSignupForm() {
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+    <form onSubmit={submit} className="flex flex-col gap-4">
       <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
         <label>Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
       </div>
 
       <label className="flex flex-col gap-1">
         <span className={label}>Name</span>
-        <input required value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} className={field} />
+        <input required autoFocus value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} className={field} />
       </label>
       <label className="flex flex-col gap-1">
         <span className={label}>Email</span>
@@ -85,16 +85,16 @@ export default function BetaSignupForm() {
         </select>
       </label>
 
-      {error && <p className="md:col-span-2 border border-red bg-red/10 px-3 py-2 text-red text-xs" role="alert">{error}</p>}
+      {error && <p className="border border-red bg-red/10 px-3 py-2 text-red text-xs" role="alert">{error}</p>}
 
-      <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+      <div className="flex flex-col gap-3">
         <p className="text-xs text-muted">
           We’ll be in touch. We only use this to choose and contact beta testers.{' '}
           <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
         </p>
         <button type="submit" disabled={status === 'sending'}
-          className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">
-          {status === 'sending' ? 'SENDING…' : 'APPLY TO TEST'}
+          className="w-full px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">
+          {status === 'sending' ? 'SENDING…' : 'SIGN ME UP'}
         </button>
       </div>
     </form>

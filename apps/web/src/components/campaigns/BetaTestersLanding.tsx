@@ -1,7 +1,7 @@
-import BetaSignupForm from './BetaSignupForm'
+import BetaApplyModal from './BetaApplyModal'
 
 // The ?campaign=betatesters landing: the tracker video playing behind square
-// message boxes, then the application form.
+// message boxes, and a CLICK TO SNITCH button that opens the form in a pop-up.
 //
 // The video is muted, looped and inline (required for autoplay on phones). With
 // reduced motion the video is hidden and the poster frame shows instead.
@@ -63,9 +63,8 @@ export default function BetaTestersLanding() {
           ))}
         </div>
 
-        <div id="apply" className="border border-border bg-bg/85 backdrop-blur-sm p-6">
-          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">Apply to be a beta tester</h2>
-          <BetaSignupForm />
+        <div className="flex justify-center pt-4">
+          <BetaApplyModal />
         </div>
       </div>
     </section>

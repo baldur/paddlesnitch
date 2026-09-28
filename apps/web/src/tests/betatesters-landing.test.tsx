@@ -41,12 +41,10 @@ describe('beta testers landing', () => {
     expect((html.match(/md:aspect-square/g) ?? []).length).toBe(3)
   })
 
-  it('has a short application form: no note box, no tick box, and says we will be in touch', () => {
-    expect(html).toContain('APPLY TO TEST')
-    expect(html).not.toContain('<textarea')
-    expect(html).not.toContain('type="checkbox"')
-    expect(html).toContain('be in touch')
-    expect(html).toContain('href="/att/privacy"')
+  it('shows a CLICK TO SNITCH button, with the form kept in a pop-up until it is pressed', () => {
+    expect(html).toContain('CLICK TO SNITCH')
+    expect(html).not.toContain('<form')
+    expect(html).not.toContain('role="dialog"')
   })
 })
 
