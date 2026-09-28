@@ -136,6 +136,17 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Every version shows its note on the tracker once, after it updates. A
+      # note left over from the previous version would describe the wrong change.
+      - name: Refuse a new version without a new release note
+        run: |
+          bash .github/scripts/firmware-notes.test.sh
+          if ! git diff --quiet HEAD^ HEAD -- firmware/VERSION && git diff --quiet HEAD^ HEAD -- firmware/NOTES; then
+            echo "::error::firmware/VERSION changed but firmware/NOTES did not. Write what changed, for the person holding the tracker."
+            exit 1
+          fi
+          bash .github/scripts/firmware-notes.sh firmware/NOTES
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -166,7 +177,7 @@ jobs:
           test -f "$BIN" || { echo "no firmware.bin at $BIN"; exit 1; }
           SHA="$(sha256sum "$BIN" | cut -d' ' -f1)"
           SIZE="$(stat -c%s "$BIN")"
-          NOTES="$(git log -1 --pretty=%s)"
+          NOTES="$(bash ../.github/scripts/firmware-notes.sh NOTES)"
           jq -n --arg v "${{ steps.v.outputs.version }}" --arg s "$SHA" \
                 --argjson n "$SIZE" --arg notes "$NOTES" \
                 --arg built "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sha "$GITHUB_SHA" \

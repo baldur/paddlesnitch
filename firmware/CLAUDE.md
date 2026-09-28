@@ -418,6 +418,15 @@ behaviour changes, and with OTA a stale version means a device never updates or
 updates in a loop. The release workflow fails a build where `firmware/src`
 changed and `VERSION` did not.
 
+**Every version bump also needs `firmware/NOTES`**: one line, shown once on the
+tracker's "Updated to X" screen. Write it for the person holding the tracker
+("Setup screen shows the WiFi QR again"), not as a commit title. It has to fit two
+rows of 25 characters in plain ASCII, wrapped at a space the way `drawOtaUpdated`
+wraps it. `.github/scripts/firmware-notes.sh` checks this (tests in the sibling
+`.test.sh`), and the release fails if VERSION moved and NOTES did not. The note
+used to be the last commit's subject, and a merge commit put "Merge pull request
+#295 from baldur/…" on the trackers' screens.
+
 Serial commands (tracker env): `HELP`, `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
 `PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`,
 `DBG` / `DBG CLEAR`, `QRDUMP <text>`.
