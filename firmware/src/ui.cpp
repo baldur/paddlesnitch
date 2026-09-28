@@ -154,7 +154,7 @@ static void drawTracker(const UiState &s)
         display.setFont(u8g2_font_6x10_tf);
         display.drawStr(0, 52, "HOLD to stop");
         display.setFont(u8g2_font_5x8_tf);
-        display.drawStr(0, 62, "double-tap or wait = keep going");
+        display.drawStr(0, 62, "double-tap = keep going");
         display.sendBuffer();
         return;
     }
@@ -391,7 +391,7 @@ static void drawNetwork(const UiState &s)
     if (s.net.up)                    snprintf(l, sizeof(l), "%s  %d dBm", s.net.ip.c_str(), s.net.rssi);
     else if (!s.net.ssid.length())   snprintf(l, sizeof(l), "hold to choose a network");
     else if (s.net.everConnected)    snprintf(l, sizeof(l), "idle - connects to sync");
-    else                             snprintf(l, sizeof(l), "never connected - check pass");
+    else                             snprintf(l, sizeof(l), "never joined - check pass");
     display.drawStr(0, 38, l);
     display.drawStr(0, 50, "CHANGE NETWORK");
     // (no gesture hint -- see drawTutorial)
@@ -450,7 +450,7 @@ static void drawResetConfirm(const UiState &s)
     display.drawStr(0, 12, "Factory reset?");
     display.drawHLine(0, 15, 128);
     display.setFont(u8g2_font_5x8_tf);
-    display.drawStr(0, 27, "clears wifi + account link");
+    display.drawStr(0, 27, "clears wifi, account link");
     display.drawStr(0, 37, "KEEPS paddles on the card");
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 53, "HOLD to reset");
@@ -613,7 +613,7 @@ static void drawOtaProgress(const UiState &s)
 
     // Says the two things a person standing over it needs: do not unplug, and
     // the buttons are not broken, they are ignored.
-    display.drawStr(0, 63, "keep power on - buttons off");
+    display.drawStr(0, 63, "keep powered, buttons off");
     display.sendBuffer();
 }
 
