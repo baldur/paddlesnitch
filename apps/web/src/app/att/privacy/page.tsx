@@ -40,7 +40,7 @@ export default function PrivacyPolicy() {
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. If you sign in with Strava, which doesn&apos;t share your email, you can add a contact email.</li>
             <li><strong>Public profile</strong>: off unless you turn it on, plus the profile handle if you pick one.</li>
-            <li><strong>Time-trial results</strong>: the GPS file you upload (GPX, FIT, TCX, CSV or a .zip), and your time, 500 m splits, average stroke rate, boat class and crew names.</li>
+            <li><strong>Time-trial results</strong>: the track from the GPS file you upload (times, positions and stroke rate; we don&apos;t keep the file itself), and your time, 500 m splits, average stroke rate, boat class and crew names.</li>
             <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, Strava, a time trial or a tracker): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
             <li><strong>Trackers</strong>: if you link a paddlesnitch tracker, the recordings it uploads (GPS positions and motion data), and its ID, software version and when it last synced.</li>
             <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
