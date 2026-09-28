@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
+import { fetchPublicFile } from '@/lib/fetch-public-file'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { trackToCsv } from '@paddlesnitch/timing/csv'
 import { parseTrace, parseFailureMessage } from '@/lib/parse'
@@ -287,27 +288,19 @@ export async function POST(
       )
     }
 
-    let fetchRes: Response
-    try {
-      fetchRes = await fetch(resolvedUrl, {
-        headers: { 'User-Agent': 'ATTS/1.0 (paddlesnitch.com)' },
-      })
-    } catch {
+    // https only, public hosts only, no redirects, 10 s, 10 MB (fetch-public-file.ts).
+    const fetched = await fetchPublicFile(resolvedUrl, 10 * 1024 * 1024)
+    if ('error' in fetched) {
       return NextResponse.json(
-        { error: 'Couldn’t fetch that activity. Make sure it’s public.' },
+        {
+          error: fetched.error === 'too_large'
+            ? 'That file is too large. Download it and upload the file instead.'
+            : 'Couldn’t fetch that activity. Use a public https link, or download it and upload the file.',
+        },
         { status: 422 }
       )
     }
-
-    if (!fetchRes.ok) {
-      return NextResponse.json(
-        { error: 'Couldn’t fetch that activity. Make sure it’s public.' },
-        { status: 422 }
-      )
-    }
-
-    const arrayBuffer = await fetchRes.arrayBuffer()
-    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass, crew, trial.date)
+    return processBuffer(fetched.data, 'activity.gpx', course, user, trialId, boatClass, crew, trial.date)
   }
 
   // File upload (multipart/form-data)
