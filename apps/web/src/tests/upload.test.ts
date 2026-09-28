@@ -5,7 +5,8 @@ import {
   makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial,
   makeGpxBuffer, makeTestTrack,
 } from './helpers'
-import { listKeys, getJson } from '@/lib/storage'
+import { listKeys, getJson, getObject } from '@/lib/storage'
+import { loadTrialEntryTrack } from '@paddlesnitch/analysis/trials'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -59,6 +60,36 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const body = await res.json()
     expect(body.result.totalElapsedSeconds).toBeGreaterThan(0)
     expect(body.entryId).toBeTruthy()
+  })
+
+  // Privacy audit 2026-09: the privacy page says heart rate is never stored, but
+  // the original file was kept byte for byte, heart rate and device serials
+  // included. Only the parsed track (time, position, stroke rate) is kept now.
+  it('stores no heart rate: the kept trace is the parsed track, not the uploaded file', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const withHr = new TextDecoder().decode(makeGpxBuffer(makeTestTrack())).replace(
+      /<\/time><\/trkpt>/g,
+      '</time><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>152</gpxtpx:hr><gpxtpx:cad>61</gpxtpx:cad></gpxtpx:TrackPointExtension></extensions></trkpt>',
+    )
+    const file = new File([withHr], 'activity.gpx', { type: 'application/gpx+xml' })
+    const res = await upload(uploadReq(trial.id, file), { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).toBe(201)
+    const { entryId } = await res.json()
+
+    const keys = (await listKeys(`trials/${trial.id}/entries/${user.id}/${entryId}/`)).filter(k => k.includes('/trace.'))
+    expect(keys.map(k => k.split('/').pop())).toEqual(['trace.csv'])
+    const stored = (await getObject(keys[0]))!.toString()
+    expect(stored).not.toMatch(/hr|heart|152/i)
+    expect(stored.split('\n')[0]).toBe('timestamp,lat,lon,strokerate')
+
+    // Analyse can still load it, stroke rate included.
+    const track = await loadTrialEntryTrack(user.id, trial.id, entryId)
+    expect(track?.length).toBe(makeTestTrack().length)
+    expect(track?.[0].strokeRate).toBe(61)
   })
 
   it('result appears on the leaderboard after upload', async () => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
+import { trackToCsv } from '@paddlesnitch/timing/csv'
 import { parseTrace, parseFailureMessage } from '@/lib/parse'
 import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint } from '@/lib/geo'
 import { captureConditions } from '@/lib/conditions'
@@ -162,7 +163,12 @@ async function processTrack(
   const ext = filename.split('.').pop()?.toLowerCase() ?? 'bin'
   const basePath = `trials/${trialId}/entries/${user.id}/${entryId}`
 
-  await putObject(`${basePath}/trace.${ext}`, rawBlob)
+  // Keep the PARSED track, never the uploaded file: GPX/FIT/TCX exports carry
+  // heart rate and device serials, and the privacy page promises heart rate is
+  // never stored. A Strava import's snapshot (latlng + time only) is already
+  // just that, so it is kept as is.
+  if (ext === 'json') await putObject(`${basePath}/trace.json`, rawBlob)
+  else await putObject(`${basePath}/trace.csv`, trackToCsv(track))
 
   // Best-effort weather + river-flow snapshot at the finish time and the course
   // location (start-line midpoint). Never let a conditions failure affect the

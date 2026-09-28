@@ -59,3 +59,15 @@ export function parseCsv(text: string): TrackPoint[] {
 
   return points
 }
+
+// A track as the CSV parseCsv reads back: time, position, stroke rate, nothing
+// else. This is what a time-trial entry keeps instead of the uploaded file,
+// which can carry heart rate and device serial numbers the privacy page
+// promises we never store.
+export function trackToCsv(track: TrackPoint[]): string {
+  const rows = ['timestamp,lat,lon,strokerate']
+  for (const p of track) {
+    rows.push(`${p.timestamp.toISOString()},${p.lat},${p.lng},${p.strokeRate ?? ''}`)
+  }
+  return rows.join('\n') + '\n'
+}
