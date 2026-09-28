@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { authorizeUrl } from '@/lib/strava'
-import { canonicalBaseUrl } from '@/lib/url'
+import { canonicalBaseUrl, safeNext } from '@/lib/url'
 import { getAuthUser } from '@/lib/auth'
 
 // Sign in with Strava. Differs from /att/api/strava/connect (which requires
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const base = canonicalBaseUrl(req)
   // Preserve the `next` query param so we can bounce the user back to where
   // they were trying to go after sign-in.
-  const next = req.nextUrl.searchParams.get('next') ?? '/'
+  const next = safeNext(req.nextUrl.searchParams.get('next'))
 
   // If the visitor is already signed in, the Strava OAuth round-trip is
   // useless and prone to failure (an expired or single-use authorization
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   // connect button on /account, which has its own flow.
   const existingUser = await getAuthUser()
   if (existingUser) {
-    return NextResponse.redirect(new URL(next.startsWith('/') ? next : '/', base))
+    return NextResponse.redirect(new URL(next, base))
   }
 
   const state = randomBytes(24).toString('hex')

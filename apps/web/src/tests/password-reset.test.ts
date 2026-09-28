@@ -45,6 +45,15 @@ describe('POST /att/api/auth/password-reset/request', () => {
     expect(res.status).toBe(400)
   })
 
+  it('stops emailing reset codes to one address after 5 in an hour, without saying so', async () => {
+    const spy = vi.spyOn(cognito, 'forgotPassword').mockResolvedValue({ ok: true })
+    for (let i = 0; i < 7; i++) {
+      const res = await requestReset(jsonReq('http://x', { email: 'someone@example.com' }))
+      expect(res.status).toBe(200)   // same answer as ever: no signal about the account or the limit
+    }
+    expect(spy).toHaveBeenCalledTimes(5)
+  })
+
   it('drops a bot submission (populated honeypot) without emailing a code', async () => {
     const user = await makeUser()
     // Deterministic: assert forgotPassword was never invoked, rather than

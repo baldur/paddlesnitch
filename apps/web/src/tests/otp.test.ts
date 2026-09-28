@@ -49,6 +49,18 @@ function jsonReq(body: Record<string, unknown>) {
 }
 
 describe('POST /att/api/auth/otp-request', () => {
+  // Security audit 2026-09: each request emails a code (and can create an
+  // account), so one address could be flooded and SES billed at will.
+  it('stops emailing one address after 5 codes in an hour', async () => {
+    vi.mocked(cognito.otpRequest).mockResolvedValue({ session: 's' })
+    for (let i = 0; i < 5; i++) expect((await otpRequest(jsonReq({ email: 'Victim@Example.com' }))).status).toBe(200)
+    const sixth = await otpRequest(jsonReq({ email: 'victim@example.com' }))
+    expect(sixth.status).toBe(429)
+    expect(cognito.otpRequest).toHaveBeenCalledTimes(5)
+    // A different address is unaffected.
+    expect((await otpRequest(jsonReq({ email: 'other@example.com' }))).status).toBe(200)
+  })
+
   it('returns the session token from cognito on success', async () => {
     vi.mocked(cognito.otpRequest).mockResolvedValue({ session: 'sess-abc' })
     const res = await otpRequest(jsonReq({ email: 'alice@example.com' }))
