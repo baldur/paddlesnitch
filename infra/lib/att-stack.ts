@@ -39,7 +39,20 @@ export class AttStack extends cdk.Stack {
           // baldur=759, paddlesnitch=1254392477. We trust the immutable form
           // (what the runner actually presents) and keep the plain form too, so
           // this still works if GitHub ever reverts to plain subjects.
+          //
+          // MOVING TO THE `production` ENVIRONMENT (security audit 2026-09).
+          // `ref:refs/heads/main` is presented by EVERY workflow that runs on
+          // main -- including the Claude intake/fast-loop jobs, which run on
+          // anonymous public issues with Bash and id-token: write. So a
+          // prompt-injected issue could mint this role (AdministratorAccess).
+          // A job only presents `environment:production` if it declares that
+          // environment, and only deploy.yml / firmware-release.yml do.
+          // Step 1 (this change): trust both. Step 2: the workflows declare the
+          // environment and the ref:main subjects are removed. Two steps
+          // because the deploy that changes this trust runs under the old one.
           'token.actions.githubusercontent.com:sub': [
+            'repo:baldur@759/paddlesnitch@1254392477:environment:production',
+            'repo:baldur/paddlesnitch:environment:production',
             'repo:baldur@759/paddlesnitch@1254392477:ref:refs/heads/main',
             'repo:baldur/paddlesnitch:ref:refs/heads/main',
           ],
