@@ -5,8 +5,9 @@ import BetaApplyModal from './BetaApplyModal'
 export type Slide = { title: string; body: string; image?: { src: string; alt: string } }
 
 // One message at a time, flipped with the arrows at the sides, the dots, the
-// keyboard arrow keys, or a swipe. Every slide is in the HTML (inactive ones are
-// `hidden`), so the page reads fine without JavaScript and to search engines.
+// keyboard arrow keys, or a swipe. Every slide is in the HTML, stacked in one
+// grid cell, so the frame is always as tall as the tallest card and the dots and
+// button never jump as you flip. Inactive cards are invisible and inert.
 // On the last slide the CLICK TO SNITCH button starts bouncing.
 export default function BetaSlides({ slides }: { slides: Slide[] }) {
   const [i, setI] = useState(0)
@@ -31,32 +32,37 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="relative flex items-center sm:gap-3 w-full max-w-xl">
+      <div
+        className="relative flex items-center sm:gap-3 w-full max-w-xl"
+        // Swipes are caught on the whole card area, arrows included: on a phone
+        // the arrows sit over the card's edges, where a swipe often starts.
+        onTouchStart={e => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
+        onTouchEnd={e => {
+          const start = touchStart.current
+          touchStart.current = null
+          if (!start) return
+          const dx = e.changedTouches[0].clientX - start.x
+          const dy = e.changedTouches[0].clientY - start.y
+          // Only a mainly-sideways swipe flips; a page scroll that drifts
+          // sideways must not.
+          if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+          go(dx < 0 ? i + 1 : i - 1)
+        }}
+      >
         <button type="button" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous" className={`${arrow} left-1`}>←</button>
 
         <div
-          className="flex-1"
+          className="flex-1 grid"
           aria-roledescription="carousel"
-          onTouchStart={e => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
-          onTouchEnd={e => {
-            const start = touchStart.current
-            touchStart.current = null
-            if (!start) return
-            const dx = e.changedTouches[0].clientX - start.x
-            const dy = e.changedTouches[0].clientY - start.y
-            // Only a mainly-sideways swipe flips; a page scroll that drifts
-            // sideways must not.
-            if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
-            go(dx < 0 ? i + 1 : i - 1)
-          }}
         >
           {slides.map((s, n) => (
             <article
               key={s.title}
-              hidden={n !== i}
+              aria-hidden={n !== i}
+              inert={n !== i}
               aria-roledescription="slide"
               aria-label={`${n + 1} of ${slides.length}`}
-              className={`sm:aspect-square border bg-bg/80 backdrop-blur-sm px-14 py-8 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
+              className={`[grid-area:1/1] ${n === i ? '' : 'invisible'} sm:aspect-square border bg-bg/80 backdrop-blur-sm px-14 py-8 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
             >
               {n === 0
                 ? <h1 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h1>

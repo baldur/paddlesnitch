@@ -28,13 +28,21 @@ async function mount() {
   root = createRoot(container)
   await act(async () => { root.render(<BetaSlides slides={SLIDES} />) })
 }
-const visible = () => [...container.querySelectorAll('article')].filter(a => !a.hidden).map(a => a.querySelector('h1,h2')!.textContent)
+const visible = () => [...container.querySelectorAll('article')].filter(a => a.getAttribute('aria-hidden') !== 'true').map(a => a.querySelector('h1,h2')!.textContent)
 const btn = (label: string) => container.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement
 const snitch = () => [...container.querySelectorAll('button')].find(b => b.textContent === 'CLICK TO SNITCH')!
 const click = (b: HTMLElement) => act(async () => { b.click() })
 const key = (k: string) => act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: k })) })
 
 describe('beta testers carousel', () => {
+  it('keeps inactive cards invisible and inert, stacked in one cell so the frame never changes height', async () => {
+    await mount()
+    const cards = [...container.querySelectorAll('article')]
+    expect(cards.every(c => c.className.includes('[grid-area:1/1]'))).toBe(true)
+    expect(cards.filter(c => c.className.includes('invisible'))).toHaveLength(2)
+    expect(cards.filter(c => c.hasAttribute('inert'))).toHaveLength(2)
+  })
+
   it('starts on the first card with Previous disabled', async () => {
     await mount()
     expect(visible()).toEqual(['First'])
@@ -74,6 +82,16 @@ describe('beta testers carousel', () => {
     expect(visible()).toEqual(['Second'])
     await act(async () => { touch('touchstart', 100); touch('touchend', 300) })
     expect(visible()).toEqual(['First'])
+    // A swipe that starts on an arrow (they sit over the card's edges on a
+    // phone) still flips.
+    const fromArrow = (type: string, x: number) => {
+      const e = new Event(type, { bubbles: true }) as Event & Record<string, unknown>
+      e[type === 'touchstart' ? 'touches' : 'changedTouches'] = [{ clientX: x, clientY: 0 }]
+      btn('Next').dispatchEvent(e)
+    }
+    await act(async () => { fromArrow('touchstart', 350); fromArrow('touchend', 120) })
+    expect(visible()).toEqual(['Second'])
+    await click(btn('Previous'))
     // A page scroll that drifts sideways (mostly vertical) must not flip.
     await act(async () => { touch('touchstart', 200, 500); touch('touchend', 140, 200) })
     expect(visible()).toEqual(['First'])
@@ -90,7 +108,7 @@ describe('beta testers carousel', () => {
 
   it('shows a down arrow at the bottom of the last card only, pointing at the button', async () => {
     await mount()
-    const arrow = () => [...container.querySelectorAll('[data-testid="down-arrow"]')].filter(el => !el.closest('article')!.hidden)
+    const arrow = () => [...container.querySelectorAll('[data-testid="down-arrow"]')].filter(el => el.closest('article')!.getAttribute('aria-hidden') !== 'true')
     expect(arrow()).toHaveLength(0)
     await click(btn('Show 3 of 3'))
     expect(arrow()).toHaveLength(1)

@@ -47,15 +47,17 @@ describe('beta testers landing', () => {
 
   it('shows one card at a time: all four are in the page, only the first is visible', () => {
     expect((html.match(/aria-roledescription="slide"/g) ?? []).length).toBe(4)
-    expect((html.match(/<article hidden=""/g) ?? []).length).toBe(3)
+    expect((html.match(/aria-hidden="true" inert=""/g) ?? []).length).toBe(3)
     expect(html).toContain('aria-label="Previous"')
     expect(html).toContain('aria-label="Next"')
   })
 
-  it('has a "what you get" card with an example screenshot, and says the product keeps changing', () => {
-    expect(html).toContain('Here’s what you get')
+  it('has a "what the snitch tells you" card with an example screenshot, and says the product keeps changing', () => {
+    expect(html).toContain('This is what the snitch tells you')
+    expect(html).toContain('GPS watch or a stroke coach')
+    expect(html).toContain('pitches and rolls')
     expect(html).toMatch(/<img src="\/campaigns\/betatesters-what-you-get.png" alt="[^"]+"/)
-    expect(html).toContain('We keep adding and changing things as we learn from you')
+    expect(html).toContain('more as we think of things and learn')
   })
 
   it('shows a CLICK TO SNITCH button, with the form kept in a pop-up until it is pressed', () => {

@@ -13,8 +13,8 @@ const SLIDES: Slide[] = [
     body: 'A small GPS and motion tracker that records your paddle and uploads it on its own. We need paddlers to take it on the water and tell us what works and what breaks.',
   },
   {
-    title: 'Here’s what you get',
-    body: 'Every paddle you record shows up on the site: where you went, how fast, and how the boat moved under you. We keep adding and changing things as we learn from you.',
+    title: 'This is what the snitch tells you',
+    body: 'Most of what a GPS watch or a stroke coach gives you: distance, speed, pace and stroke rate. Plus how the boat pitches and rolls, and how even it sits from side to side through your outing. And more as we think of things and learn.',
     image: {
       src: '/campaigns/betatesters-what-you-get.png',
       alt: 'The tracker’s boat motion page: side-to-side roll, bow-to-stern pitch and how even the rocking was, charted across a 64-minute paddle',
