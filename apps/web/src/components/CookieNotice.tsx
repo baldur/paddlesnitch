@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'tt_cookie_acked'
 
-// One-line dismissable banner. We only set essential auth cookies (tt_id,
-// tt_refresh), no analytics or trackers, so there is nothing optional to
-// consent to — hence no Accept/Reject buttons. We still show this for
-// transparency and PECR compliance.
+// One-line dismissable banner. The only cookies are the two sign-in ones
+// (tt_id, tt_refresh). Page views are counted with a per-tab random id in
+// sessionStorage (not a cookie, not linked to an account) -- say so plainly
+// rather than deny counting anything. See the privacy page.
 export default function CookieNotice() {
   const [show, setShow] = useState(false)
 
@@ -29,7 +29,8 @@ export default function CookieNotice() {
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 border border-border bg-bg shadow-lg p-4 text-xs text-fg flex flex-col gap-3">
       <p>
-        We use essential cookies for sign-in only. No analytics, no trackers.{' '}
+        We use cookies only to keep you signed in. We count page views without cookies and
+        without linking them to you. No ads, no third-party trackers.{' '}
         <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
       </p>
       <button

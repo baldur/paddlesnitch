@@ -11,9 +11,9 @@ first.
 
 ## What file formats can I upload?
 
-GPX, FIT, and CSV files are all supported, and you can import an activity
-directly from Strava once you've connected your account. Export your activity
-from Garmin Connect, Strava, Apple Fitness, or any GPS device.
+GPX, FIT, TCX and CSV files, and a Garmin .zip export. NK SpeedCoach CSV
+files work too. You can also import an activity straight from Strava once
+you've connected it. KML files don't work: they have no timestamps.
 
 ## Why wasn't my time recorded?
 
@@ -24,10 +24,12 @@ lines so you can see what happened — usually the GPS wasn't recording through
 one of the lines, or the activity went a different way than the course
 expects.
 
-## Are heart rate and cadence stored?
+## Is my heart rate stored?
 
-No. Heart rate and cadence are intentionally discarded when your file is
-parsed, even if the source file contains them. Only position and time are kept.
+No. Heart rate is thrown away when your file is read, even if the file
+contains it. Stroke rate is kept if your file has it: it's used for your
+average stroke rate and the paddle analysis. FIT files usually include it;
+GPX exports often don't.
 
 ## Why are different boat classes on the same leaderboard?
 
@@ -74,7 +76,7 @@ organiser invited.
 
 ## How do I join a group?
 
-Open the group's page and use **Request to join** — an admin approves you —
+Open the group's page and use Request to join (an admin approves you),
 unless the group is set to open, in which case you join instantly. Admins can
 also send you an invitation by email, or share a join link that lets you join
 in one click. An invite-only group can only be joined via an admin invitation.

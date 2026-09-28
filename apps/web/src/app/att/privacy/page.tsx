@@ -22,7 +22,7 @@ export default function PrivacyPolicy() {
 
       <article className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full text-sm text-fg leading-relaxed">
         <h1 className="text-lg font-bold tracking-widest mb-2">PRIVACY POLICY</h1>
-        <p className="text-xs text-muted mb-8">Last updated: 31 May 2026</p>
+        <p className="text-xs text-muted mb-8">Last updated: 28 September 2026</p>
 
         <Section title="Who runs paddlesnitch.com">
           <p>
@@ -35,86 +35,91 @@ export default function PrivacyPolicy() {
           </p>
         </Section>
 
-        <Section title="What data we collect">
-          <p>We only collect data you give us by signing up and using the site:</p>
+        <Section title="What we collect">
+          <p>Only what you give us, or what your GPS files and tracker record:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Email address</strong> — used to sign you in.</li>
-            <li><strong>Display name</strong> — shown to other users on leaderboards.</li>
-            <li><strong>Password hash</strong> — held by Amazon Cognito; we never see your plaintext password.</li>
-            <li><strong>GPS traces you upload</strong> — the raw file (GPX, FIT, or CSV) and the derived race result (elapsed time, 500 m splits).</li>
-            <li><strong>Crew names and seat numbers</strong> — if you submit on behalf of a multi-person boat.</li>
-            <li><strong>Race date</strong> — the date you raced, as you entered it.</li>
-            <li><strong>Boat class</strong> — K1, 2X, 8+, etc.</li>
+            <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. If you sign in with Strava, which doesn&apos;t share your email, you can add a contact email.</li>
+            <li><strong>Public profile</strong>: off unless you turn it on, plus the profile handle if you pick one.</li>
+            <li><strong>Time-trial results</strong>: the GPS file you upload (GPX, FIT, TCX, CSV or a .zip), and your time, 500 m splits, average stroke rate, boat class and crew names.</li>
+            <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, Strava, a time trial or a tracker): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
+            <li><strong>Trackers</strong>: if you link a paddlesnitch tracker, the recordings it uploads (GPS positions and motion data), and its ID, software version and when it last synced.</li>
+            <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
+            <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, your recent paddles and your diary notes to an AI model on Amazon Bedrock. We keep a short written profile of your paddling to make later summaries relevant.</li>
+            <li><strong>Issue reports</strong>: what you write, the page you were on and your browser. If you&apos;re signed in, or add an email, we keep your name and email privately so we can reply.</li>
+            <li><strong>Page-view counts</strong>: which pages are opened, with a random ID that lasts until you close the tab. It isn&apos;t linked to your account.</li>
           </ul>
           <p className="mt-3">
-            <strong>Heart-rate and cadence are explicitly discarded</strong> at parse time, even if your
-            GPS file contains them. We never store, display, or transmit biometric data.
+            <strong>Heart rate is never stored</strong>, even if your GPS file contains it. Stroke rate is
+            kept, because it&apos;s part of the analysis.
           </p>
         </Section>
 
         <Section title="Why we hold this data (legal basis)">
           <p>
-            We process this data under <em>performance of a contract</em> (UK GDPR Art. 6(1)(b)): you
-            sign up to use the service, and the service cannot rank your time without knowing who you are,
-            what boat you raced in, and what your GPS trace says. We do not process your data for any
-            other purpose — no marketing, no analytics, no profiling.
+            We use your data to provide the service you signed up for: timing your races, analysing your
+            paddles and running your groups (<em>performance of a contract</em>, UK GDPR Art. 6(1)(b)). We
+            count page views and keep issue reports to find and fix problems (<em>legitimate
+            interests</em>, Art. 6(1)(f)). We don&apos;t use your data for marketing or advertising, and we
+            don&apos;t sell it.
           </p>
         </Section>
 
         <Section title="How long we keep it">
           <p>
-            We hold your data for as long as your account exists. You can delete it at any time from your{' '}
-            <Link href="/profile/me/settings" className="tt-link">account page</Link>{' '}
-            — that removes your user record, all courses and trials you created, all entries you
-            submitted, and rebuilds any affected leaderboards. The deletion is immediate and
-            irreversible.
+            We keep your data for as long as your account exists. You can delete your account at any time
+            from your{' '}
+            <Link href="/profile/me/settings" className="tt-link">account page</Link>. That deletes your
+            account, paddles, diary notes, results, shared links, tracker recordings and the courses and
+            trials you created, and disconnects Strava. It happens at once and can&apos;t be undone.
           </p>
         </Section>
 
         <Section title="Your rights">
           <p>Under UK GDPR you can:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Access</strong> a copy of your data — use the &quot;Download my data&quot; button on your account page.</li>
-            <li><strong>Erase</strong> your data — use the &quot;Delete my account&quot; button on your account page.</li>
-            <li><strong>Rectify</strong> incorrect data — email us; for display name you can also edit it in Cognito.</li>
-            <li><strong>Port</strong> your data — the export download is a machine-readable JSON file.</li>
-            <li><strong>Object</strong> or restrict processing — email us.</li>
+            <li><strong>Access</strong> a copy of your data: use &quot;Download my data&quot; on your account page.</li>
+            <li><strong>Erase</strong> your data: use &quot;Delete my account&quot; on your account page.</li>
+            <li><strong>Correct</strong> wrong data: email us.</li>
+            <li><strong>Take your data elsewhere</strong>: the download is a machine-readable JSON file.</li>
+            <li><strong>Object</strong> to or restrict how we use it: email us.</li>
             <li><strong>Complain</strong> to the Information Commissioner&apos;s Office (
               <a href="https://ico.org.uk" className="tt-link">ico.org.uk</a>
             ) if you think we&apos;ve mishandled your data.</li>
           </ul>
         </Section>
 
-        <Section title="Cookies">
-          <p>We set <strong>two</strong> cookies, both strictly necessary for signing you in:</p>
+        <Section title="Cookies and browser storage">
+          <p>We set <strong>two</strong> cookies, both needed to keep you signed in:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><code>tt_id</code> — your sign-in token (a signed JWT from Cognito). 24 hour lifetime.</li>
-            <li><code>tt_refresh</code> — used to keep you signed in across sessions. 30 day lifetime.</li>
+            <li><code>tt_id</code>: your sign-in token. Lasts 24 hours.</li>
+            <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
           </ul>
           <p className="mt-3">
-            We do not use analytics cookies, advertising cookies, or any third-party trackers. The map
-            tiles are fetched from Esri and do not receive any of your personal data.
+            Your browser also stores <code>tt_cookie_acked</code> (so this notice isn&apos;t shown twice)
+            and <code>tt_sid</code> (the random page-view ID, deleted when you close the tab). We use no
+            advertising cookies and no third-party trackers.
           </p>
         </Section>
 
-        <Section title="Third parties we share data with">
-          <p>We use a small number of processors to run the service:</p>
+        <Section title="Who else sees data">
+          <p>We use these services to run the site:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Amazon Web Services</strong> (eu-west-1, Ireland) — hosting, user pool (Cognito), and storage (S3).</li>
-            <li><strong>Amazon SES</strong> — to send transactional emails (sign-in codes, password resets) from <code>noreply@paddlesnitch.com</code>.</li>
-            <li><strong>Esri</strong> — map background tiles. Their servers see your IP and the map tile you requested; they do not see any of your account data.</li>
+            <li><strong>Amazon Web Services</strong> (eu-west-1, Ireland): hosting, sign-in (Cognito), storage (S3), email (SES, from <code>noreply@paddlesnitch.com</code>) and the AI model that writes paddle summaries (Bedrock). Bedrock doesn&apos;t use your data to train models.</li>
+            <li><strong>Strava</strong> (USA): only if you connect it. We read your activities; we never post.</li>
+            <li><strong>Open-Meteo</strong> and the <strong>Environment Agency</strong>: we send them a location and a time to look up the wind and river flow for a paddle. Nothing that identifies you.</li>
+            <li><strong>GitHub</strong> (USA): issue reports are filed there, and <strong>the text you write is public</strong>. Your name and email are not sent.</li>
+            <li><strong>Esri</strong> and <strong>unpkg</strong>: your browser loads map tiles and map icons from them, so they see your IP address. They don&apos;t see your account.</li>
           </ul>
           <p className="mt-3">
-            We do not sell your data, share it with advertisers, or transfer it outside the European
-            Economic Area.
+            Strava and GitHub are in the USA. Everything else we store stays in the EU.
           </p>
         </Section>
 
         <Section title="Changes to this policy">
           <p>
-            If we change how we handle your data we&apos;ll update this page and bump the &quot;last updated&quot;
-            date at the top. For significant changes (new categories of data, new processors) we&apos;ll
-            email registered users before the change takes effect.
+            If we change how we handle your data we&apos;ll update this page and the &quot;last updated&quot;
+            date at the top. For significant changes (new kinds of data, new services) we&apos;ll email
+            registered users before the change takes effect.
           </p>
         </Section>
 
