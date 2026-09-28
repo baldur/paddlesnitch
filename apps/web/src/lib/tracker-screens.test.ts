@@ -20,6 +20,19 @@ describe('tracker screen drawings', () => {
     for (const frag of literalFragments(text)) expect(source, frag).toContain(frag)
   })
 
+  // The panel is 128 px. In the fixed-width fonts a character is 5 (s) or 6 (m)
+  // px, less the last glyph's blank column. Four lines of firmware text once ran
+  // off the edge (the Stop? screen read "...keep g"); drawing them here now
+  // fails instead.
+  it.each(Object.entries(SCREENS).flatMap(([name, s]) => s.els.flatMap(e =>
+    'text' in e && (e.font === 's' || e.font === 'm') ? [[name, e] as const] : [])))(
+    '%s: every line fits the 128 px screen', (_name, e) => {
+      const w = shown(e.text).length * (e.font === 's' ? 5 : 6) - 1
+      const left = e.align === 'right' ? e.x - w : e.align === 'center' ? e.x - w / 2 : e.x
+      expect(left, e.text).toBeGreaterThanOrEqual(0)
+      expect(left + w, e.text).toBeLessThanOrEqual(128)
+    })
+
   it('splits example values from the fixed text', () => {
     expect(literalFragments('on device ‹3›')).toEqual(['on device'])
     expect(literalFragments('‹K7P2QM›')).toEqual([])
