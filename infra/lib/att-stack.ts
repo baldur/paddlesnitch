@@ -699,6 +699,27 @@ export class AttStack extends cdk.Stack {
       }),
     )
 
+    // Marketing campaigns (?campaign=<id> landings): visits → button clicks →
+    // sign-ups, one row per campaign + step. `pageview` rows are visits that
+    // arrived on a campaign link, `campaign_cta` the main button, and
+    // `campaign_signup` saved applications (server-side; `repeat` = "true"
+    // is someone updating theirs). Visitors = distinct browser tabs; the
+    // server-side sign-up has none.
+    dashboard.addWidgets(
+      new cloudwatch.LogQueryWidget({
+        title: 'Campaigns: visits → button clicks → sign-ups',
+        logGroupNames: [serverLogGroup],
+        view: cloudwatch.LogQueryVisualizationType.TABLE,
+        queryLines: [
+          'filter ispresent(campaign)',
+          'stats count(*) as events, count_distinct(sid) as visitors by campaign, Event, repeat',
+          'sort campaign asc, events desc',
+        ],
+        width: 24,
+        height: 6,
+      }),
+    )
+
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'Server Lambda — invocations & errors / hour',

@@ -7,6 +7,9 @@ vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>,
 }))
 
+vi.mock('@/lib/analytics', () => ({ capture: vi.fn() }))
+
+import { capture } from '@/lib/analytics'
 import BetaApplyModal from './BetaApplyModal'
 
 let container: HTMLDivElement
@@ -32,6 +35,14 @@ describe('beta tester application pop-up', () => {
     await openIt()
     expect(dialog()).not.toBeNull()
     expect(dialog()!.querySelector('form')).not.toBeNull()
+  })
+
+  it('counts the CLICK TO SNITCH press for the campaign dashboard', async () => {
+    vi.mocked(capture).mockClear()
+    await mount()
+    expect(capture).not.toHaveBeenCalled()
+    await openIt()
+    expect(capture).toHaveBeenCalledWith('campaign_cta', { campaign: 'betatesters' })
   })
 
   it('shows no heading, but keeps a label for screen readers', async () => {

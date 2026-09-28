@@ -4,9 +4,11 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 vi.mock('@/lib/email', () => ({ sendEmail: vi.fn(async () => true) }))
+vi.mock('@/lib/metrics', () => ({ emitMetric: vi.fn() }))
 
 import { cookies } from 'next/headers'
 import { sendEmail } from '@/lib/email'
+import { emitMetric } from '@/lib/metrics'
 import { POST as apply } from '@/app/api/beta-signup/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as exportData } from '@/app/api/account/export/route'
@@ -14,7 +16,7 @@ import { listKeys } from '@/lib/storage'
 import { getBetaApplication } from '@/lib/beta-signups'
 
 let dataDir: string
-beforeEach(async () => { dataDir = await makeDataDir(); vi.mocked(sendEmail).mockClear() })
+beforeEach(async () => { dataDir = await makeDataDir(); vi.mocked(sendEmail).mockClear(); vi.mocked(emitMetric).mockClear() })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
 const good = {
@@ -24,6 +26,19 @@ const good = {
 const post = (body: object) => apply(new Request('http://x/api/beta-signup', { method: 'POST', body: JSON.stringify(body) }))
 
 describe('POST /api/beta-signup', () => {
+  it('counts a sign-up for the campaign dashboard', async () => {
+    await post(good)
+    expect(emitMetric).toHaveBeenCalledWith('campaign_signup', { campaign: 'betatesters', repeat: 'false' })
+    await post(good)
+    expect(emitMetric).toHaveBeenLastCalledWith('campaign_signup', { campaign: 'betatesters', repeat: 'true' })
+  })
+
+  it('does not count a bot or an invalid application as a sign-up', async () => {
+    await post({ ...good, website: 'http://spam' })
+    await post({ ...good, email: 'nope' })
+    expect(emitMetric).not.toHaveBeenCalled()
+  })
+
   it('saves an application and emails a notification', async () => {
     const res = await post(good)
     expect(res.status).toBe(200)

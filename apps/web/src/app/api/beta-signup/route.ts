@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { looksLikeBot } from '@/lib/anti-bot'
 import { parseBetaApplication, saveBetaApplication } from '@/lib/beta-signups'
 import { sendEmail } from '@/lib/email'
+import { emitMetric } from '@/lib/metrics'
 
 // Beta tester applications from the ?campaign=betatesters landing. Public:
 // the applicant usually has no account. Outside /att/api and /api/account, so
@@ -25,6 +26,9 @@ export async function POST(req: Request) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
   const { record: saved, repeat } = await saveBetaApplication(parsed.app)
+  // Server-side, so it can't be spoofed and bots never reach it. `repeat`
+  // separates new applicants from people updating theirs.
+  emitMetric('campaign_signup', { campaign: 'betatesters', repeat: String(repeat) })
 
   // Best effort: the application is saved, so a failed notification must not
   // turn into an error for the applicant.
