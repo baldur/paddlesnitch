@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import BetaApplyModal from './BetaApplyModal'
 
-export type Slide = { title: string; body: string }
+export type Slide = { title: string; body: string; image?: { src: string; alt: string } }
 
 // One message at a time, flipped with the arrows at the sides, the dots, the
 // keyboard arrow keys, or a swipe. Every slide is in the HTML (inactive ones are
@@ -61,6 +61,10 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
               {n === 0
                 ? <h1 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h1>
                 : <h2 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h2>}
+              {s.image && (
+                // eslint-disable-next-line @next/next/no-img-element -- a static public/ file; next/image adds nothing here
+                <img src={s.image.src} alt={s.image.alt} loading="lazy" className="w-full border border-border" />
+              )}
               <p className="text-sm sm:text-base text-muted leading-relaxed">{s.body}</p>
               {n === last && (
                 // Points from the last message down to the (now bouncing) button.

@@ -13,6 +13,14 @@ const SLIDES: Slide[] = [
     body: 'A small GPS and motion tracker that records your paddle and uploads it on its own. We need paddlers to take it on the water and tell us what works and what breaks.',
   },
   {
+    title: 'Here’s what you get',
+    body: 'Every paddle you record shows up on the site: where you went, how fast, and how the boat moved under you. We keep adding and changing things as we learn from you.',
+    image: {
+      src: '/campaigns/betatesters-what-you-get.png',
+      alt: 'The tracker’s boat motion page: side-to-side roll, bow-to-stern pitch and how even the rocking was, charted across a 64-minute paddle',
+    },
+  },
+  {
     title: 'You get out on the water',
     body: 'You kayak, canoe, row or paddleboard, and you go out regularly. You answer a few questions each week, and spend up to 60 minutes with me going through how it went. In return, you keep the tracker, a £60 value.',
   },
