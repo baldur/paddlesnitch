@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import AccountNav from '@paddlesnitch/ui/AccountNav'
 
-// MY DEVICES is conditional on the viewer owning a tracker — the dropdown is on
+// The DEVICES row appears when devicesHref is given — the dropdown is on
 // every page, and a permanent row would send the large majority of people to a
 // page with nothing on it. The adapters decide; AccountNav just honours the prop.
 
@@ -39,25 +39,25 @@ const nav = (extra: Record<string, unknown> = {}) => (
   />
 )
 
-describe('AccountNav — MY DEVICES', () => {
-  it('shows a MY DEVICES link when devicesHref is given', async () => {
-    const menu = await openMenu(nav({ devicesHref: '/profile/me/devices' }))
-    const link = [...menu.querySelectorAll('a')].find(a => a.textContent === 'MY DEVICES')
+describe('AccountNav — DEVICES', () => {
+  it('shows a DEVICES link when devicesHref is given', async () => {
+    const menu = await openMenu(nav({ devicesHref: '/devices' }))
+    const link = [...menu.querySelectorAll('a')].find(a => a.textContent === 'DEVICES')
     expect(link).toBeTruthy()
-    expect(link?.getAttribute('href')).toBe('/profile/me/devices')
+    expect(link?.getAttribute('href')).toBe('/devices')
   })
 
-  it('omits it entirely when the viewer has no tracker', async () => {
+  it('omits it when the host passes no devicesHref', async () => {
     const menu = await openMenu(nav())
-    expect(menu.textContent).not.toContain('MY DEVICES')
+    expect(menu.textContent).not.toContain('DEVICES')
     // the rest of the menu is unaffected
-    expect(menu.textContent).toContain('MY PROFILE')
+    expect(menu.textContent).toContain('PROFILE')
     expect(menu.textContent).toContain('SIGN OUT')
   })
 
-  it('sits with MY PADDLES above the profile/account rows', async () => {
-    const menu = await openMenu(nav({ paddlesHref: '/paddles/library', devicesHref: '/profile/me/devices' }))
+  it('lists PADDLES, DEVICES, PROFILE, ACCOUNT in that order', async () => {
+    const menu = await openMenu(nav({ paddlesHref: '/paddles', devicesHref: '/devices' }))
     const labels = [...menu.querySelectorAll('a,button')].map(el => el.textContent)
-    expect(labels).toEqual(['MY PADDLES', 'MY DEVICES', 'MY PROFILE', 'ACCOUNT', 'REPORT AN ISSUE', 'SIGN OUT'])
+    expect(labels).toEqual(['PADDLES', 'DEVICES', 'PROFILE', 'ACCOUNT', 'REPORT AN ISSUE', 'SIGN OUT'])
   })
 })

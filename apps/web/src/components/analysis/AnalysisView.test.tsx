@@ -114,7 +114,7 @@ describe('AnalysisView SHARE control (#206)', () => {
   })
 
   it('keeps the top-right controls on screen on a phone: the button row wraps and the column is viewport-capped', async () => {
-    // On a 426px phone the un-wrapped control row (NEW / MY PADDLES / SHARE /
+    // On a 426px phone the un-wrapped control row (NEW / PADDLES / SHARE /
     // DIARY / BOAT / ANALYSE A SECTION) overflowed off the left edge, hiding the
     // SHARE button. The row must wrap and the column must be width-capped.
     await mount(<AnalysisView data={data} sessionId="abc123" />)

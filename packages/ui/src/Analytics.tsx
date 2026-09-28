@@ -8,7 +8,7 @@ import { capture, startAnalytics } from './analytics'
 // route change. Uses window.location.pathname (not usePathname) for the captured
 // value so it's the TRUE full path in both apps — under Analyse's basePath
 // '/paddles', usePathname() omits the prefix, which would collide with att paths;
-// the full path keeps `/paddles/library` distinct from att's `/library`.
+// the full path keeps `/paddles/new` distinct from any other `/new`.
 // usePathname is only the change trigger.
 export default function Analytics() {
   const pathname = usePathname()

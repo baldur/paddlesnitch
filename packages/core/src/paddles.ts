@@ -40,3 +40,15 @@ export function paddleTotals(paddles: { distanceKm: number; durationS: number; p
   }
   return { count: paddles.length, totalKm, totalS, since }
 }
+
+// The " · SOURCE" tag after a paddle's date. One wording for every list and
+// view (it was an inline switch copied into four files). A plain file upload
+// needs no tag.
+export function sourceLabel(type: string | undefined): string {
+  switch (type) {
+    case 'strava': return ' · STRAVA'
+    case 'trial': return ' · TIME TRIAL'
+    case 'device': return ' · TRACKER'
+    default: return ''
+  }
+}

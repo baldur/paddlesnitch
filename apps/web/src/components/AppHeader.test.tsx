@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 // AttAccountNav is a client component (useRouter/fetch on mount) — stub it so we
 // can test AppHeader's markup in isolation. AppHeader is now a thin wrapper over
 // the shared @paddlesnitch/ui AppShell.
-vi.mock('@/components/AttAccountNav', () => ({ default: () => <span>ACCOUNTNAV</span> }))
+vi.mock('@/components/AccountMenu', () => ({ default: () => <span>ACCOUNTNAV</span> }))
 let pathname = '/att'
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }))
 

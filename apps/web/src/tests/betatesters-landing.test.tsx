@@ -5,11 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>,
 }))
-vi.mock('@/components/AttAccountNav', () => ({ default: () => <span>ACCOUNTNAV</span> }))
+vi.mock('@/components/AccountMenu', () => ({ default: () => <span>ACCOUNTNAV</span> }))
 vi.mock('@/lib/auth', () => ({ getAuthUser: vi.fn() }))
-vi.mock('@paddlesnitch/api', () => ({
-  createCaller: () => ({ paddles: { list: async () => ({ cards: [] }) } }),
-}))
+const redirect = vi.fn((to: string) => { throw new Error(`REDIRECT ${to}`) })
+vi.mock('next/navigation', () => ({ redirect: (to: string) => redirect(to), usePathname: () => '/' }))
 
 import { getAuthUser } from '@/lib/auth'
 const { default: LandingPage, generateMetadata } = await import('@/app/page')
@@ -79,8 +78,12 @@ describe('the front door with ?campaign=betatesters', () => {
     expect(html).not.toContain('ANN’S PADDLES')
   })
 
-  it('still sends a signed-in paddler with no campaign to their dashboard', async () => {
+  it('sends a signed-in paddler with no campaign to /paddles, their home', async () => {
     vi.mocked(getAuthUser).mockResolvedValue({ id: 'u', email: 'a@b.c', displayName: 'Ann' })
+    await expect(render()).rejects.toThrow('REDIRECT /paddles')
+  })
+
+  it('shows a signed-out visitor with no campaign the normal landing', async () => {
     expect(await render()).not.toContain('data-campaign')
   })
 

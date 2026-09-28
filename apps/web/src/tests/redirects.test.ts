@@ -33,7 +33,9 @@ describe('redirects', async () => {
     ['/profile/me/settings', '/account'],
     ['/att/account', '/account'],
     ['/att/u/abc', '/profile/abc'],
-    ['/analyse/library', '/paddles/library'],
+    ['/analyse/library', '/paddles'],
+    ['/paddles/library', '/paddles'],
+    ['/analyse/abc123', '/paddles/abc123'],
     ['/profile/me/devices', '/devices'],
     ['/profile/me/devices/d/AABBCCDD', '/devices/AABBCCDD'],
   ])('%s → %s', (from, to) => {

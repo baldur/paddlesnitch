@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
       // The Analyse section moved to /paddles ("Analyse" was a verb; paddles are
       // the thing). Keep old links / bookmarks / shared-paddle URLs working.
       { source: '/analyse', destination: '/paddles', permanent: true },
+      // The paddle list and the dashboard were two pages; /paddles is both now.
+      // /analyse/library is listed so it lands in one hop, not via /paddles/library.
+      { source: '/analyse/library', destination: '/paddles', permanent: true },
+      { source: '/paddles/library', destination: '/paddles', permanent: true },
       { source: '/analyse/:path*', destination: '/paddles/:path*', permanent: true },
     ]
   },
