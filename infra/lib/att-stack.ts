@@ -443,6 +443,12 @@ export class AttStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
+        // Marketing landing media (the ?campaign= pages), e.g. the beta testers video.
+        '/campaigns/*': {
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
         // /analyse is now part of the single app: its pages + API hit the default
         // server origin and its assets are under /_next/* (served from S3 above),
         // so no /analyse-specific behaviors are needed any more.
