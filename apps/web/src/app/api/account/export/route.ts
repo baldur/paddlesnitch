@@ -7,6 +7,7 @@ import { getStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { listSessions, getAthleteProfile } from '@paddlesnitch/analysis/analysis-store'
 import { exportUserDevices } from '@paddlesnitch/core/devices'
 import { listFeedbackContactsForUser } from '@/lib/feedback-contacts'
+import { getBetaApplication } from '@/lib/beta-signups'
 
 // GDPR Art. 15 (right of access) + Art. 20 (right to data portability) endpoint.
 // Returns a JSON document containing everything the system holds about the
@@ -85,6 +86,7 @@ export async function GET() {
     trackers,
     trackerRecordings,
     issueReports: await listFeedbackContactsForUser(user.id),
+    betaApplication: await getBetaApplication(user.email),
     notes: [
       'This file contains all personal data paddlesnitch.com holds about you.',
       'Heart rate is never stored. Stroke rate is kept when your file has it.',

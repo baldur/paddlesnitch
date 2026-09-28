@@ -6,6 +6,7 @@ import { deleteUser, revoke } from '@/lib/cognito'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
 import { eraseFeedbackContactsForUser } from '@/lib/feedback-contacts'
+import { eraseBetaApplication } from '@/lib/beta-signups'
 import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
@@ -22,6 +23,7 @@ import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 //   - their Strava link (deauthorised, and the athlete -> account index)
 //   - their place in groups; a group they own passes to an admin or member
 //   - the private contact records behind issue reports they filed
+//   - a beta tester application made with their account email
 //   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent.
@@ -91,6 +93,7 @@ export async function DELETE() {
   await eraseUserDevices(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
+  await eraseBetaApplication(user.email)
   const strava = await getStravaTokens(user.id)
   if (strava) await revokeStrava(strava.accessToken)
   // A Strava sign-in account may have no tokens left, but its synthetic email

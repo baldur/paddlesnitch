@@ -1012,6 +1012,12 @@ Maps: dark tiles (Esri World Dark Gray); att maps still default to light with a 
 - Never commit AWS credentials. IAM roles for Lambda; `aws sso` locally.
 - Target domain: `paddlesnitch.com` — app at `paddlesnitch.com/att`, landing at `paddlesnitch.com/`
 
+### Marketing campaign landings (`/?campaign=<id>`)
+
+`src/lib/campaigns.ts` lists the ids (`CAMPAIGN_LANDINGS`); `src/app/page.tsx` maps each to a landing (`LANDINGS`) and optional title/description/share image (`CAMPAIGN_METADATA`). An unknown id falls back to the default landing and is logged (`[campaign] …`). **A known campaign is shown to signed-in visitors too** (people share these links; the dashboard only replaces the DEFAULT landing).
+
+- **`betatesters`** — tracker beta-tester recruitment. The tracker video (`public/campaigns/betatesters.mp4`, 720p/24 fps/no audio, ~4.9 MB; poster `.jpg`) loops muted behind three square message boxes + an application form (`src/components/campaigns/`). Requirements: they paddle/row, and can keep the tracker reasonably dry (a required tick box, enforced server-side). `POST /api/beta-signup` (public; outside the proxy's mutation gate; `looksLikeBot` gated) stores `beta-signups/{sha256(email)}.json` — one record per email, a re-apply updates it — and emails a notification to `privacy@` (`BETA_NOTIFY_TO`), best effort. Covered by account delete + export (matched on the account email) and listed on the privacy page. List them: `aws s3 ls s3://paddlesnitch-data-prod/beta-signups/`.
+
 ### Product analytics (CloudWatch EMF)
 
 Custom product events flow to CloudWatch metrics via **Embedded Metric Format** — `emitMetric(event, props?)` in `src/lib/metrics.ts` writes one EMF JSON line; in the Lambda runtime CloudWatch auto-extracts a `Count` metric (namespace `Paddlesnitch/App`, dimension `Event`) with **no metric filters, no log parsing, no extra IAM**. Locally/in tests it's a harmless `console.log`.

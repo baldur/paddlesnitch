@@ -24,6 +24,10 @@ describe('proxy auth gate', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/track')))).toBe(false)
   })
 
+  it('lets an UNAUTHENTICATED POST to /api/beta-signup through (applicants usually have no account)', () => {
+    expect(redirectsToAuth(proxy(req('POST', '/api/beta-signup')))).toBe(false)
+  })
+
   it('still gates other unauthenticated API mutations to sign-in', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/courses')))).toBe(true)
     expect(redirectsToAuth(proxy(req('DELETE', '/api/account')))).toBe(true)
