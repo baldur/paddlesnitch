@@ -102,13 +102,13 @@ paddlesnitch.com/l/ABC123
 so the scheme is not a nicety that was dropped for neatness. `test_qr` pins that.
 
 Server side: `GET /l/:code` (`apps/web/src/app/l/[code]/route.ts`) normalises the
-code and redirects to `/account?code=…#devices`. `DevicesSection`
+code and redirects to `/devices?code=…#add` (updated 2026-09-28). `AddTrackerForm` (was `DevicesSection`)
 prefills from `?code=` with a lazy `useState` initialiser — never an effect, per
 the repo rule about `useSearchParams` and state.
 
 **Sign-in round trip: this needed a proxy fix.** `src/proxy.ts` set
 `next` to the *pathname only* while the cloned URL kept the original query, so
-`/account?code=ABC123` became
+`/devices?code=ABC123` became
 `/att/auth?code=ABC123&next=/account` and the code was dropped on the
 way back. Fixed to carry `pathname + search`, with a regression test in
 `proxy.test.ts`. This affected every gated page with a query string, not just QR.

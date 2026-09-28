@@ -103,7 +103,7 @@ the device record. The claim is consumed — a second call returns 410.
 
 ### `POST /api/account/devices/link` — authenticated (browser)
 
-The other half, called from `/profile/me/settings`.
+The other half, called from `/devices` (Add a tracker; it was on the account page when this was written).
 
 ```jsonc
 { "claimCode": "K7P2QM", "name": "Baldur's tracker" }   // → 200 { deviceId, model }
@@ -257,7 +257,7 @@ them into one "get the current principal" helper.
 
 1. Tracker boots at home, joins WiFi (SoftAP captive portal on first run).
 2. Unclaimed → `POST /api/devices/claim`, shows `K7P2QM` on the OLED.
-3. User opens `/profile/me/settings` → **Devices** → *Link a tracker* → types the code.
+3. User opens `/devices` → **Add a tracker** → types the code (or scans the tracker's QR, which lands there prefilled).
 4. Device's next poll returns the token; it stores it in NVS and the OLED confirms.
 5. Every subsequent boot: connect, upload any session not in `/uploaded.txt`, WiFi off.
 
@@ -289,7 +289,7 @@ The original proposal, kept for the record:
 1. **Claim + token** — the three endpoints, `getDeviceAuth`, storage records.
    Verifiable with `curl` alone, no hardware.
 2. **Session upload** — `/api/devices/sessions`, reusing `parseTrace()` unchanged.
-3. **UI** — Devices section in `/profile/me/settings`: link, rename, revoke, recent uploads.
+3. **UI** — `/devices`: add a tracker, see its recordings, remove it (from the tracker's own page).
 4. **Attach to a trial** — surface a device session as a source when submitting an entry.
 
 Phases 1–2 are independently testable and are what the firmware needs; 3–4 are the

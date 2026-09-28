@@ -13,7 +13,7 @@ A platform for paddlers — kayak, canoe, SUP, rowing. Live at
 
 ## Layout
 
-One pnpm workspace. One Next app over four shared packages.
+One pnpm workspace. One Next app over five shared packages.
 
 ```
 apps/web            the whole web app — /att, /paddles, /profile, /api/trpc
@@ -38,7 +38,7 @@ No Docker and no AWS credentials needed for normal development. Storage is the
 local filesystem under `apps/web/.local-data/`, and auth is a local Cognito
 emulator that speaks the same SDK as production.
 
-Sign in with `admin@paddlesnitch.com` / `Password123`.
+Sign in with `admin@rrc-tt.is` / `Password123` (the seed admin).
 
 ## Testing
 
@@ -62,7 +62,7 @@ deploys with CDK via OIDC — there are no stored AWS credentials.
 **Not Vercel.** It runs on CloudFront in front of a single Lambda, with S3 for
 assets and data and Cognito for identity.
 
-Firmware is separate and deliberately manual: `cd firmware && ./tools/flash.sh`.
+Firmware is built separately: flash by cable with `cd firmware && ./tools/flash.sh`. Releases are automatic: every merge to `main` promotes `firmware/VERSION` to the trackers over the air (`.github/workflows/firmware-release.yml`).
 A plain `pio run -t upload` does not work on this board — see `firmware/CLAUDE.md`.
 
 ## Where the documentation is

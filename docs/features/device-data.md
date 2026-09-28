@@ -1,6 +1,6 @@
 # Feature spec: what the paddle tracker captures
 
-**Status:** 📋 reference — describes firmware `0.3.0`. **Firmware is now 0.9.0** and
+**Status:** 📋 reference — describes firmware `0.3.0`. **Firmware has moved on** (read `firmware/VERSION` for the current one) and
 several claims here have been overtaken: stroke rate IS now derivable (a ~12 Hz
 motion sidecar is uploaded and `deriveCadence` resolves it), boat attitude is
 derived too, and uploads are chunked. The column-by-column reference and the

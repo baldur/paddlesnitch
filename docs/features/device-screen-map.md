@@ -1,6 +1,6 @@
 # Device screen map, and everywhere a customer can get stuck
 
-**Status:** reference. Written 2026-09-19, from firmware 0.9.0 as merged.
+**Status:** reference. Written 2026-09-19 from firmware 0.9.0; web URLs updated 2026-09-28 (`/devices`, `/account`). Screens may have moved on since — check `firmware/src/`.
 **Purpose:** two things — every screen and how you reach it, and a catalogue of
 failure states with what the customer actually sees.
 **Source of truth for behaviour:** `firmware/docs/device-states-spec.md` (screens
@@ -255,7 +255,7 @@ Honest list. Nothing here is fixed.
 |---|---|---|
 | `/L/:code` → `/l/:code` | claim QR target; uppercase for QR alphanumeric mode | wrong case 404s without the redirect |
 | `/l/:code` (and `/L/:code`, rewritten in the proxy) | → `/devices?code=…#add` | relative redirect, so it cannot leak the Lambda origin |
-| `/profile/me/settings` → Devices | enter or confirm the code | `unknown_code` / `claim_expired` / `already_linked` are all worded for a human |
+| `/devices` → Add a tracker | enter or confirm the code | `unknown_code` / `claim_expired` / `already_linked` are all worded for a human |
 | `/devices` | DEVICES — one card per tracker (sessions, distance, last seen) + the add-a-tracker code box | empty state offers the add box right there; a revoked tracker still shows, flagged `not linked`, because its uploads outlive the binding |
 | `/devices/[deviceId]` | one tracker's uploads + per-session diagnostics | `No uploads from this tracker yet` |
 | `/devices/[deviceId]/[sessionId]` | motion charts for one session | `No motion data for this session yet` when no sidecar |
