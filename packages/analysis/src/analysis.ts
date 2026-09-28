@@ -174,6 +174,18 @@ export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boo
   }
 }
 
+// The plain summary, rebuilt from a saved result's own numbers. Used wherever
+// the AI summary must not appear: the AI one is written from the owner's diary
+// notes and coach profile, so on a shared (public) paddle it could repeat
+// private text. Only the average stroke rate reaches the template, and the
+// result stores it, so this matches what analyseTrack produced.
+export function plainInsight(r: AnalysisResult): string {
+  return buildInsight({
+    durationS: r.durationS, distanceKm: r.distanceKm, surges: r.surges, stops: r.stops, sets: r.sets,
+    allSR: r.avgSR != null ? [r.avgSR] : [], cruise: r.cruiseSpeed, conditions: r.conditions,
+  })
+}
+
 // Deterministic templated insight (the LLM replaces this later, narrating the
 // same structured facts). Kept in engine so the page is useful before Bedrock.
 function buildInsight(a: { durationS: number; distanceKm: number; surges: Segment[]; stops: Segment[]; sets: SessionSet[]; allSR: number[]; cruise: number; conditions?: Conditions }): string {

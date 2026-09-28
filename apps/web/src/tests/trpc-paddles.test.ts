@@ -87,3 +87,32 @@ describe('me', () => {
     expect(await createCaller({ user: null }).me()).toEqual({ user: null })
   })
 })
+
+// The AI summary is written from the owner's diary notes and coach profile, so it
+// can repeat private text. A shared paddle is public: it must show only the plain
+// summary built from its own numbers.
+describe('paddles.shared never exposes the AI summary', () => {
+  it('replaces the AI summary with the plain summary from the paddle\'s own numbers', async () => {
+    const { saveSession, shareSession } = await import('@paddlesnitch/analysis/analysis-store')
+    const { analyseTrack } = await import('@paddlesnitch/analysis/analysis')
+    const t0 = Date.parse('2026-09-01T10:00:00Z')
+    const track = Array.from({ length: 600 }, (_, i) => ({
+      lat: 51.5 + i * 0.00003, lng: -0.1, timestamp: new Date(t0 + i * 1000), strokeRate: 60,
+    }))
+    const result = analyseTrack(track, {})
+    const plain = result.insight
+    await saveSession({
+      id: 'p1', userId: USER.id, createdAt: '2026-09-01T11:00:00Z', paddledAt: '2026-09-01T10:00:00Z',
+      source: { type: 'file' }, doubleStrokeRate: false, note: 'knee still hurts after the fall',
+      insight: 'You mentioned your knee still hurts after the fall, so take it easy.',
+      result: { ...result, insight: 'You mentioned your knee still hurts after the fall, so take it easy.', insightModel: 'some-model' },
+    } as never)
+    const shared = await shareSession(USER.id, 'p1')
+
+    const res = await createCaller({ user: null }).paddles.shared({ shareId: shared!.shareId })
+
+    expect(JSON.stringify(res)).not.toContain('knee')
+    expect(res.result.insight).toBe(plain)
+    expect(res.result.insightModel).toBeUndefined()
+  })
+})
