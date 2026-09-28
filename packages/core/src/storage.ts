@@ -13,13 +13,26 @@ function isDev() {
 // In dev: filesystem under .local-data/
 // In prod: S3 (same interface, different backing)
 
+// "Not found" is the ONLY failure that means null. Everything else (throttling,
+// access denied, a network fault) throws. Read-modify-write callers treat null
+// as "start fresh", so an error read as null used to overwrite real data: a
+// user's group list, a taken handle, a leaderboard entry. It also made an
+// outage look like an empty site instead of an error.
+const NOT_FOUND_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR'])
+const isNotFound = (e: unknown) => {
+  const err = e as { name?: string; code?: string; $metadata?: { httpStatusCode?: number } }
+  return err?.name === 'NoSuchKey' || err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404
+    || (err?.code !== undefined && NOT_FOUND_CODES.has(err.code))
+}
+
 export async function getObject(key: string): Promise<Buffer | null> {
   if (isDev()) {
     const filePath = path.join(localRoot(), key)
     try {
       return await fs.readFile(filePath)
-    } catch {
-      return null
+    } catch (e) {
+      if (isNotFound(e)) return null
+      throw e
     }
   }
   const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3')
@@ -31,8 +44,9 @@ export async function getObject(key: string): Promise<Buffer | null> {
       chunks.push(chunk)
     }
     return Buffer.concat(chunks)
-  } catch {
-    return null
+  } catch (e) {
+    if (isNotFound(e)) return null
+    throw e
   }
 }
 
@@ -75,10 +89,18 @@ export async function listKeys(prefix: string): Promise<string[]> {
   }
   const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3')
   const s3 = new S3Client({})
-  const res = await s3.send(
-    new ListObjectsV2Command({ Bucket: process.env.DATA_BUCKET!, Prefix: prefix })
-  )
-  return (res.Contents ?? []).map(o => o.Key!).filter(Boolean)
+  // Every page: S3 returns at most 1,000 keys per call, and callers list broad
+  // prefixes (devices/, trials/) for pages, export and erasure.
+  const keys: string[] = []
+  let token: string | undefined
+  do {
+    const res = await s3.send(
+      new ListObjectsV2Command({ Bucket: process.env.DATA_BUCKET!, Prefix: prefix, ContinuationToken: token })
+    )
+    for (const o of res.Contents ?? []) if (o.Key) keys.push(o.Key)
+    token = res.IsTruncated ? res.NextContinuationToken : undefined
+  } while (token)
+  return keys
 }
 
 export async function deleteObject(key: string): Promise<void> {
