@@ -4,17 +4,16 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
 import RemoveTrackerButton from '@/components/devices/RemoveTrackerButton'
+import { strokeRateCopy, gpsCopy } from '@/lib/tracker-copy'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { type DeviceView, fmtDate, fmtDay, fmtDist, fmtDur } from '@/lib/device-view'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
-// One tracker's uploads. Lives under `/d/<deviceId>` rather than directly at
-// `/devices/<deviceId>`: `/devices/[sessionId]` already owns that single dynamic
-// segment, and Next refuses two differently-named slugs at the same position.
-// The extra `d` segment sidesteps it without renaming the session URL, which is
-// already linked from elsewhere.
+// One tracker's recordings. Each opens to a plain summary (time, distance,
+// speed, stroke rate, boat motion) with the engineering diagnostics behind a
+// TECHNICAL DETAILS toggle.
 
 type SessionReport = {
   report: DeviceDataReport
@@ -23,165 +22,111 @@ type SessionReport = {
 }
 
 function Report({ report, cadence, attitude, sessionId, deviceId }: SessionReport & { sessionId: string; deviceId: string }) {
-  const sr = report.strokeRate
+  const sr = strokeRateCopy(report, cadence)
+  const gps = gpsCopy(report)
   // Derived from the fields already in the report — no server change.
   const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
   const sampleRateHz = report.timeSpanS && report.timeSpanS > 0 ? report.rows / report.timeSpanS : null
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
-      {/* Always offered, never gated on the motion data being there: the charts
-          page is how you find out WHETHER this session has motion, and hiding the
-          way in until it does makes the feature undiscoverable. */}
-      <div>
-        <Link href={`/devices/${deviceId}/${sessionId}`} className="text-primary">
-          OPEN FULL VIEW — ROLL &amp; PITCH CHARTS →
-        </Link>
-      </div>
-
-      {/* what we can make of it */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Stat label="Rows" value={String(report.rows)} />
-        <Stat label="With GPS fix" value={`${report.fixedRows} / ${report.rows}`} />
-        <Stat label="No-fix rows" value={String(report.noFixRows)} />
-        <Stat label="Duration" value={fmtDur(report.timeSpanS)} />
-        <Stat label="Distance (gated)" value={fmtDist(report.movementDistanceM)} />
-        <Stat label="Avg speed" value={avgSpeedKmh == null ? '—' : `${avgSpeedKmh.toFixed(1)} km/h`} />
-        <Stat label="Sample rate" value={sampleRateHz == null ? '—' : `${sampleRateHz.toFixed(1)} Hz`} />
-      </div>
-
-      {/* Motion sensors present in the file — accelerometer and gyroscope. */}
-      <div className="border border-border bg-surface px-3 py-2 flex flex-wrap gap-x-6 gap-y-1">
-        <span className="tracking-widest text-[10px] uppercase text-muted">Motion sensors</span>
-        <span>Accelerometer <span className={report.hasImu ? 'text-green' : 'text-muted'}>{report.hasImu ? 'yes' : 'no'}</span></span>
-        <span>Gyroscope <span className={report.hasGyro ? 'text-green' : 'text-muted'}>{report.hasGyro ? 'yes' : 'no'}</span></span>
-      </div>
-
-      {/* capture + fix quality: a trace can look complete on duration alone */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Stat label="Rows captured" value={`${(report.capture.capturedFraction * 100).toFixed(1)}%`} />
-        <Stat label="Dropped rows" value={report.capture.gaps === 0 ? 'none' : `${report.capture.missingRows} in ${report.capture.gaps} gap${report.capture.gaps === 1 ? '' : 's'}`} />
-        <Stat label="Satellites" value={report.gnss.satsFirst == null ? '—' : `${report.gnss.satsFirst} → ${report.gnss.satsLast}`} />
-        <Stat label="HDOP" value={report.gnss.hdopFirst == null ? '—' : `${report.gnss.hdopFirst} → ${report.gnss.hdopLast}`} />
-      </div>
-
-      {report.gnss.fixTrend && (
-        <p className="text-muted leading-relaxed">
-          {report.gnss.fixTrend === 'improving'
-            ? 'The GPS fix tightened as the session went on, so the opening minutes are the least accurate part of this trace.'
-            : report.gnss.fixTrend === 'degrading'
-              ? 'The GPS fix got worse over the session — worth checking sky view or antenna placement.'
-              : 'The GPS fix held steady across the session.'}
-          {report.gnss.altitudeSpreadM != null && report.gnss.altitudeSpreadM > 10 && (
-            <> Recorded altitude wandered <span className="tabular text-fg">{report.gnss.altitudeSpreadM} m</span> — GPS altitude is noise at this scale, so nothing here uses it.</>
-          )}
-        </p>
+      {!report.looksUsable && (
+        <p className="text-muted">This recording has no paddle in it. The tracker records whenever it&apos;s switched on.</p>
       )}
 
-      {/* Real cadence, once the motion sidecar is up. This supersedes the "not
-          derivable" verdict below, which is about the 1 Hz track file alone. */}
-      {cadence?.available ? (
-        <div className="border border-green bg-green/10 px-3 py-2 text-green">
-          <span className="tracking-widest text-[10px] uppercase">Stroke rate</span>{' '}
-          <span className="tabular text-fg">{cadence.medianStrokesPerMin} spm</span>
-          <p className="mt-1 leading-relaxed text-muted">
-            Median across {cadence.windows.length} moving window{cadence.windows.length === 1 ? '' : 's'},
-            from the {cadence.sampleRateHz} Hz motion sidecar.
-            {cadence.windows[0]?.alternating && ' Detected as an alternating left/right stroke, so the rate is twice the measured cycle.'}
-          </p>
-        </div>
-      ) : (
-        <div className={`border px-3 py-2 ${sr.available ? 'border-green bg-green/10 text-green' : 'border-border bg-surface text-muted'}`}>
-          <span className="tracking-widest text-[10px] uppercase">Stroke rate</span>{' '}
-          <span className={sr.available ? 'text-green' : 'text-fg'}>{sr.available ? 'available' : 'not derivable'}</span>
-          <p className="mt-1 leading-relaxed">{sr.reason}</p>
-          {sr.evidence && <p className="mt-2 leading-relaxed text-split">{sr.evidence}</p>}
-          {cadence && !cadence.available && (
-            <p className="mt-2 leading-relaxed">Motion sidecar present, but no cadence came out of it: {cadence.reason}</p>
-          )}
-        </div>
-      )}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Stat label="Time" value={fmtDur(report.timeSpanS)} />
+        <Stat label="Distance" value={fmtDist(report.movementDistanceM)} />
+        <Stat label="Average speed" value={avgSpeedKmh == null ? '—' : `${avgSpeedKmh.toFixed(1)} km/h`} />
+        <Stat label="Stroke rate" value={sr.spm == null ? '—' : `${sr.spm} spm`} />
+      </div>
+      <p className="text-muted leading-relaxed">{sr.text}{gps ? ` ${gps}` : ''}</p>
 
       {attitude?.available && (
         <div>
-          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Boat attitude</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Stat label="Roll (rms)" value={`${attitude.rollRmsDeg}°`} />
-            <Stat label="Pitch (rms)" value={`${attitude.pitchRmsDeg}°`} />
-            <Stat label="Roll range" value={`${attitude.rollP5Deg}° … ${attitude.rollP95Deg}°`} />
-            <Stat
-              label="Rock evenness"
-              value={attitude.symmetry ? `${Math.abs(attitude.symmetry.imbalancePct).toFixed(0)}% off` : '—'}
-            />
+          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Boat motion</div>
+          <div className="grid grid-cols-3 gap-2">
+            <Stat label="Side-to-side roll" value={`${attitude.rollRmsDeg}°`} />
+            <Stat label="Bow-to-stern pitch" value={`${attitude.pitchRmsDeg}°`} />
+            <Stat label="Evenness" value={attitude.symmetry ? `${Math.abs(attitude.symmetry.imbalancePct).toFixed(0)}% uneven` : '—'} />
           </div>
           <p className="text-muted leading-relaxed mt-2">
-            {attitude.symmetry && (
-              <>One side swings to {attitude.symmetry.sideADeg}°, the other to {attitude.symmetry.sideBDeg}°.{' '}</>
-            )}
-            Rowing wants roll near zero; kayaking wants it even rather than small, so the
-            imbalance is the number to watch.{' '}
-            {!attitude.axisConfident && 'Roll and pitch were too similar here to tell reliably apart — treat the split with caution. '}
-            Which side is which isn&apos;t recoverable without a magnetometer, and a constant
-            lean can&apos;t be separated from the device being mounted slightly off.
+            Rowing: aim for little roll. Kayak: roll is fine if it&apos;s even.
+            {!attitude.axisConfident && ' Roll and pitch were hard to tell apart in this recording.'}
           </p>
         </div>
       )}
 
-      {report.motion && report.motion.gyroPeakMax != null && (
-        <div>
-          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Motion envelope</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Stat label="Rotation, median" value={`${report.motion.gyroPeakMedian ?? '—'} dps`} />
-            <Stat label="Paddling ceiling (p99)" value={report.motion.gyroPeakP99Moving == null ? '—' : `${report.motion.gyroPeakP99Moving} dps`} />
-            <Stat label="Handling peak" value={report.motion.gyroPeakMaxStationary == null ? '—' : `${report.motion.gyroPeakMaxStationary} dps`} />
-            <Stat label="Peak acceleration" value={report.motion.accelPeakMax == null ? '—' : `${report.motion.accelPeakMax} g`} />
-          </div>
-        </div>
-      )}
-
-      {report.deadColumns.length > 0 && (
-        <p className="text-muted leading-relaxed">
-          <span className="text-red">Logging nothing:</span>{' '}
-          {report.deadColumns.map(c => `${c.name} (${c.kind === 'zero' ? 'always 0' : 'always empty'})`).join(', ')}.
-          {' '}These columns exist in the file but carry no data in this session. That can be correct —
-          battery voltage reads 0 with no cell fitted, and position is empty before the GPS gets a fix —
-          so treat it as &ldquo;nothing was recorded here&rdquo;, not automatically as a fault.
-        </p>
-      )}
-
-      {!report.looksUsable && (
-        <p className="text-muted">This session doesn&apos;t contain a usable paddle (likely a bench/acquisition log). That&apos;s normal — the device records whenever it has power.</p>
-      )}
-
-      {/* every column, and a few raw rows */}
+      {/* Always offered, never gated on the motion data being there: the charts
+          page is how you find out WHETHER this recording has motion. */}
       <div>
-        <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Columns ({report.columns.length})</div>
-        <div className="flex flex-wrap gap-1">
-          {report.columns.map(c => {
-            const dead = report.deadColumns.find(d => d.name === c)
-            return (
-              <span
-                key={c}
-                title={dead ? `Present in every row but ${dead.kind === 'zero' ? 'always 0' : 'always empty'}` : undefined}
-                className={`border px-2 py-0.5 tabular text-[11px] ${dead ? 'border-red/40 bg-surface text-red' : 'border-border bg-surface'}`}
-              >{c}</span>
-            )
-          })}
-        </div>
+        <Link href={`/devices/${deviceId}/${sessionId}`} className="text-primary">BOAT MOTION CHARTS →</Link>
       </div>
 
-      {report.sampleRows.length > 0 && (
-        <div className="overflow-x-auto">
-          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">First rows (raw)</div>
-          <table className="text-[11px] tabular border border-border">
-            <thead><tr>{report.columns.map(c => <th key={c} className="border-b border-border px-2 py-1 text-left text-muted font-normal whitespace-nowrap">{c}</th>)}</tr></thead>
-            <tbody>
-              {report.sampleRows.map((row, i) => (
-                <tr key={i}>{report.columns.map(c => <td key={c} className="px-2 py-1 whitespace-nowrap text-fg">{row[c] || <span className="text-muted">·</span>}</td>)}</tr>
-              ))}
-            </tbody>
-          </table>
+      <details className="border border-border bg-surface px-3 py-2">
+        <summary className="cursor-pointer text-[10px] text-muted tracking-widest uppercase">Technical details</summary>
+        <div className="flex flex-col gap-3 mt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Rows" value={String(report.rows)} />
+            <Stat label="With GPS fix" value={`${report.fixedRows} / ${report.rows}`} />
+            <Stat label="Rows captured" value={`${(report.capture.capturedFraction * 100).toFixed(1)}%`} />
+            <Stat label="Dropped rows" value={report.capture.gaps === 0 ? 'none' : `${report.capture.missingRows} in ${report.capture.gaps} gap${report.capture.gaps === 1 ? '' : 's'}`} />
+            <Stat label="Sample rate" value={sampleRateHz == null ? '—' : `${sampleRateHz.toFixed(1)} Hz`} />
+            <Stat label="Satellites" value={report.gnss.satsFirst == null ? '—' : `${report.gnss.satsFirst} → ${report.gnss.satsLast}`} />
+            <Stat label="HDOP" value={report.gnss.hdopFirst == null ? '—' : `${report.gnss.hdopFirst} → ${report.gnss.hdopLast}`} />
+            <Stat label="Motion sensors" value={`${report.hasImu ? 'accel' : '—'}${report.hasGyro ? ' + gyro' : ''}`} />
+          </div>
+          {report.gnss.altitudeSpreadM != null && report.gnss.altitudeSpreadM > 10 && (
+            <p className="text-muted">Altitude wandered {report.gnss.altitudeSpreadM} m. GPS altitude is noise at this scale, so nothing uses it.</p>
+          )}
+          <p className="text-muted leading-relaxed">Stroke rate: {report.strokeRate.reason}{cadence && !cadence.available ? ` Motion data: ${cadence.reason}` : ''}</p>
+          {report.strokeRate.evidence && <p className="text-muted leading-relaxed">{report.strokeRate.evidence}</p>}
+          {attitude?.available && (
+            <p className="text-muted">Roll range {attitude.rollP5Deg}° … {attitude.rollP95Deg}°{attitude.symmetry ? `; one side to ${attitude.symmetry.sideADeg}°, the other to ${attitude.symmetry.sideBDeg}°` : ''}.</p>
+          )}
+          {report.motion && report.motion.gyroPeakMax != null && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Stat label="Rotation, median" value={`${report.motion.gyroPeakMedian ?? '—'} dps`} />
+              <Stat label="Paddling ceiling (p99)" value={report.motion.gyroPeakP99Moving == null ? '—' : `${report.motion.gyroPeakP99Moving} dps`} />
+              <Stat label="Handling peak" value={report.motion.gyroPeakMaxStationary == null ? '—' : `${report.motion.gyroPeakMaxStationary} dps`} />
+              <Stat label="Peak acceleration" value={report.motion.accelPeakMax == null ? '—' : `${report.motion.accelPeakMax} g`} />
+            </div>
+          )}
+          {report.deadColumns.length > 0 && (
+            <p className="text-muted leading-relaxed">
+              Empty in this recording: {report.deadColumns.map(c => `${c.name} (${c.kind === 'zero' ? 'always 0' : 'always empty'})`).join(', ')}.
+              This is often normal, for example battery reads 0 with no battery fitted.
+            </p>
+          )}
+          <div>
+            <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Columns ({report.columns.length})</div>
+            <div className="flex flex-wrap gap-1">
+              {report.columns.map(c => {
+                const dead = report.deadColumns.find(d => d.name === c)
+                return (
+                  <span
+                    key={c}
+                    title={dead ? `Present in every row but ${dead.kind === 'zero' ? 'always 0' : 'always empty'}` : undefined}
+                    className={`border px-2 py-0.5 tabular text-[11px] ${dead ? 'border-red/40 bg-surface text-red' : 'border-border bg-surface'}`}
+                  >{c}</span>
+                )
+              })}
+            </div>
+          </div>
+          {report.sampleRows.length > 0 && (
+            <div className="overflow-x-auto">
+              <div className="text-[10px] text-muted tracking-widest uppercase mb-1">First rows</div>
+              <table className="text-[11px] tabular border border-border">
+                <thead><tr>{report.columns.map(c => <th key={c} className="border-b border-border px-2 py-1 text-left text-muted font-normal whitespace-nowrap">{c}</th>)}</tr></thead>
+                <tbody>
+                  {report.sampleRows.map((row, i) => (
+                    <tr key={i}>{report.columns.map(c => <td key={c} className="px-2 py-1 whitespace-nowrap text-fg">{row[c] || <span className="text-muted">·</span>}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </details>
     </div>
   )
 }
@@ -237,7 +182,7 @@ export default function DeviceDetailPage() {
       <AppHeader breadcrumb={<Link href="/devices" className="tt-nav-link text-sm shrink-0">← DEVICES</Link>} />
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-fg tracking-wide">{title}</h1>
+          <h1 className="text-lg font-bold text-fg tracking-widest uppercase">{title}</h1>
           <p className="text-xs text-muted mt-1 tabular">
             {deviceId}
             {device?.model ? ` · ${device.model}` : ''}
@@ -256,21 +201,21 @@ export default function DeviceDetailPage() {
         {sessions === undefined ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : sessions.length === 0 ? (
-          <p className="text-sm text-muted">No uploads from this tracker yet. It syncs over WiFi when you hold SYNC on the device.</p>
+          <p className="text-sm text-muted">No recordings from this tracker yet. It uploads over WiFi when you hold SYNC on the tracker.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {sessions.map(s => (
               <div key={s.sessionId} className="border border-border">
                 <button onClick={() => toggle(s)} className="w-full text-left px-4 py-3 flex items-center justify-between gap-4 hover:bg-surface transition-colors">
                   <span className="min-w-0">
-                    <span className="block text-sm text-fg truncate">{s.filename}</span>
-                    <span className="block text-xs text-muted tabular">{fmtDate(s.startedAt ?? s.uploadedAt)} · {s.points} pts{s.distanceMetres ? ` · ${fmtDist(s.distanceMetres)}` : ''}{s.motion ? ' · motion' : ''}</span>
+                    <span className="block text-sm text-fg truncate">{fmtDate(s.startedAt ?? s.uploadedAt)}{s.distanceMetres ? ` · ${fmtDist(s.distanceMetres)}` : ''}</span>
+                    <span className="block text-xs text-muted tabular truncate">{s.filename}{s.motion ? ' · with boat motion' : ''}</span>
                   </span>
                   <span className="text-muted text-lg leading-none shrink-0">{open === s.sessionId ? '–' : '+'}</span>
                 </button>
                 {open === s.sessionId && (
                   <div className="px-4 pb-4">
-                    {reports[s.sessionId] === 'loading' && <p className="text-xs text-muted">Reading…</p>}
+                    {reports[s.sessionId] === 'loading' && <p className="text-xs text-muted">Loading…</p>}
                     {reports[s.sessionId] === 'error' && <p className="text-xs text-red">Couldn’t read this recording. Please try again.</p>}
                     {reports[s.sessionId] && reports[s.sessionId] !== 'loading' && reports[s.sessionId] !== 'error' && (
                       <Report {...(reports[s.sessionId] as SessionReport)} sessionId={s.sessionId} deviceId={s.deviceId} />

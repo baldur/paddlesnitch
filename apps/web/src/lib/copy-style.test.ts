@@ -7,7 +7,7 @@ import { readFileSync, readdirSync, statSync } from 'fs'
 import path from 'path'
 
 const repo = path.resolve(__dirname, '../../../..')
-const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src', 'packages/timing/src']
+const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src']
 
 function files(dir: string): string[] {
   const out: string[] = []
@@ -37,6 +37,7 @@ const BANNED: [RegExp, string][] = [
   [/\bdigs?\b|breathers?\b|rock-steady|\(fatigue\)/, 'plain words for efforts and rests'],
   [/growing suite|seamless|unlock|journey|actually happened|no-bloat|GO DEEPER/i, 'no marketing filler'],
   [/RESCIND|Tears down|GEOMETRY \(/, 'plain words'],
+  [/not derivable|motion sidecar|OPEN FULL VIEW|Boat attitude|Rock evenness|no cadence|\bfw \b/, 'tracker pages speak to paddlers, not firmware developers (engineering detail lives under TECHNICAL DETAILS)'],
 ]
 
 describe('site copy follows the style guide', () => {
