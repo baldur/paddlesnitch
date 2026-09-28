@@ -15,7 +15,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'paddlesnitch',
+  // Sections and pages set a short title ("Trials", "Privacy policy"); the
+  // template adds the site name. A page with no title of its own gets the default.
+  title: { default: 'paddlesnitch', template: '%s · paddlesnitch' },
   description: 'Time trials and paddle analysis for kayakers and rowers.',
 }
 

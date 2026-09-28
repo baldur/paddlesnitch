@@ -25,7 +25,7 @@ export default function LibraryPage() {
 
   return (
     <div className="min-h-screen">
-      <AppShell active="analyse" account={<AppAccountNav />} />
+      <AppShell active="paddles" account={<AppAccountNav />} />
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">MY PADDLES</h1>

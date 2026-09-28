@@ -262,7 +262,7 @@ function AccountPageInner() {
       <AppHeader
         breadcrumb={
           <>
-            <Link href="/att" className="tt-nav-link text-sm">
+            <Link href="/" className="tt-nav-link text-sm">
               ← HOME
             </Link>
             <span className="text-muted">/</span>

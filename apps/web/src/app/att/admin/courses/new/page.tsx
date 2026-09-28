@@ -172,7 +172,7 @@ export default function NewCoursePage() {
         breadcrumb={
           <>
             <Link href="/att" className="tt-nav-link text-sm">
-              ← HOME
+              ← TRIALS
             </Link>
             <span className="text-muted">/</span>
             <span className="text-fg text-sm">NEW COURSE</span>

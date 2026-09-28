@@ -55,7 +55,7 @@ function Inner() {
 
   return (
     <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0]">
-      <AppShell active="analyse" account={<AppAccountNav />} />
+      <AppShell active="paddles" account={<AppAccountNav />} />
       <div className="h-[46vh] w-full relative">
         <SectionRaceMapClient racers={overlay} startLine={race.startLine} finishLine={race.finishLine} />
         <div className="absolute top-3 left-3 z-[1000] bg-[#0f172a]/95 border border-[#1e293b] rounded px-3 py-2 text-xs">
@@ -71,7 +71,6 @@ function Inner() {
           <div className="mb-6">
             <div className="text-[10px] text-[#64748b] tracking-widest mb-1">WHAT THE NUMBERS SAY</div>
             <p className="text-sm leading-relaxed border-l-2 border-[#0369a1] pl-3">{race.insight}</p>
-            {race.insightModel && <div className="text-[10px] text-[#64748b] mt-1">narrated by {race.insightModel}</div>}
           </div>
         )}
 

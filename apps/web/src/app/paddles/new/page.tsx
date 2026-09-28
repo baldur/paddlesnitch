@@ -17,7 +17,7 @@ type Result = ViewData & { id: string }
 function Frame({ nav, children }: { nav?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
-      <AppShell active="analyse" nav={nav} account={<AppAccountNav />} />
+      <AppShell active="paddles" nav={nav} account={<AppAccountNav />} />
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">{children}</div>
     </div>
   )
