@@ -3,6 +3,7 @@
 #include "spibus.h"
 #include "dbg.h"
 #include "board_pins.h"
+#include "display_addr.h"
 #include <Wire.h>
 #include <SPI.h>
 #include "SensorPCF8563.hpp"
@@ -102,11 +103,13 @@ BoardStatus boardInit()
 
     // Verify the panel actually acks before trusting it. U8g2's begin() returns
     // success unconditionally over I2C, so on its own it proves nothing -- this
-    // is how the wrong address went unnoticed.
-    Wire.beginTransmission(DISPLAY_I2C_ADDR);
-    bool panelPresent = (Wire.endTransmission() == 0);
+    // is how the wrong address went unnoticed. Board batches put the panel at
+    // different addresses; displayAddressFor() picks (0x3D first, see header).
+    auto acks = [](uint8_t addr) { Wire.beginTransmission(addr); return Wire.endTransmission() == 0; };
+    st.displayAddr = displayAddressFor(acks(DISPLAY_I2C_ADDR), acks(DISPLAY_I2C_ADDR_ALT));
+    bool panelPresent = st.displayAddr != 0;
 
-    display.setI2CAddress(DISPLAY_I2C_ADDR << 1);
+    display.setI2CAddress((panelPresent ? st.displayAddr : DISPLAY_I2C_ADDR) << 1);
     st.display = panelPresent && display.begin();
     g_displayOk = st.display;
     if (st.display) {

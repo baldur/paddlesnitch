@@ -289,7 +289,9 @@ void setup()
     report("PMU",     board.pmu);
     report("GPS",     board.gps, "UART open, waiting for NMEA");
     report("Radio",   board.radio, radioDetail);
-    report("Display", board.display, board.display ? "" : "panel did not ack");
+    char displayDetail[24];
+    snprintf(displayDetail, sizeof(displayDetail), board.display ? "at 0x%02X" : "panel did not ack", board.displayAddr);
+    report("Display", board.display, displayDetail);
 
 #if PACKET_SELFTEST
     pktSelfTest();

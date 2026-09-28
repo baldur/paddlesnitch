@@ -690,11 +690,15 @@ Other constraints worth keeping:
 
 ## Board-specific gotchas
 
-- **The OLED is at I2C `0x3D`, not `0x3C`.** LilyGO's header implies `0x3C`, and
-  a device does ack there — but it is not the panel. Driving `0x3C` gives a
-  permanently blank screen with no error. Verified with `tools/flash.sh -e
-  displayprobe`, which renders a distinct digit per controller/address candidate.
-  What `0x3C` actually is remains unidentified.
+- **The OLED's I2C address depends on the board batch.** The first tracker
+  (5A43CA48): panel at `0x3D`, and something that is NOT the panel acks at `0x3C`
+  (driving it gives a permanently blank screen with no error). The 2026-09 batch
+  (paddle02 onwards): panel at `0x3C`, nothing at `0x3D`. `boardInit()` probes both
+  and `displayAddressFor()` (`include/display_addr.h`, host-tested) prefers `0x3D`
+  whenever it acks, else `0x3C`; the bring-up report says which (`Display [ok] at
+  0x3C`). Before 0.15.0 only `0x3D` was tried, so new boards booted fine with a
+  blank screen. Diagnose with `tools/flash.sh -e displayprobe`, which prints an I2C
+  scan and renders a distinct digit per controller/address candidate.
 - **`U8g2::begin()` returns success unconditionally over I2C.** It cannot tell
   you the panel is there, let alone that the controller matches — this is how the
   wrong address survived a "Display [ok]" report. `boardInit()` now gates it on a
