@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const email = typeof body?.email === 'string' ? body.email.toLowerCase().trim() : ''
   if (!email) {
-    return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter your email address.' }, { status: 400 })
   }
 
   // Anti-bot gate runs BEFORE any Cognito work. This endpoint both sends an SES
@@ -35,15 +35,15 @@ export async function POST(req: NextRequest) {
       const displayName = email.split('@')[0]
       const created = await signUp(email, displayName, random)
       if ('error' in created) {
-        return NextResponse.json({ error: 'Could not start sign-in' }, { status: 500 })
+        return NextResponse.json({ error: 'Couldn’t start sign-in. Please try again.' }, { status: 500 })
       }
       const retry = await otpRequest(email)
       if ('error' in retry) {
-        return NextResponse.json({ error: 'Could not start sign-in' }, { status: 500 })
+        return NextResponse.json({ error: 'Couldn’t start sign-in. Please try again.' }, { status: 500 })
       }
       return NextResponse.json({ session: retry.session })
     }
-    return NextResponse.json({ error: 'Could not start sign-in' }, { status: 500 })
+    return NextResponse.json({ error: 'Couldn’t start sign-in. Please try again.' }, { status: 500 })
   }
   return NextResponse.json({ session: result.session })
 }

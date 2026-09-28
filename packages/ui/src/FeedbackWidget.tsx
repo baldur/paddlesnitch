@@ -59,10 +59,10 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error ?? 'Could not file the report')
+      if (!res.ok) throw new Error(data?.error ?? 'Couldn’t send your report. Please try again.')
       setIssueUrl(data?.url ?? ''); setStatus('done')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not file the report'); setStatus('error')
+      setError(err instanceof Error ? err.message : 'Couldn’t send your report. Please try again.'); setStatus('error')
     }
   }
 

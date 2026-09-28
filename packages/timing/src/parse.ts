@@ -65,3 +65,15 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
     return { ok: false, reason: 'parse_error' }
   }
 }
+
+// What to tell a person whose file didn't parse. One wording for every upload
+// path (trial upload, course check, paddle upload); each used to have its own,
+// and one showed the raw reason code.
+export function parseFailureMessage(reason: Extract<ParseResult, { ok: false }>['reason']): string {
+  switch (reason) {
+    case 'kml_no_timing': return 'KML files have no timestamps, so we can’t time them. Export your activity as GPX, FIT or TCX instead.'
+    case 'unknown_format': return 'We can’t read that file type. Upload a GPX, FIT, TCX or CSV file, or a Garmin .zip.'
+    case 'empty': return 'That file has no GPS points with times. Export the whole activity as GPX, FIT or TCX.'
+    case 'parse_error': return 'We couldn’t read that file. It may be damaged. Try exporting it again as GPX, FIT or TCX.'
+  }
+}

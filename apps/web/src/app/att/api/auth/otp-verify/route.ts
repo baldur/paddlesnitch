@@ -13,12 +13,12 @@ export async function POST(req: NextRequest) {
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
 
   if (!email || !session || !code) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter the code from your email.' }, { status: 400 })
   }
 
   const result = await otpVerify(email, session, code)
   if ('error' in result) {
-    return NextResponse.json({ error: 'Could not verify code' }, { status: 400 })
+    return NextResponse.json({ error: 'That code didn’t work. Check it and try again.' }, { status: 400 })
   }
   if ('needsAnotherTry' in result) {
     return NextResponse.json(
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const user = await verifyIdToken(result.idToken)
   if (!user) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 500 })
+    return NextResponse.json({ error: 'Sign-in didn’t finish. Please try again.' }, { status: 500 })
   }
   const res = NextResponse.json({ id: user.id, email: user.email, displayName: user.displayName })
   setAuthCookies(res.cookies, result.idToken, result.refreshToken)

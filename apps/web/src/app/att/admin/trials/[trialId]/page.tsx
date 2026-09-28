@@ -77,7 +77,7 @@ export default function TrialAdminPage({
     })
     const updated = await res.json()
     if (!res.ok) {
-      alert(updated.error ?? 'Could not change visibility')
+      alert(updated.error ?? 'Couldn’t change who can see this. Please try again.')
       return
     }
     setTrial(updated)
@@ -117,12 +117,12 @@ export default function TrialAdminPage({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Could not invite')
+        throw new Error(data.error ?? 'Couldn’t send the invitation. Please try again.')
       }
       setInviteEmail('')
       await loadInvitees()
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : 'Could not invite')
+      setInviteError(err instanceof Error ? err.message : 'Couldn’t send the invitation. Please try again.')
     } finally {
       setInviting(false)
     }
@@ -207,10 +207,10 @@ export default function TrialAdminPage({
               title={
                 course.visibility === 'private'
                   ? 'Course is private, so this trial is private too.'
-                  : 'Toggle who can see this trial.'
+                  : 'Change who can see this trial.'
               }
             >
-              {trial.visibility === 'public' ? 'PUBLIC ↔ PRIVATE' : 'PRIVATE ↔ PUBLIC'}
+              {trial.visibility === 'public' ? 'MAKE PRIVATE' : 'MAKE PUBLIC'}
             </button>
             <span className="text-xs text-muted tracking-widest self-center">SUBMIT:</span>
             {(['members', 'invitational', 'public'] as const).map(v => (
@@ -251,15 +251,14 @@ export default function TrialAdminPage({
 
               {gated && (
                 <div className="border border-border bg-surface-2 text-fg text-xs px-3 py-2 mb-4">
-                  Heads-up: this trial is <b>{trial.participation}</b>, so people who follow the plain link above will need to{' '}
-                  {trial.participation === 'members' ? 'join the group' : 'be invited'} before they can submit. Use the{' '}
-                  <b>submit link</b> below to let anyone you share it with sign up and submit directly — or set “Submit” to <b>PUBLIC</b>.
+                  Only {trial.participation === 'members' ? 'group members' : 'invited people'} can submit to this trial. To let
+                  anyone with the link submit, create a <b>submit link</b> below, or set Submit to <b>PUBLIC</b>.
                 </div>
               )}
 
               <label className="text-xs text-muted tracking-widest">SUBMIT LINK</label>
               <p className="text-xs text-muted mt-1 mb-2">
-                Anyone with this link can sign up and submit to this trial{gated ? ', even though it’s gated' : ''}. Revoke it any time.
+                Anyone with this link can sign up and submit to this trial{gated ? ', even if they aren’t in the group or invited' : ''}. Revoke it any time.
               </p>
               {submitLink ? (
                 <div className="flex flex-col sm:flex-row gap-2">

@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useEffect } from 'react'
 import type { AnalysisPoint, Segment } from '@paddlesnitch/analysis/analysis'
+import { split500 } from '@paddlesnitch/analysis/analysis'
 
 // Esri Dark Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
 // "API key required" nag tile once over their informal limit.) Native tiles cap
@@ -59,11 +60,11 @@ export default function AnalysisMap({ points, stops, surges, metric, cursor, pic
         const color = v == null ? '#475569' : ramp((v - lo) / (hi - lo || 1))
         return (
           <Polyline key={i} positions={[[points[i].lat, points[i].lng], [p.lat, p.lng]]} pathOptions={{ color, weight: 4, opacity: 0.95 }}>
-            <Tooltip sticky>{fmt(p.t)} · {p.speed.toFixed(2)} m/s{p.sr != null ? ` · ${Math.round(p.sr)} spm` : ''}</Tooltip>
+            <Tooltip sticky>{fmt(p.t)} · {p.speed > 0 ? `${split500(p.speed)}/500` : 'stopped'}{p.sr != null ? ` · ${Math.round(p.sr)} spm` : ''}</Tooltip>
           </Polyline>
         )
       })}
-      {surges.map((s, i) => { const p = nearest((s.fromT + s.toT) / 2); return <CircleMarker key={`s${i}`} center={[p.lat, p.lng]} radius={9} pathOptions={{ color: '#fff', weight: 2, fillOpacity: 0 }}><Tooltip>dig {i + 1} · {fmt(s.durS)}{s.avgSR != null ? ` · ${Math.round(s.avgSR)} spm` : ''}{s.trend ? ` · ${s.trend}` : ''}</Tooltip></CircleMarker> })}
+      {surges.map((s, i) => { const p = nearest((s.fromT + s.toT) / 2); return <CircleMarker key={`s${i}`} center={[p.lat, p.lng]} radius={9} pathOptions={{ color: '#fff', weight: 2, fillOpacity: 0 }}><Tooltip>effort {i + 1} · {fmt(s.durS)}{s.avgSR != null ? ` · ${Math.round(s.avgSR)} spm` : ''}{s.trend ? ` · ${s.trend}` : ''}</Tooltip></CircleMarker> })}
       {stops.map((s, i) => { const p = nearest(s.fromT); return <CircleMarker key={`r${i}`} center={[p.lat, p.lng]} radius={7} pathOptions={{ color: '#38bdf8', weight: 2, fillOpacity: 0 }}><Tooltip>rest {Math.round(s.durS)}s</Tooltip></CircleMarker> })}
       <CircleMarker center={[points[0].lat, points[0].lng]} radius={6} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }}><Tooltip>start</Tooltip></CircleMarker>
       <CircleMarker center={[points[points.length - 1].lat, points[points.length - 1].lng]} radius={6} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }}><Tooltip>finish</Tooltip></CircleMarker>

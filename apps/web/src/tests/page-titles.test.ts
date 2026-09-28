@@ -8,21 +8,28 @@ import { metadata as trials } from '@/app/att/layout'
 import { metadata as paddles } from '@/app/paddles/layout'
 import { metadata as profile } from '@/app/profile/layout'
 import { metadata as privacy } from '@/app/att/privacy/page'
+import { metadata as devices } from '@/app/devices/layout'
 
 describe('page titles', () => {
   it('the site adds its name to every page title', () => {
     expect(root.title).toEqual({ default: 'paddlesnitch', template: '%s · paddlesnitch' })
   })
+  // A section's plain string title would cancel the root template for every
+  // page under it (the privacy page's tab lost "· paddlesnitch" that way).
   it.each([
     ['Trials', trials.title],
     ['Paddles', paddles.title],
     ['Profile', profile.title],
-    ['Privacy policy', privacy.title],
-  ])('%s names itself', (expected, title) => {
-    expect(title).toBe(expected)
+    ['Devices', devices.title],
+  ])('%s names itself and keeps the site-name template for its pages', (expected, title) => {
+    expect(title).toEqual({ default: expected, template: '%s · paddlesnitch' })
+  })
+
+  it('the privacy page names itself', () => {
+    expect(privacy.title).toBe('Privacy policy')
   })
   it('nothing is still titled ATTS', () => {
-    for (const m of [root, trials, paddles, profile, privacy]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)
+    for (const m of [root, trials, paddles, profile, privacy, devices]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)
   })
 })
 

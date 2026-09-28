@@ -31,17 +31,17 @@ function AuthForm() {
   // legacy magic-link). Map known keys to user-friendly messages once.
   const initialError = (() => {
     const e = searchParams.get('error')
-    if (e === 'magic_disabled') return 'Magic link sign-in is temporarily unavailable. Please use email and password.'
+    if (e === 'magic_disabled') return 'That sign-in link no longer works. Use an email code or your password.'
     if (e === 'strava_denied') return 'You cancelled the Strava sign-in.'
-    if (e === 'strava_state_mismatch') return 'Strava sign-in failed (state mismatch). Please try again.'
-    if (e === 'strava_exchange_failed') return 'Strava sign-in failed during token exchange. Please try again.'
-    if (e === 'strava_profile_failed') return 'Could not load your Strava profile. Please try again.'
+    if (e === 'strava_state_mismatch') return 'Strava sign-in didn’t finish. Please try again.'
+    if (e === 'strava_exchange_failed') return 'Strava sign-in didn’t finish. Please try again.'
+    if (e === 'strava_profile_failed') return 'Couldn’t load your Strava profile. Please try again.'
     // strava_no_email was retired — Strava never shares email with
     // third-party apps, so we now synthesise a placeholder address at
     // sign-in. See src/app/att/api/auth/strava/callback/route.ts.
-    if (e === 'strava_user_create_failed') return 'Could not create an account from your Strava profile. Please try email sign-up.'
-    if (e === 'strava_signin_failed') return 'Could not complete Strava sign-in. Please try again.'
-    if (e === 'strava_not_configured') return 'Strava sign-in is not configured on this server.'
+    if (e === 'strava_user_create_failed') return 'Couldn’t create an account from your Strava profile. Please sign up with your email instead.'
+    if (e === 'strava_signin_failed') return 'Strava sign-in didn’t finish. Please try again.'
+    if (e === 'strava_not_configured') return 'Strava sign-in isn’t available right now.'
     return ''
   })()
   const [error, setError] = useState(initialError)
@@ -69,7 +69,7 @@ function AuthForm() {
         router.push(next)
       } else {
         const data = await res.json()
-        setError(data.error ?? 'Sign in failed')
+        setError(data.error ?? 'Couldn’t sign you in. Please try again.')
         setLoading(false)
       }
     } catch {
@@ -96,7 +96,7 @@ function AuthForm() {
         router.push(next)
       } else {
         const data = await res.json()
-        setError(data.error ?? 'Sign up failed')
+        setError(data.error ?? 'Couldn’t sign you up. Please try again.')
         setLoading(false)
       }
     } catch {
@@ -116,10 +116,10 @@ function AuthForm() {
         body: JSON.stringify({ email, website, elapsedMs: Date.now() - mountedAt.current }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error ?? 'Could not send code')
+      if (!res.ok) throw new Error(data?.error ?? 'Couldn’t send the code. Please try again.')
       setOtpSession(data.session)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send code')
+      setError(err instanceof Error ? err.message : 'Couldn’t send the code. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -140,11 +140,11 @@ function AuthForm() {
         // Server returns a new session on retryable failures; swap it in
         // so the next attempt continues the same Cognito session.
         if (data?.session) setOtpSession(data.session)
-        throw new Error(data?.error ?? 'Could not verify code')
+        throw new Error(data?.error ?? 'That code didn’t work. Check it and try again.')
       }
       router.push(next)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not verify code')
+      setError(err instanceof Error ? err.message : 'That code didn’t work. Check it and try again.')
       setLoading(false)
     }
   }
@@ -170,10 +170,8 @@ function AuthForm() {
         <StravaButton href={stravaHref} />
       </div>
       <p className="text-xs text-muted mb-6 text-center leading-relaxed">
-        Strava doesn&apos;t share your email, so after you continue we&apos;ll ask you to add one — that&apos;s
-        how we reach you about your account and group invitations. Already have an email account here?
-        Sign in below first and connect Strava from your account page, so it links to that account
-        instead of creating a new one.
+        Strava doesn&apos;t share your email, so we&apos;ll ask for one. Already have an account? Sign in
+        below first, then connect Strava in your account, so you don&apos;t end up with two.
       </p>
       <div className="flex items-center gap-3 mb-6 text-xs text-muted tracking-widest">
         <span className="flex-1 h-px bg-border" />
@@ -429,9 +427,9 @@ export default function AuthPage() {
   return (
     <main className="flex-1 flex flex-col">
       <header className="border-b border-border px-4 py-3">
-        <Link href="/att">
-          <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
-          <span className="text-muted text-xs tracking-widest ml-3 hidden sm:inline">AUTOMATED TIME TRIALS</span>
+        {/* Sign-in is for the whole site, not only Trials. */}
+        <Link href="/">
+          <span className="text-fg font-bold text-lg tracking-widest">paddlesnitch</span>
         </Link>
       </header>
       <div className="flex-1 flex items-start justify-center pt-16 px-4">

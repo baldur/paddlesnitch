@@ -271,7 +271,7 @@ export default function DeviceDetailPage() {
                 {open === s.sessionId && (
                   <div className="px-4 pb-4">
                     {reports[s.sessionId] === 'loading' && <p className="text-xs text-muted">Reading…</p>}
-                    {reports[s.sessionId] === 'error' && <p className="text-xs text-red">Could not read this session.</p>}
+                    {reports[s.sessionId] === 'error' && <p className="text-xs text-red">Couldn’t read this recording. Please try again.</p>}
                     {reports[s.sessionId] && reports[s.sessionId] !== 'loading' && reports[s.sessionId] !== 'error' && (
                       <Report {...(reports[s.sessionId] as SessionReport)} sessionId={s.sessionId} deviceId={s.deviceId} />
                     )}

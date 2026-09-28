@@ -27,12 +27,12 @@ function ResetForm() {
         body: JSON.stringify({ email, code, password }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error ?? 'Could not reset password')
+      if (!res.ok) throw new Error(data?.error ?? 'Couldn’t reset your password. Please try again.')
       // Server auto-signs the user in if it can; if it couldn't, send to login.
       if (data?.signedIn) router.push('/')
       else router.push('/att/auth?reset=ok')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reset password')
+      setError(err instanceof Error ? err.message : 'Couldn’t reset your password. Please try again.')
       setLoading(false)
     }
   }
@@ -111,8 +111,8 @@ export default function ResetPasswordPage() {
   return (
     <main className="flex-1 flex flex-col">
       <header className="border-b border-border px-4 py-3">
-        <Link href="/att">
-          <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
+        <Link href="/">
+          <span className="text-fg font-bold text-lg tracking-widest">paddlesnitch</span>
         </Link>
       </header>
       <div className="flex-1 flex items-start justify-center pt-16 px-4">

@@ -114,10 +114,10 @@ export default function GroupDetailPage({
           body: JSON.stringify(token ? { token } : {}),
         })
         const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.error ?? 'Could not join')
+        if (!res.ok) throw new Error(data.error ?? 'Couldn’t join the group. Please try again.')
         await loadAll() // reflect accepted (now a member) or pending
       } catch (err) {
-        setJoinError(err instanceof Error ? err.message : 'Could not join')
+        setJoinError(err instanceof Error ? err.message : 'Couldn’t join the group. Please try again.')
       } finally {
         setJoining(false)
       }
@@ -186,7 +186,7 @@ export default function GroupDetailPage({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Could not invite')
+        throw new Error(data.error ?? 'Couldn’t send the invitation. Please try again.')
       }
       const data = await res.json()
       const invited = inviteEmail.trim()
@@ -198,7 +198,7 @@ export default function GroupDetailPage({
         setInviteWarning(`Invitation to ${invited} saved, but the email couldn’t be sent. Try again, or share the group link with them directly.`)
       }
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : 'Could not invite')
+      setInviteError(err instanceof Error ? err.message : 'Couldn’t send the invitation. Please try again.')
     } finally {
       setInviting(false)
     }
@@ -344,7 +344,7 @@ export default function GroupDetailPage({
             </form>
             {inviteError && <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs mt-3">{inviteError}</div>}
             {inviteWarning && <div className="border border-border bg-surface-2 px-3 py-2 text-fg text-xs mt-3">{inviteWarning}</div>}
-            <p className="text-xs text-muted mt-3">If the email has no account yet, the invitation will activate the moment they sign up.</p>
+            <p className="text-xs text-muted mt-3">If they don’t have an account yet, they’ll join when they sign up.</p>
           </section>
         )}
 
@@ -358,7 +358,7 @@ export default function GroupDetailPage({
                     <div className="text-fg truncate">{i.toEmail ?? i.toUserId}</div>
                     <div className="text-xs text-muted">role: {i.role}</div>
                   </div>
-                  <button onClick={() => removeInvitation(i.id)} className="text-xs text-muted hover:text-red tracking-widest">RESCIND</button>
+                  <button onClick={() => removeInvitation(i.id)} className="text-xs text-muted hover:text-red tracking-widest">CANCEL INVITE</button>
                 </div>
               ))}
             </div>
@@ -413,7 +413,7 @@ export default function GroupDetailPage({
           <section className="border-t border-border pt-8">
             <h2 className="text-xs text-red tracking-[0.2em] uppercase mb-3">Delete group</h2>
             <p className="text-sm text-muted mb-3">
-              Tears down the group, its invitations, and removes it from every member&apos;s list.
+              Deletes the group and its invitations, and removes all its members.
               Courses and trials scoped to this group fall back to private (you can re-scope them later).
             </p>
             <button onClick={deleteGroup} className="px-4 py-2 border border-red text-red text-xs font-bold tracking-widest hover:bg-red hover:text-white transition-colors">

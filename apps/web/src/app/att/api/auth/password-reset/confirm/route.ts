@@ -11,10 +11,10 @@ export async function POST(req: NextRequest) {
   const password = typeof body?.password === 'string' ? body.password : ''
 
   if (!email || !code || !password) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter your email, the code and a new password.' }, { status: 400 })
   }
   if (password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
+    return NextResponse.json({ error: 'Use at least 8 characters, with an uppercase letter, a lowercase letter and a number.' }, { status: 400 })
   }
 
   const result = await confirmForgotPassword(email, code, password)
@@ -27,10 +27,10 @@ export async function POST(req: NextRequest) {
     }
     if (result.error === 'invalid_password') {
       return NextResponse.json({
-        error: 'Password must contain an uppercase letter, a lowercase letter, and a number.',
+        error: 'Use at least 8 characters, with an uppercase letter, a lowercase letter and a number.',
       }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Could not reset password' }, { status: 400 })
+    return NextResponse.json({ error: 'Couldn’t reset your password. Please try again.' }, { status: 400 })
   }
 
   // Auto-sign-in so the user lands on /att without an extra step.

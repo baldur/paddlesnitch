@@ -33,10 +33,10 @@ export default function ReferenceTraceValidator({ geometry }: { geometry: Geomet
       form.append('geometry', JSON.stringify(geometry))
       const res = await fetch('/att/api/courses/validate-trace', { method: 'POST', body: form })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Validation failed')
+      if (!res.ok) throw new Error(data.error ?? 'Couldn’t check that file. Please try again.')
       setResult(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Validation failed')
+      setError(err instanceof Error ? err.message : 'Couldn’t check that file. Please try again.')
     } finally {
       setStatus('idle')
     }

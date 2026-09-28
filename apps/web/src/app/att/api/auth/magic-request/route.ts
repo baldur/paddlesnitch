@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 // magic link will be re-added via Cognito Custom Auth Lambda triggers in a follow-up.
 export async function POST() {
   return NextResponse.json(
-    { error: 'Magic link sign-in is temporarily disabled. Please use email and password.' },
+    { error: 'Sign-in links aren’t available. Use an email code or your password.' },
     { status: 501 }
   )
 }

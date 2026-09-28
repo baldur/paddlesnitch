@@ -88,7 +88,7 @@ describe('AnalysisView mobile panels (#187)', () => {
     expect(narrative!.className).toMatch(/max-h-\[\d+vh\]/)
     // the SAME flex column contains both the narrative and the SEGMENTS panel
     const column = divs.find(el =>
-      el.className.includes('flex-col') && el.textContent?.includes('x x') && el.textContent?.includes('SEGMENTS'))
+      el.className.includes('flex-col') && el.textContent?.includes('x x') && el.textContent?.includes('EFFORTS AND RESTS'))
     expect(column).toBeTruthy()
   })
 
@@ -97,9 +97,9 @@ describe('AnalysisView mobile panels (#187)', () => {
     expect(container.textContent).toContain('EFFORTS')
 
     await act(async () => { btn('Minimise segments')!.click() })
-    expect(container.textContent).not.toContain('EFFORTS')
+    expect(container.textContent).not.toMatch(/EFFORTS \(\d+\)/)
     // The panel header (with the expand control) is still there.
-    expect(container.textContent).toContain('SEGMENTS')
+    expect(container.textContent).toContain('EFFORTS AND RESTS')
     expect(btn('Expand segments')).not.toBeNull()
   })
 })

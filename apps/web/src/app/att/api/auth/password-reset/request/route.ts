@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const email = typeof body?.email === 'string' ? body.email.toLowerCase().trim() : ''
   if (!email) {
-    return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter your email address.' }, { status: 400 })
   }
   // Anti-bot gate before the SES send. On a bot signal we skip forgotPassword
   // entirely and return the same { ok: true } we'd return for a non-existent

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { parseTrace } from '@/lib/parse'
+import { parseTrace, parseFailureMessage } from '@/lib/parse'
 import { processTrace, diagnoseGates, gateDiagnosisMessage } from '@/lib/geo'
 import type { CourseType, Line } from '@/lib/types'
 
@@ -29,27 +29,27 @@ export async function POST(req: NextRequest) {
   const form = await req.formData()
   const file = form.get('file')
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    return NextResponse.json({ error: 'Choose a file to check.' }, { status: 400 })
   }
 
   let geometry: Geometry
   try {
     geometry = JSON.parse(String(form.get('geometry')))
   } catch {
-    return NextResponse.json({ error: 'Invalid geometry' }, { status: 400 })
+    return NextResponse.json({ error: 'The course lines aren’t complete. Draw them all, then check again.' }, { status: 400 })
   }
   // Just enough validation to run the matcher meaningfully.
   if (geometry.type === 'gate') {
     if (!Array.isArray(geometry.gates) || geometry.gates.length < 2) {
-      return NextResponse.json({ error: 'A gate course needs at least 2 gates to validate.' }, { status: 400 })
+      return NextResponse.json({ error: 'Draw at least 2 gates, then check again.' }, { status: 400 })
     }
   } else if (!geometry.startLine) {
-    return NextResponse.json({ error: 'Draw the course lines before validating.' }, { status: 400 })
+    return NextResponse.json({ error: 'Draw the course lines, then check again.' }, { status: 400 })
   }
 
   const parsed = await parseTrace(file.name, await file.arrayBuffer())
   if (!parsed.ok) {
-    return NextResponse.json({ error: `Could not parse file: ${parsed.reason}` }, { status: 422 })
+    return NextResponse.json({ error: parseFailureMessage(parsed.reason) }, { status: 422 })
   }
 
   const result = processTrace(

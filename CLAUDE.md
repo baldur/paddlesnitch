@@ -991,6 +991,19 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 CSS utilities in `globals.css`: `.tabular` (tabular-nums), `.tt-link`/`.tt-nav-link` (token-based).
 Maps: dark tiles (Esri World Dark Gray); att maps still default to light with a dark toggle (flip pending — see the spec's follow-ups). No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets ≥ 44px. The historical light palette values (`#ffffff`/`#0f172a`/…) are retained in comments in `tokens.css` as a possible future light mode.
 
+### Writing for the site
+
+Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed; add to its list when you retire a word.
+
+1. **One name per thing:** Trials (URL `/att`), Paddles, Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
+2. **Buttons:** 1–3 uppercase words that say what happens (SAVE, ADD, REMOVE TRACKER). Loading = same verb + "…". No emoji.
+3. **Labels and headings:** uppercase (in source, or via `uppercase`); helper text on its own muted line below, sentence case.
+4. **Errors:** "Couldn't …" + what to do ("Please try again." only when retrying helps). Never codes, vendor names (Cognito, JWT, S3), "token", "state", "endpoint", raw enums.
+5. **One idea per sentence, ~20 words max;** helper text two sentences at most. No marketing filler (suite, seamless, unlock, journey, "actually happened"), no lists of three for rhythm, few em-dashes.
+6. **Don't blame the reader** ("We can't find this paddle", not "it isn't yours"), and **don't claim causes the data can't show** ("slowed", not "faded (fatigue)").
+7. **Units:** lowercase with a space — `2.1 km`, `/500 m`, `58 spm`; pace is `/500`, not m/s.
+8. **No AI model names on screen.** AI-written text follows the same rules.
+
 ### Key Conventions
 
 - All IDs: `nanoid()` — URL-safe, short.

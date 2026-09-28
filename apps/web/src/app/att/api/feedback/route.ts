@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     // No token configured (e.g. local dev without secrets). Don't 500 the
     // user — surface a clear status so the widget can tell them.
     return NextResponse.json(
-      { error: 'Feedback endpoint not configured on this environment.' },
+      { error: 'Reporting isn’t working right now. Please email privacy@paddlesnitch.com.' },
       { status: 503 },
     )
   }
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
   if (!ghRes.ok) {
     // Don't leak GitHub error details to the customer — they can't act on it.
     return NextResponse.json(
-      { error: 'Sorry, we could not file your report. Please try again later.' },
+      { error: 'Couldn’t send your report. Please try again later.' },
       { status: 502 },
     )
   }

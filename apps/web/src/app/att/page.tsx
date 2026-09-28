@@ -58,14 +58,7 @@ export default async function Home() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader
-        breadcrumb={
-          <>
-            <span className="text-fg font-bold text-lg tracking-widest">ATT</span>
-            <span className="text-muted text-xs tracking-widest hidden sm:inline">paddlesnitch.com</span>
-          </>
-        }
-      >
+      <AppHeader>
         <Link href="/att/courses" className="tt-nav-link">
           COURSES
         </Link>
@@ -85,10 +78,10 @@ export default async function Home() {
 
       <section className="border-b border-border px-4 py-12 text-center bg-surface">
         <p className="text-muted text-xs tracking-[0.3em] uppercase mb-3">
-          GPS-verified river racing
+          Timed from your GPS file
         </p>
         <h1 className="text-4xl md:text-5xl font-bold text-fg mb-2">
-          Automated Time Trials
+          Time trials
         </h1>
         <p className="text-muted text-sm">Upload your trace. See your splits.</p>
       </section>
@@ -99,7 +92,7 @@ export default async function Home() {
           {/* Open trials */}
           <div>
             <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
-              Open Time Trials
+              Open time trials
             </h2>
             {openTrials.length === 0 ? (
               <div className="border border-border p-8 text-center text-muted text-sm">
@@ -170,7 +163,7 @@ export default async function Home() {
           {/* Recent submissions */}
           <div>
             <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
-              Recent Submissions
+              Recent results
             </h2>
             {recent.length === 0 ? (
               <div className="border border-border p-8 text-center text-muted text-sm">

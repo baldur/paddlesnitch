@@ -68,7 +68,7 @@ export default function DeviceSessionPage() {
       } />
       <div className="flex-1 px-4 py-8 max-w-4xl mx-auto w-full flex flex-col gap-6">
         {state === 'loading' && <LoadingState label="Reading session" />}
-        {state === 'error' && <p className="text-sm text-red">Could not read this session.</p>}
+        {state === 'error' && <p className="text-sm text-red">Couldn’t read this recording. Please try again.</p>}
 
         {state === 'ready' && meta === 'missing' && (
           <p className="text-sm text-muted">

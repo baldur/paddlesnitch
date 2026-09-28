@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { courseId, name, date, visibility, participation } = body
   if (!courseId || !name || !date) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Give the trial a course, a name and a date.' }, { status: 400 })
   }
 
   const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)

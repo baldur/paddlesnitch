@@ -17,10 +17,10 @@ type StravaStatus =
 // finishes. Keeps redirects round-trippable instead of relying on session state.
 const STRAVA_FLASH: Record<string, { tone: 'ok' | 'err'; text: string }> = {
   connected: { tone: 'ok', text: 'Strava connected.' },
-  denied: { tone: 'err', text: 'Strava connection cancelled.' },
-  state_mismatch: { tone: 'err', text: 'Strava connect failed (state mismatch). Please try again.' },
-  exchange_failed: { tone: 'err', text: 'Strava connect failed during token exchange. Please try again.' },
-  not_configured: { tone: 'err', text: 'Strava is not configured on this server.' },
+  denied: { tone: 'err', text: 'You cancelled connecting Strava.' },
+  state_mismatch: { tone: 'err', text: 'Connecting Strava didn’t finish. Please try again.' },
+  exchange_failed: { tone: 'err', text: 'Connecting Strava didn’t finish. Please try again.' },
+  not_configured: { tone: 'err', text: 'Connecting Strava isn’t available right now.' },
 }
 
 export default function AccountPage() {
@@ -103,12 +103,12 @@ function AccountPageInner() {
         body: JSON.stringify({ handle: handleInput.trim() }),
       })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not save handle')
+      if (!res.ok) throw new Error(body.error ?? 'Couldn’t save your handle. Please try again.')
       setHandle(body.handle ?? null)
       setHandleInput(body.handle ?? '')
       setHandleMsg('Saved.')
     } catch (err) {
-      setHandleMsg(err instanceof Error ? err.message : 'Could not save handle')
+      setHandleMsg(err instanceof Error ? err.message : 'Couldn’t save your handle. Please try again.')
     } finally {
       setHandleSaving(false)
     }
@@ -119,12 +119,12 @@ function AccountPageInner() {
     setHandleSaving(true)
     try {
       const res = await fetch('/api/account/handle', { method: 'DELETE' })
-      if (!res.ok) throw new Error('Could not release handle')
+      if (!res.ok) throw new Error('Couldn’t remove your handle. Please try again.')
       setHandle(null)
       setHandleInput('')
       setHandleMsg('Handle released.')
     } catch (err) {
-      setHandleMsg(err instanceof Error ? err.message : 'Could not release handle')
+      setHandleMsg(err instanceof Error ? err.message : 'Couldn’t remove your handle. Please try again.')
     } finally {
       setHandleSaving(false)
     }
@@ -140,10 +140,10 @@ function AccountPageInner() {
         body: JSON.stringify({ public: next }),
       })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not update profile')
+      if (!res.ok) throw new Error(body.error ?? 'Couldn’t update your profile. Please try again.')
       setProfilePublic(!!body.public)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update profile')
+      setError(err instanceof Error ? err.message : 'Couldn’t update your profile. Please try again.')
     } finally {
       setProfileSaving(false)
     }
@@ -160,11 +160,11 @@ function AccountPageInner() {
         body: JSON.stringify({ email: contactEmail.trim() }),
       })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not save email')
+      if (!res.ok) throw new Error(body.error ?? 'Couldn’t save the email. Please try again.')
       setContactSaved(body.contact.email)
       setContactMsg('Saved.')
     } catch (err) {
-      setContactMsg(err instanceof Error ? err.message : 'Could not save email')
+      setContactMsg(err instanceof Error ? err.message : 'Couldn’t save the email. Please try again.')
     } finally {
       setWorking(null)
     }
@@ -175,12 +175,12 @@ function AccountPageInner() {
     setWorking('contact')
     try {
       const res = await fetch('/api/account/contact', { method: 'DELETE' })
-      if (!res.ok) throw new Error('Could not clear email')
+      if (!res.ok) throw new Error('Couldn’t remove the email. Please try again.')
       setContactSaved(null)
       setContactEmail('')
       setContactMsg('Removed.')
     } catch (err) {
-      setContactMsg(err instanceof Error ? err.message : 'Could not clear email')
+      setContactMsg(err instanceof Error ? err.message : 'Couldn’t remove the email. Please try again.')
     } finally {
       setWorking(null)
     }
@@ -191,10 +191,10 @@ function AccountPageInner() {
     setWorking('strava')
     try {
       const res = await fetch('/att/api/strava/disconnect', { method: 'POST' })
-      if (!res.ok) throw new Error('Disconnect failed')
+      if (!res.ok) throw new Error('Couldn’t disconnect Strava. Please try again.')
       setStrava({ connected: false })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Disconnect failed')
+      setError(err instanceof Error ? err.message : 'Couldn’t disconnect Strava. Please try again.')
     } finally {
       setWorking(null)
     }
@@ -208,10 +208,10 @@ function AccountPageInner() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       })
-      if (!res.ok) throw new Error('Could not update auto-import')
+      if (!res.ok) throw new Error('Couldn’t change auto-import. Please try again.')
     } catch (err) {
       setStrava(s => (s?.connected ? { ...s, autoImport: !enabled } : s))
-      setError(err instanceof Error ? err.message : 'Could not update auto-import')
+      setError(err instanceof Error ? err.message : 'Couldn’t change auto-import. Please try again.')
     }
   }
 
@@ -220,7 +220,7 @@ function AccountPageInner() {
     setWorking('export')
     try {
       const res = await fetch('/api/account/export')
-      if (!res.ok) throw new Error('Export failed')
+      if (!res.ok) throw new Error('Couldn’t prepare your download. Please try again.')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -233,7 +233,7 @@ function AccountPageInner() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed')
+      setError(err instanceof Error ? err.message : 'Couldn’t prepare your download. Please try again.')
     } finally {
       setWorking(null)
     }
@@ -246,12 +246,12 @@ function AccountPageInner() {
       const res = await fetch('/api/account', { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? 'Deletion failed')
+        throw new Error(body.error ?? 'Couldn’t delete your account. Please try again.')
       }
       // Account gone. Send them home.
       router.replace('/att')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Deletion failed')
+      setError(err instanceof Error ? err.message : 'Couldn’t delete your account. Please try again.')
       setWorking(null)
     }
   }
@@ -297,7 +297,8 @@ function AccountPageInner() {
                 <dd className="col-span-2 text-fg tabular">{user.email}</dd>
                 <dt className="text-muted tracking-widest text-xs uppercase">Display name</dt>
                 <dd className="col-span-2 text-fg">{user.displayName}</dd>
-                <dt className="text-muted tracking-widest text-xs uppercase">User ID</dt>
+                {/* For support: the one id we can look an account up by. */}
+                <dt className="text-muted tracking-widest text-xs uppercase">Support ID</dt>
                 <dd className="col-span-2 text-muted tabular text-xs break-all">{user.id}</dd>
               </dl>
             </section>
@@ -311,12 +312,9 @@ function AccountPageInner() {
                   Contact email
                 </h2>
                 <p className="text-sm text-muted mb-4 leading-relaxed">
-                  You signed in with Strava, so the address on your account
-                  ({user.email}) is a placeholder we can&apos;t deliver to.
-                  <span className="text-fg"> Until you add a real email, we have no way to
-                  reach you</span> — including if our Terms of Service change, or if there&apos;s a
-                  problem with your account or a group invitation. Add one below (we&apos;ll never
-                  share it). It&apos;s optional, but recommended.
+                  You signed in with Strava, which doesn&apos;t share your email, so we can&apos;t reach
+                  you. Add an email so we can tell you about your account, group invitations and
+                  changes to our Terms. We never share it.
                 </p>
                 <form onSubmit={saveContactEmail} className="flex flex-col sm:flex-row gap-2 mb-3">
                   <input
@@ -352,13 +350,11 @@ function AccountPageInner() {
 
             <section>
               <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
-                Strava integration
+                Strava
               </h2>
               <p className="text-sm text-muted mb-4 leading-relaxed">
-                Connect Strava once to do two things: import any of your recent water-sport
-                activities straight into a time trial (no GPX export needed), and sign in with
-                Strava next time instead of your email and password. We only request read access
-                and never post anything to your Strava account.
+                Connect Strava to bring in your paddles and trial results without exporting files,
+                and to sign in with Strava. We only read your activities; we never post.
               </p>
 
               {stravaFlash && (
@@ -416,9 +412,8 @@ function AccountPageInner() {
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
                   <PoweredByStrava className="mt-2" />
                   <p className="text-xs text-muted mt-2">
-                    You can now use <span className="text-[#fc4c02]">Continue with Strava</span> on the
-                    sign-in page to log in to this account. Disconnecting stops both activity import and
-                    Strava sign-in.
+                    You can now sign in with Strava. Disconnecting stops both importing and signing in
+                    with Strava.
                   </p>
                 </>
               )}
@@ -437,9 +432,8 @@ function AccountPageInner() {
                 Public profile
               </h2>
               <p className="text-sm text-muted mb-4 leading-relaxed">
-                A public profile page shows your race history, personal bests and stats at a shareable link.
-                It only ever shows results from trials people can already see — private and group-only results stay hidden.
-                Off by default.
+                Show your race results and personal bests on a public page. Private and group-only
+                results stay hidden. Off until you turn it on.
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <button
@@ -484,7 +478,7 @@ function AccountPageInner() {
                     disabled={handleSaving || !handleInput.trim() || handleInput.trim() === handle}
                     className="px-4 py-2 border border-primary text-primary text-xs tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
                   >
-                    {handleSaving ? 'SAVING…' : handle ? 'CHANGE' : 'CLAIM'}
+                    {handleSaving ? 'SAVING…' : handle ? 'CHANGE' : 'SAVE'}
                   </button>
                   {handle && (
                     <button
@@ -493,7 +487,7 @@ function AccountPageInner() {
                       disabled={handleSaving}
                       className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red disabled:opacity-50 transition-colors"
                     >
-                      RELEASE
+                      REMOVE
                     </button>
                   )}
                 </div>
@@ -583,8 +577,7 @@ function AccountPageInner() {
             <section className="text-xs text-muted border-t border-border pt-6">
               See the{' '}
               <Link href="/att/privacy" className="tt-link">privacy policy</Link>{' '}
-              for full details on what we hold, why, and how to exercise rights we can&apos;t handle from
-              this page. For rectification or other requests, email{' '}
+              for what we hold and why. For anything else, email{' '}
               <a href="mailto:privacy@paddlesnitch.com" className="tt-link">
                 privacy@paddlesnitch.com
               </a>

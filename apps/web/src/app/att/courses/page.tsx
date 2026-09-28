@@ -89,7 +89,7 @@ export default async function CoursesCataloguePage() {
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
         <h1 className="text-lg font-bold text-fg tracking-widest mb-2">COURSE CATALOGUE</h1>
         <p className="text-sm text-muted mb-8">
-          Browse all courses. Group admins can open time trials on a course; create a group to organise your own.
+          All courses. To run your own trials, create a group.
         </p>
 
         {courses.length === 0 ? (

@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => ({}))
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+  if (!email) return NextResponse.json({ error: 'Enter an email address.' }, { status: 400 })
   const role = body.role === 'admin' ? 'admin' : 'member'
 
   const baseUrl = canonicalBaseUrl(req)

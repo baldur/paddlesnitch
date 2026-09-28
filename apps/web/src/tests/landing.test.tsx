@@ -21,12 +21,12 @@ const html = renderToStaticMarkup(<LandingContent />)
 
 describe('#210 — landing page is compact on mobile', () => {
   it('lists both products with their CTAs and links', () => {
-    expect(html).toContain('Automated Time Trials')
-    expect(html).toContain('OPEN ATT')
+    expect(html).toContain('Time trials')
+    expect(html).toContain('OPEN TRIALS')
     expect(html).toContain('href="/att"')
 
-    expect(html).toContain('Paddle Analysis')
-    expect(html).toContain('TRY ANALYSIS')
+    expect(html).toContain('Paddles')
+    expect(html).toContain('OPEN PADDLES')
     expect(html).toContain('href="/paddles"')
   })
 
@@ -50,12 +50,16 @@ describe('campaign landing variant', () => {
     expect(html).not.toContain('data-campaign')
   })
 
-  it('shows a campaign marker when a variant is rendered', () => {
+  it('marks a campaign variant in the markup only, never in visible text', () => {
     const variantHtml = renderToStaticMarkup(<LandingContent variant="example1" />)
     expect(variantHtml).toContain('data-campaign="example1"')
-    expect(variantHtml).toContain('campaign: example1')
+    expect(variantHtml).not.toContain('campaign: example1')
     // Same product content as the default — it's the default landing + a marker.
-    expect(variantHtml).toContain('Automated Time Trials')
-    expect(variantHtml).toContain('Paddle Analysis')
+    expect(variantHtml).toContain('Time trials')
+    expect(variantHtml).toContain('Paddles')
+  })
+
+  it('has no marketing filler', () => {
+    expect(html).not.toMatch(/growing suite|disappear into|no-bloat|actually happened/i)
   })
 })

@@ -131,7 +131,7 @@ export default function CourseAdminPage({
       const data = await res.json()
       // Geometry edits on a course with entries return 409 (locked) — the
       // error message is surfaced below. Name/visibility/sport still succeed.
-      if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+      if (!res.ok) throw new Error(data.error ?? 'Couldn’t save. Please try again.')
 
       setCourse(data)
       setEditing(false)
@@ -165,7 +165,7 @@ export default function CourseAdminPage({
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error ?? 'Failed to create trial')
+        throw new Error(data.error ?? 'Couldn’t create the trial. Please try again.')
       }
       const trial = await res.json()
       router.push(`/att/admin/trials/${trial.id}`)
@@ -249,7 +249,7 @@ export default function CourseAdminPage({
             </div>
           </div>
           <p className="text-xs text-muted mb-4">
-            {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
+            {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} m
             {course.type === 'loop' && ' · LOOP'}
             {course.type === 'gate' && ' · GATE'}
           </p>
@@ -407,7 +407,7 @@ export default function CourseAdminPage({
 
         <section>
           <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-            New Time Trial
+            New time trial
           </h2>
           <form onSubmit={createTrial} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
