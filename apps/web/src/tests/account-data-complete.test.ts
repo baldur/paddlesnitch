@@ -141,6 +141,18 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await getUserIdByAthleteId(777)).toBeNull()
   })
 
+  it('deletes the private contact records behind their issue reports, and only theirs', async () => {
+    const me = await makeUser('Me')
+    const other = await makeUser('Other')
+    await putJson('feedback-contacts/1.json', { issueNumber: 1, userId: me.id, email: me.email })
+    await putJson('feedback-contacts/2.json', { issueNumber: 2, userId: other.id, email: other.email })
+
+    signInAs(me.idToken)
+    await deleteAccount()
+
+    expect(await listKeys('feedback-contacts/')).toEqual(['feedback-contacts/2.json'])
+  })
+
   it('takes them out of groups they belong to, with their invitations and join requests', async () => {
     const owner = await makeUser('Owner')
     const me = await makeUser('Me')
@@ -203,6 +215,8 @@ describe('GET /api/account/export includes every kind of personal data', () => {
       { deviceId: 'AABBCCDD', userId: me.id, filename: 'track_001.csv', points: 3 },
       'timestamp,lat,lon\n',
     )
+    await putJson('feedback-contacts/5.json', { issueNumber: 5, userId: me.id, email: me.email })
+    await putJson('feedback-contacts/6.json', { issueNumber: 6, userId: owner.id, email: owner.email })
 
     signInAs(me.idToken)
     const text = await (await exportData()).text()
@@ -218,6 +232,7 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     expect(body.trackers).toHaveLength(1)
     expect(body.trackers[0].deviceId).toBe('AABBCCDD')
     expect(body.trackerRecordings).toHaveLength(1)
+    expect(body.issueReports).toEqual([{ issueNumber: 5, userId: me.id, email: me.email }])
     // Credentials are never exported.
     expect(text).not.toContain('SECRET-A')
     expect(text).not.toContain('SECRET-R')

@@ -7,6 +7,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
 import { POST as feedback } from '@/app/att/api/feedback/route'
 import { cookies } from 'next/headers'
+import { getJson } from '@/lib/storage'
 
 let dataDir: string
 let fetchSpy: ReturnType<typeof vi.spyOn>
@@ -95,24 +96,54 @@ describe('POST /att/api/feedback', () => {
     expect(sent.body).toContain('Reporter: anonymous')
   })
 
-  it('captures the signed-in user when present', async () => {
+  // The repo is PUBLIC. Reporter identity used to go into the issue body, which
+  // published names and email addresses. It is now kept privately, keyed by
+  // issue number, and the issue only says a contact exists.
+  it('keeps a signed-in reporter out of the public issue and stores them privately', async () => {
     const user = await makeUser('Alice')
     mockAuth(user.idToken)
 
     await feedback(jsonReq({ description: 'The upload form crashed.', url: 'https://paddlesnitch.com/att' }))
 
     const sent = sentBody()
-    expect(sent.body).toContain(user.email)
-    expect(sent.body).toContain(user.id)
+    expect(sent.body).not.toContain(user.email)
+    expect(sent.body).not.toContain(user.id)
+    expect(sent.body).not.toContain('Alice')
+    expect(sent.body).toContain('Reporter: signed in (contact kept privately)')
+    expect(await getJson('feedback-contacts/99.json')).toEqual({
+      issueNumber: 99, userId: user.id, displayName: expect.any(String), email: user.email,
+      page: 'https://paddlesnitch.com/att', reportedAt: expect.any(String),
+    })
   })
 
-  it('falls back to the supplied email when not signed in', async () => {
+  it('keeps a typed-in email out of the public issue and stores it privately', async () => {
     mockAnonymous()
     await feedback(jsonReq({
       description: 'I cannot find the open trial.',
       email: 'paddler@example.com',
     }))
-    expect(sentBody().body).toContain('paddler@example.com (no account)')
+    const body = sentBody().body
+    expect(body).not.toContain('paddler@example.com')
+    expect(body).toContain('Reporter: no account, left an email (kept privately)')
+    expect((await getJson<{ email: string }>('feedback-contacts/99.json'))!.email).toBe('paddler@example.com')
+  })
+
+  it('stores nothing privately for an anonymous report with no email', async () => {
+    mockAnonymous()
+    await feedback(jsonReq({ description: 'The leaderboard never loads on my trial.' }))
+    expect(await getJson('feedback-contacts/99.json')).toBeNull()
+  })
+
+  it('drops the query string and fragment from the page URL, which can carry join, invite and claim tokens', async () => {
+    mockAnonymous()
+    await feedback(jsonReq({
+      description: 'Joining the group did nothing.',
+      url: 'https://paddlesnitch.com/att/groups/g1?join=SECRET-JOIN#frag',
+    }))
+    const body = sentBody().body
+    expect(body).toContain('Page: https://paddlesnitch.com/att/groups/g1')
+    expect(body).not.toContain('SECRET-JOIN')
+    expect(body).not.toContain('#frag')
   })
 
   it('returns 400 when the description is too short', async () => {
