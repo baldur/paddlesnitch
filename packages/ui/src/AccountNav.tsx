@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 // att's AuthNav.
 //
 // Signed in, it's a single dropdown ("Name ▾") holding everything common to
-// every page: My profile, Account, Report an issue, Sign out. This keeps the
+// every page: Paddles, Devices, Profile, Account, Report an issue, Sign out. This keeps the
 // TRIALS/ANALYSE tabs + section-specific nav uncluttered in the header. Signed
 // out it's a plain SIGN IN link (anonymous users still get the floating
 // FeedbackWidget button for reporting).
@@ -33,10 +33,8 @@ export default function AccountNav({
   onSignOut,
 }: {
   user: NavUser | null | undefined   // undefined = still loading
-  paddlesHref?: string               // optional "MY PADDLES" quick link
-  devicesHref?: string               // optional "MY DEVICES" quick link — omitted
-                                     // when the viewer has no tracker linked, so
-                                     // the row never points at an empty page
+  paddlesHref?: string               // optional PADDLES link
+  devicesHref?: string               // optional DEVICES link
   profileHref: string
   accountHref: string
   signInHref: string
@@ -79,9 +77,9 @@ export default function AccountNav({
 
       {open && (
         <div role="menu" className="absolute right-0 top-full mt-2 min-w-[10rem] border border-border bg-surface shadow-md z-[1200] flex flex-col py-1">
-          {paddlesHref && <a role="menuitem" href={paddlesHref} className={`${item} text-fg hover:bg-surface-2`}>MY PADDLES</a>}
-          {devicesHref && <a role="menuitem" href={devicesHref} className={`${item} text-fg hover:bg-surface-2`}>MY DEVICES</a>}
-          <a role="menuitem" href={profileHref} className={`${item} text-fg hover:bg-surface-2`}>MY PROFILE</a>
+          {paddlesHref && <a role="menuitem" href={paddlesHref} className={`${item} text-fg hover:bg-surface-2`}>PADDLES</a>}
+          {devicesHref && <a role="menuitem" href={devicesHref} className={`${item} text-fg hover:bg-surface-2`}>DEVICES</a>}
+          <a role="menuitem" href={profileHref} className={`${item} text-fg hover:bg-surface-2`}>PROFILE</a>
           <a role="menuitem" href={accountHref} className={`${item} text-muted hover:bg-surface-2 hover:text-fg`}>ACCOUNT</a>
           <button
             role="menuitem"

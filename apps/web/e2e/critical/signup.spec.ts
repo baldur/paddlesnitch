@@ -11,15 +11,14 @@ import { freshEmail, signUpFlow } from '../helpers'
 // This is the cheapest happy-path smoke test. If it breaks, almost
 // nothing else works.
 
-test('a new user can sign up and lands on / with their session', async ({ page }) => {
+test('a new user can sign up and lands on their paddles, signed in', async ({ page }) => {
   const email = freshEmail('signup-spec')
 
   await signUpFlow(page, { email, displayName: 'Signup Tester' })
 
-  // We're on the signed-in home `/` — the personal paddle dashboard (its
-  // heading is "<NAME>'S PADDLES"). Anything tighter ties the test to copy
-  // that changes often.
-  await expect(page).toHaveURL('/')
+  // We're on the signed-in home: / redirects to /paddles (heading PADDLES).
+  // Anything tighter ties the test to copy that changes often.
+  await expect(page).toHaveURL('/paddles')
   await expect(page.getByRole('heading', { level: 1, name: /PADDLES/i })).toBeVisible()
 
   // Verify the session is actually authenticated. When signed in the

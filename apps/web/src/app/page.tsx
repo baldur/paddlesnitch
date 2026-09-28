@@ -1,11 +1,10 @@
 import Link from 'next/link'
 import AppHeader from '@/components/AppHeader'
-import PersonalHome from '@/components/PersonalHome'
 import type { Metadata } from 'next'
 import BetaTestersLanding from '@/components/campaigns/BetaTestersLanding'
 import { resolveCampaign, type CampaignLanding } from '@/lib/campaigns'
 import { getAuthUser } from '@/lib/auth'
-import { createCaller } from '@paddlesnitch/api'
+import { redirect } from 'next/navigation'
 
 const DEFAULT_METADATA: Metadata = {
   title: 'paddlesnitch.com — tools for the river',
@@ -84,22 +83,12 @@ export default async function LandingPage({
   // A known campaign link shows its landing to everyone: people share these
   // links, and a signed-in paddler who taps one should see what was shared, not
   // their dashboard.
-  // Otherwise: signed in → the personal paddle dashboard (their stuff, not
-  // marketing); signed out → the default marketing landing.
+  // Otherwise: signed in → your paddles (/paddles is the signed-in home; it
+  // used to be a third copy of the dashboard here); signed out → the default
+  // marketing landing.
   const { campaign } = await searchParams
   const r = resolveCampaign(campaign)
-  const user = r.found ? null : await getAuthUser()
-  if (user) {
-    // SSR via the tRPC router in-process (no HTTP hop) — same procedure the
-    // browser + mobile call over the wire.
-    const { cards } = await createCaller({ user }).paddles.list()
-    return (
-      <main className="flex-1 flex flex-col">
-        <AppHeader breadcrumb={<span className="text-muted text-xs tracking-widest hidden sm:inline">TOOLS FOR THE RIVER</span>} />
-        <PersonalHome name={user.displayName} cards={cards} />
-      </main>
-    )
-  }
+  if (!r.found && await getAuthUser()) redirect('/paddles')
 
   // Log every campaign arrival (served variant or fallback) so it's traceable
   // in the server (CloudWatch) logs. Only logs when a campaign was requested,

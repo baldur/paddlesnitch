@@ -4,21 +4,20 @@ import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtDurWords, split500 } from '@paddlesnitch/analysis/analysis'
 import { trpc } from '@/lib/trpc'
-import AppShell from '@paddlesnitch/ui/AppShell'
-import AppAccountNav from '@/components/AppAccountNav'
+import AppHeader from '@/components/AppHeader'
 
 export default function ComparePage() {
-  return <Suspense fallback={<div className="min-h-screen bg-[#0b1220]" />}><CompareInner /></Suspense>
+  return <Suspense fallback={<div className="min-h-screen bg-bg" />}><CompareInner /></Suspense>
 }
 
 function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
 
 function Row({ label, a, b, better }: { label: string; a: string; b: string; better?: 'a' | 'b' | '' }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5 border-b border-[#1e293b] text-sm tabular">
-      <span className="text-[#64748b] text-xs self-center">{label}</span>
-      <span className={`text-right w-24 ${better === 'a' ? 'text-[#22c55e]' : ''}`}>{a}</span>
-      <span className={`text-right w-24 ${better === 'b' ? 'text-[#22c55e]' : ''}`}>{b}</span>
+    <div className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5 border-b border-border text-sm tabular">
+      <span className="text-muted text-xs self-center">{label}</span>
+      <span className={`text-right w-24 ${better === 'a' ? 'text-green' : ''}`}>{a}</span>
+      <span className={`text-right w-24 ${better === 'b' ? 'text-green' : ''}`}>{b}</span>
     </div>
   )
 }
@@ -31,11 +30,11 @@ function CompareInner() {
   const A = !aId ? null : aQ.isPending ? undefined : (aQ.data ?? null)
   const B = !bId ? null : bQ.isPending ? undefined : (bQ.data ?? null)
 
-  if (A === undefined || B === undefined) return <div className="min-h-screen bg-[#0b1220] text-[#64748b] flex items-center justify-center text-sm">Loading…</div>
+  if (A === undefined || B === undefined) return <div className="min-h-screen bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
   if (!A || !B) return (
-    <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0] flex flex-col items-center justify-center gap-3">
-      <p className="text-sm text-[#64748b]">Couldn&apos;t load both paddles.</p>
-      <Link href="/paddles/library" className="text-xs tracking-widest text-[#0369a1]">← MY PADDLES</Link>
+    <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
+      <p className="text-sm text-muted">Couldn&apos;t load both paddles.</p>
+      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
     </div>
   )
 
@@ -45,17 +44,16 @@ function CompareInner() {
 
   return (
     <div className="min-h-screen">
-      <AppShell active="paddles" account={<AppAccountNav />} />
+      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← PADDLES</Link>} />
       <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">COMPARE</h1>
-          <Link href="/paddles/library" className="text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← MY PADDLES</Link>
         </div>
 
-        <div className="grid grid-cols-[1fr_auto_auto] gap-3 mb-2 text-[10px] tracking-widest text-[#64748b]">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-3 mb-2 text-[10px] tracking-widest text-muted">
           <span></span>
-          <Link href={`/paddles/${A.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(A.paddledAt)}</Link>
-          <Link href={`/paddles/${B.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(B.paddledAt)}</Link>
+          <Link href={`/paddles/${A.id}`} className="text-right w-24 text-muted hover:text-fg">{fmtDate(A.paddledAt)}</Link>
+          <Link href={`/paddles/${B.id}`} className="text-right w-24 text-muted hover:text-fg">{fmtDate(B.paddledAt)}</Link>
         </div>
 
         <Row label="duration" a={fmtDurWords(ra.durationS)} b={fmtDurWords(rb.durationS)} />
@@ -67,7 +65,7 @@ function CompareInner() {
         <Row label="wind" a={ra.conditions?.windKmh != null ? `${Math.round(ra.conditions.windKmh)} km/h` : '—'} b={rb.conditions?.windKmh != null ? `${Math.round(rb.conditions.windKmh)} km/h` : '—'} />
         <Row label="flow" a={ra.conditions?.flowM3s != null ? `${ra.conditions.flowM3s.toFixed(1)} m³/s` : '—'} b={rb.conditions?.flowM3s != null ? `${rb.conditions.flowM3s.toFixed(1)} m³/s` : '—'} />
 
-        <div className="mt-4 border-l-2 border-[#0369a1] pl-3 text-sm text-[#e2e8f0]">
+        <div className="mt-4 border-l-2 border-primary pl-3 text-sm text-fg">
           {fmtDate(A.paddledAt)} vs {fmtDate(B.paddledAt)}: cruise pace was{' '}
           <b>{Math.abs(dPace) < 0.5 ? 'about the same' : `${Math.abs(dPace).toFixed(0)}s/500 ${dPace < 0 ? 'faster' : 'slower'}`}</b>
           {ra.avgSR != null && rb.avgSR != null && <>, stroke rate {ra.avgSR > rb.avgSR ? 'up' : ra.avgSR < rb.avgSR ? 'down' : 'level'} {Math.abs(Math.round(ra.avgSR - rb.avgSR)) || ''} spm</>}
@@ -76,8 +74,8 @@ function CompareInner() {
 
         {(A.note?.trim() || B.note?.trim()) && (
           <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="text-xs"><div className="text-[10px] text-[#64748b] tracking-widest mb-1">📓 {fmtDate(A.paddledAt)}</div>{A.note || <span className="text-[#475569]">no note</span>}</div>
-            <div className="text-xs"><div className="text-[10px] text-[#64748b] tracking-widest mb-1">📓 {fmtDate(B.paddledAt)}</div>{B.note || <span className="text-[#475569]">no note</span>}</div>
+            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">📓 {fmtDate(A.paddledAt)}</div>{A.note || <span className="text-muted">no note</span>}</div>
+            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">📓 {fmtDate(B.paddledAt)}</div>{B.note || <span className="text-muted">no note</span>}</div>
           </div>
         )}
       </div>

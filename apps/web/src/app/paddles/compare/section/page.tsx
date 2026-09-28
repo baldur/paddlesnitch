@@ -6,8 +6,7 @@ import { fmtDur, split500 } from '@paddlesnitch/analysis/analysis'
 import type { Racer } from '@paddlesnitch/analysis/similar'
 import { trpc } from '@/lib/trpc'
 import SectionRaceMapClient from '@/components/map/SectionRaceMapClient'
-import AppShell from '@paddlesnitch/ui/AppShell'
-import AppAccountNav from '@/components/AppAccountNav'
+import AppHeader from '@/components/AppHeader'
 
 // Palette: source is blue; the picked racers cycle through the rest.
 const SOURCE_COLOR = '#38bdf8'
@@ -20,7 +19,7 @@ const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const compass = (d?: number | null) => (d == null ? '' : ` ${COMPASS[Math.round(d / 45) % 8]}`)
 
 export default function SectionComparePage() {
-  return <Suspense fallback={<div className="min-h-screen bg-[#0b1220]" />}><Inner /></Suspense>
+  return <Suspense fallback={<div className="min-h-screen bg-bg" />}><Inner /></Suspense>
 }
 
 function Inner() {
@@ -34,11 +33,11 @@ function Inner() {
   const race = !valid ? null : q.isPending ? undefined : (q.data?.race ?? null)
   const err = q.data?.reason === 'section_too_short' ? 'That section is too short to race.' : (q.isError ? 'Could not build the race.' : '')
 
-  if (race === undefined) return <div className="min-h-screen bg-[#0b1220] text-[#64748b] flex items-center justify-center text-sm">Building the race…</div>
+  if (race === undefined) return <div className="min-h-screen bg-bg text-muted flex items-center justify-center text-sm">Building the race…</div>
   if (!race || race.racers.length === 0) return (
-    <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0] flex flex-col items-center justify-center gap-3">
-      <p className="text-sm text-[#64748b]">{err || 'Nothing to race here.'}</p>
-      <Link href="/paddles/library" className="text-xs tracking-widest text-[#0369a1]">← MY PADDLES</Link>
+    <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
+      <p className="text-sm text-muted">{err || 'Nothing to race here.'}</p>
+      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
     </div>
   )
 
@@ -54,32 +53,32 @@ function Inner() {
   const splitAt = (r: Racer, d: number) => r.splits.find(s => s.distance === d)?.elapsedSeconds
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-[#e2e8f0]">
-      <AppShell active="paddles" account={<AppAccountNav />} />
+    <div className="min-h-screen bg-bg text-fg">
+      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← PADDLES</Link>} />
       <div className="h-[46vh] w-full relative">
         <SectionRaceMapClient racers={overlay} startLine={race.startLine} finishLine={race.finishLine} />
-        <div className="absolute top-3 left-3 z-[1000] bg-[#0f172a]/95 border border-[#1e293b] rounded px-3 py-2 text-xs">
-          <div className="text-[10px] text-[#64748b] tracking-widest">SECTION RACE</div>
+        <div className="absolute top-3 left-3 z-[1000] bg-surface/95 border border-border px-3 py-2 text-xs">
+          <div className="text-[10px] text-muted tracking-widest">SECTION RACE</div>
           <div className="tabular text-sm font-bold">{(race.sectionM / 1000).toFixed(2)} km · {racers.length} paddles</div>
         </div>
-        <Link href={src ? `/paddles/${src}` : '/paddles/library'} className="absolute top-3 right-3 z-[1000] bg-[#0f172a]/95 border border-[#1e293b] rounded px-3 py-2 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]">← BACK</Link>
+        <Link href={src ? `/paddles/${src}` : '/paddles'} className="absolute top-3 right-3 z-[1000] bg-surface/95 border border-border px-3 py-2 text-[10px] tracking-widest text-muted hover:text-fg">← BACK</Link>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-5">
         {/* coach narrative — reasons about whether conditions explain the gap */}
         {race.insight && (
           <div className="mb-6">
-            <div className="text-[10px] text-[#64748b] tracking-widest mb-1">WHAT THE NUMBERS SAY</div>
-            <p className="text-sm leading-relaxed border-l-2 border-[#0369a1] pl-3">{race.insight}</p>
+            <div className="text-[10px] text-muted tracking-widest mb-1">WHAT THE NUMBERS SAY</div>
+            <p className="text-sm leading-relaxed border-l-2 border-primary pl-3">{race.insight}</p>
           </div>
         )}
 
         {/* comparison table — dates across the top, metrics down the side */}
-        <div className="text-[10px] text-[#64748b] tracking-widest mb-2">COMPARISON · zeroed at the start line</div>
+        <div className="text-[10px] text-muted tracking-widest mb-2">COMPARISON · zeroed at the start line</div>
         <div className="overflow-x-auto mb-6">
           <table className="w-full text-sm tabular border-collapse">
             <thead>
-              <tr className="text-[10px] text-[#64748b] tracking-widest">
+              <tr className="text-[10px] text-muted tracking-widest">
                 <th className="text-left font-normal py-1 pr-3"></th>
                 {racers.map((r, i) => (
                   <th key={r.sessionId} className="text-right font-normal py-1 pl-3 whitespace-nowrap">
@@ -90,49 +89,49 @@ function Inner() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1.5 pr-3 text-[#64748b]">time</td>
-                {racers.map(r => <td key={r.sessionId} className={`text-right py-1.5 pl-3 font-bold ${r.elapsedS === fastest ? 'text-[#22c55e]' : 'text-[#e2e8f0]'}`}>{fmtDur(r.elapsedS)}</td>)}
+              <tr className="border-t border-border">
+                <td className="text-left py-1.5 pr-3 text-muted">time</td>
+                {racers.map(r => <td key={r.sessionId} className={`text-right py-1.5 pl-3 font-bold ${r.elapsedS === fastest ? 'text-green' : 'text-fg'}`}>{fmtDur(r.elapsedS)}</td>)}
               </tr>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1 pr-3 text-[#64748b]">vs you</td>
-                {racers.map(r => { const d = r.elapsedS - source.elapsedS; return <td key={r.sessionId} className={`text-right py-1 pl-3 ${r.isSource ? 'text-[#64748b]' : d < 0 ? 'text-[#22c55e]' : d > 0 ? 'text-[#f87171]' : 'text-[#64748b]'}`}>{r.isSource ? '—' : signed(d)}</td> })}
+              <tr className="border-t border-border">
+                <td className="text-left py-1 pr-3 text-muted">vs you</td>
+                {racers.map(r => { const d = r.elapsedS - source.elapsedS; return <td key={r.sessionId} className={`text-right py-1 pl-3 ${r.isSource ? 'text-muted' : d < 0 ? 'text-green' : d > 0 ? 'text-red' : 'text-muted'}`}>{r.isSource ? '—' : signed(d)}</td> })}
               </tr>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1 pr-3 text-[#64748b]">pace /500</td>
-                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#94a3b8]">{split500(r.cruiseSpeed)}</td>)}
+              <tr className="border-t border-border">
+                <td className="text-left py-1 pr-3 text-muted">pace /500</td>
+                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted">{split500(r.cruiseSpeed)}</td>)}
               </tr>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1 pr-3 text-[#64748b]">stroke rate</td>
-                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#94a3b8]">{r.avgSR != null ? `${Math.round(r.avgSR)} spm` : '—'}</td>)}
+              <tr className="border-t border-border">
+                <td className="text-left py-1 pr-3 text-muted">stroke rate</td>
+                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted">{r.avgSR != null ? `${Math.round(r.avgSR)} spm` : '—'}</td>)}
               </tr>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1 pr-3 text-[#64748b]">dist / stroke</td>
-                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#94a3b8]">{r.avgDps != null ? `${r.avgDps.toFixed(1)} m` : '—'}</td>)}
+              <tr className="border-t border-border">
+                <td className="text-left py-1 pr-3 text-muted">dist / stroke</td>
+                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted">{r.avgDps != null ? `${r.avgDps.toFixed(1)} m` : '—'}</td>)}
               </tr>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1 pr-3 text-[#64748b]">wind</td>
-                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#94a3b8] whitespace-nowrap">{r.conditions?.windKmh != null ? `${Math.round(r.conditions.windKmh)} km/h${compass(r.conditions.windDir)}` : '—'}</td>)}
+              <tr className="border-t border-border">
+                <td className="text-left py-1 pr-3 text-muted">wind</td>
+                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-muted whitespace-nowrap">{r.conditions?.windKmh != null ? `${Math.round(r.conditions.windKmh)} km/h${compass(r.conditions.windDir)}` : '—'}</td>)}
               </tr>
-              <tr className="border-t border-[#1e293b]">
-                <td className="text-left py-1 pr-3 text-[#64748b]">flow</td>
+              <tr className="border-t border-border">
+                <td className="text-left py-1 pr-3 text-muted">flow</td>
                 {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#22d3ee] whitespace-nowrap">{r.conditions?.flowM3s != null ? `${r.conditions.flowM3s.toFixed(1)} m³/s` : '—'}</td>)}
               </tr>
             </tbody>
           </table>
           {racers.every(r => !r.conditions?.windKmh && !r.conditions?.flowM3s) && (
-            <div className="text-[11px] text-[#64748b] mt-1">No wind/flow captured for these paddles — re-analyse with a network connection to add it.</div>
+            <div className="text-[11px] text-muted mt-1">No wind/flow captured for these paddles — re-analyse with a network connection to add it.</div>
           )}
         </div>
 
         {/* per-500 splits over the section */}
         {boundaries.length > 0 && (
           <>
-            <div className="text-[10px] text-[#64748b] tracking-widest mb-2">SPLITS · elapsed at each 500 m of the section</div>
+            <div className="text-[10px] text-muted tracking-widest mb-2">SPLITS · elapsed at each 500 m of the section</div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm tabular border-collapse">
                 <thead>
-                  <tr className="text-[10px] text-[#64748b] tracking-widest">
+                  <tr className="text-[10px] text-muted tracking-widest">
                     <th className="text-left font-normal py-1 pr-3">500 m</th>
                     {racers.map((r, i) => (
                       <th key={r.sessionId} className="text-right font-normal py-1 pl-3 whitespace-nowrap">
@@ -143,8 +142,8 @@ function Inner() {
                 </thead>
                 <tbody>
                   {boundaries.map(d => (
-                    <tr key={d} className="border-t border-[#1e293b]">
-                      <td className="text-left py-1 pr-3 text-[#64748b]">{d < 1000 ? `${d} m` : `${(d / 1000).toFixed(1)} km`}</td>
+                    <tr key={d} className="border-t border-border">
+                      <td className="text-left py-1 pr-3 text-muted">{d < 1000 ? `${d} m` : `${(d / 1000).toFixed(1)} km`}</td>
                       {racers.map(r => { const e = splitAt(r, d); return <td key={r.sessionId} className="text-right py-1 pl-3">{e != null ? fmtDur(e) : '—'}</td> })}
                     </tr>
                   ))}
