@@ -37,8 +37,6 @@ export async function POST(req: Request) {
       `Email: ${saved.email}`,
       `Paddles: ${SPORT_LABEL[saved.sport]}`,
       `How often: ${FREQ_LABEL[saved.frequency]}`,
-      `Can keep the tracker reasonably dry: yes`,
-      `Note: ${saved.note || '(none)'}`,
       `Applied: ${saved.appliedAt}${repeat ? ` (updated ${saved.updatedAt})` : ''}`,
     ].join('\n'),
   }).catch(() => false)

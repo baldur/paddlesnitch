@@ -18,15 +18,15 @@ const TILES: { eyebrow: string; title: string; body: string }[] = [
     body: 'You kayak, canoe, row or paddleboard, and you go out regularly enough to give the tracker real use.',
   },
   {
-    eyebrow: '2 · You can keep it dry',
-    title: 'Somewhere dry on board',
-    body: 'The tracker needs to stay reasonably dry while you paddle or row: a dry bag, a hatch or a pocket where splashes won’t soak it.',
+    eyebrow: '2 · It sits firmly in the boat',
+    title: 'Fixed in place',
+    body: 'The tracker measures how the boat moves, so it needs to sit firmly in the boat. Attached is best; otherwise somewhere it won’t slide or bounce around. It also needs to stay reasonably dry.',
   },
 ]
 
 export default function BetaTestersLanding() {
   return (
-    <section className="relative flex-1 overflow-hidden" data-campaign="betatesters">
+    <section className="relative flex-1 overflow-hidden min-h-[calc(100svh-6rem)]" data-campaign="betatesters">
       {/* Poster frame: the background under reduced motion, and while the video loads. */}
       <div
         aria-hidden="true"

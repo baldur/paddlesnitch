@@ -16,8 +16,6 @@ export type BetaApplication = {
   email: string
   sport: (typeof BETA_SPORTS)[number]
   frequency: (typeof BETA_FREQUENCIES)[number]
-  keepsDry: true
-  note: string
   appliedAt: string
   updatedAt: string
 }
@@ -38,15 +36,12 @@ export function parseBetaApplication(
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'Please enter a valid email address.' }
   if (!(BETA_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'Please choose what you paddle or row.' }
   if (!(BETA_FREQUENCIES as readonly string[]).includes(frequency)) return { ok: false, error: 'Please choose how often you get out on the water.' }
-  if (body.keepsDry !== true) return { ok: false, error: 'Beta testers need to be able to keep the tracker reasonably dry.' }
   return {
     ok: true,
     app: {
       name, email,
       sport: sport as BetaApplication['sport'],
       frequency: frequency as BetaApplication['frequency'],
-      keepsDry: true,
-      note: str(body.note, 1000),
     },
   }
 }

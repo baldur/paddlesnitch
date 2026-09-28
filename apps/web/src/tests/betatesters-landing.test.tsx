@@ -32,16 +32,20 @@ describe('beta testers landing', () => {
     expect(html).toContain('poster="/campaigns/betatesters.jpg"')
   })
 
-  it('states both requirements in square boxes', () => {
+  it('states both requirements in square boxes: paddle regularly, tracker fixed firmly in the boat', () => {
     expect(html).toContain('Beta testers wanted')
     expect(html).toContain('You kayak, canoe, row or paddleboard')
-    expect(html).toContain('reasonably dry while you paddle or row')
+    expect(html).toContain('sit firmly in the boat')
+    expect(html).toContain('Attached is best')
+    expect(html).toContain('reasonably dry')
     expect((html.match(/md:aspect-square/g) ?? []).length).toBe(3)
   })
 
-  it('has the application form, with the keep-it-dry box required', () => {
+  it('has a short application form: no note box, no tick box, and says we will be in touch', () => {
     expect(html).toContain('APPLY TO TEST')
-    expect(html).toMatch(/<input required="" type="checkbox"/)
+    expect(html).not.toContain('<textarea')
+    expect(html).not.toContain('type="checkbox"')
+    expect(html).toContain('be in touch')
     expect(html).toContain('href="/att/privacy"')
   })
 })

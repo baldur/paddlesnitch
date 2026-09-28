@@ -22,8 +22,6 @@ export default function BetaSignupForm() {
   const [email, setEmail] = useState('')
   const [sport, setSport] = useState('')
   const [frequency, setFrequency] = useState('')
-  const [keepsDry, setKeepsDry] = useState(false)
-  const [note, setNote] = useState('')
   const [website, setWebsite] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'done'>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +34,7 @@ export default function BetaSignupForm() {
       const res = await fetch('/api/beta-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, sport, frequency, keepsDry, note, website, elapsedMs: Date.now() - mountedAt.current }),
+        body: JSON.stringify({ name, email, sport, frequency, website, elapsedMs: Date.now() - mountedAt.current }),
       })
       if (!res.ok) {
         setError((await res.json().catch(() => ({}))).error ?? 'Couldn’t send your application. Please try again.')
@@ -53,7 +51,7 @@ export default function BetaSignupForm() {
   if (status === 'done') {
     return (
       <p className="text-sm text-green" role="status">
-        Thanks, {name.split(' ')[0] || 'paddler'}. Your application is in. We’ll email you at {email}.
+        Thanks, {name.split(' ')[0] || 'paddler'}. We’ll be in touch.
       </p>
     )
   }
@@ -86,22 +84,12 @@ export default function BetaSignupForm() {
           {FREQUENCIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </label>
-      <label className="flex flex-col gap-1 md:col-span-2">
-        <span className={label}>Anything else? (optional)</span>
-        <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={1000}
-          placeholder="Where you paddle, what boat, what you’d like the tracker to do"
-          className={`${field} resize-y`} />
-      </label>
-      <label className="flex items-start gap-3 md:col-span-2 text-sm text-fg">
-        <input required type="checkbox" checked={keepsDry} onChange={e => setKeepsDry(e.target.checked)} className="mt-1 accent-primary" />
-        <span>I can keep the tracker reasonably dry while I paddle or row.</span>
-      </label>
 
       {error && <p className="md:col-span-2 border border-red bg-red/10 px-3 py-2 text-red text-xs" role="alert">{error}</p>}
 
       <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <p className="text-xs text-muted">
-          We only use this to choose and contact beta testers.{' '}
+          We’ll be in touch. We only use this to choose and contact beta testers.{' '}
           <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
         </p>
         <button type="submit" disabled={status === 'sending'}

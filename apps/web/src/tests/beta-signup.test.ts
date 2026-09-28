@@ -19,7 +19,7 @@ afterEach(async () => { await cleanDataDir(dataDir) })
 
 const good = {
   name: 'Ann Paddler', email: 'Ann@Example.com', sport: 'kayak', frequency: 'most-weeks',
-  keepsDry: true, note: 'I paddle the Thames at Reading', website: '', elapsedMs: 5000,
+  website: '', elapsedMs: 5000,
 }
 const post = (body: object) => apply(new Request('http://x/api/beta-signup', { method: 'POST', body: JSON.stringify(body) }))
 
@@ -28,7 +28,7 @@ describe('POST /api/beta-signup', () => {
     const res = await post(good)
     expect(res.status).toBe(200)
     const saved = await getBetaApplication('ann@example.com')
-    expect(saved).toMatchObject({ name: 'Ann Paddler', email: 'ann@example.com', sport: 'kayak', frequency: 'most-weeks', keepsDry: true })
+    expect(saved).toMatchObject({ name: 'Ann Paddler', email: 'ann@example.com', sport: 'kayak', frequency: 'most-weeks' })
     expect(sendEmail).toHaveBeenCalledOnce()
     expect(vi.mocked(sendEmail).mock.calls[0][0].subject).toBe('New beta tester application: Ann Paddler')
   })
@@ -51,11 +51,10 @@ describe('POST /api/beta-signup', () => {
     expect(vi.mocked(sendEmail).mock.calls[1][0].subject).toMatch(/^Updated/)
   })
 
-  it('rejects an applicant who cannot keep the tracker dry, and says why', async () => {
-    const res = await post({ ...good, keepsDry: false })
-    expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/reasonably dry/)
-    expect(await listKeys('beta-signups/')).toEqual([])
+  it('ignores fields the form no longer sends (no note, no dry tick) and stores only what it asks for', async () => {
+    await post({ ...good, note: 'extra', keepsDry: false })
+    expect(Object.keys((await getBetaApplication('ann@example.com'))!).sort())
+      .toEqual(['appliedAt', 'email', 'frequency', 'name', 'sport', 'updatedAt'])
   })
 
   it.each([
