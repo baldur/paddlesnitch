@@ -57,6 +57,22 @@ static void claimed_trackers_keep_legacy_new_ones_get_unique(void)
     TEST_ASSERT_FALSE(deviceIdUseLegacy(false));
 }
 
+// The join QR only fits the panel up to 32 bytes; 0.16.0 made it 33.
+static void hotspot_name_keeps_the_join_qr_within_32_bytes(void)
+{
+    const uint8_t PADDLE04[6] = {0x48, 0xca, 0x43, 0x5c, 0x09, 0xc8};
+    char id[9], ssid[7], payload[64];
+    deviceIdUnique(efuseFor(PADDLE04), id);
+    apSsidFor(id, ssid);
+    TEST_ASSERT_EQUAL_STRING("PT-9C8", ssid);
+    snprintf(payload, sizeof payload, "WIFI:S:%s;T:WPA;P:%s;;", ssid, "abcdefgh");
+    TEST_ASSERT_EQUAL_UINT(32, strlen(payload));
+
+    deviceIdLegacy(efuseFor(PADDLE02), id);   // what claimed trackers keep
+    apSsidFor(id, ssid);
+    TEST_ASSERT_EQUAL_STRING("PT-A48", ssid);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -68,5 +84,6 @@ int main(int, char **)
     RUN_TEST(unique_id_uses_the_per_board_bytes);
     RUN_TEST(unique_id_separates_boards_that_differ_in_the_last_byte);
     RUN_TEST(claimed_trackers_keep_legacy_new_ones_get_unique);
+    RUN_TEST(hotspot_name_keeps_the_join_qr_within_32_bytes);
     return UNITY_END();
 }
