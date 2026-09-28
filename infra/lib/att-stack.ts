@@ -10,10 +10,19 @@ import * as iam from 'aws-cdk-lib/aws-iam'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
+import * as logs from 'aws-cdk-lib/aws-logs'
+import * as sns from 'aws-cdk-lib/aws-sns'
+import * as snsSubs from 'aws-cdk-lib/aws-sns-subscriptions'
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions'
+import * as budgets from 'aws-cdk-lib/aws-budgets'
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets'
 import * as ses from 'aws-cdk-lib/aws-ses'
 import * as sesActions from 'aws-cdk-lib/aws-ses-actions'
 import { Construct } from 'constructs'
+
+// Lambda logs used to be kept for ever (no retention was set): growing cost,
+// and page-view records and admin audit lines held indefinitely.
+const LOG_RETENTION = logs.RetentionDays.THREE_MONTHS
 
 export class AttStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -74,8 +83,19 @@ export class AttStack extends cdk.Stack {
       bucketName: 'paddlesnitch-data-prod',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      versioned: false,
+      // Versioned, with old versions kept 30 days (rule below). There was no
+      // backup of anything: RETAIN only stops CloudFormation deleting the
+      // bucket, not a bug or a bad deploy overwriting or deleting objects.
+      // At ~25 MB this costs pennies. Deleted data is therefore recoverable for
+      // 30 days, which the privacy page says (security audit 2026-09).
+      versioned: true,
+      // Refuse plain-HTTP requests to the bucket.
+      enforceSSL: true,
       lifecycleRules: [{
+        id: 'expire-old-versions',
+        noncurrentVersionExpiration: cdk.Duration.days(30),
+        expiredObjectDeleteMarker: true,
+      }, {
         // Firmware rollout records (which device was offered which build, and
         // how it booted). Troubleshooting data, not an audit trail — and it
         // ties a physical device to a user account, so it expires rather than
@@ -92,6 +112,8 @@ export class AttStack extends cdk.Stack {
         id: 'expire-rate-limit-counters',
         prefix: 'rate/',
         expiration: cdk.Duration.days(1),
+        // Counters are rewritten on every request; don't keep their history.
+        noncurrentVersionExpiration: cdk.Duration.days(1),
       }],
     })
 
@@ -162,6 +184,10 @@ export class AttStack extends cdk.Stack {
         replyTo: 'privacy@paddlesnitch.com',
       }),
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+      // Every S3 key is a user's Cognito sub, and a recreated pool issues new
+      // subs, so losing the pool orphans all data. RETAIN covers CloudFormation;
+      // this also stops a console or API delete (security audit 2026-09).
+      deletionProtection: true,
     })
 
     // Custom Auth Lambda triggers for OTP / passwordless sign-in.
@@ -169,6 +195,7 @@ export class AttStack extends cdk.Stack {
     // both here and in the dev lambda-emulator.
     const lambdaDir = path.join(__dirname, '../lambdas/cognito-auth')
     const defineAuth = new lambda.Function(this, 'DefineAuthChallenge', {
+      logRetention: LOG_RETENTION,
       functionName: 'att-cognito-define-auth-challenge',
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'define-auth-challenge.handler',
@@ -176,6 +203,7 @@ export class AttStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(5),
     })
     const createAuth = new lambda.Function(this, 'CreateAuthChallenge', {
+      logRetention: LOG_RETENTION,
       functionName: 'att-cognito-create-auth-challenge',
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'create-auth-challenge.handler',
@@ -202,6 +230,7 @@ export class AttStack extends cdk.Stack {
       ],
     }))
     const verifyAuth = new lambda.Function(this, 'VerifyAuthChallenge', {
+      logRetention: LOG_RETENTION,
       functionName: 'att-cognito-verify-auth-challenge',
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'verify-auth-challenge.handler',
@@ -239,6 +268,7 @@ export class AttStack extends cdk.Stack {
     // ---------------------------------------------------------------------------
 
     const serverFn = new lambda.Function(this, 'ServerFn', {
+      logRetention: LOG_RETENTION,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
@@ -376,6 +406,7 @@ export class AttStack extends cdk.Stack {
     })
 
     const imageOptFn = new lambda.Function(this, 'ImageOptFn', {
+      logRetention: LOG_RETENTION,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
@@ -564,6 +595,7 @@ export class AttStack extends cdk.Stack {
     }))
 
     const forwarderFn = new lambda.Function(this, 'EmailForwarderFn', {
+      logRetention: LOG_RETENTION,
       functionName: 'att-email-forwarder',
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
@@ -902,6 +934,93 @@ export class AttStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CloudFrontUrl', {
       value: `https://${distribution.distributionDomainName}`,
     })
+    // ---------------------------------------------------------------------------
+    // Alerts (security audit 2026-09). Until now nobody found out about a 500,
+    // a timeout or a failed tracker boot unless a user reported it. Standard
+    // alarms are $0.10/month each; SNS email is free at this volume. The email
+    // subscription must be confirmed once from the inbox.
+    // ---------------------------------------------------------------------------
+    const alertEmail = 'baldur.gudbjornsson@gmail.com'
+    const alerts = new sns.Topic(this, 'AlertsTopic', { topicName: 'paddlesnitch-alerts' })
+    alerts.addSubscription(new snsSubs.EmailSubscription(alertEmail))
+    const notify = new cwActions.SnsAction(alerts)
+    const alarm = (id: string, props: cloudwatch.AlarmProps) => {
+      const a = new cloudwatch.Alarm(this, id, { treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING, ...props })
+      a.addAlarmAction(notify)
+      return a
+    }
+
+    // Crashes and timeouts. (OpenNext catches app errors, so a handled 500
+    // doesn't count here; the log filter below covers those.)
+    alarm('ServerCrashAlarm', {
+      alarmName: 'paddlesnitch-server-crashes',
+      alarmDescription: 'The web server Lambda crashed or timed out.',
+      metric: serverFn.metricErrors({ period: cdk.Duration.minutes(5), statistic: 'Sum' }),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+    alarm('ServerThrottleAlarm', {
+      alarmName: 'paddlesnitch-server-throttled',
+      alarmDescription: 'Requests to the web server were throttled (the account is shared).',
+      metric: serverFn.metricThrottles({ period: cdk.Duration.minutes(5), statistic: 'Sum' }),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+    alarm('ServerSlowAlarm', {
+      alarmName: 'paddlesnitch-server-near-timeout',
+      alarmDescription: 'Slowest requests are near the 30 s Lambda timeout.',
+      metric: serverFn.metricDuration({ period: cdk.Duration.minutes(15), statistic: 'p99' }),
+      threshold: 25_000, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
+    // Errors the app logged (console.error prints ERROR in the Lambda log
+    // line) and trackers reporting a failed boot after an update. Metric
+    // filters are free; each custom metric is about $0.30/month.
+    const serverLogs = logs.LogGroup.fromLogGroupName(this, 'ServerLogGroup', `/aws/lambda/${serverFn.functionName}`)
+    const logCount = (id: string, pattern: logs.IFilterPattern, metricName: string) => {
+      new logs.MetricFilter(this, id, {
+        logGroup: serverLogs, filterPattern: pattern,
+        metricNamespace: 'Paddlesnitch/Alerts', metricName, metricValue: '1', defaultValue: 0,
+      })
+      return new cloudwatch.Metric({ namespace: 'Paddlesnitch/Alerts', metricName, statistic: 'Sum', period: cdk.Duration.hours(1) })
+    }
+    alarm('ServerErrorLogAlarm', {
+      alarmName: 'paddlesnitch-server-errors',
+      alarmDescription: 'More than 5 errors logged by the web server in an hour.',
+      metric: logCount('ServerErrorFilter', logs.FilterPattern.anyTerm('ERROR', 'Task timed out'), 'ServerErrorLines'),
+      threshold: 5, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+    alarm('FirmwareBootFailedAlarm', {
+      alarmName: 'paddlesnitch-tracker-boot-failed',
+      alarmDescription: 'A tracker reported that an update failed to boot and was rolled back.',
+      metric: logCount('FirmwareBootFailedFilter', logs.FilterPattern.anyTerm('FirmwareBootFailed'), 'FirmwareBootFailedLines'),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
+    // SES pauses sending above ~10% bounces, and then sign-in codes stop.
+    alarm('SesBounceAlarm', {
+      alarmName: 'paddlesnitch-email-bounces',
+      alarmDescription: 'SES bounce rate above 5%; SES pauses sending at about 10%.',
+      metric: new cloudwatch.Metric({ namespace: 'AWS/SES', metricName: 'Reputation.BounceRate', statistic: 'Maximum', period: cdk.Duration.hours(1) }),
+      threshold: 0.05, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
+    // A runaway bill (a loop, or someone driving Bedrock/SES). Budgets are
+    // free. Account-wide, because the account is shared and the `project` tag
+    // isn't activated for cost allocation yet; $30-50/month is normal today.
+    new budgets.CfnBudget(this, 'MonthlyBudget', {
+      budget: {
+        budgetName: 'paddlesnitch-account-monthly',
+        budgetType: 'COST',
+        timeUnit: 'MONTHLY',
+        budgetLimit: { amount: 75, unit: 'USD' },
+      },
+      notificationsWithSubscribers: [
+        { notification: { notificationType: 'ACTUAL', comparisonOperator: 'GREATER_THAN', threshold: 100, thresholdType: 'PERCENTAGE' },
+          subscribers: [{ subscriptionType: 'EMAIL', address: alertEmail }] },
+        { notification: { notificationType: 'FORECASTED', comparisonOperator: 'GREATER_THAN', threshold: 100, thresholdType: 'PERCENTAGE' },
+          subscribers: [{ subscriptionType: 'EMAIL', address: alertEmail }] },
+      ],
+    })
+
     new cdk.CfnOutput(this, 'DashboardUrl', {
       value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards/dashboard/paddlesnitch-app`,
       description: 'CloudWatch dashboard for product events + server health',
