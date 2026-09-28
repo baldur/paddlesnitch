@@ -291,7 +291,7 @@ static volatile bool g_apActive = false;
 // The last four ID characters. With the legacy ID these were "A48" on every
 // board of a batch (all share the OUI), so several trackers set up side by side
 // all offered the same "PT-A48".
-String netApSsid() { String id = netDeviceId(); return "PT-" + id.substring(id.length() - 4); }
+String netApSsid() { char ssid[7]; apSsidFor(netDeviceId().c_str(), ssid); return String(ssid); }
 String netApPass() { return apPassword(); }
 bool   netApActive() { return g_apActive; }
 

@@ -702,8 +702,10 @@ Other constraints worth keeping:
   legacy ID sheds it. Logic in `include/device_id.h`, host-tested. **A new
   board must run 0.16.0+ BEFORE it is claimed**, and an unclaimed tracker cannot
   OTA (the firmware endpoints need its token), so flash new boards by cable.
-  The setup hotspot is `PT-` + the last four ID characters (it was `PT-A48` on
-  every board of a batch).
+  The setup hotspot is `PT-` + the last **three** ID characters (`apSsidFor`).
+  Never four: the join QR payload must stay within 32 bytes to fit the panel,
+  and 0.16.0 used four (33 bytes), so every new tracker showed text instead of
+  the QR until 0.16.1. A host test pins the payload at 32.
 
 - **The OLED's I2C address depends on the board batch.** The first tracker
   (5A43CA48): panel at `0x3D`, and something that is NOT the panel acks at `0x3C`
