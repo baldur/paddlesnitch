@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
+import { noMotionCopy } from '@/lib/tracker-copy'
 import LoadingState from '@/components/LoadingState'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
@@ -67,7 +68,7 @@ export default function DeviceSessionPage() {
         <Link href={`/devices/${deviceId}`} className="tt-nav-link text-sm shrink-0">← TRACKER</Link>
       } />
       <div className="flex-1 px-4 py-8 max-w-4xl mx-auto w-full flex flex-col gap-6">
-        {state === 'loading' && <LoadingState label="Reading session" />}
+        {state === 'loading' && <LoadingState label="Loading" />}
         {state === 'error' && <p className="text-sm text-red">Couldn’t read this recording. Please try again.</p>}
 
         {state === 'ready' && meta === 'missing' && (
@@ -80,87 +81,67 @@ export default function DeviceSessionPage() {
         {state === 'ready' && meta && meta !== 'missing' && (
           <>
             <div>
-              <h1 className="text-2xl font-bold text-fg tracking-wide">Boat motion</h1>
+              <h1 className="text-lg font-bold text-fg tracking-widest">BOAT MOTION</h1>
               <p className="text-sm text-muted mt-1 tabular">
-                {meta.filename} · {fmtDate(meta.startedAt ?? meta.uploadedAt)} · {meta.deviceId}
+                {fmtDate(meta.startedAt ?? meta.uploadedAt)} · {meta.filename}
               </p>
             </div>
 
             {!attitude?.available ? (
               <div className="border border-border bg-surface px-4 py-3 text-sm text-muted leading-relaxed">
-                <p className="text-fg mb-1">No motion data for this session yet.</p>
-                {/* Two different situations reach here and they need different
-                    answers. `reason` present means a sidecar WAS uploaded but
-                    yielded nothing; absent means no sidecar has arrived — which
-                    could be a session that predates the feature, or simply one
-                    still waiting on the device. Don't tell someone their paddle
-                    from this morning "never will" have motion data. */}
-                {attitude?.reason ? (
-                  <p>{attitude.reason}</p>
-                ) : (
-                  <p>
-                    Roll and pitch come from the tracker&apos;s motion sidecar, which uploads
-                    separately from the track — so a session can appear here with its
-                    track already in and its motion still on the device. If this paddle is
-                    recent, the sidecar is probably still waiting to sync. Sessions recorded
-                    before the tracker started writing sidecars have none at all.
-                  </p>
-                )}
+                <p className="text-fg mb-1">No boat motion for this recording.</p>
+                <p>{noMotionCopy(attitude)}</p>
+                {attitude?.reason && <p className="mt-2 text-xs">Technical detail: {attitude.reason}</p>}
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <Tile label="Roll (rms)" value={`${attitude.rollRmsDeg}°`} note="side to side" />
-                  <Tile label="Pitch (rms)" value={`${attitude.pitchRmsDeg}°`} note="bow / stern" />
+                  <Tile label="Side-to-side roll" value={`${attitude.rollRmsDeg}°`} note="typical lean" />
+                  <Tile label="Bow-to-stern pitch" value={`${attitude.pitchRmsDeg}°`} note="typical tilt" />
                   <Tile
-                    label="Rock evenness"
+                    label="Evenness"
                     value={attitude.symmetry ? `${Math.abs(attitude.symmetry.imbalancePct).toFixed(0)}%` : '—'}
-                    note={attitude.symmetry ? 'off even' : ''}
+                    note={attitude.symmetry ? 'uneven' : ''}
                   />
                   <Tile
                     label="Stroke rate"
                     value={cadence?.available ? `${cadence.medianStrokesPerMin}` : '—'}
-                    note={cadence?.available ? 'spm' : 'no cadence'}
+                    note={cadence?.available ? 'spm' : 'not measured'}
                   />
                 </div>
 
                 <Panel
                   title="Through the session"
-                  caption="The band is the full range the boat swung through in each moment, not a sampled line — at this zoom a single sample per pixel would draw a wave that never happened. Roll is the side-to-side lean, pitch the bow rising and falling."
+                  caption="The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
                 >
                   <EnvelopeChart report={attitude} />
                 </Panel>
 
                 <Panel
                   title="Stroke shape"
-                  caption={`Thirty seconds at full rate, taken from the most representative part of the session. This is what one stroke actually looks like — a smooth even rock crosses the centre line symmetrically.`}
+                  caption="30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
                 >
                   <ExcerptChart report={attitude} />
                 </Panel>
 
                 <Panel
                   title="Where the boat spent its time"
-                  caption="Solid bars are the real distribution of lean. The outline is that same distribution mirrored — if your rocking is even, the two match. Where the outline sticks out past the bars, that side went further."
+                  caption="Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
                 >
                   <HistogramChart report={attitude} />
                 </Panel>
 
                 <div className="border border-border bg-surface px-4 py-3 text-xs text-muted leading-relaxed flex flex-col gap-2">
                   <p>
-                    <span className="text-fg">Reading this.</span> Rowing wants roll near zero — the hull
-                    should stay level. Kayaking is the opposite: the boat is meant to rock with the
-                    stroke, so what matters is that it rocks <em>evenly</em>. A big roll is only a
-                    fault if it&apos;s lopsided.
+                    <span className="text-fg">Reading this.</span> Rowing: aim for little roll, so the
+                    boat stays level. Kayak: the boat should rock with the stroke; what matters is that
+                    it rocks evenly.
                   </p>
                   <p>
-                    <span className="text-fg">What this can&apos;t tell you.</span> Which side is port
-                    and which starboard isn&apos;t recoverable — there&apos;s no magnetometer, so
-                    there&apos;s no heading. And a constant lean can&apos;t be separated from the
-                    tracker being mounted a few degrees off, so everything here is measured about this
-                    session&apos;s own neutral.
-                    {!attitude.axisConfident && ' Roll and pitch were also too similar in this session to separate reliably, so treat which is which with caution.'}
+                    <span className="text-fg">What this can&apos;t tell you.</span> We can&apos;t tell port
+                    from starboard, and a tracker mounted slightly crooked looks like a steady lean.
+                    {!attitude.axisConfident && ' Roll and pitch were hard to tell apart in this recording.'}
                   </p>
-                  <p className="tabular">{attitude.reason}</p>
                 </div>
               </>
             )}

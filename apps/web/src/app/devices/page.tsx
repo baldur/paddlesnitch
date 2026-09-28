@@ -74,7 +74,7 @@ export default function DevicesPage() {
                       {/* Running version, and whether it is the released one.
                           Both come from what the device actually reported on its
                           last request, not from what it claimed when paired. */}
-                      <span className="text-muted">fw </span>
+                      <span className="text-muted">firmware </span>
                       <span className="text-fg">{d.firmware || 'unknown'}</span>
                       {deviceIsBehind(d.firmware, stable) === true && (
                         <span className="text-split"> · update pending ({stable})</span>
@@ -90,8 +90,8 @@ export default function DevicesPage() {
                   )}
                   <span className="block text-xs text-muted tabular mt-1">
                     {d.sessions === 0
-                      ? 'no uploads yet'
-                      : `${d.sessions} session${d.sessions === 1 ? '' : 's'}${d.totalDistanceM > 0 ? ` · ${fmtDist(d.totalDistanceM)}` : ''}${d.motionSessions > 0 ? ` · ${d.motionSessions} with motion` : ''}`}
+                      ? 'no recordings yet'
+                      : `${d.sessions} recording${d.sessions === 1 ? '' : 's'}${d.totalDistanceM > 0 ? ` · ${fmtDist(d.totalDistanceM)}` : ''}${d.motionSessions > 0 ? ` · ${d.motionSessions} with boat motion` : ''}`}
                     {d.latestAt ? ` · latest ${fmtDate(d.latestAt)}` : ''}
                   </span>
                 </span>

@@ -46,7 +46,7 @@ describe('DEVICES page', () => {
     await mount()
     expect(container.textContent).toContain("Baldur's tracker")
     expect(container.textContent).toContain('5A43CA48')
-    expect(container.textContent).toContain('1 session')
+    expect(container.textContent).toContain('1 recording')
     expect(container.textContent).toContain('10.79 km')
     const card = [...container.querySelectorAll('a')].find(a => a.textContent?.includes("Baldur's tracker"))
     expect(card?.getAttribute('href')).toBe('/devices/5A43CA48')
