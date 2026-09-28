@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { capture, startAnalytics } from './analytics'
+import { campaignFrom } from './metrics-events'
 
 // Shared analytics mount — dropped once into each app's root layout. Starts the
 // capture pump (flush timer + unload listeners) and records a `pageview` on every
@@ -17,7 +18,10 @@ export default function Analytics() {
 
   useEffect(() => {
     if (pathname && typeof window !== 'undefined') {
-      capture('pageview', { path: window.location.pathname })
+      // `campaign` tags a visit that arrived on a ?campaign= link, so the
+      // dashboard can count each campaign's visits.
+      const campaign = campaignFrom(window.location.search)
+      capture('pageview', { path: window.location.pathname, ...(campaign ? { campaign } : {}) })
     }
   }, [pathname])
 
