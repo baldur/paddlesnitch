@@ -86,6 +86,29 @@ export type DeviceDataReport = {
 const MIN_SEG_M = 3
 const MIN_SPEED_KMH = 1.5
 
+// Movement-gated distance. ANCHOR-based, not per-row: at 1 Hz a normal paddle
+// (~8 km/h ≈ 2.2 m/row) is below the 3 m gate, so we accumulate displacement
+// from the last counted point and bank it once it clears 3 m AT ≥1.5 km/h.
+// Real paddling banks in ~3 m chunks; stationary scatter (bounded in a small
+// box, so slow) never clears the speed gate and is discarded — no invented
+// distance. The ONE place tracker distance is computed: the upload stores it
+// and the diagnostics report it, so the two can't disagree.
+export function movementDistanceM(points: { lat: number; lng: number; tMs: number }[]): number {
+  let total = 0
+  let anchor = points[0]
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i]
+    if (!anchor || [anchor.lat, anchor.lng, p.lat, p.lng].some(Number.isNaN)) { anchor = p; continue }
+    const d = haversine([anchor.lat, anchor.lng], [p.lat, p.lng])
+    const dt = (p.tMs - anchor.tMs) / 1000
+    if (d >= MIN_SEG_M) {
+      if (dt > 0 && (d / dt) * 3.6 >= MIN_SPEED_KMH) { total += d; anchor = p }
+      // else: drifted 3 m but too slowly to be travel — leave the anchor, keep waiting.
+    }
+  }
+  return total
+}
+
 const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]/g, '')
 // parseCsv's stroke-rate aliases — if the device (or a future firmware) emits one
 // of these, cadence is available for free with no server change.
@@ -140,28 +163,9 @@ export function describeDeviceData(csv: string): DeviceDataReport {
   const times = fixed.map(r => Date.parse(cell(r, timeI))).filter(t => !isNaN(t))
   if (times.length >= 2) timeSpanS = Math.round((Math.max(...times) - Math.min(...times)) / 1000)
 
-  // Movement-gated distance. ANCHOR-based, not per-row: at 1 Hz a normal paddle
-  // (~8 km/h ≈ 2.2 m/row) is below the 3 m gate, so we accumulate displacement
-  // from the last counted point and bank it once it clears 3 m AT ≥1.5 km/h.
-  // Real paddling banks in ~3 m chunks; stationary scatter (bounded in a small
-  // box, so slow) never clears the speed gate and is discarded — no invented
-  // distance.
-  let movementDistanceM = 0
-  const pt = (r: string[]): [number, number] | null => {
-    const la = Number(cell(r, latI)), lo = Number(cell(r, lonI))
-    return isNaN(la) || isNaN(lo) ? null : [la, lo]
-  }
-  let anchor = fixed.length ? fixed[0] : null
-  for (let i = 1; i < fixed.length; i++) {
-    const a = anchor && pt(anchor), b = pt(fixed[i])
-    if (!a || !b) { anchor = fixed[i]; continue }
-    const d = haversine(a, b)
-    const dt = (Date.parse(cell(fixed[i], timeI)) - Date.parse(cell(anchor!, timeI))) / 1000
-    if (d >= MIN_SEG_M) {
-      if (dt > 0 && (d / dt) * 3.6 >= MIN_SPEED_KMH) { movementDistanceM += d; anchor = fixed[i] }
-      // else: drifted 3 m but too slowly to be travel — leave the anchor, keep waiting.
-    }
-  }
+  const movedM = movementDistanceM(fixed.map(r => ({
+    lat: Number(cell(r, latI)), lng: Number(cell(r, lonI)), tMs: Date.parse(cell(r, timeI)),
+  })))
 
   // --- Row capture. Measured against the interval the file ACTUALLY samples at,
   // so this stays honest for a future firmware that logs at something else.
@@ -294,13 +298,13 @@ export function describeDeviceData(csv: string): DeviceDataReport {
     strokeRate = { available: false, reason: 'No stroke-rate column and no accelerometer data.', evidence: null }
   }
 
-  const looksUsable = fixed.length >= 2 && movementDistanceM >= 50 && (timeSpanS ?? 0) >= 60
+  const looksUsable = fixed.length >= 2 && movedM >= 50 && (timeSpanS ?? 0) >= 60
 
   const sampleRows = rows.slice(0, 5).map(r => Object.fromEntries(header.map((h, i) => [h, cell(r, i)])))
 
   return {
     columns: header, rows: rows.length, fixedRows: fixed.length, noFixRows,
-    timeSpanS, movementDistanceM: Math.round(movementDistanceM), hasImu, hasGyro,
+    timeSpanS, movementDistanceM: Math.round(movedM), hasImu, hasGyro,
     strokeRate, capture, gnss, motion, deadColumns, looksUsable, sampleRows,
   }
 }

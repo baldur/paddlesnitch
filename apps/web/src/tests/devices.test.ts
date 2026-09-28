@@ -204,6 +204,21 @@ describe('device session upload (device-uplink P2)', () => {
     expect(body.distanceMetres).toBeGreaterThan(0)
   })
 
+  it('a tracker sitting still stores ~0 m, not the distance GPS jitter invents', async () => {
+    const u = await makeUser('Jetty')
+    const dt = await boundToken(u)
+    // Ten minutes at 1 Hz on a jetty: each fix wobbles ~1 m either side of one spot.
+    const rows = ['timestamp,lat,lon']
+    const t0 = Date.parse('2026-09-05T09:00:00Z')
+    for (let i = 0; i < 600; i++) {
+      const lat = 51.46 + (i % 2 === 0 ? 0.00001 : -0.00001)
+      rows.push(`${new Date(t0 + i * 1000).toISOString()},${lat.toFixed(6)},-0.930000`)
+    }
+    const body = await (await uploadSession(csvReq('track_0020.csv', rows.join('\n'), dt))).json()
+    // A raw sum of every fix here comes to about 1.3 km.
+    expect(body.distanceMetres).toBeLessThan(20)
+  })
+
   it('unfixed rows do not become Null Island points', async () => {
     const u = await makeUser('Indoor')
     const dt = await boundToken(u)
