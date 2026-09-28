@@ -25,12 +25,14 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [last])
 
-  const arrow = 'shrink-0 w-11 h-11 flex items-center justify-center border border-border bg-bg/80 text-fg text-lg hover:border-primary disabled:opacity-30 disabled:hover:border-border transition-colors'
+  // Beside the card from sm: up; on a phone they sit over the card's edges so the
+  // card gets the full width (beside it, a 320 px screen left ~5 words a line).
+  const arrow = 'z-10 shrink-0 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center border border-border bg-bg/90 text-fg text-lg hover:border-primary disabled:opacity-30 disabled:hover:border-border transition-colors absolute top-1/2 -translate-y-1/2 sm:static sm:translate-y-0'
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="flex items-center gap-3 w-full max-w-xl">
-        <button type="button" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous" className={arrow}>←</button>
+      <div className="relative flex items-center sm:gap-3 w-full max-w-xl">
+        <button type="button" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous" className={`${arrow} left-1`}>←</button>
 
         <div
           className="flex-1"
@@ -54,7 +56,7 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
               hidden={n !== i}
               aria-roledescription="slide"
               aria-label={`${n + 1} of ${slides.length}`}
-              className={`aspect-square border bg-bg/80 backdrop-blur-sm p-6 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
+              className={`sm:aspect-square border bg-bg/80 backdrop-blur-sm px-14 py-8 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
             >
               {n === 0
                 ? <h1 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h1>
@@ -68,7 +70,7 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
           ))}
         </div>
 
-        <button type="button" onClick={() => go(i + 1)} disabled={i === last} aria-label="Next" className={arrow}>→</button>
+        <button type="button" onClick={() => go(i + 1)} disabled={i === last} aria-label="Next" className={`${arrow} right-1`}>→</button>
       </div>
 
       <div className="flex gap-2" aria-label="Choose a slide">

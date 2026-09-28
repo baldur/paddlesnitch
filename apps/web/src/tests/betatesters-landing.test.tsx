@@ -39,7 +39,10 @@ describe('beta testers landing', () => {
     expect(html).toContain('You kayak, canoe, row or paddleboard')
     expect(html).toContain('sit firmly in the boat')
     expect(html).toContain('Attached is best')
-    expect(html).toContain('reasonably dry')
+    expect(html).toContain('a few questions each week')
+    expect(html).toContain('up to 60 minutes')
+    expect(html).toContain('keep the tracker, a £60 value')
+    expect(html).toContain('zip-lock bag is available on request')
   })
 
   it('shows one card at a time: all three are in the page, only the first is visible', () => {

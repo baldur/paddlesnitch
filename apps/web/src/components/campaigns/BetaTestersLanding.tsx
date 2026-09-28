@@ -14,11 +14,11 @@ const SLIDES: Slide[] = [
   },
   {
     title: 'You get out on the water',
-    body: 'You kayak, canoe, row or paddleboard, and you go out regularly enough to give the tracker real use.',
+    body: 'You kayak, canoe, row or paddleboard, and you go out regularly. You answer a few questions each week, and spend up to 60 minutes with me going through how it went. In return, you keep the tracker, a £60 value.',
   },
   {
     title: 'Fixed in place',
-    body: 'The tracker measures how the boat moves, so it needs to sit firmly in the boat. Attached is best; otherwise somewhere it won’t slide or bounce around. It also needs to stay reasonably dry.',
+    body: 'The tracker measures how the boat moves, so it needs to sit firmly in the boat. Attached is best; otherwise somewhere it won’t slide or bounce around. It will arrive in a case. The case is not waterproof. A zip-lock bag is available on request.',
   },
 ]
 
@@ -45,7 +45,7 @@ export default function BetaTestersLanding() {
       {/* Darken the video so the text reads on any frame. */}
       <div aria-hidden="true" className="absolute inset-0 bg-bg/45" />
 
-      <div className="relative px-4 py-10 md:py-16 w-full flex flex-col items-center">
+      <div className="relative px-4 py-6 md:py-16 w-full flex flex-col items-center">
         <BetaSlides slides={SLIDES} />
       </div>
     </section>
