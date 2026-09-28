@@ -44,10 +44,12 @@ export default function PrivacyPolicy() {
             <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, Strava, a time trial or a tracker): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
             <li><strong>Trackers</strong>: if you link a paddlesnitch tracker, the recordings it uploads (GPS positions and motion data), and its ID, software version and when it last synced.</li>
             <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
-            <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, your recent paddles and your diary notes to an AI model on Amazon Bedrock. We keep a short written profile of your paddling to make later summaries relevant.</li>
+            <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, the name of the nearest river gauge, your recent paddles and your diary notes to an AI model on Amazon Bedrock. Please don&apos;t put health details in diary notes. We keep a short written profile of your paddling to make later summaries relevant.</li>
             <li><strong>Issue reports</strong>: what you write, the page you were on and your browser. If you&apos;re signed in, or add an email, we keep your name and email privately so we can reply.</li>
             <li><strong>Beta tester applications</strong>: your name, email, how you paddle (kayak, rowing and so on), and how often. We use it only to choose and contact beta testers, and delete it when the beta ends or when you ask.</li>
             <li><strong>Page-view counts</strong>: which pages are opened, with a random ID that lasts until you close the tab. It isn&apos;t linked to your account.</li>
+            <li><strong>Technical records</strong>: when a tracker checks for a software update we record its IP address and software version (kept 90 days), and we briefly keep IP addresses to stop repeated requests (1 day).</li>
+            <li><strong>Emails to us</strong>: if you email privacy@paddlesnitch.com we keep the message so we can deal with it.</li>
           </ul>
           <p className="mt-3">
             <strong>Heart rate is never stored</strong>, even if your GPS file contains it. Stroke rate is
@@ -92,10 +94,12 @@ export default function PrivacyPolicy() {
         </Section>
 
         <Section title="Cookies and browser storage">
-          <p>We set <strong>two</strong> cookies, both needed to keep you signed in:</p>
+          <p>We set these cookies, all needed for the site to work:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li><code>tt_id</code>: your sign-in token. Lasts 24 hours.</li>
             <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
+            <li><code>strava_state</code>, <code>strava_signin_state</code> and <code>strava_signin_next</code>: only while you connect or sign in with Strava, to check the reply really came from Strava and to bring you back to the right page. Last 10 minutes.</li>
+            <li><code>ps_contact_banner_dismissed</code>: only if you sign in with Strava and hide the &quot;add your email&quot; banner. Lasts 180 days.</li>
           </ul>
           <p className="mt-3">
             Your browser also stores <code>tt_cookie_acked</code> (so this notice isn&apos;t shown twice)
@@ -112,9 +116,10 @@ export default function PrivacyPolicy() {
             <li><strong>Open-Meteo</strong> and the <strong>Environment Agency</strong>: we send them a location and a time to look up the wind and river flow for a paddle. Nothing that identifies you.</li>
             <li><strong>GitHub</strong> (USA): issue reports are filed there, and <strong>the text you write is public</strong>. Your name and email are not sent.</li>
             <li><strong>Esri</strong> and <strong>unpkg</strong>: your browser loads map tiles and map icons from them, so they see your IP address. They don&apos;t see your account.</li>
+            <li><strong>Google</strong> (Gmail, USA): emails you send to privacy@paddlesnitch.com, and beta tester applications, are forwarded to our Gmail inbox so we can answer them.</li>
           </ul>
           <p className="mt-3">
-            Strava and GitHub are in the USA. Everything else we store stays in the EU.
+            Strava, GitHub and Google are in the USA. Everything else we store stays in the EU.
           </p>
         </Section>
 
