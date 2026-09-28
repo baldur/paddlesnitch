@@ -8,6 +8,7 @@ import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
 import { paddleTotals } from '@paddlesnitch/core/paddles'
+import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling,
@@ -71,7 +72,9 @@ export const paddlesRouter = router({
   }),
 
   // Public read-only view of a shared paddle (#202) — token only, no auth. Strips
-  // everything but result + narrative + boat (never the owner's userId or note).
+  // everything but result + boat (never the owner's userId or note). The AI
+  // summary is swapped for the plain one: it is written from the owner's diary
+  // notes and coach profile, so it can repeat private text.
   shared: publicProcedure.input(z.object({ shareId: z.string() })).query(async ({ input }) => {
     const session = await getSharedSession(input.shareId)
     if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
@@ -79,7 +82,7 @@ export const paddlesRouter = router({
       id: session.id,
       paddledAt: session.paddledAt,
       source: { type: session.source.type },
-      result: session.result,
+      result: { ...session.result, insight: plainInsight(session.result), insightModel: undefined },
       boatClass: session.boatClass,
       seat: session.seat,
     }
