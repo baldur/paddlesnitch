@@ -14,6 +14,7 @@
 #include <esp_ota_ops.h>
 #include "ota.h"
 #include "tutorial.h"
+#include "track_policy.h"
 #include <Preferences.h>
 #include "qr.h"
 #include "spibus.h"
@@ -704,6 +705,10 @@ static void screenHold()
     if (stopArmed) {
         stopArmed = false;
         if (storageRecording()) toggleRecording();     // stop + trigger a sync
+        // Back to the menu, or Track's auto-start records again on the next
+        // tick (track_policy.h). Track stays highlighted: one hold resumes.
+        const TrackNav nav = trackNavAfterStop({ menu != Menu::None, uiScreen == Screen::Track });
+        if (nav.menuOpen) { menu = Menu::Pick; menuSel = 0; }
         return;
     }
     if (!deviceUsable()) { linkAttempt(); return; }        // onboarding: WiFi/link
@@ -1266,10 +1271,10 @@ void loop()
         // Track is the recording screen: auto-start once a fix is available, so
         // the user never has to press anything to record. Only fires while on
         // Track and idle; a confirmed stop returns to the menu, so it never
-        // immediately re-starts. Throttled to this 1 Hz tick. toggleRecording()
-        // self-guards on the fix and the SD card.
-        if (menu == Menu::None && uiScreen == Screen::Track && !storageRecording()
-            && gps.location.isValid()) {
+        // immediately re-starts (track_policy.h, host-tested). Throttled to
+        // this 1 Hz tick. toggleRecording() self-guards on the fix and the SD card.
+        if (trackShouldAutoStart({ menu != Menu::None, uiScreen == Screen::Track },
+                                 storageRecording(), gps.location.isValid())) {
             toggleRecording();
         }
 
