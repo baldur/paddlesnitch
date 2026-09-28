@@ -5,6 +5,7 @@ import { getJson, putJson } from '@/lib/storage'
 import { canViewTrial, canManageTrial } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
+import { trialForViewer } from '@/lib/trial-view'
 
 type Params = { params: Promise<{ trialId: string }> }
 
@@ -26,7 +27,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     // Hide existence of private trials from non-owners.
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  return NextResponse.json(trial)
+  const manages = viewer ? canManageTrial(trial, viewer, new Set(await getUserAdminGroupIds(viewer.id))) : false
+  return NextResponse.json(trialForViewer(trial, manages))
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {

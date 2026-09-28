@@ -8,6 +8,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import { GET as listInvitations, POST as createInvitation } from '@/app/att/api/trials/[trialId]/invitations/route'
 import { DELETE as removeInvitation } from '@/app/att/api/trials/[trialId]/invitations/[userId]/route'
 import { GET as getTrial, PATCH as patchTrial } from '@/app/att/api/trials/[trialId]/route'
+import { GET as listTrials } from '@/app/att/api/trials/route'
 import { POST as upload } from '@/app/att/api/trials/[trialId]/upload/route'
 import { GET as canSubmit } from '@/app/att/api/trials/[trialId]/can-submit/route'
 import { addUserToGroupIndex, newGroup, putGroup } from '@/lib/groups'
@@ -288,6 +289,30 @@ describe('shareable submit link (invite token)', () => {
 
     const withTok = await (await canSubmit(new NextRequest(`http://x?invite=${token}`), params(trial.id))).json()
     expect(withTok.canSubmit).toBe(true)
+  })
+
+  // Security audit 2026-09: the token bypasses the participation gate, and the
+  // trial endpoints handed it (and the invite list) to every viewer.
+  it('only managers see the submit token and the invite list', async () => {
+    const { trial, token } = await membersTrialWithToken()
+    const stranger = await makeUser('Stranger')
+    for (const who of [stranger.idToken, null]) {
+      mockAuth(who)
+      const one = await (await getTrial(new NextRequest('http://x'), params(trial.id))).json()
+      expect(one.id).toBe(trial.id)
+      expect(one.submitToken).toBeUndefined()
+      expect(one.invitedUserIds).toBeUndefined()
+      mockAuth(who)
+      const list = await (await listTrials(new NextRequest('http://x'))).json()
+      expect(list.find((t: { id: string }) => t.id === trial.id)?.submitToken).toBeUndefined()
+      expect(JSON.stringify(list)).not.toContain(token)
+    }
+  })
+
+  it('the manager still gets the submit token to share', async () => {
+    const { trial, token } = await membersTrialWithToken()
+    const res = await (await getTrial(new NextRequest('http://x'), params(trial.id))).json()
+    expect(res.submitToken).toBe(token)
   })
 
   it('revoking the token disables it', async () => {
