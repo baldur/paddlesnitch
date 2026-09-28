@@ -246,7 +246,7 @@ export default function DeviceDetailPage() {
           {device === null && (
             <p className="text-xs text-muted mt-2 border border-border bg-surface px-3 py-2">
               This tracker is no longer linked to your account, but the sessions it uploaded are
-              still yours. Link it again in <Link href="/profile/me/settings" className="text-primary">Account</Link> to
+              still yours. Link it again in <Link href="/account" className="text-primary">Account</Link> to
               start receiving new ones.
             </p>
           )}

@@ -11,7 +11,7 @@ describe('GET /l/:code — the claim QR target', () => {
   it('redirects to settings with the code prefilled', async () => {
     const res = await hit('ABC123')
     expect(res.status).toBe(307)
-    expect(res.headers.get('location')).toBe('/profile/me/settings?code=ABC123#devices')
+    expect(res.headers.get('location')).toBe('/account?code=ABC123#devices')
   })
 
   it('uses a RELATIVE Location so it never leaks the origin it ran on', async () => {
@@ -31,6 +31,6 @@ describe('GET /l/:code — the claim QR target', () => {
   })
 
   it('falls back to the devices section when there is no usable code', async () => {
-    expect((await hit('!!!')).headers.get('location')).toBe('/profile/me/settings#devices')
+    expect((await hit('!!!')).headers.get('location')).toBe('/account#devices')
   })
 })

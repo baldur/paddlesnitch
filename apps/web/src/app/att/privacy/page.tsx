@@ -69,7 +69,7 @@ export default function PrivacyPolicy() {
           <p>
             We keep your data for as long as your account exists. You can delete your account at any time
             from your{' '}
-            <Link href="/profile/me/settings" className="tt-link">account page</Link>. That deletes your
+            <Link href="/account" className="tt-link">account page</Link>. That deletes your
             account, paddles, diary notes, results, shared links, tracker recordings and the courses and
             trials you created, and disconnects Strava. It happens at once and can&apos;t be undone.
           </p>

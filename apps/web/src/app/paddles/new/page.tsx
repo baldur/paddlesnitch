@@ -148,7 +148,7 @@ export default function AnalyseNewPage() {
         ) : tab === 'strava' ? (
           <div className="max-h-[300px] overflow-auto">
             {acts === undefined && <p className="text-xs text-[#64748b]">Loading your Strava activities…</p>}
-            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/profile/me/settings" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
+            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/account" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
             {acts && acts.length > 0 && acts.map(a => (
               <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a)}
                 className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">
@@ -186,7 +186,7 @@ export default function AnalyseNewPage() {
                 <span className="text-[11px] text-[#64748b]">{fmtDate(s.startedAt ?? s.uploadedAt)}{s.distanceMetres ? ` · ${fmtDist(s.distanceMetres)}` : ''} · {s.points} pts</span>
               </button>
             ))}
-            {deviceSessions && deviceSessions.length === 0 && <p className="text-xs text-[#64748b]">No tracker uploads yet. Link a tracker in <a href="/profile/me/settings" className="text-[#0369a1]">Account</a>.</p>}
+            {deviceSessions && deviceSessions.length === 0 && <p className="text-xs text-[#64748b]">No tracker uploads yet. Link a tracker in <a href="/account" className="text-[#0369a1]">Account</a>.</p>}
           </div>
         )}
 

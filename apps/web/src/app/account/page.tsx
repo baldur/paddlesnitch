@@ -281,7 +281,7 @@ function AccountPageInner() {
               Sign in to view or manage your account data.
             </p>
             <Link
-              href="/att/auth?next=/profile/me/settings"
+              href="/att/auth?next=/account"
               className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors self-center"
             >
               SIGN IN
@@ -292,7 +292,7 @@ function AccountPageInner() {
         {user && (
           <>
             <section>
-              <h1 className="text-lg font-bold text-fg tracking-widest mb-6">YOUR ACCOUNT</h1>
+              <h1 className="text-lg font-bold text-fg tracking-widest mb-6">ACCOUNT</h1>
               <dl className="grid grid-cols-3 gap-4 text-sm">
                 <dt className="text-muted tracking-widest text-xs uppercase">Email</dt>
                 <dd className="col-span-2 text-fg tabular">{user.email}</dd>
@@ -427,7 +427,7 @@ function AccountPageInner() {
 
             <DevicesSection />
 
-            <section>
+            <section id="profile">
               <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
                 Public profile
               </h2>

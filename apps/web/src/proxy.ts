@@ -23,11 +23,12 @@ export function proxy(req: NextRequest) {
   }
 
 
-  // Admin pages + the signed-in "my profile"/settings area always require auth.
+  // Admin pages, your account and your own profile always require auth.
   // `/profile/:id` (public profiles) is NOT gated — only `/profile/me*`.
   const requiresAuth =
     pathname.startsWith('/att/admin') ||
     pathname.startsWith('/profile/me') ||
+    pathname === '/account' || pathname.startsWith('/account/') ||
     (req.method !== 'GET' &&
       (pathname.startsWith('/att/api') || pathname.startsWith('/api/account')) &&
       !pathname.startsWith('/att/api/auth'))
@@ -35,8 +36,8 @@ export function proxy(req: NextRequest) {
   if (requiresAuth && !req.cookies.get('tt_id')) {
     // `next` carries the QUERY STRING as well as the path. It used to be the
     // pathname alone, while the clone kept the original params — so a gated URL
-    // like /profile/me/settings?code=ABC123 redirected to
-    // /att/auth?code=ABC123&next=/profile/me/settings and the code was silently
+    // like /account?code=ABC123 redirected to
+    // /att/auth?code=ABC123&next=/account and the code was silently
     // dropped on the way back. That breaks the scan-to-link QR for anyone not
     // already signed in, which is most people setting up a device.
     const target = pathname + req.nextUrl.search
