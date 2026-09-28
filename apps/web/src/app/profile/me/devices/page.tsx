@@ -28,7 +28,7 @@ export default function MyDevicesPage() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader breadcrumb={<Link href="/profile/me/settings" className="tt-nav-link text-sm shrink-0">← ACCOUNT</Link>} />
+      <AppHeader breadcrumb={<Link href="/account" className="tt-nav-link text-sm shrink-0">← ACCOUNT</Link>} />
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-fg tracking-wide">My devices</h1>
@@ -44,7 +44,7 @@ export default function MyDevicesPage() {
           <div className="border border-border bg-surface px-4 py-6 text-sm text-muted leading-relaxed">
             No trackers yet. A paddlesnitch tracker records a paddle and uploads it over WiFi by
             itself — no phone, no card shuffling. Pair one in{' '}
-            <Link href="/profile/me/settings" className="text-primary">Account → Devices</Link> by
+            <Link href="/account" className="text-primary">Account → Devices</Link> by
             entering the 6-character code it shows on its screen.
           </div>
         ) : (
@@ -97,7 +97,7 @@ export default function MyDevicesPage() {
         )}
 
         <p className="text-xs text-muted">
-          Pair or revoke a tracker in <Link href="/profile/me/settings" className="text-primary">Account → Devices</Link>.
+          Pair or revoke a tracker in <Link href="/account" className="text-primary">Account → Devices</Link>.
           Uploaded sessions also appear as <span className="text-fg">MY TRACKER</span> in{' '}
           <Link href="/paddles/library" className="text-primary">My paddles</Link>.
         </p>

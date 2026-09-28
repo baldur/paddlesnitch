@@ -24,7 +24,7 @@ export default function AppAccountNav() {
       paddlesHref="/paddles/library"
       devicesHref={hasDevice ? '/profile/me/devices' : undefined}
       profileHref={user ? "/profile/me" : "/att"}
-      accountHref="/profile/me/settings"
+      accountHref="/account"
       signInHref="/att/auth?next=/paddles"
       onSignOut={onSignOut}
     />

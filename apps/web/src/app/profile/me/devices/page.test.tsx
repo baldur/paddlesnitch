@@ -68,7 +68,7 @@ describe('MY DEVICES page', () => {
     stubFetch({ [DEVICES]: { devices: [] }, [SESSIONS]: { sessions: [] } })
     await mount()
     expect(container.textContent).toContain('No trackers yet')
-    const settings = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/profile/me/settings')
+    const settings = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/account')
     expect(settings).toBeTruthy()
   })
 })

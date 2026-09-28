@@ -33,6 +33,13 @@ describe('proxy auth gate', () => {
     expect(redirectsToAuth(proxy(req('DELETE', '/api/account')))).toBe(true)
   })
 
+  it('gates the account page, but not a public profile or a path that merely starts with "account"', () => {
+    expect(redirectsToAuth(proxy(req('GET', '/account')))).toBe(true)
+    expect(redirectsToAuth(proxy(req('GET', '/account', true)))).toBe(false)
+    expect(redirectsToAuth(proxy(req('GET', '/profile/abc')))).toBe(false)
+    expect(redirectsToAuth(proxy(req('GET', '/accounting')))).toBe(false)
+  })
+
   it('lets authenticated API mutations through', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/courses', true)))).toBe(false)
   })
@@ -47,14 +54,14 @@ describe('proxy auth gate', () => {
 
   it('carries the query string through sign-in, not just the path', () => {
     // Regression: `next` was set to the pathname alone while the cloned URL
-    // kept the original params, so /profile/me/settings?code=ABC123 became
-    // /att/auth?code=ABC123&next=/profile/me/settings and the code was dropped
+    // kept the original params, so /account?code=ABC123 became
+    // /att/auth?code=ABC123&next=/account and the code was dropped
     // on the way back. That silently breaks scan-to-link for anyone not
     // already signed in -- i.e. most people setting up a device.
-    const res = proxy(req('GET', '/profile/me/settings?code=ABC123'))
+    const res = proxy(req('GET', '/account?code=ABC123'))
     const loc = new URL(res.headers.get('location') ?? '', 'https://paddlesnitch.com')
     expect(loc.pathname).toBe('/att/auth')
-    expect(loc.searchParams.get('next')).toBe('/profile/me/settings?code=ABC123')
+    expect(loc.searchParams.get('next')).toBe('/account?code=ABC123')
     // ...and the code must not be left loose on the auth URL itself.
     expect(loc.searchParams.get('code')).toBeNull()
   })

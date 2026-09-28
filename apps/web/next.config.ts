@@ -23,7 +23,10 @@ const nextConfig: NextConfig = {
       // needs routing to /l/.
       { source: '/L/:code', destination: '/l/:code', permanent: false },
       { source: '/att/u/:id', destination: '/profile/:id', permanent: true },
-      { source: '/att/account', destination: '/profile/me/settings', permanent: true },
+      // Account settings moved twice: /att/account → /profile/me/settings → /account.
+      // Both old URLs go straight to /account (no chained hops).
+      { source: '/att/account', destination: '/account', permanent: true },
+      { source: '/profile/me/settings', destination: '/account', permanent: true },
       // The Analyse section moved to /paddles ("Analyse" was a verb; paddles are
       // the thing). Keep old links / bookmarks / shared-paddle URLs working.
       { source: '/analyse', destination: '/paddles', permanent: true },

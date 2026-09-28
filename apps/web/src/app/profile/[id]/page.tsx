@@ -59,7 +59,7 @@ export default async function ProfilePage({
       <AppHeader
         breadcrumb={<Link href="/" className="tt-nav-link text-sm shrink-0">← HOME</Link>}
       >
-        {isOwner && <Link href="/profile/me/settings" className="tt-nav-link text-sm">SETTINGS</Link>}
+        {isOwner && <Link href="/account#profile" className="tt-nav-link text-sm">EDIT PROFILE</Link>}
       </AppHeader>
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
@@ -71,7 +71,7 @@ export default async function ProfilePage({
         {isOwner && !settings.public && (
           <div className="border border-primary bg-primary/10 px-4 py-3 text-xs text-primary">
             Only you can see this profile. Make it public from your{' '}
-            <Link href="/profile/me/settings" className="underline">account page</Link> to share it.
+            <Link href="/account" className="underline">account page</Link> to share it.
           </div>
         )}
 

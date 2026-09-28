@@ -32,7 +32,7 @@ const nav = (extra: Record<string, unknown> = {}) => (
   <AccountNav
     user={USER}
     profileHref="/profile/me"
-    accountHref="/profile/me/settings"
+    accountHref="/account"
     signInHref="/att/auth"
     onSignOut={() => {}}
     {...extra}
@@ -55,9 +55,9 @@ describe('AccountNav — MY DEVICES', () => {
     expect(menu.textContent).toContain('SIGN OUT')
   })
 
-  it('sits with MY PADDLES above the profile/settings rows', async () => {
+  it('sits with MY PADDLES above the profile/account rows', async () => {
     const menu = await openMenu(nav({ paddlesHref: '/paddles/library', devicesHref: '/profile/me/devices' }))
     const labels = [...menu.querySelectorAll('a,button')].map(el => el.textContent)
-    expect(labels).toEqual(['MY PADDLES', 'MY DEVICES', 'MY PROFILE', 'SETTINGS', 'REPORT AN ISSUE', 'SIGN OUT'])
+    expect(labels).toEqual(['MY PADDLES', 'MY DEVICES', 'MY PROFILE', 'ACCOUNT', 'REPORT AN ISSUE', 'SIGN OUT'])
   })
 })

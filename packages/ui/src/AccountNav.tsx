@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 // att's AuthNav.
 //
 // Signed in, it's a single dropdown ("Name ▾") holding everything common to
-// every page: My profile, Settings, Report an issue, Sign out. This keeps the
+// every page: My profile, Account, Report an issue, Sign out. This keeps the
 // TRIALS/ANALYSE tabs + section-specific nav uncluttered in the header. Signed
 // out it's a plain SIGN IN link (anonymous users still get the floating
 // FeedbackWidget button for reporting).
@@ -82,7 +82,7 @@ export default function AccountNav({
           {paddlesHref && <a role="menuitem" href={paddlesHref} className={`${item} text-fg hover:bg-surface-2`}>MY PADDLES</a>}
           {devicesHref && <a role="menuitem" href={devicesHref} className={`${item} text-fg hover:bg-surface-2`}>MY DEVICES</a>}
           <a role="menuitem" href={profileHref} className={`${item} text-fg hover:bg-surface-2`}>MY PROFILE</a>
-          <a role="menuitem" href={accountHref} className={`${item} text-muted hover:bg-surface-2 hover:text-fg`}>SETTINGS</a>
+          <a role="menuitem" href={accountHref} className={`${item} text-muted hover:bg-surface-2 hover:text-fg`}>ACCOUNT</a>
           <button
             role="menuitem"
             type="button"

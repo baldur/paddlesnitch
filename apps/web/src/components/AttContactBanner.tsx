@@ -16,7 +16,7 @@ export default function AttContactBanner() {
   return (
     <ContactBanner
       shouldShow={shouldShow}
-      href="/profile/me/settings"
+      href="/account"
       cta="Add a contact email →"
       message="You signed in with Strava, so we can’t reach you about Terms changes, account problems, or group invitations."
       dismissKey="tt_strava_email_banner_dismissed"

@@ -4,7 +4,7 @@ import { getProfileSettings } from '@/lib/profile'
 
 // /profile/me — the signed-in paddler's own profile entry point. Redirects to
 // their canonical public profile (/profile/{handle-or-id}), where the owner view
-// shows a SETTINGS link (→ /profile/me/settings). Signed-out → sign in and come
+// shows an EDIT PROFILE link (→ /account#profile). Signed-out → sign in and come
 // back here.
 export default async function MyProfilePage() {
   const user = await getAuthUser()

@@ -32,7 +32,7 @@ export default function AttAccountNav() {
       paddlesHref="/paddles/library"
       devicesHref={hasDevice ? '/profile/me/devices' : undefined}
       profileHref={user ? "/profile/me" : "/att"}
-      accountHref="/profile/me/settings"
+      accountHref="/account"
       signInHref="/att/auth"
       onSignOut={onSignOut}
     />
