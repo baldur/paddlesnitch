@@ -68,6 +68,9 @@ describe('DEVICES page', () => {
     stubFetch({ [DEVICES]: { devices: [] }, [SESSIONS]: { sessions: [] } })
     await mount()
     expect(container.textContent).toContain('No trackers yet')
+    // A new tester is shown what to do next, linked to the guide.
+    expect(container.textContent).toContain('Getting started')
+    expect(container.querySelector('a[href="/guide/switch-on"]')).not.toBeNull()
     expect(container.querySelector('#add form')).not.toBeNull()
     expect([...container.querySelectorAll('a')].some(a => a.getAttribute('href') === '/account')).toBe(false)
   })
@@ -76,5 +79,14 @@ describe('DEVICES page', () => {
     stubFetch({ [DEVICES]: { devices: [{ deviceId: '5A43CA48', name: 't', model: 'm' }] }, [SESSIONS]: { sessions: [] } })
     await mount()
     expect(container.querySelector('#add form')).not.toBeNull()
+  })
+
+  it('drops the getting-started list once a recording has arrived', async () => {
+    stubFetch({
+      [DEVICES]: { devices: [{ deviceId: 'AABBCCDD', name: 'Boat', model: 'm', firmware: '0.16.3', linkedAt: '2026-09-01T00:00:00Z', lastSeenAt: new Date().toISOString() }] },
+      [SESSIONS]: { sessions: [{ id: 's1', deviceId: 'AABBCCDD', filename: 'track_1.csv', uploadedAt: '2026-09-02T00:00:00Z', distanceMetres: 1200 }] },
+    })
+    await mount()
+    expect(container.textContent).not.toContain('Getting started')
   })
 })

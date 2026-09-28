@@ -30,7 +30,7 @@ function Report({ report, cadence, attitude, sessionId, deviceId }: SessionRepor
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
       {!report.looksUsable && (
-        <p className="text-muted">This recording has no paddle in it. The tracker records whenever it&apos;s switched on.</p>
+        <p className="text-muted">This recording has no paddle in it. It may have been started on land, or stopped before you set off.</p>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -201,7 +201,7 @@ export default function DeviceDetailPage() {
         {sessions === undefined ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : sessions.length === 0 ? (
-          <p className="text-sm text-muted">No recordings from this tracker yet. It uploads over WiFi when you hold SYNC on the tracker.</p>
+          <p className="text-sm text-muted">No recordings from this tracker yet. It uploads them by itself when it’s switched on in range of your WiFi. <Link href="/guide/upload" className="text-primary">How uploading works</Link>.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {sessions.map(s => (
