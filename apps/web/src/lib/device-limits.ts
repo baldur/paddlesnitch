@@ -18,16 +18,22 @@ import { rateLimit, clientIpKey } from '@paddlesnitch/core/rate-limit'
 
 const HOUR = 3600
 
-/** `/api/devices/claim` — one request per claim attempt. A user who fumbles
- *  onboarding (reset, retry, wrong WiFi) legitimately makes several. */
-export const CLAIM_PER_DEVICE = 10
+/** `/api/devices/claim` — one request per claim attempt. The uplink task starts
+ *  a new claim the moment a five-minute round times out, so a tracker left on
+ *  its code screen makes 12 an hour on its own; 10 cut it off (audit 2026-09). */
+export const CLAIM_PER_DEVICE = 20
 /** Per IP, which is the limit that actually bounds an attacker minting claim
  *  records for invented device IDs. One household onboarding devices sits far
  *  under this; a script does not. */
 export const CLAIM_PER_IP = 30
-/** `/api/devices/token` — 60 polls per five-minute round, so this is five full
- *  rounds plus headroom. */
-export const TOKEN_PER_DEVICE = 300
+/** `/api/devices/token` — 60 polls per five-minute round, and rounds run back to
+ *  back while the code is on screen: ~720 an hour. 300 locked a waiting tracker
+ *  out after ~25 minutes, and a code typed then was added on the website but
+ *  never collected by the tracker (audit 2026-09). */
+export const TOKEN_PER_DEVICE = 1000
+/** `/api/account/devices/link` per signed-in user. A person mistypes a few
+ *  times; a script guessing 6-character codes would try millions. */
+export const LINK_PER_USER = 20
 
 export type LimitOutcome = { limited: false } | { limited: true; response: Response }
 
@@ -57,6 +63,12 @@ export async function limitClaim(req: Request, deviceId: string): Promise<LimitO
   const perIp = await rateLimit(`claim/ip/${ip}`, CLAIM_PER_IP, HOUR)
   if (!perIp.allowed) return { limited: true, response: tooMany(perIp.resetInSeconds) }
   return { limited: false }
+}
+
+/** Limit `/api/account/devices/link` per user. */
+export async function limitLink(userId: string): Promise<LimitOutcome> {
+  const r = await rateLimit(`link/user/${userId}`, LINK_PER_USER, HOUR)
+  return r.allowed ? { limited: false } : { limited: true, response: tooMany(r.resetInSeconds) }
 }
 
 /** Limit `/api/devices/token` per device. No IP limit: the device polls this

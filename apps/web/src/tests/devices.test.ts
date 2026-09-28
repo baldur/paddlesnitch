@@ -11,6 +11,7 @@ import { GET as listDevices, DELETE as revokeDevice } from '@/app/api/account/de
 import { POST as uploadSession } from '@/app/api/devices/sessions/route'
 import { getDeviceAuth } from '@/lib/auth'
 import { createClaim, linkClaim } from '@/lib/devices'
+import { getJson, listKeys } from '@/lib/storage'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -164,6 +165,60 @@ describe('device pairing (#212 device-uplink)', () => {
     expect((await token(jreq({ deviceId: DEVICE, claimSecret }))).status).toBe(200)
     // The code index is dropped the moment the token is issued.
     expect(await linkClaim(claimCode, u.id)).toEqual({ error: 'unknown_code' })
+  })
+
+  // Security audit 2026-09. Each helper: claim, link as `u`, collect the token.
+  async function pair(u: { idToken: string }, deviceId = DEVICE) {
+    const { claimCode, claimSecret } = await (await claim(jreq({ deviceId, model: 'm', firmware: 'f' }))).json()
+    mockAuth(u.idToken)
+    const linked = await link(jreq({ claimCode }))
+    if (linked.status !== 200) return { linked, deviceToken: undefined as string | undefined }
+    const { deviceToken } = await (await token(jreq({ deviceId, claimSecret }))).json()
+    return { linked, deviceToken: deviceToken as string }
+  }
+
+  it('re-adding a tracker cancels its previous token (a reset tracker must not keep the old one)', async () => {
+    const u = await makeUser('Re-adder')
+    const first = await pair(u)
+    const second = await pair(u)
+    expect(await getDeviceAuth(bearer(second.deviceToken!))).toEqual({ deviceId: DEVICE, userId: u.id })
+    expect(await getDeviceAuth(bearer(first.deviceToken!))).toBeNull()
+    expect(await listKeys('device-tokens/')).toHaveLength(1)
+  })
+
+  it('a tracker on one account cannot be added to another until its owner removes it', async () => {
+    const owner = await makeUser('Owner')
+    const other = await makeUser('Someone Else')
+    const mine = await pair(owner)
+    // Anyone can start a claim for a known deviceId (it is not a secret) ...
+    const taken = await pair(other)
+    expect(taken.linked.status).toBe(409)
+    expect((await taken.linked.json()).error).toBe('owned_elsewhere')
+    // ... but the owner keeps the tracker and its token.
+    expect(await getDeviceAuth(bearer(mine.deviceToken!))).toEqual({ deviceId: DEVICE, userId: owner.id })
+    // Once the owner removes it, it can be added elsewhere (a tracker changing hands).
+    mockAuth(owner.idToken)
+    expect((await revokeDevice(jreq({ deviceId: DEVICE }))).status).toBe(200)
+    const after = await pair(other)
+    expect(after.linked.status).toBe(200)
+    expect(await getDeviceAuth(bearer(after.deviceToken!))).toEqual({ deviceId: DEVICE, userId: other.id })
+  })
+
+  it('using a token does not rewrite it (a removed tracker could come back mid-sync)', async () => {
+    const u = await makeUser('Syncer')
+    const { deviceToken } = await pair(u)
+    const [key] = await listKeys('device-tokens/')
+    const before = await getJson(key)
+    await getDeviceAuth(bearer(deviceToken!))
+    expect(await getJson(key)).toEqual(before)
+  })
+
+  it('limits how many codes one account can try', async () => {
+    const u = await makeUser('Guesser')
+    mockAuth(u.idToken)
+    let last = 0
+    for (let i = 0; i < 25; i++) last = (await link(jreq({ claimCode: 'ZZZZZZ' }))).status
+    expect(last).toBe(429)
   })
 
   it('rejects a malformed deviceId at claim', async () => {

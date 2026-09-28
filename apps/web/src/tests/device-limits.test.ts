@@ -153,6 +153,15 @@ describe('POST /api/devices/token rate limit', () => {
     expect(TOKEN_PER_DEVICE).toBeGreaterThanOrEqual(60 * 4)
   })
 
+  it('never locks out a tracker left on its code screen for an hour', async () => {
+    // The uplink task starts a new claim as soon as a round times out, so a
+    // tracker waiting on its code screen makes 12 claims and ~720 polls an
+    // hour. At 10 and 300 it was cut off after ~25 minutes, and a code typed
+    // then was added on the website but never collected by the tracker.
+    expect(TOKEN_PER_DEVICE).toBeGreaterThanOrEqual(12 * 60)
+    expect(CLAIM_PER_DEVICE).toBeGreaterThanOrEqual(12)
+  })
+
   it('a malformed deviceId stays indistinguishable from pending and spends nothing', async () => {
     for (let i = 0; i < TOKEN_PER_DEVICE + 5; i++) {
       const res = await token(tokenReq('whatever', 'nope'))

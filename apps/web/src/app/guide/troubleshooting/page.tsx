@@ -100,6 +100,8 @@ export default function Troubleshooting() {
           <li><strong>“That code has expired.”</strong> The same: use the code on the screen now.</li>
           <li><strong>“That code has already been used.”</strong> The tracker is probably on your
             account already. Check <Link href="/devices">Devices</Link>.</li>
+          <li><strong>“This tracker is on someone else’s account.”</strong> Its last owner has to
+            remove it on their Devices page first. Ask whoever gave it to you.</li>
         </ul>
         <p>
           If the tracker says <strong>getting a code...</strong> for more than a minute, it can’t
