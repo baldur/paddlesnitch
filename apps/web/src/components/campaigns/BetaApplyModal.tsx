@@ -5,7 +5,8 @@ import BetaSignupForm from './BetaSignupForm'
 // The CLICK TO SNITCH button and the pop-up it opens. The form lives in the
 // pop-up so the page itself is only the video and the message boxes.
 // Closes on ✕, Escape, or a click on the dimmed background.
-export default function BetaApplyModal() {
+// `bounce` makes the button bounce (the carousel sets it on its last slide).
+export default function BetaApplyModal({ bounce = false }: { bounce?: boolean }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export default function BetaApplyModal() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="px-8 py-3 bg-primary text-white font-bold text-sm tracking-widest hover:opacity-90 transition-opacity"
+        className={`px-8 py-3 bg-primary text-white font-bold text-sm tracking-widest hover:opacity-90 transition-opacity ${bounce ? 'motion-safe:animate-bounce' : ''}`}
       >
         CLICK TO SNITCH
       </button>

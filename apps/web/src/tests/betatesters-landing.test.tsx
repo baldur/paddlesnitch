@@ -32,13 +32,19 @@ describe('beta testers landing', () => {
     expect(html).toContain('poster="/campaigns/betatesters.jpg"')
   })
 
-  it('states both requirements in square boxes: paddle regularly, tracker fixed firmly in the boat', () => {
+  it('states both requirements: paddle regularly, tracker fixed firmly in the boat', () => {
     expect(html).toContain('Beta testers wanted')
     expect(html).toContain('You kayak, canoe, row or paddleboard')
     expect(html).toContain('sit firmly in the boat')
     expect(html).toContain('Attached is best')
     expect(html).toContain('reasonably dry')
-    expect((html.match(/md:aspect-square/g) ?? []).length).toBe(3)
+  })
+
+  it('shows one card at a time: all three are in the page, only the first is visible', () => {
+    expect((html.match(/aria-roledescription="slide"/g) ?? []).length).toBe(3)
+    expect((html.match(/<article hidden=""/g) ?? []).length).toBe(2)
+    expect(html).toContain('aria-label="Previous"')
+    expect(html).toContain('aria-label="Next"')
   })
 
   it('shows a CLICK TO SNITCH button, with the form kept in a pop-up until it is pressed', () => {

@@ -1,12 +1,13 @@
-import BetaApplyModal from './BetaApplyModal'
+import BetaSlides, { type Slide } from './BetaSlides'
 
-// The ?campaign=betatesters landing: the tracker video playing behind square
-// message boxes, and a CLICK TO SNITCH button that opens the form in a pop-up.
+// The ?campaign=betatesters landing: the tracker video playing behind one
+// message card at a time (flip with the side arrows), and a CLICK TO SNITCH
+// button that opens the form in a pop-up and bounces on the last card.
 //
 // The video is muted, looped and inline (required for autoplay on phones). With
 // reduced motion the video is hidden and the poster frame shows instead.
 
-const TILES: { eyebrow: string; title: string; body: string }[] = [
+const SLIDES: Slide[] = [
   {
     eyebrow: 'Beta testers wanted',
     title: 'Test the paddlesnitch tracker',
@@ -47,25 +48,8 @@ export default function BetaTestersLanding() {
       {/* Darken the video so the text reads on any frame. */}
       <div aria-hidden="true" className="absolute inset-0 bg-bg/45" />
 
-      <div className="relative px-4 py-10 md:py-16 max-w-5xl mx-auto w-full flex flex-col gap-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          {TILES.map((t, i) => (
-            <article
-              key={t.eyebrow}
-              className={`md:aspect-square border bg-bg/80 backdrop-blur-sm p-6 flex flex-col gap-3 ${i === 0 ? 'border-primary' : 'border-border'}`}
-            >
-              <p className={`text-[10px] tracking-[0.3em] uppercase ${i === 0 ? 'text-fg' : 'text-muted'}`}>{t.eyebrow}</p>
-              {i === 0
-                ? <h1 className="text-2xl font-bold text-fg leading-tight">{t.title}</h1>
-                : <h2 className="text-lg md:text-xl font-bold text-fg leading-tight">{t.title}</h2>}
-              <p className="text-sm text-muted leading-relaxed">{t.body}</p>
-            </article>
-          ))}
-        </div>
-
-        <div className="flex justify-center pt-4">
-          <BetaApplyModal />
-        </div>
+      <div className="relative px-4 py-10 md:py-16 w-full flex flex-col items-center">
+        <BetaSlides slides={SLIDES} />
       </div>
     </section>
   )
