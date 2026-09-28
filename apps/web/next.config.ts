@@ -15,18 +15,17 @@ const nextConfig: NextConfig = {
   // bookmarks / the Strava app config don't break.
   async redirects() {
     return [
-      // The device's claim QR carries an UPPERCASE URL on purpose: all-caps
-      // puts it in QR alphanumeric mode, which packs 2 characters per 11 bits
-      // and drops the code from version 2 to version 1 -- fewer modules and a
-      // wider quiet zone on a 64 px panel, which is what makes it scannable.
-      // Domains are case-insensitive but Next path segments are not, so /L/
-      // needs routing to /l/.
-      { source: '/L/:code', destination: '/l/:code', permanent: false },
+      // (The tracker QR's uppercase /L/<code> is routed in src/proxy.ts: a rule
+      // here matches case-insensitively and would loop /l/ onto itself.)
       { source: '/att/u/:id', destination: '/profile/:id', permanent: true },
       // Account settings moved twice: /att/account → /profile/me/settings → /account.
       // Both old URLs go straight to /account (no chained hops).
       { source: '/att/account', destination: '/account', permanent: true },
       { source: '/profile/me/settings', destination: '/account', permanent: true },
+      // Trackers moved from /profile/me/devices to /devices. (The old recording
+      // URL /profile/me/devices/<sessionId> is a page that looks up the tracker.)
+      { source: '/profile/me/devices', destination: '/devices', permanent: true },
+      { source: '/profile/me/devices/d/:deviceId', destination: '/devices/:deviceId', permanent: true },
       // The Analyse section moved to /paddles ("Analyse" was a verb; paddles are
       // the thing). Keep old links / bookmarks / shared-paddle URLs working.
       { source: '/analyse', destination: '/paddles', permanent: true },

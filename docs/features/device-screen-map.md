@@ -112,7 +112,7 @@ flowchart TD
     J --> E
     I -- yes --> K["claim: POST /api/devices/claim"]
     K --> L["LINKING — full-panel QR<br/>PADDLESNITCH.COM/L/&lt;code&gt;"]
-    L --> M["scan → /l/code → settings,<br/>code prefilled"]
+    L --> M["scan → /l/code → /devices,<br/>code prefilled"]
     L -. "tap" .-> N["the 6 characters,<br/>type them instead"]
     M --> O{user confirms<br/>on the website}
     N --> O
@@ -254,8 +254,8 @@ Honest list. Nothing here is fixed.
 | Route | Purpose | Failure the customer meets |
 |---|---|---|
 | `/L/:code` → `/l/:code` | claim QR target; uppercase for QR alphanumeric mode | wrong case 404s without the redirect |
-| `/l/:code` | → `/profile/me/settings?code=…#devices` | relative redirect, so it cannot leak the Lambda origin |
+| `/l/:code` (and `/L/:code`, rewritten in the proxy) | → `/devices?code=…#add` | relative redirect, so it cannot leak the Lambda origin |
 | `/profile/me/settings` → Devices | enter or confirm the code | `unknown_code` / `claim_expired` / `already_linked` are all worded for a human |
-| `/profile/me/devices` | MY DEVICES — one card per tracker (sessions, distance, last seen) | empty state points at Account → Devices; a revoked tracker still shows, flagged `not linked`, because its uploads outlive the binding |
-| `/profile/me/devices/d/[deviceId]` | one tracker's uploads + per-session diagnostics | `No uploads from this tracker yet` |
-| `/profile/me/devices/[sessionId]` | motion charts for one session | `No motion data for this session yet` when no sidecar |
+| `/devices` | DEVICES — one card per tracker (sessions, distance, last seen) + the add-a-tracker code box | empty state offers the add box right there; a revoked tracker still shows, flagged `not linked`, because its uploads outlive the binding |
+| `/devices/[deviceId]` | one tracker's uploads + per-session diagnostics | `No uploads from this tracker yet` |
+| `/devices/[deviceId]/[sessionId]` | motion charts for one session | `No motion data for this session yet` when no sidecar |

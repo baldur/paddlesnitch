@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 // AppHeader mounts AttAccountNav (useRouter + fetch on mount) — out of scope here.
 vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header> }))
 
-import MyDevicesPage from './page'
+import DevicesPage from './page'
 
 let container: HTMLDivElement
 let root: Root
@@ -27,7 +27,7 @@ async function mount() {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root.render(<MyDevicesPage />) })
+  await act(async () => { root.render(<DevicesPage />) })
   await act(async () => { await Promise.resolve() })
   await act(async () => { await Promise.resolve() })
 }
@@ -35,7 +35,7 @@ async function mount() {
 const DEVICES = '/api/account/devices'
 const SESSIONS = '/api/account/devices/sessions'
 
-describe('MY DEVICES page', () => {
+describe('DEVICES page', () => {
   it('renders one card per tracker, linking into that tracker', async () => {
     stubFetch({
       [DEVICES]: { devices: [{ deviceId: '5A43CA48', name: "Baldur's tracker", model: 'lilygo-tbeam-s3-supreme', firmware: '0.9.0', lastSeenAt: '2026-09-18T09:00:00Z' }] },
@@ -49,7 +49,7 @@ describe('MY DEVICES page', () => {
     expect(container.textContent).toContain('1 session')
     expect(container.textContent).toContain('10.79 km')
     const card = [...container.querySelectorAll('a')].find(a => a.textContent?.includes("Baldur's tracker"))
-    expect(card?.getAttribute('href')).toBe('/profile/me/devices/d/5A43CA48')
+    expect(card?.getAttribute('href')).toBe('/devices/5A43CA48')
   })
 
   it('still shows a revoked tracker, because its uploads are still the user\'s', async () => {
@@ -64,11 +64,17 @@ describe('MY DEVICES page', () => {
     expect(container.textContent).toContain('not linked')
   })
 
-  it('steers a user with no tracker to Account → Devices rather than showing an empty list', async () => {
+  it('lets a user with no tracker add one right here, instead of sending them to another page', async () => {
     stubFetch({ [DEVICES]: { devices: [] }, [SESSIONS]: { sessions: [] } })
     await mount()
     expect(container.textContent).toContain('No trackers yet')
-    const settings = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/account')
-    expect(settings).toBeTruthy()
+    expect(container.querySelector('#add form')).not.toBeNull()
+    expect([...container.querySelectorAll('a')].some(a => a.getAttribute('href') === '/account')).toBe(false)
+  })
+
+  it('has the add-a-tracker box when trackers already exist too', async () => {
+    stubFetch({ [DEVICES]: { devices: [{ deviceId: '5A43CA48', name: 't', model: 'm' }] }, [SESSIONS]: { sessions: [] } })
+    await mount()
+    expect(container.querySelector('#add form')).not.toBeNull()
   })
 })
