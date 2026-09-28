@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { makeDataDir, cleanDataDir } from './helpers'
@@ -47,7 +48,7 @@ describe('POST /att/api/auth/signup', () => {
       email,
       displayName: 'Alice',
       password: 'Password123',
-      acceptedTosVersion: '001',
+      acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
     expect(res.status).toBe(201)
     const body = await res.json()
@@ -66,7 +67,7 @@ describe('POST /att/api/auth/signup', () => {
   it('rejects password shorter than 8 characters', async () => {
     const res = await signup(jsonReq('http://x/att/api/auth/signup', {
       email: freshEmail(), displayName: 'A', password: 'short',
-      acceptedTosVersion: '001',
+      acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
     expect(res.status).toBe(400)
   })
@@ -77,7 +78,7 @@ describe('POST /att/api/auth/signup', () => {
 
   it('rejects duplicate email with 409', async () => {
     const email = freshEmail()
-    const body = { email, displayName: 'D', password: 'Password123', acceptedTosVersion: '001' }
+    const body = { email, displayName: 'D', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }
     await signup(jsonReq('http://x/att/api/auth/signup', body))
     const res = await signup(jsonReq('http://x/att/api/auth/signup', body))
     expect(res.status).toBe(409)
@@ -90,7 +91,7 @@ describe('POST /att/api/auth/login', () => {
     bobEmail = freshEmail()
     await signup(jsonReq('http://x/att/api/auth/signup', {
       email: bobEmail, displayName: 'Bob', password: 'Password123',
-      acceptedTosVersion: '001',
+      acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
   })
 
@@ -124,7 +125,7 @@ describe('GET /att/api/auth/me', () => {
     const email = freshEmail()
     const signupRes = await signup(jsonReq('http://x/att/api/auth/signup', {
       email, displayName: 'Carol', password: 'Password123',
-      acceptedTosVersion: '001',
+      acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
     const setCookie = signupRes.headers.get('set-cookie') ?? ''
     const idToken = extractCookie(setCookie, 'tt_id') ?? ''
@@ -162,7 +163,7 @@ describe('POST /att/api/auth/logout', () => {
   it('clears ID and refresh cookies', async () => {
     const email = freshEmail()
     const signupRes = await signup(jsonReq('http://x/att/api/auth/signup', {
-      email, displayName: 'Dan', password: 'Password123', acceptedTosVersion: '001',
+      email, displayName: 'Dan', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
     const setCookie = signupRes.headers.get('set-cookie') ?? ''
     const refreshToken = extractCookie(setCookie, 'tt_refresh') ?? ''

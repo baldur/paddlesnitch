@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StravaButton from '@/components/strava/StravaButton'
+import { CURRENT_TOS_VERSION } from '@/lib/types'
 
 function AuthForm() {
   const router = useRouter()
@@ -23,8 +24,8 @@ function AuthForm() {
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   // ToS acceptance is mandatory on signup; the checkbox lives just above
-  // the submit button. The version sent on POST is hard-coded to '001'
-  // for now — when CURRENT_TOS_VERSION bumps, this string bumps with it.
+  // the submit button. The version sent on POST is CURRENT_TOS_VERSION, so a
+  // bump can't leave the form sending a stale one.
   const [tosAccepted, setTosAccepted] = useState(false)
   // ?error= comes back from server-driven flows (Strava OAuth callback,
   // legacy magic-link). Map known keys to user-friendly messages once.
@@ -89,7 +90,7 @@ function AuthForm() {
       const res = await fetch('/att/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, displayName, password, acceptedTosVersion: '001' }),
+        body: JSON.stringify({ email, displayName, password, acceptedTosVersion: CURRENT_TOS_VERSION }),
       })
       if (res.ok) {
         router.push(next)

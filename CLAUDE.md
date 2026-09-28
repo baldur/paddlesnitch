@@ -694,10 +694,11 @@ Versioned markdown at `legal/tos-{version}.md`. The current version constant is 
 
 #### Bumping a version
 
-1. Copy `legal/tos-{prev}.md` to `legal/tos-{new}.md`. Edit.
-2. Set `CURRENT_TOS_VERSION` in `src/lib/types.ts` to the new string.
-3. Update the signup form's hard-coded `acceptedTosVersion: '...'` (in `src/app/att/auth/page.tsx`) to match.
-4. (Future) wire a re-accept gate on the next authenticated request.
+1. Copy `legal/tos-{prev}.md` to `legal/tos-{new}.md`. Edit, including the `**Version NNN, effective …**` line (a test checks it matches).
+2. Set `CURRENT_TOS_VERSION` in `src/lib/types.ts` to the new string. The signup form and tests read the constant — nothing else to bump.
+3. **Email registered users** — the ToS (§9) promises this for every new version. There is no re-accept prompt yet; continuing use after the bump is the acceptance.
+
+Current version: **002** (2026-09-28): adds Paddles/trackers/AI summary ("can be wrong"), stroke rate kept, and drops 001's false claims (re-accept prompt, version in footer, leaked "so we don't chase consents" reasoning).
 
 ### Make-public acknowledgement
 
