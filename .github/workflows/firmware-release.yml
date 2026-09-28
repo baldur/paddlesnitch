@@ -101,6 +101,9 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.firmware == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write    # OIDC, as for the whole workflow
+      contents: write    # push the fw/vX.Y.Z tag; nothing else in here writes
     steps:
       - uses: actions/checkout@v5
         with:
@@ -223,10 +226,32 @@ jobs:
           aws s3 cp manifest.json "s3://$DATA_BUCKET/firmware/$V/manifest.json"
           echo "PUBLISHED_NOW=true" >> "$GITHUB_ENV"
 
+      # A git tag per published version (fw/v0.16.2), on the commit that was
+      # built, so "what code is 0.16.2?" is one `git show fw/v0.16.2` away.
+      # Only for a version published by THIS run: a docs-only rebuild keeps the
+      # bytes published earlier, which were built from an earlier commit. The
+      # tag message is the note the tracker shows. A tag that already exists is
+      # left where it is (tags are never moved).
+      - name: Tag the release
+        if: env.PUBLISHED_NOW == 'true'
+        run: |
+          bash .github/scripts/release-tag.test.sh
+          TAG="$(bash .github/scripts/release-tag.sh fw "${{ steps.v.outputs.version }}")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists -- leaving it."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "$(bash .github/scripts/firmware-notes.sh firmware/NOTES)"
+          git push origin "refs/tags/$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
       - name: Summary
         run: |
           {
             echo "### Firmware ${{ steps.v.outputs.version }} built"
+            [ -n "${TAG:-}" ] && echo "" && echo "- tag: \`$TAG\`"
             echo ""
             echo "- size: ${{ steps.m.outputs.size }} bytes"
             echo "- sha256: \`${{ steps.m.outputs.sha256 }}\`"

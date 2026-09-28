@@ -427,6 +427,12 @@ wraps it. `.github/scripts/firmware-notes.sh` checks this (tests in the sibling
 used to be the last commit's subject, and a merge commit put "Merge pull request
 #295 from baldur/…" on the trackers' screens.
 
+**Each published version gets a git tag, `fw/v<VERSION>`** (e.g. `fw/v0.16.2`),
+on the commit that was built, with the release note as its message. The release
+workflow creates it; tags are never moved. The naming is
+`.github/scripts/release-tag.sh` (`<component>/v<semver>`), shared so iOS,
+Android and web releases can use `ios/`, `android/`, `web/` later.
+
 Serial commands (tracker env): `HELP`, `STATUS`, `SETUP`, `SCAN`, `SSID <name>`,
 `PASS <secret>`, `SYNC`, `FORGET`, `LS`, `CAT <file>`, `SDPROBE <file>`,
 `DBG` / `DBG CLEAR`, `QRDUMP <text>`.
