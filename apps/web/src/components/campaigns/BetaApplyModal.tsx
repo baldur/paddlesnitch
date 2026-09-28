@@ -38,15 +38,14 @@ export default function BetaApplyModal() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="beta-apply-title"
+            aria-label="Apply to be a beta tester"
             className="bg-surface border border-border w-full sm:max-w-md max-h-[100svh] overflow-y-auto flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            <header className="border-b border-border px-5 py-3 flex items-center justify-between">
-              <h2 id="beta-apply-title" className="text-xs text-fg tracking-widest uppercase">Apply to be a beta tester</h2>
-              <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-fg text-sm" aria-label="Close">✕</button>
-            </header>
-            <div className="px-5 py-5">
+            <div className="flex justify-end px-3 pt-2">
+              <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-fg text-sm p-2" aria-label="Close">✕</button>
+            </div>
+            <div className="px-5 pb-5">
               <BetaSignupForm />
             </div>
           </div>

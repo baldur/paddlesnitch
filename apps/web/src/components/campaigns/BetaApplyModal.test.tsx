@@ -34,6 +34,14 @@ describe('beta tester application pop-up', () => {
     expect(dialog()!.querySelector('form')).not.toBeNull()
   })
 
+  it('shows no heading, but keeps a label for screen readers', async () => {
+    await mount()
+    await openIt()
+    expect(dialog()!.querySelector('h1, h2, h3')).toBeNull()
+    expect(dialog()!.textContent).not.toMatch(/apply to be a beta tester/i)
+    expect(dialog()!.getAttribute('aria-label')).toBe('Apply to be a beta tester')
+  })
+
   it('lays the form out in one column, top to bottom: name, email, sport, how often, then the button', async () => {
     await mount()
     await openIt()
