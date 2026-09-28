@@ -9,17 +9,14 @@ import BetaSlides, { type Slide } from './BetaSlides'
 
 const SLIDES: Slide[] = [
   {
-    eyebrow: 'Beta testers wanted',
     title: 'Test the paddlesnitch tracker',
     body: 'A small GPS and motion tracker that records your paddle and uploads it on its own. We need paddlers to take it on the water and tell us what works and what breaks.',
   },
   {
-    eyebrow: '1 · You paddle',
     title: 'You get out on the water',
     body: 'You kayak, canoe, row or paddleboard, and you go out regularly enough to give the tracker real use.',
   },
   {
-    eyebrow: '2 · It sits firmly in the boat',
     title: 'Fixed in place',
     body: 'The tracker measures how the boat moves, so it needs to sit firmly in the boat. Attached is best; otherwise somewhere it won’t slide or bounce around. It also needs to stay reasonably dry.',
   },

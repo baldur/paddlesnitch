@@ -10,9 +10,9 @@ vi.mock('next/link', () => ({
 import BetaSlides from './BetaSlides'
 
 const SLIDES = [
-  { eyebrow: 'A', title: 'First', body: 'one' },
-  { eyebrow: 'B', title: 'Second', body: 'two' },
-  { eyebrow: 'C', title: 'Third', body: 'three' },
+  { title: 'First', body: 'one' },
+  { title: 'Second', body: 'two' },
+  { title: 'Third', body: 'three' },
 ]
 
 let container: HTMLDivElement

@@ -33,7 +33,9 @@ describe('beta testers landing', () => {
   })
 
   it('states both requirements: paddle regularly, tracker fixed firmly in the boat', () => {
-    expect(html).toContain('Beta testers wanted')
+    expect(html).toContain('Test the paddlesnitch tracker')
+    // No small heading line above the card titles.
+    expect(html).not.toMatch(/Beta testers wanted|You paddle<|It sits firmly in the boat</)
     expect(html).toContain('You kayak, canoe, row or paddleboard')
     expect(html).toContain('sit firmly in the boat')
     expect(html).toContain('Attached is best')

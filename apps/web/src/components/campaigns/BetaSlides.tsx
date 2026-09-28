@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import BetaApplyModal from './BetaApplyModal'
 
-export type Slide = { eyebrow: string; title: string; body: string }
+export type Slide = { title: string; body: string }
 
 // One message at a time, flipped with the arrows at the sides, the dots, the
 // keyboard arrow keys, or a swipe. Every slide is in the HTML (inactive ones are
@@ -50,13 +50,12 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
         >
           {slides.map((s, n) => (
             <article
-              key={s.eyebrow}
+              key={s.title}
               hidden={n !== i}
               aria-roledescription="slide"
               aria-label={`${n + 1} of ${slides.length}`}
               className={`aspect-square border bg-bg/80 backdrop-blur-sm p-6 sm:p-8 flex flex-col justify-center gap-3 ${n === 0 ? 'border-primary' : 'border-border'}`}
             >
-              <p className="text-[10px] tracking-[0.3em] uppercase text-muted">{s.eyebrow}</p>
               {n === 0
                 ? <h1 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h1>
                 : <h2 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">{s.title}</h2>}
@@ -75,7 +74,7 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
       <div className="flex gap-2" aria-label="Choose a slide">
         {slides.map((s, n) => (
           <button
-            key={s.eyebrow}
+            key={s.title}
             type="button"
             onClick={() => go(n)}
             aria-label={`Show ${n + 1} of ${slides.length}`}
