@@ -188,7 +188,7 @@ export type GroupInvitation = {
 // Bumped manually when legal/tos-{version}.md gets a material change.
 // Signed-in users see a re-accept gate on their next request until they
 // accept the new version.
-export const CURRENT_TOS_VERSION = '001'
+export const CURRENT_TOS_VERSION = '002'
 
 // Persisted per-user at users/{userId}/tos-consent.json. A user with no
 // record at all has never accepted any ToS version (a pre-existing

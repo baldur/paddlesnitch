@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
@@ -59,7 +60,7 @@ describe('Terms of Service — signup gating', () => {
       email,
       displayName: 'Consented',
       password: 'Password123',
-      acceptedTosVersion: '001',
+      acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
     expect(signupRes.status).toBe(201)
 
@@ -69,10 +70,10 @@ describe('Terms of Service — signup gating', () => {
 
     const meTos = await (await getMyTos()).json()
     expect(meTos.accepted).toBe(true)
-    expect(meTos.currentVersion).toBe('001')
+    expect(meTos.currentVersion).toBe(CURRENT_TOS_VERSION)
     expect(meTos.acceptances).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ version: '001' }),
+        expect.objectContaining({ version: CURRENT_TOS_VERSION }),
       ])
     )
   })
@@ -99,10 +100,10 @@ describe('Terms of Service — current acceptance status', () => {
   it('records acceptance via POST', async () => {
     const u = await makeUser('Acceptor')
     mockAuth(u.idToken)
-    const res = await acceptTos(jsonReq('POST', { version: '001' }))
+    const res = await acceptTos(jsonReq('POST', { version: CURRENT_TOS_VERSION }))
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.acceptances.some((a: { version: string }) => a.version === '001')).toBe(true)
+    expect(data.acceptances.some((a: { version: string }) => a.version === CURRENT_TOS_VERSION)).toBe(true)
   })
 
   it('refuses to accept a non-current version (no future-version land grab)', async () => {
@@ -115,11 +116,11 @@ describe('Terms of Service — current acceptance status', () => {
   it('repeated acceptance of the same version is idempotent', async () => {
     const u = await makeUser('DoubleAccept')
     mockAuth(u.idToken)
-    await acceptTos(jsonReq('POST', { version: '001' }))
-    const second = await acceptTos(jsonReq('POST', { version: '001' }))
+    await acceptTos(jsonReq('POST', { version: CURRENT_TOS_VERSION }))
+    const second = await acceptTos(jsonReq('POST', { version: CURRENT_TOS_VERSION }))
     expect(second.status).toBe(200)
     const data = await second.json()
-    expect(data.acceptances.filter((a: { version: string }) => a.version === '001')).toHaveLength(1)
+    expect(data.acceptances.filter((a: { version: string }) => a.version === CURRENT_TOS_VERSION)).toHaveLength(1)
   })
 })
 
@@ -129,8 +130,33 @@ describe('Terms of Service — public document', () => {
     const res = await getTosDoc()
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.version).toBe('001')
+    expect(data.version).toBe(CURRENT_TOS_VERSION)
     expect(typeof data.body).toBe('string')
     expect(data.body.length).toBeGreaterThan(100)
+  })
+
+  it('the served document is the current version, not a stale file', async () => {
+    mockAuth(null)
+    const data = await (await getTosDoc()).json()
+    expect(data.body).toContain(`**Version ${CURRENT_TOS_VERSION},`)
+  })
+
+  it('version 002: states that stroke rate is kept and the summary can be wrong, and drops claims about features that do not exist', async () => {
+    mockAuth(null)
+    const { body } = await (await getTosDoc()).json()
+    expect(body).toMatch(/Stroke rate is stored/)
+    expect(body).toMatch(/summary can be wrong/)
+    expect(body).not.toMatch(/prompted to re-accept/)
+    expect(body).not.toMatch(/shown in the footer/)
+    expect(body).not.toMatch(/chase individual consents/)
+  })
+})
+
+describe('Terms of Service — the version bump to 002', () => {
+  it('a sign-up that accepted the previous version (001) is rejected', async () => {
+    const res = await signup(jsonReq('POST', {
+      email: freshEmail(), displayName: 'OldForm', password: 'Password123', acceptedTosVersion: '001',
+    }))
+    expect(res.status).toBe(422)
   })
 })
