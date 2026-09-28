@@ -47,14 +47,13 @@ export class AttStack extends cdk.Stack {
           // prompt-injected issue could mint this role (AdministratorAccess).
           // A job only presents `environment:production` if it declares that
           // environment, and only deploy.yml / firmware-release.yml do.
-          // Step 1 (this change): trust both. Step 2: the workflows declare the
-          // environment and the ref:main subjects are removed. Two steps
-          // because the deploy that changes this trust runs under the old one.
+          // Moved in two steps (the deploy that changes this trust runs under
+          // the old one): both subjects were trusted first, then the workflows
+          // declared the environment and ref:main was dropped. Do not add
+          // ref:refs/heads/main back.
           'token.actions.githubusercontent.com:sub': [
             'repo:baldur@759/paddlesnitch@1254392477:environment:production',
             'repo:baldur/paddlesnitch:environment:production',
-            'repo:baldur@759/paddlesnitch@1254392477:ref:refs/heads/main',
-            'repo:baldur/paddlesnitch:ref:refs/heads/main',
           ],
         },
         StringEquals: {
