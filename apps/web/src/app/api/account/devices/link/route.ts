@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { linkClaim } from '@/lib/devices'
+import { limitLink } from '@/lib/device-limits'
 
 // POST /api/account/devices/link — AUTHENTICATED (browser). The signed-in user
 // types the code shown on their device; this binds the pending claim to their
@@ -9,6 +10,8 @@ import { linkClaim } from '@/lib/devices'
 export async function POST(req: Request) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limit = await limitLink(user.id)
+  if (limit.limited) return limit.response
 
   const body = await req.json().catch(() => ({}))
   const claimCode = typeof body?.claimCode === 'string' ? body.claimCode.toUpperCase().trim() : ''

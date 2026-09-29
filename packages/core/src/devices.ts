@@ -118,7 +118,7 @@ const isExpired = (c: DeviceClaim) => Date.now() > Date.parse(c.expiresAt)
 // The browser (authenticated) half: the user types the code. Binds the claim to
 // their account. Does not mint the token — the device collects that on its next
 // poll (so the secret never has to travel to the browser).
-export async function linkClaim(claimCode: string, userId: string, name?: string): Promise<{ deviceId: string; model: string } | { error: 'unknown_code' | 'claim_expired' | 'already_linked' }> {
+export async function linkClaim(claimCode: string, userId: string, name?: string): Promise<{ deviceId: string; model: string } | { error: 'unknown_code' | 'claim_expired' | 'already_linked' | 'owned_elsewhere' }> {
   const idx = await getJson<{ deviceId: string }>(claimCodeKey(claimCode))
   if (!idx?.deviceId) return { error: 'unknown_code' }
   const c = await getJson<DeviceClaim>(claimKey(idx.deviceId))
@@ -136,6 +136,13 @@ export async function linkClaim(claimCode: string, userId: string, name?: string
     return { error: 'claim_expired' }
   }
   if (c.userId) return { error: 'already_linked' }
+  // A deviceId is not a secret (it is on the portal page and, for older
+  // trackers, broadcast over LoRa), and anyone can start a claim for one. So a
+  // tracker already on an account stays there until its owner removes it;
+  // otherwise redeeming would hand the record, and the tracker's future
+  // uploads, to whoever typed the code (security audit 2026-09).
+  const existing = await getJson<DeviceRecord>(deviceKey(idx.deviceId))
+  if (existing && existing.userId !== userId) return { error: 'owned_elsewhere' }
   c.userId = userId
   if (name) c.name = name
   await putJson(claimKey(idx.deviceId), c)
@@ -179,6 +186,11 @@ export async function redeemToken(deviceId: string, claimSecret: string): Promis
   const token = randomBytes(32).toString('base64url')
   const tokenHash = sha256(token)
   const ts = nowIso()
+  // Re-adding a tracker (after UNLINK or a factory reset) must cancel the token
+  // it had: the record only ever pointed at the newest one, so every older
+  // token stayed valid for ever and removing the tracker didn't stop them.
+  const previous = await getJson<DeviceRecord>(deviceKey(deviceId))
+  if (previous?.tokenHash && previous.tokenHash !== tokenHash) await deleteObject(tokenKey(previous.tokenHash))
   await putJson(tokenKey(tokenHash), { deviceId, userId: c.userId, createdAt: ts, lastSeenAt: ts } satisfies DeviceTokenRecord)
   await putJson(deviceKey(deviceId), {
     deviceId, userId: c.userId, name: c.name ?? `Tracker ${deviceId}`, model: c.model, firmware: c.firmware,
@@ -192,12 +204,14 @@ export async function redeemToken(deviceId: string, claimSecret: string): Promis
   return { status: 'bound', deviceToken: token, userId: c.userId, deviceName: c.name }
 }
 
-// Resolve a bearer token to its device+user, or null. Best-effort lastSeenAt bump.
+// Resolve a bearer token to its device+user, or null. READ ONLY. It used to
+// rewrite the token record with a lastSeenAt on every request (~48 PUTs per
+// sync), and a rewrite racing a revoke brought a deleted token back to life.
+// touchDevice() records when a tracker was last seen, on the device record.
 export async function resolveDeviceToken(token: string): Promise<DeviceAuth | null> {
   if (!token) return null
   const rec = await getJson<DeviceTokenRecord>(tokenKey(sha256(token)))
   if (!rec) return null
-  try { rec.lastSeenAt = nowIso(); await putJson(tokenKey(sha256(token)), rec) } catch { /* non-fatal */ }
   return { deviceId: rec.deviceId, userId: rec.userId }
 }
 

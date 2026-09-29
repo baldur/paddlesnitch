@@ -10,6 +10,8 @@ const LINK_ERR: Record<string, string> = {
   unknown_code: 'We don’t recognise that code. Check the tracker’s screen and try again.',
   claim_expired: 'That code has expired. Get a new one on the tracker.',
   already_linked: 'That code has already been used.',
+  owned_elsewhere: 'This tracker is on someone else’s account. They need to remove it on their Devices page first.',
+  rate_limited: 'Too many tries. Wait a few minutes, then use the code on the tracker’s screen.',
 }
 
 export default function AddTrackerForm({ onAdded }: { onAdded?: () => void }) {
