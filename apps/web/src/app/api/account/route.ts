@@ -15,7 +15,10 @@ import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
 // GDPR Art. 17 (right to erasure). Permanently removes:
 //   - the Cognito user record (no more sign-ins)
-//   - every course they own and every trial that runs on those courses
+//   - every course and trial they created that no group owns and nobody else
+//     has results in. Anything with other people's results, or owned by a
+//     group, stays (audit decision 2026-09: deleting an account must not
+//     delete other people's records); only this user's entries leave it
 //   - every entry they ever submitted, in any trial, owned or not
 //   - every failed-upload diagnostic (GPS track) they left, in any trial
 //   - every paddle, the coach profile, and the share link of any shared paddle
@@ -31,23 +34,26 @@ export async function DELETE() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // 1. Find owned courses (we will delete them after step 3).
+  // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const courseKeys = (await listKeys('courses/')).filter(k => k.endsWith('metadata.json'))
   const courses = await Promise.all(courseKeys.map(k => getJson<CourseMetadata>(k)))
-  const ownedCourseIds = courses
-    .filter((c): c is CourseMetadata => c !== null && c.adminUserId === user.id)
-    .map(c => c.id)
+  const createdCourses = courses
+    .filter((c): c is CourseMetadata => c !== null && c.adminUserId === user.id && !c.groupId)
 
-  // 2. Find owned trials (we will delete them whole, including foreign entries).
+  // 2. Trials they created that can go whole: no group owns them, and no one
+  //    else has an entry in them. Everything else just loses this user's
+  //    entries in step 4.
   const trialKeys = (await listKeys('trials/')).filter(
     k => k.endsWith('metadata.json') && !k.includes('/entries/')
   )
   const trials = await Promise.all(trialKeys.map(k => getJson<TrialMetadata>(k)))
-  const ownedTrialIds = new Set(
-    trials
-      .filter((t): t is TrialMetadata => t !== null && t.adminUserId === user.id)
-      .map(t => t.id)
-  )
+  const ownedTrialIds = new Set<string>()
+  for (const t of trials) {
+    if (!t || t.adminUserId !== user.id || t.groupId) continue
+    const entrants = new Set((await listKeys(`trials/${t.id}/entries/`)).map(k => k.split('/')[3]))
+    entrants.delete(user.id)
+    if (entrants.size === 0) ownedTrialIds.add(t.id)
+  }
 
   // 3. Find every other trial that holds this user's entries — we will remove
   //    those entries and rebuild the leaderboard.
@@ -81,9 +87,13 @@ export async function DELETE() {
     await rebuildLeaderboard(trialId)
   }
 
-  // 6. Delete owned course metadata.
-  for (const courseId of ownedCourseIds) {
-    await deleteObject(`courses/${courseId}/metadata.json`)
+  // 6. Delete the courses they created that no group owns and no remaining
+  //    trial runs on (a kept trial keeps its course).
+  const keptTrialCourses = new Set(
+    trials.filter((t): t is TrialMetadata => t !== null && !ownedTrialIds.has(t.id)).map(t => t.courseId),
+  )
+  for (const c of createdCourses) {
+    if (!keptTrialCourses.has(c.id)) await deleteObject(`courses/${c.id}/metadata.json`)
   }
 
   // 6a. Paddles, trackers, groups, Strava. These live outside users/{userId}/,
