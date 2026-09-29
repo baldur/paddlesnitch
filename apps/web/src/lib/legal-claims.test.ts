@@ -79,3 +79,26 @@ describe('analytics claims match the code', () => {
     expect(privacy).not.toMatch(/no analytics/i)
   })
 })
+
+// Privacy audit 2026-09: the page said "We set two cookies" while the code set
+// six, and it didn't say that privacy@ mail is forwarded to Gmail (a US
+// transfer).
+describe('cookie and email claims match the code', () => {
+  const code = [...sourceFiles(path.join(repo, 'apps/web/src')), ...sourceFiles(path.join(repo, 'packages/ui/src'))]
+    .map(f => readFileSync(f, 'utf8')).join('\n')
+
+  it('the privacy page names every cookie the code sets', () => {
+    const names = new Set([
+      ...[...code.matchAll(/cookies\.set\(\s*'([a-z_]+)'/g)].map(m => m[1]),
+      ...[...code.matchAll(/dismissKey = '([a-z_]+)'/g)].map(m => m[1]),
+      'tt_id', 'tt_refresh',
+    ])
+    expect(names.size).toBeGreaterThanOrEqual(6)
+    for (const n of names) expect(privacy, n).toContain(`<code>${n}</code>`)
+  })
+
+  it('says where email to privacy@ goes', () => {
+    const stack = read('infra/lib/att-stack.ts')
+    if (/FORWARD_TO: '[^']*@gmail\.com'/.test(stack)) expect(privacy).toMatch(/Gmail/)
+  })
+})
