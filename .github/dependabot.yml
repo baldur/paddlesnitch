@@ -13,13 +13,11 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Node's types follow the Node the Lambdas run (22, see
-      # lambda-runtime.test.ts), not the newest Node. Bump by hand with the runtime.
-      - dependency-name: '@types/node'
-        update-types: ['version-update:semver-major']
-      # ESLint 10 crashes inside eslint-plugin-react (pulled in by
-      # eslint-config-next). Hold at 9 until eslint-config-next supports 10.
-      - dependency-name: 'eslint'
+      # Major versions are projects, not routine bumps (TypeScript 7, ESLint 10
+      # (crashes eslint-plugin-react), a new FIT parser, Vitest 5, @types/node,
+      # which must follow the Lambda's Node 22...). Take them deliberately.
+      # Minor and patch updates still come weekly, grouped.
+      - dependency-name: '*'
         update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
