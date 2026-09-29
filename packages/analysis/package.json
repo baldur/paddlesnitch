@@ -20,6 +20,6 @@
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
     "@aws-sdk/client-bedrock-runtime": "^3.1141.0",
-    "nanoid": "^5.1.11"
+    "nanoid": "^6.0.1"
   }
 }
