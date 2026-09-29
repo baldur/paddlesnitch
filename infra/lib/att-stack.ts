@@ -447,12 +447,30 @@ export class AttStack extends cdk.Stack {
       'arn:aws:acm:us-east-1:423220633280:certificate/3c7ad0c4-5bd2-4959-907b-971417a0ff08'
     )
 
+    // Security headers on every response (security audit 2026-09: there were
+    // none). HSTS: browsers only ever use HTTPS here. frame DENY: no page can
+    // be framed, so the account-delete and tracker-add buttons can't be
+    // clickjacked. nosniff, and a referrer policy that keeps paths (share
+    // links, codes in query strings) off other sites. A Content-Security-Policy
+    // is a separate change: it needs testing against Leaflet tiles, Strava
+    // images and the inline scripts Next emits.
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
+      responseHeadersPolicyName: 'paddlesnitch-security-headers',
+      securityHeadersBehavior: {
+        strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        contentTypeOptions: { override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+      },
+    })
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       domainNames: ['paddlesnitch.com', 'www.paddlesnitch.com'],
       certificate,
       defaultBehavior: {
         origin: serverOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        responseHeadersPolicy: securityHeaders,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
@@ -462,6 +480,7 @@ export class AttStack extends cdk.Stack {
         '/_next/image*': {
           origin: imageOptOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         },
@@ -469,6 +488,7 @@ export class AttStack extends cdk.Stack {
         '/_next/*': {
           origin: assetsOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         // Static files under public/ (OpenNext copies public/ into the assets
@@ -479,17 +499,20 @@ export class AttStack extends cdk.Stack {
         '/strava/*': {
           origin: assetsOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         '/data/*': {
           origin: assetsOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         // Marketing landing media (the ?campaign= pages), e.g. the beta testers video.
         '/campaigns/*': {
           origin: assetsOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         // /analyse is now part of the single app: its pages + API hit the default
