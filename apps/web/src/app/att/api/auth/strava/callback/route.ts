@@ -15,7 +15,7 @@ import {
   verifyIdToken,
 } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
-import { canonicalBaseUrl } from '@/lib/url'
+import { canonicalBaseUrl, safeNext } from '@/lib/url'
 import { syntheticEmailFor } from '@/lib/strava-account'
 
 // Strava OAuth callback for the SIGN-IN flow. This is what runs after the
@@ -156,8 +156,8 @@ export async function GET(req: NextRequest) {
   }
 
   // 5. Set the auth cookies and bounce to where the user was headed.
-  const safeNext = nextCookie.startsWith('/') ? nextCookie : '/'
-  const res = NextResponse.redirect(new URL(safeNext, base))
+  const next = safeNext(nextCookie)
+  const res = NextResponse.redirect(new URL(next, base))
   setAuthCookies(res.cookies, signInResult.idToken, signInResult.refreshToken)
   return clearCookies(res)
 }

@@ -2,13 +2,14 @@
 import Link from 'next/link'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') ?? '/'
+  const next = safeNext(searchParams.get('next'))
 
   // Redirect if already signed in ( /me now answers 200 with a null body when
   // signed out, so key off the body, not r.ok )

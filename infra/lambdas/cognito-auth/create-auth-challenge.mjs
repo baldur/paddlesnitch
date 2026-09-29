@@ -7,13 +7,14 @@
 // In local dev (LOCAL_DEV=true), we skip the SES call and log the code so
 // the developer can grab it from the cognito-local console / db file.
 
+import { randomInt } from 'node:crypto'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 
 function generateCode() {
-  // 6 digits, padded with leading zeros if needed. Math.random is fine here —
-  // Cognito's session id is the unguessable thing; the code is just one of
-  // 10**6 possibilities verified server-side.
-  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0')
+  // 6 digits, padded with leading zeros. From the crypto RNG: Math.random is
+  // predictable from its own earlier outputs, and this code is a sign-in
+  // secret (security audit 2026-09).
+  return String(randomInt(0, 1_000_000)).padStart(6, '0')
 }
 
 async function sendCode(email, code) {

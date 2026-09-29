@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { otpRequest, signUp } from '@/lib/cognito'
 import { looksLikeBot } from '@/lib/anti-bot'
+import { rateLimit, emailKey } from '@paddlesnitch/core/rate-limit'
 
 // Step 1 of passwordless sign-in. We ALWAYS return the same shape regardless
 // of whether the email exists in the pool, to avoid leaking account existence
@@ -23,6 +24,14 @@ export async function POST(req: NextRequest) {
   // retry; by then the form's been on screen well past the time threshold.
   if (looksLikeBot(body)) {
     return NextResponse.json({ session: crypto.randomUUID() })
+  }
+
+  // Each request emails a code and can create an account, so without a
+  // per-address limit one inbox could be flooded and SES billed at will. The
+  // 429 says nothing about whether the account exists.
+  const limit = await rateLimit(`otp/email/${emailKey(email)}`, 5, 3600)
+  if (!limit.allowed) {
+    return NextResponse.json({ error: 'Too many codes requested. Wait a few minutes, then try again.' }, { status: 429 })
   }
 
   const result = await otpRequest(email)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { forgotPassword } from '@/lib/cognito'
 import { looksLikeBot } from '@/lib/anti-bot'
+import { rateLimit, emailKey } from '@paddlesnitch/core/rate-limit'
 
 // Triggers Cognito to email a 6-digit reset code. We deliberately return the
 // same 200 response regardless of whether the email exists in the pool —
@@ -19,6 +20,9 @@ export async function POST(req: NextRequest) {
   }
   // Fire-and-forget at the API surface. Internal errors are swallowed for the
   // existence-leak reason above; the underlying call still logs to CloudWatch.
-  await forgotPassword(email)
+  // Per-address limit, silently: the same { ok: true } either way, so it says
+  // nothing about the account or the limit.
+  const limit = await rateLimit(`reset/email/${emailKey(email)}`, 5, 3600)
+  if (limit.allowed) await forgotPassword(email)
   return NextResponse.json({ ok: true })
 }

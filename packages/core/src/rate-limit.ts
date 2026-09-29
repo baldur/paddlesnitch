@@ -25,6 +25,7 @@
 // every hit, which is more storage and more reads for a bound that does not need
 // to be that sharp. The cost of a fixed window is that a caller can use its full
 // allowance at the end of one window and again at the start of the next.
+import { createHash } from 'crypto'
 import { getJson, putJson } from './storage'
 
 export type RateLimitResult = {
@@ -86,4 +87,10 @@ export function clientIpKey(req: Request): string | null {
   // paths, so normalise to something safe on both backends.
   const safe = raw.replace(/[^0-9a-fA-F.:]/g, '').replace(/[.:]/g, '_')
   return safe.length >= 3 && safe.length <= 64 ? safe : null
+}
+
+// A rate-limit key for an email address that doesn't put the address in a
+// storage key (keys show up in bucket listings).
+export function emailKey(email: string): string {
+  return createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 32)
 }
