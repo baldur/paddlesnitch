@@ -1,7 +1,7 @@
 # Security, privacy and resilience audit — September 2026
 
-**Status:** audit done 2026-09-28/29. Clear-cut fixes are PRs #303–#320 (open when
-this was written). The rest needs decisions, listed under **Decisions** with
+**Status:** audit done 2026-09-28/29. Clear-cut fixes are PRs #303–#320; the owner's
+decisions on the rest (2026-09-29) added #322–#324 and are noted under each decision. The rest needs decisions, listed under **Decisions** with
 the trade-offs and a recommendation. Budget constraint throughout: this stays
 cheap infrastructure (today ~$30–50/month for the whole shared AWS account).
 
@@ -82,6 +82,7 @@ Each: the situation, the options, a recommendation, and rough cost.
 - **Recommend:** all three. (b) today, (a) this week, (c) unless another project uses them.
 
 ### 2. Claude intake on anonymous issues
+- **Decided (2026-09-29):** keep it running with restricted access → #324 (read and comment only; fixing is a maintainer-started fast-loop run; action pinned).
 - **Situation:** after #305 it can't reach AWS, but it still runs on text anyone
   can submit, with Bash and `contents: write` — a prompt injection could push a
   branch, open PRs, or leak the Claude OAuth token.
@@ -173,6 +174,7 @@ Each: the situation, the options, a recommendation, and rough cost.
 - **Recommend:** (a), then take the client IP from CloudFront's viewer-address header.
 
 ### 10. Sign-up doesn't prove the email
+- **Decided (2026-09-29):** not now. Revisit if abuse shows up (e.g. accounts registered with other people's addresses, or invitation theft).
 - **Situation:** password sign-up marks the email verified without a code. Someone
   can register *your* address first (then share the account if you later sign in
   by code), and — worse — **pending group invitations to that address are applied
@@ -182,6 +184,7 @@ Each: the situation, the options, a recommendation, and rough cost.
   users in the Cognito client (today `email` and `custom:auth_preset` are).
 
 ### 11. Terms of Service on every sign-up path
+- **Decided (2026-09-29):** yes → #323 (accept at sign-in for email-code and Strava accounts and anyone on an older version). No age question added.
 - **Situation:** only the password sign-up tab has the ToS box. EMAIL CODE and
   Strava create accounts without it, there is no age declaration anywhere, and
   nobody from v001 has accepted v002 (the "re-accept gate" doesn't exist). The
@@ -190,6 +193,7 @@ Each: the situation, the options, a recommendation, and rough cost.
   goes to "accept + confirm you're 16 or over". ~1 day.
 
 ### 12. Account deletion deletes other people's results
+- **Decided (2026-09-29):** it shouldn't → #322 (only trials/courses with no group and nobody else's results are deleted).
 - **Situation:** erasure deletes every trial and course the user *created*, including
   **other paddlers' entries**, even though groups own them now and the group
   itself passes to an heir. It also runs as one long sequence in a 30 s Lambda.
@@ -197,6 +201,7 @@ Each: the situation, the options, a recommendation, and rough cost.
   with no group; group-owned ones stay with the group. Make erasure resumable.
 
 ### 13. Shared paddle links show where you live
+- **Decided (2026-09-29):** no trimming: people generally paddle from a club, not from home.
 - **Situation:** a shared paddle publishes the full route including start and end;
   many paddles start at home.
 - **Recommend:** trim the first and last ~400 m on the shared view and the share
