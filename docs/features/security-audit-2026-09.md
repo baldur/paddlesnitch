@@ -1,7 +1,9 @@
 # Security, privacy and resilience audit — September 2026
 
 **Status:** audit done 2026-09-28/29. Clear-cut fixes are PRs #303–#320; the owner's
-decisions on the rest (2026-09-29) added #322–#324 and are noted under each decision. The rest needs decisions, listed under **Decisions** with
+decisions on the rest (2026-09-29) added #322–#324 and are noted under each decision.
+All of them were merged and deployed on 2026-09-29 except **#316** (firmware 0.16.5),
+which stays a draft until it has been run on a tracker. The rest needs decisions, listed under **Decisions** with
 the trade-offs and a recommendation. Budget constraint throughout: this stays
 cheap infrastructure (today ~$30–50/month for the whole shared AWS account).
 
