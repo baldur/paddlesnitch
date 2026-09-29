@@ -13,6 +13,7 @@ const { storage, importStravaActivity } = vi.hoisted(() => ({
     getStravaAutoImport: vi.fn(),
     deleteStravaTokens: vi.fn(),
     deleteAthleteIndex: vi.fn(),
+    stravaAccessRevoked: vi.fn(),
   },
   importStravaActivity: vi.fn(),
 }))
@@ -91,10 +92,24 @@ describe('POST events', () => {
 
   it('disconnects on athlete deauthorization', async () => {
     storage.getUserIdByAthleteId.mockResolvedValue('user-1')
+    storage.stravaAccessRevoked.mockResolvedValue(true)
     await post({ object_type: 'athlete', aspect_type: 'update', owner_id: 99, updates: { authorized: 'false' } })
     await runAfters()
     expect(storage.deleteStravaTokens).toHaveBeenCalledWith('user-1')
     expect(storage.deleteAthleteIndex).toHaveBeenCalledWith(99)
     expect(importStravaActivity).not.toHaveBeenCalled()
+  })
+
+  // Security audit 2026-09: this endpoint is public and athlete ids are
+  // public, so a forged event could disconnect any user.
+  it('ignores a deauthorization Strava does not confirm', async () => {
+    storage.getUserIdByAthleteId.mockResolvedValue('user-1')
+    for (const answer of [false, 'unknown'] as const) {
+      storage.stravaAccessRevoked.mockResolvedValue(answer)
+      await post({ object_type: 'athlete', aspect_type: 'update', owner_id: 99, updates: { authorized: 'false' } })
+      await runAfters()
+    }
+    expect(storage.deleteStravaTokens).not.toHaveBeenCalled()
+    expect(storage.deleteAthleteIndex).not.toHaveBeenCalled()
   })
 })
