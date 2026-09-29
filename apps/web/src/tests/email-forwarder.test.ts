@@ -5,7 +5,11 @@
 import { describe, it, expect } from 'vitest'
 import { __test__ } from '../../../../infra/lambdas/email-forwarder/index.mjs'
 
-const { parseHeaders, buildForwardedMime } = __test__
+// The forwarder is plain JS; give its helpers the types the tests rely on.
+const { parseHeaders, buildForwardedMime } = __test__ as unknown as {
+  parseHeaders: (raw: string) => Record<string, string>
+  buildForwardedMime: (args: { headers: Record<string, string>; rawBody: string; originalRaw: string }) => string
+}
 
 describe('parseHeaders', () => {
   it('extracts From / Subject / Date from a typical email', () => {

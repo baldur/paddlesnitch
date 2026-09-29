@@ -46,7 +46,7 @@ describe('client analytics buffer', () => {
   })
 
   it('drops non-allowlisted events at the door (never queued)', () => {
-    // @ts-expect-error deliberately passing a non-allowlisted name
+    // capture() takes any string; the allowlist is enforced at run time.
     capture('totally_made_up')
     flush()
     expect(fetchMock).not.toHaveBeenCalled()

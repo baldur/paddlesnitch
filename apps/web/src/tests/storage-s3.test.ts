@@ -48,7 +48,7 @@ import { getObject, getJson, listKeys } from '@paddlesnitch/core/storage'
 const env = { ...process.env }
 beforeEach(() => {
   store.clear(); failGet = null
-  process.env.NODE_ENV = 'production'
+  ;(process.env as Record<string, string>).NODE_ENV = 'production'
   process.env.USE_LOCAL_STORAGE = 'false'
   process.env.DATA_BUCKET = 'test-bucket'
 })

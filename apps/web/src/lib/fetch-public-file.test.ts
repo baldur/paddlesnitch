@@ -33,7 +33,7 @@ describe('isPublicHttpsUrl', () => {
 
 describe('fetchPublicFile', () => {
   it('does not follow redirects (they could point anywhere)', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:9001/' } }))
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:9001/' } }))
     vi.stubGlobal('fetch', fetchMock)
     expect(await fetchPublicFile('https://example.com/x.gpx', 1000)).toEqual({ error: 'fetch_failed' })
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'manual' })

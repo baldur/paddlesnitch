@@ -24,7 +24,7 @@ function makeSession(userId: string, id: string): AnalysisSession {
     note: '',
     insight: 'A steady outing.',
     // Only the fields the store touches matter here.
-    result: { durationS: 1800, distanceKm: 6, avgSR: 60, cruiseSpeed: 3, surges: [], avgDps: 2, points: [], strokeRateDoubled: false } as AnalysisSession['result'],
+    result: { durationS: 1800, distanceKm: 6, avgSR: 60, cruiseSpeed: 3, surges: [], avgDps: 2, points: [], strokeRateDoubled: false } as unknown as AnalysisSession['result'],
   }
 }
 

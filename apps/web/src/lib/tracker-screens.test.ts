@@ -5,14 +5,16 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
 import path from 'path'
-import { SCREENS, literalFragments, shown } from './tracker-screens'
+import { SCREENS, literalFragments, shown, type ScreenEl, type TrackerScreen } from './tracker-screens'
 
 const fw = path.resolve(__dirname, '../../../../firmware')
 const source = ['src', 'include']
   .flatMap(d => readdirSync(path.join(fw, d)).filter(f => /\.(cpp|h)$/.test(f)).map(f => readFileSync(path.join(fw, d, f), 'utf8')))
   .join('\n')
 
-const texts = Object.entries(SCREENS).flatMap(([name, s]) =>
+type TextEl = Extract<ScreenEl, { text: string }>
+const screens = Object.entries(SCREENS as Record<string, TrackerScreen>)
+const texts = screens.flatMap(([name, s]) =>
   s.els.flatMap(e => ('text' in e ? [[name, e.text] as const] : [])))
 
 describe('tracker screen drawings', () => {
@@ -24,8 +26,8 @@ describe('tracker screen drawings', () => {
   // px, less the last glyph's blank column. Four lines of firmware text once ran
   // off the edge (the Stop? screen read "...keep g"); drawing them here now
   // fails instead.
-  it.each(Object.entries(SCREENS).flatMap(([name, s]) => s.els.flatMap(e =>
-    'text' in e && (e.font === 's' || e.font === 'm') ? [[name, e] as const] : [])))(
+  it.each(screens.flatMap(([name, s]) => s.els.flatMap(e =>
+    'text' in e && (e.font === 's' || e.font === 'm') ? [[name, e as TextEl] as const] : [])))(
     '%s: every line fits the 128 px screen', (_name, e) => {
       const w = shown(e.text).length * (e.font === 's' ? 5 : 6) - 1
       const left = e.align === 'right' ? e.x - w : e.align === 'center' ? e.x - w / 2 : e.x
