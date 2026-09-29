@@ -40,7 +40,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1141.0",
     "@swc/helpers": "^0.5.23",
     "aws-jwt-verify": "^5.2.1",
-    "fit-file-parser": "^3.0.0",
+    "fit-file-parser": "^6.1.2",
     "leaflet": "^1.9.4",
     "nanoid": "^6.0.1",
     "next": "16.3.6",

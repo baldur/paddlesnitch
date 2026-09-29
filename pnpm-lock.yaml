@@ -66,8 +66,8 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       fit-file-parser:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^6.1.2
+        version: 6.1.2
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
@@ -205,8 +205,8 @@ importers:
   packages/timing:
     dependencies:
       fit-file-parser:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^6.1.2
+        version: 6.1.2
 
   packages/ui:
     dependencies:
@@ -2721,8 +2721,8 @@ packages:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
 
-  fit-file-parser@3.0.0:
-    resolution: {integrity: sha512-Sf0erVcqT1TAQ3qbrg5b5Uyr8OVV0HDgxKRNuXEC0R7HeAGwz0dRTEHqpmKEluI4q+9ummnJnSDFx0gFg7yMPA==}
+  fit-file-parser@6.1.2:
+    resolution: {integrity: sha512-HFPRiFvXyvrU9ujEr5IEIJtvC+Mi0db9JR/zYA0tcBq7+AjgFkPZ58oScU+9Q9k8vMOjOwGQiA8DMpJuGzg79g==}
 
   flat-cache@4.0.1:
     resolution: {integrity: sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw==}
@@ -7246,7 +7246,7 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
-  fit-file-parser@3.0.0:
+  fit-file-parser@6.1.2:
     dependencies:
       buffer: 6.0.3
 

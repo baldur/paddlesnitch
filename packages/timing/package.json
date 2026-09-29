@@ -24,6 +24,6 @@
     "./conditions": "./src/conditions.ts"
   },
   "dependencies": {
-    "fit-file-parser": "^3.0.0"
+    "fit-file-parser": "^6.1.2"
   }
 }
