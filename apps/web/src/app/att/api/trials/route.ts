@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, listKeys } from '@/lib/storage'
-import { canViewCourse, canManageCourse, isListedForViewer } from '@/lib/permissions'
+import { canViewCourse, canManageCourse, canManageTrial, isListedForViewer } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
+import { trialForViewer } from '@/lib/trial-view'
 
 function isVisibility(v: unknown): v is Visibility {
   return v === 'public' || v === 'private' || v === 'group'
@@ -29,7 +30,12 @@ export async function GET(req: NextRequest) {
   ).filter((t): t is TrialMetadata => t !== null)
 
   const scoped = courseId ? all.filter(t => t.courseId === courseId) : all
-  return NextResponse.json(scoped.filter(t => isListedForViewer(t, viewer, viewerGroupIds)))
+  const adminGroupIds = viewer ? new Set(await getUserAdminGroupIds(viewer.id)) : new Set<string>()
+  return NextResponse.json(
+    scoped
+      .filter(t => isListedForViewer(t, viewer, viewerGroupIds))
+      .map(t => trialForViewer(t, !!viewer && canManageTrial(t, viewer, adminGroupIds))),
+  )
 }
 
 export async function POST(req: NextRequest) {
