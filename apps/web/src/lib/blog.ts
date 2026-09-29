@@ -74,12 +74,13 @@ export function parsePost(filename: string, src: string): Post {
 }
 
 // The teaser on /blog: the summary if the post has one, otherwise its first
-// paragraph as plain text (headings and images skipped, links and emphasis
-// reduced to their words), cut at a word near 240 characters.
+// paragraph as plain text (headings, images and all-italic notes such as
+// "Part 2 of 5…" skipped; links and emphasis reduced to their words), cut at a
+// word near 240 characters.
 export function teaserOf(post: { summary?: string; body: string }, max = 240): string {
   if (post.summary) return post.summary
   const para = post.body.split(/\n\s*\n/).map(p => p.trim())
-    .find(p => p && !p.startsWith('#') && !/^!\[[^\]]*\]\([^)]*\)$/.test(p)) ?? ''
+    .find(p => p && !p.startsWith('#') && !/^!\[[^\]]*\]\([^)]*\)$/.test(p) && !/^\*[^*][\s\S]*\*$/.test(p)) ?? ''
   const text = para
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')

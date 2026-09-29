@@ -41,6 +41,10 @@ describe('teaserOf', () => {
     const body = '# Heading\n\n![boat](/blog-media/b.jpg)\n\nWe went out on **the Thames** with [the club](https://x.org).\nSecond line.\n\nNext paragraph.'
     expect(teaserOf({ body })).toBe('We went out on the Thames with the club. Second line.')
   })
+  it('skips a paragraph that is all italic (a series note), so each part gets its own teaser', () => {
+    const body = '*Part 2 of 5 in a series. [Part 1](/blog/x) was the start.*\n\nA tracking device is always going to cost something.'
+    expect(teaserOf({ body })).toBe('A tracking device is always going to cost something.')
+  })
   it('cuts a long paragraph at a word, with an ellipsis', () => {
     const t = teaserOf({ body: 'word '.repeat(100) })
     expect(t.length).toBeLessThanOrEqual(241)
