@@ -26,6 +26,7 @@ vi.mock('@/lib/cognito', async (importOriginal) => {
 import { POST as otpRequest } from '@/app/att/api/auth/otp-request/route'
 import { POST as otpVerify } from '@/app/att/api/auth/otp-verify/route'
 import * as cognito from '@/lib/cognito'
+import { recordAcceptance } from '@/lib/tos'
 
 let dataDir: string
 beforeEach(async () => {
@@ -126,6 +127,19 @@ describe('POST /att/api/auth/otp-verify', () => {
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toContain('tt_id=')
     expect(setCookie).toContain('tt_refresh=')
+  })
+
+  // Audit decision 2026-09: the Terms were only on the password sign-up tab, so
+  // an account made by email code (or Strava) never agreed to them.
+  it('asks a user who has not accepted the current Terms to accept them', async () => {
+    vi.mocked(cognito.otpVerify).mockResolvedValue({ idToken: 'i', refreshToken: 'r' })
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-new', email: 'new@example.com', displayName: 'New' })
+    const first = await (await otpVerify(jsonReq({ email: 'new@example.com', session: 's', code: '123456' }))).json()
+    expect(first.needsTerms).toBe(true)
+
+    await recordAcceptance('sub-new')
+    const again = await (await otpVerify(jsonReq({ email: 'new@example.com', session: 's', code: '123456' }))).json()
+    expect(again.needsTerms).toBe(false)
   })
 
   it('returns 400 with a new session when the wrong code was given but retries remain', async () => {

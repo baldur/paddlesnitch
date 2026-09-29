@@ -53,3 +53,6 @@ export async function readTosDoc(version: string = CURRENT_TOS_VERSION): Promise
     return null
   }
 }
+
+
+export { termsAcceptPath } from './terms-path'

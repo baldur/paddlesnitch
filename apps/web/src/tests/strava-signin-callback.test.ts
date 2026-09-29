@@ -17,12 +17,14 @@ vi.mock('@/lib/cognito', () => ({
   verifyIdToken: vi.fn(),
 }))
 vi.mock('@/lib/auth', () => ({ setAuthCookies: vi.fn() }))
+vi.mock('@/lib/tos', async (orig) => ({ ...(await orig<typeof import('@/lib/tos')>()), hasAcceptedCurrent: vi.fn(async () => true) }))
 
 import { GET as callback } from '@/app/att/api/auth/strava/callback/route'
 import { cookies } from 'next/headers'
 import * as strava from '@/lib/strava'
 import * as stravaStorage from '@/lib/strava-storage'
 import * as cognito from '@/lib/cognito'
+import * as tos from '@/lib/tos'
 
 function mockCookies(state: string, next = '/att') {
   vi.mocked(cookies).mockResolvedValue({
@@ -93,5 +95,28 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     const [emailArg] = vi.mocked(cognito.adminCreateUserForStrava).mock.calls[0]
     expect(emailArg).toBe('strava-555@noreply.paddlesnitch.com')
     expect(emailArg).not.toBe('')
+  })
+})
+
+// Audit decision 2026-09: a Strava sign-up never saw the Terms.
+describe('Strava sign-in callback — Terms of Service', () => {
+  beforeEach(() => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue('real-sub-1')
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'real-sub-1', email: 'baldur@example.com', displayName: 'Baldur' } as never)
+  })
+
+  it('sends someone who has not accepted the current Terms to accept them, then on to where they were going', async () => {
+    vi.mocked(tos.hasAcceptedCurrent).mockResolvedValueOnce(false)
+    mockCookies('state123', '/paddles')
+    const res = await callback(req())
+    const loc = new URL(res.headers.get('location')!)
+    expect(loc.pathname).toBe('/att/tos/accept')
+    expect(loc.searchParams.get('next')).toBe('/paddles')
+  })
+
+  it('goes straight on when the Terms are accepted', async () => {
+    mockCookies('state123', '/paddles')
+    const res = await callback(req())
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/paddles')
   })
 })
