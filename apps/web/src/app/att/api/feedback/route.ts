@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
+import { publicPath } from '@paddlesnitch/ui/metrics-events'
 import { getAuthUser } from '@/lib/auth'
 import { looksLikeBot } from '@/lib/anti-bot'
 import { putFeedbackContact } from '@/lib/feedback-contacts'
@@ -165,7 +166,7 @@ function publicPage(url: string): string {
   if (!url) return ''
   try {
     const u = new URL(url)
-    return `${u.origin}${u.pathname}`
+    return `${u.origin}${publicPath(u.pathname)}`
   } catch {
     return url.split(/[?#]/)[0]
   }

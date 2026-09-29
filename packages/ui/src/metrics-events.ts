@@ -30,3 +30,20 @@ export function campaignFrom(search: string): string | undefined {
   const id = new URLSearchParams(search).get('campaign')?.trim().toLowerCase()
   return id && /^[a-z0-9_-]{1,40}$/.test(id) ? id : undefined
 }
+
+// A path as it may be recorded: analytics (kept for months) and feedback issues
+// (a public GitHub repo). Segments that identify a person or are secrets become
+// placeholders: a share id publishes a paddle's route, a claim code is live for
+// minutes, a profile handle or tracker id says who someone is. Trial and course
+// ids stay: they're public and are what the analytics are for.
+const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api'])
+export function publicPath(pathname: string): string {
+  const p = pathname.split('/')
+  const [, a, b] = p
+  if (a === 'paddles' && b === 'shared' && p[3]) p[3] = '[id]'
+  else if (a === 'paddles' && b && !PADDLES_STATIC.has(b)) p[2] = '[id]'
+  else if (a === 'profile' && b && b !== 'me') p[2] = '[id]'
+  else if (a === 'devices') for (let i = 2; i < p.length; i++) { if (p[i]) p[i] = '[id]' }
+  else if ((a === 'l' || a === 'L') && b) p[2] = '[code]'
+  return p.join('/')
+}
