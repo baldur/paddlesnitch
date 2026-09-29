@@ -24,6 +24,8 @@ static void temporary_failures_are_retried(void)
     TEST_ASSERT_TRUE(uploadOutcome(503, "") == UploadOutcome::Retry);
     TEST_ASSERT_TRUE(uploadOutcome(-1, "") == UploadOutcome::Retry);   // no connection
     TEST_ASSERT_TRUE(uploadOutcome(409, nullptr) == UploadOutcome::Retry);
+    // A checksum mismatch is usually a bad card read: try again.
+    TEST_ASSERT_TRUE(uploadOutcome(422, "{\"error\":\"sha256_mismatch\"}") == UploadOutcome::Retry);
 }
 
 static void the_index_tells_confirmed_from_rejected(void)

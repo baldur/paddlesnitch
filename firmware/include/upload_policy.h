@@ -23,7 +23,11 @@ static inline UploadOutcome uploadOutcome(int rc, const char *body)
     // earlier sync landed it but the reply was lost). The others -- a part
     // missing, or a sidecar whose track hasn't arrived -- clear up on a retry.
     if (rc == 409) return (body && strstr(body, "already_uploaded")) ? UploadOutcome::Accepted : UploadOutcome::Retry;
-    // Bad filename, too large, nothing usable in it, checksum mismatch.
+    // A checksum mismatch means the pieces the server assembled don't match
+    // what the tracker read -- usually a bad read off the card, which a fresh
+    // attempt can fix. Retry it; never write a recording off for that.
+    if (rc == 422 && body && strstr(body, "sha256_mismatch")) return UploadOutcome::Retry;
+    // Bad filename, too large, nothing usable in it.
     if (rc == 400 || rc == 413 || rc == 422) return UploadOutcome::Rejected;
     // 401 (token), 5xx, and network failures (negative codes) are temporary.
     return UploadOutcome::Retry;
