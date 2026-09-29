@@ -10,7 +10,7 @@ import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { POST as upload } from '@/app/att/api/trials/[trialId]/upload/route'
 import { GET as listCourses } from '@/app/att/api/courses/route'
 import { GET as getLeaderboard } from '@/app/att/api/trials/[trialId]/leaderboard/route'
-import { listKeys, getJson } from '@/lib/storage'
+import { listKeys, getJson, putJson } from '@/lib/storage'
 import { claimHandle } from '@/lib/profile'
 import { cookies } from 'next/headers'
 
@@ -117,6 +117,44 @@ describe('DELETE /api/account', () => {
 
     expect(await getJson(`courses/${course.id}/metadata.json`)).toBeNull()
     expect(await getJson(`trials/${trial.id}/metadata.json`)).toBeNull()
+  })
+
+  // Audit decision 2026-09: deleting an account must not delete other people's
+  // results. It used to delete every trial and course the user created, whole,
+  // with everyone's entries in it.
+  it('keeps a trial the user created when someone else has a result in it', async () => {
+    const me = await makeUser('Organiser Leaving')
+    const racer = await makeUser('Racer')
+    const course = await makeCourse(me.id)
+    const trial = await makeTrial(course.id, me.id, 'open')
+    const gpx = makeGpxBuffer(makeTestTrack())
+    for (const u of [me, racer]) {
+      mockAuth(u.idToken)
+      await upload(uploadReq(trial.id, new File([gpx], 'r.gpx')), { params: Promise.resolve({ trialId: trial.id }) })
+    }
+
+    mockAuth(me.idToken)
+    expect((await deleteAccount()).status).toBe(200)
+
+    expect(await getJson(`trials/${trial.id}/metadata.json`)).not.toBeNull()
+    expect(await getJson(`courses/${course.id}/metadata.json`)).not.toBeNull()
+    expect(await listKeys(`trials/${trial.id}/entries/${racer.id}/`)).not.toHaveLength(0)
+    expect(await listKeys(`trials/${trial.id}/entries/${me.id}/`)).toHaveLength(0)
+    const lb = await (await getLeaderboard(new NextRequest('http://x'), { params: Promise.resolve({ trialId: trial.id }) })).json()
+    expect(lb.map((e: { userId: string }) => e.userId)).toEqual([racer.id])
+  })
+
+  it('keeps a trial and course a group owns, even with no one else in them yet', async () => {
+    const me = await makeUser('Group Admin Leaving')
+    const course = await makeCourse(me.id)
+    await putJson(`courses/${course.id}/metadata.json`, { ...course, groupId: 'g1' })
+    const trial = await makeTrial(course.id, me.id, 'open', { groupId: 'g1' })
+
+    mockAuth(me.idToken)
+    expect((await deleteAccount()).status).toBe(200)
+
+    expect(await getJson(`trials/${trial.id}/metadata.json`)).not.toBeNull()
+    expect(await getJson(`courses/${course.id}/metadata.json`)).not.toBeNull()
   })
 
   it('clears tt_id and tt_refresh on the response', async () => {

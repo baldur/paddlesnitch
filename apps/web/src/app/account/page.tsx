@@ -519,9 +519,9 @@ function AccountPageInner() {
                 Delete my account
               </h2>
               <p className="text-sm text-muted mb-4 leading-relaxed">
-                Deletes your account, your paddles and diary notes, the courses and trials you created,
-                your results (leaderboards update without you), your shared links and your tracker
-                recordings. Your trackers are unlinked and Strava is disconnected. A group you own passes
+                Deletes your account, your paddles and diary notes, your results (leaderboards update
+                without you), your shared links and your tracker recordings. Courses and trials you created
+                go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes
                 to one of its admins or members. <strong className="text-red">This happens at once and can&apos;t be undone.</strong> Backs
                 your right to erasure (UK GDPR Art. 17).
               </p>
