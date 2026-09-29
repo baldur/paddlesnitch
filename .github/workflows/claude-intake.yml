@@ -36,7 +36,7 @@ jobs:
       issues: write      # comment + label
       id-token: write    # required by claude-code-action to fetch its OIDC token
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Pinned to a commit (v1 as of 2026-09-29), not a moving tag: this
       # action runs with a Claude token on text anyone can write.
