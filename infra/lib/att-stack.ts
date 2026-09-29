@@ -170,14 +170,14 @@ export class AttStack extends cdk.Stack {
     const lambdaDir = path.join(__dirname, '../lambdas/cognito-auth')
     const defineAuth = new lambda.Function(this, 'DefineAuthChallenge', {
       functionName: 'att-cognito-define-auth-challenge',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'define-auth-challenge.handler',
       code: lambda.Code.fromAsset(lambdaDir),
       timeout: cdk.Duration.seconds(5),
     })
     const createAuth = new lambda.Function(this, 'CreateAuthChallenge', {
       functionName: 'att-cognito-create-auth-challenge',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'create-auth-challenge.handler',
       code: lambda.Code.fromAsset(lambdaDir),
       timeout: cdk.Duration.seconds(10),
@@ -203,7 +203,7 @@ export class AttStack extends cdk.Stack {
     }))
     const verifyAuth = new lambda.Function(this, 'VerifyAuthChallenge', {
       functionName: 'att-cognito-verify-auth-challenge',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'verify-auth-challenge.handler',
       code: lambda.Code.fromAsset(lambdaDir),
       timeout: cdk.Duration.seconds(5),
@@ -239,7 +239,7 @@ export class AttStack extends cdk.Stack {
     // ---------------------------------------------------------------------------
 
     const serverFn = new lambda.Function(this, 'ServerFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../apps/web/.open-next/server-functions/default')
@@ -376,7 +376,7 @@ export class AttStack extends cdk.Stack {
     })
 
     const imageOptFn = new lambda.Function(this, 'ImageOptFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../apps/web/.open-next/image-optimization-function')
@@ -565,7 +565,7 @@ export class AttStack extends cdk.Stack {
 
     const forwarderFn = new lambda.Function(this, 'EmailForwarderFn', {
       functionName: 'att-email-forwarder',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/email-forwarder')),
       timeout: cdk.Duration.seconds(20),
