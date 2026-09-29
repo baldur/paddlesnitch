@@ -53,6 +53,7 @@ export default async function BlogPost({ params }: Params) {
             <time dateTime={post.date}>{fmtPostDate(post.date)}</time>
             {post.author && <> · {post.author}</>}
             {post.draft && <span className="text-split"> · draft</span>}
+            {post.scheduled && <span className="text-split"> · scheduled</span>}
           </p>
           <h1 className="text-xl font-bold text-fg leading-snug">{post.title}</h1>
         </header>

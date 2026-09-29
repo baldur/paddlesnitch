@@ -60,15 +60,27 @@ describe('listPosts / getPost', () => {
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-  it('lists newest first, without drafts unless asked', () => {
-    expect(listPosts({ dir }).map(p => p.slug)).toEqual(['newer', 'older'])
-    expect(listPosts({ dir, drafts: true }).map(p => p.slug)).toEqual(['unfinished', 'newer', 'older'])
+  const today = '2026-09-29'
+
+  it('lists newest first, without drafts unless previewing', () => {
+    expect(listPosts({ dir, today }).map(p => p.slug)).toEqual(['newer', 'older'])
+    expect(listPosts({ dir, today, preview: true }).map(p => p.slug)).toEqual(['unfinished', 'newer', 'older'])
+  })
+
+  it('keeps a post dormant until its date, then publishes it', () => {
+    writeFileSync(path.join(dir, '2026-10-06-part-two.md'), '---\ntitle: Part two\n---\nD.')
+    expect(listPosts({ dir, today }).map(p => p.slug)).not.toContain('part-two')
+    expect(getPost('2026', '10', '06', 'part-two', { dir, today })).toBeNull()
+    expect(listPosts({ dir, today: '2026-10-06' }).map(p => p.slug)[0]).toBe('part-two')
+    // Previewing (local dev) shows it early, flagged as scheduled.
+    const early = listPosts({ dir, today, preview: true }).find(p => p.slug === 'part-two')!
+    expect(early.scheduled).toBe(true)
   })
 
   it('finds a post by its permalink parts, and nothing else', () => {
-    expect(getPost('2026', '09', '29', 'newer', { dir })?.title).toBe('Newer')
-    expect(getPost('2026', '09', '28', 'newer', { dir })).toBeNull()
-    expect(getPost('2026', '09', '30', 'unfinished', { dir })).toBeNull()
+    expect(getPost('2026', '09', '29', 'newer', { dir, today })?.title).toBe('Newer')
+    expect(getPost('2026', '09', '28', 'newer', { dir, today })).toBeNull()
+    expect(getPost('2026', '09', '30', 'unfinished', { dir, today })).toBeNull()
   })
 })
 
@@ -76,7 +88,7 @@ describe('listPosts / getPost', () => {
 // fail here, not at build time on the deploy.
 describe('the posts in the repo', () => {
   it('all parse, with unique permalinks', () => {
-    const posts = listPosts({ drafts: true })
+    const posts = listPosts({ preview: true })
     expect(posts.length).toBe(readdirSync(BLOG_DIR).filter(f => /^\d{4}-/.test(f)).length)
     expect(new Set(posts.map(p => p.permalink)).size).toBe(posts.length)
   })

@@ -13,6 +13,11 @@ import path from 'path'
 //   draft: true                       (optional; shown only in local dev)
 //   ---
 //
+// A post dated in the future stays DORMANT until that date: the build leaves
+// it out, so neither /blog nor its permalink shows it. The daily
+// publish-scheduled-posts workflow redeploys on the morning a post falls due,
+// which is what makes it appear. Local dev shows it early, marked scheduled.
+//
 // Images go in apps/web/public/blog-media/ and are referenced as
 // /blog-media/<file>. They deploy to the S3 assets bucket with the site.
 // Read at build time: every post page is static.
@@ -27,6 +32,7 @@ export type Post = {
   author?: string
   image?: string
   draft: boolean
+  scheduled: boolean    // dated after today (only ever listed when previewing)
   body: string          // Markdown, front matter removed
   permalink: string
 }
@@ -61,6 +67,7 @@ export function parsePost(filename: string, src: string): Post {
     author: meta.author || undefined,
     image: meta.image || undefined,
     draft: meta.draft === 'true',
+    scheduled: false,
     body: body.trim(),
     permalink: `/blog/${y}/${mo}/${d}/${slug}`,
   }
@@ -84,16 +91,20 @@ export function teaserOf(post: { summary?: string; body: string }, max = 240): s
   return cut.slice(0, cut.lastIndexOf(' ')).replace(/[,.;:]$/, '') + '…'
 }
 
-type Opts = { dir?: string; drafts?: boolean }
-const showDrafts = () => process.env.NODE_ENV === 'development'
+// `today` is a UTC date (YYYY-MM-DD). `preview` also lists drafts and
+// scheduled posts: on in local dev, off in every build that gets deployed.
+type Opts = { dir?: string; preview?: boolean; today?: string }
+const isPreview = () => process.env.NODE_ENV === 'development'
+export const todayUtc = () => new Date().toISOString().slice(0, 10)
 
-export function listPosts({ dir = BLOG_DIR, drafts = showDrafts() }: Opts = {}): Post[] {
+export function listPosts({ dir = BLOG_DIR, preview = isPreview(), today = todayUtc() }: Opts = {}): Post[] {
   let files: string[]
   try { files = readdirSync(dir) } catch { return [] }
   return files
     .filter(f => /^\d{4}-/.test(f) && f.endsWith('.md'))
     .map(f => parsePost(f, readFileSync(path.join(dir, f), 'utf8')))
-    .filter(p => drafts || !p.draft)
+    .map(p => ({ ...p, scheduled: p.date > today }))
+    .filter(p => preview || (!p.draft && !p.scheduled))
     .sort((a, b) => (a.date === b.date ? a.slug.localeCompare(b.slug) : b.date.localeCompare(a.date)))
 }
 

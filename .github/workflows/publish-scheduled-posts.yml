@@ -1,0 +1,42 @@
+# Publishes blog posts on their date. A post dated in the future is left out
+# of the build (apps/web/src/lib/blog.ts), and the pages are static, so it
+# appears only when the site is next deployed on or after that date. This
+# checks every morning: any post that should be live but 404s on the site
+# (due today, or missed on an earlier day) triggers the normal deploy.
+name: Publish scheduled blog posts
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC, about 7am in the UK
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write          # to start the deploy workflow
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Test the due-post check
+        run: bash .github/scripts/blog-due.test.sh
+
+      - name: Deploy if a post that should be live is missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for p in $(bash .github/scripts/blog-due.sh apps/web/content/blog "$(date -u +%F)"); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://paddlesnitch.com$p")
+            echo "$p -> $code"
+            [ "$code" = "404" ] && missing=1
+          done
+          if [ "$missing" = 1 ]; then
+            echo "A post is due and not live yet: deploying."
+            gh workflow run deploy.yml --ref main
+          else
+            echo "Every due post is live. Nothing to do."
+          fi

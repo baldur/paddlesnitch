@@ -35,6 +35,7 @@ export default function BlogIndex() {
                   <p className="text-xs text-muted tracking-widest uppercase">
                     <time dateTime={p.date}>{fmtPostDate(p.date)}</time>
                     {p.draft && <span className="text-split"> · draft</span>}
+                    {p.scheduled && <span className="text-split"> · scheduled</span>}
                   </p>
                   <h2 className="text-base font-bold text-fg">
                     <Link href={p.permalink} className="hover:text-primary transition-colors">{p.title}</Link>

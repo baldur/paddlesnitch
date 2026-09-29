@@ -28,5 +28,17 @@ post, e.g. `2026-10-04-start-line.jpg`, and keep them under ~500 KB) and use the
 as `![what it shows](/blog-media/2026-10-04-start-line.jpg)`. They are served
 from S3 with the rest of the site.
 
-A post goes live when it is merged to `main` (the pages are built at deploy).
+## Scheduling
+
+A post goes live on its date, not before. Merge it any time: a post dated in
+the future is left out of the site (its address 404s) until that day, when the
+*Publish scheduled blog posts* workflow redeploys the site at 06:00 UTC (about
+7am in the UK). If a morning's run fails, the next one catches up. To publish
+a series, merge all the parts at once with a date each, e.g.
+`2026-10-06-part-2.md`, `2026-10-13-part-3.md`.
+
+Local dev (`pnpm dev`) shows scheduled posts early, marked "scheduled", so you
+can check them. Link between parts with their permalinks, e.g.
+`[part 2](/blog/2026/10/06/part-2)`; the link works from that date.
+
 `pnpm test` checks every post's file name and title.
