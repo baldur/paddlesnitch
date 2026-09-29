@@ -991,6 +991,10 @@ Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on 
 - Never commit AWS credentials. IAM roles for Lambda; `aws sso` locally.
 - Target domain: `paddlesnitch.com` — app at `paddlesnitch.com/att`, landing at `paddlesnitch.com/`
 
+### Blog (`/blog`)
+
+Posts are Markdown files in **`apps/web/content/blog/`**, named `YYYY-MM-DD-readable-slug.md`; the file name is the date and the permalink **`/blog/yyyy/mm/dd/readable-slug`**. Front matter: `title` (required), `summary` (the teaser; otherwise the first paragraph), `author`, `image` (share image), `draft: true` (local dev only). How-to for writers: `content/blog/README.md`. `src/lib/blog.ts` reads them (tiny front-matter parser, `teaserOf`, drafts hidden unless `NODE_ENV=development`); every post page is **static, built at deploy** (`generateStaticParams`, `dynamicParams=false`, so any other address 404s), so a post goes live when merged. Markdown renders with `react-markdown` + `remark-gfm` (`components/blog/PostBody.tsx`): React elements, raw HTML shown as text, never injected. **Images** live in `apps/web/public/blog-media/` → the S3 assets bucket via the `/blog-media/*` CloudFront behavior. `blog.test.ts` parses every real post, so a bad file name or missing title fails `pnpm test`, not the deploy. Linked from the footer.
+
 ### Marketing campaign landings (`/?campaign=<id>`)
 
 `src/lib/campaigns.ts` lists the ids (`CAMPAIGN_LANDINGS`); `src/app/page.tsx` maps each to a landing (`LANDINGS`) and optional title/description/share image (`CAMPAIGN_METADATA`). An unknown id falls back to the default landing and is logged (`[campaign] …`). **A known campaign is shown to signed-in visitors too** (people share these links; the dashboard only replaces the DEFAULT landing).
