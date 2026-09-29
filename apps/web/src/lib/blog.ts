@@ -99,11 +99,14 @@ const isPreview = () => process.env.NODE_ENV === 'development'
 export const todayUtc = () => new Date().toISOString().slice(0, 10)
 
 export function listPosts({ dir = BLOG_DIR, preview = isPreview(), today = todayUtc() }: Opts = {}): Post[] {
+  // turbopackIgnore: every blog page is built at deploy time and nothing reads
+  // these files at runtime, so the bundler mustn't trace them (a dynamic path
+  // here otherwise pulls the whole project into the server bundle).
   let files: string[]
-  try { files = readdirSync(dir) } catch { return [] }
+  try { files = readdirSync(/* turbopackIgnore: true */ dir) } catch { return [] }
   return files
     .filter(f => /^\d{4}-/.test(f) && f.endsWith('.md'))
-    .map(f => parsePost(f, readFileSync(path.join(dir, f), 'utf8')))
+    .map(f => parsePost(f, readFileSync(path.join(/* turbopackIgnore: true */ dir, f), 'utf8')))
     .map(p => ({ ...p, scheduled: p.date > today }))
     .filter(p => preview || (!p.draft && !p.scheduled))
     .sort((a, b) => (a.date === b.date ? a.slug.localeCompare(b.slug) : b.date.localeCompare(a.date)))
