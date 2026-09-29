@@ -17,6 +17,10 @@ updates:
       # lambda-runtime.test.ts), not the newest Node. Bump by hand with the runtime.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
+      # ESLint 10 crashes inside eslint-plugin-react (pulled in by
+      # eslint-config-next). Hold at 9 until eslint-config-next supports 10.
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
