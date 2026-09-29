@@ -15,8 +15,16 @@ const CENTRAL_SIG = 0x02014b50
  * Returns every file entry (directories skipped). Throws on anything it can't
  * read (encrypted, zip64, unsupported compression) — callers treat that as a
  * parse failure.
+ *
+ * Bounded (security audit 2026-09): a few MB of zip can inflate to gigabytes,
+ * enough to take the 1 GB server Lambda down. An entry may not claim or
+ * inflate to more than `maxEntryBytes`, nor may the archive hold more than
+ * `maxEntries` files. A one-activity export is well under both.
  */
-export function readZip(data: ArrayBuffer): ZipEntry[] {
+export function readZip(
+  data: ArrayBuffer,
+  { maxEntryBytes = 50 * 1024 * 1024, maxEntries = 64 }: { maxEntryBytes?: number; maxEntries?: number } = {},
+): ZipEntry[] {
   const buf = Buffer.from(data)
 
   // Find the End Of Central Directory record (search backwards past the
@@ -31,6 +39,7 @@ export function readZip(data: ArrayBuffer): ZipEntry[] {
   if (eocd < 0) throw new Error('not a zip file')
 
   const entryCount = buf.readUInt16LE(eocd + 10)
+  if (entryCount > maxEntries) throw new Error(`zip has too many files (${entryCount})`)
   let offset = buf.readUInt32LE(eocd + 16)
 
   const entries: ZipEntry[] = []
@@ -59,11 +68,13 @@ export function readZip(data: ArrayBuffer): ZipEntry[] {
     const dataStart = localOffset + 30 + localNameLen + localExtraLen
     const compressed = buf.slice(dataStart, dataStart + compressedSize)
 
+    if (uncompressedSize > maxEntryBytes) throw new Error(`zip entry too large (${uncompressedSize} bytes)`)
     let content: Buffer
     if (method === 0) {
       content = compressed // stored, no compression
     } else if (method === 8) {
-      content = inflateRawSync(compressed)
+      // Capped as well: the declared size above could be a lie.
+      content = inflateRawSync(compressed, { maxOutputLength: maxEntryBytes })
     } else {
       throw new Error(`unsupported compression method ${method}`)
     }

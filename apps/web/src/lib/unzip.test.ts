@@ -102,3 +102,27 @@ describe('parseTrace with zip', () => {
     expect(result).toEqual({ ok: false, reason: 'parse_error' })
   })
 })
+
+// Security audit 2026-09: a few MB of zip can inflate to gigabytes and take the
+// 1 GB server Lambda down with it.
+describe('readZip limits', () => {
+  it('refuses an entry that would inflate past the limit, before inflating it', () => {
+    const zip = makeZip('big.gpx', Buffer.alloc(200_000, 0x20))
+    expect(() => readZip(zip, { maxEntryBytes: 100_000 })).toThrow(/too large/)
+    expect(readZip(zip, { maxEntryBytes: 300_000 })).toHaveLength(1)
+  })
+
+  it('refuses an entry that lies about its size and inflates past the limit anyway', () => {
+    // Central directory claims 10 bytes; the data inflates to 200 kB.
+    const zip = Buffer.from(makeZip('liar.gpx', Buffer.alloc(200_000, 0x20)))
+    const eocd = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+    const central = zip.readUInt32LE(eocd + 16)
+    zip.writeUInt32LE(10, central + 24)
+    expect(() => readZip(toArrayBuffer(zip), { maxEntryBytes: 100_000 })).toThrow()
+  })
+
+  it('has sensible defaults for real exports', () => {
+    expect(readZip(GARMIN_ZIP).length).toBeGreaterThan(0)
+  })
+})
+
