@@ -101,6 +101,10 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.firmware == 'true'
     runs-on: ubuntu-latest
+    # `production` is what lets this job assume the AWS deploy role (the role
+    # trusts only jobs in that environment; see infra/lib/att-stack.ts). The
+    # environment has no reviewers, so it never prompts.
+    environment: production
     permissions:
       id-token: write    # OIDC, as for the whole workflow
       contents: write    # push the fw/vX.Y.Z tag; nothing else in here writes
@@ -277,10 +281,15 @@ jobs:
        (needs.changes.result == 'success' &&
         (needs.build.result == 'success' || needs.build.result == 'skipped')))
     runs-on: ubuntu-latest
-    # No `environment:` gate. It would prompt for approval on every merge, which
-    # is exactly the step this change removes. If devices ever ship to people who
-    # cannot reach them with a cable, put it back on the auto path -- NOT on the
+    # No approval gate: `production` below has no reviewers, so it never
+    # prompts (it only scopes the AWS role). A reviewer gate would prompt on
+    # every merge, the step the auto-promote removed. If devices ever ship to
+    # people who cannot reach them with a cable, gate the auto path -- NOT the
     # manual one, which is the rollback and must stay fast.
+    # `production` is what lets this job assume the AWS deploy role (the role
+    # trusts only jobs in that environment; see infra/lib/att-stack.ts). The
+    # environment has no reviewers, so it never prompts.
+    environment: production
     steps:
       - uses: actions/checkout@v5
 

@@ -11,6 +11,10 @@ permissions:
 jobs:
   test-and-deploy:
     runs-on: ubuntu-latest
+    # `production` is what lets this job assume the AWS deploy role (the role
+    # trusts only jobs in that environment; see infra/lib/att-stack.ts). The
+    # environment has no reviewers, so it never prompts.
+    environment: production
     steps:
       - uses: actions/checkout@v5
 

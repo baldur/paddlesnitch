@@ -49,7 +49,12 @@ jobs:
         (
           github.event_name != 'issues' && github.event_name != 'pull_request' &&
           (contains(github.event.issue.labels.*.name, 'claude-active') ||
-           contains(github.event.pull_request.labels.*.name, 'claude-active'))
+           contains(github.event.pull_request.labels.*.name, 'claude-active')) &&
+          # Only people with a role in the repo. The repo is public, so any
+          # GitHub user could otherwise comment instructions into a run that
+          # has Bash and write access (security audit 2026-09).
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                   github.event.comment.author_association || github.event.review.author_association)
         )
       )
     permissions:
