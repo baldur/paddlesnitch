@@ -12,6 +12,9 @@ const app = new cdk.App()
 cdk.Tags.of(app).add('project', 'paddlesnitch')
 
 new AttStack(app, 'AttStack', {
+  // A `cdk destroy` or console delete would take the whole platform down.
+  // The data bucket and user pool are RETAIN anyway; this guards the rest.
+  terminationProtection: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION ?? 'eu-west-1',
