@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { otpVerify, verifyIdToken } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
+import { hasAcceptedCurrent } from '@/lib/tos'
 
 // Step 2 of passwordless sign-in. Submit the 6-digit code from the user's
 // email. On success, set tt_id + tt_refresh cookies and return the user.
@@ -31,7 +32,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Sign-in didn’t finish. Please try again.' }, { status: 500 })
   }
-  const res = NextResponse.json({ id: user.id, email: user.email, displayName: user.displayName })
+  // needsTerms: the sign-in page sends them to accept the Terms first.
+  const needsTerms = !(await hasAcceptedCurrent(user.id))
+  const res = NextResponse.json({ id: user.id, email: user.email, displayName: user.displayName, needsTerms })
   setAuthCookies(res.cookies, result.idToken, result.refreshToken)
   return res
 }

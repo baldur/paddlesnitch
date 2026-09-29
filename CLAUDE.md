@@ -651,7 +651,8 @@ Versioned markdown at `legal/tos-{version}.md`. The current version constant is 
 #### Acceptance flow
 
 - **Signup** requires `acceptedTosVersion: CURRENT_TOS_VERSION` in the request body. The signup form on `/att/auth` ships the constant; an out-of-date client gets 422 instead of silently signing the user up.
-- The signup hook records `{ version, acceptedAt }` at `users/{userId}/tos-consent.json` so a re-accept gate on the next bump can tell who's already up to date.
+- The signup hook records `{ version, acceptedAt }` at `users/{userId}/tos-consent.json`.
+- **Every other way in accepts them at sign-in** (2026-09-29): EMAIL CODE and Strava create accounts with no Terms box, so `otp-verify` and `login` return `needsTerms` and the Strava callback redirects, sending anyone without the current version to **`/att/tos/accept?next=…`** (tick, CONTINUE, then on to `next`; `termsAcceptPath()` in `src/lib/terms-path.ts`). That also catches accounts from before the current version. A session that is already signed in isn't interrupted until its next sign-in.
 - `GET /api/account/tos` returns `{ currentVersion, accepted, acceptances[] }` for the authenticated viewer.
 - `POST /api/account/tos { version }` records an acceptance. Refuses anything other than `CURRENT_TOS_VERSION` (no future-version land-grab).
 - Public ToS page at `/att/tos` rendered from the markdown source.
@@ -660,7 +661,7 @@ Versioned markdown at `legal/tos-{version}.md`. The current version constant is 
 
 1. Copy `legal/tos-{prev}.md` to `legal/tos-{new}.md`. Edit, including the `**Version NNN, effective …**` line (a test checks it matches).
 2. Set `CURRENT_TOS_VERSION` in `src/lib/types.ts` to the new string. The signup form and tests read the constant — nothing else to bump.
-3. **Email registered users** — the ToS (§9) promises this for every new version. There is no re-accept prompt yet; continuing use after the bump is the acceptance.
+3. **Email registered users** — the ToS (§9) promises this for every new version. Each user accepts the new version at their next sign-in (`/att/tos/accept`).
 
 Current version: **002** (2026-09-28): adds Paddles/trackers/AI summary ("can be wrong"), stroke rate kept, and drops 001's false claims (re-accept prompt, version in footer, leaked "so we don't chase consents" reasoning).
 

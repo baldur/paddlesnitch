@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signIn, verifyIdToken } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
+import { hasAcceptedCurrent } from '@/lib/tos'
 import { emitMetric } from '@/lib/metrics'
 
 export async function POST(req: NextRequest) {
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest) {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    // Accounts from before the current Terms version accept them once.
+    needsTerms: !(await hasAcceptedCurrent(user.id)),
   })
   setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
   return res

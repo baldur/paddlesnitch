@@ -105,6 +105,11 @@ describe('POST /att/api/auth/login', () => {
     expect(setCookie).toContain('tt_refresh=')
   })
 
+  it('does not ask someone who accepted the Terms at sign-up to accept them again', async () => {
+    const res = await login(jsonReq('http://x/att/api/auth/login', { email: bobEmail, password: 'Password123' }))
+    expect((await res.json()).needsTerms).toBe(false)
+  })
+
   it('rejects wrong password with 401', async () => {
     const res = await login(jsonReq('http://x/att/api/auth/login', {
       email: bobEmail, password: 'WrongPassword1',

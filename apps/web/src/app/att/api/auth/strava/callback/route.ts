@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { hasAcceptedCurrent, termsAcceptPath } from '@/lib/tos'
 import { randomBytes } from 'crypto'
 import { exchangeCode, getAthleteProfile } from '@/lib/strava'
 import {
@@ -155,9 +156,12 @@ export async function GET(req: NextRequest) {
     await putStravaTokens(user.id, tokens)
   }
 
-  // 5. Set the auth cookies and bounce to where the user was headed.
+  // 5. Set the auth cookies and bounce to where the user was headed: via the
+  //    Terms first if this account hasn't accepted the current version (a
+  //    Strava sign-up never saw the Terms box).
   const next = safeNext(nextCookie)
-  const res = NextResponse.redirect(new URL(next, base))
+  const accepted = user ? await hasAcceptedCurrent(user.id) : true
+  const res = NextResponse.redirect(new URL(accepted ? next : termsAcceptPath(next), base))
   setAuthCookies(res.cookies, signInResult.idToken, signInResult.refreshToken)
   return clearCookies(res)
 }

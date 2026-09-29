@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
+import { termsAcceptPath } from '@/lib/terms-path'
 
 function AuthForm() {
   const router = useRouter()
@@ -67,7 +68,8 @@ function AuthForm() {
         body: JSON.stringify({ email, password }),
       })
       if (res.ok) {
-        router.push(next)
+        const data = await res.json().catch(() => ({}))
+        router.push(data?.needsTerms ? termsAcceptPath(next) : next)
       } else {
         const data = await res.json()
         setError(data.error ?? 'Couldn’t sign you in. Please try again.')
@@ -143,7 +145,7 @@ function AuthForm() {
         if (data?.session) setOtpSession(data.session)
         throw new Error(data?.error ?? 'That code didn’t work. Check it and try again.')
       }
-      router.push(next)
+      router.push(data?.needsTerms ? termsAcceptPath(next) : next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That code didn’t work. Check it and try again.')
       setLoading(false)
