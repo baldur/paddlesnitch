@@ -8,7 +8,7 @@ import { readZip } from './unzip'
 import { parseTrace } from './parse'
 
 function toArrayBuffer(b: Buffer): ArrayBuffer {
-  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
+  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer
 }
 
 // A real Garmin Connect export: one *_ACTIVITY.fit deflated inside a zip whose

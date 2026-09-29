@@ -40,7 +40,7 @@ const TRACK = [
 
 const put = (qs: string, body: string | Buffer, dt: string) =>
   new Request(`http://x/api/devices/sessions?${qs}`, {
-    method: 'POST', body, headers: { authorization: `Bearer ${dt}`, 'content-type': 'text/csv' },
+    method: 'POST', body: body as BodyInit, headers: { authorization: `Bearer ${dt}`, 'content-type': 'text/csv' },
   })
 
 /** A motion CSV big enough to be worth chunking, with identifiable rows. */

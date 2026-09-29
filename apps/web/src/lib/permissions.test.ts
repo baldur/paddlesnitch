@@ -88,6 +88,9 @@ function makeGroup(): GroupMetadata {
   }
 }
 
+// Pre-phase-3 data can still say 'open' (read as 'public'); the type no longer allows it.
+const LEGACY_OPEN = 'open' as unknown as Participation
+
 describe('viewing a public course', () => {
   it('an unauthenticated visitor can see it', () => {
     expect(canViewCourse(makeCourse('public'), null)).toBe(true)
@@ -339,22 +342,22 @@ describe('viewing a group-scoped trial', () => {
   const groupId = 'group-1'
 
   it('a viewer who is in the group can see it', () => {
-    const trial = makeTrial('group', 'open', [], groupId)
+    const trial = makeTrial('group', LEGACY_OPEN, [], groupId)
     expect(canViewTrial(trial, other, new Set([groupId]))).toBe(true)
   })
 
   it('a viewer who is NOT in the group cannot see it', () => {
-    const trial = makeTrial('group', 'open', [], groupId)
+    const trial = makeTrial('group', LEGACY_OPEN, [], groupId)
     expect(canViewTrial(trial, other, new Set())).toBe(false)
   })
 
   it('a group member can submit to a group-scoped open trial', () => {
-    const trial = makeTrial('group', 'open', [], groupId)
+    const trial = makeTrial('group', LEGACY_OPEN, [], groupId)
     expect(canSubmitToTrial(trial, other, new Set([groupId]))).toBe(true)
   })
 
   it('a non-member cannot submit to a group-scoped open trial', () => {
-    const trial = makeTrial('group', 'open', [], groupId)
+    const trial = makeTrial('group', LEGACY_OPEN, [], groupId)
     expect(canSubmitToTrial(trial, other, new Set())).toBe(false)
   })
 
