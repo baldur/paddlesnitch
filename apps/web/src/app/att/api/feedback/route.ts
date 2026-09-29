@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
   ].join('\n')
 
   const ghRes = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+    signal: AbortSignal.timeout(8_000),
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,

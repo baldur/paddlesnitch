@@ -15,6 +15,10 @@ const API_BASE = `${STRAVA_BASE}/api/v3`
 // access tokens live 6 h; refreshing slightly early is harmless and keeps us
 // off the edge of "expired mid-request".
 const REFRESH_LEEWAY_SEC = 120
+// Every call to Strava gives up after this (security audit 2026-09: none had a
+// timeout, so a slow Strava held a request until the 30 s Lambda limit).
+const STRAVA_TIMEOUT_MS = 8_000
+const timeout = () => AbortSignal.timeout(STRAVA_TIMEOUT_MS)
 
 // Sport types we'll surface in the picker. Strava has fifty-ish; we only care
 // about ones a paddler or rower would use for a time trial. If you want to
@@ -147,6 +151,7 @@ export async function exchangeCode(code: string): Promise<StravaTokens> {
     grant_type: 'authorization_code',
   })
   const res = await fetch(`${STRAVA_BASE}/oauth/token`, {
+    signal: timeout(),
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
@@ -187,6 +192,7 @@ export async function refreshIfExpired(tokens: StravaTokens): Promise<StravaToke
     refresh_token: tokens.refreshToken,
   })
   const res = await fetch(`${STRAVA_BASE}/oauth/token`, {
+    signal: timeout(),
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
@@ -219,6 +225,7 @@ export type StravaAthleteProfile = {
 export async function getAthleteProfile(accessToken: string): Promise<StravaAthleteProfile | null> {
   try {
     const res = await fetch(`${API_BASE}/athlete`, {
+      signal: timeout(),
       headers: { Authorization: `Bearer ${accessToken}` },
     })
     if (!res.ok) {
@@ -243,6 +250,7 @@ export async function getAthleteProfile(accessToken: string): Promise<StravaAthl
 export async function revoke(accessToken: string): Promise<void> {
   try {
     await fetch(`${STRAVA_BASE}/oauth/deauthorize`, {
+    signal: timeout(),
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     })
@@ -271,6 +279,7 @@ export async function listActivities(
   perPage = 30,
 ): Promise<{ activities: StravaActivitySummary[]; hasMore: boolean }> {
   const res = await fetch(`${API_BASE}/athlete/activities?per_page=${perPage}&page=${page}`, {
+    signal: timeout(),
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!res.ok) throw new Error(`strava_list_failed_${res.status}`)
@@ -295,6 +304,7 @@ export async function listActivities(
 // its streams. Null if Strava won't return it (deleted / no access).
 export async function getActivitySport(accessToken: string, activityId: number): Promise<string | null> {
   const res = await fetch(`${API_BASE}/activities/${activityId}`, {
+    signal: timeout(),
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!res.ok) return null
@@ -327,7 +337,7 @@ export async function createWebhookSubscription(callbackUrl: string, verifyToken
     client_id: clientId, client_secret: clientSecret,
     callback_url: callbackUrl, verify_token: verifyToken,
   })
-  const res = await fetch(`${API_BASE}/push_subscriptions`, { method: 'POST', body })
+  const res = await fetch(`${API_BASE}/push_subscriptions`, { signal: timeout(), method: 'POST', body })
   if (!res.ok) throw new Error(`strava_subscribe_failed_${res.status}: ${await res.text()}`)
   return (await res.json()) as StravaSubscription
 }
@@ -336,7 +346,7 @@ export async function viewWebhookSubscriptions(): Promise<StravaSubscription[]> 
   const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
   if (!clientId || !clientSecret) throw new Error('strava_not_configured')
   const qs = new URLSearchParams({ client_id: clientId, client_secret: clientSecret })
-  const res = await fetch(`${API_BASE}/push_subscriptions?${qs}`)
+  const res = await fetch(`${API_BASE}/push_subscriptions?${qs}`, { signal: timeout() })
   if (!res.ok) throw new Error(`strava_view_subs_failed_${res.status}`)
   return (await res.json()) as StravaSubscription[]
 }
@@ -345,7 +355,7 @@ export async function deleteWebhookSubscription(id: number): Promise<void> {
   const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
   if (!clientId || !clientSecret) throw new Error('strava_not_configured')
   const qs = new URLSearchParams({ client_id: clientId, client_secret: clientSecret })
-  const res = await fetch(`${API_BASE}/push_subscriptions/${id}?${qs}`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE}/push_subscriptions/${id}?${qs}`, { signal: timeout(), method: 'DELETE' })
   if (!res.ok && res.status !== 204) throw new Error(`strava_delete_sub_failed_${res.status}`)
 }
 
@@ -363,9 +373,11 @@ export async function getActivityStreams(accessToken: string, activityId: number
 } | null> {
   const [streamsRes, summaryRes] = await Promise.all([
     fetch(`${API_BASE}/activities/${activityId}/streams?keys=latlng,time&key_by_type=true`, {
+      signal: timeout(),
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
     fetch(`${API_BASE}/activities/${activityId}`, {
+      signal: timeout(),
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
   ])
