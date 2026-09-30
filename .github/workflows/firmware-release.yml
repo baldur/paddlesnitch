@@ -81,7 +81,7 @@ jobs:
     outputs:
       firmware: ${{ steps.d.outputs.firmware }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: d
@@ -109,7 +109,7 @@ jobs:
       id-token: write    # OIDC, as for the whole workflow
       contents: write    # push the fw/vX.Y.Z tag; nothing else in here writes
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Need the previous commit to tell whether VERSION moved with the source.
           fetch-depth: 2
@@ -154,11 +154,11 @@ jobs:
           fi
           bash .github/scripts/firmware-notes.sh firmware/NOTES
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.platformio
@@ -194,7 +194,7 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
           echo "size=$SIZE"  >> "$GITHUB_OUTPUT"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -291,9 +291,9 @@ jobs:
     # environment has no reviewers, so it never prompts.
     environment: production
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}

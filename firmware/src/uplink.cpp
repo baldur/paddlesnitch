@@ -90,7 +90,7 @@ UplinkStatus uplinkGetStatus()
 // whole point: this device carries a token that can write to a user's account.
 static void configureClient(WiFiClientSecure &c)
 {
-    c.setCACert(AMAZON_ROOT_CA1);
+    c.setCACert(AMAZON_ROOT_CAS);
     c.setTimeout(20000);
 }
 
@@ -670,10 +670,13 @@ int uplinkSyncSessions()
             String name = f.name();
             if (name.startsWith("/")) name = name.substring(1);
             f.close();
+            // Only files still to send take a slot. Listing uploaded ones too
+            // meant a card holding 128 recordings never uploaded another
+            // (audit 2026-09); the next sync picks up anything past 128.
             if (isTrackUpload(name)) {
-                if (name != active && nTracks < 128) tracks[nTracks++] = name;
+                if (name != active && nTracks < 128 && !alreadyUploaded(name)) tracks[nTracks++] = name;
             } else if (isMotionUpload(name)) {
-                if (name != activeUp && nSide < 128) sidecars[nSide++] = name;
+                if (name != activeUp && nSide < 128 && !alreadyUploaded(name)) sidecars[nSide++] = name;
             }
         }
         root.close();

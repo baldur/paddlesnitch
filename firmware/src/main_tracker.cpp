@@ -16,6 +16,11 @@
 #include "tutorial.h"
 #include "track_policy.h"
 #include "setup_policy.h"
+
+// Live position over LoRa: off unless the build turns it on (see loop()).
+#ifndef LORA_TX
+#define LORA_TX 0
+#endif
 #include <Preferences.h>
 #include "qr.h"
 #include "spibus.h"
@@ -888,6 +893,12 @@ static void handleSerialCommand()
                 netcfgSetSsid(buf + 5);
                 Serial.printf("ssid set to [%s]\n", netcfg.ssid.c_str());
             }
+            else if (!strncmp(buf, "URL ", 4)) {
+                // For development against a local server. Serial only: the
+                // setup portal used to offer this to anyone who reached it.
+                netcfgSetUrl(buf + 4);
+                Serial.printf("server set to [%s]; takes effect at the next sync\n", netcfg.baseUrl.c_str());
+            }
             else if (!strncmp(buf, "PASS ", 5)) {
                 netcfgSetPass(buf + 5);
                 Serial.printf("password set (%d chars)\n", netcfg.pass.length());
@@ -949,6 +960,7 @@ static void handleSerialCommand()
                     "SETUP / SCAN      captive portal / list WiFi networks\n"
                     "SSID <n>          rest of line is the name (may contain spaces)\n"
                     "PASS <s>          rest of line is the secret\n"
+                    "URL <u>           server base URL (development)\n"
                     "UNLINK            clear the device token only (keeps WiFi), then re-claim\n"
                     "FORGET            clear WiFi credentials AND the token\n"
                     "SYNC              ask the uplink task to sync now\n"
@@ -1509,8 +1521,11 @@ void loop()
 
     // Only transmit while recording: an idle device on a shelf has nothing worth
     // saying, and every transmission spends duty-cycle budget and battery.
+    // And only in a build that asks for it (LORA_TX=1, e.g. with the bench
+    // receiver): the packet is the live position in plain text, which anyone
+    // with an 868 MHz receiver within a few km could follow (audit 2026-09).
     bool intervalElapsed = (lastTxMs == 0) || (millis() - lastTxMs >= TX_INTERVAL_S * 1000UL);
-    if (storageRecording() && board.radio && intervalElapsed && duty.canTransmit()) {
+    if (LORA_TX && storageRecording() && board.radio && intervalElapsed && duty.canTransmit()) {
         transmitPosition();
     }
 }

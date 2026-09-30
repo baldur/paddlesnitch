@@ -692,9 +692,19 @@ be accepted as real points and corrupt every track.
 
 Other constraints worth keeping:
 
-- **TLS verifies against a pinned root** (`include/root_ca.h`, Amazon Root CA 1,
-  fetched not transcribed). Never swap this for `setInsecure()` — the device
-  carries a bearer token with write access to a user's account.
+- **TLS verifies against Amazon's roots** (`include/root_ca.h`, Amazon Root CA
+  1–4, fetched not transcribed; `firmware-security.test.ts` checks the
+  fingerprints). All four since 0.16.5: an ECDSA certificate chains to Root CA 3,
+  and trusting only Root CA 1 would have cut trackers off from the server and
+  from the OTA that could fix it. Never swap this for `setInsecure()` — the
+  device carries a bearer token with write access to a user's account.
+- **The setup page escapes everything it prints** (`include/html_escape.h`):
+  nearby network names are attacker-controlled. **It has no server field**:
+  whoever reached it could point the tracker (and its token) at their own
+  server. The server URL is serial-only now (`URL <u>`).
+- **LoRa position broadcast is off** (`LORA_TX` defaults to 0): the packet is the
+  live position in plain text. Build with `-DLORA_TX=1` for bench work with the
+  receiver.
 - **No secret is compiled into the firmware.** The device is issued its own
   revocable token via the claim flow; a shared key in a binary can be read off
   any device's flash.

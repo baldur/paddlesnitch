@@ -4,6 +4,7 @@
 #include "board_pins.h"
 #include "device_id.h"
 #include "setup_policy.h"
+#include "html_escape.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -83,6 +84,7 @@ void netcfgSaveWifi(const String &ssid, const String &pass, const String &baseUr
 }
 void netcfgSetSsid(const String &v)         { put("ssid", v);   netcfg.ssid = v; }
 void netcfgSetPass(const String &v)         { put("pass", v);   netcfg.pass = v; }
+void netcfgSetUrl(const String &v)          { put("url", v);    netcfg.baseUrl = v; }
 void netcfgSaveToken(const String &t)       { put("token", t);  netcfg.token = t; }
 void netcfgSaveClaimSecret(const String &s) { put("secret", s); netcfg.claimSecret = s; }
 
@@ -234,6 +236,20 @@ bool netConnect(uint32_t timeoutMs, String *reason)
 // Setup portal
 // ---------------------------------------------------------------------------
 
+// Everything the portal pastes into its HTML goes through this (html_escape.h):
+// network names come from whoever is broadcasting nearby.
+static String esc(const String &s)
+{
+    String out;
+    const size_t cap = s.length() * 6 + 1;
+    char *buf = (char *)malloc(cap);
+    if (!buf) return out;
+    htmlEscape(s.c_str(), buf, cap);
+    out = buf;
+    free(buf);
+    return out;
+}
+
 static const char PORTAL_HTML[] PROGMEM = R"HTML(<!doctype html><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1"><title>Set up tracker</title>
 <style>
@@ -269,7 +285,6 @@ code{color:#7fb5ef}
 <label>WiFi password</label>
 <input name=pass type=password value="" autocapitalize=off autocorrect=off spellcheck=false>
 <p class=hint>%PASSHINT%</p>
-<label>Server</label><input name=url value="%URL%" autocapitalize=off spellcheck=false>
 <button type=submit>Save and connect</button></form></div>)HTML";
 
 // The AP password, generated once and kept. Deliberately NOT derived from the
@@ -342,7 +357,7 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
     int n = WiFi.scanNetworks();
     String opts;
     for (int i = 0; i < n && i < 20; i++) {
-        String ss = WiFi.SSID(i);
+        const String ss = esc(WiFi.SSID(i));
         if (!ss.length() || opts.indexOf(">" + ss + " (") >= 0) continue;
         opts += "<option value=\"" + ss + "\">" + ss + " (" + String(WiFi.RSSI(i)) + " dBm)</option>";
     }
@@ -350,9 +365,8 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
 
     auto renderForm = [&](const String &note) {
         String p = FPSTR(PORTAL_HTML);
-        p.replace("%DEVICEID%", netDeviceId());
-        p.replace("%SSID%", netcfg.ssid);
-        p.replace("%URL%", netcfg.baseUrl);
+        p.replace("%DEVICEID%", esc(netDeviceId()));
+        p.replace("%SSID%", esc(netcfg.ssid));
         p.replace("%OPTIONS%", opts);
         // Only promise to keep a password when one exists. On a fresh device
         // nothing is stored, and "leave blank to keep the saved one" invites
@@ -360,7 +374,7 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
         p.replace("%PASSHINT%", netcfg.pass.length()
                       ? "Leave blank to keep the saved one."
                       : "Required.");
-        p.replace("%ERROR%", note.length() ? "<p class=err>" + note + "</p>" : "");
+        p.replace("%ERROR%", note.length() ? "<p class=err>" + esc(note) + "</p>" : "");
         server.send(200, "text/html", p);
     };
 
@@ -368,7 +382,6 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
     server.on("/save", HTTP_POST, [&]() {
         String ssid = server.arg("ssid");
         String pass = server.arg("pass");
-        String url  = server.arg("url");
         if (!ssid.length()) { renderForm("Please choose a network."); return; }
         // Blank keeps the stored password -- so a re-run to fix a typo in the
         // SSID does not force a retype on a phone. But ONLY if there is one to
@@ -381,14 +394,17 @@ bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
             renderForm("Enter the password for \"" + ssid + "\".");
             return;
         }
-        netcfgSaveWifi(ssid, pass.length() ? pass : netcfg.pass,
-                       url.length() ? url : netcfg.baseUrl);
+        // No server field any more (security audit 2026-09): whoever reached
+        // the portal could point the tracker at their own server, which then
+        // received its token and could hand it firmware. Changing the server
+        // is serial-only (URL <u>), i.e. needs the tracker in hand.
+        netcfgSaveWifi(ssid, pass.length() ? pass : netcfg.pass, netcfg.baseUrl);
         server.send(200, "text/html",
             "<meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
             "<body style=\"font:16px/1.5 -apple-system,system-ui,sans-serif;background:#101317;"
             "color:#eef1f5;margin:0\"><div style='max-width:420px;margin:0 auto;padding:32px 20px'>"
             "<h1 style='font-size:20px'>Saved</h1><p style='color:#a4aeba'>The tracker is "
-            "restarting and will try to join <b>" + ssid + "</b>.</p>"
+            "restarting and will try to join <b>" + esc(ssid) + "</b>.</p>"
             "<p style='color:#a4aeba'>Watch the tracker's screen: it shows whether it worked. "
             "If it can't join, it reopens this setup page and explains why.</p></div>");
         saved = true;

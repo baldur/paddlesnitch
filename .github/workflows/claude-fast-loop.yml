@@ -63,16 +63,16 @@ jobs:
       issues: write
       id-token: write   # required by claude-code-action@v1 to fetch its OIDC token
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # full history for diff context
 
       # Node + pnpm + deps so Claude can actually run `pnpm test` / `pnpm build`
       # while working (matches the deploy workflow's toolchain versions).
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
