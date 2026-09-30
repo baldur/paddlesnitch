@@ -16,7 +16,7 @@ The web platform, the infrastructure and the tracker firmware are all public at 
 
 ## What's next: beta testers and club fleets
 
-In October I'm onboarding five beta testers with trackers. I'm hoping for ten more in November and a hundred by the end of 2027.
+This month I've been onboarding five beta testers with trackers. I'm hoping for ten more in November and a hundred by the end of 2027.
 
 ![Four trackers in black cases, labelled PADDLE02 to PADDLE05](/blog-media/2026-09-29-paddle02-05.jpg)
 

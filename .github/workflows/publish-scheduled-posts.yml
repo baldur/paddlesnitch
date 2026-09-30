@@ -18,7 +18,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Test the due-post check
         run: bash .github/scripts/blog-due.test.sh

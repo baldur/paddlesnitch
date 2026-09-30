@@ -12,9 +12,9 @@ So I started building paddlesnitch: something useful for me, and hopefully for o
 
 ![Four paddlesnitch trackers on a desk, each with an antenna, next to a pack of memory cards](/blog-media/2026-09-29-trackers.jpg)
 
-I started on 16 May. Four and a half months later it's 458 commits and 319 pull requests. Over five weekly posts, here's what was hard.
+I started on 16 May. By late September it was 458 commits and 319 pull requests. Over five weekly posts, here's what was hard.
 
-## Special challenge #1: a team's worth of work, alone, in evenings
+## A team's worth of work, alone, in evenings
 
 I've spent most of my career running engineering teams. Honestly assessed, what's in this repo is what I'd have expected a team of three to five engineers to take six to nine months to build. That includes a web platform, authentication, Strava integration, GPS timing, clubs and permissions, an AI coach, GDPR tooling, cloud infrastructure, CI/CD, and firmware for a custom device. I built it in four and a half months, alone, around a day job.
 

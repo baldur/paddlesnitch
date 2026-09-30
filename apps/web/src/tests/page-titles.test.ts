@@ -13,6 +13,12 @@ import { metadata as guide } from '@/app/guide/layout'
 import { metadata as blog } from '@/app/blog/layout'
 
 describe('page titles', () => {
+  // Without a metadataBase, Next resolves a relative share image (a blog post's
+  // `image: /blog-media/…`) against http://localhost:3000, so LinkedIn/Bluesky
+  // previews break.
+  it('share images resolve against paddlesnitch.com, not localhost', () => {
+    expect(String(root.metadataBase)).toBe('https://paddlesnitch.com/')
+  })
   it('the site adds its name to every page title', () => {
     expect(root.title).toEqual({ default: 'paddlesnitch', template: '%s · paddlesnitch' })
   })
