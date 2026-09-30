@@ -35,6 +35,8 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /guide                       P  tracker setup guide: overview + one page per step
 /guide/<step>                P  account, switch-on, wifi, link, boat, record, upload
 /guide/troubleshooting       P  problems by symptom, each linkable (#wifi, #code, …)
+/blog                        P  posts, newest first, with teasers
+/blog/yyyy/mm/dd/<slug>      P  one post (static; content/blog/YYYY-MM-DD-<slug>.md)
 /profile/[id-or-handle]      P  public profile (opt-in; 404 if private). Owner sees
                                 EDIT PROFILE → /account#profile
 /profile/me                  A  → your own profile

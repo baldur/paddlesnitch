@@ -15,6 +15,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
+  // Relative share images (a blog post's `image:`) resolve against this, not localhost.
+  metadataBase: new URL('https://paddlesnitch.com'),
   // Sections and pages set a short title ("Trials", "Privacy policy"); the
   // template adds the site name. A page with no title of its own gets the default.
   title: { default: 'paddlesnitch', template: '%s · paddlesnitch' },
