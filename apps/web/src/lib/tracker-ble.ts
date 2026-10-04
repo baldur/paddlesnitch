@@ -39,8 +39,10 @@ export function isPairedReply(raw: string): boolean {
 }
 
 /** How long to keep trying the protected read while pairing finishes: about
- *  Bluetooth's 30 s pairing limit. Read at call time, so tests can shorten it. */
-export const PAIRING_WAIT = { tries: 20, delayMs: 1500 }
+ *  Bluetooth's 30 s pairing limit (8 tries of up to 3 s + 1.5 s). Each read
+ *  has its own limit: on Android a read sometimes never answers at all, and
+ *  the page sat on PAIRING… for ever. Read at call time, so tests can shorten it. */
+export const PAIRING_WAIT = { tries: 8, delayMs: 1500, readTimeoutMs: 3000 }
 
 /**
  * Read the paired-only item until it answers, or the wait runs out.
@@ -50,11 +52,18 @@ export const PAIRING_WAIT = { tries: 20, delayMs: 1500 }
  * the background; the link is encrypted a few seconds later. Giving up on that
  * first refusal reported "Couldn't pair" for a tracker that had just paired.
  */
-export async function readWhenPaired(read: () => Promise<string>, wait = PAIRING_WAIT): Promise<boolean> {
+export async function readWhenPaired(
+  read: () => Promise<string>,
+  wait: { tries: number; delayMs: number; readTimeoutMs?: number } = PAIRING_WAIT,
+): Promise<boolean> {
+  const limit = wait.readTimeoutMs ?? 3000
   for (let i = 0; i < wait.tries; i++) {
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      if (isPairedReply(await read())) return true
-    } catch { /* not paired yet: wait and try again */ }
+      const timedOut = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('no answer')), limit) })
+      if (isPairedReply(await Promise.race([read(), timedOut]))) return true
+    } catch { /* not paired yet, or no answer: wait and try again */ }
+    finally { clearTimeout(timer) }
     if (i < wait.tries - 1 && wait.delayMs > 0) await new Promise(r => setTimeout(r, wait.delayMs))
   }
   return false

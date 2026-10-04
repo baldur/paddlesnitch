@@ -66,7 +66,16 @@ describe('readWhenPaired', () => {
     expect(n).toBe(4)
   })
 
+  // Found on Android: a read that never answers (neither value nor error) left
+  // the page on PAIRING… for ever. Each try now has its own time limit.
+  it('moves on from a read that never answers, instead of hanging', async () => {
+    let n = 0
+    const read = () => { n++; return n < 3 ? new Promise<string>(() => {}) : Promise.resolve('{"v":1,"paired":true}') }
+    expect(await readWhenPaired(read, { tries: 4, delayMs: 0, readTimeoutMs: 20 })).toBe(true)
+    expect(n).toBe(3)
+  })
+
   it('waits about 30 s by default, the most Bluetooth allows for pairing', () => {
-    expect(PAIRING_WAIT.tries * PAIRING_WAIT.delayMs).toBeGreaterThanOrEqual(30000)
+    expect(PAIRING_WAIT.tries * (PAIRING_WAIT.delayMs + PAIRING_WAIT.readTimeoutMs)).toBeGreaterThanOrEqual(30000)
   })
 })
