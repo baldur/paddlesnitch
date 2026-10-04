@@ -22,8 +22,13 @@ phone or browser over Bluetooth, and that uploads them.** WiFi stays. Both run
 side by side, and whichever gets there first wins.
 
 It also makes first-time setup a guided path: connect WiFi and link the tracker
-(as today), learn the button through a short game, then choose how paddles
-should get home.
+(as today, or over Bluetooth for someone with no WiFi), learn the button through
+a short game, then choose how paddles should get home. Trackers already in use
+get Bluetooth by a normal update and switch it on in Settings.
+
+Without WiFi, a tracker also needs another way to get **firmware updates**. The
+phone or browser can carry those too, but only once firmware is signed: see
+"Updates without WiFi".
 
 And it compresses recordings first, which makes every route faster, WiFi
 included.
@@ -38,6 +43,9 @@ included.
    nothing sent until the server has it.
 5. A tracker only ever talks to its owner's phone or browser. These files are
    someone's location history.
+6. A tracker that never sees WiFi can still be set up, linked and kept up to
+   date.
+7. Trackers already in use can turn Bluetooth on without a cable or a reset.
 
 ## Not in scope
 
@@ -52,7 +60,7 @@ included.
 
 Bluetooth from a web page ("Web Bluetooth") works in some browsers and not
 others. This is from general knowledge, not checked against 2026 releases;
-**confirm before Phase 2.**
+**confirm before P3.**
 
 | Where | Bluetooth from paddlesnitch.com | Route |
 |---|---|---|
@@ -73,7 +81,7 @@ Android app, then the iPhone app if testers need it.
 
 ```mermaid
 flowchart TD
-    A([switch on]) --> B["(a) WiFi + link<br/>exactly as today"]
+    A([switch on]) --> B["(a) WiFi + link as today,<br/>or over Bluetooth (J10)"]
     B --> C["(b) Learn the tracker<br/>short game on the screen"]
     C --> D{"(c) How should your<br/>paddles get home?"}
     D -- "WiFi only" --> W([done: uploads at home])
@@ -83,12 +91,15 @@ flowchart TD
     Q --> E
 ```
 
-**(a) WiFi and linking: unchanged.** Setup hotspot, join QR, choose network,
-then the link QR or code entered on paddlesnitch.com. See
-[`device-screen-map.md`](device-screen-map.md) § Onboarding.
+**(a) WiFi and linking, or Bluetooth.** The WiFi path is unchanged: setup
+hotspot, join QR, choose network, then the link QR or code entered on
+paddlesnitch.com (see [`device-screen-map.md`](device-screen-map.md) §
+Onboarding). The setup screen also says "or set up from your phone or computer",
+because the tracker advertises over Bluetooth at the same time. Whichever the
+paddler uses first wins, so a paddler with WiFi sees no extra step. See J10.
 
 **(b) Learn the tracker, game-style.** The current gesture lesson already runs
-here (it starts once the tracker has WiFi and is linked). It teaches tap, hold
+here (it starts once the tracker is linked). It teaches tap, hold
 and double-tap. Extend it into a short game:
 
 - **Level 1: the button.** Today's lesson: tap to move, hold to select,
@@ -177,6 +188,61 @@ filename), so a recording uploaded twice is harmless.
 - **Removing the tracker on the website** stops uploads from it. The tracker
   forgets its pairings at its next sync over WiFi or Bluetooth.
 
+### J9. Turn on Bluetooth on a tracker already in use
+
+Every tracker in use today has WiFi, so it gets the Bluetooth firmware the
+normal way: an over-the-air update on its next sync.
+
+1. After the update the tracker shows its one-line release note: "New: sync by
+   phone or computer. Settings → Bluetooth".
+2. **Bluetooth is off after the update.** An update shouldn't switch on a radio
+   nobody asked for, or change battery life by surprise.
+3. **Settings → Bluetooth** is a new row. Its screen shows Off / On and the
+   paired phones and computers. **Hold** turns it on and starts pairing (J2 or
+   J3). A second page (tap) has Forget all, behind a confirmation, like the
+   Sync screen's cleanup page.
+4. /devices notices the new firmware and says the same thing: "Your tracker can
+   now sync over Bluetooth. Turn it on in Settings → Bluetooth."
+
+Turning Bluetooth on does not repeat the setup lesson; the lesson's new levels
+are in Settings → How to use for anyone curious.
+
+Trackers set up from new (J1) have Bluetooth on if (c) chose a phone or
+computer, and off if it chose WiFi only. Settings → Bluetooth changes it either
+way.
+
+### J10. Set up without WiFi (Bluetooth linking)
+
+For a paddler with no WiFi, or who would rather not use the setup hotspot.
+
+1. The paddler signs in on paddlesnitch.com (or the app) and presses **ADD A
+   TRACKER → SET UP OVER BLUETOOTH**.
+2. The browser lists nearby trackers. The paddler picks theirs, and both show a
+   6-digit number. **Hold** on the tracker to confirm.
+3. The tracker is linked to the account. Same result as typing the code today,
+   without the code and its timer.
+4. On to (b), the lesson, then (c), with Phone or This computer chosen already.
+   WiFi can still be added later in Settings → Network.
+
+How linking works without the tracker reaching the server is under "Linking
+over Bluetooth" below.
+
+### J11. Update a tracker without WiFi
+
+1. The phone or browser reads the tracker's firmware version when it connects,
+   and the server says what the current version is.
+2. **Browser:** /devices/<tracker> shows "Update available" and **UPDATE OVER
+   BLUETOOTH**. It takes a minute or two with the page open; closing it
+   resumes next time.
+3. **App:** the update is carried automatically, like recordings, preferably
+   while the tracker is charging.
+4. The tracker checks the update is genuine (see "Updates without WiFi"),
+   installs it, restarts, and the phone or browser confirms it with the server.
+5. If the new version fails to start, the tracker goes back to the old one by
+   itself, as WiFi updates already do.
+
+The tracker never updates while recording, and refuses if its battery is low.
+
 ---
 
 ## Design
@@ -216,7 +282,7 @@ The tracker offers one Bluetooth service:
 | **Read** | one recording, from an offset, in compressed pieces; resumable |
 | **Done** | the phone or browser reports the server's receipt for a recording |
 
-Expected speed, from general knowledge, **to be measured in Phase 2**: a native
+Expected speed, from general knowledge, **to be measured in P3**: a native
 app 50–150 KB/s, a web page 10–40 KB/s. With compression an hour's paddle is
 ~1 MB, so roughly 10–20 s from an app and 25 s to 2 minutes from a web page.
 
@@ -250,6 +316,81 @@ Instead the phone or browser uploads **as the signed-in user**:
 - The phone passes the receipt to **Done**. Only then does the tracker mark the
   recording sent, in the same `uploaded.txt` record WiFi uploads use.
 
+### Linking over Bluetooth (J10)
+
+Linking today: the tracker asks the server for a code, the paddler types it on
+the website, and the tracker collects a **token** it keeps for every later
+request. **The server only ever stores a hash of that token.**
+
+That makes Bluetooth linking clean. **The tracker creates its own token** and
+never lets it out:
+
+1. Paired over Bluetooth (number comparison + hold), the tracker generates a
+   random token and stores it, as it stores the one it collects today.
+2. It sends the signed-in page or app its **tracker id and the token's hash**.
+3. The page or app calls a new account endpoint, `POST
+   /api/account/devices/link-bluetooth`, with those two values. The server
+   applies the same rules as linking by code: a tracker already on another
+   account can't be taken (`owned_elsewhere`), and the same rate limits apply.
+4. The server stores the hash, exactly as it would have after code linking.
+   From then on the tracker is indistinguishable from one linked by code. If it
+   ever reaches WiFi it uploads with its own token as usual.
+
+What proves the tracker belongs to this person is physical: pairing needs a
+hold on the tracker in their hand. That's the same trust as today, where the
+code is read off the tracker's screen.
+
+### Updates without WiFi (J11)
+
+**Why today's updates can't simply be relayed:** a tracker updating over WiFi
+downloads the image itself over HTTPS, and checks it against a checksum it also
+got over HTTPS. Its trust rests on that secure connection. When a phone carries
+the update, the secure connection ends at the phone, so a lost, hacked or
+malicious phone could hand the tracker any image with a matching checksum.
+
+**So Bluetooth updates require signed firmware first.** That's decision 5 in
+[`security-audit-2026-09.md`](security-audit-2026-09.md), which recommends
+**ed25519 signing**: a public key built into the firmware, the private key held
+outside AWS, about a day of work, and deliverable over the air. It also closes
+the audit's wider gap: today anyone who can write the firmware bucket can ship
+firmware to every tracker.
+
+The design:
+
+- **The release signs a small manifest:** model, version, size, the image's
+  sha256, and a release time. The tracker checks the signature with its built-in
+  key, then checks the image against the sha256 as it does now. Who carried it
+  (WiFi, phone, browser) no longer matters.
+- **WiFi updates check the signature too** once it exists, so there is one rule.
+- **No going backwards by replay.** An old signed manifest is still validly
+  signed, so a phone could replay an older, flawed version. The tracker
+  remembers the release time of the last manifest it accepted and refuses
+  older ones. Today's rollback lever (promoting an older build) keeps working
+  by signing a new manifest for the older image with a newer release time.
+- **Transfer:** the image goes over the same resumable, compressed pieces as
+  recordings, written straight into the spare app slot like a WiFi update. It's
+  about 1.1 MB, so roughly 15–60 s from an app and 1–2 minutes from a browser
+  (estimates until measured).
+- **Marking the update good:** the audit also asks that a new version only be
+  marked good after it has reached the server, not just booted (audit 5(i)).
+  Without WiFi, the server's **receipt** (below) relayed by the phone counts as
+  reaching the server.
+- **Guards:** not while recording, not below a battery level (to be chosen), and
+  the existing roll-back-after-failed-boots still applies.
+- **Getting the first Bluetooth firmware onto trackers:** every tracker in use
+  has WiFi, so they get it by WiFi. New trackers get it by cable at first flash,
+  as now. The partition table doesn't change.
+
+### Trackers that never see WiFi
+
+The server learns a tracker's firmware, model and last-seen time from the
+tracker's own requests (`touchDevice`, the `DeviceSeen` metric). A tracker
+synced only by phone makes none. So the account upload endpoint takes the
+tracker's About details from the phone and records them the same way, so
+/devices and the firmware dashboard still show it correctly. Removing a tracker
+on the website reaches it the same way: the phone passes it on at the next
+connection.
+
 ### Pairing and privacy
 
 - **Pairing needs the tracker in hand:** both sides show a 6-digit number and
@@ -268,7 +409,7 @@ Instead the phone or browser uploads **as the signed-in user**:
 - Advertise only when recordings are waiting and the tracker isn't recording.
 - Stop advertising some hours after the last recording ends (to be chosen once
   measured), and start again at the next.
-- Measure the cost in Phase 2. Advertising every second or so should be small
+- Measure the cost in P3. Advertising every second or so should be small
   next to the GPS, but that is an estimate, not a measurement.
 
 ### Later: working things out on the tracker
@@ -296,35 +437,46 @@ Rules for when this happens:
 | Phase | What | Proves |
 |---|---|---|
 | **P1. Compression** | Tracker compresses upload pieces; server accepts them. WiFi only. | The format, and a ~3× smaller upload today |
-| **P2. Bluetooth + browser prototype** | Tracker Bluetooth service, pairing, a test page on /devices that lists and reads recordings | Real speed, battery cost, pairing on Chrome/Edge |
-| **P3. Upload from the browser** | Account upload endpoint, receipts, J2 + J4 for real | End-to-end: no WiFi, paddle arrives |
-| **P4. Guided setup** | The game-style lesson (J1 b) and the "how should paddles get home?" chooser (J1 c) | Setup ends with sync chosen and working |
-| **P5. Android app** | Expo app with pairing and automatic sync (J3, J5) | Sync with nothing pressed |
-| **P6. iPhone app** | If testers need it | Same, on iPhone |
-| **P7. On the tracker** | Live stroke rate; later maybe summaries | Matches the server on the reference capture |
+| **P2. Signed firmware** | ed25519-signed manifests, checked on every update; replay protection (audit decision 5) | Updates are genuine whoever carries them. Needed before P5, worth having anyway |
+| **P3. Bluetooth + browser prototype** | Tracker Bluetooth service, pairing, **Settings → Bluetooth** (J9), a test page on /devices that lists and reads recordings | Real speed, battery cost, pairing on Chrome/Edge |
+| **P4. Upload and link from the browser** | Account upload endpoint, receipts, About details recorded (J2, J4); Bluetooth linking (J10) | End-to-end: no WiFi anywhere, paddle arrives |
+| **P5. Update from the browser** | Firmware over Bluetooth, marked good on a relayed receipt (J11) | A tracker that never sees WiFi stays current |
+| **P6. Guided setup** | The game-style lesson (J1 b) and the "how should paddles get home?" chooser (J1 c) | Setup ends with sync chosen and working |
+| **P7. Android app** | Expo app with pairing, linking, automatic sync and updates (J3, J5) | Sync with nothing pressed |
+| **P8. iPhone app** | If testers need it | Same, on iPhone |
+| **P9. On the tracker** | Live stroke rate; later maybe summaries | Matches the server on the reference capture |
 
-P4 doesn't depend on P2–P3 except for the chooser's "This computer" row, so the
-game-style lesson can ship earlier if wanted.
+**Order constraints:**
+- P2 must ship **before** P5, and before any tracker relies on Bluetooth alone.
+  A tracker with no WiFi and no Bluetooth updates can only be fixed by cable.
+- P3 reaches trackers in use by an ordinary WiFi update. That works because they
+  all have WiFi today, so ship it while that's still true.
+- P6 doesn't depend on P3–P5 except for the chooser's Phone and Computer rows,
+  so the game-style lesson can ship earlier if wanted.
 
 ## Success measures
 
 - Time from the end of a paddle to it appearing in Paddles, by route.
 - Share of recordings arriving by WiFi, browser and app.
-- Measured transfer speed and battery cost (P2), against the estimates above.
+- Measured transfer speed and battery cost (P3), against the estimates above.
 - From testers: how many finish setup, and how many get stuck at each step.
 
 ## Open questions
 
-1. **No WiFi at all.** Setup (a) needs WiFi to link the tracker. A paddler with
-   no WiFi anywhere can't start. Should the phone or browser also be able to
-   do the linking over Bluetooth? It could, using the same pairing, but it's a
-   bigger change to setup.
-2. **Expo or fully native for the apps?** Expo keeps one codebase with the web
+1. **Expo or fully native for the apps?** Expo keeps one codebase with the web
    and fits the planned mobile client, but background Bluetooth needs a custom
    build, not the Expo Go test app.
-3. **How long to advertise** after a paddle (battery against convenience).
-   Decide from P2 measurements.
-4. **Desktop demand.** Will people bring the tracker to a computer, or is the
-   browser route mainly a stepping stone to the app? The P3 numbers will tell.
-5. **Exact receipt format and key derivation.** Settle in P3, with a host test
-   on the tracker side like the other `*_policy` code.
+2. **How long to advertise** after a paddle (battery against convenience).
+   Decide from P3 measurements.
+3. **Desktop demand.** Will people bring the tracker to a computer, or is the
+   browser route mainly a stepping stone to the app? The P4 numbers will tell.
+4. **Exact receipt format and key derivation.** Settle in P4, with a host test
+   on the tracker side like the other `*_policy` code. The receipt key is
+   derived from the stored token hash, so a leaked hash would let someone
+   forge receipts: the worst case is a recording marked sent that never
+   arrived. Decide whether that needs a separate key.
+5. **Where the firmware signing key lives.** The audit suggests a GitHub secret
+   on a protected environment, or offline. Offline is safer but slows every
+   release, and releases happen on every merge today.
+6. **Minimum battery for an update** over Bluetooth, and whether the app should
+   only update while the tracker is charging.
