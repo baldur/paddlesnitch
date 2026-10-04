@@ -266,3 +266,82 @@ describe('chunked TRACK upload', () => {
     expect((await getDeviceSessionMotion(u.id, DEVICE, s.sessionId))!.toString('utf8')).toBe(mcsv)
   })
 })
+
+describe('compressed upload parts (?enc=zlib)', () => {
+  // The tracker compresses each 64 KB piece on its own (zlib), so an hour's
+  // paddle travels as ~1 MB instead of ~2.9 MB. The server unpacks each part on
+  // arrival and stores it exactly as an uncompressed part, so assembly, the
+  // sha256 (over the UNCOMPRESSED file) and everything after are unchanged.
+  const zlib = async () => await import('zlib')
+  const NAME = 'track_20260918_061002_imu.csv'
+
+  it('assembles zlib parts into exactly the original bytes, checked by sha256', async () => {
+    const { deflateSync } = await zlib()
+    const u = await makeUser('Squeezed')
+    const dt = await boundToken(u)
+    const sessionId = await uploadTrack(dt)
+    const csv = motionCsv(4000)
+    const sha = createHash('sha256').update(Buffer.from(csv, 'utf8')).digest('hex')
+    const parts = chunk(csv, 5)
+    for (let i = 0; i < parts.length; i++) {
+      const last = i === parts.length - 1
+      const res = await uploadSession(put(
+        `filename=${NAME}&part=${i + 1}&parts=${parts.length}&enc=zlib${last ? `&sha256=${sha}` : ''}`,
+        deflateSync(parts[i]), dt))
+      expect(res.status).toBe(last ? 201 : 202)
+    }
+    expect((await getDeviceSessionMotion(u.id, DEVICE, sessionId))!.toString('utf8')).toBe(csv)
+  })
+
+  it('compressed and uncompressed parts can be mixed (a retry may come from older firmware)', async () => {
+    const { deflateSync } = await zlib()
+    const u = await makeUser('Mixed')
+    const dt = await boundToken(u)
+    const sessionId = await uploadTrack(dt)
+    const csv = motionCsv(900)
+    const parts = chunk(csv, 3)
+    await uploadSession(put(`filename=${NAME}&part=1&parts=3&enc=zlib`, deflateSync(parts[0]), dt))
+    await uploadSession(put(`filename=${NAME}&part=2&parts=3`, parts[1], dt))
+    expect((await uploadSession(put(`filename=${NAME}&part=3&parts=3&enc=zlib`, deflateSync(parts[2]), dt))).status).toBe(201)
+    expect((await getDeviceSessionMotion(u.id, DEVICE, sessionId))!.toString('utf8')).toBe(csv)
+  })
+
+  it('a compressed track parses as a paddle', async () => {
+    const { deflateSync } = await zlib()
+    const u = await makeUser('SqueezedTrack')
+    const dt = await boundToken(u)
+    const res = await uploadSession(put(
+      'filename=track_20260918_061002.csv&part=1&parts=1&enc=zlib', deflateSync(Buffer.from(TRACK)), dt))
+    expect(res.status).toBe(201)
+    expect((await res.json()).points).toBe(3)
+  })
+
+  it('rejects a part that is not valid zlib, and stores nothing for it', async () => {
+    const u = await makeUser('Garbled')
+    const dt = await boundToken(u)
+    await uploadTrack(dt)
+    const res = await uploadSession(put(`filename=${NAME}&part=1&parts=2&enc=zlib`, Buffer.from('not zlib at all'), dt))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('bad_encoding')
+  })
+
+  it('rejects an encoding it does not know rather than storing compressed bytes as CSV', async () => {
+    const u = await makeUser('Brotli')
+    const dt = await boundToken(u)
+    await uploadTrack(dt)
+    const res = await uploadSession(put(`filename=${NAME}&part=1&parts=2&enc=br`, Buffer.from('x'), dt))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('bad_encoding')
+  })
+
+  it('applies the size limit to the unpacked part, so a tiny bomb cannot expand past it', async () => {
+    const { deflateSync } = await zlib()
+    const u = await makeUser('Bomb')
+    const dt = await boundToken(u)
+    await uploadTrack(dt)
+    const bomb = deflateSync(Buffer.alloc(5 * 1024 * 1024, 0x30))   // 5 MB of '0' → a few KB
+    expect(bomb.length).toBeLessThan(64 * 1024)
+    const res = await uploadSession(put(`filename=${NAME}&part=1&parts=2&enc=zlib`, bomb, dt))
+    expect(res.status).toBe(413)
+  })
+})
