@@ -148,6 +148,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`sitemap.md`](docs/features/sitemap.md) | ✅ current map | Every route, as of the 2026-09 navigation clean-up |
 | [`security-audit-2026-09.md`](docs/features/security-audit-2026-09.md) | 🔍 audit, 2026-09-29 | Security, privacy, resilience (firmware, web, live AWS). Fixes: PRs #303–#320. The rest: 15 decisions with trade-offs. Read "Read this first" before handing trackers to testers |
 | [`behavioural-analytics.md`](docs/features/behavioural-analytics.md) | 🚧 spec, not built | Consent-gated struggle signals |
+| [`tracker-bluetooth-sync.md`](docs/features/tracker-bluetooth-sync.md) | 📋 spec, not built | Recordings home by phone/browser over Bluetooth, compression first, game-style setup |
 
 ### Tech Stack
 
