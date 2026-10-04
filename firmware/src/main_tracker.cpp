@@ -645,6 +645,9 @@ static void enterScreen(Screen s)
 // See docs/device-states-spec.md.
 static void screenTap()
 {
+#if BLE_ENABLED
+    if (bleConfirmPending(nullptr)) return;   // a tap never answers a pairing
+#endif
     if (tutRunning) { tutState = tutorialAdvance(tutState, TutEvent::Tap); return; }
     // A tap on a confirmation does NOTHING now. Deliberately not "cancel"
     // either: double-tap is how you back out of everything else, and making a
@@ -670,6 +673,9 @@ static void screenTap()
 
 static void screenDoubleTap()
 {
+#if BLE_ENABLED
+    if (bleConfirmPending(nullptr)) { bleConfirmAnswer(false); return; }   // 2x = refuse
+#endif
     if (tutRunning) { tutState = tutorialAdvance(tutState, TutEvent::DoubleTap); return; }
     if (confirmReset) { confirmReset = false; return; }   // 2x = cancel
     // No exceptions, no "unless" -- that is the entire value of the gesture. A
@@ -691,6 +697,9 @@ static void screenDoubleTap()
 
 static void screenHold()
 {
+#if BLE_ENABLED
+    if (bleConfirmPending(nullptr)) { bleConfirmAnswer(true); return; }    // hold = yes
+#endif
     if (tutRunning) {
         tutState = tutorialAdvance(tutState, TutEvent::Hold);
         if (tutorialComplete(tutState)) {
@@ -890,6 +899,9 @@ static void handleSerialCommand()
             if      (!strncmp(buf, "LS", 2))   storageList();
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
 #if BENCH_TOOLS
+#if BLE_ENABLED
+            else if (!strncmp(buf, "BLEFORGET", 9)) bleForgetAll();
+#endif
             else if (!strncmp(buf, "PUTFILE ", 8)) {
                 char name[64]; unsigned long size = 0;
                 if (sscanf(buf + 8, "%63s %lu", name, &size) == 2 && size > 0) storagePut(name, size);
@@ -1422,7 +1434,16 @@ void loop()
         // Tutorial sits AFTER onboarding and BEFORE the menus: during setup the
         // user is looking at their phone, not the device, and the lesson is
         // about driving menus that do not exist yet.
-        u.state       = !netHasWifi()   ? AppState::Setup
+        // A Bluetooth pairing outranks everything: it times out in 25 s.
+        uint32_t pairPin = 0;
+#if BLE_ENABLED
+        const bool pairing = bleConfirmPending(&pairPin);
+#else
+        const bool pairing = false;
+#endif
+        u.pairPin     = pairPin;
+        u.state       = pairing         ? AppState::PairConfirm
+                      : !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
                       : tutRunning       ? AppState::Tutorial
                       : confirmReset     ? AppState::ResetConfirm

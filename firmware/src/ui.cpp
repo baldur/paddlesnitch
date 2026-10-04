@@ -460,6 +460,26 @@ static void drawResetConfirm(const UiState &s)
     display.sendBuffer();
 }
 
+// Bluetooth pairing: the same 6 digits are on the phone or computer. Hold is
+// yes, like every other confirmation; double-tap is no; doing nothing is no
+// after 25 s.
+static void drawPairConfirm(const UiState &s)
+{
+    display.clearBuffer();
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 12, "Pair over Bluetooth?");
+    display.drawHLine(0, 15, 128);
+    char pin[8];
+    snprintf(pin, sizeof(pin), "%06lu", (unsigned long)s.pairPin);
+    display.setFont(u8g2_font_logisoso20_tr);
+    display.drawStr((128 - display.getStrWidth(pin)) / 2, 41, pin);
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 54, "HOLD if it matches");
+    display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 63, "double-tap to refuse");
+    display.sendBuffer();
+}
+
 // Linking: the code is the only thing that matters, so it gets the whole panel.
 static void drawLinking(const UiState &s)
 {
@@ -735,6 +755,7 @@ void uiDraw(const UiState &s)
     case AppState::Nerd:          drawNerd(s);          break;
     case AppState::DeleteConfirm: drawDeleteConfirm(s); break;
     case AppState::ResetConfirm:  drawResetConfirm(s);  break;
+    case AppState::PairConfirm:   drawPairConfirm(s);   break;
     case AppState::Setup:
     default:                      drawOnboarding(s);    break;
     }
