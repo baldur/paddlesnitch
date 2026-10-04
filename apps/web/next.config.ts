@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Don't let `next dev` write AGENTS.md + CLAUDE.md here when an AI agent runs
+  // it (it re-creates them if deleted). The root CLAUDE.md covers this repo.
+  agentRules: false,
   // Workspace packages ship untranspiled TypeScript — Next must transpile them.
   transpilePackages: ['@paddlesnitch/analysis', '@paddlesnitch/api', '@paddlesnitch/core', '@paddlesnitch/timing', '@paddlesnitch/ui'],
   // Bundle @aws-sdk into server chunks (Turbopack otherwise externalizes it,
