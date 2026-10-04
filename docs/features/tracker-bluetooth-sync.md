@@ -74,6 +74,23 @@ A web page only transfers **while it is open and on screen**. Automatic sync in
 the background needs a native app. Order: prove it on the web, then build the
 Android app, then the iPhone app if testers need it.
 
+**Android in Chrome is the main test platform until there is an app** (the
+owner's decision, 2026-10-04: no app until the browser route works). What to
+expect and check in P4:
+
+- **The page must stay open with the screen on.** A transfer pauses if the
+  phone locks or the user switches apps, and resumes at the next sync. The page
+  keeps the screen awake while syncing (Screen Wake Lock API).
+- **Every connection starts with a tap** (CONNECT, SYNC): Chrome only searches
+  for devices after a user gesture, and shows its own list of nearby trackers.
+- **Permissions:** Android asks for "Nearby devices" (location on Android 11
+  and older) the first time. The page explains why before asking.
+- **Pairing:** number comparison should appear as Android's normal pairing
+  prompt. Confirm this early: if it misbehaves, the pairing design changes.
+- **Browser check:** target Chrome. Samsung Internet and Edge share the engine
+  but may not support Bluetooth; the page detects missing support and says
+  "Open this in Chrome".
+
 ---
 
 ## User journeys
