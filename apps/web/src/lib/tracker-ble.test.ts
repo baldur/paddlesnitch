@@ -55,15 +55,18 @@ describe('readWhenPaired', () => {
   it('keeps reading while pairing finishes, instead of failing on the first refusal', async () => {
     let n = 0
     const read = async () => { if (++n < 3) throw new Error('insufficient authentication'); return '{"v":1,"paired":true}' }
-    expect(await readWhenPaired(read, fast)).toBe(true)
+    expect((await readWhenPaired(read, fast)).paired).toBe(true)
     expect(n).toBe(3)
   })
 
   it('gives up after the last try (pairing refused or timed out)', async () => {
     let n = 0
     const read = async () => { n++; throw new Error('refused') }
-    expect(await readWhenPaired(read, fast)).toBe(false)
+    const r = await readWhenPaired(read, fast)
+    expect(r.paired).toBe(false)
     expect(n).toBe(4)
+    // What the browser said, for the test page to show.
+    expect(r.lastError).toBe('Error: refused')
   })
 
   // Found on Android: a read that never answers (neither value nor error) left
@@ -71,7 +74,7 @@ describe('readWhenPaired', () => {
   it('moves on from a read that never answers, instead of hanging', async () => {
     let n = 0
     const read = () => { n++; return n < 3 ? new Promise<string>(() => {}) : Promise.resolve('{"v":1,"paired":true}') }
-    expect(await readWhenPaired(read, { tries: 4, delayMs: 0, readTimeoutMs: 20 })).toBe(true)
+    expect((await readWhenPaired(read, { tries: 4, delayMs: 0, readTimeoutMs: 20 })).paired).toBe(true)
     expect(n).toBe(3)
   })
 
