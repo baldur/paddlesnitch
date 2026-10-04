@@ -1,8 +1,8 @@
 'use client'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
-import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, isPairedReply, ownership, browserBluetooth, type TrackerAbout } from '@/lib/tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, readWhenPaired, ownership, browserBluetooth, type TrackerAbout } from '@/lib/tracker-ble'
 
 // Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 step 1).
 // Linked from nowhere yet: it connects to a nearby tracker and reads its
@@ -26,6 +26,14 @@ export default function BluetoothTestPage() {
   const [error, setError] = useState('')
   const [disconnect, setDisconnect] = useState<(() => void) | null>(null)
   const [paired, setPaired] = useState(false)
+  // The open connection, so leaving the page can drop it. A tab left connected
+  // stops the tracker advertising, which hid it from a phone during testing.
+  const drop = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    const leave = () => drop.current?.()
+    window.addEventListener('pagehide', leave)
+    return () => { window.removeEventListener('pagehide', leave); leave() }
+  }, [])
   const [pairing, setPairing] = useState(false)
 
   useEffect(() => {
@@ -58,7 +66,8 @@ export default function BluetoothTestPage() {
       const readPaired = async () =>
         new TextDecoder().decode(await (await svc.getCharacteristic(TRACKER_PAIRED)).readValue())
       setFound({ name: device.name ?? 'Tracker', about, readPaired })
-      setDisconnect(() => () => { device.gatt?.disconnect(); setFound(null); setDisconnect(null) })
+      drop.current = () => device.gatt?.disconnect()
+      setDisconnect(() => () => { device.gatt?.disconnect(); drop.current = null; setFound(null); setDisconnect(null) })
     } catch (e) {
       // Closing the browser's list without choosing is not an error.
       if ((e as { name?: string }).name === 'NotFoundError') return
@@ -71,14 +80,11 @@ export default function BluetoothTestPage() {
   async function pair() {
     if (!found) return
     setPairing(true); setError('')
-    try {
-      if (!isPairedReply(await found.readPaired())) throw new Error('unexpected reply')
-      setPaired(true)
-    } catch {
-      setError("Couldn't pair. Check the number on the tracker matches, hold its button within 25 seconds, then try again.")
-    } finally {
-      setPairing(false)
-    }
+    // Keeps trying while the phone or computer and the tracker finish
+    // pairing: the first read is refused before the link is encrypted.
+    if (await readWhenPaired(found.readPaired)) setPaired(true)
+    else setError("Couldn't pair. Check the number on the tracker matches, hold its button within 25 seconds, then try again.")
+    setPairing(false)
   }
 
   return (
@@ -131,7 +137,12 @@ export default function BluetoothTestPage() {
               <dt className="text-muted">Pairing</dt>
               <dd className={paired ? 'text-green' : 'text-fg'}>{paired ? 'Paired' : 'Not paired'}</dd>
             </dl>
-            {!paired && (
+            {pairing && (
+              <p className="text-sm text-fg" role="status">
+                Check the number on the tracker matches the one on this screen, then hold the tracker&apos;s button.
+              </p>
+            )}
+            {!paired && !pairing && (
               <p className="text-xs text-muted">
                 Pairing shows the same 6-digit number here and on the tracker. Hold the tracker&apos;s button if they match.
               </p>

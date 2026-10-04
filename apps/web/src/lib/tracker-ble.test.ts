@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, ownership, isPairedReply } from './tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT } from './tracker-ble'
 
 const header = readFileSync(path.resolve(__dirname, '../../../../firmware/include/ble_about.h'), 'utf8')
 
@@ -42,5 +42,31 @@ describe('tracker Bluetooth contract', () => {
     expect(ownership({ id: '435AC17C', linked: true }, mine)).toBe('yours')
     expect(ownership({ id: '435C09C8', linked: true }, mine)).toBe('elsewhere')
     expect(ownership({ id: '435C09C8', linked: false }, mine)).toBe('unlinked')
+  })
+})
+
+describe('readWhenPaired', () => {
+  // Android Chrome refuses the first protected read at once, while Android's
+  // pairing carries on in the background and finishes a few seconds later. The
+  // tracker log showed it paired ("2 pairings stored") while the page had
+  // already said "Couldn't pair".
+  const fast = { tries: 4, delayMs: 0 }
+
+  it('keeps reading while pairing finishes, instead of failing on the first refusal', async () => {
+    let n = 0
+    const read = async () => { if (++n < 3) throw new Error('insufficient authentication'); return '{"v":1,"paired":true}' }
+    expect(await readWhenPaired(read, fast)).toBe(true)
+    expect(n).toBe(3)
+  })
+
+  it('gives up after the last try (pairing refused or timed out)', async () => {
+    let n = 0
+    const read = async () => { n++; throw new Error('refused') }
+    expect(await readWhenPaired(read, fast)).toBe(false)
+    expect(n).toBe(4)
+  })
+
+  it('waits about 30 s by default, the most Bluetooth allows for pairing', () => {
+    expect(PAIRING_WAIT.tries * PAIRING_WAIT.delayMs).toBeGreaterThanOrEqual(30000)
   })
 })

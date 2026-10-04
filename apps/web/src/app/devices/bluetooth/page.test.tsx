@@ -6,6 +6,11 @@ import { createRoot, type Root } from 'react-dom/client'
 vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header> }))
 
 import BluetoothTestPage from './page'
+import { PAIRING_WAIT } from '@/lib/tracker-ble'
+
+// The real wait is ~30 s; tests don't sit through it.
+PAIRING_WAIT.tries = 3
+PAIRING_WAIT.delayMs = 0
 
 let container: HTMLDivElement
 let root: Root
@@ -93,12 +98,32 @@ describe('Bluetooth test page', () => {
     expect(pairButton()).toBeUndefined()
   })
 
+  it('waits for pairing to finish instead of failing on the first refused read (Android Chrome)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })))
+    let n = 0
+    fakeBluetooth(ABOUT, () => { if (++n < 2) throw Object.assign(new Error('auth'), { name: 'NetworkError' }); return '{"v":1,"paired":true}' })
+    await connected()
+    await act(async () => { pairButton()!.click() })
+    for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(container.textContent).toContain('Paired')
+    expect(container.textContent).not.toContain("Couldn't pair")
+  })
+
+  it('drops the connection when the page is left, so the tracker advertises again', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })))
+    const bt = fakeBluetooth(ABOUT)
+    await connected()
+    await act(async () => { root.unmount() })
+    root = undefined as unknown as Root
+    expect(bt.disconnect).toHaveBeenCalled()
+  })
+
   it('explains what to do when pairing is refused or times out', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })))
     fakeBluetooth(ABOUT, () => { throw Object.assign(new Error('auth'), { name: 'NetworkError' }) })
     await connected()
     await act(async () => { pairButton()!.click() })
-    await act(async () => { await Promise.resolve() })
+    for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(container.textContent).toContain("Couldn't pair")
     expect(pairButton()).toBeDefined()   // can try again
   })
