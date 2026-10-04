@@ -2,13 +2,13 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
-import { TRACKER_SERVICE, TRACKER_ABOUT, parseAbout, ownership, browserBluetooth, type TrackerAbout } from '@/lib/tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, isPairedReply, ownership, browserBluetooth, type TrackerAbout } from '@/lib/tracker-ble'
 
 // Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 step 1).
 // Linked from nowhere yet: it connects to a nearby tracker and reads its
 // details, nothing more. Only bench-build trackers have Bluetooth so far.
 
-type Found = { name: string; about: TrackerAbout }
+type Found = { name: string; about: TrackerAbout; readPaired: () => Promise<string> }
 
 const OWNER_TEXT = {
   yours: 'On your account',
@@ -25,6 +25,8 @@ export default function BluetoothTestPage() {
   const [found, setFound] = useState<Found | null>(null)
   const [error, setError] = useState('')
   const [disconnect, setDisconnect] = useState<(() => void) | null>(null)
+  const [paired, setPaired] = useState(false)
+  const [pairing, setPairing] = useState(false)
 
   useEffect(() => {
     setSupported(browserBluetooth() !== null)
@@ -37,7 +39,7 @@ export default function BluetoothTestPage() {
   async function connect() {
     const bt = browserBluetooth()
     if (!bt) return
-    setBusy(true); setError(''); setFound(null)
+    setBusy(true); setError(''); setFound(null); setPaired(false)
     try {
       // The browser shows its own list, filtered to paddlesnitch trackers.
       const device = await bt.requestDevice({ filters: [{ services: [TRACKER_SERVICE] }] })
@@ -51,7 +53,11 @@ export default function BluetoothTestPage() {
         setError("Couldn't read this tracker. Its firmware may be too old for Bluetooth.")
         return
       }
-      setFound({ name: device.name ?? 'Tracker', about })
+      // Reading this item is refused until the connection is paired, and the
+      // refusal is what makes the browser or phone start pairing.
+      const readPaired = async () =>
+        new TextDecoder().decode(await (await svc.getCharacteristic(TRACKER_PAIRED)).readValue())
+      setFound({ name: device.name ?? 'Tracker', about, readPaired })
       setDisconnect(() => () => { device.gatt?.disconnect(); setFound(null); setDisconnect(null) })
     } catch (e) {
       // Closing the browser's list without choosing is not an error.
@@ -59,6 +65,19 @@ export default function BluetoothTestPage() {
       setError("Couldn't connect to the tracker. Make sure it's switched on and close by, then try again.")
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function pair() {
+    if (!found) return
+    setPairing(true); setError('')
+    try {
+      if (!isPairedReply(await found.readPaired())) throw new Error('unexpected reply')
+      setPaired(true)
+    } catch {
+      setError("Couldn't pair. Check the number on the tracker matches, hold its button within 25 seconds, then try again.")
+    } finally {
+      setPairing(false)
     }
   }
 
@@ -109,8 +128,21 @@ export default function BluetoothTestPage() {
                 {found.about.waiting === null ? 'Still counting' : `${found.about.waiting} waiting to upload`}
               </dd>
               <dt className="text-muted">Account</dt><dd className="text-fg">{OWNER_TEXT[ownership(found.about, mine)]}</dd>
+              <dt className="text-muted">Pairing</dt>
+              <dd className={paired ? 'text-green' : 'text-fg'}>{paired ? 'Paired' : 'Not paired'}</dd>
             </dl>
-            <div>
+            {!paired && (
+              <p className="text-xs text-muted">
+                Pairing shows the same 6-digit number here and on the tracker. Hold the tracker&apos;s button if they match.
+              </p>
+            )}
+            <div className="flex gap-2 flex-wrap">
+              {!paired && (
+                <button type="button" onClick={pair} disabled={pairing}
+                  className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
+                  {pairing ? 'PAIRING…' : 'PAIR'}
+                </button>
+              )}
               <button type="button" onClick={() => disconnect?.()}
                 className="px-4 py-2 border border-border text-sm tracking-widest text-fg">
                 DISCONNECT

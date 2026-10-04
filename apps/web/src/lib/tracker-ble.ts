@@ -4,6 +4,8 @@
 
 export const TRACKER_SERVICE = '04dd0a01-9cd1-403e-a461-0b4af515a1b4'
 export const TRACKER_ABOUT = '04dd0a02-9cd1-403e-a461-0b4af515a1b4'
+/** Readable only over a paired connection; reading it is what starts pairing. */
+export const TRACKER_PAIRED = '04dd0a03-9cd1-403e-a461-0b4af515a1b4'
 
 export type TrackerAbout = {
   id: string
@@ -26,6 +28,14 @@ export function parseAbout(raw: string): TrackerAbout | null {
   if (typeof a.fw !== 'string' || typeof a.model !== 'string' || typeof a.linked !== 'boolean') return null
   if (a.waiting !== null && typeof a.waiting !== 'number') return null
   return { id: a.id, firmware: a.fw, model: a.model, waiting: a.waiting as number | null, linked: a.linked }
+}
+
+/** The reply to reading TRACKER_PAIRED, which only a paired connection gets. */
+export function isPairedReply(raw: string): boolean {
+  try {
+    const o = JSON.parse(raw) as { v?: unknown; paired?: unknown }
+    return o.v === 1 && o.paired === true
+  } catch { return false }
 }
 
 /** Whose tracker this is, as far as the signed-in person can tell. */

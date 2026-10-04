@@ -11,6 +11,10 @@
 // setup hotspot's name). Recordings will need a paired connection.
 #define PS_BLE_SERVICE_UUID "04dd0a01-9cd1-403e-a461-0b4af515a1b4"
 #define PS_BLE_ABOUT_UUID   "04dd0a02-9cd1-403e-a461-0b4af515a1b4"
+// Readable only over a paired, encrypted connection. Reading it is how the page
+// asks for pairing: the browser/phone starts it when the read is refused.
+#define PS_BLE_PAIRED_UUID  "04dd0a03-9cd1-403e-a461-0b4af515a1b4"
+#define PS_BLE_PAIRED_JSON  "{\"v\":1,\"paired\":true}"
 
 // About, as a small JSON object. `waiting` is the number of recordings not yet
 // uploaded, or -1 while the tracker hasn't counted them yet (sent as null).

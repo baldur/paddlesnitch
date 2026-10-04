@@ -26,8 +26,11 @@ async function mount() {
 
 const ABOUT = '{"v":1,"id":"435AC17C","fw":"0.18.0","model":"lilygo-tbeam-s3-supreme","waiting":2,"linked":true}'
 
-/** A browser Bluetooth that "finds" one tracker sending `about`. */
-function fakeBluetooth(about: string) {
+const enc = (s: string) => new DataView(new TextEncoder().encode(s).buffer)
+
+/** A browser Bluetooth that "finds" one tracker sending `about`. Reading the
+ *  paired item gives `pairedRead()` (throw to mimic a refused pairing). */
+function fakeBluetooth(about: string, pairedRead: () => string = () => '{"v":1,"paired":true}') {
   const disconnect = vi.fn()
   const requestDevice = vi.fn(async () => ({
     name: 'PT-17C',
@@ -36,7 +39,9 @@ function fakeBluetooth(about: string) {
       disconnect,
       connect: async () => ({
         getPrimaryService: async () => ({
-          getCharacteristic: async () => ({ readValue: async () => new DataView(new TextEncoder().encode(about).buffer) }),
+          getCharacteristic: async (uuid: string) => ({
+            readValue: async () => enc(uuid.startsWith('04dd0a03') ? pairedRead() : about),
+          }),
         }),
       }),
     },
@@ -67,6 +72,35 @@ describe('Bluetooth test page', () => {
     expect(container.textContent).toContain('0.18.0')
     expect(container.textContent).toContain('2 waiting to upload')
     expect(container.textContent).toContain('On your account')
+  })
+
+  async function connected() {
+    await mount()
+    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'CONNECT')!
+    await act(async () => { connect.click() })
+    await act(async () => { await Promise.resolve() })
+  }
+  const pairButton = () => [...container.querySelectorAll('button')].find(b => b.textContent === 'PAIR')
+
+  it('pairs by reading the item only a paired connection may read', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [{ deviceId: '435AC17C' }] }) })))
+    fakeBluetooth(ABOUT)
+    await connected()
+    expect(container.textContent).toContain('the same 6-digit number')
+    await act(async () => { pairButton()!.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(container.textContent).toContain('Paired')
+    expect(pairButton()).toBeUndefined()
+  })
+
+  it('explains what to do when pairing is refused or times out', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })))
+    fakeBluetooth(ABOUT, () => { throw Object.assign(new Error('auth'), { name: 'NetworkError' }) })
+    await connected()
+    await act(async () => { pairButton()!.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(container.textContent).toContain("Couldn't pair")
+    expect(pairButton()).toBeDefined()   // can try again
   })
 
   it('says plainly when what it found is not a tracker it understands', async () => {
