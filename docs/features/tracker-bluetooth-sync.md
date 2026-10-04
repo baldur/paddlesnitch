@@ -21,10 +21,11 @@ This adds a second way home: **the tracker hands its recordings to its owner's
 phone or browser over Bluetooth, and that uploads them.** WiFi stays. Both run
 side by side, and whichever gets there first wins.
 
-It also makes first-time setup a guided path: connect WiFi and link the tracker
-(as today, or over Bluetooth for someone with no WiFi), learn the button through
-a short game, then choose how paddles should get home. Trackers already in use
-get Bluetooth by a normal update and switch it on in Settings.
+It also makes first-time setup a guided path: learn the button through a short
+game, choose WiFi, Bluetooth or both, get linked to paddlesnitch.com in one
+short step, and finish on the current firmware. Either connection can be added
+or changed later in Settings. Trackers already in use get Bluetooth by a normal
+update and switch it on there.
 
 Without WiFi, a tracker also needs another way to get **firmware updates**. The
 phone or browser can carry those too, but only once firmware is signed: see
@@ -60,7 +61,7 @@ included.
 
 Bluetooth from a web page ("Web Bluetooth") works in some browsers and not
 others. This is from general knowledge, not checked against 2026 releases;
-**confirm before P3.**
+**confirm before P4.**
 
 | Where | Bluetooth from paddlesnitch.com | Route |
 |---|---|---|
@@ -79,28 +80,26 @@ Android app, then the iPhone app if testers need it.
 
 ### J1. First-time setup
 
+The order: **learn the button, choose how it connects, get linked, get
+current.** The lesson needs no network, and the choice that follows needs the
+button, so the lesson comes first.
+
 ```mermaid
 flowchart TD
-    A([switch on]) --> B["(a) WiFi + link as today,<br/>or over Bluetooth (J10)"]
-    B --> C["(b) Learn the tracker<br/>short game on the screen"]
-    C --> D{"(c) How should your<br/>paddles get home?"}
-    D -- "WiFi only" --> W([done: uploads at home])
-    D -- "Phone app" --> P["pair with phone<br/>(J3)"]
-    D -- "This computer" --> Q["pair with browser<br/>(J2)"]
-    P --> E([done])
-    Q --> E
+    A([switch on]) --> L["1. Learn the tracker<br/>short game, hold to continue"]
+    L --> C{"2. How should it connect?"}
+    C -- "WiFi" --> W["3. Setup hotspot + WiFi<br/>then link QR / code<br/>(as today)"]
+    C -- "Bluetooth + WiFi" --> B["3. Pair with paddlesnitch.com<br/>link + WiFi details<br/>in one page"]
+    C -- "Bluetooth only<br/>(once P5 ships)" --> O["3. Pair with paddlesnitch.com<br/>link"]
+    W --> U["4. Get current<br/>update if one is waiting"]
+    B --> U
+    O --> U
+    U --> D([ready: Pick menu])
 ```
 
-**(a) WiFi and linking, or Bluetooth.** The WiFi path is unchanged: setup
-hotspot, join QR, choose network, then the link QR or code entered on
-paddlesnitch.com (see [`device-screen-map.md`](device-screen-map.md) §
-Onboarding). The setup screen also says "or set up from your phone or computer",
-because the tracker advertises over Bluetooth at the same time. Whichever the
-paddler uses first wins, so a paddler with WiFi sees no extra step. See J10.
-
-**(b) Learn the tracker, game-style.** The current gesture lesson already runs
-here (it starts once the tracker is linked). It teaches tap, hold
-and double-tap. Extend it into a short game:
+**1. Learn the tracker.** The gesture lesson moves to the very start, before
+any network setup (today it runs only once the tracker has WiFi and is linked).
+It becomes a short game:
 
 - **Level 1: the button.** Today's lesson: tap to move, hold to select,
   double-tap to go back.
@@ -109,22 +108,58 @@ and double-tap. Extend it into a short game:
   explains that recording starts by itself once the tracker has GPS.
 - **Level 3: getting paddles home.** A practice Sync screen: what "on tracker /
   uploaded / waiting" mean, and tap to sync now.
-- Progress dots at the top ("level 2 of 3"), a short "nice" between levels, and
-  nothing scored or timed. Wrong gestures flash the prompt rather than failing
-  you, as now.
-- Skippable (double-tap out of level 1), and replayable from
-  Settings → How to use, as now.
+- Progress dots ("level 2 of 3"), a short "nice" between levels, nothing scored
+  or timed. Wrong gestures flash the prompt rather than failing you, as now.
+- The last screen is **Continue: hold**, which is the gesture just learned,
+  used for real.
+- Replayable from Settings → How to use, as now. A factory reset starts here
+  again, as it does today.
 
-**(c) How should your paddles get home?** A new chooser on the tracker:
+**2. How should it connect?** A chooser on the tracker, after the lesson:
 
-- **WiFi only.** Today's behaviour. Done.
-- **Phone app.** Shows "Open the paddlesnitch app" and starts pairing (J3).
-  Only offered once an app exists. Until then this row isn't shown.
-- **This computer.** Shows "Open paddlesnitch.com/devices on this computer" and
-  starts pairing (J2).
+| Choice | Best for | Needs |
+|---|---|---|
+| **WiFi** | WiFi at home; any phone, including iPhone without the app | A phone to join the setup hotspot |
+| **Bluetooth + WiFi** | Most people: quickest setup, and paddles come home either way | Chrome or Edge (desktop or Android), or the app |
+| **Bluetooth only** | No WiFi anywhere, or none wanted | The same; **only offered once Bluetooth updates exist (P5)** |
 
-The choice isn't final. Settings → Bluetooth lets you add or remove a phone or
-browser later, and WiFi keeps working whatever you pick.
+Bluetooth only waits for P5 because a tracker with no WiFi and no Bluetooth
+updates could only ever be updated by cable. Until then the chooser shows two
+rows.
+
+**3. Link to paddlesnitch.com quickly.** This is the step people abandon, so
+each route keeps it short:
+
+- **WiFi:** today's flow, unchanged. Setup hotspot, join QR, choose network,
+  then the full-screen link QR (scan → /devices with the code filled in) or
+  type the 6 characters.
+- **Bluetooth + WiFi:** the tracker shows "Go to paddlesnitch.com/devices on
+  this computer or phone". There, signed in:
+  1. **ADD A TRACKER → SET UP OVER BLUETOOTH**, pick `PT-xxx` from the
+     browser's list.
+  2. Both show a 6-digit number; **hold** on the tracker to confirm.
+  3. The tracker is **linked** at once (see "Linking over Bluetooth"). No code
+     to type and no timer.
+  4. The same page asks for the **WiFi name and password** and sends them over
+     the encrypted Bluetooth connection. **No setup hotspot, no captive portal.**
+     The tracker tries them and the page shows whether they worked.
+- **Bluetooth only:** steps 1–3, without the WiFi details.
+
+**4. Get current.** A tracker can sit in a box for months, so setup ends by
+bringing it up to date:
+
+- **WiFi:** the tracker checks for an update as part of its first sync, as it
+  does on every sync.
+- **Bluetooth:** the page compares the tracker's version with the current one
+  and, if there's an update, offers **UPDATE NOW** before saying "Ready". It
+  takes a minute or two with the page open. It can be skipped; the next sync
+  offers it again.
+
+**Changing it later.** Settings has a row each for **WiFi** and **Bluetooth**.
+Either can be added, changed or turned off, so someone who chose Bluetooth only
+can add WiFi later, and the other way round. The tracker won't let both be
+turned off, because then nothing could ever reach it. Trackers in use today get
+the Bluetooth row by an update (J9).
 
 ### J2. Pair with a browser (Chrome or Edge, desktop or Android)
 
@@ -207,25 +242,14 @@ normal way: an over-the-air update on its next sync.
 Turning Bluetooth on does not repeat the setup lesson; the lesson's new levels
 are in Settings → How to use for anyone curious.
 
-Trackers set up from new (J1) have Bluetooth on if (c) chose a phone or
-computer, and off if it chose WiFi only. Settings → Bluetooth changes it either
-way.
+Trackers set up from new (J1) have Bluetooth on if step 2 chose a Bluetooth
+option, and off if it chose WiFi. Settings → Bluetooth changes it either way.
 
-### J10. Set up without WiFi (Bluetooth linking)
+### J10. Set up without WiFi
 
-For a paddler with no WiFi, or who would rather not use the setup hotspot.
-
-1. The paddler signs in on paddlesnitch.com (or the app) and presses **ADD A
-   TRACKER → SET UP OVER BLUETOOTH**.
-2. The browser lists nearby trackers. The paddler picks theirs, and both show a
-   6-digit number. **Hold** on the tracker to confirm.
-3. The tracker is linked to the account. Same result as typing the code today,
-   without the code and its timer.
-4. On to (b), the lesson, then (c), with Phone or This computer chosen already.
-   WiFi can still be added later in Settings → Network.
-
-How linking works without the tracker reaching the server is under "Linking
-over Bluetooth" below.
+Now part of J1: choose **Bluetooth only** (once P5 ships) or **Bluetooth +
+WiFi** at step 2. How the tracker is linked without reaching the server is under
+"Linking over Bluetooth" below.
 
 ### J11. Update a tracker without WiFi
 
@@ -282,7 +306,7 @@ The tracker offers one Bluetooth service:
 | **Read** | one recording, from an offset, in compressed pieces; resumable |
 | **Done** | the phone or browser reports the server's receipt for a recording |
 
-Expected speed, from general knowledge, **to be measured in P3**: a native
+Expected speed, from general knowledge, **to be measured in P4**: a native
 app 50–150 KB/s, a web page 10–40 KB/s. With compression an hour's paddle is
 ~1 MB, so roughly 10–20 s from an app and 25 s to 2 minutes from a web page.
 
@@ -339,6 +363,24 @@ never lets it out:
 What proves the tracker belongs to this person is physical: pairing needs a
 hold on the tracker in their hand. That's the same trust as today, where the
 code is read off the tracker's screen.
+
+### WiFi details over Bluetooth (J1 step 3)
+
+With **Bluetooth + WiFi**, the browser sends the WiFi name and password over
+the paired, encrypted connection, so the setup hotspot isn't needed. This is
+the same idea as the open "Improv WiFi" standard; use it if it fits, or a small
+item on the tracker's own service.
+
+- **Only after pairing.** The WiFi item can't be written on an unpaired
+  connection.
+- **The tracker tries the network and reports back:** joined, wrong password,
+  or network not found. The page shows the result and lets the paddler fix it,
+  instead of today's reboot-and-hope.
+- **The same rules as the setup page:** no blank password unless the network
+  is open, and the "has worked once" mark only once it has really joined (the
+  0.16.4 fix).
+- **The setup hotspot stays** for the WiFi choice, and for iPhone users without
+  the app.
 
 ### Updates without WiFi (J11)
 
@@ -409,7 +451,7 @@ connection.
 - Advertise only when recordings are waiting and the tracker isn't recording.
 - Stop advertising some hours after the last recording ends (to be chosen once
   measured), and start again at the next.
-- Measure the cost in P3. Advertising every second or so should be small
+- Measure the cost in P4. Advertising every second or so should be small
   next to the GPS, but that is an estimate, not a measurement.
 
 ### Later: working things out on the tracker
@@ -437,28 +479,29 @@ Rules for when this happens:
 | Phase | What | Proves |
 |---|---|---|
 | **P1. Compression** | Tracker compresses upload pieces; server accepts them. WiFi only. | The format, and a ~3× smaller upload today |
-| **P2. Signed firmware** | ed25519-signed manifests, checked on every update; replay protection (audit decision 5) | Updates are genuine whoever carries them. Needed before P5, worth having anyway |
-| **P3. Bluetooth + browser prototype** | Tracker Bluetooth service, pairing, **Settings → Bluetooth** (J9), a test page on /devices that lists and reads recordings | Real speed, battery cost, pairing on Chrome/Edge |
-| **P4. Upload and link from the browser** | Account upload endpoint, receipts, About details recorded (J2, J4); Bluetooth linking (J10) | End-to-end: no WiFi anywhere, paddle arrives |
-| **P5. Update from the browser** | Firmware over Bluetooth, marked good on a relayed receipt (J11) | A tracker that never sees WiFi stays current |
-| **P6. Guided setup** | The game-style lesson (J1 b) and the "how should paddles get home?" chooser (J1 c) | Setup ends with sync chosen and working |
-| **P7. Android app** | Expo app with pairing, linking, automatic sync and updates (J3, J5) | Sync with nothing pressed |
-| **P8. iPhone app** | If testers need it | Same, on iPhone |
-| **P9. On the tracker** | Live stroke rate; later maybe summaries | Matches the server on the reference capture |
+| **P2. Lesson first** | The game-style lesson moves to the start of setup (J1 step 1); WiFi setup follows as today | People learn the button before they need it. Firmware only; can ship any time |
+| **P3. Signed firmware** | ed25519-signed manifests, checked on every update; replay protection (audit decision 5) | Updates are genuine whoever carries them |
+| **P4. Bluetooth + browser prototype** | Tracker Bluetooth service, pairing, Settings rows for **WiFi** and **Bluetooth** (J9), a test page on /devices that lists and reads recordings | Real speed, battery cost, pairing on Chrome/Edge |
+| **P5. Setup, sync and updates from the browser** | The connection chooser (J1 step 2); linking and WiFi details over Bluetooth (step 3); account upload endpoint and receipts (J4); updates over Bluetooth (J11, step 4); then the **Bluetooth only** row | No WiFi anywhere: set up, paddle arrives, tracker stays current |
+| **P6. Android app** | Expo app with pairing, linking, automatic sync and updates (J3, J5) | Sync with nothing pressed |
+| **P7. iPhone app** | If testers need it | Same, on iPhone |
+| **P8. On the tracker** | Live stroke rate; later maybe summaries | Matches the server on the reference capture |
 
 **Order constraints:**
-- P2 must ship **before** P5, and before any tracker relies on Bluetooth alone.
-  A tracker with no WiFi and no Bluetooth updates can only be fixed by cable.
-- P3 reaches trackers in use by an ordinary WiFi update. That works because they
-  all have WiFi today, so ship it while that's still true.
-- P6 doesn't depend on P3–P5 except for the chooser's Phone and Computer rows,
-  so the game-style lesson can ship earlier if wanted.
+- **Updates over Bluetooth ship in the same phase as Bluetooth setup (P5),** and
+  Bluetooth only is the last thing switched on in it. No tracker should ever
+  rely on Bluetooth without a way to update over it.
+- **P3 (signing) comes before P5,** because a relayed update is only safe if
+  it's signed.
+- **P4 reaches trackers in use by an ordinary WiFi update.** That works because
+  they all have WiFi today, so ship it while that's still true.
+- **P2 has no dependencies** and is the cheapest visible improvement.
 
 ## Success measures
 
 - Time from the end of a paddle to it appearing in Paddles, by route.
 - Share of recordings arriving by WiFi, browser and app.
-- Measured transfer speed and battery cost (P3), against the estimates above.
+- Measured transfer speed and battery cost (P4), against the estimates above.
 - From testers: how many finish setup, and how many get stuck at each step.
 
 ## Open questions
@@ -467,10 +510,10 @@ Rules for when this happens:
    and fits the planned mobile client, but background Bluetooth needs a custom
    build, not the Expo Go test app.
 2. **How long to advertise** after a paddle (battery against convenience).
-   Decide from P3 measurements.
+   Decide from P4 measurements.
 3. **Desktop demand.** Will people bring the tracker to a computer, or is the
-   browser route mainly a stepping stone to the app? The P4 numbers will tell.
-4. **Exact receipt format and key derivation.** Settle in P4, with a host test
+   browser route mainly a stepping stone to the app? The P5 numbers will tell.
+4. **Exact receipt format and key derivation.** Settle in P5, with a host test
    on the tracker side like the other `*_policy` code. The receipt key is
    derived from the stored token hash, so a leaked hash would let someone
    forge receipts: the worst case is a recording marked sent that never
