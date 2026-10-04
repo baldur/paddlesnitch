@@ -349,6 +349,62 @@ void storageList()
     Serial.println("<<<END>>>");
 }
 
+#if BENCH_TOOLS
+// PUTFILE <name> <size>, then exactly <size> raw bytes: writes a file onto the
+// card, so uploads can be tested on the bench without a GPS fix. Bench build
+// only. Written to a temporary name and renamed at the end, so the uploader
+// can never pick up a half-written recording.
+void storagePut(const char *name, size_t size)
+{
+    char path[64];
+    snprintf(path, sizeof(path), "%s%s", name[0] == '/' ? "" : "/", name);
+    static const char *TMP = "/put.tmp";
+
+    SpiBusGuard bus(5000);
+    if (!bus || !ready) { Serial.println("<<<PUT ERR card busy or missing>>>"); return; }
+    SD.remove(TMP);
+    File f = SD.open(TMP, FILE_WRITE);
+    if (!f) { Serial.println("<<<PUT ERR cannot create>>>"); return; }
+    // The USB serial driver's receive queue is 256 bytes and drops what doesn't
+    // fit, so a 1 KB block arrives with holes. Enlarge it once, before the host
+    // is told to send anything (resizing replaces the queue).
+    static bool bigRx = false;
+    if (!bigRx) { Serial.setRxBufferSize(4096); bigRx = true; }
+    Serial.printf("<<<PUT READY %s %u>>>\n", path, (unsigned)size);
+
+    // One 1 KB block at a time, each acknowledged with an ACK byte (0x06), so the host never
+    // gets ahead: the USB serial link drops bytes once its small receive
+    // buffer is full (the first version lost ~80% of a 600 KB file that way).
+    uint8_t buf[1024];
+    size_t got = 0;
+    bool stalled = false;
+    while (got < size && !stalled) {
+        size_t block = size - got;
+        if (block > sizeof(buf)) block = sizeof(buf);
+        size_t have = 0;
+        uint32_t last = millis();
+        while (have < block) {
+            int n = Serial.read(buf + have, block - have);
+            if (n > 0) { have += (size_t)n; last = millis(); continue; }
+            if (millis() - last > 5000) { stalled = true; break; }
+            delay(1);
+        }
+        if (stalled || f.write(buf, block) != block) break;
+        got += block;
+        Serial.write((uint8_t)0x06);   // ACK: a byte no log line contains
+    }
+    f.close();
+    if (got != size) {
+        SD.remove(TMP);
+        Serial.printf("<<<PUT ERR got %u of %u>>>\n", (unsigned)got, (unsigned)size);
+        return;
+    }
+    SD.remove(path);
+    if (!SD.rename(TMP, path)) { Serial.println("<<<PUT ERR rename>>>"); return; }
+    Serial.printf("<<<PUT OK %s %u>>>\n", path, (unsigned)got);
+}
+#endif
+
 void storageCat(const char *name)
 {
     SpiBusGuard bus(3000);
