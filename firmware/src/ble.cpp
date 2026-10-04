@@ -119,7 +119,10 @@ void bleStart()
     // Readable only once paired: a refused read is what starts pairing.
     NimBLECharacteristic *paired = svc->createCharacteristic(PS_BLE_PAIRED_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::READ_ENC | NIMBLE_PROPERTY::READ_AUTHEN);
-    paired->setValue(PS_BLE_PAIRED_JSON);
+    // Explicit length: setValue() of a string literal copied its terminating
+    // zero byte too, and the page's JSON.parse refused it ("unexpected reply"
+    // on a phone that had paired).
+    paired->setValue((const uint8_t *)PS_BLE_PAIRED_JSON, strlen(PS_BLE_PAIRED_JSON));
     svc->start();
 
     // The service id goes in the advertisement so the page can ask the browser
