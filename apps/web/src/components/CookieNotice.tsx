@@ -26,8 +26,10 @@ export default function CookieNotice() {
 
   if (!show) return null
 
+  // bottom-16 stacks it above the floating REPORT AN ISSUE button (bottom-4,
+  // z-[1100]), which otherwise covers the OK button; z clears Leaflet's panes.
   return (
-    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 border border-border bg-bg shadow-lg p-4 text-xs text-fg flex flex-col gap-3">
+    <div className="fixed bottom-16 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[1100] border border-border bg-bg shadow-lg p-4 text-xs text-fg flex flex-col gap-3">
       <p>
         We use cookies only to keep you signed in. We count page views without cookies and
         without linking them to you. No ads, no third-party trackers.{' '}
