@@ -38,6 +38,11 @@ jobs:
     #   - comment/review events: fire only on items already carrying
     #     `claude-active`. (PRs are issues underneath, so the labels live on
     #     github.event.issue.labels for issue_comment.)
+    # Comments/reviews also need an author with a role in the repo. The repo is
+    # public, so any GitHub user could otherwise comment instructions into a
+    # run that has Bash and write access (security audit 2026-09).
+    # NB: no `#` lines inside the `if: >` block below; there they are part of
+    # the expression, not comments, and the whole workflow stops running.
     if: >
       github.actor != 'claude[bot]' &&
       github.actor != 'github-actions[bot]' &&
@@ -50,9 +55,6 @@ jobs:
           github.event_name != 'issues' && github.event_name != 'pull_request' &&
           (contains(github.event.issue.labels.*.name, 'claude-active') ||
            contains(github.event.pull_request.labels.*.name, 'claude-active')) &&
-          # Only people with a role in the repo. The repo is public, so any
-          # GitHub user could otherwise comment instructions into a run that
-          # has Bash and write access (security audit 2026-09).
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
                    github.event.comment.author_association || github.event.review.author_association)
         )
