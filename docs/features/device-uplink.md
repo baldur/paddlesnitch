@@ -1,6 +1,6 @@
 # Feature spec: hardware tracker uplink (device claim + session upload)
 
-**Status:** ✅ **shipped 2026-09 (#214/#215/#216)** — both sides. Since then the transport changed substantially: **every upload is chunked** (`?part=N&parts=M&sha256=`). See the Devices section of `CLAUDE.md` and [`device-screen-map.md`](device-screen-map.md).
+**Status:** ✅ **shipped 2026-09 (#214/#215/#216)** — both sides. Since then the transport changed substantially: **every upload is chunked** (`?part=N&parts=M&sha256=`). Since 2026-10 a part may also be **zlib-compressed** (`&enc=zlib`, sent as `application/octet-stream`): the server unpacks each part on arrival, so assembly and the sha256 (over the uncompressed file) are unchanged. See [`tracker-bluetooth-sync.md`](tracker-bluetooth-sync.md) § Compression. See the Devices section of `CLAUDE.md` and [`device-screen-map.md`](device-screen-map.md).
 **Owner:** Baldur (product). App: `apps/att` (platform-level routes, served at the root).
 **Counterpart:** the `gps_device` repo — LilyGO T-Beam S3 Supreme firmware, device
 id `5A43CA48`. This document is the contract between the two; keep them in step.

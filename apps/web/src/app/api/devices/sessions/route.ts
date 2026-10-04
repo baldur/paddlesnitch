@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { inflateSync } from 'zlib'
 import { withDeviceAuth } from '@/lib/device-route'
 import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeUploadPart, clearUploadParts, motionSidecarTrackName } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
@@ -32,6 +33,29 @@ export const POST = withDeviceAuth(async (req, auth) => {
   const ab = await req.arrayBuffer()
   if (ab.byteLength > MAX_BYTES) return NextResponse.json({ error: 'too_large' }, { status: 413 })
 
+  // ?enc=zlib: this body (one part, or a whole small file) was compressed on
+  // the tracker. Unpack it here, so what is stored and assembled is exactly
+  // what an uncompressed upload would have stored — and the sha256 stays over
+  // the uncompressed file. A query parameter, not Content-Encoding: proxies
+  // and CDNs rewrite encoding headers. Unknown values are refused rather than
+  // stored as if they were CSV. The size limit applies to the UNPACKED bytes,
+  // so a small compressed body can't expand past it.
+  // The device MUST send compressed bodies as application/octet-stream: a Lambda
+  // function URL passes a text/* body through as a string, which mangles binary.
+  const enc = url.searchParams.get('enc')
+  let body: Buffer = Buffer.from(ab)
+  if (enc !== null) {
+    if (enc !== 'zlib') return NextResponse.json({ error: 'bad_encoding' }, { status: 400 })
+    try {
+      body = inflateSync(body, { maxOutputLength: MAX_BYTES })
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+        return NextResponse.json({ error: 'too_large' }, { status: 413 })
+      }
+      return NextResponse.json({ error: 'bad_encoding' }, { status: 400 })
+    }
+  }
+
   // A motion sidecar (`track_<stamp>_imu.csv`) is not a paddle: it carries no
   // position, so parseTrace would correctly reject it. It attaches to the track
   // of the same name, which must already be uploaded.
@@ -44,7 +68,6 @@ export const POST = withDeviceAuth(async (req, auth) => {
   // a large file off its card while HTTP is in flight, and a sidecar cannot
   // attach until its track has been uploaded.
   const partRaw = url.searchParams.get('part')
-  let body: Buffer = Buffer.from(ab)
   let assembledParts = 0
   if (partRaw !== null) {
     const part = Number(partRaw)
