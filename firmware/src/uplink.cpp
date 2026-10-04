@@ -30,6 +30,72 @@ static SemaphoreHandle_t g_lock   = nullptr;
 static UplinkStatus      g_status;
 static volatile bool     g_yield   = false;   // "let go of the SD card"
 static volatile bool     g_syncNow = false;
+
+// Bluetooth setup's WiFi trial (uplinkTryWifi). Strings are only touched
+// under g_trialLock; the state is a single byte.
+static SemaphoreHandle_t  g_trialLock = nullptr;
+static String             g_trialSsid, g_trialPass;
+static volatile bool      g_trialPending = false;
+static volatile WifiTrial g_trial = WifiTrial::Idle;
+
+const char *wifiTrialName(WifiTrial t)
+{
+    switch (t) {
+    case WifiTrial::Trying:        return "trying";
+    case WifiTrial::Joined:        return "joined";
+    case WifiTrial::WrongPassword: return "wrong_password";
+    case WifiTrial::NotFound:      return "not_found";
+    case WifiTrial::Failed:        return "failed";
+    default:                       return "idle";
+    }
+}
+
+void uplinkTryWifi(const String &ssid, const String &pass)
+{
+    if (!g_trialLock) g_trialLock = xSemaphoreCreateMutex();
+    xSemaphoreTake(g_trialLock, portMAX_DELAY);
+    g_trialSsid = ssid; g_trialPass = pass;
+    xSemaphoreGive(g_trialLock);
+    g_trial = WifiTrial::Trying;
+    g_trialPending = true;
+}
+WifiTrial uplinkWifiTrial() { return g_trial; }
+
+// Runs on the uplink task, which owns the radio. Tries the new details with
+// the old ones kept in RAM, and saves the new ones only if they join.
+static void runWifiTrial()
+{
+    String ssid, pass;
+    xSemaphoreTake(g_trialLock, portMAX_DELAY);
+    ssid = g_trialSsid; pass = g_trialPass;
+    g_trialPass = "";   // don't keep the password around longer than needed
+    xSemaphoreGive(g_trialLock);
+
+    const String oldSsid = netcfg.ssid, oldPass = netcfg.pass;
+    netDisconnect();
+    netcfg.ssid = ssid; netcfg.pass = pass;          // RAM only, for this attempt
+    const bool ok = netConnect(15000, nullptr);
+    if (ok) {
+        // Restore first, so netcfgSaveWifi compares the new details with the
+        // old ones (setup_policy.h) and then marks what it saves.
+        netcfg.ssid = oldSsid; netcfg.pass = oldPass;
+        netcfgSaveWifi(ssid, pass, netcfg.baseUrl);
+        // netcfgSaveWifi clears the "has worked" mark when the network changed.
+        // It has just worked, so join again to set it -- from disconnected:
+        // netConnect returns early, without marking, if already connected.
+        netDisconnect();
+        netConnect(15000, nullptr);
+        g_trial = WifiTrial::Joined;
+        g_syncNow = true;                             // sync while we're at it
+    } else {
+        const int seen = netSsidVisible(ssid);
+        netcfg.ssid = oldSsid; netcfg.pass = oldPass; // keep what worked before
+        g_trial = seen == 1 ? WifiTrial::WrongPassword : seen == 0 ? WifiTrial::NotFound : WifiTrial::Failed;
+    }
+    DBGI("wifi", "bluetooth setup: %s", wifiTrialName(g_trial));
+    Serial.printf("WiFi trial (Bluetooth setup): %s\n", wifiTrialName(g_trial));
+    netDisconnect();
+}
 static volatile bool     g_countNow = false;  // recompute Sync-screen tallies
 static volatile bool     g_probeNow = false;  // run a card probe on THIS task
 static char              g_probeFile[64] = "";
@@ -818,6 +884,11 @@ static void uplinkTask(void *)
         // bus. If this reads at 429 KB/s like the core-1 SDPROBE does, the task
         // is not the variable and the fault is somewhere in what the sync does.
         // If it stalls, the task context IS the variable.
+        if (g_trialPending && !storageRecording()) {
+            g_trialPending = false;
+            runWifiTrial();
+        }
+
         if (g_probeNow) {
             g_probeNow = false;
             for (int phase = 0; phase < 2; phase++) {

@@ -6,6 +6,10 @@
 #include "uplink.h"
 #include "dbg.h"
 #include <NimBLEDevice.h>
+#include <ArduinoJson.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/base64.h>
+#include <esp_random.h>
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0-dev"
@@ -49,6 +53,96 @@ void bleForgetAll()
     DBGI("ble", "all pairings forgotten");
     Serial.println("BLE: all pairings forgotten");
 }
+
+// ---- LINK: the tracker makes its own token; only the hash leaves it --------
+static String s_pendingToken, s_pendingHash;
+static bool   s_committed = false;
+
+static String sha256Hex(const String &s)
+{
+    uint8_t d[32];
+    mbedtls_sha256((const uint8_t *)s.c_str(), s.length(), d, 0);
+    char hex[65];
+    for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", d[i]);
+    hex[64] = 0;
+    return String(hex);
+}
+
+// 32 random bytes, base64url without padding: the same shape as the tokens
+// the server issues when linking by code.
+static String newToken()
+{
+    uint8_t raw[32];
+    esp_fill_random(raw, sizeof(raw));
+    unsigned char b64[64];
+    size_t n = 0;
+    mbedtls_base64_encode(b64, sizeof(b64), &n, raw, sizeof(raw));
+    String t;
+    for (size_t i = 0; i < n; i++) {
+        char c = (char)b64[i];
+        if (c == '=') break;
+        t += c == '+' ? '-' : c == '/' ? '_' : c;
+    }
+    return t;
+}
+
+class LinkCallbacks : public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic *c) override
+    {
+        char json[200];
+        const char *state = s_committed ? "committed" : s_pendingHash.length() ? "pending" : "idle";
+        bleLinkJson(json, sizeof(json), netDeviceId().c_str(), state, s_pendingHash.c_str());
+        c->setValue((const uint8_t *)json, strlen(json));
+    }
+    void onWrite(NimBLECharacteristic *c) override
+    {
+        JsonDocument doc;
+        if (deserializeJson(doc, c->getValue().c_str())) return;
+        const char *op = doc["op"] | "";
+        if (!strcmp(op, "begin")) {
+            s_pendingToken = newToken();
+            s_pendingHash  = sha256Hex(s_pendingToken);
+            s_committed    = false;
+            DBGI("ble", "link: begin");
+            Serial.println("BLE: link begun (token made, hash ready)");
+        } else if (!strcmp(op, "commit")) {
+            // Only the token whose hash the page just registered. Anything else
+            // (a stale page, a second browser) leaves the tracker as it was.
+            const char *h = doc["tokenHash"] | "";
+            if (s_pendingToken.length() && s_pendingHash == h) {
+                netcfgSaveToken(s_pendingToken);
+                s_pendingToken = "";
+                s_committed = true;
+                DBGI("ble", "link: committed");
+                Serial.println("BLE: linked to an account over Bluetooth");
+            } else {
+                DBGW("ble", "link: commit refused (hash mismatch or nothing pending)");
+                Serial.println("BLE: link commit refused");
+            }
+        }
+    }
+};
+
+// ---- WIFI: try a network before saving it (the uplink task does the work) --
+class WifiCallbacks : public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic *c) override
+    {
+        char json[64];
+        bleWifiJson(json, sizeof(json), wifiTrialName(uplinkWifiTrial()));
+        c->setValue((const uint8_t *)json, strlen(json));
+    }
+    void onWrite(NimBLECharacteristic *c) override
+    {
+        JsonDocument doc;
+        if (deserializeJson(doc, c->getValue().c_str())) return;
+        const String ssid = doc["ssid"] | "";
+        const String pass = doc["pass"] | "";
+        if (!ssid.length() || ssid.length() > 32 || pass.length() > 64) return;
+        DBGI("ble", "wifi: trying a network");
+        Serial.printf("BLE: WiFi details received for \"%s\", trying them\n", ssid.c_str());
+        uplinkTryWifi(ssid, pass);
+    }
+};
 
 class ServerCallbacks : public NimBLEServerCallbacks {
     // Which phone or computer, by address, so a log can tell them apart (a
@@ -123,6 +217,11 @@ void bleStart()
     // zero byte too, and the page's JSON.parse refused it ("unexpected reply"
     // on a phone that had paired).
     paired->setValue((const uint8_t *)PS_BLE_PAIRED_JSON, strlen(PS_BLE_PAIRED_JSON));
+    // Setup items: paired and encrypted only, for reading AND writing.
+    const uint32_t SECURE_RW = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::READ_ENC | NIMBLE_PROPERTY::READ_AUTHEN |
+                               NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN;
+    svc->createCharacteristic(PS_BLE_LINK_UUID, SECURE_RW)->setCallbacks(new LinkCallbacks());
+    svc->createCharacteristic(PS_BLE_WIFI_UUID, SECURE_RW)->setCallbacks(new WifiCallbacks());
     svc->start();
 
     // The service id goes in the advertisement so the page can ask the browser

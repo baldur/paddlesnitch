@@ -68,6 +68,14 @@ struct UplinkStatus {
 void uplinkTaskStart();               // call once, after storage + net are up
 UplinkStatus uplinkGetStatus();       // thread-safe snapshot
 
+// Bluetooth setup: try a WiFi network BEFORE saving it. The uplink task (which
+// owns the radio) joins it for up to 15 s and saves it only if that works, so
+// a mistyped password never replaces details that worked.
+enum class WifiTrial : uint8_t { Idle, Trying, Joined, WrongPassword, NotFound, Failed };
+void      uplinkTryWifi(const String &ssid, const String &pass);
+WifiTrial uplinkWifiTrial();
+const char *wifiTrialName(WifiTrial t);   // idle, trying, joined, wrong_password, not_found, failed
+
 // Asks the task to stop touching the SD card and waits up to timeoutMs for it
 // to actually stop. Called before opening a recording: both cores must never
 // have the card at once.
