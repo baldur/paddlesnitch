@@ -17,10 +17,14 @@ export type TrackerAbout = {
   linked: boolean
 }
 
+// A value set from a C string can carry its terminating zero byte, which
+// JSON.parse refuses (it made a paired phone show "unexpected reply").
+const trimValue = (raw: string) => raw.replace(/[\u0000\s]+$/, '')
+
 /** About as the tracker sends it (bleAboutJson), or null if it isn't one. */
 export function parseAbout(raw: string): TrackerAbout | null {
   let o: unknown
-  try { o = JSON.parse(raw) } catch { return null }
+  try { o = JSON.parse(trimValue(raw)) } catch { return null }
   if (!o || typeof o !== 'object') return null
   const a = o as Record<string, unknown>
   if (a.v !== 1) return null
@@ -33,7 +37,7 @@ export function parseAbout(raw: string): TrackerAbout | null {
 /** The reply to reading TRACKER_PAIRED, which only a paired connection gets. */
 export function isPairedReply(raw: string): boolean {
   try {
-    const o = JSON.parse(raw) as { v?: unknown; paired?: unknown }
+    const o = JSON.parse(trimValue(raw)) as { v?: unknown; paired?: unknown }
     return o.v === 1 && o.paired === true
   } catch { return false }
 }

@@ -37,6 +37,14 @@ describe('tracker Bluetooth contract', () => {
     expect(isPairedReply('nope')).toBe(false)
   })
 
+  // Found on Android: the tracker sent the C string's terminating zero byte
+  // too, JSON.parse refused it, and the page said "unexpected reply" for a
+  // phone that had paired.
+  it('accepts a reply with a trailing zero byte', () => {
+    expect(isPairedReply('{"v":1,"paired":true}\u0000')).toBe(true)
+    expect(parseAbout('{"v":1,"id":"435AC17C","fw":"x","model":"m","waiting":0,"linked":true}\u0000')).not.toBeNull()
+  })
+
   it('says whose tracker it is from the signed-in account', () => {
     const mine = new Set(['435AC17C'])
     expect(ownership({ id: '435AC17C', linked: true }, mine)).toBe('yours')
