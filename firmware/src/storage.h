@@ -48,3 +48,6 @@ void     storageClose();
 // Both write framing markers that tools/dump.py keys on.
 void     storageList();
 void     storageCat(const char *name);
+#if BENCH_TOOLS
+void     storagePut(const char *name, size_t size);   // bench build only
+#endif

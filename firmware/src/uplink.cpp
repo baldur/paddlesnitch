@@ -10,6 +10,11 @@
 #include "root_ca.h"
 #include "ota.h"
 #include "upload_policy.h"
+#include "compress.h"
+
+#ifndef BENCH_TOOLS
+#define BENCH_TOOLS 0
+#endif
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -424,6 +429,12 @@ static UploadOutcome uploadChunked(WiFiClientSecure &client, const String &path,
 
     uint8_t *buf = (uint8_t *)ps_malloc(UPLOAD_CHUNK);
     if (!buf) { Serial.println("  no PSRAM for a chunk"); return UploadOutcome::Retry; }
+    // Compressed copy of the piece. A little larger than the piece itself so a
+    // piece that barely compresses still fits; one that doesn't fit, or grows,
+    // goes plain (sendCompressed).
+    const size_t ZBUF = UPLOAD_CHUNK + 1024;
+    uint8_t *zbuf = (uint8_t *)ps_malloc(ZBUF);
+    size_t sentBytes = 0;   // what actually went over the air, for the log
 
     mbedtls_sha256_context sha;
     mbedtls_sha256_init(&sha);
@@ -489,37 +500,59 @@ static UploadOutcome uploadChunked(WiFiClientSecure &client, const String &path,
         mbedtls_sha256_update(&sha, buf, got);
 
         // The hash is only known in full on the last part, which is also the one
-        // that triggers assembly — so that is where it is sent.
-        String url = netcfg.baseUrl + "/api/devices/sessions?filename=" + name
-                   + "&part=" + String(part) + "&parts=" + String(parts);
+        // that triggers assembly -- so that is where it is sent. It covers the
+        // UNCOMPRESSED file: the server unpacks each piece before assembling.
+        String query = "/api/devices/sessions?filename=" + name
+                     + "&part=" + String(part) + "&parts=" + String(parts);
         if (part == parts) {
             uint8_t digest[32];
             mbedtls_sha256_finish(&sha, digest);
             char hex[65];
             for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", digest[i]);
             hex[64] = 0;
-            url += "&sha256=" + String(hex);
+            query += "&sha256=" + String(hex);
         }
 
-        HTTPClient http;
-        if (!http.begin(client, url)) { ok = false; break; }
-        http.addHeader("Content-Type", "text/csv");
-        http.addHeader("Authorization", "Bearer " + netcfg.token);
-        http.addHeader("X-Device-Firmware", FIRMWARE_VERSION);
-        http.addHeader("X-Device-Model", "lilygo-tbeam-s3-supreme");
-        http.setTimeout(60000);
-        // THE OTA SIGNAL. HTTPClient throws away every response header unless it
-        // is asked for one by name BEFORE the request, so without this line the
-        // device would never learn a new version exists and would fall back to
-        // polling -- which is exactly what the design avoids.
-        static const char *kCollect[] = { "X-PS-Firmware" };
-        http.collectHeaders(kCollect, 1);
-        int rc = http.sendRequest("POST", buf, got);
-        String payload = http.getString();
-        // Read it on EVERY response, including the failures below: a device
-        // whose uploads are failing is exactly one that may need a new build.
-        otaNoteServerVersion(http.header("X-PS-Firmware").c_str());
-        http.end();
+        // Compress the piece (zlib, ROM deflate). About 3x smaller on real
+        // recordings; sent plain if it doesn't help or the buffer is missing.
+        size_t zlen = zbuf ? compressPiece(buf, got, zbuf, ZBUF) : 0;
+        bool compressed = sendCompressed(got, zlen);
+
+        int rc = 0;
+        String payload;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            HTTPClient http;
+            if (!http.begin(client, netcfg.baseUrl + query + (compressed ? "&enc=zlib" : ""))) { rc = -1; break; }
+            // Compressed bytes MUST go as octet-stream: a Lambda function URL
+            // passes a text/* body through as a string, which mangles binary.
+            http.addHeader("Content-Type", compressed ? "application/octet-stream" : "text/csv");
+            http.addHeader("Authorization", "Bearer " + netcfg.token);
+            http.addHeader("X-Device-Firmware", FIRMWARE_VERSION);
+            http.addHeader("X-Device-Model", "lilygo-tbeam-s3-supreme");
+            http.setTimeout(60000);
+            // THE OTA SIGNAL. HTTPClient throws away every response header unless it
+            // is asked for one by name BEFORE the request, so without this line the
+            // device would never learn a new version exists and would fall back to
+            // polling -- which is exactly what the design avoids.
+            static const char *kCollect[] = { "X-PS-Firmware" };
+            http.collectHeaders(kCollect, 1);
+            rc = compressed ? http.sendRequest("POST", zbuf, zlen) : http.sendRequest("POST", buf, got);
+            payload = http.getString();
+            // Read it on EVERY response, including the failures below: a device
+            // whose uploads are failing is exactly one that may need a new build.
+            otaNoteServerVersion(http.header("X-PS-Firmware").c_str());
+            http.end();
+            // A server that can't unpack the piece: resend it plain, once. A 400
+            // would otherwise write the recording off (upload_policy.h).
+            if (compressed && resendPlain(rc, payload.c_str())) {
+                DBGW("sync", "%s part %d: bad_encoding, resending plain", name.c_str(), part);
+                Serial.printf("  %s part %d: server could not unpack it, resending plain\n", name.c_str(), part);
+                compressed = false;
+                continue;
+            }
+            break;
+        }
+        if (rc == 202 || rc == 201) sentBytes += compressed ? zlen : got;
 
         rcOut = rc;
         // 202 = part stored, 201 = assembled. Anything else stops this file, and
@@ -537,11 +570,17 @@ static UploadOutcome uploadChunked(WiFiClientSecure &client, const String &path,
         if (part == parts || (part % 8) == 0) {
             Serial.printf("  %s part %d/%d -> HTTP %d\n", name.c_str(), part, parts, rc);
         }
+        if (part == parts) {
+            DBGI("sync", "%s: %u B sent for %u B", name.c_str(), (unsigned)sentBytes, (unsigned)total);
+            Serial.printf("  %s: sent %u B for %u B (%.1fx)\n", name.c_str(), (unsigned)sentBytes,
+                          (unsigned)total, sentBytes ? (double)total / sentBytes : 0.0);
+        }
         delay(5);   // let the radio breathe before the next card read
     }
 
     mbedtls_sha256_free(&sha);
     free(buf);
+    free(zbuf);
     return ok ? UploadOutcome::Accepted : failed;
 }
 
@@ -862,6 +901,8 @@ static void uplinkTask(void *)
             statusSet(st);
             g_sdBusy = true;            // pause core-1 IMU polling for the SD reads
             st.uploadedOk = uplinkSyncSessions();
+            DBGI("sync", "stack headroom %u B", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
+            Serial.printf("sync: stack headroom %u B\n", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
             computeCounts(st);          // refresh tallies after uploading
             g_sdBusy = false;
             st.busy       = false;
@@ -874,7 +915,12 @@ static void uplinkTask(void *)
         // succeeds -- it reboots.
         if (netIsClaimed() && !g_yield) {
             if (otaAckPending()) otaSendAck();
+#if BENCH_TOOLS
+            // Bench build: never install an update (see platformio.ini).
+            DBGI("ota", "bench build: automatic updates are off");
+#else
             otaMaybeUpdate();
+#endif
         }
 
         netDisconnect();
@@ -890,5 +936,9 @@ void uplinkTaskStart()
     if (!g_lock) g_lock = xSemaphoreCreateMutex();
     // Core 0: the Arduino loop (UI, GNSS, logging) runs on core 1, and this task
     // blocks for seconds inside TLS and HTTP.
-    xTaskCreatePinnedToCore(uplinkTask, "uplink", 8192, nullptr, 1, nullptr, 0);
+    // 16 KB, was 8 KB. Compression (0.17.0) runs here, and the ROM deflate keeps
+    // its Huffman tables on the stack: on top of TLS that overflowed 8 KB on the
+    // first compressed upload (stack canary, crash loop). The headroom left is
+    // logged after every sync ("stack headroom").
+    xTaskCreatePinnedToCore(uplinkTask, "uplink", 16384, nullptr, 1, nullptr, 0);
 }

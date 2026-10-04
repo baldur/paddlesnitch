@@ -49,10 +49,34 @@ static void finds_the_motion_file_of_a_track(void)
 void setUp(void) {}
 void tearDown(void) {}
 
+// Compression (0.17.0): a piece goes compressed only if that actually saves
+// bytes; a failed compression (0) or one that grew falls back to plain.
+static void a_piece_is_sent_compressed_only_when_it_is_smaller(void)
+{
+    TEST_ASSERT_TRUE(sendCompressed(65536, 18000));
+    TEST_ASSERT_FALSE(sendCompressed(65536, 0));        // compressor failed
+    TEST_ASSERT_FALSE(sendCompressed(100, 100));        // no saving
+    TEST_ASSERT_FALSE(sendCompressed(100, 108));        // grew (tiny or random data)
+}
+
+// If the server can't unpack a piece, the tracker resends it plain at once.
+// A 400 otherwise writes the recording off, so a compression bug must never
+// cost a paddle -- and an older server that ignores enc= can't cause this.
+static void a_piece_the_server_cannot_unpack_is_resent_plain(void)
+{
+    TEST_ASSERT_TRUE(resendPlain(400, "{\"error\":\"bad_encoding\"}"));
+    TEST_ASSERT_FALSE(resendPlain(400, "{\"error\":\"bad_filename\"}"));
+    TEST_ASSERT_FALSE(resendPlain(202, "{}"));
+    TEST_ASSERT_FALSE(resendPlain(413, "{\"error\":\"too_large\"}"));
+}
+
+
 int main(int, char **)
 {
     UNITY_BEGIN();
     RUN_TEST(accepted_replies_are_done);
+    RUN_TEST(a_piece_is_sent_compressed_only_when_it_is_smaller);
+    RUN_TEST(a_piece_the_server_cannot_unpack_is_resent_plain);
     RUN_TEST(a_recording_the_server_cannot_use_is_not_sent_again);
     RUN_TEST(temporary_failures_are_retried);
     RUN_TEST(the_index_tells_confirmed_from_rejected);

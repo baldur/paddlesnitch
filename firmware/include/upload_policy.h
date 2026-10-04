@@ -33,6 +33,23 @@ static inline UploadOutcome uploadOutcome(int rc, const char *body)
     return UploadOutcome::Retry;
 }
 
+// Compression (docs/features/tracker-bluetooth-sync.md, P1). Each upload piece
+// is zlib-compressed on the tracker and sent with &enc=zlib; the server unpacks
+// it on arrival. A piece goes compressed only when that saves bytes: the
+// compressor returns 0 on failure, and tiny or random data can grow.
+static inline bool sendCompressed(size_t rawLen, size_t compressedLen)
+{
+    return compressedLen > 0 && compressedLen < rawLen;
+}
+
+// The server answers 400 bad_encoding when it can't unpack a piece. A 400 would
+// otherwise write the whole recording off (uploadOutcome above), so a bug in
+// the compression must never cost a paddle: resend that piece plain, at once.
+static inline bool resendPlain(int rc, const char *body)
+{
+    return rc == 400 && body && strstr(body, "bad_encoding");
+}
+
 // How uploaded.txt records each outcome (it stores the HTTP code).
 static inline bool indexRcConfirmed(int rc) { return rc == 200 || rc == 201 || rc == 409; }
 static inline bool indexRcRejected(int rc)  { return rc == 400 || rc == 413 || rc == 422; }

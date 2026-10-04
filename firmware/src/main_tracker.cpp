@@ -882,6 +882,13 @@ static void handleSerialCommand()
             if (strncmp(buf, "QRTEST", 6) != 0) qrTestHold = false;
             if      (!strncmp(buf, "LS", 2))   storageList();
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
+#if BENCH_TOOLS
+            else if (!strncmp(buf, "PUTFILE ", 8)) {
+                char name[64]; unsigned long size = 0;
+                if (sscanf(buf + 8, "%63s %lu", name, &size) == 2 && size > 0) storagePut(name, size);
+                else Serial.println("<<<PUT ERR usage: PUTFILE <name> <size>>>>");
+            }
+#endif
             else if (!strncmp(buf, "REC", 3))  toggleRecording();
             else if (!strncmp(buf, "NERD", 4)) {
                 if (menu == Menu::None && uiScreen == Screen::Nerd) { menu = Menu::Settings; menuSel = 0; Serial.println("screen settings"); }
@@ -967,6 +974,9 @@ static void handleSerialCommand()
                     "HOLD / RESUME     take the SD card off the uploader / give it back\n"
                     "LS                list files on the card\n"
                     "CAT <f>           dump a file (framed <<<CAT>>> .. <<<END>>>)\n"
+#if BENCH_TOOLS
+                    "PUTFILE <f> <n>   bench: write n raw bytes to the card as f\n"
+#endif
                     "SDPROBE <f>       read a file on CORE 1, radio off then on\n"
                     "SDPROBE0 <f>      the same read on CORE 0 (the uplink task)\n"
                     "DBG [CLEAR]       dump / clear the flight recorder\n"

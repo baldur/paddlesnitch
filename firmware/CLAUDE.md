@@ -325,6 +325,18 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   card in one uninterrupted go while HTTP is in flight, so each chunk does its own
   open/seek/read/**close** and nothing holds a card handle across a TLS round trip.
   Holding one File open across all 37 requests is what failed before.
+  **Since 0.17.0 each part is zlib-compressed** (`src/compress.*`, the deflate
+  compressor in the ESP32-S3 ROM, work area in PSRAM) and sent with `&enc=zlib`
+  as `application/octet-stream`; `sha256` still covers the uncompressed file.
+  Measured on the bench against production: a 65-min paddle went up as 1.01 MB
+  instead of 2.86 MB (track 3.7x, motion 2.6x). A piece goes plain if
+  compressing doesn't shrink it, and is resent plain at once if the server
+  answers `bad_encoding` (`sendCompressed`/`resendPlain` in `upload_policy.h`,
+  host-tested) -- a 400 would otherwise write the recording off.
+  **The uplink task stack is 16 KB** (was 8 KB): the ROM deflate keeps its
+  Huffman tables on the stack, and on top of TLS that overflowed 8 KB on the
+  first compressed upload (stack-canary crash loop). Measured peak ~8.3 KB; every
+  sync logs `stack headroom` -- check it after adding anything to that task.
 
 ### OTA (introduced in firmware 0.11.0) — working over the air; rollback seen on hardware
 
@@ -771,6 +783,22 @@ Other constraints worth keeping:
   still on an older table must be reflashed by cable.
 
 ## Verifying a change on real hardware
+
+**`tracker-bench` (`tools/flash.sh -e tracker-bench`) is for testing a claimed
+tracker on the bench.** It is the tracker plus two differences, and the release
+workflow never builds it:
+- **Automatic updates are off.** The tracker installs whatever version the
+  server says is current, including downward, so an unreleased build flashed by
+  cable otherwise replaces itself with the released one at its first sync.
+- **`PUTFILE <name> <size>`** writes a file onto the card over serial, so an
+  upload can be tested without a GPS fix. Send the line, wait for
+  `<<<PUT READY ...>>>`, then send the bytes in 1 KB blocks, waiting for an ACK
+  byte (0x06) after each. The USB serial link drops bytes when the host runs
+  ahead (the first version lost ~80% of a file); the command enlarges the
+  receive queue to 4 KB as well. The file is written as `put.tmp` and renamed at
+  the end, so the uploader never sees half a recording. About 5 KB/s.
+Flash `tracker` again to leave the bench build (it will then update itself to
+whatever is released).
 
 `main.cpp` prints a peripheral bring-up table and an I2C scan of both buses at
 boot, then one status line per second. When diagnosing GPS: `nmea_chars` stuck at
