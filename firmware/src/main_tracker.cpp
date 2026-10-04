@@ -27,6 +27,7 @@
 #include "dbg.h"
 #include "netcfg.h"
 #include "uplink.h"
+#include "ble.h"
 #include "ui.h"
 #include <WiFi.h>
 
@@ -343,6 +344,12 @@ void setup()
     // a failure means the device is away from home, and hijacking it into
     // setup mode when it should be out tracking would be worse than useless.
     if (!netHasWifi() || !netcfg.everConnected) netBringUp();
+
+#if BLE_ENABLED
+    // Bluetooth (bench build only for now: no pairing yet). After netcfgLoad,
+    // because the advertised name comes from the device id.
+    bleStart();
+#endif
 
     // The self-check that makes an update permanent. Everything above has run:
     // PMU, display, GPS UART and the card all reported in. If this image were
