@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { TRACKER_SERVICE, TRACKER_ABOUT, parseAbout, ownership } from './tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, ownership, isPairedReply } from './tracker-ble'
 
 const header = readFileSync(path.resolve(__dirname, '../../../../firmware/include/ble_about.h'), 'utf8')
 
@@ -10,6 +10,7 @@ describe('tracker Bluetooth contract', () => {
   it('uses the same service and About ids as the firmware', () => {
     expect(header).toContain(`#define PS_BLE_SERVICE_UUID "${TRACKER_SERVICE}"`)
     expect(header).toContain(`#define PS_BLE_ABOUT_UUID   "${TRACKER_ABOUT}"`)
+    expect(header).toContain(`#define PS_BLE_PAIRED_UUID  "${TRACKER_PAIRED}"`)
   })
 
   it('reads the About record the firmware writes', () => {
@@ -26,6 +27,14 @@ describe('tracker Bluetooth contract', () => {
     expect(parseAbout('{"v":2,"id":"435AC17C","fw":"x","model":"m","waiting":0,"linked":true}')).toBeNull()
     expect(parseAbout('{"v":1,"id":"<script>","fw":"x","model":"m","waiting":0,"linked":true}')).toBeNull()
     expect(parseAbout('not json')).toBeNull()
+  })
+
+  it('recognises the reply a paired connection gets', () => {
+    // Exactly PS_BLE_PAIRED_JSON in the firmware header.
+    expect(header).toContain('#define PS_BLE_PAIRED_JSON  "{\\"v\\":1,\\"paired\\":true}"')
+    expect(isPairedReply('{"v":1,"paired":true}')).toBe(true)
+    expect(isPairedReply('{"v":1,"paired":false}')).toBe(false)
+    expect(isPairedReply('nope')).toBe(false)
   })
 
   it('says whose tracker it is from the signed-in account', () => {
