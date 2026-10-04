@@ -38,6 +38,28 @@ export function isPairedReply(raw: string): boolean {
   } catch { return false }
 }
 
+/** How long to keep trying the protected read while pairing finishes: about
+ *  Bluetooth's 30 s pairing limit. Read at call time, so tests can shorten it. */
+export const PAIRING_WAIT = { tries: 20, delayMs: 1500 }
+
+/**
+ * Read the paired-only item until it answers, or the wait runs out.
+ *
+ * Chrome on Android refuses the first protected read straight away while
+ * Android's pairing (the number prompt, the hold on the tracker) carries on in
+ * the background; the link is encrypted a few seconds later. Giving up on that
+ * first refusal reported "Couldn't pair" for a tracker that had just paired.
+ */
+export async function readWhenPaired(read: () => Promise<string>, wait = PAIRING_WAIT): Promise<boolean> {
+  for (let i = 0; i < wait.tries; i++) {
+    try {
+      if (isPairedReply(await read())) return true
+    } catch { /* not paired yet: wait and try again */ }
+    if (i < wait.tries - 1 && wait.delayMs > 0) await new Promise(r => setTimeout(r, wait.delayMs))
+  }
+  return false
+}
+
 /** Whose tracker this is, as far as the signed-in person can tell. */
 export function ownership(a: Pick<TrackerAbout, 'id' | 'linked'>, myTrackerIds: Set<string>): 'yours' | 'elsewhere' | 'unlinked' {
   if (myTrackerIds.has(a.id)) return 'yours'
