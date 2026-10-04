@@ -55,18 +55,26 @@ export const PAIRING_WAIT = { tries: 8, delayMs: 1500, readTimeoutMs: 3000 }
 export async function readWhenPaired(
   read: () => Promise<string>,
   wait: { tries: number; delayMs: number; readTimeoutMs?: number } = PAIRING_WAIT,
-): Promise<boolean> {
+): Promise<{ paired: boolean; lastError?: string }> {
   const limit = wait.readTimeoutMs ?? 3000
+  let lastError: string | undefined
   for (let i = 0; i < wait.tries; i++) {
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       const timedOut = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('no answer')), limit) })
-      if (isPairedReply(await Promise.race([read(), timedOut]))) return true
-    } catch { /* not paired yet, or no answer: wait and try again */ }
+      const reply = await Promise.race([read(), timedOut])
+      if (isPairedReply(reply)) return { paired: true }
+      lastError = `unexpected reply: ${reply.slice(0, 60)}`
+    } catch (e) {
+      // Not paired yet, or no answer: wait and try again. Kept so the test
+      // page can show what the browser actually said.
+      const err = e as { name?: string; message?: string }
+      lastError = [err.name, err.message].filter(Boolean).join(': ')
+    }
     finally { clearTimeout(timer) }
     if (i < wait.tries - 1 && wait.delayMs > 0) await new Promise(r => setTimeout(r, wait.delayMs))
   }
-  return false
+  return { paired: false, lastError }
 }
 
 /** Whose tracker this is, as far as the signed-in person can tell. */

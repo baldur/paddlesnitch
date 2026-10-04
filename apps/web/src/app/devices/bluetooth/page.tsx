@@ -24,6 +24,8 @@ export default function BluetoothTestPage() {
   const [busy, setBusy] = useState(false)
   const [found, setFound] = useState<Found | null>(null)
   const [error, setError] = useState('')
+  // What the browser said, shown under a pairing failure (this is a test page).
+  const [detail, setDetail] = useState('')
   const [disconnect, setDisconnect] = useState<(() => void) | null>(null)
   const [paired, setPaired] = useState(false)
   // The open connection, so leaving the page can drop it. A tab left connected
@@ -82,8 +84,13 @@ export default function BluetoothTestPage() {
     setPairing(true); setError('')
     // Keeps trying while the phone or computer and the tracker finish
     // pairing: the first read is refused before the link is encrypted.
-    if (await readWhenPaired(found.readPaired)) setPaired(true)
-    else setError("Couldn't pair. Check the number on the tracker matches, hold its button within 25 seconds, then try again.")
+    setDetail('')
+    const r = await readWhenPaired(found.readPaired)
+    if (r.paired) setPaired(true)
+    else {
+      setError("Couldn't pair. Check the number on the tracker matches, hold its button within 25 seconds, then try again.")
+      setDetail(r.lastError ?? '')
+    }
     setPairing(false)
   }
 
@@ -122,6 +129,7 @@ export default function BluetoothTestPage() {
         )}
 
         {error && <p className="text-sm text-red" role="alert">{error}</p>}
+        {error && detail && <p className="text-xs text-muted">Technical details: {detail}</p>}
 
         {found && (
           <section className="border border-border bg-surface px-4 py-4 flex flex-col gap-3" aria-label="Tracker">

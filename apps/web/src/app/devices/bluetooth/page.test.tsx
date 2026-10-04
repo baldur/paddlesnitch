@@ -125,6 +125,8 @@ describe('Bluetooth test page', () => {
     await act(async () => { pairButton()!.click() })
     for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(container.textContent).toContain("Couldn't pair")
+    // This is a test page: show what the browser said, to diagnose from.
+    expect(container.textContent).toContain('NetworkError: auth')
     expect(pairButton()).toBeDefined()   // can try again
   })
 
