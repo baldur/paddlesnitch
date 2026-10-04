@@ -28,12 +28,19 @@ class AboutCallbacks : public NimBLECharacteristicCallbacks {
 static volatile bool     s_pending = false;
 static volatile uint32_t s_pin     = 0;
 static volatile int      s_answer  = -1;
+static volatile uint32_t s_since   = 0;    // millis() when the number appeared
 static const uint32_t    CONFIRM_MS = 25000;   // under Bluetooth's 30 s pairing timeout
 
 bool bleConfirmPending(uint32_t *pin)
 {
     if (s_pending && pin) *pin = s_pin;
     return s_pending;
+}
+uint32_t bleConfirmSecondsLeft()
+{
+    if (!s_pending) return 0;
+    const uint32_t used = millis() - s_since;
+    return used >= CONFIRM_MS ? 0 : (CONFIRM_MS - used + 999) / 1000;
 }
 void bleConfirmAnswer(bool yes) { if (s_pending) s_answer = yes ? 1 : 0; }
 void bleForgetAll()
@@ -44,15 +51,30 @@ void bleForgetAll()
 }
 
 class ServerCallbacks : public NimBLEServerCallbacks {
-    void onConnect(NimBLEServer *) override    { DBGI("ble", "connected"); Serial.println("BLE: connected"); }
-    void onDisconnect(NimBLEServer *) override { DBGI("ble", "disconnected"); Serial.println("BLE: disconnected"); }
+    // Which phone or computer, by address, so a log can tell them apart (a
+    // tab left connected on the Mac once hid the tracker from a phone).
+    void onConnect(NimBLEServer *, ble_gap_conn_desc *desc) override
+    {
+        const std::string who = NimBLEAddress(desc->peer_ota_addr).toString();
+        DBGI("ble", "connected %s", who.c_str());
+        Serial.printf("BLE: connected %s\n", who.c_str());
+        // Keep advertising while connected (up to 3 connections), so a second
+        // phone or computer can still find the tracker.
+        NimBLEDevice::startAdvertising();
+    }
+    void onDisconnect(NimBLEServer *, ble_gap_conn_desc *desc) override
+    {
+        const std::string who = NimBLEAddress(desc->peer_ota_addr).toString();
+        DBGI("ble", "disconnected %s", who.c_str());
+        Serial.printf("BLE: disconnected %s\n", who.c_str());
+    }
 
     // NimBLE 1.4 asks this synchronously, on its own task (core 0), so it waits
     // here while the main loop (core 1) shows the number and takes the answer.
     // Nothing else on the Bluetooth link happens meanwhile -- it's pairing.
     bool onConfirmPIN(uint32_t pin) override
     {
-        s_answer = -1; s_pin = pin; s_pending = true;
+        s_answer = -1; s_pin = pin; s_since = millis(); s_pending = true;
         DBGI("ble", "pairing: confirm %06lu", (unsigned long)pin);
         Serial.printf("BLE: pairing, number %06lu -- hold to confirm\n", (unsigned long)pin);
         const uint32_t t0 = millis();
@@ -68,8 +90,9 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     {
         const bool ok = desc->sec_state.encrypted && desc->sec_state.authenticated;
         DBGI("ble", "pairing %s, bonded=%d", ok ? "done" : "failed", desc->sec_state.bonded);
-        Serial.printf("BLE: pairing %s (bonded=%d, %d pairing(s) stored)\n",
-                      ok ? "done" : "failed", desc->sec_state.bonded, NimBLEDevice::getNumBonds());
+        Serial.printf("BLE: pairing %s with %s (bonded=%d, %d pairing(s) stored)\n",
+                      ok ? "done" : "failed", NimBLEAddress(desc->peer_ota_addr).toString().c_str(),
+                      desc->sec_state.bonded, NimBLEDevice::getNumBonds());
     }
 };
 

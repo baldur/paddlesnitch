@@ -10,5 +10,6 @@ void bleStart();
 // tracker's screen: hold = yes, double-tap = no (the same gestures as every
 // other confirmation). The main loop shows the number while this is pending.
 bool bleConfirmPending(uint32_t *pin);
+uint32_t bleConfirmSecondsLeft();   // for the countdown on the pairing screen
 void bleConfirmAnswer(bool yes);
 void bleForgetAll();   // drop every pairing (bench: BLEFORGET)

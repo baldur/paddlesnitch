@@ -79,6 +79,7 @@ struct UiState {
     uint32_t droppedRows = 0;
     bool     stopArmed   = false;
     uint32_t pairPin     = 0;       // PairConfirm: the 6 digits both sides show
+    uint32_t pairSecsLeft = 0;      // PairConfirm: seconds until it's refused
     // track speed readout unit, toggled by tap: 0 km/h, 1 m/s, 2 pace per 500 m
     int      speedUnit   = 0;
     // stroke rate (SPM) shown right of the speed; <0 = not available yet

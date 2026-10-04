@@ -477,6 +477,9 @@ static void drawPairConfirm(const UiState &s)
     display.drawStr(0, 54, "HOLD if it matches");
     display.setFont(u8g2_font_5x8_tf);
     display.drawStr(0, 63, "double-tap to refuse");
+    char left[8];
+    snprintf(left, sizeof(left), "%lus", (unsigned long)s.pairSecsLeft);
+    display.drawStr(128 - display.getStrWidth(left), 63, left);
     display.sendBuffer();
 }
 

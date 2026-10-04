@@ -1442,6 +1442,9 @@ void loop()
         const bool pairing = false;
 #endif
         u.pairPin     = pairPin;
+#if BLE_ENABLED
+        u.pairSecsLeft = pairing ? bleConfirmSecondsLeft() : 0;
+#endif
         u.state       = pairing         ? AppState::PairConfirm
                       : !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
