@@ -159,6 +159,22 @@ static void every_gate_has_a_readable_reason(void)
     }
 }
 
+
+// A crash DURING an upload (2026-10-04: the uplink stack overflowed on the
+// first compressed upload) used to be unfixable over the air: the tracker
+// checked for an update only after uploading, so it crashed before it ever
+// asked. After a crash, the first sync now checks first.
+static void after_a_crash_the_first_sync_checks_for_an_update_before_uploading(void)
+{
+    TEST_ASSERT_TRUE(otaCheckBeforeUploads(true, true));
+}
+
+static void normally_uploads_go_first(void)
+{
+    TEST_ASSERT_FALSE(otaCheckBeforeUploads(false, true));    // a normal start
+    TEST_ASSERT_FALSE(otaCheckBeforeUploads(true, false));    // only the first sync after it
+}
+
 int main(int, char **)
 {
     UNITY_BEGIN();
@@ -177,5 +193,7 @@ int main(int, char **)
     RUN_TEST(a_downgrade_counts_as_a_difference);
     RUN_TEST(absent_or_empty_versions_never_trigger_an_update);
     RUN_TEST(every_gate_has_a_readable_reason);
+    RUN_TEST(after_a_crash_the_first_sync_checks_for_an_update_before_uploading);
+    RUN_TEST(normally_uploads_go_first);
     return UNITY_END();
 }

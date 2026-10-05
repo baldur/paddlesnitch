@@ -59,3 +59,8 @@ const char *otaGateReason(OtaGate g)
     }
     return "?";
 }
+
+bool otaCheckBeforeUploads(bool lastResetWasCrash, bool firstSyncSinceBoot)
+{
+    return lastResetWasCrash && firstSyncSinceBoot;
+}
