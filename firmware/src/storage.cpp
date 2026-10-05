@@ -365,11 +365,7 @@ void storagePut(const char *name, size_t size)
     SD.remove(TMP);
     File f = SD.open(TMP, FILE_WRITE);
     if (!f) { Serial.println("<<<PUT ERR cannot create>>>"); return; }
-    // The USB serial driver's receive queue is 256 bytes and drops what doesn't
-    // fit, so a 1 KB block arrives with holes. Enlarge it once, before the host
-    // is told to send anything (resizing replaces the queue).
-    static bool bigRx = false;
-    if (!bigRx) { Serial.setRxBufferSize(4096); bigRx = true; }
+    // The receive queue is enlarged to 4 KB at start-up (main_tracker.cpp).
     Serial.printf("<<<PUT READY %s %u>>>\n", path, (unsigned)size);
 
     // One 1 KB block at a time, each acknowledged with an ACK byte (0x06), so the host never

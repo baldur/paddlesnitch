@@ -52,6 +52,9 @@ String netDeviceId();
 // tell those apart and they need opposite fixes.
 bool netConnect(uint32_t timeoutMs = 15000, String *reason = nullptr);
 
+// Can a scan see this network? 1 yes, 0 no, -1 the scan failed.
+int netSsidVisible(const String &ssid);
+
 // Blocking SoftAP + captive portal. `errorNote` is shown at the top of the form
 // so a failed attempt explains itself instead of leaving a blank page.
 // Returns true if credentials were submitted.

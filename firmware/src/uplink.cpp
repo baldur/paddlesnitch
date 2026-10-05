@@ -12,6 +12,9 @@
 #include "ota_policy.h"
 #include "upload_policy.h"
 #include "compress.h"
+#include "health.h"
+#include "ble_about.h"
+#include <mbedtls/md.h>
 
 #ifndef BENCH_TOOLS
 #define BENCH_TOOLS 0
@@ -30,6 +33,72 @@ static SemaphoreHandle_t g_lock   = nullptr;
 static UplinkStatus      g_status;
 static volatile bool     g_yield   = false;   // "let go of the SD card"
 static volatile bool     g_syncNow = false;
+
+// Bluetooth setup's WiFi trial (uplinkTryWifi). Strings are only touched
+// under g_trialLock; the state is a single byte.
+static SemaphoreHandle_t  g_trialLock = nullptr;
+static String             g_trialSsid, g_trialPass;
+static volatile bool      g_trialPending = false;
+static volatile WifiTrial g_trial = WifiTrial::Idle;
+
+const char *wifiTrialName(WifiTrial t)
+{
+    switch (t) {
+    case WifiTrial::Trying:        return "trying";
+    case WifiTrial::Joined:        return "joined";
+    case WifiTrial::WrongPassword: return "wrong_password";
+    case WifiTrial::NotFound:      return "not_found";
+    case WifiTrial::Failed:        return "failed";
+    default:                       return "idle";
+    }
+}
+
+void uplinkTryWifi(const String &ssid, const String &pass)
+{
+    if (!g_trialLock) g_trialLock = xSemaphoreCreateMutex();
+    xSemaphoreTake(g_trialLock, portMAX_DELAY);
+    g_trialSsid = ssid; g_trialPass = pass;
+    xSemaphoreGive(g_trialLock);
+    g_trial = WifiTrial::Trying;
+    g_trialPending = true;
+}
+WifiTrial uplinkWifiTrial() { return g_trial; }
+
+// Runs on the uplink task, which owns the radio. Tries the new details with
+// the old ones kept in RAM, and saves the new ones only if they join.
+static void runWifiTrial()
+{
+    String ssid, pass;
+    xSemaphoreTake(g_trialLock, portMAX_DELAY);
+    ssid = g_trialSsid; pass = g_trialPass;
+    g_trialPass = "";   // don't keep the password around longer than needed
+    xSemaphoreGive(g_trialLock);
+
+    const String oldSsid = netcfg.ssid, oldPass = netcfg.pass;
+    netDisconnect();
+    netcfg.ssid = ssid; netcfg.pass = pass;          // RAM only, for this attempt
+    const bool ok = netConnect(15000, nullptr);
+    if (ok) {
+        // Restore first, so netcfgSaveWifi compares the new details with the
+        // old ones (setup_policy.h) and then marks what it saves.
+        netcfg.ssid = oldSsid; netcfg.pass = oldPass;
+        netcfgSaveWifi(ssid, pass, netcfg.baseUrl);
+        // netcfgSaveWifi clears the "has worked" mark when the network changed.
+        // It has just worked, so join again to set it -- from disconnected:
+        // netConnect returns early, without marking, if already connected.
+        netDisconnect();
+        netConnect(15000, nullptr);
+        g_trial = WifiTrial::Joined;
+        g_syncNow = true;                             // sync while we're at it
+    } else {
+        const int seen = netSsidVisible(ssid);
+        netcfg.ssid = oldSsid; netcfg.pass = oldPass; // keep what worked before
+        g_trial = seen == 1 ? WifiTrial::WrongPassword : seen == 0 ? WifiTrial::NotFound : WifiTrial::Failed;
+    }
+    DBGI("wifi", "bluetooth setup: %s", wifiTrialName(g_trial));
+    Serial.printf("WiFi trial (Bluetooth setup): %s\n", wifiTrialName(g_trial));
+    netDisconnect();
+}
 static volatile bool     g_countNow = false;  // recompute Sync-screen tallies
 static volatile bool     g_probeNow = false;  // run a card probe on THIS task
 static char              g_probeFile[64] = "";
@@ -797,6 +866,185 @@ void uplinkRequestCounts()        { g_countNow = true; }
 void uplinkRequestDeleteUploaded(){ g_deleteNow = true; }
 bool uplinkSdBusy()               { return g_sdBusy; }
 
+// ---------------------------------------------------------------------------
+// Recordings over Bluetooth -- the uplink task's half (see uplink.h)
+// ---------------------------------------------------------------------------
+
+enum class BtOp : uint8_t { None, List, Piece, Done };
+static volatile BtOp g_btOp = BtOp::None;
+static String   g_btName, g_btReceipt;
+static int      g_btPart = 0;
+static const char *g_btState = "idle";        // idle, working, ready, marked, bad_receipt, busy, error
+static uint8_t *g_btBuf = nullptr;            // PSRAM: what DATA serves
+static const size_t BT_BUF = UPLOAD_CHUNK + 16 * 1024;   // a piece, or a long list
+static size_t   g_btLen = 0, g_btCursor = 0;
+static int      g_btParts = 0;
+static bool     g_btCompressed = false;
+
+void uplinkBtList()                                   { g_btName = ""; g_btState = "working"; g_btOp = BtOp::List; }
+void uplinkBtPiece(const String &name, int part)      { g_btName = name; g_btPart = part; g_btState = "working"; g_btOp = BtOp::Piece; }
+void uplinkBtDone(const String &name, const String &r) { g_btName = name; g_btReceipt = r; g_btState = "working"; g_btOp = BtOp::Done; }
+void uplinkBtSeek(uint32_t offset)                    { g_btCursor = offset <= g_btLen ? offset : g_btLen; }
+
+void uplinkBtStatus(char *json, size_t n)
+{
+    bleSyncJson(json, n, g_btState, (unsigned long)g_btLen, g_btPart, g_btParts, g_btCompressed);
+}
+
+size_t uplinkBtPage(uint8_t *out, size_t max)
+{
+    if (max < 4 || strcmp(g_btState, "ready") != 0) return 0;
+    blePageHeader(out, (uint32_t)g_btCursor);
+    size_t n = g_btLen - g_btCursor;
+    if (n > PS_BLE_PAGE_DATA) n = PS_BLE_PAGE_DATA;
+    if (n > max - 4) n = max - 4;
+    memcpy(out + 4, g_btBuf + g_btCursor, n);
+    g_btCursor += n;
+    return n + 4;
+}
+
+static String btActiveName()
+{
+    String a = storageFilename();
+    return a.startsWith("/") ? a.substring(1) : a;
+}
+
+// The waiting recordings as JSON: tracks first (a motion file can only attach
+// to a track the server already has), never the one being recorded.
+static bool btBuildList()
+{
+    const String active = btActiveName();
+    String activeUp = active;
+    if (activeUp.endsWith(".csv")) activeUp = activeUp.substring(0, activeUp.length() - 4) + "_i10.csv";
+    static String names[128]; static uint32_t sizes[128]; int n = 0;
+    {
+        SpiBusGuard bus(5000);
+        if (!bus) return false;
+        File root = SD.open("/");
+        for (File f = root.openNextFile(); f && n < 128; f = root.openNextFile()) {
+            String nm = f.name();
+            if (nm.startsWith("/")) nm = nm.substring(1);
+            if (!f.isDirectory() && isTrackUpload(nm) && nm != active) { names[n] = nm; sizes[n++] = f.size(); }
+            f.close();
+        }
+        root.close();
+        root = SD.open("/");
+        for (File f = root.openNextFile(); f && n < 128; f = root.openNextFile()) {
+            String nm = f.name();
+            if (nm.startsWith("/")) nm = nm.substring(1);
+            if (!f.isDirectory() && isMotionUpload(nm) && nm != activeUp) { names[n] = nm; sizes[n++] = f.size(); }
+            f.close();
+        }
+        root.close();
+    }
+    String json = "[";
+    bool first = true;
+    for (int i = 0; i < n; i++) {
+        if (alreadyUploaded(names[i])) continue;
+        const String up = isMotionUpload(names[i]) ? motionUploadName(names[i]) : names[i];
+        json += (first ? "" : ",");
+        json += "{\"n\":\"" + names[i] + "\",\"u\":\"" + up + "\",\"s\":" + String(sizes[i]) + "}";
+        first = false;
+        if (json.length() > BT_BUF - 200) break;      // the rest on the next list
+    }
+    json += "]";
+    memcpy(g_btBuf, json.c_str(), json.length());
+    g_btLen = json.length(); g_btParts = 0; g_btCompressed = false;
+    return true;
+}
+
+// Piece `part` (1-based) of a recording: read 64 KB off the card, compress it
+// like a WiFi upload, and hold it for DATA.
+static bool btBuildPiece(const String &name, int part)
+{
+    if (!isTrackUpload(name) && !isMotionUpload(name)) return false;
+    if (name == btActiveName()) return false;
+    static uint8_t *raw = nullptr;
+    if (!raw) raw = (uint8_t *)ps_malloc(UPLOAD_CHUNK);
+    if (!raw) return false;
+    size_t total = 0, got = 0;
+    {
+        SpiBusGuard bus(5000);
+        if (!bus) return false;
+        File f = SD.open("/" + name, FILE_READ);
+        if (!f) return false;
+        total = f.size();
+        const int parts = chunkCount(total, UPLOAD_CHUNK);
+        if (part < 1 || part > parts) { f.close(); return false; }
+        g_btParts = parts;
+        const size_t want = chunkLength(total, UPLOAD_CHUNK, part);
+        if (!f.seek((size_t)(part - 1) * UPLOAD_CHUNK)) { f.close(); return false; }
+        int stalls = 0;
+        while (got < want) {
+            int r = f.read(raw + got, want - got);
+            if (r > 0) { got += (size_t)r; stalls = 0; continue; }
+            if (++stalls > 20) break;
+            delay(10);
+        }
+        f.close();
+        if (got != want) return false;
+    }
+    const size_t z = compressPiece(raw, got, g_btBuf, BT_BUF);
+    g_btCompressed = sendCompressed(got, z);
+    if (g_btCompressed) g_btLen = z;
+    else { memcpy(g_btBuf, raw, got); g_btLen = got; }
+    return true;
+}
+
+// Mark a recording sent only if the server's receipt checks: HMAC-SHA256 keyed
+// with the hex sha256 of OUR token (what the server stores) over
+// "ps-receipt:v1|id|uploadName" (ble_about.h; server uploadReceipt).
+static bool btCheckReceipt(const String &name, const String &receipt)
+{
+    if (!netIsClaimed() || receipt.length() != 64) return false;
+    uint8_t d[32];
+    mbedtls_sha256((const uint8_t *)netcfg.token.c_str(), netcfg.token.length(), d, 0);
+    char key[65];
+    for (int i = 0; i < 32; i++) sprintf(key + i * 2, "%02x", d[i]);
+    const String up = isMotionUpload(name) ? motionUploadName(name) : name;
+    char msg[160];
+    bleReceiptMessage(msg, sizeof(msg), netDeviceId().c_str(), up.c_str());
+    uint8_t mac[32];
+    if (mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), (const uint8_t *)key, 64,
+                        (const uint8_t *)msg, strlen(msg), mac) != 0) return false;
+    char hex[65];
+    for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", mac[i]);
+    uint8_t diff = 0;
+    for (int i = 0; i < 64; i++) diff |= (uint8_t)(hex[i] ^ tolower((unsigned char)receipt[i]));
+    return diff == 0;
+}
+
+static void runBtOp()
+{
+    const BtOp op = g_btOp;
+    g_btOp = BtOp::None;
+    if (!g_btBuf) g_btBuf = (uint8_t *)ps_malloc(BT_BUF);
+    if (!g_btBuf) { g_btState = "error"; return; }
+    // Recording owns the card; nothing else reads it then.
+    if (storageRecording()) { g_btState = "busy"; return; }
+    g_btCursor = 0; g_btLen = 0;
+    bool ok = false;
+    switch (op) {
+    case BtOp::List:  ok = btBuildList(); break;
+    case BtOp::Piece: ok = btBuildPiece(g_btName, g_btPart); break;
+    case BtOp::Done:
+        if (btCheckReceipt(g_btName, g_btReceipt)) {
+            markUploaded(g_btName, 201);
+            DBGI("ble", "%s sent via Bluetooth (receipt ok)", g_btName.c_str());
+            Serial.printf("BLE: %s marked sent (receipt checked)\n", g_btName.c_str());
+            g_btState = "marked";
+        } else {
+            DBGW("ble", "%s: receipt did not check", g_btName.c_str());
+            Serial.printf("BLE: %s receipt did NOT check -- left waiting\n", g_btName.c_str());
+            g_btState = "bad_receipt";
+        }
+        g_countNow = true;   // refresh the Sync screen's tallies
+        return;
+    default: return;
+    }
+    g_btState = ok ? "ready" : "error";
+}
+
 static void uplinkTask(void *)
 {
     // Retried on a timer, not only at boot and on request. A recording that
@@ -818,6 +1066,13 @@ static void uplinkTask(void *)
         // bus. If this reads at 429 KB/s like the core-1 SDPROBE does, the task
         // is not the variable and the fault is somewhere in what the sync does.
         // If it stalls, the task context IS the variable.
+        if (g_btOp != BtOp::None) runBtOp();
+
+        if (g_trialPending && !storageRecording()) {
+            g_trialPending = false;
+            runWifiTrial();
+        }
+
         if (g_probeNow) {
             g_probeNow = false;
             for (int phase = 0; phase < 2; phase++) {
@@ -897,6 +1152,16 @@ static void uplinkTask(void *)
             statusSet(st);
         }
 
+        // Health first (health.h): the start report -- with the crash summary
+        // after a crash -- goes before anything that could restart us, such as
+        // the update check below; then a heartbeat every hour.
+        if (netIsClaimed() && !g_yield) {
+            WiFiClientSecure hc;
+            configureClient(hc);
+            const UplinkStatus now = uplinkGetStatus();
+            healthMaybeSend(hc, now.countsValid ? now.pending : -1, uxTaskGetStackHighWaterMark(nullptr));
+        }
+
         // After a crash, look for a fix BEFORE uploading (ota_policy.h): if an
         // upload is what crashed, the usual check after the uploads is never
         // reached, and the tracker could only be fixed with a cable.
@@ -950,9 +1215,11 @@ void uplinkTaskStart()
     if (!g_lock) g_lock = xSemaphoreCreateMutex();
     // Core 0: the Arduino loop (UI, GNSS, logging) runs on core 1, and this task
     // blocks for seconds inside TLS and HTTP.
-    // 16 KB, was 8 KB. Compression (0.17.0) runs here, and the ROM deflate keeps
+    // 16 KB (was 8 KB) from 0.17.0. Compression runs here, and the ROM deflate keeps
     // its Huffman tables on the stack: on top of TLS that overflowed 8 KB on the
     // first compressed upload (stack canary, crash loop). The headroom left is
     // logged after every sync ("stack headroom").
-    xTaskCreatePinnedToCore(uplinkTask, "uplink", 16384, nullptr, 1, nullptr, 0);
+    // 20 KB from 0.18.0: health reports and Bluetooth jobs run here too, and
+    // on 16 KB a compressed upload left 7.7 KB (release-testing A5).
+    xTaskCreatePinnedToCore(uplinkTask, "uplink", 20480, nullptr, 1, nullptr, 0);
 }
