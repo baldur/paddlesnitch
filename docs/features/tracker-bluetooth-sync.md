@@ -1,6 +1,6 @@
 # Feature spec: Bluetooth sync — paddles home by phone, browser or WiFi
 
-**Status:** 📋 spec. **P1 (compression) built 2026-10-04**: server live (#344); firmware 0.17.0 verified on a tracker against production (2.86 MB → 1.01 MB). **P4 step 1 (advertise + About + /devices/bluetooth) built 2026-10-04**, bench build only. The rest not built. Written 2026-10-04.
+**Status:** 📋 spec. **P1 (compression) built 2026-10-04**: server live (#344); firmware 0.17.0 verified on a tracker against production (2.86 MB → 1.01 MB). **P4 steps 1–2 (advertise, About, pairing with the number on screen) built and verified on a Mac and an Android phone 2026-10-04**, bench build only. **Setup over Bluetooth (link + WiFi, J1 step 3) built 2026-10-05, awaiting a paired test.** The rest not built. Written 2026-10-04.
 **Owner:** Baldur (product).
 **Related:** [`device-screen-map.md`](device-screen-map.md) (screens, gestures, onboarding),
 [`device-uplink.md`](device-uplink.md) (how recordings arrive today),

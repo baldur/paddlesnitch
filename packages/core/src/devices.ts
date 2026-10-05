@@ -204,6 +204,37 @@ export async function redeemToken(deviceId: string, claimSecret: string): Promis
   return { status: 'bound', deviceToken: token, userId: c.userId, deviceName: c.name }
 }
 
+/**
+ * Link a tracker set up over Bluetooth (docs/features/tracker-bluetooth-sync.md,
+ * "Linking over Bluetooth"). The tracker made its own token and gave the page
+ * only `tokenHash`, so the token never leaves the tracker; the server stores the
+ * hash, exactly as it does after linking by code.
+ *
+ * Same rules as linkClaim + redeemToken, plus one: a hash that is already some
+ * tracker's token is refused, or registering it would point that tracker's
+ * uploads at this record. (Squatting a never-linked id is possible here exactly
+ * as it is with a claim: the id is not a secret. See linkClaim.)
+ */
+export async function linkByTokenHash(
+  userId: string,
+  d: { deviceId: string; tokenHash: string; model: string; firmware: string; name?: string },
+): Promise<{ deviceId: string; model: string } | { error: 'bad_request' | 'owned_elsewhere' | 'token_in_use' }> {
+  if (!isDeviceId(d.deviceId) || !/^[0-9a-f]{64}$/.test(d.tokenHash)) return { error: 'bad_request' }
+  const existing = await getJson<DeviceRecord>(deviceKey(d.deviceId))
+  if (existing && existing.userId !== userId) return { error: 'owned_elsewhere' }
+  if (await getJson<DeviceTokenRecord>(tokenKey(d.tokenHash))) return { error: 'token_in_use' }
+
+  const ts = nowIso()
+  // Re-linking your own tracker cancels its previous token, as redeemToken does.
+  if (existing?.tokenHash) await deleteObject(tokenKey(existing.tokenHash))
+  await putJson(tokenKey(d.tokenHash), { deviceId: d.deviceId, userId, createdAt: ts, lastSeenAt: ts } satisfies DeviceTokenRecord)
+  await putJson(deviceKey(d.deviceId), {
+    deviceId: d.deviceId, userId, name: d.name ?? existing?.name ?? `Tracker ${d.deviceId}`,
+    model: d.model, firmware: d.firmware, linkedAt: ts, lastSeenAt: ts, tokenHash: d.tokenHash,
+  } satisfies DeviceRecord)
+  return { deviceId: d.deviceId, model: d.model }
+}
+
 // Resolve a bearer token to its device+user, or null. READ ONLY. It used to
 // rewrite the token record with a lastSeenAt on every request (~48 PUTs per
 // sync), and a rewrite racing a revoke brought a deleted token back to life.

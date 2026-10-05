@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT } from './tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT, parseLinkStatus, parseWifiState, wifiMessage, linkErrorMessage } from './tracker-ble'
 
 const header = readFileSync(path.resolve(__dirname, '../../../../firmware/include/ble_about.h'), 'utf8')
 
@@ -88,5 +88,36 @@ describe('readWhenPaired', () => {
 
   it('waits about 30 s by default, the most Bluetooth allows for pairing', () => {
     expect(PAIRING_WAIT.tries * (PAIRING_WAIT.delayMs + PAIRING_WAIT.readTimeoutMs)).toBeGreaterThanOrEqual(30000)
+  })
+})
+
+describe('setup over Bluetooth', () => {
+  it('uses the firmware ids for the link and WiFi items', () => {
+    expect(header).toContain(`#define PS_BLE_LINK_UUID    "${TRACKER_LINK}"`)
+    expect(header).toContain(`#define PS_BLE_WIFI_UUID    "${TRACKER_WIFI}"`)
+  })
+
+  it('reads the link status the tracker writes (bleLinkJson)', () => {
+    const h = '0123456789abcdef'.repeat(4)
+    expect(parseLinkStatus(`{"v":1,"id":"435AC17C","state":"pending","tokenHash":"${h}"}\u0000`))
+      .toEqual({ id: '435AC17C', state: 'pending', tokenHash: h })
+    expect(parseLinkStatus('{"v":1,"id":"435AC17C","state":"idle","tokenHash":""}')!.tokenHash).toBe('')
+    expect(parseLinkStatus('{"v":1,"id":"435AC17C","state":"weird","tokenHash":""}')).toBeNull()
+  })
+
+  it('reads the WiFi state and says it in plain words', () => {
+    expect(parseWifiState('{"v":1,"state":"wrong_password"}')).toBe('wrong_password')
+    expect(parseWifiState('{"v":1,"state":"bogus"}')).toBeNull()
+    expect(wifiMessage('joined')).toMatch(/joined/i)
+    expect(wifiMessage('wrong_password')).toMatch(/password/i)
+    expect(wifiMessage('not_found')).toMatch(/2\.4 GHz/)
+    // Never vendor words or codes on screen.
+    for (const s of ['joined', 'wrong_password', 'not_found', 'failed'] as const) expect(wifiMessage(s)).not.toMatch(/_|ssid/i)
+  })
+
+  it('explains each way adding the tracker can fail', () => {
+    expect(linkErrorMessage(409, 'owned_elsewhere')).toMatch(/another account/)
+    expect(linkErrorMessage(429)).toMatch(/wait/i)
+    expect(linkErrorMessage(500)).toMatch(/^Couldn't/)
   })
 })

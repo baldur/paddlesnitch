@@ -2,13 +2,25 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
-import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, parseAbout, readWhenPaired, ownership, browserBluetooth, type TrackerAbout } from '@/lib/tracker-ble'
+import {
+  TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, WIFI_WAIT,
+  parseAbout, readWhenPaired, ownership, browserBluetooth, parseLinkStatus, parseWifiState,
+  wifiMessage, linkErrorMessage, type TrackerAbout,
+} from '@/lib/tracker-ble'
 
-// Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 step 1).
-// Linked from nowhere yet: it connects to a nearby tracker and reads its
-// details, nothing more. Only bench-build trackers have Bluetooth so far.
+// Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 + J1 step 3).
+// Linked from nowhere yet: connect to a nearby tracker, read its details, pair
+// it, add it to this account and give it WiFi details. Only bench-build
+// trackers have Bluetooth so far.
 
-type Found = { name: string; about: TrackerAbout; readPaired: () => Promise<string> }
+type Found = {
+  name: string
+  about: TrackerAbout
+  readPaired: () => Promise<string>
+  read: (uuid: string) => Promise<string>
+  write: (uuid: string, body: unknown) => Promise<void>
+}
+type Msg = { ok: boolean; text: string } | null
 
 const OWNER_TEXT = {
   yours: 'On your account',
@@ -37,6 +49,12 @@ export default function BluetoothTestPage() {
     return () => { window.removeEventListener('pagehide', leave); leave() }
   }, [])
   const [pairing, setPairing] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const [linkMsg, setLinkMsg] = useState<Msg>(null)
+  const [ssid, setSsid] = useState('')
+  const [wifiPass, setWifiPass] = useState('')
+  const [wifiBusy, setWifiBusy] = useState(false)
+  const [wifiMsg, setWifiMsg] = useState<Msg>(null)
 
   useEffect(() => {
     setSupported(browserBluetooth() !== null)
@@ -67,7 +85,10 @@ export default function BluetoothTestPage() {
       // refusal is what makes the browser or phone start pairing.
       const readPaired = async () =>
         new TextDecoder().decode(await (await svc.getCharacteristic(TRACKER_PAIRED)).readValue())
-      setFound({ name: device.name ?? 'Tracker', about, readPaired })
+      const read = async (uuid: string) => new TextDecoder().decode(await (await svc.getCharacteristic(uuid)).readValue())
+      const write = async (uuid: string, body: unknown) =>
+        (await svc.getCharacteristic(uuid)).writeValueWithResponse(new TextEncoder().encode(JSON.stringify(body)))
+      setFound({ name: device.name ?? 'Tracker', about, readPaired, read, write })
       drop.current = () => device.gatt?.disconnect()
       setDisconnect(() => () => { device.gatt?.disconnect(); drop.current = null; setFound(null); setDisconnect(null) })
     } catch (e) {
@@ -94,6 +115,61 @@ export default function BluetoothTestPage() {
     setPairing(false)
   }
 
+  // Add the tracker to this account. The tracker makes a token and keeps it;
+  // only its hash comes back, gets registered, and then the tracker commits.
+  async function addToAccount() {
+    if (!found) return
+    setLinking(true); setLinkMsg(null)
+    try {
+      await found.write(TRACKER_LINK, { op: 'begin' })
+      const st = parseLinkStatus(await found.read(TRACKER_LINK))
+      if (!st || st.state !== 'pending' || !st.tokenHash) throw new Error('no hash')
+      const res = await fetch('/api/account/devices/link-bluetooth', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ deviceId: st.id, tokenHash: st.tokenHash, model: found.about.model, firmware: found.about.firmware }),
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({})) as { error?: string }
+        setLinkMsg({ ok: false, text: linkErrorMessage(res.status, b.error) })
+        return
+      }
+      await found.write(TRACKER_LINK, { op: 'commit', tokenHash: st.tokenHash })
+      if (parseLinkStatus(await found.read(TRACKER_LINK))?.state !== 'committed') throw new Error('not committed')
+      setMine(new Set([...mine, st.id]))
+      setLinkMsg({ ok: true, text: 'Added to your account.' })
+    } catch {
+      // Pressing again starts over with a fresh token, which replaces anything
+      // half-done on both sides.
+      setLinkMsg({ ok: false, text: "Couldn't finish adding the tracker. Press ADD TO MY ACCOUNT again." })
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  // Send WiFi details; the tracker tries them and saves them only if they work.
+  async function saveWifi(e: React.FormEvent) {
+    e.preventDefault()
+    if (!found || !ssid.trim()) return
+    setWifiBusy(true); setWifiMsg(null)
+    try {
+      await found.write(TRACKER_WIFI, { ssid: ssid.trim(), pass: wifiPass })
+      for (let i = 0; i < WIFI_WAIT.tries; i++) {
+        if (WIFI_WAIT.delayMs) await new Promise(r => setTimeout(r, WIFI_WAIT.delayMs))
+        const st = parseWifiState(await found.read(TRACKER_WIFI))
+        if (st && st !== 'trying' && st !== 'idle') {
+          setWifiMsg({ ok: st === 'joined', text: wifiMessage(st) })
+          if (st === 'joined') setWifiPass('')
+          return
+        }
+      }
+      setWifiMsg({ ok: false, text: "Couldn't hear back from the tracker. Check its screen, then try again." })
+    } catch {
+      setWifiMsg({ ok: false, text: "Couldn't send the WiFi details. Stay close to the tracker and try again." })
+    } finally {
+      setWifiBusy(false)
+    }
+  }
+
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
@@ -109,7 +185,7 @@ export default function BluetoothTestPage() {
         <div>
           <h1 className="text-lg font-bold text-fg tracking-widest">BLUETOOTH (TEST)</h1>
           <p className="text-sm text-muted mt-1">
-            Connect to a tracker nearby and read its details. Only test trackers have Bluetooth so far.
+            Connect to a tracker nearby, pair it, add it to your account and give it your WiFi. Only test trackers have Bluetooth so far.
           </p>
         </div>
 
@@ -154,6 +230,43 @@ export default function BluetoothTestPage() {
               <p className="text-xs text-muted">
                 Pairing shows the same 6-digit number here and on the tracker. Hold the tracker&apos;s button if they match.
               </p>
+            )}
+            {paired && (
+              <div className="flex flex-col gap-4 border-t border-border pt-4">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs text-fg tracking-widest">ACCOUNT</h3>
+                  {ownership(found.about, mine) === 'yours' ? (
+                    <p className="text-sm text-muted">This tracker is on your account.</p>
+                  ) : (
+                    <div>
+                      <button type="button" onClick={addToAccount} disabled={linking}
+                        className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
+                        {linking ? 'ADDING…' : 'ADD TO MY ACCOUNT'}
+                      </button>
+                    </div>
+                  )}
+                  {linkMsg && <p className={`text-sm ${linkMsg.ok ? 'text-green' : 'text-red'}`} role="status">{linkMsg.text}</p>}
+                </div>
+
+                <form onSubmit={saveWifi} className="flex flex-col gap-2" aria-label="WiFi">
+                  <h3 className="text-xs text-fg tracking-widest">WIFI</h3>
+                  <p className="text-xs text-muted">The tracker tries the network first and keeps it only if it can join.</p>
+                  <label htmlFor="bt-wifi-ssid" className="text-xs text-muted uppercase tracking-widest">Network name</label>
+                  <input id="bt-wifi-ssid" value={ssid} onChange={e => setSsid(e.target.value)} maxLength={32} autoComplete="off"
+                    className="bg-bg border border-border px-3 py-2 text-sm text-fg" />
+                  <label htmlFor="bt-wifi-pass" className="text-xs text-muted uppercase tracking-widest">Password</label>
+                  <input id="bt-wifi-pass" type="password" value={wifiPass} onChange={e => setWifiPass(e.target.value)} maxLength={64}
+                    autoComplete="off" className="bg-bg border border-border px-3 py-2 text-sm text-fg" />
+                  <div>
+                    <button type="submit" disabled={wifiBusy || !ssid.trim()}
+                      className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
+                      {wifiBusy ? 'SAVING…' : 'SAVE WIFI'}
+                    </button>
+                  </div>
+                  {wifiBusy && <p className="text-sm text-fg" role="status">The tracker is trying the network. This takes up to 30 seconds.</p>}
+                  {wifiMsg && <p className={`text-sm ${wifiMsg.ok ? 'text-green' : 'text-red'}`} role="status">{wifiMsg.text}</p>}
+                </form>
+              </div>
             )}
             <div className="flex gap-2 flex-wrap">
               {!paired && (

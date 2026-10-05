@@ -6,6 +6,9 @@ export const TRACKER_SERVICE = '04dd0a01-9cd1-403e-a461-0b4af515a1b4'
 export const TRACKER_ABOUT = '04dd0a02-9cd1-403e-a461-0b4af515a1b4'
 /** Readable only over a paired connection; reading it is what starts pairing. */
 export const TRACKER_PAIRED = '04dd0a03-9cd1-403e-a461-0b4af515a1b4'
+/** Setup items, paired-only: link the tracker to an account, and WiFi details. */
+export const TRACKER_LINK = '04dd0a04-9cd1-403e-a461-0b4af515a1b4'
+export const TRACKER_WIFI = '04dd0a05-9cd1-403e-a461-0b4af515a1b4'
 
 export type TrackerAbout = {
   id: string
@@ -81,6 +84,53 @@ export async function readWhenPaired(
   return { paired: false, lastError }
 }
 
+export type LinkStatus = { id: string; state: 'idle' | 'pending' | 'committed'; tokenHash: string }
+
+/** The LINK item (bleLinkJson): the tracker's id, where the link is, and the
+ *  sha256 of the token it made -- never the token itself. */
+export function parseLinkStatus(raw: string): LinkStatus | null {
+  try {
+    const o = JSON.parse(trimValue(raw)) as Record<string, unknown>
+    if (o.v !== 1 || typeof o.id !== 'string' || !/^[0-9A-F]{8}$/.test(o.id)) return null
+    if (o.state !== 'idle' && o.state !== 'pending' && o.state !== 'committed') return null
+    if (typeof o.tokenHash !== 'string' || !/^([0-9a-f]{64})?$/.test(o.tokenHash)) return null
+    return { id: o.id, state: o.state, tokenHash: o.tokenHash }
+  } catch { return null }
+}
+
+export type WifiState = 'idle' | 'trying' | 'joined' | 'wrong_password' | 'not_found' | 'failed'
+const WIFI_STATES: WifiState[] = ['idle', 'trying', 'joined', 'wrong_password', 'not_found', 'failed']
+
+/** The WIFI item (bleWifiJson). */
+export function parseWifiState(raw: string): WifiState | null {
+  try {
+    const st = (JSON.parse(trimValue(raw)) as { v?: unknown; state?: unknown })
+    return st.v === 1 && WIFI_STATES.includes(st.state as WifiState) ? (st.state as WifiState) : null
+  } catch { return null }
+}
+
+/** How long to wait for the tracker to try a network: it takes up to 15 s to
+ *  join, plus a scan to tell a wrong password from a missing network. Read at
+ *  call time, so tests can shorten it. */
+export const WIFI_WAIT = { tries: 30, delayMs: 1500 }
+
+/** What to tell the person once the tracker has tried the network. */
+export function wifiMessage(s: Exclude<WifiState, 'idle' | 'trying'>): string {
+  switch (s) {
+    case 'joined': return 'The tracker joined your WiFi. It will upload over it from now on.'
+    case 'wrong_password': return "Couldn't join: the tracker found the network, so the password is probably wrong. Check it and try again."
+    case 'not_found': return "Couldn't find that network. Names are case-sensitive, and the tracker only uses 2.4 GHz WiFi."
+    default: return "Couldn't join that network. Check the name and password, then try again."
+  }
+}
+
+/** Why adding the tracker to the account failed, from the server's answer. */
+export function linkErrorMessage(status: number, code?: string): string {
+  if (code === 'owned_elsewhere') return 'This tracker is on another account. Its owner needs to remove it first.'
+  if (status === 429) return 'Too many tries. Please wait a while, then try again.'
+  return "Couldn't add the tracker. Please try again."
+}
+
 /** Whose tracker this is, as far as the signed-in person can tell. */
 export function ownership(a: Pick<TrackerAbout, 'id' | 'linked'>, myTrackerIds: Set<string>): 'yours' | 'elsewhere' | 'unlinked' {
   if (myTrackerIds.has(a.id)) return 'yours'
@@ -96,7 +146,10 @@ export type BluetoothLike = {
       connected: boolean
       connect(): Promise<{
         getPrimaryService(uuid: string): Promise<{
-          getCharacteristic(uuid: string): Promise<{ readValue(): Promise<DataView> }>
+          getCharacteristic(uuid: string): Promise<{
+            readValue(): Promise<DataView>
+            writeValueWithResponse(value: BufferSource): Promise<void>
+          }>
         }>
       }>
       disconnect(): void
