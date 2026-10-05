@@ -800,6 +800,16 @@ workflow never builds it:
 Flash `tracker` again to leave the bench build (it will then update itself to
 whatever is released).
 
+**`tools/bench.sh`** (status / put-fixture / sync / log) runs the bench checks
+against a tracker on USB and prints PASS/FAIL with evidence; it's Part A of the
+release checklist in [`../docs/features/release-testing.md`](../docs/features/release-testing.md).
+`put-fixture` writes a 10-minute slice of the 13 Sep reference paddle
+(`tools/fixtures/`), stamped with the current time so each run is a new
+recording. Opening the serial port restarts the tracker, and its start-up sync
+is usually the upload, so `sync` reads that too. Wait ~12 s after start-up
+before a `PUTFILE`: one sent while WiFi is still switching off loses its first
+block (the tool does this).
+
 **Bluetooth is in release builds from 0.18.0, OFF until the owner turns it on**
 (Settings > Network, page 2: tap flips pages, hold turns it on; turning it off
 restarts the tracker, the clean way to take the stack down, and is refused
