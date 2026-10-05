@@ -237,14 +237,41 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     }
 };
 
+#ifndef BLE_DEFAULT_ON
+#define BLE_DEFAULT_ON 0
+#endif
+static bool s_running = false;
+static char s_name[8] = "";
+
+bool bleEnabledSetting()
+{
+    Preferences p;
+    if (!p.begin("ble", true)) return BLE_DEFAULT_ON;   // never written
+    const bool on = p.getBool("on", BLE_DEFAULT_ON);
+    p.end();
+    return on;
+}
+void bleSetEnabled(bool on)
+{
+    Preferences p;
+    if (!p.begin("ble", false)) return;
+    p.putBool("on", on);
+    p.end();
+}
+bool bleRunning() { return s_running; }
+int  bleBondCount() { return s_running ? NimBLEDevice::getNumBonds() : 0; }
+const char *bleName() { return s_name; }
+
 void bleStart()
 {
+    if (s_running) return;
     // Same name as the setup hotspot (PT- + last three of the id), so the
     // browser's list shows a name the owner has already seen.
     const String id = netDeviceId();
     char name[7];
     apSsidFor(id.c_str(), name);
 
+    snprintf(s_name, sizeof(s_name), "%s", name);
     NimBLEDevice::init(name);
     // Pairing with number comparison: the tracker has a screen and a button,
     // so both sides show the same 6 digits and the owner confirms on the
@@ -295,6 +322,7 @@ void bleStart()
         p.end();
     }
 
+    s_running = true;
     DBGI("ble", "advertising as %s", name);
     Serial.printf("BLE: advertising as %s\n", name);
 }

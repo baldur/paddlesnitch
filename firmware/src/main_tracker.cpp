@@ -170,6 +170,13 @@ static uint32_t resetUntil    = 0;
 static int      linkPage      = 0;      // Linking screen: 0 QR, 1 characters
 static bool     qrTestHold    = false;   // QRTEST owns the panel until any other command
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
+// Settings > Network: page 0 WiFi, page 1 Bluetooth (when built in).
+static int      netPage       = 0;
+#if BLE_ENABLED
+static const int NET_PAGES = 2;
+#else
+static const int NET_PAGES = 1;
+#endif
 static const int NERD_PAGES   = 3;
 // Sync is paged for the same reason Nerd is, but the motive is safety as much as
 // space: deleting every uploaded file used to be a hold on the status page, so
@@ -348,9 +355,9 @@ void setup()
     if (!netHasWifi() || !netcfg.everConnected) netBringUp();
 
 #if BLE_ENABLED
-    // Bluetooth (bench build only for now: no pairing yet). After netcfgLoad,
-    // because the advertised name comes from the device id.
-    bleStart();
+    // Bluetooth, if the owner turned it on (Settings > Network, page 2). After
+    // netcfgLoad, because the advertised name comes from the device id.
+    if (bleEnabledSetting()) bleStart();
 #endif
 
     // The self-check that makes an update permanent. Everything above has run:
@@ -623,6 +630,7 @@ static void enterScreen(Screen s)
     menu     = Menu::None;
     stopArmed = false;
     if (s == Screen::Nerd) nerdPage = 0;                    // always start at page 1
+    if (s == Screen::Network) netPage = 0;
     if (s == Screen::Sync) syncPage = 0;                    // never open on cleanup
     if (s == Screen::Sync) uplinkRequestCounts();           // refresh on entry
     // Track is the recording screen: it auto-starts once a fix is available
@@ -670,6 +678,7 @@ static void screenTap()
     case Screen::Track: speedUnit = (speedUnit + 1) % 3; break;   // km/h -> m/s -> pace
     case Screen::Sync:  syncPage  = (syncPage  + 1) % SYNC_PAGES; break;
     case Screen::Nerd:  nerdPage  = (nerdPage  + 1) % NERD_PAGES; break;
+    case Screen::Network: netPage = (netPage + 1) % NET_PAGES; break;
     }
 }
 
@@ -774,6 +783,17 @@ static void screenHold()
         if (nerdPage == NERD_PAGES - 1) linkAttempt();
         break;
     case Screen::Network:
+#if BLE_ENABLED
+        // Page 2: Bluetooth on/off. On starts it now; off restarts the tracker,
+        // the one clean way to take the Bluetooth stack down -- so not while
+        // recording.
+        if (netPage == 1) {
+            if (!bleRunning()) { bleSetEnabled(true); bleStart(); toast("BLUETOOTH ON"); }
+            else if (storageRecording()) toast("STOP RECORDING FIRST");
+            else { bleSetEnabled(false); toast("BLUETOOTH OFF"); delay(800); ESP.restart(); }
+            break;
+        }
+#endif
         // The portal. A hold, not a tap, because opening it drops the current
         // connection -- and because hold is what commits on every other screen.
         if (netStartPortal("Change the WiFi network or password below.")) {
@@ -1480,6 +1500,13 @@ void loop()
         u.net.ip      = u.net.up ? WiFi.localIP().toString() : String();
         u.net.rssi    = u.net.up ? WiFi.RSSI() : 0;
         u.net.everConnected = netcfg.everConnected;
+        u.netPage     = netPage;
+        u.netPages    = NET_PAGES;
+#if BLE_ENABLED
+        u.bleOn       = bleRunning();
+        u.bleName     = bleName();
+        u.bleBonds    = bleBondCount();
+#endif
         u.nerdPage    = nerdPage;
         u.nerdPages   = NERD_PAGES;
         u.syncPage    = syncPage;

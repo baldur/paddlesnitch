@@ -370,12 +370,42 @@ static void drawSettings(const UiState &s)
 // portal is the screen's primary action, so it is a hold -- consistent with
 // every other screen, and deliberately not a tap, because opening the portal
 // drops the current connection.
-static void drawNetwork(const UiState &s)
+// Settings > Network, page 2: Bluetooth on or off, and how many phones and
+// computers are paired. Hold switches it (off restarts the tracker).
+static void drawBluetooth(const UiState &s)
 {
     char l[40];
     display.clearBuffer();
     display.setFont(u8g2_font_5x8_tf);
+    display.drawStr(0, 8, "Settings > Bluetooth");
+    snprintf(l, sizeof(l), "%d/%d", s.netPage + 1, s.netPages);
+    display.drawStr(128 - display.getStrWidth(l), 8, l);
+    display.drawHLine(0, 11, 128);
+    display.setFont(u8g2_font_6x10_tf);
+    display.drawStr(0, 26, s.bleOn ? "Bluetooth is on" : "Bluetooth is off");
+    display.setFont(u8g2_font_5x8_tf);
+    if (s.bleOn) {
+        snprintf(l, sizeof(l), "%s - %d paired", s.bleName.c_str(), s.bleBonds);
+        display.drawStr(0, 38, l);
+    } else {
+        display.drawStr(0, 38, "sync by phone or computer");
+    }
+    display.drawStr(0, 50, s.bleOn ? "TURN OFF (restarts)" : "TURN ON");
+    drawBatteryBadge(s);
+    display.sendBuffer();
+}
+
+static void drawNetwork(const UiState &s)
+{
+    if (s.netPage == 1) { drawBluetooth(s); return; }
+    char l[40];
+    display.clearBuffer();
+    display.setFont(u8g2_font_5x8_tf);
     display.drawStr(0, 8, "Settings > Network");
+    if (s.netPages > 1) {
+        snprintf(l, sizeof(l), "%d/%d", s.netPage + 1, s.netPages);
+        display.drawStr(128 - display.getStrWidth(l), 8, l);
+    }
     display.drawHLine(0, 11, 128);
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(0, 26, s.net.ssid.length() ? s.net.ssid.c_str() : "no network set");

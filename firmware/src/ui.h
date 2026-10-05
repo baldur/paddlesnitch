@@ -28,6 +28,12 @@ struct UiState {
     // link / onboarding
     bool     linked      = false;
     UiNet    net;
+    // Settings > Network page 2 (Bluetooth), when built in.
+    int      netPage     = 0;
+    int      netPages    = 1;
+    bool     bleOn       = false;
+    String   bleName;
+    int      bleBonds    = 0;
     // Linking screen: 0 = the QR alone on the whole panel, 1 = the characters.
     int      linkPage    = 0;
     String   linkTitle;
