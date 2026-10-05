@@ -265,6 +265,12 @@ static void misoCheck(const char *when)
 
 void setup()
 {
+#if BENCH_TOOLS
+    // PUTFILE streams files in; the USB serial driver's 256-byte receive queue
+    // drops what doesn't fit. Enlarged here, before anything is sent: resizing
+    // it mid-transfer (as PUTFILE first did) lost the first block after a start.
+    Serial.setRxBufferSize(4096);
+#endif
     Serial.begin(115200);
     // USB-CDC: give the host a moment to enumerate, but never block forever --
     // the board must still run on battery with no serial monitor attached.

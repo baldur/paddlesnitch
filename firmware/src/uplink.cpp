@@ -1215,9 +1215,11 @@ void uplinkTaskStart()
     if (!g_lock) g_lock = xSemaphoreCreateMutex();
     // Core 0: the Arduino loop (UI, GNSS, logging) runs on core 1, and this task
     // blocks for seconds inside TLS and HTTP.
-    // 16 KB, was 8 KB. Compression (0.17.0) runs here, and the ROM deflate keeps
+    // 16 KB (was 8 KB) from 0.17.0. Compression runs here, and the ROM deflate keeps
     // its Huffman tables on the stack: on top of TLS that overflowed 8 KB on the
     // first compressed upload (stack canary, crash loop). The headroom left is
     // logged after every sync ("stack headroom").
-    xTaskCreatePinnedToCore(uplinkTask, "uplink", 16384, nullptr, 1, nullptr, 0);
+    // 20 KB from 0.18.0: health reports and Bluetooth jobs run here too, and
+    // on 16 KB a compressed upload left 7.7 KB (release-testing A5).
+    xTaskCreatePinnedToCore(uplinkTask, "uplink", 20480, nullptr, 1, nullptr, 0);
 }
