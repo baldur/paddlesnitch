@@ -617,10 +617,93 @@ export async function getDeviceSessionTrace(userId: string, deviceId: string, se
 // ── GDPR ─────────────────────────────────────────────────────────────────────
 
 // What export shows of a tracker: everything but the token hash (a credential).
-export type ExportedDevice = Omit<DeviceRecord, 'tokenHash'>
+// ---------------------------------------------------------------------------
+// Health: why a tracker restarted (with the chip's crash summary, if it
+// crashed) once per start, and an hourly heartbeat while on WiFi
+// (docs/features/release-testing.md). Diagnostics only -- no position.
+// ---------------------------------------------------------------------------
+
+export type DeviceCrash = { task: string; pc: string; bt: string[]; corrupted: boolean; elf: string }
+export type DeviceHealth = {
+  at: string
+  kind: 'boot' | 'heartbeat'
+  firmware?: string
+  resetReason?: string
+  uptimeS?: number
+  heapMin?: number
+  psramFree?: number
+  battMv?: number
+  onUsb?: boolean
+  stackHeadroom?: number
+  pending?: number
+  crash?: DeviceCrash
+}
+
+const healthKey = (deviceId: string) => `devices/${deviceId}/health/latest.json`
+const crashPrefix = (deviceId: string) => `devices/${deviceId}/crashes/`
+const MAX_CRASHES = 20
+
+/** A report as the tracker sent it, bounded and cleaned, or null if it isn't one. */
+export function sanitizeHealth(raw: unknown, firmware: string | null): DeviceHealth | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (r.kind !== 'boot' && r.kind !== 'heartbeat') return null
+  const int = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(Math.round(v), 2 ** 31)) : undefined)
+  const word = (v: unknown, max = 24) => (typeof v === 'string' ? v.replace(/[^\w.-]/g, '').slice(0, max) : '')
+  const addr = (v: unknown) => (typeof v === 'string' && /^0x[0-9a-fA-F]{1,8}$/.test(v) ? v.toLowerCase() : null)
+  const h: DeviceHealth = {
+    at: new Date().toISOString(),
+    kind: r.kind,
+    firmware: firmware ?? undefined,
+    resetReason: word(r.resetReason) || undefined,
+    uptimeS: int(r.uptimeS), heapMin: int(r.heapMin), psramFree: int(r.psramFree), battMv: int(r.battMv),
+    onUsb: typeof r.onUsb === 'boolean' ? r.onUsb : undefined,
+    stackHeadroom: int(r.stackHeadroom), pending: int(r.pending),
+  }
+  const c = r.crash as Record<string, unknown> | undefined
+  if (c && typeof c === 'object') {
+    h.crash = {
+      task: word(c.task, 16),
+      pc: addr(c.pc) ?? '',
+      bt: (Array.isArray(c.bt) ? c.bt : []).map(addr).filter((a): a is string => !!a).slice(0, 16),
+      corrupted: c.corrupted === true,
+      elf: word(c.elf, 64),
+    }
+  }
+  return h
+}
+
+/** Keep the latest report, and the last MAX_CRASHES crashes. */
+export async function storeDeviceHealth(deviceId: string, h: DeviceHealth): Promise<void> {
+  if (!isDeviceId(deviceId)) return
+  await putJson(healthKey(deviceId), h)
+  if (!h.crash) return
+  // Time first, so a plain listing is in order; a random tail, because a
+  // tracker in a crash loop can report twice in one millisecond.
+  await putJson(`${crashPrefix(deviceId)}${h.at.replace(/[:.]/g, '-')}-${randomBytes(3).toString('hex')}.json`, h)
+  const keys = (await listKeys(crashPrefix(deviceId))).sort()
+  for (const k of keys.slice(0, Math.max(0, keys.length - MAX_CRASHES))) await deleteObject(k)
+}
+
+/** The newest crash report, if any. */
+export async function getLastCrash(deviceId: string): Promise<DeviceHealth | null> {
+  if (!isDeviceId(deviceId)) return null
+  const keys = (await listKeys(crashPrefix(deviceId))).sort()
+  return keys.length ? getJson<DeviceHealth>(keys[keys.length - 1]) : null
+}
+
+export async function getDeviceHealth(deviceId: string): Promise<DeviceHealth | null> {
+  return isDeviceId(deviceId) ? getJson<DeviceHealth>(healthKey(deviceId)) : null
+}
+
+export type ExportedDevice = Omit<DeviceRecord, 'tokenHash'> & { health?: DeviceHealth }
 
 export async function exportUserDevices(userId: string): Promise<{ trackers: ExportedDevice[]; recordings: DeviceSessionMeta[] }> {
-  const trackers = (await listUserDevices(userId)).map(({ tokenHash: _t, ...rest }) => rest)
+  const trackers: ExportedDevice[] = []
+  for (const { tokenHash: _t, ...rest } of await listUserDevices(userId)) {
+    const health = await getDeviceHealth(rest.deviceId)
+    trackers.push(health ? { ...rest, health } : rest)
+  }
   return { trackers, recordings: await listUserDeviceSessions(userId) }
 }
 
@@ -643,6 +726,9 @@ export async function eraseUserDevices(userId: string): Promise<void> {
     if (d.tokenHash) await deleteObject(tokenKey(d.tokenHash))
     await deleteObject(deviceKey(d.deviceId))
     for (const k of await listKeys(`devices/${d.deviceId}/parts/`)) await deleteObject(k)
+    // Its health reports and crash history.
+    for (const k of await listKeys(`devices/${d.deviceId}/health/`)) await deleteObject(k)
+    for (const k of await listKeys(crashPrefix(d.deviceId))) await deleteObject(k)
   }
   // 3. Claims they linked, including any still outstanding, and their code index.
   for (const k of await listKeys('device-claims/')) {

@@ -25,6 +25,19 @@ export const fmtDur = (s?: number | null) => {
 export type DeviceView = {
   deviceId: string; name: string; model?: string; firmware?: string
   linkedAt?: string; lastSeenAt?: string
+  /** The tracker's most recent crash, as it reported on its next start. */
+  lastCrash?: { at: string; task: string }
+}
+
+/** How long a crash stays on the tracker's card. */
+export const CRASH_SHOWN_MS = 7 * 24 * 60 * 60 * 1000
+
+/** "crashed 2h ago (uplink)" for a crash in the last week, else null. */
+export function crashNote(c: { at: string; task: string } | undefined, now: number = Date.now()): string | null {
+  if (!c) return null
+  const t = Date.parse(c.at)
+  if (!Number.isFinite(t) || now - t > CRASH_SHOWN_MS) return null
+  return `crashed ${fmtAgo(c.at, now)}${c.task ? ` (${c.task})` : ''}`
 }
 
 /** How long without a word before a tracker is worth flagging. Two days: a

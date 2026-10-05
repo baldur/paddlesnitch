@@ -227,6 +227,9 @@ jobs:
             exit 0
           fi
           aws s3 cp .pio/build/tracker/firmware.bin "s3://$DATA_BUCKET/firmware/$V/firmware.bin"
+          # The debug file, so a crash report's addresses can be decoded to file
+          # and line later (firmware/tools/decode-crash.sh). Never sent to trackers.
+          aws s3 cp .pio/build/tracker/firmware.elf "s3://$DATA_BUCKET/firmware/$V/firmware.elf"
           aws s3 cp manifest.json "s3://$DATA_BUCKET/firmware/$V/manifest.json"
           echo "PUBLISHED_NOW=true" >> "$GITHUB_ENV"
 
