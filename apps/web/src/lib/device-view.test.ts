@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
-import { deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, fmtDur, type DeviceView } from './device-view'
+import { deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, fmtDur, type DeviceView, crashNote } from './device-view'
 import type { DeviceSessionMeta } from '@/lib/devices'
 
 const dev = (deviceId: string, over: Partial<DeviceView> = {}): DeviceView =>
@@ -102,5 +102,19 @@ describe('fleet state — version drift and liveness', () => {
     expect(ago(5 * 3600 * 1000)).toBe('5h ago')
     expect(ago(3 * 24 * 3600 * 1000)).toBe('3d ago')
     expect(fmtAgo(undefined)).toBe('never')
+  })
+})
+
+describe('crashNote', () => {
+  const now = Date.parse('2026-10-05T20:00:00Z')
+  it('says a tracker crashed recently, and where', () => {
+    expect(crashNote({ at: '2026-10-05T18:00:00Z', task: 'uplink' }, now)).toBe('crashed 2h ago (uplink)')
+  })
+  it('says nothing about a crash more than a week old, or none', () => {
+    expect(crashNote({ at: '2026-09-20T18:00:00Z', task: 'uplink' }, now)).toBeNull()
+    expect(crashNote(undefined, now)).toBeNull()
+  })
+  it('leaves the task out when the chip saved none', () => {
+    expect(crashNote({ at: '2026-10-05T19:30:00Z', task: '' }, now)).toBe('crashed 30m ago')
   })
 })

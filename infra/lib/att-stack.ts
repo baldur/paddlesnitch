@@ -852,6 +852,21 @@ export class AttStack extends cdk.Stack {
         width: 12,
         height: 6,
       }),
+      // Trackers report a crash on the start after it (POST /api/devices/health),
+      // by version. A crash that starts with a release is the release.
+      new cloudwatch.GraphWidget({
+        title: 'Tracker crashes / day, by version',
+        // A search, because the metric carries Version + Model dimensions: one
+        // line per version that crashed.
+        left: [new cloudwatch.MathExpression({
+          expression: `SEARCH('{Paddlesnitch/Firmware,Version,Model} MetricName="DeviceCrash"', 'Sum', 86400)`,
+          usingMetrics: {},
+          label: 'crashes',
+          period: cdk.Duration.days(1),
+        })],
+        width: 12,
+        height: 6,
+      }),
       new cloudwatch.SingleValueWidget({
         title: 'Selected range - totals',
         metrics: [
@@ -859,6 +874,7 @@ export class AttStack extends cdk.Stack {
           firmwareMetric('FirmwareBootConfirmed', cdk.Duration.days(1)),
           firmwareMetric('FirmwareBootFailed', cdk.Duration.days(1)),
           firmwareMetric('FirmwareCheckNotModified', cdk.Duration.days(1)),
+          firmwareMetric('DeviceCrash', cdk.Duration.days(1)),
         ],
         width: 12,
         height: 6,
@@ -1015,6 +1031,13 @@ export class AttStack extends cdk.Stack {
       alarmName: 'paddlesnitch-tracker-boot-failed',
       alarmDescription: 'A tracker reported that an update failed to boot and was rolled back.',
       metric: logCount('FirmwareBootFailedFilter', logs.FilterPattern.anyTerm('FirmwareBootFailed'), 'FirmwareBootFailedLines'),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
+    alarm('DeviceCrashAlarm', {
+      alarmName: 'paddlesnitch-tracker-crashed',
+      alarmDescription: 'A tracker reported a crash (panic or watchdog) on its next start. The log line has the device, task and backtrace; firmware/tools/decode-crash.sh turns the addresses into file and line.',
+      metric: logCount('DeviceCrashFilter', logs.FilterPattern.anyTerm('DeviceCrash'), 'DeviceCrashLines'),
       threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
     })
 

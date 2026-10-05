@@ -5,7 +5,7 @@ import AppHeader from '@/components/AppHeader'
 import AddTrackerForm from '@/components/devices/AddTrackerForm'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { setupProgress } from '@/lib/guide'
-import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDate, fmtDist } from '@/lib/device-view'
+import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDate, fmtDist, crashNote } from '@/lib/device-view'
 
 // DEVICES: your trackers, one card each (the tracker is the unit; its
 // recordings live one level down at /devices/<deviceId>), and the box to add a
@@ -116,6 +116,8 @@ export default function DevicesPage() {
                       <span className={deviceIsQuiet(d.lastSeenAt) ? 'text-red' : 'text-fg'}>
                         {fmtAgo(d.lastSeenAt)}
                       </span>
+                      {/* Reported by the tracker on the start after the crash. */}
+                      {crashNote(d.lastCrash) && <span className="text-red"> · {crashNote(d.lastCrash)}</span>}
                     </span>
                   )}
                   <span className="block text-xs text-muted tabular mt-1">

@@ -307,7 +307,7 @@ describe('Bluetooth test page', () => {
         },
       }))
       vi.stubGlobal('navigator', { ...navigator, bluetooth: { requestDevice } })
-      const fetchMock = vi.fn(async (url: string) => url.startsWith('/api/account/devices/435AC17C/sessions')
+      const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => url.startsWith('/api/account/devices/435AC17C/sessions')
         ? ({ ok: true, status: 201, json: async () => ({ receipt: 'r'.repeat(64) }) } as unknown as Response)
         : ({ ok: true, status: 200, json: async () => ({ devices: [{ deviceId: '435AC17C' }] }) } as unknown as Response))
       vi.stubGlobal('fetch', fetchMock)
