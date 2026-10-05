@@ -28,6 +28,7 @@
 #include "netcfg.h"
 #include "uplink.h"
 #include "ble.h"
+#include "health.h"
 #include "ui.h"
 #include <WiFi.h>
 
@@ -274,6 +275,7 @@ void setup()
     // to come up three times, this puts the old one back and reboots -- and it
     // has to run before the thing that is crashing gets a chance to crash again.
     otaBootCheck();
+    healthCaptureBoot();   // why we restarted, and the crash summary if we crashed
     // Prove the OTA layout rather than assert it. The previous table declared
     // otadata and typed app0 as ota_0 but had no app1, so this line would have
     // printed "OTA: NOT POSSIBLE" -- which is the whole reason it exists.

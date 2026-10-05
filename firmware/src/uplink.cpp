@@ -12,6 +12,7 @@
 #include "ota_policy.h"
 #include "upload_policy.h"
 #include "compress.h"
+#include "health.h"
 #include "ble_about.h"
 #include <mbedtls/md.h>
 
@@ -1149,6 +1150,16 @@ static void uplinkTask(void *)
             st.claiming = false;
             snprintf(st.message, sizeof(st.message), "%s", cs.message.c_str());
             statusSet(st);
+        }
+
+        // Health first (health.h): the start report -- with the crash summary
+        // after a crash -- goes before anything that could restart us, such as
+        // the update check below; then a heartbeat every hour.
+        if (netIsClaimed() && !g_yield) {
+            WiFiClientSecure hc;
+            configureClient(hc);
+            const UplinkStatus now = uplinkGetStatus();
+            healthMaybeSend(hc, now.countsValid ? now.pending : -1, uxTaskGetStackHighWaterMark(nullptr));
         }
 
         // After a crash, look for a fix BEFORE uploading (ota_policy.h): if an
