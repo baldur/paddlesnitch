@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header> }))
 
 import BluetoothTestPage from './page'
-import { PAIRING_WAIT, WIFI_WAIT } from '@/lib/tracker-ble'
+import { PAIRING_WAIT, WIFI_WAIT, SYNC_WAIT } from '@/lib/tracker-ble'
 
 // The real wait is ~30 s; tests don't sit through it.
 PAIRING_WAIT.tries = 3
@@ -263,6 +263,72 @@ describe('Bluetooth test page', () => {
       await act(async () => { button('SAVE WIFI')!.click() })
       await settle()
       expect(container.textContent).toContain('password is probably wrong')
+    })
+  })
+
+  describe('SYNC OVER BLUETOOTH', () => {
+    // One small recording on a fake tracker that speaks SYNC + DATA like the firmware.
+    function fakeSyncTracker() {
+      const csv = 'timestamp,lat,lon\n2026-10-05T06:10:02Z,51.46,-0.93'
+      let state = 'idle', data = new Uint8Array(0), cursor = 0
+      const done: unknown[] = []
+      const enc8 = (t: string) => new TextEncoder().encode(t)
+      const requestDevice = vi.fn(async () => ({
+        name: 'PT-17C',
+        gatt: {
+          connected: true, disconnect: vi.fn(),
+          connect: async () => ({
+            getPrimaryService: async () => ({
+              getCharacteristic: async (uuid: string) => ({
+                readValue: async () => {
+                  if (uuid.startsWith('04dd0a02')) return enc(ABOUT)
+                  if (uuid.startsWith('04dd0a03')) return enc('{"v":1,"paired":true}')
+                  if (uuid.startsWith('04dd0a06')) return enc(JSON.stringify({ v: 1, state, len: data.length, part: 1, parts: 1, compressed: false }))
+                  if (uuid.startsWith('04dd0a07')) {
+                    const n = Math.min(500, data.length - cursor)
+                    const p = new Uint8Array(4 + n)
+                    new DataView(p.buffer).setUint32(0, cursor, true)
+                    p.set(data.subarray(cursor, cursor + n), 4); cursor += n
+                    return new DataView(p.buffer)
+                  }
+                  return enc('{}')
+                },
+                writeValueWithResponse: async (buf: ArrayBuffer) => {
+                  const b = JSON.parse(new TextDecoder().decode(buf))
+                  if (!uuid.startsWith('04dd0a06')) return
+                  cursor = 0
+                  if (b.op === 'list') { data = enc8(JSON.stringify([{ n: 'track_z.csv', u: 'track_z.csv', s: csv.length }])); state = 'ready' }
+                  if (b.op === 'piece') { data = enc8(csv); state = 'ready' }
+                  if (b.op === 'done') { done.push(b); state = 'marked' }
+                },
+              }),
+            }),
+          }),
+        },
+      }))
+      vi.stubGlobal('navigator', { ...navigator, bluetooth: { requestDevice } })
+      const fetchMock = vi.fn(async (url: string) => url.startsWith('/api/account/devices/435AC17C/sessions')
+        ? ({ ok: true, status: 201, json: async () => ({ receipt: 'r'.repeat(64) }) } as unknown as Response)
+        : ({ ok: true, status: 200, json: async () => ({ devices: [{ deviceId: '435AC17C' }] }) } as unknown as Response))
+      vi.stubGlobal('fetch', fetchMock)
+      return { done, fetchMock }
+    }
+
+    it('sends the recording through this browser and hands the receipt back to the tracker', async () => {
+      SYNC_WAIT.delayMs = 0
+      const { done, fetchMock } = fakeSyncTracker()
+      await connected()
+      await act(async () => { pairButton()!.click() })
+      for (let i = 0; i < 12; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+      const btn = [...container.querySelectorAll('button')].find(b => b.textContent === 'SYNC OVER BLUETOOTH')!
+      await act(async () => { btn.click() })
+      for (let i = 0; i < 30; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+      const call = fetchMock.mock.calls.find(c => String(c[0]).startsWith('/api/account/devices/435AC17C/sessions'))!
+      expect(String(call[0])).toContain('filename=track_z.csv')
+      expect(String(call[0])).toContain('part=1&parts=1')
+      expect((call[1] as RequestInit).headers).toMatchObject({ 'content-type': 'text/csv', 'x-device-firmware': '0.18.0' })
+      expect(done).toEqual([{ op: 'done', name: 'track_z.csv', receipt: 'r'.repeat(64) }])
+      expect(container.textContent).toContain('1 recording sent')
     })
   })
 })

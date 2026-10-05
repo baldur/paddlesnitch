@@ -9,6 +9,10 @@ export const TRACKER_PAIRED = '04dd0a03-9cd1-403e-a461-0b4af515a1b4'
 /** Setup items, paired-only: link the tracker to an account, and WiFi details. */
 export const TRACKER_LINK = '04dd0a04-9cd1-403e-a461-0b4af515a1b4'
 export const TRACKER_WIFI = '04dd0a05-9cd1-403e-a461-0b4af515a1b4'
+/** Recordings over Bluetooth, paired-only: SYNC takes commands and reports
+ *  state; DATA serves what SYNC prepared, in offset-stamped pages. */
+export const TRACKER_SYNC = '04dd0a06-9cd1-403e-a461-0b4af515a1b4'
+export const TRACKER_DATA = '04dd0a07-9cd1-403e-a461-0b4af515a1b4'
 
 export type TrackerAbout = {
   id: string
@@ -143,6 +147,143 @@ export function linkErrorMessage(status: number, code?: string): string {
   if (code === 'owned_elsewhere') return 'This tracker is on another account. Its owner needs to remove it first.'
   if (status === 429) return 'Too many tries. Please wait a while, then try again.'
   return "Couldn't add the tracker. Please try again."
+}
+
+export type SyncStatus = {
+  state: 'idle' | 'working' | 'ready' | 'marked' | 'bad_receipt' | 'busy' | 'error'
+  len: number; part: number; parts: number; compressed: boolean
+}
+const SYNC_STATES: SyncStatus['state'][] = ['idle', 'working', 'ready', 'marked', 'bad_receipt', 'busy', 'error']
+
+/** The SYNC item (bleSyncJson). */
+export function parseSyncStatus(raw: string): SyncStatus | null {
+  try {
+    const o = JSON.parse(trimValue(raw)) as Record<string, unknown>
+    if (o.v !== 1 || !SYNC_STATES.includes(o.state as SyncStatus['state'])) return null
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+    return { state: o.state as SyncStatus['state'], len: num(o.len), part: num(o.part), parts: num(o.parts), compressed: o.compressed === true }
+  } catch { return null }
+}
+
+export type PendingRecording = { name: string; upload: string; size: number }
+const SAFE_NAME = /^[\w.-]{1,64}$/
+
+/** The waiting recordings, as the tracker lists them: tracks before motion
+ *  files. `upload` is the name the server knows a file by. Anything that isn't
+ *  a plain file name is dropped. */
+export function parsePendingList(raw: string): PendingRecording[] {
+  try {
+    const arr = JSON.parse(trimValue(raw)) as { n?: unknown; u?: unknown; s?: unknown }[]
+    if (!Array.isArray(arr)) return []
+    return arr
+      .filter(e => typeof e.n === 'string' && SAFE_NAME.test(e.n) && !e.n.startsWith('.') && typeof e.u === 'string' && SAFE_NAME.test(e.u) && typeof e.s === 'number')
+      .map(e => ({ name: e.n as string, upload: e.u as string, size: e.s as number }))
+  } catch { return [] }
+}
+
+/**
+ * Read `len` bytes off DATA. Each page is [u32 offset, little-endian][bytes];
+ * a page that doesn't start where we are (a read lost or repeated) makes us
+ * seek back rather than splice the wrong bytes into a recording.
+ */
+export async function readPayload(
+  readPage: () => Promise<DataView>,
+  seek: (offset: number) => Promise<void>,
+  len: number,
+  maxMisses = 20,
+): Promise<Uint8Array> {
+  const out = new Uint8Array(len)
+  let at = 0, misses = 0
+  while (at < len) {
+    const p = await readPage()
+    if (p.byteLength < 4) throw new Error('empty page')
+    const offset = p.getUint32(0, true)
+    const n = p.byteLength - 4
+    if (offset !== at || n === 0) {
+      if (++misses > maxMisses) throw new Error(`pages out of place at ${at}`)
+      await seek(at)
+      continue
+    }
+    out.set(new Uint8Array(p.buffer, p.byteOffset + 4, Math.min(n, len - at)), at)
+    at += n
+  }
+  return out
+}
+
+/** The Bluetooth and network calls a sync needs; the page wires these to Web
+ *  Bluetooth and fetch, and tests to a fake tracker. */
+export type SyncIo = {
+  command(body: Record<string, unknown>): Promise<void>           // write SYNC
+  status(): Promise<SyncStatus | null>                           // read SYNC
+  readPage(): Promise<DataView>                                  // read DATA
+  seek(offset: number): Promise<void>                            // write DATA {op:seek}
+  upload(r: PendingRecording, part: number, parts: number, bytes: Uint8Array, compressed: boolean):
+    Promise<{ status: number; body: { error?: string; receipt?: string } }>
+}
+export type SyncProgress = { index: number; total: number; name: string; part: number; parts: number }
+export type SyncResult = { sent: number; failed: { name: string; reason: 'unusable' | 'receipt' | 'failed' }[] }
+
+/** How long to wait for the tracker to prepare something (it reads the card and
+ *  compresses on its upload task). Read at call time, so tests can shorten it. */
+export const SYNC_WAIT = { tries: 120, delayMs: 250 }
+
+async function waitForTracker(io: SyncIo, want: SyncStatus['state'][]): Promise<SyncStatus> {
+  for (let i = 0; i < SYNC_WAIT.tries; i++) {
+    const st = await io.status()
+    if (st?.state === 'busy') throw new Error('The tracker is recording. Stop the recording, then sync.')
+    if (st && want.includes(st.state)) return st
+    if (st?.state === 'error') throw new Error('tracker error')
+    if (SYNC_WAIT.delayMs) await new Promise(r => setTimeout(r, SYNC_WAIT.delayMs))
+  }
+  throw new Error('The tracker took too long to answer.')
+}
+
+/**
+ * Bring every waiting recording home over Bluetooth: list them, then for each,
+ * read it piece by piece (64 KB, zlib when that helped), upload each piece as
+ * the signed-in user, and hand the server's receipt back so the tracker marks
+ * it sent. Tracks come before their motion files (the tracker lists them that
+ * way). One recording failing doesn't stop the rest.
+ */
+export async function syncOverBluetooth(io: SyncIo, onProgress?: (p: SyncProgress) => void): Promise<SyncResult> {
+  await io.command({ op: 'list' })
+  const listed = await waitForTracker(io, ['ready'])
+  const list = parsePendingList(new TextDecoder().decode(await readPayload(io.readPage, io.seek, listed.len)))
+  const result: SyncResult = { sent: 0, failed: [] }
+  for (let i = 0; i < list.length; i++) {
+    const rec = list[i]
+    try {
+      let parts = 1, receipt: string | undefined
+      for (let part = 1; part <= parts; part++) {
+        await io.command({ op: 'piece', name: rec.name, part })
+        const st = await waitForTracker(io, ['ready'])
+        parts = Math.max(1, st.parts)
+        onProgress?.({ index: i + 1, total: list.length, name: rec.name, part, parts })
+        const bytes = await readPayload(io.readPage, io.seek, st.len)
+        const r = await io.upload(rec, part, parts, bytes, st.compressed)
+        if (r.status === 202) continue
+        if ((r.status === 201 || (r.status === 409 && r.body.error === 'already_uploaded')) && r.body.receipt) {
+          receipt = r.body.receipt
+          break
+        }
+        if (r.status === 400 || r.status === 413 || r.status === 422) {
+          result.failed.push({ name: rec.name, reason: 'unusable' })
+        } else {
+          result.failed.push({ name: rec.name, reason: 'failed' })
+        }
+        break
+      }
+      if (!receipt) continue
+      await io.command({ op: 'done', name: rec.name, receipt })
+      const done = await waitForTracker(io, ['marked', 'bad_receipt'])
+      if (done.state === 'marked') result.sent++
+      else result.failed.push({ name: rec.name, reason: 'receipt' })
+    } catch (e) {
+      if (/recording/.test((e as Error).message)) throw e
+      result.failed.push({ name: rec.name, reason: 'failed' })
+    }
+  }
+  return result
 }
 
 /** Whose tracker this is, as far as the signed-in person can tell. */

@@ -50,6 +50,30 @@ static void wifi_status_is_one_word_the_page_maps(void)
     TEST_ASSERT_EQUAL_STRING("{\"v\":1,\"state\":\"wrong_password\"}", buf);
 }
 
+static void a_page_starts_with_its_offset_little_endian(void)
+{
+    uint8_t h[4];
+    blePageHeader(h, 0x00012345);
+    TEST_ASSERT_EQUAL_HEX8(0x45, h[0]); TEST_ASSERT_EQUAL_HEX8(0x23, h[1]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, h[2]); TEST_ASSERT_EQUAL_HEX8(0x00, h[3]);
+    TEST_ASSERT_TRUE(PS_BLE_PAGE_DATA + 4 <= 512);   // one Bluetooth read
+}
+
+// Must equal the server's uploadReceipt message, or no receipt ever checks.
+static void the_receipt_covers_the_id_and_the_server_side_name(void)
+{
+    char m[100];
+    bleReceiptMessage(m, sizeof(m), "435AC17C", "track_20261005_061002_imu.csv");
+    TEST_ASSERT_EQUAL_STRING("ps-receipt:v1|435AC17C|track_20261005_061002_imu.csv", m);
+}
+
+static void sync_status_says_what_data_holds(void)
+{
+    char b[160];
+    bleSyncJson(b, sizeof(b), "ready", 18234, 2, 10, true);
+    TEST_ASSERT_EQUAL_STRING("{\"v\":1,\"state\":\"ready\",\"len\":18234,\"part\":2,\"parts\":10,\"compressed\":true}", b);
+}
+
 int main(int, char **)
 {
     UNITY_BEGIN();
@@ -58,5 +82,8 @@ int main(int, char **)
     RUN_TEST(about_fits_one_read);
     RUN_TEST(link_status_carries_the_hash_never_a_token);
     RUN_TEST(wifi_status_is_one_word_the_page_maps);
+    RUN_TEST(a_page_starts_with_its_offset_little_endian);
+    RUN_TEST(the_receipt_covers_the_id_and_the_server_side_name);
+    RUN_TEST(sync_status_says_what_data_holds);
     return UNITY_END();
 }

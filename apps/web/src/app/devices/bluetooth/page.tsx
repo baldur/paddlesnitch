@@ -6,6 +6,7 @@ import {
   TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, WIFI_WAIT,
   parseAbout, readWhenPaired, ownership, browserBluetooth, parseLinkStatus, parseWifiState,
   wifiMessage, linkErrorMessage, setupErrorMessage, type TrackerAbout,
+  TRACKER_SYNC, TRACKER_DATA, parseSyncStatus, syncOverBluetooth, type SyncProgress,
 } from '@/lib/tracker-ble'
 
 // Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 + J1 step 3).
@@ -17,6 +18,7 @@ type Found = {
   name: string
   about: TrackerAbout
   readPaired: () => Promise<string>
+  readRaw: (uuid: string) => Promise<DataView>
   read: (uuid: string) => Promise<string>
   write: (uuid: string, body: unknown) => Promise<void>
 }
@@ -55,6 +57,9 @@ export default function BluetoothTestPage() {
   const [wifiPass, setWifiPass] = useState('')
   const [wifiBusy, setWifiBusy] = useState(false)
   const [wifiMsg, setWifiMsg] = useState<Msg>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null)
+  const [syncMsg, setSyncMsg] = useState<Msg>(null)
 
   useEffect(() => {
     setSupported(browserBluetooth() !== null)
@@ -88,7 +93,8 @@ export default function BluetoothTestPage() {
       const read = async (uuid: string) => new TextDecoder().decode(await (await svc.getCharacteristic(uuid)).readValue())
       const write = async (uuid: string, body: unknown) =>
         (await svc.getCharacteristic(uuid)).writeValueWithResponse(new TextEncoder().encode(JSON.stringify(body)))
-      setFound({ name: device.name ?? 'Tracker', about, readPaired, read, write })
+      const readRaw = async (uuid: string) => (await svc.getCharacteristic(uuid)).readValue()
+      setFound({ name: device.name ?? 'Tracker', about, readPaired, readRaw, read, write })
       drop.current = () => device.gatt?.disconnect()
       setDisconnect(() => () => { device.gatt?.disconnect(); drop.current = null; setFound(null); setDisconnect(null) })
     } catch (e) {
@@ -145,6 +151,49 @@ export default function BluetoothTestPage() {
       setLinkMsg({ ok: false, text: stale ? setupErrorMessage(e, found.name) : "Couldn't finish adding the tracker. Press ADD TO MY ACCOUNT again." })
     } finally {
       setLinking(false)
+    }
+  }
+
+  // Bring the tracker's waiting recordings home through this browser: read
+  // each one off the tracker, upload it as you, and give the tracker the
+  // server's receipt so it marks it sent (lib/tracker-ble.ts syncOverBluetooth).
+  async function syncRecordings() {
+    if (!found) return
+    setSyncing(true); setSyncMsg(null); setSyncProgress(null)
+    const f = found
+    try {
+      const r = await syncOverBluetooth({
+        command: body => f.write(TRACKER_SYNC, body),
+        status: async () => parseSyncStatus(await f.read(TRACKER_SYNC)),
+        readPage: () => f.readRaw(TRACKER_DATA),
+        seek: offset => f.write(TRACKER_DATA, { op: 'seek', offset }),
+        upload: async (rec, part, parts, bytes, compressed) => {
+          const qs = new URLSearchParams({ filename: rec.upload, part: String(part), parts: String(parts) })
+          if (compressed) qs.set('enc', 'zlib')
+          const res = await fetch(`/api/account/devices/${f.about.id}/sessions?${qs}`, {
+            method: 'POST', body: bytes as BodyInit,
+            headers: {
+              'content-type': compressed ? 'application/octet-stream' : 'text/csv',
+              'x-device-firmware': f.about.firmware, 'x-device-model': f.about.model,
+            },
+          })
+          return { status: res.status, body: await res.json().catch(() => ({})) }
+        },
+      }, setSyncProgress)
+      const n = r.sent
+      const sent = n === 0 ? 'Nothing new to send.' : `${n} recording${n === 1 ? '' : 's'} sent. ${n === 1 ? 'It' : 'They'}'ll appear on your tracker's page.`
+      const unusable = r.failed.filter(x => x.reason === 'unusable').length
+      const other = r.failed.length - unusable
+      const notes = [
+        unusable ? `${unusable} couldn't be used (no GPS in ${unusable === 1 ? 'it' : 'them'}).` : '',
+        other ? `${other} didn't finish; sync again to retry.` : '',
+      ].filter(Boolean).join(' ')
+      setSyncMsg({ ok: other === 0, text: [r.sent || !r.failed.length ? sent : '', notes].filter(Boolean).join(' ') })
+    } catch (e) {
+      const msg = (e as Error).message
+      setSyncMsg({ ok: false, text: /recording|too long/.test(msg) ? msg : setupErrorMessage(e, f.name) })
+    } finally {
+      setSyncing(false); setSyncProgress(null)
     }
   }
 
@@ -248,6 +297,25 @@ export default function BluetoothTestPage() {
                     </div>
                   )}
                   {linkMsg && <p className={`text-sm ${linkMsg.ok ? 'text-green' : 'text-red'}`} role="status">{linkMsg.text}</p>}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs text-fg tracking-widest">RECORDINGS</h3>
+                  <p className="text-xs text-muted">Sends the tracker&apos;s waiting recordings through this browser. Keep this page open until it finishes.</p>
+                  <div>
+                    <button type="button" onClick={syncRecordings} disabled={syncing}
+                      className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
+                      {syncing ? 'SYNCING…' : 'SYNC OVER BLUETOOTH'}
+                    </button>
+                  </div>
+                  {syncing && (
+                    <p className="text-sm text-fg tabular" role="status">
+                      {syncProgress
+                        ? `Recording ${syncProgress.index} of ${syncProgress.total} · piece ${syncProgress.part} of ${syncProgress.parts}`
+                        : 'Asking the tracker what it has…'}
+                    </p>
+                  )}
+                  {syncMsg && <p className={`text-sm ${syncMsg.ok ? 'text-green' : 'text-red'}`} role="status">{syncMsg.text}</p>}
                 </div>
 
                 <form onSubmit={saveWifi} className="flex flex-col gap-2" aria-label="WiFi">

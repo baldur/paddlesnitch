@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT, parseLinkStatus, parseWifiState, wifiMessage, linkErrorMessage, setupErrorMessage } from './tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT, parseLinkStatus, parseWifiState, wifiMessage, linkErrorMessage, setupErrorMessage, TRACKER_SYNC, TRACKER_DATA, parseSyncStatus, parsePendingList, readPayload } from './tracker-ble'
 
 const header = readFileSync(path.resolve(__dirname, '../../../../firmware/include/ble_about.h'), 'utf8')
 
@@ -128,5 +128,50 @@ describe('setup over Bluetooth', () => {
     expect(linkErrorMessage(409, 'owned_elsewhere')).toMatch(/another account/)
     expect(linkErrorMessage(429)).toMatch(/wait/i)
     expect(linkErrorMessage(500)).toMatch(/^Couldn't/)
+  })
+})
+
+describe('recordings over Bluetooth', () => {
+  it('uses the firmware ids and page size', () => {
+    expect(header).toContain(`#define PS_BLE_SYNC_UUID    "${TRACKER_SYNC}"`)
+    expect(header).toContain(`#define PS_BLE_DATA_UUID    "${TRACKER_DATA}"`)
+    expect(header).toContain('#define PS_BLE_PAGE_DATA    500')
+  })
+
+  it('reads the SYNC status the tracker writes (bleSyncJson)', () => {
+    expect(parseSyncStatus('{"v":1,"state":"ready","len":18234,"part":2,"parts":10,"compressed":true}'))
+      .toEqual({ state: 'ready', len: 18234, part: 2, parts: 10, compressed: true })
+    expect(parseSyncStatus('{"v":1,"state":"nonsense","len":0,"part":0,"parts":0,"compressed":false}')).toBeNull()
+  })
+
+  it('reads the list of waiting recordings', () => {
+    expect(parsePendingList('[{"n":"track_x.csv","u":"track_x.csv","s":626441},{"n":"track_x_i10.csv","u":"track_x_imu.csv","s":2231416}]'))
+      .toEqual([{ name: 'track_x.csv', upload: 'track_x.csv', size: 626441 }, { name: 'track_x_i10.csv', upload: 'track_x_imu.csv', size: 2231416 }])
+    expect(parsePendingList('[{"n":"../etc","u":"x","s":1}]')).toEqual([])   // never a path
+  })
+
+  // Pages are [u32 offset LE][bytes]; the offset catches a lost or repeated read.
+  const page = (offset: number, bytes: number[]) => {
+    const b = new Uint8Array(4 + bytes.length)
+    new DataView(b.buffer).setUint32(0, offset, true)
+    b.set(bytes, 4)
+    return new DataView(b.buffer)
+  }
+
+  it('reassembles a payload from offset-stamped pages', async () => {
+    const pages = [page(0, [1, 2, 3]), page(3, [4, 5])]
+    let i = 0
+    const out = await readPayload(async () => pages[i++], async () => {}, 5)
+    expect([...out]).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('seeks back when a page arrives out of place, instead of corrupting the recording', async () => {
+    // First read returns offset 3 (a page went missing): seek to 0, then good pages.
+    const pages = [page(3, [9, 9]), page(0, [1, 2, 3]), page(3, [4, 5])]
+    const seeks: number[] = []
+    let i = 0
+    const out = await readPayload(async () => pages[i++], async (o: number) => { seeks.push(o) }, 5)
+    expect([...out]).toEqual([1, 2, 3, 4, 5])
+    expect(seeks).toEqual([0])
   })
 })
