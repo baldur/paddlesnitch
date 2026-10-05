@@ -124,6 +124,20 @@ export function wifiMessage(s: Exclude<WifiState, 'idle' | 'trying'>): string {
   }
 }
 
+/**
+ * What to say when talking to the tracker failed during setup. A phone that
+ * paired before a firmware update can keep the tracker's old list of items, so
+ * a newer item "isn't there" (Chrome: NotFoundError, "No Characteristics
+ * matching UUID"). Forgetting the tracker in Bluetooth settings clears it.
+ */
+export function setupErrorMessage(e: unknown, trackerName: string): string {
+  const err = e as { name?: string; message?: string }
+  if (err?.name === 'NotFoundError' || /no characteristics matching/i.test(err?.message ?? '')) {
+    return `This phone or computer has an out-of-date copy of the tracker's details. In its Bluetooth settings, forget ${trackerName}, then connect and pair again.`
+  }
+  return "Couldn't reach the tracker. Keep it close by and try again."
+}
+
 /** Why adding the tracker to the account failed, from the server's answer. */
 export function linkErrorMessage(status: number, code?: string): string {
   if (code === 'owned_elsewhere') return 'This tracker is on another account. Its owner needs to remove it first.'

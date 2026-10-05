@@ -144,7 +144,7 @@ describe('Bluetooth test page', () => {
   describe('setting the tracker up once paired', () => {
     const HASH = 'ab'.repeat(32)
     /** A paired tracker whose LINK and WIFI items behave like the firmware's. */
-    function fakeSetupTracker(opts: { wifiResult?: string; serverStatus?: number; serverError?: string } = {}) {
+    function fakeSetupTracker(opts: { wifiResult?: string; serverStatus?: number; serverError?: string; staleWifi?: boolean } = {}) {
       const tracker = { link: 'idle', wifiReads: 0, committedWith: '' }
       const writes: { uuid: string; body: unknown }[] = []
       const requestDevice = vi.fn(async () => ({
@@ -153,7 +153,12 @@ describe('Bluetooth test page', () => {
           connected: true, disconnect: vi.fn(),
           connect: async () => ({
             getPrimaryService: async () => ({
-              getCharacteristic: async (uuid: string) => ({
+              getCharacteristic: async (uuid: string) => {
+                // A phone holding the tracker's old list of items (paired before an update).
+                if (uuid.startsWith('04dd0a05') && opts.staleWifi) {
+                  throw Object.assign(new Error(`No Characteristics matching UUID ${uuid} found in Service.`), { name: 'NotFoundError' })
+                }
+                return {
                 readValue: async () => {
                   if (uuid.startsWith('04dd0a02')) return enc(ABOUT_UNLINKED)
                   if (uuid.startsWith('04dd0a03')) return enc('{"v":1,"paired":true}')
@@ -168,7 +173,8 @@ describe('Bluetooth test page', () => {
                   if (uuid.startsWith('04dd0a04') && body.op === 'begin') tracker.link = 'pending'
                   if (uuid.startsWith('04dd0a04') && body.op === 'commit' && body.tokenHash === HASH) { tracker.link = 'committed'; tracker.committedWith = body.tokenHash }
                 },
-              }),
+                }
+              },
             }),
           }),
         },
@@ -229,6 +235,21 @@ describe('Bluetooth test page', () => {
       await settle()
       expect(writes.find(w => w.uuid.startsWith('04dd0a05'))!.body).toEqual({ ssid: 'kruttnet', pass: 'secret-pw' })
       expect(container.textContent).toContain('joined your WiFi')
+    })
+
+    // Found on Android after a firmware update: "Couldn't send the WiFi
+    // details", fixed only by forgetting the tracker and pairing again.
+    it("tells the person to forget the tracker when the phone's copy of it is out of date", async () => {
+      fakeSetupTracker({ staleWifi: true })
+      await pairedPage()
+      const ssid = container.querySelector('input#bt-wifi-ssid') as HTMLInputElement
+      await act(async () => {
+        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+        set.call(ssid, 'kruttnet'); ssid.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => { button('SAVE WIFI')!.click() })
+      await settle()
+      expect(container.textContent).toContain('forget PT-17C')
     })
 
     it('says the password is probably wrong when the tracker found the network', async () => {

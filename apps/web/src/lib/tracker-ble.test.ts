@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT, parseLinkStatus, parseWifiState, wifiMessage, linkErrorMessage } from './tracker-ble'
+import { TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, parseAbout, ownership, isPairedReply, readWhenPaired, PAIRING_WAIT, parseLinkStatus, parseWifiState, wifiMessage, linkErrorMessage, setupErrorMessage } from './tracker-ble'
 
 const header = readFileSync(path.resolve(__dirname, '../../../../firmware/include/ble_about.h'), 'utf8')
 
@@ -113,6 +113,15 @@ describe('setup over Bluetooth', () => {
     expect(wifiMessage('not_found')).toMatch(/2\.4 GHz/)
     // Never vendor words or codes on screen.
     for (const s of ['joined', 'wrong_password', 'not_found', 'failed'] as const) expect(wifiMessage(s)).not.toMatch(/_|ssid/i)
+  })
+
+  // Found on Android: the phone kept the tracker's old list of items after a
+  // firmware update, so the WIFI item "didn't exist" and the page could only
+  // say "Couldn't send". Forgetting the tracker in Bluetooth settings fixed it.
+  it('spots an out-of-date copy of the tracker on the phone and says how to fix it', () => {
+    const stale = Object.assign(new Error("No Characteristics matching UUID 04dd0a05-9cd1-403e-a461-0b4af515a1b4 found in Service."), { name: 'NotFoundError' })
+    expect(setupErrorMessage(stale, 'PT-17C')).toMatch(/forget PT-17C/i)
+    expect(setupErrorMessage(new Error('GATT Server is disconnected.'), 'PT-17C')).toMatch(/close by/)
   })
 
   it('explains each way adding the tracker can fail', () => {
