@@ -810,6 +810,21 @@ is usually the upload, so `sync` reads that too. Wait ~12 s after start-up
 before a `PUTFILE`: one sent while WiFi is still switching off loses its first
 block (the tool does this).
 
+**Bluetooth is in release builds from 0.18.0, OFF until the owner turns it on**
+(Settings > Network, page 2: tap flips pages, hold turns it on; turning it off
+restarts the tracker, the clean way to take the stack down, and is refused
+while recording). The choice is NVS `ble`/`on`; the bench build defaults it on
+(`-DBLE_DEFAULT_ON=1`). Settings could not take a fifth row: with the title the
+fifth lands at y=73 on a 64 px panel.
+
+**Health reports (0.18.0, `src/health.*`, `include/health_report.h`):** once per
+start the tracker POSTs `/api/devices/health` with its reset reason and, after a
+crash, the summary the chip saved to the `coredump` partition (task, pc, up to 16
+backtrace addresses, ELF sha) -- before the after-a-crash update check, so a
+crash is reported even if the fix installs and restarts it. The dump is erased
+only once the server has it. Then a heartbeat every hour on WiFi. Decode crash
+addresses with `tools/decode-crash.sh <version> <addr...>`.
+
 `main.cpp` prints a peripheral bring-up table and an I2C scan of both buses at
 boot, then one status line per second. When diagnosing GPS: `nmea_chars` stuck at
 0 means the UART is silent (rail or pin problem); `nmea_chars` climbing with

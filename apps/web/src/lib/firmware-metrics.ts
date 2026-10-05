@@ -21,10 +21,11 @@ export type FirmwareMetric =
   | 'FirmwareBootConfirmed'
   | 'FirmwareBootFailed'
   | 'DeviceSeen'
+  | 'DeviceCrash'
 
 export const FIRMWARE_METRICS: readonly FirmwareMetric[] = [
   'FirmwareOfferIssued', 'FirmwareCheckNotModified', 'FirmwareBootConfirmed', 'FirmwareBootFailed',
-  'DeviceSeen',
+  'DeviceSeen', 'DeviceCrash',
 ]
 
 // `DeviceSeen` is the FLEET HEARTBEAT, and it exists because the firmware

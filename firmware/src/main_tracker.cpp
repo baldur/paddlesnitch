@@ -27,6 +27,8 @@
 #include "dbg.h"
 #include "netcfg.h"
 #include "uplink.h"
+#include "ble.h"
+#include "health.h"
 #include "ui.h"
 #include <WiFi.h>
 
@@ -168,6 +170,13 @@ static uint32_t resetUntil    = 0;
 static int      linkPage      = 0;      // Linking screen: 0 QR, 1 characters
 static bool     qrTestHold    = false;   // QRTEST owns the panel until any other command
 static int      nerdPage      = 0;              // diagnostics page, 0..NERD_PAGES-1
+// Settings > Network: page 0 WiFi, page 1 Bluetooth (when built in).
+static int      netPage       = 0;
+#if BLE_ENABLED
+static const int NET_PAGES = 2;
+#else
+static const int NET_PAGES = 1;
+#endif
 static const int NERD_PAGES   = 3;
 // Sync is paged for the same reason Nerd is, but the motive is safety as much as
 // space: deleting every uploaded file used to be a hold on the status page, so
@@ -256,6 +265,12 @@ static void misoCheck(const char *when)
 
 void setup()
 {
+#if BENCH_TOOLS
+    // PUTFILE streams files in; the USB serial driver's 256-byte receive queue
+    // drops what doesn't fit. Enlarged here, before anything is sent: resizing
+    // it mid-transfer (as PUTFILE first did) lost the first block after a start.
+    Serial.setRxBufferSize(4096);
+#endif
     Serial.begin(115200);
     // USB-CDC: give the host a moment to enumerate, but never block forever --
     // the board must still run on battery with no serial monitor attached.
@@ -273,6 +288,7 @@ void setup()
     // to come up three times, this puts the old one back and reboots -- and it
     // has to run before the thing that is crashing gets a chance to crash again.
     otaBootCheck();
+    healthCaptureBoot();   // why we restarted, and the crash summary if we crashed
     // Prove the OTA layout rather than assert it. The previous table declared
     // otadata and typed app0 as ota_0 but had no app1, so this line would have
     // printed "OTA: NOT POSSIBLE" -- which is the whole reason it exists.
@@ -343,6 +359,12 @@ void setup()
     // a failure means the device is away from home, and hijacking it into
     // setup mode when it should be out tracking would be worse than useless.
     if (!netHasWifi() || !netcfg.everConnected) netBringUp();
+
+#if BLE_ENABLED
+    // Bluetooth, if the owner turned it on (Settings > Network, page 2). After
+    // netcfgLoad, because the advertised name comes from the device id.
+    if (bleEnabledSetting()) bleStart();
+#endif
 
     // The self-check that makes an update permanent. Everything above has run:
     // PMU, display, GPS UART and the card all reported in. If this image were
@@ -614,6 +636,7 @@ static void enterScreen(Screen s)
     menu     = Menu::None;
     stopArmed = false;
     if (s == Screen::Nerd) nerdPage = 0;                    // always start at page 1
+    if (s == Screen::Network) netPage = 0;
     if (s == Screen::Sync) syncPage = 0;                    // never open on cleanup
     if (s == Screen::Sync) uplinkRequestCounts();           // refresh on entry
     // Track is the recording screen: it auto-starts once a fix is available
@@ -638,6 +661,9 @@ static void enterScreen(Screen s)
 // See docs/device-states-spec.md.
 static void screenTap()
 {
+#if BLE_ENABLED
+    if (bleConfirmPending(nullptr)) return;   // a tap never answers a pairing
+#endif
     if (tutRunning) { tutState = tutorialAdvance(tutState, TutEvent::Tap); return; }
     // A tap on a confirmation does NOTHING now. Deliberately not "cancel"
     // either: double-tap is how you back out of everything else, and making a
@@ -658,11 +684,15 @@ static void screenTap()
     case Screen::Track: speedUnit = (speedUnit + 1) % 3; break;   // km/h -> m/s -> pace
     case Screen::Sync:  syncPage  = (syncPage  + 1) % SYNC_PAGES; break;
     case Screen::Nerd:  nerdPage  = (nerdPage  + 1) % NERD_PAGES; break;
+    case Screen::Network: netPage = (netPage + 1) % NET_PAGES; break;
     }
 }
 
 static void screenDoubleTap()
 {
+#if BLE_ENABLED
+    if (bleConfirmPending(nullptr)) { bleConfirmAnswer(false); return; }   // 2x = refuse
+#endif
     if (tutRunning) { tutState = tutorialAdvance(tutState, TutEvent::DoubleTap); return; }
     if (confirmReset) { confirmReset = false; return; }   // 2x = cancel
     // No exceptions, no "unless" -- that is the entire value of the gesture. A
@@ -684,6 +714,9 @@ static void screenDoubleTap()
 
 static void screenHold()
 {
+#if BLE_ENABLED
+    if (bleConfirmPending(nullptr)) { bleConfirmAnswer(true); return; }    // hold = yes
+#endif
     if (tutRunning) {
         tutState = tutorialAdvance(tutState, TutEvent::Hold);
         if (tutorialComplete(tutState)) {
@@ -756,6 +789,17 @@ static void screenHold()
         if (nerdPage == NERD_PAGES - 1) linkAttempt();
         break;
     case Screen::Network:
+#if BLE_ENABLED
+        // Page 2: Bluetooth on/off. On starts it now; off restarts the tracker,
+        // the one clean way to take the Bluetooth stack down -- so not while
+        // recording.
+        if (netPage == 1) {
+            if (!bleRunning()) { bleSetEnabled(true); bleStart(); toast("BLUETOOTH ON"); }
+            else if (storageRecording()) toast("STOP RECORDING FIRST");
+            else { bleSetEnabled(false); toast("BLUETOOTH OFF"); delay(800); ESP.restart(); }
+            break;
+        }
+#endif
         // The portal. A hold, not a tap, because opening it drops the current
         // connection -- and because hold is what commits on every other screen.
         if (netStartPortal("Change the WiFi network or password below.")) {
@@ -883,6 +927,12 @@ static void handleSerialCommand()
             if      (!strncmp(buf, "LS", 2))   storageList();
             else if (!strncmp(buf, "CAT ", 4))  storageCat(buf + 4);
 #if BENCH_TOOLS
+#if BLE_ENABLED
+            else if (!strncmp(buf, "BLEFORGET", 9)) bleForgetAll();
+#endif
+            // Release testing (docs/features/release-testing.md, A6): crash on
+            // purpose, to check the next start recovers. Bench build only.
+            else if (!strncmp(buf, "CRASH", 5)) { Serial.println("CRASH: on purpose (bench)"); delay(100); abort(); }
             else if (!strncmp(buf, "PUTFILE ", 8)) {
                 char name[64]; unsigned long size = 0;
                 if (sscanf(buf + 8, "%63s %lu", name, &size) == 2 && size > 0) storagePut(name, size);
@@ -976,6 +1026,7 @@ static void handleSerialCommand()
                     "CAT <f>           dump a file (framed <<<CAT>>> .. <<<END>>>)\n"
 #if BENCH_TOOLS
                     "PUTFILE <f> <n>   bench: write n raw bytes to the card as f\n"
+                    "CRASH             bench: crash on purpose (release testing)\n"
 #endif
                     "SDPROBE <f>       read a file on CORE 1, radio off then on\n"
                     "SDPROBE0 <f>      the same read on CORE 0 (the uplink task)\n"
@@ -1415,7 +1466,19 @@ void loop()
         // Tutorial sits AFTER onboarding and BEFORE the menus: during setup the
         // user is looking at their phone, not the device, and the lesson is
         // about driving menus that do not exist yet.
-        u.state       = !netHasWifi()   ? AppState::Setup
+        // A Bluetooth pairing outranks everything: it times out in 25 s.
+        uint32_t pairPin = 0;
+#if BLE_ENABLED
+        const bool pairing = bleConfirmPending(&pairPin);
+#else
+        const bool pairing = false;
+#endif
+        u.pairPin     = pairPin;
+#if BLE_ENABLED
+        u.pairSecsLeft = pairing ? bleConfirmSecondsLeft() : 0;
+#endif
+        u.state       = pairing         ? AppState::PairConfirm
+                      : !netHasWifi()   ? AppState::Setup
                       : !netIsClaimed()  ? AppState::Linking
                       : tutRunning       ? AppState::Tutorial
                       : confirmReset     ? AppState::ResetConfirm
@@ -1443,6 +1506,13 @@ void loop()
         u.net.ip      = u.net.up ? WiFi.localIP().toString() : String();
         u.net.rssi    = u.net.up ? WiFi.RSSI() : 0;
         u.net.everConnected = netcfg.everConnected;
+        u.netPage     = netPage;
+        u.netPages    = NET_PAGES;
+#if BLE_ENABLED
+        u.bleOn       = bleRunning();
+        u.bleName     = bleName();
+        u.bleBonds    = bleBondCount();
+#endif
         u.nerdPage    = nerdPage;
         u.nerdPages   = NERD_PAGES;
         u.syncPage    = syncPage;

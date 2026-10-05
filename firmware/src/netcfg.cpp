@@ -194,6 +194,8 @@ void netScan()
                   netcfg.ssid.c_str(), netcfg.ssid.length());
 }
 
+int netSsidVisible(const String &ssid) { return ssidVisible(ssid); }
+
 bool netConnect(uint32_t timeoutMs, String *reason)
 {
     if (!netHasWifi()) { if (reason) *reason = "No network configured."; return false; }

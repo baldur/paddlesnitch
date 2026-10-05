@@ -68,6 +68,24 @@ struct UplinkStatus {
 void uplinkTaskStart();               // call once, after storage + net are up
 UplinkStatus uplinkGetStatus();       // thread-safe snapshot
 
+// Bluetooth setup: try a WiFi network BEFORE saving it. The uplink task (which
+// owns the radio) joins it for up to 15 s and saves it only if that works, so
+// a mistyped password never replaces details that worked.
+enum class WifiTrial : uint8_t { Idle, Trying, Joined, WrongPassword, NotFound, Failed };
+void      uplinkTryWifi(const String &ssid, const String &pass);
+WifiTrial uplinkWifiTrial();
+const char *wifiTrialName(WifiTrial t);   // idle, trying, joined, wrong_password, not_found, failed
+
+// Recordings over Bluetooth (ble_about.h: SYNC + DATA). A command is queued
+// here and done on the uplink task -- card reads, compression and the receipt
+// check all need more stack than the Bluetooth task has. One at a time.
+void   uplinkBtList();                                   // waiting recordings -> data
+void   uplinkBtPiece(const String &name, int part);      // 64 KB piece -> data
+void   uplinkBtDone(const String &name, const String &receipt);
+void   uplinkBtStatus(char *json, size_t n);             // bleSyncJson
+size_t uplinkBtPage(uint8_t *out, size_t max);           // next DATA page, header + bytes
+void   uplinkBtSeek(uint32_t offset);
+
 // Asks the task to stop touching the SD card and waits up to timeoutMs for it
 // to actually stop. Called before opening a recording: both cores must never
 // have the card at once.

@@ -12,7 +12,7 @@
 // uiSplash(), not a state. See docs/device-states-spec.md.
 // Two MENUS (Pick, Settings) and the screens they open. Nerd and Network moved
 // under Settings so the top level stays the three things you use on the water.
-enum class AppState { Setup, Linking, Tutorial, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm, ResetConfirm };
+enum class AppState { Setup, Linking, Tutorial, Pick, Settings, Track, Sync, Nerd, Network, DeleteConfirm, ResetConfirm, PairConfirm };
 
 // Network details for the Settings > Network screen.
 struct UiNet {
@@ -28,6 +28,12 @@ struct UiState {
     // link / onboarding
     bool     linked      = false;
     UiNet    net;
+    // Settings > Network page 2 (Bluetooth), when built in.
+    int      netPage     = 0;
+    int      netPages    = 1;
+    bool     bleOn       = false;
+    String   bleName;
+    int      bleBonds    = 0;
     // Linking screen: 0 = the QR alone on the whole panel, 1 = the characters.
     int      linkPage    = 0;
     String   linkTitle;
@@ -78,6 +84,8 @@ struct UiState {
     // Track rows lost to a busy bus. Nonzero means the paddle has holes in it.
     uint32_t droppedRows = 0;
     bool     stopArmed   = false;
+    uint32_t pairPin     = 0;       // PairConfirm: the 6 digits both sides show
+    uint32_t pairSecsLeft = 0;      // PairConfirm: seconds until it's refused
     // track speed readout unit, toggled by tap: 0 km/h, 1 m/s, 2 pace per 500 m
     int      speedUnit   = 0;
     // stroke rate (SPM) shown right of the speed; <0 = not available yet

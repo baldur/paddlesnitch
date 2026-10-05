@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { listUserDevices, revokeDevice } from '@/lib/devices'
+import { listUserDevices, revokeDevice, getDeviceHealth, getLastCrash } from '@/lib/devices'
 import { getChannelVersion } from '@/lib/firmware'
 
 // GET /api/account/devices — AUTHENTICATED. The signed-in user's linked devices.
@@ -12,9 +12,16 @@ import { getChannelVersion } from '@/lib/firmware'
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const devices = (await listUserDevices(user.id)).map(d => ({
-    deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware,
-    linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt,
+  const devices = await Promise.all((await listUserDevices(user.id)).map(async d => {
+    // The last start-up or heartbeat report, reduced to what the page shows.
+    const h = await getDeviceHealth(d.deviceId)
+    const crash = await getLastCrash(d.deviceId)
+    return {
+      deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware,
+      linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt,
+      ...(h ? { health: { at: h.at, kind: h.kind, resetReason: h.resetReason, crashTask: h.crash?.task } } : {}),
+      ...(crash?.crash ? { lastCrash: { at: crash.at, task: crash.crash.task } } : {}),
+    }
   }))
   // What the stable channel currently offers, so the page can say whether a
   // device is BEHIND rather than just printing a version nobody can calibrate.
