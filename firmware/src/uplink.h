@@ -76,6 +76,16 @@ void      uplinkTryWifi(const String &ssid, const String &pass);
 WifiTrial uplinkWifiTrial();
 const char *wifiTrialName(WifiTrial t);   // idle, trying, joined, wrong_password, not_found, failed
 
+// Recordings over Bluetooth (ble_about.h: SYNC + DATA). A command is queued
+// here and done on the uplink task -- card reads, compression and the receipt
+// check all need more stack than the Bluetooth task has. One at a time.
+void   uplinkBtList();                                   // waiting recordings -> data
+void   uplinkBtPiece(const String &name, int part);      // 64 KB piece -> data
+void   uplinkBtDone(const String &name, const String &receipt);
+void   uplinkBtStatus(char *json, size_t n);             // bleSyncJson
+size_t uplinkBtPage(uint8_t *out, size_t max);           // next DATA page, header + bytes
+void   uplinkBtSeek(uint32_t offset);
+
 // Asks the task to stop touching the SD card and waits up to timeoutMs for it
 // to actually stop. Called before opening a recording: both cores must never
 // have the card at once.

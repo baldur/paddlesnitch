@@ -18,7 +18,7 @@ extern "C" void ble_svc_gatt_changed(uint16_t start_handle, uint16_t end_handle)
 // boot every paired phone is told the list changed (Service Changed) and
 // re-reads it. Without that, a phone paired before an update kept the old
 // list and couldn't find the new WIFI item (2026-10-05, Android).
-static const char *BLE_LAYOUT = "about,paired,link,wifi/v1";
+static const char *BLE_LAYOUT = "about,paired,link,wifi,sync,data/v2";
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0-dev"
@@ -153,6 +153,44 @@ class WifiCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
+// ---- SYNC + DATA: recordings home over Bluetooth (uplink task does the work)
+class SyncCallbacks : public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic *c) override
+    {
+        char json[160];
+        uplinkBtStatus(json, sizeof(json));
+        c->setValue((const uint8_t *)json, strlen(json));
+    }
+    void onWrite(NimBLECharacteristic *c) override
+    {
+        JsonDocument doc;
+        if (deserializeJson(doc, c->getValue().c_str())) return;
+        const char *op = doc["op"] | "";
+        const String name = doc["name"] | "";
+        if (name.length() > 64 || name.indexOf('/') >= 0) return;
+        if (!strcmp(op, "list"))       uplinkBtList();
+        else if (!strcmp(op, "piece")) uplinkBtPiece(name, doc["part"] | 0);
+        else if (!strcmp(op, "done"))  uplinkBtDone(name, doc["receipt"] | "");
+    }
+};
+
+class DataCallbacks : public NimBLECharacteristicCallbacks {
+    // One page per read (NimBLE calls this once per read, not per blob of a
+    // long read), so the cursor advances exactly once per page.
+    void onRead(NimBLECharacteristic *c) override
+    {
+        static uint8_t page[4 + PS_BLE_PAGE_DATA];
+        const size_t n = uplinkBtPage(page, sizeof(page));
+        c->setValue(page, n);
+    }
+    void onWrite(NimBLECharacteristic *c) override
+    {
+        JsonDocument doc;
+        if (deserializeJson(doc, c->getValue().c_str())) return;
+        if (!strcmp(doc["op"] | "", "seek")) uplinkBtSeek(doc["offset"] | 0u);
+    }
+};
+
 class ServerCallbacks : public NimBLEServerCallbacks {
     // Which phone or computer, by address, so a log can tell them apart (a
     // tab left connected on the Mac once hid the tracker from a phone).
@@ -231,6 +269,8 @@ void bleStart()
                                NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN;
     svc->createCharacteristic(PS_BLE_LINK_UUID, SECURE_RW)->setCallbacks(new LinkCallbacks());
     svc->createCharacteristic(PS_BLE_WIFI_UUID, SECURE_RW)->setCallbacks(new WifiCallbacks());
+    svc->createCharacteristic(PS_BLE_SYNC_UUID, SECURE_RW)->setCallbacks(new SyncCallbacks());
+    svc->createCharacteristic(PS_BLE_DATA_UUID, SECURE_RW)->setCallbacks(new DataCallbacks());
     svc->start();
 
     // The service id goes in the advertisement so the page can ask the browser
