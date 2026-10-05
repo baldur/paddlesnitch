@@ -59,6 +59,9 @@ bool  boardIsCharging();
 // update, and a brownout or a panic is exactly what distinguishes a bad image
 // from a good one.
 const char *resetReasonStr();
+// The last restart was a crash: a panic or a watchdog (ota_policy: check for a
+// fix before uploading).
+bool boardLastResetWasCrash();
 bool  boardOnUsb();
 int   boardBatteryPercent();   // -1 when no battery is fitted
 bool  board_display_ok();      // did the OLED actually ack at boot

@@ -265,6 +265,14 @@ uint16_t boardBatteryMv()
 
 bool boardIsCharging() { return PMU.isCharging(); }
 
+bool boardLastResetWasCrash()
+{
+    switch (esp_reset_reason()) {
+    case ESP_RST_PANIC: case ESP_RST_INT_WDT: case ESP_RST_TASK_WDT: case ESP_RST_WDT: return true;
+    default: return false;
+    }
+}
+
 const char *resetReasonStr()
 {
     switch (esp_reset_reason()) {

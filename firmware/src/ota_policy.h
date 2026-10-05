@@ -76,3 +76,13 @@ bool otaVersionDiffers(const char *running, const char *offered);
 
 /** Is this version worth another attempt, or has it already failed too often? */
 bool otaMayRetryVersion(uint8_t failCount);
+
+/**
+ * Check for an update BEFORE uploading, rather than after?
+ *
+ * Only on the first sync after a crash (panic or watchdog). The update check
+ * normally comes after the uploads; a build that crashes DURING an upload
+ * (2026-10-04: the uplink stack overflowed on the first compressed upload)
+ * would then never reach it, and only a cable could fix the tracker.
+ */
+bool otaCheckBeforeUploads(bool lastResetWasCrash, bool firstSyncSinceBoot);

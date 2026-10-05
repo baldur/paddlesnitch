@@ -9,6 +9,7 @@
 #include "board.h"
 #include "root_ca.h"
 #include "ota.h"
+#include "ota_policy.h"
 #include "upload_policy.h"
 #include "compress.h"
 
@@ -895,6 +896,19 @@ static void uplinkTask(void *)
             snprintf(st.message, sizeof(st.message), "%s", cs.message.c_str());
             statusSet(st);
         }
+
+        // After a crash, look for a fix BEFORE uploading (ota_policy.h): if an
+        // upload is what crashed, the usual check after the uploads is never
+        // reached, and the tracker could only be fixed with a cable.
+        static bool firstSync = true;
+        if (netIsClaimed() && !g_yield && otaCheckBeforeUploads(boardLastResetWasCrash(), firstSync)) {
+            DBGW("ota", "last restart was a crash: checking for an update before uploading");
+            Serial.println("OTA: last restart was a crash -- checking for an update before uploading");
+#if !BENCH_TOOLS
+            otaMaybeUpdate();   // never returns if it installs: it restarts
+#endif
+        }
+        firstSync = false;
 
         if (netIsClaimed() && !g_yield) {
             st.busy = true;
