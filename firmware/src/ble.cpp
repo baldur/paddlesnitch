@@ -10,6 +10,15 @@
 #include <mbedtls/sha256.h>
 #include <mbedtls/base64.h>
 #include <esp_random.h>
+#include <Preferences.h>
+extern "C" void ble_svc_gatt_changed(uint16_t start_handle, uint16_t end_handle);
+
+// The tracker's list of items, as a phone would cache it. Change this string
+// whenever an item is added, removed or changes its properties: at the next
+// boot every paired phone is told the list changed (Service Changed) and
+// re-reads it. Without that, a phone paired before an update kept the old
+// list and couldn't find the new WIFI item (2026-10-05, Android).
+static const char *BLE_LAYOUT = "about,paired,link,wifi/v1";
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0-dev"
@@ -230,6 +239,21 @@ void bleStart()
     adv->addServiceUUID(PS_BLE_SERVICE_UUID);
     adv->setScanResponse(true);
     adv->start();
+
+    // Tell paired phones the list changed, once per change (see BLE_LAYOUT).
+    // NimBLE keeps this for each bonded phone and sends it when it next
+    // connects; a phone that doesn't listen gets the page's "forget and pair
+    // again" message instead.
+    Preferences p;
+    if (p.begin("ble", false)) {
+        if (p.getString("layout", "") != BLE_LAYOUT) {
+            ble_svc_gatt_changed(0x0001, 0xffff);
+            p.putString("layout", BLE_LAYOUT);
+            DBGI("ble", "layout changed: told paired phones");
+            Serial.println("BLE: item list changed since last boot -- paired phones told to re-read it");
+        }
+        p.end();
+    }
 
     DBGI("ble", "advertising as %s", name);
     Serial.printf("BLE: advertising as %s\n", name);
