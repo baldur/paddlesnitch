@@ -12,7 +12,7 @@
 //   - claims are single-use and TTL-bounded (10 min).
 //   - `deviceId` is NOT a secret (it's on every LoRa packet) — it authenticates
 //     nothing on its own.
-import { createHash, randomBytes, timingSafeEqual } from 'crypto'
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
 import { getJson, putJson, getObject, putObject, listKeys, deleteObject } from './storage'
 
 export type DeviceClaim = {
@@ -233,6 +233,27 @@ export async function linkByTokenHash(
     model: d.model, firmware: d.firmware, linkedAt: ts, lastSeenAt: ts, tokenHash: d.tokenHash,
   } satisfies DeviceRecord)
   return { deviceId: d.deviceId, model: d.model }
+}
+
+/**
+ * Proof for the tracker that the server has a recording its owner's browser
+ * relayed over Bluetooth. HMAC-SHA256 keyed with the hex sha256 of the
+ * tracker's token -- which the server stores and the tracker can compute from
+ * its own token -- so the token itself never travels. Only on a valid receipt
+ * does the tracker mark the recording sent.
+ *
+ * Someone holding the stored hash could forge one; the worst that does is mark
+ * a recording sent that never arrived (spec open question 4).
+ */
+export function uploadReceipt(tokenHash: string, deviceId: string, filename: string): string {
+  return createHmac('sha256', tokenHash).update(`ps-receipt:v1|${deviceId}|${filename}`).digest('hex')
+}
+
+/** The device record, if it belongs to this user. */
+export async function getUserDevice(userId: string, deviceId: string): Promise<DeviceRecord | null> {
+  if (!isDeviceId(deviceId)) return null
+  const rec = await getJson<DeviceRecord>(deviceKey(deviceId))
+  return rec && rec.userId === userId ? rec : null
 }
 
 // Resolve a bearer token to its device+user, or null. READ ONLY. It used to
