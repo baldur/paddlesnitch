@@ -5,7 +5,7 @@ import AppHeader from '@/components/AppHeader'
 import {
   TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, WIFI_WAIT,
   parseAbout, readWhenPaired, ownership, browserBluetooth, parseLinkStatus, parseWifiState,
-  wifiMessage, linkErrorMessage, type TrackerAbout,
+  wifiMessage, linkErrorMessage, setupErrorMessage, type TrackerAbout,
 } from '@/lib/tracker-ble'
 
 // Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 + J1 step 3).
@@ -137,10 +137,12 @@ export default function BluetoothTestPage() {
       if (parseLinkStatus(await found.read(TRACKER_LINK))?.state !== 'committed') throw new Error('not committed')
       setMine(new Set([...mine, st.id]))
       setLinkMsg({ ok: true, text: 'Added to your account.' })
-    } catch {
+    } catch (e) {
       // Pressing again starts over with a fresh token, which replaces anything
-      // half-done on both sides.
-      setLinkMsg({ ok: false, text: "Couldn't finish adding the tracker. Press ADD TO MY ACCOUNT again." })
+      // half-done on both sides -- unless the phone's copy of the tracker is
+      // out of date, which only forgetting the tracker fixes.
+      const stale = (e as { name?: string }).name === 'NotFoundError'
+      setLinkMsg({ ok: false, text: stale ? setupErrorMessage(e, found.name) : "Couldn't finish adding the tracker. Press ADD TO MY ACCOUNT again." })
     } finally {
       setLinking(false)
     }
@@ -163,8 +165,8 @@ export default function BluetoothTestPage() {
         }
       }
       setWifiMsg({ ok: false, text: "Couldn't hear back from the tracker. Check its screen, then try again." })
-    } catch {
-      setWifiMsg({ ok: false, text: "Couldn't send the WiFi details. Stay close to the tracker and try again." })
+    } catch (e) {
+      setWifiMsg({ ok: false, text: setupErrorMessage(e, found.name) })
     } finally {
       setWifiBusy(false)
     }
