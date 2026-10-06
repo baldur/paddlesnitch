@@ -10,8 +10,15 @@ import { metadata as profile } from '@/app/profile/layout'
 import { metadata as privacy } from '@/app/att/privacy/page'
 import { metadata as devices } from '@/app/devices/layout'
 import { metadata as guide } from '@/app/guide/layout'
+import { metadata as blog } from '@/app/blog/layout'
 
 describe('page titles', () => {
+  // Without a metadataBase, Next resolves a relative share image (a blog post's
+  // `image: /blog-media/…`) against http://localhost:3000, so LinkedIn/Bluesky
+  // previews break.
+  it('share images resolve against paddlesnitch.com, not localhost', () => {
+    expect(String(root.metadataBase)).toBe('https://paddlesnitch.com/')
+  })
   it('the site adds its name to every page title', () => {
     expect(root.title).toEqual({ default: 'paddlesnitch', template: '%s · paddlesnitch' })
   })
@@ -23,6 +30,7 @@ describe('page titles', () => {
     ['Profile', profile.title],
     ['Devices', devices.title],
     ['Guide', guide.title],
+    ['Blog', blog.title],
   ])('%s names itself and keeps the site-name template for its pages', (expected, title) => {
     expect(title).toEqual({ default: expected, template: '%s · paddlesnitch' })
   })
@@ -31,7 +39,7 @@ describe('page titles', () => {
     expect(privacy.title).toBe('Privacy policy')
   })
   it('nothing is still titled ATTS', () => {
-    for (const m of [root, trials, paddles, profile, privacy, devices, guide]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)
+    for (const m of [root, trials, paddles, profile, privacy, devices, guide, blog]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)
   })
 })
 

@@ -508,6 +508,13 @@ export class AttStack extends cdk.Stack {
           responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
+        // Blog images (apps/web/public/blog-media/), referenced from the posts.
+        '/blog-media/*': {
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
         // Marketing landing media (the ?campaign= pages), e.g. the beta testers video.
         '/campaigns/*': {
           origin: assetsOrigin,
