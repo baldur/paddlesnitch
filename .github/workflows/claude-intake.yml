@@ -40,7 +40,7 @@ jobs:
 
       # Pinned to a commit (v1 as of 2026-09-29), not a moving tag: this
       # action runs with a Claude token on text anyone can write.
-      - uses: anthropics/claude-code-action@8ce9314fa9a404564fa7e954cd84f25bcba2b829 # v1
+      - uses: anthropics/claude-code-action@cab360f6565aa35a51d6ce9e43f1f4287c0a32ea # v1
         with:
           # Subscription OAuth token (from `claude setup-token`) so intake runs
           # draw on the Max plan, not metered API billing — same as the fast loop.
