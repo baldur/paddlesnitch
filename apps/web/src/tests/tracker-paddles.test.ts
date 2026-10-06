@@ -183,3 +183,11 @@ describe('create-tracker-paddles (recordings uploaded before this)', () => {
     expect(await listSessionSummaries(USER)).toEqual([])
   })
 })
+
+describe('the 500 m rule, on both sides', () => {
+  it('the tracker page uses the same minimum as the pipeline', async () => {
+    const { MIN_PADDLE_METRES: pipeline } = await import('@paddlesnitch/analysis/tracker-paddle')
+    const { MIN_PADDLE_METRES: page } = await import('@/lib/device-view')
+    expect(page).toBe(pipeline)
+  })
+})

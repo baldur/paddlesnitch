@@ -31,9 +31,10 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /devices                     A  DEVICES: one card per tracker, Bluetooth, Add a tracker (#add)
 /devices/bluetooth           A  BLUETOOTH: connect, pair, sync, add to account, WiFi
                                 (Chrome/Edge on Android or a computer)
-/devices/[deviceId]          A  one tracker's recordings (plain summary + TECHNICAL
-                                DETAILS), REMOVE TRACKER
-/devices/[deviceId]/[sessionId]  A  BOAT MOTION charts for one recording
+/devices/[deviceId]          A  one tracker: its paddles (links into Paddles), other
+                                recordings with their details, REMOVE TRACKER
+/devices/[deviceId]/[sessionId]  A  → the paddle's BOAT MOTION when the recording is a
+                                paddle; else that recording's boat motion
 /guide                       P  tracker setup guide: overview + one page per step
 /guide/<step>                P  account, switch-on, wifi, link, boat, record, upload,
                                 bluetooth (optional)
@@ -53,6 +54,8 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /paddles/new                 A    ADD A PADDLE: upload / Strava / time trials / tracker
 /paddles/[id]                A    one paddle (map, summary, efforts and rests, share,
                                   diary, boat class, pick a section)
+/paddles/[id]/motion         A    BOAT MOTION of a tracker paddle (charts + technical
+                                  details)
 /paddles/compare?a=&b=       A    two paddles side by side
 /paddles/compare/section     A    one section across your paddles
 /paddles/shared/[shareId]    P    a shared paddle (read-only; plain summary)

@@ -328,6 +328,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {sessionId && !readOnly && <button onClick={toggleShare} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showShare ? 'text-split' : 'text-muted hover:text-fg'}`}>SHARE</button>}
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-split' : 'text-muted hover:text-fg'}`}>DIARY</button>}
           {sessionId && <button onClick={() => setShowBoat(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showBoat ? 'text-split' : 'text-muted hover:text-fg'}`}>BOAT</button>}
+          {/* The tracker's side of a tracker paddle: roll, pitch, evenness, charts. */}
+          {sessionId && !readOnly && data.source?.type === 'device' && <Link href={`/paddles/${sessionId}/motion`} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>BOAT MOTION</Link>}
           {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Pick part of this paddle to look at closely, or compare with your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-split' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : 'PICK A SECTION'}</button>}
         </div>
         {!sectionMode && (

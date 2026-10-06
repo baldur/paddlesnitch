@@ -115,3 +115,8 @@ export function deviceSummaries(devices: DeviceView[], sessions: DeviceSessionMe
     return bx > ax ? 1 : bx < ax ? -1 : a.deviceId.localeCompare(b.deviceId)
   })
 }
+
+// How far the boat must move for a recording to become a paddle. Kept equal to
+// MIN_PADDLE_METRES in @paddlesnitch/analysis/tracker-paddle (a test checks),
+// without pulling the analysis pipeline into this client bundle.
+export const MIN_PADDLE_METRES = 500

@@ -1,6 +1,6 @@
 # One paddle
 
-📋 **Spec, 2026-10-06.** Phases 1–2 built (2026-10-06); phases 3–4 not built. This is Phase G of the 2026-09 audit
+📋 **Spec, 2026-10-06.** Phases 1–3 built (2026-10-06); phase 4 not built. This is Phase G of the 2026-09 audit
 ("one paddle with extras"), made concrete. The owner's decisions are recorded
 under **Decisions**.
 
@@ -118,18 +118,27 @@ outside moving stretches; a tracker paddle's efforts get a stroke rate.
 
 ## Phase 3: one paddle page
 
-- The paddle page gets a **BOAT MOTION** section when the paddle came from a
-  tracker with motion data: the three figures (roll, pitch, evenness) and the
-  rowing/kayak note, then the charts from `/devices/[id]/[sessionId]`.
-  TECHNICAL DETAILS (rows, fix, capture, satellites, columns, first rows) sits
-  under it, collapsed.
-- `/devices/[deviceId]` lists that tracker's **paddles**, each linking to
-  `/paddles/[id]`, and keeps the hardware: firmware, last seen, crashes,
-  Bluetooth, REMOVE TRACKER. A recording that couldn't become a paddle (no GPS)
-  is listed plainly with its reason, so nothing disappears.
-- `/devices/[deviceId]/[sessionId]` **308s to the paddle**.
-- The shared view of a paddle (`/paddles/shared/…`) shows boat motion too: it's
-  numbers about the boat, not private text. Technical details stay owner-only.
+**Built.**
+
+- A tracker paddle has a **BOAT MOTION** button (beside SHARE, DIARY, BOAT) that
+  opens `/paddles/[id]/motion`: the roll, pitch and evenness figures, the three
+  charts and the reading notes (`components/devices/BoatMotion.tsx`), the
+  paddle's own stroke rate, and the recording's TECHNICAL DETAILS collapsed
+  under them (`components/devices/TechnicalDetails.tsx`). A side page rather
+  than a panel: the paddle view is a full-screen map, and the charts need the
+  width. "← PADDLE" goes back.
+- `/devices/[deviceId]` links each recording that became a paddle to it
+  (tRPC `paddles.byRecording`: recording id → paddle id). A recording that
+  didn't is listed with its reason ("the boat barely moved") and keeps its
+  expandable details, so nothing disappears. The tracker's hardware (firmware,
+  last seen, crashes, Bluetooth, REMOVE TRACKER) stays.
+- `/devices/[deviceId]/[sessionId]` **redirects to the paddle's BOAT MOTION**
+  when the recording is a paddle; otherwise it still shows the recording's boat
+  motion. A temporary redirect, not 308: a paddle can be deleted, and a cached
+  308 would keep sending people to it.
+- **Not done:** boat motion on the shared view (`/paddles/shared/…`). The
+  recording read is owner-only; sharing it needs a public read of the motion
+  figures. Left for later.
 
 ## Phase 4: the same outing from two sources
 

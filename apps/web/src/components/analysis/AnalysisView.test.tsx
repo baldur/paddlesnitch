@@ -125,3 +125,22 @@ describe('AnalysisView SHARE control (#206)', () => {
     expect(column.className).toContain('max-w-[calc(100vw-1.5rem)]')
   })
 })
+
+// One paddle (one-paddle.md, phase 3): a tracker paddle's boat motion is a
+// side page of the paddle, reached from the paddle itself.
+describe('AnalysisView BOAT MOTION', () => {
+  const link = () => Array.from(container.querySelectorAll('a')).find(a => a.textContent?.trim() === 'BOAT MOTION')
+
+  it('offers BOAT MOTION on a saved tracker paddle', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />)
+    expect(link()).toBeTruthy()
+  })
+  it('not on a paddle from a file or Strava (no motion data)', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'strava' } }} sessionId="p1" />)
+    expect(link()).toBeUndefined()
+  })
+  it('not on a shared view (the recording is the owner\'s)', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" readOnly />)
+    expect(link()).toBeUndefined()
+  })
+})
