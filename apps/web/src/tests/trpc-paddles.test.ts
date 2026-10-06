@@ -144,3 +144,12 @@ describe('paddles.setBoat and stroke-rate doubling', () => {
     expect(s.result.strokeRateDoubled).toBe(false)
   })
 })
+
+describe('paddles.byRecording', () => {
+  it('maps each tracker recording to its paddle, and nothing else', async () => {
+    await writeSession(dir, 't-rec1', { id: 't-rec1', userId: USER.id, paddledAt: '2026-10-01T09:00:00Z', source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' }, result: { durationS: 600, distanceKm: 2, points: [], surges: [], stops: [], sets: [] } })
+    await writeSession(dir, 'hand2', { id: 'hand2', userId: USER.id, paddledAt: '2026-10-02T09:00:00Z', source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec2' }, result: { durationS: 600, distanceKm: 2, points: [], surges: [], stops: [], sets: [] } })
+    await writeSession(dir, 'f1', { id: 'f1', userId: USER.id, paddledAt: '2026-10-03T09:00:00Z', source: { type: 'file' }, result: { durationS: 600, distanceKm: 2, points: [], surges: [], stops: [], sets: [] } })
+    expect(await createCaller({ user: USER }).paddles.byRecording()).toEqual({ rec1: 't-rec1', rec2: 'hand2' })
+  })
+})

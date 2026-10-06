@@ -27,6 +27,13 @@ export const MIN_PADDLE_METRES = 500
 /** The paddle id for a recording that didn't already have one. */
 export const trackerPaddleId = (deviceSessionId: string) => `t-${deviceSessionId}`
 
+/** Each tracker recording's paddle id, from the user's paddle summaries. */
+export function paddleIdsByRecording(summaries: { id: string; source: { type: string; deviceSessionId?: string } }[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const s of summaries) if (s.source.type === 'device' && s.source.deviceSessionId) out[s.source.deviceSessionId] = s.id
+  return out
+}
+
 /** What `paddleForRecording` would do for a recording, without doing it. */
 export type TrackerPaddlePlan =
   | { action: 'create'; track: TrackPoint[]; hasStrokeRate: boolean; hadMotion: boolean }

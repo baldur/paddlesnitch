@@ -9,6 +9,7 @@ import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
 import { paddleTotals } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
+import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling,
@@ -26,6 +27,10 @@ export const paddlesRouter = router({
 
   // Library list: richer per-paddle summaries (note, effort count, …), newest first.
   sessions: protectedProcedure.query(({ ctx }) => listSessionSummaries(ctx.user.id)),
+
+  // Which paddle each tracker recording became: { recordingId: paddleId }.
+  // The tracker's page links its recordings to their paddles with it.
+  byRecording: protectedProcedure.query(async ({ ctx }) => paddleIdsByRecording(await listSessionSummaries(ctx.user.id))),
 
   // Full saved paddle (result + note + insight). Owner only.
   get: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
