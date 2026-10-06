@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getDeviceSessionTrace, getDeviceSessionMotion } from '@/lib/devices'
 import { describeDeviceData } from '@paddlesnitch/timing/device'
-import { deriveCadence } from '@paddlesnitch/timing/cadence'
+import { deriveCadence, movingRangesFromTrack } from '@paddlesnitch/timing/cadence'
 import { deriveAttitude } from '@paddlesnitch/timing/attitude'
 
 // GET /api/account/devices/sessions/[sessionId]?deviceId=X — AUTHENTICATED.
@@ -39,36 +39,4 @@ export async function GET(req: Request, { params }: { params: Promise<{ sessionI
   }
 
   return NextResponse.json({ report, cadence, attitude })
-}
-
-/**
- * Millisecond spans where the boat was actually moving, from the track CSV.
- *
- * Without this the cadence search runs over the parked minutes at the start of a
- * session too, where a stationary device produces a confident-looking periodicity
- * that has nothing to do with paddling.
- */
-function movingRangesFromTrack(csv: string): [number, number][] {
-  const lines = csv.split(/\r?\n/)
-  if (lines.length < 2) return []
-  const head = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s_]/g, ''))
-  const msI = head.indexOf('ms')
-  const spI = head.findIndex(h => h === 'speedkmh' || h === 'speed')
-  if (msI < 0 || spI < 0) return []
-
-  const ranges: [number, number][] = []
-  let run: number[] = []
-  for (const line of lines.slice(1)) {
-    const p = line.split(',')
-    if (p.length <= Math.max(msI, spI)) continue
-    const ms = Number(p[msI]), sp = Number(p[spI])
-    if (!Number.isFinite(ms) || !Number.isFinite(sp)) continue
-    if (sp >= 4) run.push(ms)
-    else {
-      if (run.length >= 90) ranges.push([run[0], run[run.length - 1]])
-      run = []
-    }
-  }
-  if (run.length >= 90) ranges.push([run[0], run[run.length - 1]])
-  return ranges
 }

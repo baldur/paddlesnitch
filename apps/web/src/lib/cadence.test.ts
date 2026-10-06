@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { deriveCadence, decimateMotionCsv, parseMotionCsv } from '@paddlesnitch/timing/cadence'
+import {
+  deriveCadence, decimateMotionCsv, parseMotionCsv, strokeRateSeries, movingRangesFromTrack, trackClockOffset, withStrokeRate,
+} from '@paddlesnitch/timing/cadence'
+import { addStrokeRate } from '@paddlesnitch/analysis/device-sessions'
+import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 
 const HEADER = 'ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps'
 
@@ -127,5 +131,118 @@ describe('decimateMotionCsv', () => {
   it('leaves data alone that is already at or below the target rate', () => {
     const already = sidecar({ seconds: 60, hz: 10, strokesPerMin: 56 })
     expect(decimateMotionCsv(already, 10).trim()).toBe(already.trim())
+  })
+})
+
+// Joins sidecars made one after the other into one file (one header).
+const joined = (...parts: string[]) => [HEADER, ...parts.flatMap(p => p.split('\n').slice(1))].join('\n')
+const at = (pts: { ms: number; strokesPerMin: number }[], from: number, to: number) =>
+  pts.filter(p => p.ms >= from && p.ms < to).map(p => p.strokesPerMin)
+
+describe('strokeRateSeries (stroke rate through the paddle)', () => {
+  it('follows a change of rate instead of averaging it away', () => {
+    const csv = joined(
+      sidecar({ seconds: 120, hz: 10, strokesPerMin: 48 }),
+      sidecar({ seconds: 120, hz: 10, strokesPerMin: 72, startMs: 120_000 }),
+    )
+    const pts = strokeRateSeries(csv)
+    for (const v of at(pts, 0, 100_000)) expect(v).toBeGreaterThan(44), expect(v).toBeLessThan(52)
+    for (const v of at(pts, 140_000, 240_000)) expect(v).toBeGreaterThan(67), expect(v).toBeLessThan(77)
+  })
+
+  it('leaves a rest as a gap, never a zero or a guess', () => {
+    const csv = joined(
+      sidecar({ seconds: 90, hz: 10, strokesPerMin: 56 }),
+      sidecar({ seconds: 60, hz: 10, strokesPerMin: 56, amplitude: 0, startMs: 90_000 }),
+      sidecar({ seconds: 90, hz: 10, strokesPerMin: 56, startMs: 150_000 }),
+    )
+    const pts = strokeRateSeries(csv)
+    expect(at(pts, 105_000, 135_000)).toEqual([])
+    expect(at(pts, 0, 80_000).length).toBeGreaterThan(5)
+    expect(at(pts, 160_000, 240_000).length).toBeGreaterThan(5)
+    expect(pts.every(p => p.strokesPerMin > 50)).toBe(true)
+  })
+
+  it('only uses stretches where the boat was moving', () => {
+    const csv = sidecar({ seconds: 180, hz: 10, strokesPerMin: 56 })
+    const pts = strokeRateSeries(csv, { movingRanges: [[60_000, 120_000]] })
+    expect(pts.length).toBeGreaterThan(0)
+    expect(pts.every(p => p.ms >= 60_000 && p.ms <= 120_000)).toBe(true)
+  })
+
+  it('gives single-sided paddling no series yet (only calibrated on synthetic data)', () => {
+    expect(strokeRateSeries(sidecar({ seconds: 180, hz: 10, strokesPerMin: 40, alternating: false }))).toEqual([])
+  })
+
+  it('gives too short a recording no series: too few windows to decide left/right', () => {
+    expect(strokeRateSeries(sidecar({ seconds: 40, hz: 10, strokesPerMin: 56 }))).toEqual([])
+  })
+
+  it('drops a lone window with no neighbour: too little to trust', () => {
+    const csv = sidecar({ seconds: 60, hz: 10, strokesPerMin: 56 })
+    expect(strokeRateSeries(csv, { movingRanges: [[10_000, 26_000]] })).toEqual([])
+  })
+})
+
+// The track CSV as the tracker writes it: millis() and the GPS time per row,
+// at 1 Hz, moving at `kmh`.
+function trackCsv(seconds: number, kmh: number, opts: { startMs?: number; t0?: string; marker?: boolean } = {}) {
+  const { startMs = 0, t0 = '2026-10-06T09:00:00Z', marker = false } = opts
+  const rows = Array.from({ length: seconds }, (_, i) => {
+    const ts = new Date(Date.parse(t0) + i * 1000).toISOString().replace('.000Z', 'Z')
+    return `${ts},${startMs + i * 1000},1,${(51.5 + i * kmh / 3.6 / 111_000).toFixed(6)},-0.978,${kmh}`
+  })
+  return [...(marker ? ['<<<CAT /track.csv 1234>>>'] : []), 'timestamp,ms,fix,lat,lon,speed_kmh', ...rows].join('\n')
+}
+
+describe('joining stroke rate to the track', () => {
+  it('finds the moving stretches after a serial-capture marker line', () => {
+    const csv = trackCsv(100, 8, { marker: true })
+    expect(movingRangesFromTrack(csv, 20)).toEqual([[0, 99_000]])
+    expect(movingRangesFromTrack(csv)).toEqual([[0, 99_000]])
+    expect(movingRangesFromTrack(trackCsv(60, 8))).toEqual([])   // shorter than the 90 s default
+  })
+
+  it('reads the tracker clock against GPS time', () => {
+    expect(trackClockOffset(trackCsv(30, 8, { startMs: 5000 }))).toBe(Date.parse('2026-10-06T09:00:00Z') - 5000)
+    expect(trackClockOffset('ms,ax_g\n1,2')).toBeNull()
+  })
+
+  it('gives each point the nearest window within half a step, and nothing in a gap', () => {
+    const t0 = Date.parse('2026-10-06T09:00:00Z')
+    const track: { lat: number; lng: number; timestamp: Date; strokeRate?: number }[] =
+      Array.from({ length: 40 }, (_, i) => ({ lat: 0, lng: 0, timestamp: new Date(t0 + i * 1000) }))
+    const series = [{ ms: 10_000, strokesPerMin: 50, confidence: 0.8 }, { ms: 15_000, strokesPerMin: 54, confidence: 0.8 }]
+    const out = withStrokeRate(track, series, t0)
+    expect(out[10].strokeRate).toBe(50)
+    expect(out[12].strokeRate).toBe(50)
+    expect(out[13].strokeRate).toBe(54)
+    expect(out[17].strokeRate).toBe(54)
+    expect(out[5].strokeRate).toBeUndefined()
+    expect(out[30].strokeRate).toBeUndefined()
+  })
+
+  it('never replaces a stroke rate the file already carries', () => {
+    const t0 = Date.parse('2026-10-06T09:00:00Z')
+    const out = withStrokeRate([{ lat: 0, lng: 0, timestamp: new Date(t0), strokeRate: 30 }], [{ ms: 0, strokesPerMin: 60, confidence: 1 }], t0)
+    expect(out[0].strokeRate).toBe(30)
+  })
+
+  it('gives a tracker paddle a stroke rate per effort from its motion data', async () => {
+    const csv = trackCsv(300, 9, { startMs: 400_000 })
+    const motion = sidecar({ seconds: 300, hz: 10, strokesPerMin: 56, startMs: 400_000 })
+    const { parseTrace } = await import('@paddlesnitch/timing/parse')
+    const parsed = await parseTrace('trace.csv', new TextEncoder().encode(csv).buffer as ArrayBuffer)
+    if (!parsed.ok) throw new Error('fixture did not parse')
+    const track = addStrokeRate(parsed.track, csv, motion)
+    expect(track.filter(p => p.strokeRate != null).length).toBeGreaterThan(200)
+    const r = analyseTrack(track, {})
+    expect(r.avgSR).toBeGreaterThan(52)
+    expect(r.avgSR).toBeLessThan(60)
+  })
+
+  it('leaves the GPS-only track when the motion data is unusable', () => {
+    const track = [{ lat: 0, lng: 0, timestamp: new Date() }]
+    expect(addStrokeRate(track, 'nonsense', 'nonsense')).toBe(track)
   })
 })

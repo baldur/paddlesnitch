@@ -202,7 +202,9 @@ export async function updateSessionBoat(userId: string, id: string, boatClass: u
   if (bc) {
     s.boatClass = bc
     if (st !== undefined) s.seat = st; else delete s.seat
-    const doubled = BOAT_CLASS_INFO[bc].sport === 'kayak'
+    // Not for a tracker paddle: its stroke rate comes from the motion data and
+    // already counts every stroke, both sides (one-paddle.md, phase 1).
+    const doubled = BOAT_CLASS_INFO[bc].sport === 'kayak' && s.source?.type !== 'device'
     if (s.result.strokeRateDoubled !== doubled) s.result = rescaleDoubling(s.result, doubled)
     s.doubleStrokeRate = doubled
   } else { delete s.boatClass; delete s.seat }

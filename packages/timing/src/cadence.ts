@@ -180,41 +180,14 @@ export function deriveCadence(
   csv: string,
   opts: { movingRanges?: [number, number][] } = {},
 ): CadenceReport {
-  const all = parseMotionCsv(csv)
-  if (all.length < 64) {
-    return { available: false, reason: 'Motion file has too few samples to derive cadence.', sampleRateHz: null, rows: all.length, medianStrokesPerMin: null, windows: [] }
-  }
+  const prep = prepareMotion(csv)
+  if ('reason' in prep) return { available: false, ...prep, medianStrokesPerMin: null, windows: [] }
+  const { fsRaw, rows } = prep
 
-  const deltas: number[] = []
-  for (let i = 1; i < Math.min(all.length, 2000); i++) deltas.push(all[i].ms - all[i - 1].ms)
-  const step = median(deltas.filter(d => d > 0))
-  const fsRaw = step && step > 0 ? 1000 / step : null
-  if (!fsRaw || fsRaw < 2) {
-    return { available: false, reason: `Motion data is sampled at ${fsRaw ? fsRaw.toFixed(1) : '?'} Hz — too slow for a 0.5–2 Hz stroke.`, sampleRateHz: fsRaw, rows: all.length, medianStrokesPerMin: null, windows: [] }
-  }
-
-  const factor = Math.max(1, Math.round(fsRaw / WORK_HZ))
-  const work = factor > 1 ? all.filter((_, i) => i % factor === 0) : all
-  const fs = fsRaw / factor
-
-  // The WHOLE window must be moving, not just its midpoint: a window that is half
-  // parked at the launch and half paddling averages the two into a worse estimate
-  // than either.
-  const inMoving = (from: number, to: number) =>
-    !opts.movingRanges?.length || opts.movingRanges.some(([a, b]) => from >= a && to <= b)
-
-  const windows: CadenceWindow[] = []
-  const firstMs = work[0].ms
-  const lastMs = work[work.length - 1].ms
-  for (let t = firstMs; t + WINDOW_S * 1000 <= lastMs; t += STEP_S * 1000) {
-    if (!inMoving(t, t + WINDOW_S * 1000)) continue
-    const seg = work.filter(s => s.ms >= t && s.ms < t + WINDOW_S * 1000)
-    const w = analyseWindow(seg, fs, t)
-    if (w) windows.push(w)
-  }
+  const windows = windowsOver(prep, WINDOW_S, STEP_S, opts.movingRanges)
 
   if (windows.length === 0) {
-    return { available: false, reason: 'No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.', sampleRateHz: Math.round(fsRaw * 10) / 10, rows: all.length, medianStrokesPerMin: null, windows: [] }
+    return { available: false, reason: 'No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.', sampleRateHz: Math.round(fsRaw * 10) / 10, rows, medianStrokesPerMin: null, windows: [] }
   }
 
   const med = median(windows.map(w => w.strokesPerMin))
@@ -222,10 +195,199 @@ export function deriveCadence(
     available: true,
     reason: `Derived from ${windows.length} window${windows.length === 1 ? '' : 's'} of ${WINDOW_S}s at ${Math.round(fsRaw)} Hz.`,
     sampleRateHz: Math.round(fsRaw * 10) / 10,
-    rows: all.length,
+    rows,
     medianStrokesPerMin: med == null ? null : Math.round(med * 10) / 10,
     windows,
   }
+}
+
+type Prepared = { work: MotionSample[]; fs: number; fsRaw: number; rows: number }
+
+/** Parses and decimates a sidecar, or says why it can't give a stroke rate. */
+function prepareMotion(csv: string): Prepared | { reason: string; sampleRateHz: number | null; rows: number } {
+  const all = parseMotionCsv(csv)
+  if (all.length < 64) {
+    return { reason: 'Motion file has too few samples to derive cadence.', sampleRateHz: null, rows: all.length }
+  }
+
+  const deltas: number[] = []
+  for (let i = 1; i < Math.min(all.length, 2000); i++) deltas.push(all[i].ms - all[i - 1].ms)
+  const step = median(deltas.filter(d => d > 0))
+  const fsRaw = step && step > 0 ? 1000 / step : null
+  if (!fsRaw || fsRaw < 2) {
+    return { reason: `Motion data is sampled at ${fsRaw ? fsRaw.toFixed(1) : '?'} Hz — too slow for a 0.5–2 Hz stroke.`, sampleRateHz: fsRaw, rows: all.length }
+  }
+
+  const factor = Math.max(1, Math.round(fsRaw / WORK_HZ))
+  const work = factor > 1 ? all.filter((_, i) => i % factor === 0) : all
+  return { work, fs: fsRaw / factor, fsRaw, rows: all.length }
+}
+
+/** Every window of `windowS` seconds, `stepS` apart, that shows a stroke. */
+function windowsOver({ work, fs }: Prepared, windowS: number, stepS: number, movingRanges?: [number, number][]): CadenceWindow[] {
+  // The WHOLE window must be moving, not just its midpoint: a window that is half
+  // parked at the launch and half paddling averages the two into a worse estimate
+  // than either.
+  const inMoving = (from: number, to: number) =>
+    !movingRanges?.length || movingRanges.some(([a, b]) => from >= a && to <= b)
+
+  const windows: CadenceWindow[] = []
+  const lastMs = work[work.length - 1].ms
+  let lo = 0
+  for (let t = work[0].ms; t + windowS * 1000 <= lastMs; t += stepS * 1000) {
+    if (!inMoving(t, t + windowS * 1000)) continue
+    while (lo < work.length && work[lo].ms < t) lo++
+    let hi = lo
+    while (hi < work.length && work[hi].ms < t + windowS * 1000) hi++
+    const w = analyseWindow(work.slice(lo, hi), fs, t)
+    if (w) windows.push(w)
+  }
+  return windows
+}
+
+/** Stroke rate at one moment of a paddle: the centre of one short window. */
+export type StrokeRatePoint = { ms: number; strokesPerMin: number; confidence: number }
+
+// Through-the-paddle stroke rate (docs/features/one-paddle.md, phase 1): short
+// windows close together, so efforts and rests show. Chosen by the sweep in
+// docs/features/device-data.md against the 13 Sep reference capture.
+export const SERIES_WINDOW_S = 15
+export const SERIES_STEP_S = 5
+// Moving stretches this short still hold a whole window; the 90 s the session
+// figure uses would drop most interval pieces (measured: 237 windows instead of
+// 137 on the reference capture, median 57.0 against 57.6).
+export const SERIES_MIN_RUN_S = 20
+
+/**
+ * Stroke rate through the paddle, one value per `stepS`, on the tracker's
+ * millis() clock. Windows with no clear stroke give NO value (a rest is a gap,
+ * not a zero, and never a guess).
+ */
+export function strokeRateSeries(
+  csv: string,
+  opts: { movingRanges?: [number, number][]; windowS?: number; stepS?: number } = {},
+): StrokeRatePoint[] {
+  const prep = prepareMotion(csv)
+  if ('reason' in prep) return []
+  const windowS = opts.windowS ?? SERIES_WINDOW_S
+  const stepS = opts.stepS ?? SERIES_STEP_S
+  const windows = windowsOver(prep, windowS, stepS, opts.movingRanges)
+  // Left/right is decided ONCE for the paddle, by majority. On a 15 s window
+  // the half-lag test flips back and forth while the cycle rate holds steady
+  // (measured on a real 81 min paddle: ~31 cycles/min throughout, 234 of 316
+  // windows alternating), and every flip read as half the stroke rate. Nobody
+  // changes paddling style mid-outing, so one decision is right for all of it.
+  //
+  // Only alternating paddles get a series for now. Single-sided strokes (canoe,
+  // SUP) are calibrated on synthetic data alone, and a real recording read as
+  // single-sided swung between 35 and 87: no number is better than that.
+  if (windows.length < MIN_SERIES_WINDOWS) return []
+  const alternating = windows.filter(w => w.alternating).length / windows.length >= MIN_ALTERNATING_SHARE
+  if (!alternating) return []
+  const pts = windows.map(w => ({
+    ms: w.tMs + windowS * 500,
+    strokesPerMin: Math.round(w.cyclesPerMin * 2 * 10) / 10,
+    confidence: w.confidence,
+  }))
+  return pts.filter((p, i) => agreesWithNeighbours(pts, i, stepS * 1000))
+}
+
+// Too few windows to decide left/right by majority (a 9-minute test recording
+// gave 2, both reading half the rate).
+const MIN_SERIES_WINDOWS = 6
+const MIN_ALTERNATING_SHARE = 0.6
+
+// Neighbouring windows overlap by two thirds, so a real change of rate moves
+// through several of them. A lone window far from both its neighbours is the
+// alternating test missing once (measured on the reference capture: 22.5 spm
+// between 56.2 and 54.6, exactly half), and a window with no neighbour at all
+// is too little to trust. Both are dropped: a gap, never a wrong number.
+const NEIGHBOUR_TOLERANCE = 0.3
+
+function agreesWithNeighbours(pts: StrokeRatePoint[], i: number, stepMs: number): boolean {
+  const near = [pts[i - 1], pts[i + 1]].filter(q => q && Math.abs(q.ms - pts[i].ms) <= stepMs * 1.5)
+  if (near.length === 0) return false
+  const ref = near.reduce((a, q) => a + q.strokesPerMin, 0) / near.length
+  return Math.abs(pts[i].strokesPerMin - ref) <= ref * NEIGHBOUR_TOLERANCE
+}
+
+/**
+ * Millisecond spans where the boat was actually moving, from the track CSV
+ * (its `ms` and `speed_kmh` columns): at least 4 km/h for `minRunS` rows in a
+ * row (the track is 1 Hz).
+ *
+ * Without this the cadence search runs over the parked minutes at the start of a
+ * session too, where a stationary device produces a confident-looking periodicity
+ * that has nothing to do with paddling.
+ */
+export function movingRangesFromTrack(csv: string, minRunS = 90): [number, number][] {
+  // The header is the first line naming the columns: a serial capture opens
+  // with a <<<CAT …>>> marker before it.
+  const lines = csv.split(/\r?\n/)
+  const hi = lines.findIndex(l => /(^|,)\s*ms\s*,/i.test(l))
+  if (hi < 0) return []
+  const head = lines[hi].split(',').map(h => h.trim().toLowerCase().replace(/[\s_]/g, ''))
+  const msI = head.indexOf('ms')
+  const spI = head.findIndex(h => h === 'speedkmh' || h === 'speed')
+  if (msI < 0 || spI < 0) return []
+
+  const ranges: [number, number][] = []
+  let run: number[] = []
+  for (const line of lines.slice(hi + 1)) {
+    const p = line.split(',')
+    if (p.length <= Math.max(msI, spI)) continue
+    const ms = Number(p[msI]), sp = Number(p[spI])
+    if (!Number.isFinite(ms) || !Number.isFinite(sp)) continue
+    if (sp >= 4) run.push(ms)
+    else {
+      if (run.length >= minRunS) ranges.push([run[0], run[run.length - 1]])
+      run = []
+    }
+  }
+  if (run.length >= minRunS) ranges.push([run[0], run[run.length - 1]])
+  return ranges
+}
+
+/**
+ * Milliseconds to add to the tracker's millis() clock to get UTC, from the
+ * track CSV rows that carry both (`ms` and the GPS `timestamp`). The median
+ * absorbs the sub-second jitter of when each row was written. Null when the
+ * file has no such rows.
+ */
+export function trackClockOffset(csv: string): number | null {
+  const lines = csv.split(/\r?\n/)
+  const hi = lines.findIndex(l => /(^|,)\s*ms\s*,/i.test(l))
+  if (hi < 0) return null
+  const head = lines[hi].split(',').map(h => h.trim().toLowerCase())
+  const msI = head.indexOf('ms'), tI = head.indexOf('timestamp')
+  if (msI < 0 || tI < 0) return null
+  const offsets: number[] = []
+  for (const line of lines.slice(hi + 1)) {
+    const p = line.split(',')
+    const ms = Number(p[msI]), t = Date.parse(p[tI] ?? '')
+    if (p[tI] && Number.isFinite(ms) && Number.isFinite(t)) offsets.push(t - ms)
+  }
+  return median(offsets)
+}
+
+/**
+ * Puts the stroke rate series onto the track's points: each point gets the
+ * value of the window centred nearest it, within half a step. Points in a gap
+ * (a rest, an unclear stretch) get none. A rate the source file already
+ * carries is never replaced.
+ */
+export function withStrokeRate<T extends { timestamp: Date; strokeRate?: number }>(
+  track: T[], series: StrokeRatePoint[], clockOffsetMs: number, stepS = SERIES_STEP_S,
+): T[] {
+  if (series.length === 0) return track
+  const half = (stepS * 1000) / 2
+  let j = 0
+  return track.map(p => {
+    if (p.strokeRate != null) return p
+    const ms = p.timestamp.getTime() - clockOffsetMs
+    while (j + 1 < series.length && Math.abs(series[j + 1].ms - ms) <= Math.abs(series[j].ms - ms)) j++
+    return Math.abs(series[j].ms - ms) <= half ? { ...p, strokeRate: series[j].strokesPerMin } : p
+  })
 }
 
 /**

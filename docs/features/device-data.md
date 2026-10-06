@@ -272,6 +272,46 @@ on its **last** part, not its first.
 
 Result on real data: **58.0 spm**, 22 windows, all alternating, r = 0.64–0.83.
 
+## Stroke rate through the paddle (2026-10-06)
+
+The session figure above is one median. For a paddle's efforts, splits and map,
+`strokeRateSeries` (`@paddlesnitch/timing/cadence`) gives a value every 5 s and
+`withStrokeRate` puts it on the track's points, joined through the track's own
+`ms` and `timestamp` columns (`trackClockOffset`). Tracker paddles get it when
+they're loaded (`loadDeviceSessionTrack`); see `one-paddle.md` phase 1.
+
+**Window length, measured** on the 13 Sep capture decimated to 10 Hz as uploaded
+(the 60 s session figure reads 57.7 spm):
+
+| window (5 s step) | values | median | change between neighbours |
+|---|---|---|---|
+| 8 s | 136 | 57.9 | 3.4 spm |
+| 10 s | 144 | 57.5 | 2.7 spm |
+| 12 s | 147 | 57.8 | 2.2 spm |
+| **15 s** | 143 | 57.5 | **1.6 spm** |
+| 20 s | 149 | 57.6 | 1.2 spm |
+| 30 s | 149 | 57.6 | 0.8 spm |
+
+15 s keeps a stroke-to-stroke change visible within ~15 s while staying steady.
+Moving stretches for the series need only 20 s (not the 90 s the session figure
+uses): 242 values instead of 142, median 57.0.
+
+**Two things the reference capture did not show, found on real paddles:**
+
+- **Left/right flips on short windows.** On an 81 min paddle the cycle rate held
+  at ~31/min throughout, but the half-lag test said "alternating" for only 234
+  of 316 windows, and every miss read as HALF the stroke rate (a series swinging
+  31 ↔ 62). So left/right is decided once per paddle by majority (≥ 60% of
+  windows), and every window's cycle rate is doubled. Fewer than 6 windows: no
+  series (a 9 min test recording gave 2, both at half rate).
+- **Single-sided gets no series yet.** A paddle that read as single-sided swung
+  between 35 and 87 spm. Until a real canoe or SUP recording calibrates it, no
+  number is shown.
+
+A lone window that disagrees with both neighbours by more than 30% is dropped
+(the alternating test missing once: 22.5 between 56.2 and 54.6), as is a window
+with no neighbour. Rests and unclear stretches are gaps, never zeros.
+
 ## Open questions for paddlesnitch
 
 - **Do you want fix-less rows at all?** The device currently uploads whole files

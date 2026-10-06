@@ -116,3 +116,31 @@ describe('paddles.shared never exposes the AI summary', () => {
     expect(res.result.insightModel).toBeUndefined()
   })
 })
+
+// The tracker's stroke rate comes from its motion data and already counts every
+// stroke, so picking a kayak class must not double it (one-paddle.md, phase 1).
+describe('paddles.setBoat and stroke-rate doubling', () => {
+  async function saved(id: string, source: object) {
+    const { saveSession } = await import('@paddlesnitch/analysis/analysis-store')
+    const { analyseTrack } = await import('@paddlesnitch/analysis/analysis')
+    const t0 = Date.parse('2026-09-01T10:00:00Z')
+    const track = Array.from({ length: 300 }, (_, i) => ({ lat: 51.5 + i * 0.00003, lng: -0.1, timestamp: new Date(t0 + i * 1000), strokeRate: 56 }))
+    await saveSession({
+      id, userId: USER.id, createdAt: '2026-09-01T11:00:00Z', paddledAt: '2026-09-01T10:00:00Z',
+      source, doubleStrokeRate: false, note: '', insight: '', result: analyseTrack(track, {}),
+    } as never)
+  }
+
+  it('doubles a file paddle when a kayak class is picked (it counts one side)', async () => {
+    await saved('f1', { type: 'file' })
+    const s = await createCaller({ user: USER }).paddles.setBoat({ id: 'f1', boatClass: 'K1', seat: null })
+    expect(s.doubleStrokeRate).toBe(true)
+  })
+
+  it('does not double a tracker paddle when a kayak class is picked', async () => {
+    await saved('d1', { type: 'device', deviceId: '435AC17C', deviceSessionId: 's1' })
+    const s = await createCaller({ user: USER }).paddles.setBoat({ id: 'd1', boatClass: 'K1', seat: null })
+    expect(s.doubleStrokeRate).toBe(false)
+    expect(s.result.strokeRateDoubled).toBe(false)
+  })
+})
