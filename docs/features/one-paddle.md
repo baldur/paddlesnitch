@@ -1,6 +1,6 @@
 # One paddle
 
-📋 **Spec, 2026-10-06. Not built.** This is Phase G of the 2026-09 audit
+📋 **Spec, 2026-10-06.** Phase 1 built (2026-10-06); phases 2–4 not built. This is Phase G of the 2026-09 audit
 ("one paddle with extras"), made concrete. The owner's decisions are recorded
 under **Decisions**.
 
@@ -58,17 +58,14 @@ called by the device recording route, for the device page.
 **Change:**
 
 - `strokeRateSeries(motionCsv, { movingRanges })` in `timing/cadence`: the same
-  method (highest-variance gyro axis → autocorrelation → best local maximum →
-  parabolic sub-sample → the alternating-stroke ratio test) on **shorter windows
-  with a short step**, about 15 s every 5 s. Fifteen seconds is about 14 strokes
-  at 58 spm, enough for the autocorrelation. Each window gives a stroke rate and
-  a confidence. Windows below the confidence floor, or outside moving stretches,
-  give **no value** rather than a guess (rests show as gaps, not zeros).
-- **Window and step are measured, not chosen.** Before settling, sweep both
-  against the 13 Sep reference capture as the 10 Hz decision was
-  (`device-data.md`): the session median must stay within ~1% of the 60 s
-  figure (58.0 spm), and the series must show the known efforts and rests.
-  Record the sweep in `device-data.md`.
+  method as the session figure on **15 s windows every 5 s** (measured: see
+  "Stroke rate through the paddle" in `device-data.md`). Rests and unclear
+  stretches give **no value**, never a zero or a guess.
+- **Left/right is decided once per paddle**, by majority: on short windows the
+  half-lag test flips while the cycle rate holds, and each flip read as half
+  the rate on real paddles. **Single-sided paddles (canoe, SUP) get no series**
+  until a real recording calibrates them, and nor do recordings with fewer than
+  6 usable windows.
 - **Joining it to the track.** The motion file has only `ms` (the tracker's
   millis clock). The track has both `ms` and the GPS `timestamp`, so the mapping
   is exact: give each track point the stroke rate of the window whose centre is
@@ -76,10 +73,12 @@ called by the device recording route, for the device page.
 - `loadDeviceSessionTrack` attaches it when the recording has motion data, so
   the paddle analysis receives `TrackPoint.strokeRate` like any SpeedCoach file.
   `doubleStrokeRate` stays false for tracker paddles: the series is already
-  strokes per minute.
-- **Existing tracker paddles:** a script re-analyses them (dry run by default,
-  like `backfill-device-distance.ts`). Re-analysis keeps the diary note and boat
-  class, and replaces the summary.
+  strokes per minute, and picking a kayak boat class no longer doubles a
+  tracker paddle (it did, for files that count one side).
+- **Existing tracker paddles:** `scripts/backfill-tracker-stroke-rate.ts`
+  re-analyses them (dry run by default). It keeps the diary note, boat class and
+  written summary (phase 2 rewrites summaries as motion data arrives) and turns
+  doubling off.
 
 **Tests:** synthetic signals of known rate (steady, a rest in the middle, a
 rate change, single-sided pulses for canoe or SUP); the `ms` mapping; no value

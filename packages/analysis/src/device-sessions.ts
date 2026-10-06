@@ -5,8 +5,9 @@
 // storage and parse it on demand. Only the signed-in user's OWN sessions are
 // listed or loaded (getDeviceSessionTrace checks ownership), so this exposes
 // nothing another paddler couldn't already reach.
-import { listUserDeviceSessions, getDeviceSessionTrace } from '@paddlesnitch/core/devices'
+import { listUserDeviceSessions, getDeviceSessionTrace, getDeviceSessionMotion } from '@paddlesnitch/core/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
+import { strokeRateSeries, movingRangesFromTrack, trackClockOffset, withStrokeRate, SERIES_MIN_RUN_S } from '@paddlesnitch/timing/cadence'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 export { listUserDeviceSessions } from '@paddlesnitch/core/devices'
@@ -21,5 +22,23 @@ export async function loadDeviceSessionTrack(userId: string, deviceId: string, s
   const ab = new Uint8Array(buf).buffer
   const parsed = await parseTrace('trace.csv', ab)
   if (!parsed.ok || parsed.track.length < 2) return null
-  return parsed.track
+  const motion = await getDeviceSessionMotion(userId, deviceId, sessionId).catch(() => null)
+  return motion ? addStrokeRate(parsed.track, buf.toString('utf8'), motion.toString('utf8')) : parsed.track
+}
+
+/**
+ * Stroke rate through the paddle from the tracker's motion data
+ * (docs/features/one-paddle.md, phase 1), on each track point, so the analysis
+ * treats it like any file that carries stroke rate. Best effort: anything
+ * unexpected leaves the GPS-only track.
+ */
+export function addStrokeRate(track: TrackPoint[], trackCsv: string, motionCsv: string): TrackPoint[] {
+  try {
+    const offset = trackClockOffset(trackCsv)
+    if (offset == null) return track
+    const series = strokeRateSeries(motionCsv, { movingRanges: movingRangesFromTrack(trackCsv, SERIES_MIN_RUN_S) })
+    return withStrokeRate(track, series, offset)
+  } catch {
+    return track
+  }
 }
