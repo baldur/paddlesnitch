@@ -81,6 +81,13 @@ describe('DEVICES page', () => {
     expect(container.querySelector('#add form')).not.toBeNull()
   })
 
+  it('offers Bluetooth sync from Devices, with the guide for turning it on (it was linked from nowhere)', async () => {
+    stubFetch({ [DEVICES]: { devices: [{ deviceId: '5A43CA48', name: 't', model: 'm' }] }, [SESSIONS]: { sessions: [] } })
+    await mount()
+    expect(container.querySelector('section[aria-label="Bluetooth"] a[href="/devices/bluetooth"]')?.textContent).toBe('SYNC OVER BLUETOOTH')
+    expect(container.querySelector('a[href="/guide/bluetooth"]')).not.toBeNull()
+  })
+
   it('drops the getting-started list once a recording has arrived', async () => {
     stubFetch({
       [DEVICES]: { devices: [{ deviceId: 'AABBCCDD', name: 'Boat', model: 'm', firmware: '0.16.3', linkedAt: '2026-09-01T00:00:00Z', lastSeenAt: new Date().toISOString() }] },

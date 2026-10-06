@@ -9,10 +9,11 @@ import {
   TRACKER_SYNC, TRACKER_DATA, parseSyncStatus, syncOverBluetooth, type SyncProgress,
 } from '@/lib/tracker-ble'
 
-// Bluetooth test page (docs/features/tracker-bluetooth-sync.md, P4 + J1 step 3).
-// Linked from nowhere yet: connect to a nearby tracker, read its details, pair
-// it, add it to this account and give it WiFi details. Only bench-build
-// trackers have Bluetooth so far.
+// Bluetooth (docs/features/tracker-bluetooth-sync.md, P4): connect to a nearby
+// tracker, pair it, sync its recordings, add it to this account and give it
+// WiFi details. Linked from /devices and each tracker's page; explained in
+// /guide/bluetooth. Trackers have Bluetooth from firmware 0.18.0, off until
+// the owner turns it on in Settings > Network.
 
 type Found = {
   name: string
@@ -30,7 +31,7 @@ const OWNER_TEXT = {
   unlinked: 'Not added to an account yet',
 } as const
 
-export default function BluetoothTestPage() {
+export default function BluetoothPage() {
   // Read after mount: the server render has no navigator, and the first client
   // render must match it.
   const [supported, setSupported] = useState<boolean | undefined>(undefined)
@@ -83,7 +84,7 @@ export default function BluetoothTestPage() {
       const about = parseAbout(new TextDecoder().decode(value))
       if (!about) {
         device.gatt.disconnect()
-        setError("Couldn't read this tracker. Its firmware may be too old for Bluetooth.")
+        setError("Couldn't read this tracker. It may need an update: leave it on WiFi for a few minutes, then try again.")
         return
       }
       // Reading this item is refused until the connection is paired, and the
@@ -234,15 +235,19 @@ export default function BluetoothTestPage() {
       />
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full flex flex-col gap-4">
         <div>
-          <h1 className="text-lg font-bold text-fg tracking-widest">BLUETOOTH (TEST)</h1>
+          <h1 className="text-lg font-bold text-fg tracking-widest">BLUETOOTH</h1>
           <p className="text-sm text-muted mt-1">
-            Connect to a tracker nearby, pair it, add it to your account and give it your WiFi. Only test trackers have Bluetooth so far.
+            Sync a tracker nearby through this phone or computer, add it to your account, or give it your WiFi.
+          </p>
+          <p className="text-xs text-muted mt-1">
+            Turn Bluetooth on first: on the tracker, Settings &gt; Network, tap to the second page, then hold.{' '}
+            <Link href="/guide/bluetooth" className="text-primary">How it works</Link>.
           </p>
         </div>
 
         {supported === false && (
           <p className="text-sm text-fg border border-border bg-surface px-4 py-3">
-            This browser can&apos;t use Bluetooth. Open this page in Chrome or Edge, on a computer or an Android phone.
+            This browser can&apos;t use Bluetooth. Open this page in Chrome or Edge, on a computer or an Android phone. iPhones and iPads can&apos;t use Bluetooth from a web page yet.
           </p>
         )}
 
