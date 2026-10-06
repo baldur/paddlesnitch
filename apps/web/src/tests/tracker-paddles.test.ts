@@ -76,6 +76,16 @@ describe('a tracker recording becomes a paddle by itself', () => {
     expect(p.doubleStrokeRate).toBe(false)
   })
 
+  it('makes the paddle when the motion data is there but gives no stroke rate (it was never made)', async () => {
+    // Single-sided strokes give no series yet, so the motion is there but the
+    // track has no stroke rate: that is not "the motion landed meanwhile".
+    const meta = await storeDeviceSession(
+      { deviceId: DEVICE, userId: USER, filename: NAME, startedAt: '', endedAt: '', distanceMetres: 750, points: 300 }, TRACK,
+    )
+    await storeDeviceMotion(DEVICE, USER, NAME, sidecar({ seconds: 300, hz: 10, strokesPerMin: 40, alternating: false, startMs: 400_000 }), 3000)
+    expect(await paddleForRecording(USER, DEVICE, meta.sessionId)).toEqual({ status: 'created', paddleId: trackerPaddleId(meta.sessionId) })
+  })
+
   it('never makes two paddles for one recording', async () => {
     const id = await recording()
     await paddleForRecording(USER, DEVICE, id)

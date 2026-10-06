@@ -29,12 +29,15 @@ export const trackerPaddleId = (deviceSessionId: string) => `t-${deviceSessionId
 
 /** What `paddleForRecording` would do for a recording, without doing it. */
 export type TrackerPaddlePlan =
-  | { action: 'create'; track: TrackPoint[]; hasStrokeRate: boolean }
+  | { action: 'create'; track: TrackPoint[]; hasStrokeRate: boolean; hadMotion: boolean }
   | { action: 'update'; track: TrackPoint[]; existing: AnalysisSession }
   | { action: 'unchanged'; paddleId: string }
   | { action: 'skip'; reason: 'no_track' | 'too_short' }
 
 export async function planForRecording(userId: string, deviceId: string, deviceSessionId: string): Promise<TrackerPaddlePlan> {
+  // Checked BEFORE the track is read: if the motion data was there already, the
+  // track below has used it, whether or not it gave a stroke rate.
+  const hadMotion = !!(await getDeviceSessionMotion(userId, deviceId, deviceSessionId).catch(() => null))
   const track = await loadDeviceSessionTrack(userId, deviceId, deviceSessionId)
   // No usable GPS (an indoor test, a bench log): not a paddle.
   if (!track) return { action: 'skip', reason: 'no_track' }
@@ -51,7 +54,7 @@ export async function planForRecording(userId: string, deviceId: string, deviceS
     // moved 1.6 km or more, the rest 154 m at most.
     const moved = movementDistanceM(track.map(p => ({ lat: p.lat, lng: p.lng, tMs: p.timestamp.getTime() })))
     if (moved < MIN_PADDLE_METRES) return { action: 'skip', reason: 'too_short' }
-    return { action: 'create', track, hasStrokeRate }
+    return { action: 'create', track, hasStrokeRate, hadMotion }
   }
   // Only the motion data adds anything (stroke rate); otherwise leave the
   // paddle, its summary and the paddler's edits exactly as they are.
@@ -75,8 +78,11 @@ export async function paddleForRecording(
     id: trackerPaddleId(deviceSessionId),
     schedule: opts.schedule,
     // The motion data landed while this GPS-only paddle was being written: the
-    // call it triggered makes the fuller one.
-    shouldSave: async () => plan.hasStrokeRate || !(await getDeviceSessionMotion(userId, deviceId, deviceSessionId).catch(() => null)),
+    // call it triggered makes the fuller one. Only "landed meanwhile": motion
+    // that was there from the start but gives no stroke rate (single-sided, too
+    // short) must not stop the save, or that recording never gets a paddle.
+    shouldSave: async () => plan.hasStrokeRate || plan.hadMotion ||
+      !(await getDeviceSessionMotion(userId, deviceId, deviceSessionId).catch(() => null)),
   })
   if (r.dropped) return { status: 'skipped', reason: 'superseded' }
   // The same outing already added by hand from the same file (fingerprint).
