@@ -21,7 +21,7 @@
   },
   "comment_devDependencies": "@aws-sdk/client-ses is hoisted to the workspace root so the infra-lambda vitest tests (importing infra/lambdas/*.mjs from outside any package) resolve it during `pnpm test`, which CI runs before infra/npm ci.",
   "devDependencies": {
-    "@aws-sdk/client-ses": "^3.1141.0"
+    "@aws-sdk/client-ses": "^3.1146.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
