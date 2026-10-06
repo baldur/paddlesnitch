@@ -179,6 +179,22 @@ export default function Troubleshooting() {
         </p>
       </Problem>
 
+      <Problem id="bluetooth" title="Bluetooth doesn’t find the tracker, or won’t pair">
+        <ul className="list-disc pl-5 flex flex-col gap-1">
+          <li>Use Chrome or Edge on an Android phone or a computer. iPhones and iPads can’t use
+            Bluetooth from a web page yet.</li>
+          <li>Check Bluetooth is on: <strong>Settings &gt; Network</strong>, tap to the second page.
+            It should say <strong>Bluetooth is on</strong> (<Link href="/guide/bluetooth">how</Link>).</li>
+          <li>Close the Bluetooth page on any other phone, computer or tab. A tracker connected
+            somewhere else can be hard to find.</li>
+          <li>If pairing fails or the page says to <strong>forget</strong> the tracker: in your phone’s
+            or computer’s Bluetooth settings, forget the tracker (its name starts <strong>PT-</strong>),
+            then pair again. This is needed after the tracker forgets its pairings, and sometimes
+            after an update.</li>
+          <li>When pairing, hold the tracker’s button within 25 seconds of the number appearing.</li>
+        </ul>
+      </Problem>
+
       <Problem id="report" title="Something else">
         <p>
           Tell us with <strong>Report an issue</strong>. It helps to say what the tracker’s screen

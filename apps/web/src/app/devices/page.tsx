@@ -133,6 +133,22 @@ export default function DevicesPage() {
           </div>
         )}
 
+        <section className="border border-border bg-surface px-4 py-4 flex flex-col gap-2" aria-label="Bluetooth">
+          <h2 className="text-xs text-fg tracking-widest uppercase">Bluetooth</h2>
+          <p className="text-sm text-muted">
+            Away from WiFi? Sync a tracker through this phone or computer, or add one to your account without WiFi.
+          </p>
+          <div>
+            <Link href="/devices/bluetooth" className="inline-block px-4 py-2 bg-primary text-white text-sm tracking-widest">
+              SYNC OVER BLUETOOTH
+            </Link>
+          </div>
+          <p className="text-xs text-muted">
+            Chrome or Edge, on Android or a computer. Bluetooth is off on the tracker until you turn it on.{' '}
+            <Link href="/guide/bluetooth" className="text-primary">How</Link>.
+          </p>
+        </section>
+
         <div className="border-t border-border pt-6">
           <AddTrackerForm onAdded={load} />
         </div>

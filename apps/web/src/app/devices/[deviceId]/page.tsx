@@ -196,6 +196,11 @@ export default function DeviceDetailPage() {
             </p>
           )}
           <p className="text-sm text-muted mt-2">Everything this tracker has recorded. Tap one for its details.</p>
+          {device && (
+            <p className="text-sm text-muted mt-1">
+              Away from WiFi? <Link href="/devices/bluetooth" className="text-primary">Sync over Bluetooth</Link>.
+            </p>
+          )}
         </div>
 
         {sessions === undefined ? (

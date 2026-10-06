@@ -11,6 +11,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
   { slug: 'boat', title: 'Fix it in the boat', summary: 'Firmly in place, and reasonably dry.' },
   { slug: 'record', title: 'Record a paddle', summary: 'Open Track, wait for GPS, paddle, stop.' },
   { slug: 'upload', title: 'Upload it and look at it', summary: 'Back home it uploads by itself; then see it on the website.' },
+  { slug: 'bluetooth', title: 'Sync from your phone', summary: 'Optional: send a paddle home by Bluetooth, before you’re back on WiFi.' },
 ]
 
 export function guideStep(slug: string): { step: GuideStep; number: number; prev?: GuideStep; next?: GuideStep } | undefined {

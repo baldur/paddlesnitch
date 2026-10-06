@@ -17,6 +17,10 @@ export default function UploadStep() {
         So after a paddle, bring it home and leave it switched on, ideally charging. The boat
         movement data is the big part and can take several minutes.
       </p>
+      <p>
+        Away from WiFi? Your phone can send it over Bluetooth instead: see{' '}
+        <Link href="/guide/bluetooth">Sync from your phone</Link>.
+      </p>
 
       <h2 className="text-xs text-fg tracking-widest uppercase">Checking on the tracker</h2>
       <p>On the menu, choose <strong>Sync</strong>:</p>
@@ -53,7 +57,7 @@ export default function UploadStep() {
       </Screens>
 
       <Note>
-        That’s everything. If something doesn’t work the way this guide says, see{' '}
+        That’s the setup done. If something doesn’t work the way this guide says, see{' '}
         <Link href="/guide/troubleshooting">troubleshooting</Link>, or tell us with{' '}
         <strong>Report an issue</strong>.
       </Note>

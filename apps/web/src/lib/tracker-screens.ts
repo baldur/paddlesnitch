@@ -154,6 +154,33 @@ export const SCREENS = {
     battery(),
   ] },
 
+  // Settings > Network, second page (tap from the WiFi page). Hold turns
+  // Bluetooth on; it's off on every tracker until then.
+  bluetoothOff: { label: 'Settings > Bluetooth, off', els: [
+    { text: 'Settings > Bluetooth', x: 0, y: 8, font: 's' }, { hline: 11 },
+    { text: 'Bluetooth is off', x: 0, y: 26, font: 'm' },
+    { text: 'sync by phone or computer', x: 0, y: 38, font: 's' },
+    { text: 'TURN ON', x: 0, y: 50, font: 's' },
+    battery(),
+  ] },
+
+  bluetoothOn: { label: 'Settings > Bluetooth, on', els: [
+    { text: 'Settings > Bluetooth', x: 0, y: 8, font: 's' }, { hline: 11 },
+    { text: 'Bluetooth is on', x: 0, y: 26, font: 'm' },
+    { text: '‹PT-17C› - ‹1› paired', x: 0, y: 38, font: 's' },
+    { text: 'TURN OFF (restarts)', x: 0, y: 50, font: 's' },
+    battery(),
+  ] },
+
+  // drawPairConfirm: the same number shows on the phone or computer.
+  pair: { label: 'Pairing', els: [
+    { text: 'Pair over Bluetooth?', x: 0, y: 12, font: 'm' }, { hline: 15 },
+    { text: '‹482913›', x: 64, y: 41, font: 'code', align: 'center' },
+    { text: 'HOLD if it matches', x: 0, y: 54, font: 'm' },
+    { text: 'double-tap to refuse', x: 0, y: 63, font: 's' },
+    { text: '‹22s›', x: 128, y: 63, font: 's', align: 'right' },
+  ] },
+
   reset: { label: 'Factory reset', els: [
     { text: 'Factory reset?', x: 0, y: 12, font: 'm' }, { hline: 15 },
     { text: 'clears wifi, account link', x: 0, y: 27, font: 's' },
