@@ -14,7 +14,8 @@
     "./share-card": "./src/share-card.ts",
     "./similar": "./src/similar.ts",
     "./trials": "./src/trials.ts",
-    "./device-sessions": "./src/device-sessions.ts"
+    "./device-sessions": "./src/device-sessions.ts",
+    "./tracker-paddle": "./src/tracker-paddle.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",
