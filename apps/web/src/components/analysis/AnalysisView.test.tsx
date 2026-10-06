@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { httpBatchLink } from '@trpc/client'
 import AnalysisView, { type ViewData } from './AnalysisView'
 import { trpc } from '@/lib/trpc'
+import { getQueryKey } from '@trpc/react-query'
 
 // On a phone the floating panels obscure the map and the segment list is cut
 // off behind the replay scrubber. The paddler can now minimise the summary and
@@ -15,7 +16,7 @@ import { trpc } from '@/lib/trpc'
 // panels render in jsdom.
 vi.mock('@/components/map/AnalysisMapClient', () => ({ default: () => null }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
-vi.mock('next/link', () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }))
+vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href?: string }) => <a href={href}>{children}</a> }))
 
 let container: HTMLDivElement
 let root: Root
@@ -29,11 +30,12 @@ afterEach(async () => {
 // AnalysisView calls tRPC hooks (mutations + query utils), so it must render
 // inside the tRPC + React Query providers. The client points at a dummy URL —
 // these tests only render + toggle panels, they never fire a request.
-async function mount(node: React.ReactNode) {
+async function mount(node: React.ReactNode, prefill?: (qc: QueryClient) => void) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  const qc = new QueryClient()
+  const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
+  prefill?.(qc)
   const client = trpc.createClient({ links: [httpBatchLink({ url: 'http://localhost/api/trpc' })] })
   await act(async () => {
     root.render(
@@ -142,5 +144,16 @@ describe('AnalysisView BOAT MOTION', () => {
   it('not on a shared view (the recording is the owner\'s)', async () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" readOnly />)
     expect(link()).toBeUndefined()
+  })
+})
+
+// The same outing from another source (one-paddle.md, phase 4).
+describe('AnalysisView ALSO RECORDED BY', () => {
+  it('links to the comparison with the same outing from another source', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />, qc =>
+      qc.setQueryData(getQueryKey(trpc.paddles.sameOuting, { id: 't-rec1' }, 'query'),
+        [{ id: 'strava1', sourceType: 'strava', paddledAt: '2026-10-06T09:01:00Z' }]))
+    const link = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('ALSO RECORDED BY'))
+    expect(link?.textContent).toBe('ALSO RECORDED BY STRAVA →')
   })
 })

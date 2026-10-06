@@ -56,7 +56,8 @@ Everything else checks deeper (a private resource answers 404, not 403).
                                   diary, boat class, pick a section)
 /paddles/[id]/motion         A    BOAT MOTION of a tracker paddle (charts + technical
                                   details)
-/paddles/compare?a=&b=       A    two paddles side by side
+/paddles/compare?a=&b=       A    two paddles side by side; SAME OUTING section when
+                                  they're one outing from two sources
 /paddles/compare/section     A    one section across your paddles
 /paddles/shared/[shareId]    P    a shared paddle (read-only; plain summary)
 ```

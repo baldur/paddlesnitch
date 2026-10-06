@@ -10,6 +10,7 @@ import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
 import { paddleTotals } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
+import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
 import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling,
@@ -31,6 +32,33 @@ export const paddlesRouter = router({
   // Which paddle each tracker recording became: { recordingId: paddleId }.
   // The tracker's page links its recordings to their paddles with it.
   byRecording: protectedProcedure.query(async ({ ctx }) => paddleIdsByRecording(await listSessionSummaries(ctx.user.id))),
+
+  // The same outing recorded by another source (one-paddle.md, phase 4): the
+  // user's other paddles that overlap this one in time AND in place. Only the
+  // few that overlap in time are loaded to compare tracks.
+  sameOuting: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
+    const all = await listSessionSummaries(ctx.user.id)
+    const me = all.find(s => s.id === input.id)
+    if (!me) throw new TRPCError({ code: 'NOT_FOUND' })
+    const near = all.filter(s => s.id !== me.id && timeOverlapShare(me, s) >= MIN_TIME_OVERLAP)
+    if (near.length === 0) return []
+    const self = await getSession(ctx.user.id, me.id)
+    const out: { id: string; sourceType: string; paddledAt: string }[] = []
+    for (const s of near) {
+      const other = await getSession(ctx.user.id, s.id)
+      if (self && other && isSameOuting(self, other)) out.push({ id: s.id, sourceType: s.source.type, paddledAt: s.paddledAt })
+    }
+    return out
+  }),
+
+  // The two recordings of one outing side by side: how far apart they put you
+  // at the same moments, and stroke rate from each by clock minute.
+  compareOuting: protectedProcedure.input(z.object({ a: z.string(), b: z.string() })).query(async ({ ctx, input }) => {
+    const [a, b] = await Promise.all([getSession(ctx.user.id, input.a), getSession(ctx.user.id, input.b)])
+    if (!a || !b) throw new TRPCError({ code: 'NOT_FOUND' })
+    if (!isSameOuting(a, b)) return { same: false as const }
+    return { same: true as const, gap: trackGap(a, b), strokeRate: strokeRateSideBySide(a, b) }
+  }),
 
   // Full saved paddle (result + note + insight). Owner only.
   get: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
