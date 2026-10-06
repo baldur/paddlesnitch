@@ -10,6 +10,7 @@ import { haversine } from '@paddlesnitch/timing/geo'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 import { sourceLabel } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
+import { sourceName } from './SameOuting'
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const compass = (d?: number) => (d == null ? '' : COMPASS[Math.round(d / 45) % 8])
@@ -48,6 +49,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const setDoublingMut = trpc.paddles.setDoubling.useMutation()
   const setNoteMut = trpc.paddles.setNote.useMutation()
   const shareMut = trpc.paddles.share.useMutation()
+  const sameOuting = trpc.paddles.sameOuting.useQuery({ id: sessionId ?? '' }, { enabled: !!sessionId && !readOnly, retry: false }).data ?? []
   const unshareMut = trpc.paddles.unshare.useMutation()
   const setBoatMut = trpc.paddles.setBoat.useMutation()
   // SUP→kayak stroke-rate doubling is decided automatically at analysis time,
@@ -332,6 +334,13 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {sessionId && !readOnly && data.source?.type === 'device' && <Link href={`/paddles/${sessionId}/motion`} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>BOAT MOTION</Link>}
           {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Pick part of this paddle to look at closely, or compare with your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-split' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : 'PICK A SECTION'}</button>}
         </div>
+        {/* The same outing from another source (one-paddle.md, phase 4). */}
+        {sameOuting.map(o => (
+          <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`}
+            className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>
+            ALSO RECORDED BY {o.sourceType === 'device' ? 'THE TRACKER' : sourceName(o.sourceType)} →
+          </Link>
+        ))}
         {!sectionMode && (
           <div className={`${PANEL} p-1.5 flex items-center gap-1`}>
             <span className="text-[10px] text-muted tracking-widest px-1">COLOUR</span>

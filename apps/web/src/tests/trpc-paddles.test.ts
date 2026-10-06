@@ -153,3 +153,38 @@ describe('paddles.byRecording', () => {
     expect(await createCaller({ user: USER }).paddles.byRecording()).toEqual({ rec1: 't-rec1', rec2: 'hand2' })
   })
 })
+
+describe('the same outing from two sources (paddles.sameOuting, paddles.compareOuting)', () => {
+  // One boat heading north from 09:00 at 2.2 m/s, recorded from `at`.
+  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number } = {}) => {
+    const since = (Date.parse(at) - Date.parse('2026-10-06T09:00:00Z')) / 1000
+    return writeSession(dir, id, {
+      id, userId: USER.id, paddledAt: at, source: { type },
+      result: {
+        durationS: seconds - 1, distanceKm: seconds * 2.2 / 1000, cruiseSpeed: 2.2, avgSR: opts.sr ?? null,
+        surges: [], stops: [], sets: [],
+        points: Array.from({ length: seconds }, (_, t) => ({ t, lat: 51.46 + (since + t) * 2.2 / 111_000, lng: opts.lng ?? -0.93, speed: 2.2, sr: opts.sr ?? null, dps: null })),
+      },
+    })
+  }
+
+  it('finds the watch recording of a tracker paddle, and not other paddles', async () => {
+    await outing('t-rec1', '2026-10-06T09:00:00Z', 1200, 'device', { sr: 56 })
+    await outing('strava1', '2026-10-06T09:01:00Z', 1100, 'strava', { sr: 28 })
+    await outing('nextday', '2026-10-07T09:00:00Z', 1200, 'strava')
+    await outing('elsewhere', '2026-10-06T09:00:00Z', 1200, 'file', { lng: -0.9 })
+    const caller = createCaller({ user: USER })
+    expect(await caller.paddles.sameOuting({ id: 't-rec1' })).toEqual([{ id: 'strava1', sourceType: 'strava', paddledAt: '2026-10-06T09:01:00Z' }])
+
+    const cmp = await caller.paddles.compareOuting({ a: 't-rec1', b: 'strava1' })
+    expect(cmp.same).toBe(true)
+    if (!cmp.same) return
+    expect(cmp.gap?.medianM).toBe(0)
+    expect(cmp.strokeRate[0]).toMatchObject({ a: 56, b: 28 })
+    expect((await caller.paddles.compareOuting({ a: 't-rec1', b: 'nextday' })).same).toBe(false)
+  })
+
+  it("can't look at someone else's paddle", async () => {
+    await expect(createCaller({ user: USER }).paddles.sameOuting({ id: 'not-mine' })).rejects.toThrow()
+  })
+})

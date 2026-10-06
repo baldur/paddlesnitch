@@ -1,6 +1,6 @@
 # One paddle
 
-📋 **Spec, 2026-10-06.** Phases 1–3 built (2026-10-06); phase 4 not built. This is Phase G of the 2026-09 audit
+📋 **Spec, 2026-10-06.** Phases 1–4 built (2026-10-06). This is Phase G of the 2026-09 audit
 ("one paddle with extras"), made concrete. The owner's decisions are recorded
 under **Decisions**.
 
@@ -142,23 +142,24 @@ outside moving stretches; a tracker paddle's efforts get a stroke rate.
 
 ## Phase 4: the same outing from two sources
 
-- **Detecting it:** two of your paddles whose time ranges overlap by at least
-  half the shorter one, and whose tracks stay within the corridor already used
-  for sections (`similar.ts`, 40 m) over most of the overlap. Computed when a
-  paddle is saved, both ways, and stored as a link (`sameOutingAs: [id]`) on
-  each paddle.
-- **On the paddle page:** "Also recorded by Strava" (or by the tracker), linking
-  to the comparison.
-- **The comparison** (`/paddles/compare?a=&b=`, the existing page, gaining a
-  mode when the two are the same outing):
-  - both tracks on one map
-  - distance, time, average speed and average stroke rate side by side, with the
-    difference
-  - stroke rate from each source over the same clock, where both have it
-  - how far apart the tracks are (median and worst, in metres)
+**Built** (`@paddlesnitch/analysis/same-outing`, tRPC `paddles.sameOuting` and
+`paddles.compareOuting`, `components/analysis/SameOuting.tsx`).
 
-  For QA this answers "does the tracker agree with my watch or SpeedCoach?"
-  directly.
+- **Detecting it, when a paddle is opened** (not stored, so no backfill): the
+  user's other paddles that overlap it in time by at least half the shorter one
+  (from the summaries already listed), then, for those few only, a track check:
+  **at the same clock moments** (every 10 s), at least 70% of positions within
+  40 m of each other. Comparing by clock rather than "near the other route"
+  measures what QA wants (how far apart two devices put you at once) and doesn't
+  match an out-and-back to itself.
+- **On the paddle:** "ALSO RECORDED BY STRAVA →" (or BY THE TRACKER), linking to
+  the comparison.
+- **The comparison** (`/paddles/compare?a=&b=`) gains a SAME OUTING section when
+  the two are one outing: both tracks over each other, how far apart they were
+  (usually, and at worst: the 95th percentile), and stroke rate from each by
+  clock minute (a watch counting one side reads about half; the page says so).
+- **Measured on the owner's paddles (2026-10-06):** three tracker paddles match
+  their Strava copies (apart usually 3, 4 and 22 m) and nothing else matches.
 - The duplicate check (`paddleFingerprint`) is unchanged: it catches the same
   file twice, which is a different thing from two devices on one outing.
 

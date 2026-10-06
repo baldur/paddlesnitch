@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { fmtDurWords, split500 } from '@paddlesnitch/analysis/analysis'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
+import SameOuting from '@/components/analysis/SameOuting'
 
 export default function ComparePage() {
   return <Suspense fallback={<div className="min-h-screen bg-bg" />}><CompareInner /></Suspense>
@@ -71,6 +72,8 @@ function CompareInner() {
           {ra.avgSR != null && rb.avgSR != null && <>, stroke rate {ra.avgSR > rb.avgSR ? 'up' : ra.avgSR < rb.avgSR ? 'down' : 'level'} {Math.abs(Math.round(ra.avgSR - rb.avgSR)) || ''} spm</>}
           , {(ra.distanceKm - rb.distanceKm) >= 0 ? '+' : ''}{(ra.distanceKm - rb.distanceKm).toFixed(1)} km distance.
         </div>
+
+        <SameOuting a={A} b={B} />
 
         {(A.note?.trim() || B.note?.trim()) && (
           <div className="grid grid-cols-2 gap-3 mt-4">
