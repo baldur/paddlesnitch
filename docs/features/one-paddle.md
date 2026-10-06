@@ -1,6 +1,6 @@
 # One paddle
 
-📋 **Spec, 2026-10-06.** Phase 1 built (2026-10-06); phases 2–4 not built. This is Phase G of the 2026-09 audit
+📋 **Spec, 2026-10-06.** Phases 1–2 built (2026-10-06); phases 3–4 not built. This is Phase G of the 2026-09 audit
 ("one paddle with extras"), made concrete. The owner's decisions are recorded
 under **Decisions**.
 
@@ -86,24 +86,35 @@ outside moving stretches; a tracker paddle's efforts get a stroke rate.
 
 ## Phase 2: tracker recordings become paddles automatically
 
-- When a recording is accepted (`lib/session-upload.ts`, shared by the WiFi
-  and Bluetooth routes), schedule `analyseAndSave` with
-  `source: { type: 'device', deviceId, deviceSessionId }` after the response
-  (`after()`), as the Strava webhook does.
-- **The motion file arrives after the track** (a separate upload, sometimes
-  minutes later). So the paddle is created when the track lands, and
-  **re-analysed once when its motion file lands**, gaining stroke rate. A
-  recording whose motion never comes keeps its GPS-only analysis.
-- **One paddle per recording:** look up by `deviceSessionId` before creating,
-  not only by the fingerprint (a re-analysis must update the paddle, not
-  duplicate it). Picking the recording by hand in ADD A PADDLE opens the same
-  paddle.
-- Only usable recordings: those `parseTrace` accepts. Bench logs and indoor
-  recordings with no GPS don't become paddles (they already return 422).
+**Built** (`@paddlesnitch/analysis/tracker-paddle`, scheduled from
+`lib/session-upload.ts` by `lib/tracker-paddles.ts`).
+
+- When a recording is accepted, by either upload route (the tracker's own over
+  WiFi, or the owner's browser over Bluetooth), `paddleForRecording` runs after
+  the response (`after()`): it makes the paddle through the same `analyseAndSave`
+  as every other source.
+- **The motion file arrives after the track**, sometimes within a second. The
+  paddle is made when the track lands and **re-analysed once when its motion
+  file lands** (`reanalyseAndSave`): it gains stroke rate and a new summary, and
+  keeps the diary note, boat class and share link. A recording whose motion
+  never comes keeps its GPS-only analysis.
+- **One paddle per recording, even when the two jobs race:** a recording's
+  paddle has a fixed id (`t-<recording id>`), so both jobs write the same paddle;
+  and the GPS-only job doesn't save if the motion data landed while it was
+  writing the summary, so it can't overwrite the fuller paddle. A paddle added by
+  hand before this (any id) is found by its recording and updated in place.
+- **Only when the boat moved at least 500 m** (`MIN_PADDLE_METRES`, the
+  movement-gated distance). Measured on every recording in production
+  (2026-10-06): real paddles moved 1.6 km or more, desk tests, bench logs and
+  trackers switched on in the car 154 m at most. Recordings with no usable GPS
+  were already refused at upload.
 - **No setting to turn it off** at first: it's your own tracker, and Strava has
   one only because people use Strava for other sports. Add one if anyone asks.
-- **Existing recordings:** a script creates their paddles (dry run by default),
-  skipping any that already have one.
+- **Existing recordings:** `scripts/create-tracker-paddles.ts [--apply]
+  [--skip=<file>,…]` makes the missing ones (dry run by default). Run with the
+  production AI settings, or new summaries are the plain ones.
+- **ADD A PADDLE → TRACKER** still works and opens the existing paddle (the
+  duplicate check); phase 3 removes the need for it.
 
 ## Phase 3: one paddle page
 

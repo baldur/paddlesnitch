@@ -5,6 +5,7 @@ import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeUpload
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import { movementDistanceM } from '@paddlesnitch/timing/device'
 import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
+import { makePaddleAfterResponse } from '@/lib/tracker-paddles'
 
 // The upload handling behind POST /api/devices/sessions (the tracker, with its
 // own token) and POST /api/account/devices/[deviceId]/sessions (the owner's
@@ -101,6 +102,8 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
     // should retry this file rather than mark it done.
     if (stored === 'no_track') return NextResponse.json({ error: 'track_not_uploaded', trackFilename: trackName }, { status: 409 })
     if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
+    // The motion data adds stroke rate to the recording's paddle.
+    makePaddleAfterResponse(auth.userId, auth.deviceId, stored.sessionId)
     return NextResponse.json({ sessionId: stored.sessionId, motionRows: rows, bytes: body.length }, { status: 201 })
   }
 
@@ -127,6 +130,8 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
     body,
   )
   if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
+  // Every accepted recording becomes a paddle (one-paddle.md, phase 2).
+  makePaddleAfterResponse(auth.userId, auth.deviceId, meta.sessionId)
   return NextResponse.json(
     { sessionId: meta.sessionId, points: track.length, startedAt, endedAt, distanceMetres: meta.distanceMetres },
     { status: 201 },

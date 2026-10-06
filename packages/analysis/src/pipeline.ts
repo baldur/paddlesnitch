@@ -11,7 +11,7 @@ import { nanoid } from 'nanoid'
 import { getWeatherAt } from '@paddlesnitch/timing/weather'
 import { getFlowAt } from '@paddlesnitch/timing/river-flow'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
-import { analyseTrack } from './analysis'
+import { analyseTrack, type AnalysisResult } from './analysis'
 import { generateInsight, type InsightContext } from './llm'
 import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant, type PaddleFacts } from './history-stats'
 import { refreshAthleteProfile } from './athlete-profile'
@@ -30,7 +30,8 @@ function withDeadline<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ])
 }
 
-export type AnalyseSaveResult = { session: AnalysisSession; duplicate: boolean }
+// `dropped`: the caller's shouldSave said no, so nothing was saved.
+export type AnalyseSaveResult = { session: AnalysisSession; duplicate: boolean; dropped?: true }
 
 // Analyse `track` for `userId`, save it as a paddle, and return the saved (or
 // pre-existing duplicate) session. Every enrichment step degrades on its own —
@@ -39,7 +40,14 @@ export async function analyseAndSave(
   userId: string,
   track: TrackPoint[],
   source: AnalysisSource,
-  opts: { now?: Date; sport?: string; schedule?: (fn: () => void | Promise<void>) => void } = {},
+  opts: {
+    now?: Date; sport?: string; schedule?: (fn: () => void | Promise<void>) => void
+    // The paddle's id, when the caller needs a fixed one (a tracker recording's
+    // paddle, so two jobs for one recording write the same paddle).
+    id?: string
+    // Asked just before saving (after the slow summary): false drops the save.
+    shouldSave?: () => Promise<boolean>
+  } = {},
 ): Promise<AnalyseSaveResult> {
   const now = opts.now ?? new Date()
   const mid = track[Math.floor(track.length / 2)]
@@ -70,10 +78,36 @@ export async function analyseAndSave(
     if (existing) return { session: existing, duplicate: true }
   }
 
-  // Memory-aware narrative (docs/features/personable-insights.md) — grounded facts
-  // only, and wrapped so any read/compute error degrades to a plain insight.
   const sportSignal = opts.sport ?? (source.type === 'strava' ? source.sport : undefined)
-  let ctx: InsightContext = { paddledAt: when, asOf: now.toISOString(), sport: sportSignal }
+  await narrate(userId, result, when, prior, now, sportSignal)
+  const session: AnalysisSession = {
+    id: opts.id ?? nanoid(), userId, createdAt: now.toISOString(), paddledAt: when,
+    source, doubleStrokeRate: false, note: '', insight: result.insight, result,
+  }
+  if (opts.shouldSave && !(await opts.shouldSave())) return { session, duplicate: false, dropped: true }
+  await saveSession(session)
+
+  // Fold this paddle into the persistent athlete profile for NEXT time (a 2nd LLM
+  // call). Off the critical path when a scheduler is given; awaited otherwise.
+  const refresh = async () => {
+    try {
+      const all = await listSessionSummaries(userId)
+      const latest = all.find(s => s.id === session.id)
+      if (latest) await refreshAthleteProfile(userId, latest, all, new Date().toISOString())
+    } catch (err) { console.error('[analyse] profile refresh failed', err) }
+  }
+  if (opts.schedule) opts.schedule(refresh); else await refresh()
+
+  return { session, duplicate: false }
+}
+
+// The memory-aware written summary (docs/features/personable-insights.md), in
+// place on `result`. Grounded facts only, and every read is wrapped so an error
+// degrades to the plain summary analyseTrack already wrote.
+async function narrate(
+  userId: string, result: AnalysisResult, when: string, prior: SessionSummary[], now: Date, sport?: string,
+): Promise<void> {
+  let ctx: InsightContext = { paddledAt: when, asOf: now.toISOString(), sport }
   try {
     const profile = await getAthleteProfile(userId)
     const currentFacts: PaddleFacts = {
@@ -91,23 +125,22 @@ export async function analyseAndSave(
 
   const narrated = await generateInsight(result, ctx)
   if (narrated) { result.insight = narrated; result.insightModel = process.env.LLM_MODEL || '' }
+}
 
-  const session: AnalysisSession = {
-    id: nanoid(), userId, createdAt: now.toISOString(), paddledAt: when,
-    source, doubleStrokeRate: false, note: '', insight: result.insight, result,
-  }
+/**
+ * Re-analyses a saved paddle from a fuller track (a tracker paddle whose motion
+ * data arrived after it was made: one-paddle.md, phase 2) and rewrites its
+ * summary. Keeps everything the paddler set: diary note, boat class and seat,
+ * share link. Not folded into the athlete profile again (it already was).
+ */
+export async function reanalyseAndSave(userId: string, existing: AnalysisSession, track: TrackPoint[], opts: { now?: Date } = {}): Promise<AnalysisSession> {
+  const now = opts.now ?? new Date()
+  const result = analyseTrack(track, { doubleStrokeRate: existing.doubleStrokeRate, conditions: existing.result.conditions })
+  let prior: SessionSummary[] = []
+  try { prior = (await listSessionSummaries(userId)).filter(s => s.id !== existing.id) }
+  catch (err) { console.error('[analyse] history read failed', err) }
+  await narrate(userId, result, existing.paddledAt, prior, now)
+  const session: AnalysisSession = { ...existing, insight: result.insight, result }
   await saveSession(session)
-
-  // Fold this paddle into the persistent athlete profile for NEXT time (a 2nd LLM
-  // call). Off the critical path when a scheduler is given; awaited otherwise.
-  const refresh = async () => {
-    try {
-      const all = await listSessionSummaries(userId)
-      const latest = all.find(s => s.id === session.id)
-      if (latest) await refreshAthleteProfile(userId, latest, all, new Date().toISOString())
-    } catch (err) { console.error('[analyse] profile refresh failed', err) }
-  }
-  if (opts.schedule) opts.schedule(refresh); else await refresh()
-
-  return { session, duplicate: false }
+  return session
 }
