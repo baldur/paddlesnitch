@@ -55,6 +55,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const setDoublingMut = trpc.paddles.setDoubling.useMutation()
   const setNoteMut = trpc.paddles.setNote.useMutation()
   const shareMut = trpc.paddles.share.useMutation()
+  const highlights = trpc.paddles.highlights.useQuery({ id: sessionId ?? '' }, { enabled: !!sessionId && !readOnly, retry: false }).data ?? []
   const sameOuting = trpc.paddles.sameOuting.useQuery({ id: sessionId ?? '' }, { enabled: !!sessionId && !readOnly, retry: false }).data ?? []
   const unshareMut = trpc.paddles.unshare.useMutation()
   const setBoatMut = trpc.paddles.setBoat.useMutation()
@@ -365,6 +366,11 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             <div className="text-[10px] text-muted tracking-widest">
               {paddled.toUpperCase()}{sourceLabel(data.source?.type)}{boatBadge && <span className="text-split"> · {boatBadge}</span>}
             </div>
+            {highlights.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5 mt-2" aria-label="Highlights">
+                {highlights.map(h => <li key={h} className="text-[11px] text-split border border-split/40 px-2 py-0.5">{h}</li>)}
+              </ul>
+            )}
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
               <Stat label="Time" value={fmtClock(data.durationS)} />
               <Stat label="Distance" value={`${data.distanceKm.toFixed(2)} km`} />

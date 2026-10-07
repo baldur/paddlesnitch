@@ -11,6 +11,7 @@ import { paddleTotals } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
+import { paddleHighlights } from '@paddlesnitch/analysis/history-stats'
 import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling,
@@ -32,6 +33,20 @@ export const paddlesRouter = router({
   // Which paddle each tracker recording became: { recordingId: paddleId }.
   // The tracker's page links its recordings to their paddles with it.
   byRecording: protectedProcedure.query(async ({ ctx }) => paddleIdsByRecording(await listSessionSummaries(ctx.user.id))),
+
+  // Records and comparisons for the paddle page ("Fastest cruise yet"), from
+  // the history the written summary already uses. Other recordings of this
+  // same outing (overlapping in time) are left out of the comparison.
+  highlights: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
+    const all = await listSessionSummaries(ctx.user.id)
+    const me = all.find(s => s.id === input.id)
+    if (!me) throw new TRPCError({ code: 'NOT_FOUND' })
+    const others = all.filter(s => s.id !== me.id && timeOverlapShare(me, s) < MIN_TIME_OVERLAP)
+    return paddleHighlights({
+      paddledAt: me.paddledAt, cruiseSpeed: me.cruiseSpeed, distanceKm: me.distanceKm,
+      avgSR: me.avgSR, avgDps: me.avgDps, boatClass: me.boatClass,
+    }, others)
+  }),
 
   // The same outing recorded by another source (one-paddle.md, phase 4): the
   // user's other paddles that overlap this one in time AND in place. Only the
