@@ -74,7 +74,8 @@ function DirectionArrow({ line, direction, color }: { line: Line; direction: 1 |
 
 export default function CourseMap({ course, track, highlightGateIndex }: { course: CourseMetadata; track?: LatLng[]; highlightGateIndex?: number }) {
   const [mounted, setMounted] = useState(false)
-  const [dark, setDark] = useState(false)
+  // Dark by default, like the rest of the site; LIGHT MAP is a tap away.
+  const [dark, setDark] = useState(true)
   useEffect(() => { setMounted(true) }, [])
 
   if (!mounted)

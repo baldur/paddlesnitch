@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { sportLabel } from '@paddlesnitch/core/format'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
@@ -120,7 +121,7 @@ export default async function CoursesCataloguePage() {
                       {course.name}
                     </div>
                     <div className="text-xs text-muted mt-0.5 tabular">
-                      {course.sport.toUpperCase()} ·{' '}
+                      {sportLabel(course.sport)} ·{' '}
                       {course.distanceMetres > 0 ? `${course.distanceMetres.toLocaleString()} m` : '—'} ·{' '}
                       {courseTypeLabel(course)}
                     </div>

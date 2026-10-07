@@ -1,4 +1,5 @@
 'use client'
+import { fmtDay } from '@paddlesnitch/core/format'
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/geo'
@@ -156,7 +157,7 @@ export default function LeaderboardTable({
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
                     <td className="py-3 pr-4 text-right text-muted text-xs hidden sm:table-cell">
-                      {entry.raceDate ?? new Date(entry.submittedAt).toLocaleDateString()}
+                      {fmtDay(entry.raceDate ?? entry.submittedAt)}
                     </td>
                     <td className="py-3 text-muted text-xs text-right">
                       {hasDetail ? (isOpen ? '▲' : '▼') : ''}

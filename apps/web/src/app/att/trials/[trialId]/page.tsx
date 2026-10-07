@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
 import { notFound } from 'next/navigation'
 import { getJson } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
@@ -75,10 +76,10 @@ export default async function TrialPage({
           {trial.name.toUpperCase()}
         </h1>
         <div className="flex items-center gap-4 text-xs text-muted">
-          <span>{trial.date}</span>
+          <span>{fmtDay(trial.date)}</span>
           {course && (
             <span>
-              {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} m
+              {sportLabel(course.sport)} · {course.distanceMetres.toLocaleString()} m
             </span>
           )}
           <span

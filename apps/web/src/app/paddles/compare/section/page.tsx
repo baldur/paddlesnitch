@@ -83,7 +83,7 @@ function Inner() {
                 {racers.map((r, i) => (
                   <th key={r.sessionId} className="text-right font-normal py-1 pl-3 whitespace-nowrap">
                     <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: colorFor(racers, i) }} />
-                    {fmtDate(r.paddledAt).replace(/ \d{4}$/, '')}{r.isSource && <span className="text-[#38bdf8]"> · you</span>}
+                    {fmtDate(r.paddledAt).replace(/ \d{4}$/, '')}{r.isSource && <span className="text-you"> · you</span>}
                   </th>
                 ))}
               </tr>
@@ -115,7 +115,7 @@ function Inner() {
               </tr>
               <tr className="border-t border-border">
                 <td className="text-left py-1 pr-3 text-muted">RIVER FLOW</td>
-                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-[#22d3ee] whitespace-nowrap">{r.conditions?.flowM3s != null ? `${r.conditions.flowM3s.toFixed(1)} m³/s` : '—'}</td>)}
+                {racers.map(r => <td key={r.sessionId} className="text-right py-1 pl-3 text-flow whitespace-nowrap">{r.conditions?.flowM3s != null ? `${r.conditions.flowM3s.toFixed(1)} m³/s` : '—'}</td>)}
               </tr>
             </tbody>
           </table>

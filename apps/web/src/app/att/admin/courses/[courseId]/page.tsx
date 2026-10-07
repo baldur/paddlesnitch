@@ -1,4 +1,5 @@
 'use client'
+import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, use } from 'react'
@@ -249,7 +250,7 @@ export default function CourseAdminPage({
             </div>
           </div>
           <p className="text-xs text-muted mb-4">
-            {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} m
+            {sportLabel(course.sport)} · {course.distanceMetres.toLocaleString()} m
             {course.type === 'loop' && ' · LOOP'}
             {course.type === 'gate' && ' · GATE'}
           </p>
@@ -388,7 +389,7 @@ export default function CourseAdminPage({
                     <div className="text-fg text-sm group-hover:text-primary transition-colors">
                       {t.name}
                     </div>
-                    <div className="text-xs text-muted mt-0.5">{t.date}</div>
+                    <div className="text-xs text-muted mt-0.5">{fmtDay(t.date)}</div>
                   </div>
                   <span
                     className={`text-xs px-2 py-0.5 border ${

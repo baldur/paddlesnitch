@@ -441,7 +441,7 @@ export default function UploadPage({
                 onClick={() => setInputMode('strava')}
                 className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                   inputMode === 'strava'
-                    ? 'border-b-2 border-[#fc4c02] text-[#fc4c02] -mb-px'
+                    ? 'border-b-2 border-strava text-strava -mb-px'
                     : 'text-muted hover:text-fg'
                 }`}
               >
@@ -576,7 +576,7 @@ export default function UploadPage({
                                   name="stravaActivity"
                                   checked={checked}
                                   onChange={() => setStravaActivityId(a.id)}
-                                  className="accent-[#fc4c02]"
+                                  className="accent-strava"
                                 />
                                 <span className="flex-1 min-w-0">
                                   <span className="block text-sm text-fg truncate">{a.name}</span>

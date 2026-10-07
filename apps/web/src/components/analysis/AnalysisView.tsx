@@ -382,7 +382,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             {(c?.windKmh != null || c?.flowM3s != null) && (
               <div className="flex items-center gap-4 mt-3 text-sm text-fg tabular flex-wrap">
                 {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> wind {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
-                {c?.flowM3s != null && <span className="text-[#22d3ee]">river {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` at ${c.flowStation}` : ''}</span>}
+                {c?.flowM3s != null && <span className="text-flow">river {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` at ${c.flowStation}` : ''}</span>}
               </div>
             )}
           </div>
@@ -474,7 +474,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                     <div className="mt-2 pt-2 border-t border-border">
                       {data.source.stravaActivityId && (
                         <a href={`https://www.strava.com/activities/${data.source.stravaActivityId}`} target="_blank" rel="noopener noreferrer"
-                          className="block w-full px-3 py-1.5 text-[10px] tracking-widest text-center text-[#fc4c02] border border-border hover:border-[#fc4c02]">
+                          className="block w-full px-3 py-1.5 text-[10px] tracking-widest text-center text-strava border border-border hover:border-strava">
                           OPEN MY STRAVA ACTIVITY ↗
                         </a>
                       )}
