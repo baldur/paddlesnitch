@@ -1,0 +1,83 @@
+name: Performance
+
+# Times the public pages after every deploy and once a day, and always reports:
+# a table in the run's summary, perf-results.json as an artifact, and the
+# timings in CloudWatch (dashboard paddlesnitch-performance). Budgets warn;
+# they don't fail the run (add --strict to the perf command to change that).
+# What's measured: apps/web/src/lib/perf.ts.
+
+on:
+  workflow_run:
+    workflows: ['Test and Deploy']
+    types: [completed]
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Site to time'
+        default: 'https://paddlesnitch.com'
+
+# One check at a time; a newer one replaces a queued older one.
+concurrency:
+  group: perf
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  perf:
+    # After a deploy only if it went out (a failed deploy left the old site).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    # `perf` is what lets this job assume att-github-perf, a role that can only
+    # put metrics in Paddlesnitch/Perf (infra/lib/att-stack.ts). Not production.
+    environment: perf
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # A cold Lambda after a deploy is a different question from "is this
+      # page slow"; the first run per page is reported separately anyway.
+      - name: Time the pages
+        working-directory: apps/web
+        env:
+          PERF_BASE_URL: ${{ inputs.base_url || 'https://paddlesnitch.com' }}
+        run: pnpm perf
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: apps/web/perf-results.json
+          if-no-files-found: warn
+
+      # Sending to CloudWatch is a bonus: the report above stands without it.
+      - name: AWS credentials (metrics only)
+        id: aws
+        if: vars.AWS_PERF_ROLE_ARN != ''
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_PERF_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Send the timings to CloudWatch
+        if: steps.aws.outcome == 'success'
+        continue-on-error: true
+        working-directory: apps/web
+        run: aws cloudwatch put-metric-data --cli-input-json file://perf-metrics.json

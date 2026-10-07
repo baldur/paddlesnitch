@@ -10,6 +10,7 @@
     "lint": "pnpm --filter web lint",
     "test": "pnpm --filter web test",
     "test:watch": "pnpm --filter web test:watch",
+    "perf": "pnpm --filter web perf",
     "e2e": "pnpm --filter web e2e",
     "e2e:ui": "pnpm --filter web e2e:ui",
     "e2e:install": "pnpm --filter web e2e:install",
