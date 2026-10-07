@@ -4,5 +4,5 @@
 // everyone from before v002) never agreed to them (audit decision 2026-09).
 // Pure, so the sign-in page can use it too.
 export function termsAcceptPath(next: string): string {
-  return `/att/tos/accept?next=${encodeURIComponent(next)}`
+  return `/terms/accept?next=${encodeURIComponent(next)}`
 }

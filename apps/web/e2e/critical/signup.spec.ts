@@ -35,7 +35,7 @@ test('a new user can sign up and lands on their paddles, signed in', async ({ pa
 })
 
 test('signup is blocked when the ToS checkbox is not ticked', async ({ page }) => {
-  await page.goto('/att/auth')
+  await page.goto('/signin')
   await page.getByRole('button', { name: 'SIGN UP', exact: true }).click()
   await page.locator('input[type="email"]').first().fill(freshEmail())
   await page.locator('input[autocomplete="name"]').fill('Unconsented')
@@ -47,5 +47,5 @@ test('signup is blocked when the ToS checkbox is not ticked', async ({ page }) =
   // Scope to the error styling so we don't double-match the checkbox
   // label which also mentions "Terms of Service".
   await expect(page.getByText('You must agree to the Terms of Service to create an account.')).toBeVisible()
-  await expect(page).toHaveURL(/\/att\/auth/)
+  await expect(page).toHaveURL(/\/signin/)
 })

@@ -9,7 +9,7 @@ import path from 'path'
 
 const repo = path.resolve(__dirname, '../../../..')
 const read = (rel: string) => readFileSync(path.join(repo, rel), 'utf8')
-const privacy = read('apps/web/src/app/att/privacy/page.tsx')
+const privacy = read('apps/web/src/app/privacy/page.tsx')
 const faq = read('apps/web/legal/faq.md')
 const cookieNotice = read('apps/web/src/components/CookieNotice.tsx')
 const layout = read('apps/web/src/app/layout.tsx')

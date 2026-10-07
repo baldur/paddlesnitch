@@ -110,7 +110,7 @@ describe('Strava sign-in callback — Terms of Service', () => {
     mockCookies('state123', '/paddles')
     const res = await callback(req())
     const loc = new URL(res.headers.get('location')!)
-    expect(loc.pathname).toBe('/att/tos/accept')
+    expect(loc.pathname).toBe('/terms/accept')
     expect(loc.searchParams.get('next')).toBe('/paddles')
   })
 

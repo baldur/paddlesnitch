@@ -18,7 +18,7 @@ type Args = {
 // applyPendingInvitations in src/lib/pending-invitations.ts), so by the
 // time they hit the group page they're already a member.
 export function pendingInviteEmail({ group, inviterName, baseUrl, role }: Args) {
-  const signupUrl = new URL('/att/auth', baseUrl)
+  const signupUrl = new URL('/signin', baseUrl)
   signupUrl.searchParams.set('next', `/att/groups/${group.id}`)
   signupUrl.searchParams.set('signup', '1')
 

@@ -22,7 +22,7 @@ function Accept() {
 
   useEffect(() => {
     fetch('/api/account/tos').then(async r => {
-      if (r.status === 401) return router.replace(`/att/auth?next=${encodeURIComponent(`/att/tos/accept?next=${encodeURIComponent(next)}`)}`)
+      if (r.status === 401) return router.replace(`/signin?next=${encodeURIComponent(`/terms/accept?next=${encodeURIComponent(next)}`)}`)
       const body = await r.json().catch(() => ({}))
       if (body?.accepted) return router.replace(next)
       setReady(true)
@@ -53,9 +53,9 @@ function Accept() {
         <input type="checkbox" checked={ticked} onChange={e => setTicked(e.target.checked)} className="mt-0.5 accent-primary" />
         <span>
           I have read and agree to the{' '}
-          <Link href="/att/tos" target="_blank" className="tt-link">Terms of Service</Link>
+          <Link href="/terms" target="_blank" className="tt-link">Terms of Service</Link>
           {' '}and{' '}
-          <Link href="/att/privacy" target="_blank" className="tt-link">Privacy Policy</Link>.
+          <Link href="/privacy" target="_blank" className="tt-link">Privacy Policy</Link>.
         </span>
       </label>
       {error && <p className="border border-red bg-red/10 px-3 py-2 text-red text-xs" role="alert">{error}</p>}

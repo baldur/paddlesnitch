@@ -8,6 +8,8 @@ import AppHeader from '@/components/AppHeader'
 // see in git.
 export const dynamic = 'force-dynamic'
 
+export const metadata = { title: 'Terms of Service' }
+
 export default async function TosPage() {
   const body = await readTosDoc(CURRENT_TOS_VERSION)
   return (

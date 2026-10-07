@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   // The sign-in flow can't recover from that without re-consent.
   const url = await authorizeUrl(state, redirectUri, 'force')
   if (!url) {
-    return NextResponse.redirect(new URL(`/att/auth?error=strava_not_configured`, base))
+    return NextResponse.redirect(new URL(`/signin?error=strava_not_configured`, base))
   }
 
   const res = NextResponse.redirect(url)

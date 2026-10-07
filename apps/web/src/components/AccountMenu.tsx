@@ -33,7 +33,7 @@ export default function AccountMenu() {
       profileHref="/profile/me"
       accountHref="/account"
       // Back to where you were after signing in.
-      signInHref={pathname === '/' ? '/att/auth' : `/att/auth?next=${encodeURIComponent(pathname)}`}
+      signInHref={pathname === '/' ? '/signin' : `/signin?next=${encodeURIComponent(pathname)}`}
       onSignOut={onSignOut}
     />
   )

@@ -196,7 +196,7 @@ auth/login            POST — Cognito InitiateAuth (USER_PASSWORD_AUTH), sets t
 auth/logout           POST — clears cookies, revokes refresh token
 auth/me               GET  — returns the user claims from the current ID token, or `null` (200) when signed out. Signed-out is a normal state for this probe (the auth cookie is httpOnly, so the client always calls it); it answers 200 with a null body rather than 401 so a logged-out page load doesn't log a console error. Callers treat a null body as "not signed in". The tRPC `me` procedure returns `{ user: AuthUser | null }` the same way.
 auth/magic-request    POST — 501 (magic link is disabled; email code + password are the sign-in methods)
-auth/magic-verify     GET  — redirects to /att/auth?error=magic_disabled
+auth/magic-verify     GET  — redirects to /signin?error=magic_disabled
 courses               GET / POST
 courses/[id]          GET / PATCH
 courses/validate-trace POST — organiser tool: multipart {file, geometry JSON}; runs the trace through processTrace + diagnoseGates and returns { matched, totalElapsedSeconds?, gateAnalysis?, message? }. Stores nothing. Used by ReferenceTraceValidator on the course form to catch a backwards gate before anyone races (#71).
@@ -244,7 +244,7 @@ A positive result means **drop silently**: skip the side effect (send no email, 
 - `auth/password-reset/request` — returns the same `{ ok: true }` it returns for a non-existent account; `forgotPassword` never runs.
 - `feedback` — returns `{ ok: true }` without filing the issue.
 
-Client forms (`/att/auth` OTP tab, `/att/auth/forgot`, the feedback widget) carry the hidden `website` input + a `mountedAt` ref. These checks only stop unsophisticated bots — a script POSTing JSON directly omits both fields. They're a cheap first line, **not** a guarantee; a real challenge (Turnstile) or rate limiting would be the next step if targeted abuse appears. Tests: `src/lib/anti-bot.test.ts` (unit) plus bot-drop cases in `otp.test.ts`, `password-reset.test.ts`, `feedback.test.ts`.
+Client forms (`/signin` OTP tab, `/signin/forgot`, the feedback widget) carry the hidden `website` input + a `mountedAt` ref. These checks only stop unsophisticated bots — a script POSTing JSON directly omits both fields. They're a cheap first line, **not** a guarantee; a real challenge (Turnstile) or rate limiting would be the next step if targeted abuse appears. Tests: `src/lib/anti-bot.test.ts` (unit) plus bot-drop cases in `otp.test.ts`, `password-reset.test.ts`, `feedback.test.ts`.
 
 #### Customer-issue automation (GitHub)
 
@@ -451,12 +451,12 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 #### Sign-in flows
 
 1. **Email + password** — Cognito `USER_PASSWORD_AUTH` flow. Cognito enforces the password policy (8+ chars, mixed case, digit).
-2. **Email OTP** — **hidden while `EMAIL_DELIVERY` is false** (`apps/web/src/lib/email-delivery.ts`): SES production access was refused, so codes only reach verified addresses. The EMAIL CODE tab is hidden and /att/auth/forgot says to use Report an issue instead (password resets are emailed too). Flip the constant when `aws sesv2 get-account` shows ProductionAccessEnabled. Cognito `CUSTOM_AUTH` flow. Our three Lambda triggers generate a 6-digit code, email it via SES, and verify it. See `infra/lambdas/cognito-auth/`.
+2. **Email OTP** — **hidden while `EMAIL_DELIVERY` is false** (`apps/web/src/lib/email-delivery.ts`): SES production access was refused, so codes only reach verified addresses. The EMAIL CODE tab is hidden and /signin/forgot says to use Report an issue instead (password resets are emailed too). Flip the constant when `aws sesv2 get-account` shows ProductionAccessEnabled. Cognito `CUSTOM_AUTH` flow. Our three Lambda triggers generate a 6-digit code, email it via SES, and verify it. See `infra/lambdas/cognito-auth/`.
 3. **Sign in with Strava** — server-driven OAuth. Routes: `/att/api/auth/strava/init` sets a CSRF state cookie and 302s to `strava.com/oauth/authorize` with `scope=read,activity:read_all,profile:read_all`. `/att/api/auth/strava/callback` exchanges the code, fetches the authenticated athlete's profile (`/api/v3/athlete`), then resolves the Cognito user by trying in order: (a) `strava-athletes/{athleteId}.json` index, (b) `cognito ListUsers` with `email = ...` (auto-link to an existing email account — only when Strava actually returned an email, otherwise skipped), (c) `AdminCreateUser` with a random unused password. Sign-in goes through the existing `CUSTOM_AUTH` flow with a server-generated one-time token. **The token is passed via the user's `custom:auth_preset` attribute, NOT `ClientMetadata`** — Cognito does **not** forward `ClientMetadata` to the Create/Define/Verify Auth Challenge triggers (AWS limitation; it only reaches Pre-Signup/Pre-Auth/User-Migration), so the original `ClientMetadata.preset_otp` approach silently never worked and `CreateAuthChallenge` always fell through to emailing a random code. `customAuthSignIn()` now sets `custom:auth_preset` via `AdminUpdateUserAttributes` right before `InitiateAuth`, `CreateAuthChallenge` reads it from `event.request.userAttributes['custom:auth_preset']` (clientMetadata kept only as a dev/test fallback), and the attribute is cleared after. Only the server can do both halves of that dance, so the path is server-trusted.
 
 > **One-time pool setup (already done in prod):** the `custom:auth_preset` attribute was added out-of-band — `aws cognito-idp add-custom-attributes --user-pool-id <pool> --custom-attributes Name=auth_preset,AttributeDataType=String,Mutable=true`. It is **not** declared in the CDK `UserPool` construct on purpose: changing the pool's schema through CloudFormation can force a pool *replacement* (losing all users), so schema additions are manual, like the SES rule-set activation.
    **Strava never shares email** with third-party apps (their policy, not a bug). When the profile call returns no email field, we mint a synthesised address `strava-{athleteId}@noreply.paddlesnitch.com` to satisfy Cognito's email-format requirement. The user sees a banner inviting them to add a real contact email at `/account` (see `src/lib/strava-account.ts` + `src/components/AttContactBanner.tsx` (over `@paddlesnitch/ui/ContactBanner`)). Real emails sit in `users/{userId}/contact.json` (separate from the Cognito email) and feed any future outbound comms.
-4. **Magic link** — **disabled.** `magic-request` answers 501 and `magic-verify` redirects to `/att/auth?error=magic_disabled`. Email code (flow 2) replaced it.
+4. **Magic link** — **disabled.** `magic-request` answers 501 and `magic-verify` redirects to `/signin?error=magic_disabled`. Email code (flow 2) replaced it.
 5. **Social (Google, Apple)** — not yet wired. When added: Cognito hosted UI handles OAuth, callback lands in `/att/auth/oauth-callback`.
 
 #### Session mechanics
@@ -486,11 +486,11 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 - `GET  /att/api/auth/strava/init` — Strava sign-in: state cookie + redirect to Strava with `profile:read_all`
 - `GET  /att/api/auth/strava/callback` — finds/creates Cognito user, runs `CUSTOM_AUTH` with preset token, sets `tt_id` + `tt_refresh`, redirects to `next`
 - `POST /att/api/auth/magic-request` — disabled in v1 (returns 501 with friendly message)
-- `GET  /att/api/auth/magic-verify` — disabled in v1 (redirects to `/att/auth?error=magic_disabled`)
+- `GET  /att/api/auth/magic-verify` — disabled in v1 (redirects to `/signin?error=magic_disabled`)
 
 #### Access control
 
-- **Proxy (`src/proxy.ts`)**: cheap cookie-presence check at the edge — does NOT verify the JWT (keeps middleware fast). Redirects to `/att/auth?next={path}` if absent. Real verification happens in API/page handlers via `getAuthUser()`.
+- **Proxy (`src/proxy.ts`)**: cheap cookie-presence check at the edge — does NOT verify the JWT (keeps middleware fast). Redirects to `/signin?next={path}` if absent. Real verification happens in API/page handlers via `getAuthUser()`.
 - Public without login: home (open trials list), leaderboard, upload form (shows sign-in prompt).
 - Admin pages require login.
 
@@ -500,7 +500,7 @@ User pool is already deployed. Steps when ready:
 1. Register OAuth client in Google Cloud Console / Apple Developer portal
 2. Add identity provider to the pool in CDK (`cognito.UserPoolIdentityProviderGoogle`)
 3. Add a Cognito domain (`userPool.addDomain(...)`) and callback URL
-4. Add "Sign in with Google" button to `/att/auth` (redirects to hosted UI)
+4. Add "Sign in with Google" button to `/signin` (redirects to hosted UI)
 5. Build `/att/auth/oauth-callback/route.ts` to exchange the code for tokens, set cookie
 
 ### Strava integration
@@ -592,7 +592,7 @@ Unsupported extension → `{ ok: false, reason: 'unknown_format' }`. The upload 
 
 ### Paddler profiles
 
-Profile + account are **platform-level routes** ([`profile-routes.md`](docs/features/profile-routes.md)). **Account settings live at `/account`** (called ACCOUNT everywhere — never "settings"); `/profile/me/settings` and `/att/account` 308 straight to it (`src/tests/redirects.test.ts` also fails on chained redirects). Profile: public profile `/profile/{id-or-handle}`, your own `/profile/me` (→ redirects to your public profile, which shows an EDIT PROFILE link to `/account#profile` when it's yours), account API `/api/account/*`. Old `/att/u/:id` 308s to `/profile/:id`. `/profile/me*`, `/account` and `/api/account` mutations are auth-gated in `src/proxy.ts`; `/profile/:id` is public.
+Profile + account are **platform-level routes** ([`profile-routes.md`](docs/features/profile-routes.md)). **Sign-in, help and the legal pages are site-wide (2026-10):** `/signin` (+ `/signin/forgot`, `/signin/reset`), `/help` (a hub: tracker guide, troubleshooting, then the Trials FAQ), `/privacy`, `/terms` (+ `/terms/accept`); the old `/att/auth`, `/att/faq`, `/att/privacy`, `/att/tos` 308 to them in one hop with the query kept (`next.config.ts`, covered by `redirects.test.ts`). **Account settings live at `/account`** (called ACCOUNT everywhere — never "settings"); `/profile/me/settings` and `/att/account` 308 straight to it (`src/tests/redirects.test.ts` also fails on chained redirects). Profile: public profile `/profile/{id-or-handle}`, your own `/profile/me` (→ redirects to your public profile, which shows an EDIT PROFILE link to `/account#profile` when it's yours), account API `/api/account/*`. Old `/att/u/:id` 308s to `/profile/:id`. `/profile/me*`, `/account` and `/api/account` mutations are auth-gated in `src/proxy.ts`; `/profile/:id` is public.
 
 A profile page at `/profile/{id-or-handle}` shows one paddler's vanity stats — totals (races, courses, distance, since), personal best per course, best pace/speed, boat-class counts, and race history. Two invariants, both enforced in `src/lib/profile.ts`:
 
@@ -620,7 +620,7 @@ Two paths:
 - **Resolved** (recipient has an account) — stored at `groups/{groupId}/invitations/{id}.json` with `toUserId`. Recipient sees it and POSTs `/accept` or `/decline`.
 - **Pending email** (recipient doesn't yet) — stored at `pending-invitations/groups/{sha256(email)}/{id}.json`. On signup (email AND Strava paths), `applyPendingInvitations(email, sub)` (in `src/lib/pending-invitations.ts`) scans the matching folder, adds the new user to each group, and deletes the pending records. Email is hashed with sha-256 so the bucket directory listing doesn't leak unverified emails.
 
-Both paths trigger a transactional email via SES on creation (`src/lib/email.ts` wraps SES, `src/lib/invitation-email.ts` holds the templates). Pending invitations link to `/att/auth?next=/att/groups/{id}` so the recipient lands on the group after signup; resolved invitations link straight to the group page. Synthetic Strava `strava-{id}@noreply.paddlesnitch.com` addresses are skipped (no inbox). Email send failures are swallowed — the invite record is already persisted and can be re-sent. Local dev (`USE_LOCAL_STORAGE=true`) no-ops SES and logs to stdout instead.
+Both paths trigger a transactional email via SES on creation (`src/lib/email.ts` wraps SES, `src/lib/invitation-email.ts` holds the templates). Pending invitations link to `/signin?next=/att/groups/{id}` so the recipient lands on the group after signup; resolved invitations link straight to the group page. Synthetic Strava `strava-{id}@noreply.paddlesnitch.com` addresses are skipped (no inbox). Email send failures are swallowed — the invite record is already persisted and can be re-sent. Local dev (`USE_LOCAL_STORAGE=true`) no-ops SES and logs to stdout instead.
 
 #### Joining a group — self-serve (phase 4)
 
@@ -654,18 +654,18 @@ Versioned markdown at `legal/tos-{version}.md`. The current version constant is 
 
 #### Acceptance flow
 
-- **Signup** requires `acceptedTosVersion: CURRENT_TOS_VERSION` in the request body. The signup form on `/att/auth` ships the constant; an out-of-date client gets 422 instead of silently signing the user up.
+- **Signup** requires `acceptedTosVersion: CURRENT_TOS_VERSION` in the request body. The signup form on `/signin` ships the constant; an out-of-date client gets 422 instead of silently signing the user up.
 - The signup hook records `{ version, acceptedAt }` at `users/{userId}/tos-consent.json`.
-- **Every other way in accepts them at sign-in** (2026-09-29): EMAIL CODE and Strava create accounts with no Terms box, so `otp-verify` and `login` return `needsTerms` and the Strava callback redirects, sending anyone without the current version to **`/att/tos/accept?next=…`** (tick, CONTINUE, then on to `next`; `termsAcceptPath()` in `src/lib/terms-path.ts`). That also catches accounts from before the current version. A session that is already signed in isn't interrupted until its next sign-in.
+- **Every other way in accepts them at sign-in** (2026-09-29): EMAIL CODE and Strava create accounts with no Terms box, so `otp-verify` and `login` return `needsTerms` and the Strava callback redirects, sending anyone without the current version to **`/terms/accept?next=…`** (tick, CONTINUE, then on to `next`; `termsAcceptPath()` in `src/lib/terms-path.ts`). That also catches accounts from before the current version. A session that is already signed in isn't interrupted until its next sign-in.
 - `GET /api/account/tos` returns `{ currentVersion, accepted, acceptances[] }` for the authenticated viewer.
 - `POST /api/account/tos { version }` records an acceptance. Refuses anything other than `CURRENT_TOS_VERSION` (no future-version land-grab).
-- Public ToS page at `/att/tos` rendered from the markdown source.
+- Public ToS page at `/terms` rendered from the markdown source.
 
 #### Bumping a version
 
 1. Copy `legal/tos-{prev}.md` to `legal/tos-{new}.md`. Edit, including the `**Version NNN, effective …**` line (a test checks it matches).
 2. Set `CURRENT_TOS_VERSION` in `src/lib/types.ts` to the new string. The signup form and tests read the constant — nothing else to bump.
-3. **Email registered users** — the ToS (§9) promises this for every new version. Each user accepts the new version at their next sign-in (`/att/tos/accept`).
+3. **Email registered users** — the ToS (§9) promises this for every new version. Each user accepts the new version at their next sign-in (`/terms/accept`).
 
 Current version: **002** (2026-09-28): adds Paddles/trackers/AI summary ("can be wrong"), stroke rate kept, and drops 001's false claims (re-accept prompt, version in footer, leaked "so we don't chase consents" reasoning).
 
@@ -984,7 +984,7 @@ Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on 
 - **`src/proxy.ts` puts `pathname + search` in `next`, not just the path.** It
   used to set the pathname alone while the cloned URL kept the original query,
   so `/account?code=ABC123` redirected to
-  `/att/auth?code=ABC123&next=/account` and the parameter was
+  `/signin?code=ABC123&next=/account` and the parameter was
   silently dropped on the way back. That broke device scan-to-link for anyone
   not already signed in, and it affected every gated page with a query string.
   Covered by a regression test in `proxy.test.ts`.
@@ -1007,7 +1007,7 @@ Custom product events flow to CloudWatch metrics via **Embedded Metric Format** 
 - **Cardinality discipline:** the only metric dimension is `Event` (fixed allowlist in `METRIC_EVENTS`: `pageview`, `signup`, `login`, `upload`, `trial_create`, `course_create`, `campaign_cta`, `campaign_signup`). High-cardinality context (page `path`, session `sid`) is attached as a plain property — queryable in Logs Insights but does **not** create per-value metrics.
 - **Server events** (`signup`, `login`, `upload`) are emitted directly in those routes and are **always on in production** — no flag — so they can't be spoofed and start flowing on first deploy. Cost is ~6 custom metrics (~pennies/month).
 - **Client events (buffered + batched):** the capture lives in **`@paddlesnitch/ui/analytics`** (`capture(event, props?)`), and the root layout mounts the shared **`@paddlesnitch/ui/Analytics`** component (via the shim `@/components/Analytics`). `capture()` appends to an in-memory queue and **flushes a batch** to `POST /att/api/track` on whichever comes first: a timer (`flushIntervalMs`, 15 s), the queue hitting `maxBatch` (20), or the tab being hidden/closed (`visibilitychange→hidden` / `pagehide`, via `navigator.sendBeacon`). The `Analytics` component records a `pageview` (with `window.location.pathname`) on each route change. **On in production builds**, off in dev/test; `NEXT_PUBLIC_ANALYTICS=0` is the kill switch (tuning knobs on `_config`). No PII: only event, path, small string props, and a random per-tab `sid`. Vocabulary is a **strict allowlist** — the single source of truth is **`@paddlesnitch/ui/metrics-events`** (`METRIC_EVENTS`), re-exported by att's `src/lib/metrics.ts` (which keeps the server EMF `buildEmf`/`emitMetric`); enforced client-side (dropped before queueing) AND server-side. To add an event, add it to `METRIC_EVENTS`, then `capture('your_event')`. att keeps a re-export shim at `@/lib/analytics`.
-- **Track endpoint (`POST /att/api/track`):** accepts a **batch** `{ sid, events: [{ event, t?, path?, props? }] }` (and a legacy single `{ event, path, sid }` for back-compat). Per allowlisted event it emits one EMF line via `emitMetric(event, props, timestamp)`, using the event's own capture time `t` (validated to CloudWatch's accepted window, else now) so a batch flushed later still lands in the right minute. Non-allowlisted events dropped; caps: ≤100 events/batch, ≤10 props/event, values truncated. Unauthenticated by design; always 204. **`src/proxy.ts` must exempt `/att/api/track`** (alongside `/att/api/feedback`) — the mutation-auth-gate would otherwise 307-redirect every signed-out beacon to `/att/auth`, dropping all anonymous traffic (regression covered in `proxy.test.ts`). Being public + unauthenticated, it guards against random/bot pings with an **Origin allowlist** (`isAllowedIngestOrigin`, `src/lib/ingest-origin.ts`): a ping whose Origin/Referer isn't one of our own origins is dropped (still 204, no signal). This is a cheap first line, **not integrity** — the header is spoofable; the strict event allowlist + per-request caps are what bound the actual damage (count-skew only, no arbitrary metrics). Rate-limiting/WAF or a signed nonce would be the next step if abuse appears.
+- **Track endpoint (`POST /att/api/track`):** accepts a **batch** `{ sid, events: [{ event, t?, path?, props? }] }` (and a legacy single `{ event, path, sid }` for back-compat). Per allowlisted event it emits one EMF line via `emitMetric(event, props, timestamp)`, using the event's own capture time `t` (validated to CloudWatch's accepted window, else now) so a batch flushed later still lands in the right minute. Non-allowlisted events dropped; caps: ≤100 events/batch, ≤10 props/event, values truncated. Unauthenticated by design; always 204. **`src/proxy.ts` must exempt `/att/api/track`** (alongside `/att/api/feedback`) — the mutation-auth-gate would otherwise 307-redirect every signed-out beacon to `/signin`, dropping all anonymous traffic (regression covered in `proxy.test.ts`). Being public + unauthenticated, it guards against random/bot pings with an **Origin allowlist** (`isAllowedIngestOrigin`, `src/lib/ingest-origin.ts`): a ping whose Origin/Referer isn't one of our own origins is dropped (still 204, no signal). This is a cheap first line, **not integrity** — the header is spoofable; the strict event allowlist + per-request caps are what bound the actual damage (count-skew only, no arbitrary metrics). Rate-limiting/WAF or a signed nonce would be the next step if abuse appears.
 - **Dashboard:** a CloudWatch dashboard `paddlesnitch-app` (defined in `infra/lib/att-stack.ts`) charts product events/day + period totals, **pageviews & key events per hour** (recent/sparse batched beacons show here where the daily view hides them), two **Logs Insights** tables over the server Lambda log group — **pageviews by path** ("what people look at") and **events-by-type + distinct sessions** — and server-Lambda invocations/errors/p95. The Logs Insights widgets reference the log group by name (`/aws/lambda/${serverFn.functionName}`) so no LogGroup resource is created/adopted. The `DashboardUrl` stack output links to it. EMF metrics populate once events fire; the Logs Insights widgets need log data in the selected range.
 - **Not built yet (deliberate):** alarms and session heartbeats — add later if wanted.
 

@@ -38,6 +38,13 @@ describe('redirects', async () => {
     ['/analyse/abc123', '/paddles/abc123'],
     ['/profile/me/devices', '/devices'],
     ['/profile/me/devices/d/AABBCCDD', '/devices/AABBCCDD'],
+    ['/att/auth', '/signin'],
+    ['/att/auth/forgot', '/signin/forgot'],
+    ['/att/auth/reset', '/signin/reset'],
+    ['/att/faq', '/help'],
+    ['/att/privacy', '/privacy'],
+    ['/att/tos', '/terms'],
+    ['/att/tos/accept', '/terms/accept'],
   ])('%s → %s', (from, to) => {
     expect(apply(rules, from)).toBe(to)
   })

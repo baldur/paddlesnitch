@@ -110,7 +110,7 @@ export default function AddPaddlePage() {
       <div className={`${PANEL} w-full max-w-md p-6 text-center`}>
         <h1 className="text-lg font-bold tracking-widest">ADD A PADDLE</h1>
         <p className="text-xs text-muted mt-2 mb-5">Sign in to analyse and save your paddles.</p>
-        <a href="/att/auth?next=/paddles/new" className="inline-block px-6 py-2.5 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">SIGN IN</a>
+        <a href="/signin?next=/paddles/new" className="inline-block px-6 py-2.5 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">SIGN IN</a>
       </div>
     </Frame>
   )

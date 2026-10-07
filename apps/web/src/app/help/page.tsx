@@ -7,6 +7,8 @@ import AppHeader from '@/components/AppHeader'
 // see #78.
 export const dynamic = 'force-dynamic'
 
+export const metadata = { title: 'Help' }
+
 export default async function FaqPage() {
   const body = await readFaqDoc()
   const entries = body ? parseFaq(body) : []
@@ -16,17 +18,21 @@ export default async function FaqPage() {
       <AppHeader
         breadcrumb={
           <>
-            <Link href="/att" className="tt-nav-link text-sm">← TRIALS</Link>
+            <Link href="/" className="tt-nav-link text-sm">← HOME</Link>
             <span className="text-muted">/</span>
-            <span className="text-fg text-sm">HELP / FAQ</span>
+            <span className="text-fg text-sm">HELP</span>
           </>
         }
       />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-fg tracking-widest mb-8">
-          FREQUENTLY ASKED QUESTIONS
-        </h1>
+        <h1 className="text-lg font-bold text-fg tracking-widest mb-4">HELP</h1>
+        <ul className="text-sm flex flex-col gap-1 mb-8" aria-label="Help topics">
+          <li>Setting up a tracker? <Link href="/guide" className="text-primary">The setup guide</Link>, step by step.</li>
+          <li>Tracker not doing what you expect? <Link href="/guide/troubleshooting" className="text-primary">Troubleshooting</Link>.</li>
+          <li>Something else? Tell us with <strong className="text-fg">Report an issue</strong>.</li>
+        </ul>
+        <h2 className="text-xs text-muted tracking-widest mb-4">QUESTIONS ABOUT TRIALS</h2>
         {entries.length === 0 ? (
           <p className="text-sm text-red">
             The FAQ is unavailable right now. Please contact privacy@paddlesnitch.com.

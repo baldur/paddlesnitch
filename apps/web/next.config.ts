@@ -37,6 +37,14 @@ const nextConfig: NextConfig = {
       { source: '/analyse/library', destination: '/paddles', permanent: true },
       { source: '/paddles/library', destination: '/paddles', permanent: true },
       { source: '/analyse/:path*', destination: '/paddles/:path*', permanent: true },
+      // Sign-in, help and the legal pages are the whole site's, not Trials'
+      // (site review, 2026-10). Queries such as ?next= come along.
+      { source: '/att/auth', destination: '/signin', permanent: true },
+      { source: '/att/auth/:path*', destination: '/signin/:path*', permanent: true },
+      { source: '/att/faq', destination: '/help', permanent: true },
+      { source: '/att/privacy', destination: '/privacy', permanent: true },
+      { source: '/att/tos', destination: '/terms', permanent: true },
+      { source: '/att/tos/:path*', destination: '/terms/:path*', permanent: true },
     ]
   },
 };

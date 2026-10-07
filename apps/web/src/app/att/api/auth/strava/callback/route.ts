@@ -26,7 +26,7 @@ import { syntheticEmailFor } from '@/lib/strava-account'
 // /att). The Strava tokens are also persisted so activity import works
 // without a second authorize round-trip.
 //
-// On failure: bounced back to /att/auth with an ?error= the page maps to a
+// On failure: bounced back to /signin with an ?error= the page maps to a
 // friendly message.
 export async function GET(req: NextRequest) {
   const base = canonicalBaseUrl(req)
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     return res
   }
   const fail = (errKey: string) =>
-    clearCookies(NextResponse.redirect(new URL(`/att/auth?error=${errKey}`, base)))
+    clearCookies(NextResponse.redirect(new URL(`/signin?error=${errKey}`, base)))
 
   if (errorFromStrava) return fail('strava_denied')
   if (!code || !stateFromStrava || !stateCookie || stateFromStrava !== stateCookie) {

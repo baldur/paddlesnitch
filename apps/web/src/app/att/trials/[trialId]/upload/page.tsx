@@ -365,7 +365,7 @@ export default function UploadPage({
               You need an account to submit a trace and appear on the leaderboard.
             </p>
             <a
-              href={`/att/auth?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
+              href={`/signin?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
               className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
             >
               SIGN IN

@@ -33,7 +33,7 @@ export default function CookieNotice() {
       <p>
         We use cookies only to keep you signed in. We count page views without cookies and
         without linking them to you. No ads, no third-party trackers.{' '}
-        <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
+        <Link href="/privacy" className="tt-link">Privacy policy</Link>.
       </p>
       <button
         type="button"

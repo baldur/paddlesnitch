@@ -243,7 +243,7 @@ function AuthForm() {
               Sign up
             </button>
             {' · '}
-            <Link href="/att/auth/forgot" className="tt-link">
+            <Link href="/signin/forgot" className="tt-link">
               Forgot password?
             </Link>
           </p>
@@ -300,11 +300,11 @@ function AuthForm() {
             />
             <span>
               I have read and agree to the{' '}
-              <Link href="/att/tos" target="_blank" className="tt-link">
+              <Link href="/terms" target="_blank" className="tt-link">
                 Terms of Service
               </Link>
               {' '}and{' '}
-              <Link href="/att/privacy" target="_blank" className="tt-link">
+              <Link href="/privacy" target="_blank" className="tt-link">
                 Privacy Policy
               </Link>.
             </span>

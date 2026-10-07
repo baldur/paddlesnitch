@@ -41,7 +41,7 @@ export async function recordAcceptance(userId: string, version: string = CURRENT
   return updated
 }
 
-// Reads the raw markdown for a given ToS version. Used by the /att/tos
+// Reads the raw markdown for a given ToS version. Used by the /terms
 // page and by the API GET endpoint. Returns null if the file is missing
 // (a future audit can confirm we never deleted an old version users had
 // accepted — see deploy checklist).

@@ -13,7 +13,7 @@ export default function AccountStep() {
       </p>
 
       <Steps>
-        <li>Go to <Link href="/att/auth?next=/guide/switch-on">paddlesnitch.com and choose SIGN IN</Link>.</li>
+        <li>Go to <Link href="/signin?next=/guide/switch-on">paddlesnitch.com and choose SIGN IN</Link>.</li>
         <li>Choose the <strong>SIGN UP</strong> tab.</li>
         <li>Enter your email, the name other paddlers will see, and a password. The password needs at
           least 8 characters, with an uppercase letter, a lowercase letter and a number.</li>

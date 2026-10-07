@@ -8,7 +8,7 @@ import path from 'path'
 const repo = path.resolve(__dirname, '../../../..')
 const stack = readFileSync(path.join(repo, 'infra/lib/att-stack.ts'), 'utf8')
 const app = readFileSync(path.join(repo, 'infra/bin/att.ts'), 'utf8')
-const privacy = readFileSync(path.join(repo, 'apps/web/src/app/att/privacy/page.tsx'), 'utf8')
+const privacy = readFileSync(path.join(repo, 'apps/web/src/app/privacy/page.tsx'), 'utf8')
 const dataBucket = stack.slice(stack.indexOf("new s3.Bucket(this, 'DataBucket'"), stack.indexOf("new s3.Bucket(this, 'AssetsBucket'"))
 
 describe('production safety settings', () => {

@@ -77,8 +77,8 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /att/admin/courses/[id]      M  manage a course, open trials
 /att/admin/trials/new        M  create a trial
 /att/admin/trials/[id]       M  manage a trial
-/att/auth, /att/auth/forgot, /att/auth/reset  P  sign in / sign up (for the whole site)
-/att/faq, /att/tos, /att/privacy              P  help and legal
+/signin, /signin/forgot, /signin/reset  P  sign in / sign up (for the whole site)
+/help, /terms, /privacy              P  help and legal
 ```
 
 ## Old URLs (all permanent redirects, one hop)

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const user = await getAuthUser()
   // No session = we've lost context. Send them back to sign in; once they
   // re-auth they can hit Connect again.
-  if (!user) return NextResponse.redirect(new URL('/att/auth?next=/account', base))
+  if (!user) return NextResponse.redirect(new URL('/signin?next=/account', base))
 
   const params = req.nextUrl.searchParams
   const code = params.get('code')

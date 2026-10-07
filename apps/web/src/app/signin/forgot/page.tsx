@@ -33,7 +33,7 @@ export default function ForgotPasswordPage() {
       }
       // Send them to the next step regardless of whether the email exists —
       // the next page accepts the code and shows the same UX either way.
-      router.push(`/att/auth/reset?email=${encodeURIComponent(email)}`)
+      router.push(`/signin/reset?email=${encodeURIComponent(email)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t send the reset code. Please try again.')
       setLoading(false)
@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
             with the email you signed up with, and we&apos;ll reset your password for you.
           </p>
           <p className="text-sm text-muted leading-relaxed">If you connected Strava, you can sign in with Strava instead.</p>
-          <Link href="/att/auth" className="tt-link text-sm">← Back to sign in</Link>
+          <Link href="/signin" className="tt-link text-sm">← Back to sign in</Link>
         </div>
       </div>
     </main>
@@ -120,7 +120,7 @@ export default function ForgotPasswordPage() {
             </button>
             <p className="text-xs text-muted text-center">
               Remembered it?{' '}
-              <Link href="/att/auth" className="tt-link">Sign in</Link>
+              <Link href="/signin" className="tt-link">Sign in</Link>
             </p>
           </form>
         </div>
