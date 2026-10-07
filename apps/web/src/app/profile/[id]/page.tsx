@@ -6,6 +6,10 @@ import { getProfileSettings, buildProfileStats, resolveToUserId } from '@/lib/pr
 import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
 import AppHeader from '@/components/AppHeader'
+import { listSessionSummaries } from '@paddlesnitch/analysis/analysis-store'
+import { split500 } from '@paddlesnitch/analysis/analysis'
+import { paddlingSummary, groupSameOuting } from '@paddlesnitch/core/paddles'
+import { fmtDay } from '@paddlesnitch/core/format'
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -52,6 +56,13 @@ export default async function ProfilePage({
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : new Set<string>()
   const stats = await buildProfileStats(userId, viewer, viewerGroupIds)
 
+  // Your paddling: from Paddles, so a tracker tester without races doesn't
+  // see an empty page. Paddles are private, so it's computed for the owner
+  // only, whatever the profile's setting. One outing recorded twice (tracker
+  // and Strava) counts once.
+  const ownPaddles = isOwner ? groupSameOuting(await listSessionSummaries(userId).catch(() => [])).map(g => g.lead) : []
+  const paddling = ownPaddles.length ? paddlingSummary(ownPaddles, new Date()) : null
+
   const name = stats.displayName ?? (isOwner ? viewer!.displayName : 'Paddler')
 
   return (
@@ -73,6 +84,28 @@ export default async function ProfilePage({
             Only you can see this profile. Make it public from your{' '}
             <Link href="/account" className="underline">account page</Link> to share it.
           </div>
+        )}
+
+        {/* Your paddling: from Paddles, so a tracker tester without races
+            doesn't see an empty page. Paddles are private, so this part is
+            for the owner only, whatever the profile's setting. */}
+        {paddling && (
+          <section className="flex flex-col gap-3" aria-label="Your paddling">
+            <div>
+              <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Your paddling</h2>
+              <p className="text-[11px] text-muted mt-1">Only you see this part.</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Stat label="This year" value={`${paddling.thisYearKm} km`} />
+              <Stat label="Paddles" value={String(paddling.count)} />
+              <Stat label="Streak" value={paddling.streak ? `${paddling.streak} wk` : '—'} />
+              {paddling.fastest && <Stat label="Fastest cruise" value={`${split500(paddling.fastest.cruiseSpeed)}/500`} />}
+            </div>
+            <ul className="text-sm flex flex-col gap-1">
+              {paddling.longest && <li>Longest: <Link href={`/paddles/${paddling.longest.id}`} className="text-primary tabular">{paddling.longest.km.toFixed(1)} km on {fmtDay(paddling.longest.paddledAt)}</Link></li>}
+              {paddling.fastest && <li>Fastest cruise: <Link href={`/paddles/${paddling.fastest.id}`} className="text-primary tabular">{split500(paddling.fastest.cruiseSpeed)}/500 on {fmtDay(paddling.fastest.paddledAt)}</Link></li>}
+            </ul>
+          </section>
         )}
 
         {/* Totals */}

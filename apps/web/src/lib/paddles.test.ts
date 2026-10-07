@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sourceLabel, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting } from '@paddlesnitch/core/paddles'
+import { sourceLabel, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
 
 describe('sourceLabel', () => {
   it.each([
@@ -46,5 +46,16 @@ describe('logbook', () => {
     const other = { ...p('2026-10-01T09:00:00Z', 5, 3600, 'file'), id: 'o' }
     const g = groupSameOuting([strava, tracker, other])
     expect(g.map(x => [x.lead.id, x.others.map(o => o.id)])).toEqual([['t', ['s']], ['o', []]])
+  })
+})
+
+describe('paddlingSummary (your own profile)', () => {
+  const q = (id: string, at: string, km: number, speed: number) => ({ id, paddledAt: at, distanceKm: km, durationS: 3600, cruiseSpeed: speed })
+  it('picks this year, the longest and the fastest cruise, with links', () => {
+    const s = paddlingSummary([q('a', '2026-03-01T08:00:00Z', 12, 2.8), q('b', '2026-10-01T08:00:00Z', 6, 3.4), q('c', '2025-12-30T08:00:00Z', 20, 3.0)], new Date('2026-10-07T12:00:00Z'))
+    expect(s.thisYearKm).toBe(18)
+    expect(s.longest?.id).toBe('c')
+    expect(s.fastest?.id).toBe('b')
+    expect(s.count).toBe(3)
   })
 })
