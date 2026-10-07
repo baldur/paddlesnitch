@@ -52,6 +52,25 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
       .catch(() => setData(null))
   }, [entryId])
 
+  const [opening, setOpening] = useState(false)
+  const [openErr, setOpenErr] = useState('')
+  const openAsPaddle = async () => {
+    if (!data) return
+    setOpening(true); setOpenErr('')
+    try {
+      const fd = new FormData()
+      fd.append('trialEntryId', data.entry.entryId)
+      fd.append('trialId', data.trial.id)
+      const res = await fetch('/paddles/api/analyse', { method: 'POST', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.id) throw new Error()
+      window.location.href = `/paddles/${d.id}`
+    } catch {
+      setOpenErr('Couldn’t open it as a paddle. Please try again.')
+      setOpening(false)
+    }
+  }
+
   const saveNote = async () => {
     setNoteSaving(true)
     setNoteMsg('')
@@ -170,6 +189,19 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
                 ))}
               </tbody>
             </table>
+          </section>
+        )}
+
+        {/* Your own result as a paddle: the full analysis (efforts, stroke
+            rate, the chart) of the same run. Analysed on first open; after
+            that the duplicate check opens the paddle you already have. */}
+        {isOwner && (
+          <section className="border-t border-border pt-6 flex flex-col gap-2">
+            <button type="button" onClick={openAsPaddle} disabled={opening}
+              className="self-start px-4 py-2 border border-border text-xs tracking-widest text-muted hover:border-primary hover:text-fg disabled:opacity-50">
+              {opening ? 'OPENING…' : 'OPEN AS A PADDLE →'}
+            </button>
+            {openErr && <p className="text-xs text-red">{openErr}</p>}
           </section>
         )}
 
