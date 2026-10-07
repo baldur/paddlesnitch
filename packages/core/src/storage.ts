@@ -25,6 +25,17 @@ const isNotFound = (e: unknown) => {
     || (err?.code !== undefined && NOT_FOUND_CODES.has(err.code))
 }
 
+// One S3 client per process: a new client per call opened a new connection
+// (and TLS handshake) for every read, and a list page reads dozens at once.
+let s3Client: import('@aws-sdk/client-s3').S3Client | null = null
+async function client() {
+  if (!s3Client) {
+    const { S3Client } = await import('@aws-sdk/client-s3')
+    s3Client = new S3Client({})
+  }
+  return s3Client
+}
+
 export async function getObject(key: string): Promise<Buffer | null> {
   if (isDev()) {
     const filePath = path.join(localRoot(), key)
@@ -35,8 +46,8 @@ export async function getObject(key: string): Promise<Buffer | null> {
       throw e
     }
   }
-  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3')
-  const s3 = new S3Client({})
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
   try {
     const res = await s3.send(new GetObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key }))
     const chunks: Uint8Array[] = []
@@ -57,8 +68,8 @@ export async function putObject(key: string, body: Buffer | string): Promise<voi
     await fs.writeFile(filePath, body)
     return
   }
-  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
-  const s3 = new S3Client({})
+  const { PutObjectCommand } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
   await s3.send(
     new PutObjectCommand({
       Bucket: process.env.DATA_BUCKET!,
@@ -87,8 +98,8 @@ export async function listKeys(prefix: string): Promise<string[]> {
       return []
     }
   }
-  const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3')
-  const s3 = new S3Client({})
+  const { ListObjectsV2Command } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
   // Every page: S3 returns at most 1,000 keys per call, and callers list broad
   // prefixes (devices/, trials/) for pages, export and erasure.
   const keys: string[] = []
@@ -113,8 +124,8 @@ export async function deleteObject(key: string): Promise<void> {
     }
     return
   }
-  const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3')
-  const s3 = new S3Client({})
+  const { DeleteObjectCommand } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
   await s3.send(new DeleteObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key }))
 }
 
@@ -182,9 +193,9 @@ export async function presignGetUrl(key: string, expiresInSeconds: number, origi
     const q = new URLSearchParams({ key, exp: String(exp), sig: devPresignSignature(key, exp) })
     return `${origin ?? ''}/api/devices/firmware/download?${q}`
   }
-  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3')
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3')
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner')
-  const s3 = new S3Client({})
+  const s3 = await client()
   return getSignedUrl(
     s3,
     new GetObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key }),

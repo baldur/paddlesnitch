@@ -89,8 +89,21 @@ export async function findDuplicateSession(userId: string, fingerprint: string):
   return existing.find(s => paddleFingerprint(s.paddledAt, s.durationS, s.distanceKm) === fingerprint) ?? null
 }
 
+// Each paddle also keeps a small summary beside it (summary.json, ~2 KB
+// against ~100 KB for the paddle with its map points), so a list reads only
+// those: the Paddles page read every paddle in full, twice (6.5 MB for 61).
+// Written by saveSession alone: anything writing session.json some other way
+// would leave its summary stale (summary-writes.test.ts checks).
+const summaryKey = (userId: string, id: string) => `analysis/${userId}/${id}/summary.json`
+
 export async function saveSession(s: AnalysisSession): Promise<void> {
   await putJson(key(s.userId, s.id), s)
+  try { await putJson(summaryKey(s.userId, s.id), toSummary(s)) }
+  catch (err) {
+    // A stale summary is worse than none: without one, the list rebuilds it.
+    console.error('[analysis-store] summary write failed', err)
+    await deleteObject(summaryKey(s.userId, s.id)).catch(() => {})
+  }
 }
 
 export async function getSession(userId: string, id: string): Promise<AnalysisSession | null> {
@@ -103,6 +116,7 @@ export async function deleteSession(userId: string, id: string): Promise<void> {
   const s = await getSession(userId, id)
   if (s?.shareId) await deleteObject(sharedKey(s.shareId))
   await deleteObject(key(userId, id))
+  await deleteObject(summaryKey(userId, id))
 }
 
 // GDPR erasure: every paddle, the coach profile, and the public share index of
@@ -224,9 +238,25 @@ function toSummary(s: AnalysisSession): SessionSummary {
   }
 }
 
-// All of a user's sessions as summaries, newest paddle first.
+// All of a user's sessions as summaries, newest paddle first. Reads each
+// paddle's small summary.json; a paddle saved before summaries existed is read
+// in full once, and its summary written for next time.
 export async function listSessionSummaries(userId: string): Promise<SessionSummary[]> {
-  return (await listSessions(userId)).map(toSummary).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
+  const keys = await listKeys(`analysis/${userId}/`)
+  const has = new Set(keys)
+  const ids = keys.map(k => /^analysis\/[^/]+\/([^/]+)\/session\.json$/.exec(k)?.[1]).filter((x): x is string => !!x)
+  const out = await Promise.all(ids.map(async id => {
+    if (has.has(summaryKey(userId, id))) {
+      const sum = await getJson<SessionSummary>(summaryKey(userId, id)).catch(() => null)
+      if (sum) return sum
+    }
+    const full = await getJson<AnalysisSession>(key(userId, id))
+    if (!full) return null
+    const sum = toSummary(full)
+    await putJson(summaryKey(userId, id), sum).catch(() => {})
+    return sum
+  }))
+  return out.filter((s): s is SessionSummary => !!s).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
 }
 
 // All of a user's sessions in full (incl. `result.points`), unordered. Heavier
