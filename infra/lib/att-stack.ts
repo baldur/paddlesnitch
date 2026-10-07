@@ -454,14 +454,16 @@ export class AttStack extends cdk.Stack {
     // links, codes in query strings) off other sites. A Content-Security-Policy
     // is a separate change: it needs testing against Leaflet tiles, Strava
     // images and the inline scripts Next emits.
+    // One set of security headers, shared by every response headers policy.
+    const securityHeadersBehavior: cloudfront.ResponseSecurityHeadersBehavior = {
+      strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
+      frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+      contentTypeOptions: { override: true },
+      referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+    }
     const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       responseHeadersPolicyName: 'paddlesnitch-security-headers',
-      securityHeadersBehavior: {
-        strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
-        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-        contentTypeOptions: { override: true },
-        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
-      },
+      securityHeadersBehavior,
     })
 
     // Next's built files (/_next/static/<hash>…) never change at a given URL:
@@ -472,12 +474,7 @@ export class AttStack extends cdk.Stack {
     // under public/ keep their names across builds and must not get it.
     const immutableAssetHeaders = new cloudfront.ResponseHeadersPolicy(this, 'ImmutableAssetHeaders', {
       responseHeadersPolicyName: 'paddlesnitch-immutable-assets',
-      securityHeadersBehavior: {
-        strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
-        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-        contentTypeOptions: { override: true },
-        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
-      },
+      securityHeadersBehavior,
       customHeadersBehavior: {
         customHeaders: [{ header: 'Cache-Control', value: 'public, max-age=31536000, immutable', override: true }],
       },
