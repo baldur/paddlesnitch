@@ -52,3 +52,81 @@ export function sourceLabel(type: string | undefined): string {
     default: return ''
   }
 }
+
+// ---- The logbook on /paddles (site review, 2026-10) ----
+// Pure, from the fields every paddle summary has, so the list can show volume
+// and habit rather than only totals.
+
+type Dated = { paddledAt: string; distanceKm: number; durationS: number }
+const DAY_MS = 86_400_000
+
+/** Monday 00:00 UTC of the week `d` falls in. */
+export function weekStart(d: Date): Date {
+  const day = (d.getUTCDay() + 6) % 7          // Monday = 0
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day))
+}
+
+/** Kilometres per week for the last `weeks` weeks, oldest first, this week last. */
+export function weeklyKm(paddles: Dated[], now: Date, weeks = 12): { week: string; km: number }[] {
+  const last = weekStart(now).getTime()
+  const out = Array.from({ length: weeks }, (_, i) => ({ week: new Date(last - (weeks - 1 - i) * 7 * DAY_MS).toISOString().slice(0, 10), km: 0 }))
+  for (const p of paddles) {
+    const w = weekStart(new Date(p.paddledAt)).getTime()
+    const i = weeks - 1 - Math.round((last - w) / (7 * DAY_MS))
+    if (i >= 0 && i < weeks) out[i].km += p.distanceKm || 0
+  }
+  return out.map(o => ({ ...o, km: Math.round(o.km * 10) / 10 }))
+}
+
+/**
+ * Weeks in a row with at least one paddle, counting back from this week (or
+ * from last week, so a streak isn't broken on a Monday morning).
+ */
+export function weekStreak(paddles: Dated[], now: Date): number {
+  const weeks = new Set(paddles.map(p => weekStart(new Date(p.paddledAt)).getTime()))
+  let w = weekStart(now).getTime()
+  if (!weeks.has(w)) w -= 7 * DAY_MS
+  let n = 0
+  while (weeks.has(w)) { n++; w -= 7 * DAY_MS }
+  return n
+}
+
+/** Kilometres this calendar month and last (UTC). */
+export function monthKm(paddles: Dated[], now: Date): { thisMonth: number; lastMonth: number } {
+  const y = now.getUTCFullYear(), m = now.getUTCMonth()
+  const key = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth()
+  const k = y * 12 + m
+  let thisMonth = 0, lastMonth = 0
+  for (const p of paddles) {
+    const pk = key(new Date(p.paddledAt))
+    if (pk === k) thisMonth += p.distanceKm || 0
+    else if (pk === k - 1) lastMonth += p.distanceKm || 0
+  }
+  return { thisMonth: Math.round(thisMonth * 10) / 10, lastMonth: Math.round(lastMonth * 10) / 10 }
+}
+
+/**
+ * Recordings of one outing from two sources (the tracker and a watch on
+ * Strava) as one group, so the list shows the outing once. Overlapping by at
+ * least half the shorter one in time is enough here: two of YOUR paddles at
+ * the same time are the same outing. The tracker's copy leads (it has the
+ * boat motion), then Strava, then the rest; the list stays newest first.
+ */
+export function groupSameOuting<T extends Dated & { source: { type: string } }>(paddles: T[]): { lead: T; others: T[] }[] {
+  const rank = (t: string) => ['device', 'strava', 'trial', 'file'].indexOf(t)
+  const start = (p: T) => Date.parse(p.paddledAt)
+  const overlaps = (a: T, b: T) => {
+    const from = Math.max(start(a), start(b)), to = Math.min(start(a) + a.durationS * 1000, start(b) + b.durationS * 1000)
+    const shorter = Math.min(a.durationS, b.durationS)
+    return shorter > 0 && (to - from) / 1000 >= shorter * 0.5
+  }
+  const groups: T[][] = []
+  for (const p of paddles) {
+    const g = groups.find(g => g.some(q => overlaps(p, q)))
+    if (g) g.push(p); else groups.push([p])
+  }
+  return groups.map(g => {
+    const sorted = [...g].sort((a, b) => rank(a.source.type) - rank(b.source.type))
+    return { lead: sorted[0], others: sorted.slice(1) }
+  })
+}

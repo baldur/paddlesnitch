@@ -1,8 +1,8 @@
 'use client'
 import Link from 'next/link'
 import { useState } from 'react'
-import { fmtDurWords, split500 } from '@paddlesnitch/analysis/analysis'
-import { sourceLabel } from '@paddlesnitch/core/paddles'
+import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
+import { sourceLabel, weeklyKm, weekStreak, monthKm, groupSameOuting } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import RouteThumb from '@paddlesnitch/ui/RouteThumb'
@@ -15,11 +15,26 @@ import RouteThumb from '@paddlesnitch/ui/RouteThumb'
 function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
 function fmtSince(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 7) } }
 
-function Stat({ label, value }: { label: string; value: string }) {
+// The last 12 weeks as bars, this week on the right and highlighted.
+function WeeksChart({ weeks }: { weeks: { week: string; km: number }[] }) {
+  const max = Math.max(1, ...weeks.map(w => w.km))
   return (
-    <div className="bg-surface border border-border px-4 py-3">
+    <div className="flex items-end gap-1 h-16" role="img" aria-label="Kilometres per week, last 12 weeks">
+      {weeks.map((w, i) => (
+        <div key={w.week} className="flex-1 flex flex-col justify-end h-full" title={`Week of ${w.week}: ${w.km} km`}>
+          <div className={i === weeks.length - 1 ? 'bg-primary' : 'bg-surface-2'} style={{ height: `${Math.max(w.km > 0 ? 6 : 2, (w.km / max) * 100)}%` }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Figure({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div>
       <div className="text-[10px] text-muted tracking-widest">{label}</div>
-      <div className="text-lg font-bold tabular mt-0.5">{value}</div>
+      <div className="text-lg font-bold tabular">{value}</div>
+      {note && <div className="text-[11px] text-muted">{note}</div>}
     </div>
   )
 }
@@ -73,12 +88,27 @@ export default function PaddlesPage() {
           <Link href="/paddles/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">+ ADD A PADDLE</Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-          <Stat label="PADDLES" value={!totals ? '…' : String(totals.count)} />
-          <Stat label="DISTANCE" value={!totals ? '…' : `${totals.totalKm.toFixed(1)} km`} />
-          <Stat label="TIME ON WATER" value={!totals ? '…' : (totals.totalS > 0 ? fmtDurWords(totals.totalS) : '—')} />
-          <Stat label="SINCE" value={!totals ? '…' : (totals.since ? fmtSince(totals.since) : '—')} />
-        </div>
+        {sessions && sessions.length > 0 && (() => {
+          const now = new Date()
+          const weeks = weeklyKm(sessions, now)
+          const streak = weekStreak(sessions, now)
+          const month = monthKm(sessions, now)
+          return (
+            <section className="bg-surface border border-border p-4 mb-6 flex flex-col gap-4" aria-label="Logbook">
+              <div className="grid grid-cols-3 gap-3">
+                <Figure label="THIS WEEK" value={`${weeks[weeks.length - 1].km} km`} />
+                <Figure label="THIS MONTH" value={`${month.thisMonth} km`} note={`${month.lastMonth} km last month`} />
+                <Figure label="STREAK" value={streak ? `${streak} week${streak === 1 ? '' : 's'}` : '—'} note={streak ? 'in a row with a paddle' : 'paddle this week to start one'} />
+              </div>
+              <WeeksChart weeks={weeks} />
+              {totals && (
+                <p className="text-[11px] text-muted tabular">
+                  In all: {totals.count} paddle{totals.count === 1 ? '' : 's'}, {totals.totalKm.toFixed(1)} km, {fmtClock(totals.totalS)} on the water{totals.since ? `, since ${fmtSince(totals.since)}` : ''}.
+                </p>
+              )}
+            </section>
+          )
+        })()}
 
         {sel.length === 2 && (
           <Link href={`/paddles/compare?a=${sel[0]}&b=${sel[1]}`}
@@ -97,7 +127,7 @@ export default function PaddlesPage() {
         )}
 
         <div className="flex flex-col gap-2">
-          {sessions?.map(s => (
+          {sessions && groupSameOuting(sessions).map(({ lead: s, others }) => (
             <div key={s.id} className="border border-border p-3 flex gap-3 items-center">
               <input type="checkbox" checked={sel.includes(s.id)} onChange={() => toggle(s.id)} className="accent-primary" aria-label="Compare" />
               <Link href={`/paddles/${s.id}`} className="flex gap-3 items-center flex-1 min-w-0 group">
@@ -107,7 +137,7 @@ export default function PaddlesPage() {
                     {fmtDate(s.paddledAt).toUpperCase()}{sourceLabel(s.source.type)}{s.boatClass ? <span className="text-split"> · {s.boatClass}</span> : ''}
                   </div>
                   <div className="text-sm tabular mt-0.5 group-hover:text-primary transition-colors">
-                    <b>{s.distanceKm.toFixed(2)} km</b> · {fmtDurWords(s.durationS)}
+                    <b>{s.distanceKm.toFixed(2)} km</b> · {fmtClock(s.durationS)}
                   </div>
                   <div className="text-xs text-muted tabular mt-0.5">
                     {split500(s.cruiseSpeed)}/500{s.avgSR != null && <> · {Math.round(s.avgSR)} spm</>}
@@ -115,6 +145,13 @@ export default function PaddlesPage() {
                   {s.note?.trim() && <div className="text-xs text-split mt-1 truncate">{s.note}</div>}
                 </div>
               </Link>
+              {/* The same outing from another source: shown once, with a way
+                  to compare the two recordings. */}
+              {others.map(o => (
+                <Link key={o.id} href={`/paddles/compare?a=${s.id}&b=${o.id}`} className="shrink-0 text-[10px] tracking-widest text-muted border border-border px-2 py-1 hover:text-fg hover:border-primary">
+                  +{sourceLabel(o.source.type).replace(' · ', ' ') || ' FILE'}
+                </Link>
+              ))}
               <div className="shrink-0 text-[10px] tracking-widest">
                 {confirming === s.id ? (
                   <span className="flex gap-2 items-center">
