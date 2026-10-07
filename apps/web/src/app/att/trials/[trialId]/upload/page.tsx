@@ -159,7 +159,11 @@ export default function UploadPage({
   // Set when processing fails because the track didn't cross the lines — drives
   // the diagnostic map so the user can see their track against the course.
   const [diagnostic, setDiagnostic] = useState<UploadDiagnostic | null>(null)
-  const [inputMode, setInputMode] = useState<'file' | 'url' | 'strava'>('file')
+  const [inputMode, setInputMode] = useState<'file' | 'url' | 'strava' | 'tracker'>('file')
+  // The signed-in user's tracker recordings, newest first: a tracker owner's
+  // way into a trial (they had none: no file to upload, nothing on Strava).
+  const [trackerRecordings, setTrackerRecordings] = useState<{ sessionId: string; deviceId: string; startedAt?: string; uploadedAt: string; distanceMetres?: number }[] | undefined>(undefined)
+  const [trackerPick, setTrackerPick] = useState<{ deviceId: string; sessionId: string } | null>(null)
   const [activityUrl, setActivityUrl] = useState('')
   // Strava picker state. `connected` is undefined until status/me come back so
   // we can keep the loading skeleton off-screen until we know which UI to show.
@@ -288,6 +292,34 @@ export default function UploadPage({
       await handleUploadResponse(res, 'Couldn’t upload your file. Please try again.')
     } catch {
       setError('Couldn’t upload your file. Please try again.')
+      setStatus('error')
+    }
+  }
+
+  useEffect(() => {
+    if (!authUser) return
+    fetch('/api/account/devices/sessions')
+      .then(r => (r.ok ? r.json() : { sessions: [] }))
+      .then((d: { sessions?: NonNullable<typeof trackerRecordings> }) => setTrackerRecordings(
+        (d.sessions ?? []).sort((a, b) => (b.startedAt ?? b.uploadedAt).localeCompare(a.startedAt ?? a.uploadedAt))))
+      .catch(() => setTrackerRecordings([]))
+  }, [authUser])
+
+  const handleTrackerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!trackerPick) return
+    const err = preflight()
+    if (err) { setError(err); setStatus('error'); return }
+    setStatus('uploading'); setError(''); setDiagnostic(null)
+    try {
+      const res = await fetch(`/att/api/trials/${trialId}/upload${inviteQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: trackerPick.deviceId, deviceSessionId: trackerPick.sessionId, boatClass, crew }),
+      })
+      await handleUploadResponse(res, 'Couldn’t enter that recording. Please try again.')
+    } catch {
+      setError('Couldn’t enter that recording. Please try again.')
       setStatus('error')
     }
   }
@@ -447,6 +479,19 @@ export default function UploadPage({
               >
                 FROM STRAVA
               </button>
+              {trackerRecordings && trackerRecordings.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setInputMode('tracker')}
+                  className={`px-4 py-2 text-sm tracking-widest transition-colors ${
+                    inputMode === 'tracker'
+                      ? 'border-b-2 border-primary text-primary -mb-px'
+                      : 'text-muted hover:text-fg'
+                  }`}
+                >
+                  FROM YOUR TRACKER
+                </button>
+              )}
             </div>
 
             {inputMode === 'file' && (
@@ -616,6 +661,43 @@ export default function UploadPage({
                   className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'uploading' ? 'IMPORTING…' : 'IMPORT FROM STRAVA'}
+                </button>
+              </form>
+            )}
+
+            {inputMode === 'tracker' && trackerRecordings && (
+              <form onSubmit={handleTrackerSubmit} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-muted tracking-widest">YOUR TRACKER RECORDINGS</label>
+                  <ul className="flex flex-col border border-border max-h-72 overflow-y-auto">
+                    {trackerRecordings.map(r => {
+                      const checked = trackerPick?.sessionId === r.sessionId
+                      return (
+                        <li key={r.sessionId} className={`border-b border-surface-2 last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface'}`}>
+                          <label className="flex items-center gap-3 px-3 py-2 cursor-pointer">
+                            <input type="radio" name="trackerRecording" checked={checked}
+                              onChange={() => setTrackerPick({ deviceId: r.deviceId, sessionId: r.sessionId })} className="accent-primary" />
+                            <span className="text-sm text-fg tabular">
+                              {formatDate(r.startedAt ?? r.uploadedAt)}{r.distanceMetres ? ` · ${formatDistance(r.distanceMetres)}` : ''}
+                            </span>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <p className="text-xs text-muted">Pick the recording with your run on the course. The whole session is fine: we find the run in it.</p>
+                </div>
+
+                <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
+                <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
+
+                {status === 'error' && (
+                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">{error}</div>
+                )}
+
+                <button type="submit" disabled={status === 'uploading' || !trackerPick}
+                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  {status === 'uploading' ? 'ENTERING…' : 'ENTER THIS RECORDING'}
                 </button>
               </form>
             )}

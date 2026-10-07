@@ -13,6 +13,7 @@ import { utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
+import { getDeviceSessionTrace } from '@/lib/devices'
 import { canSubmitToTrial, canViewTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng, EntryConditions } from '@/lib/types'
@@ -235,9 +236,9 @@ export async function POST(
 
   if (contentType.includes('application/json')) {
     const body = await req.json()
-    const { url, stravaActivityId, boatClass, crew: rawCrew } = body
-    if (!url && !stravaActivityId) {
-      return NextResponse.json({ error: 'Choose a file, a link or a Strava activity.' }, { status: 400 })
+    const { url, stravaActivityId, deviceId, deviceSessionId, boatClass, crew: rawCrew } = body
+    if (!url && !stravaActivityId && !deviceSessionId) {
+      return NextResponse.json({ error: 'Choose a file, a link, a Strava activity or a tracker recording.' }, { status: 400 })
     }
     if (!isBoatClass(boatClass)) {
       return NextResponse.json({ error: 'Choose a boat class.' }, { status: 400 })
@@ -246,6 +247,17 @@ export async function POST(
     if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
     const crewError = validateCrew(boatClass, crew)
     if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
+
+    // Tracker branch: one of the user's own tracker recordings, read from where
+    // the tracker uploaded it (owner-checked: someone else's recording reads
+    // as not found). Tracker owners had no way to enter a trial otherwise.
+    if (deviceSessionId) {
+      const raw = typeof deviceId === 'string' && typeof deviceSessionId === 'string'
+        ? await getDeviceSessionTrace(user.id, deviceId.toUpperCase(), deviceSessionId) : null
+      if (!raw) return NextResponse.json({ error: 'We can’t find that tracker recording.' }, { status: 404 })
+      const ab = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer
+      return processBuffer(ab, `tracker-${deviceSessionId}.csv`, course, user, trialId, boatClass, crew, trial.date)
+    }
 
     // Strava-import branch: fetch the user's stored tokens, refresh if needed,
     // pull the streams, hand them straight to processTrack.

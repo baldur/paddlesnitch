@@ -352,3 +352,39 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(stored?.raceDate).toBe('2024-06-01')
   })
 })
+
+// Tracker owners had no way into a trial: no file to upload, nothing on
+// Strava. They can now enter one of their own tracker recordings.
+describe('entering a trial with a tracker recording', () => {
+  const trackerCsv = () => 'timestamp,lat,lon\n' + makeTestTrack().map(([lat, lng, t]) => `${t},${lat},${lng}`).join('\n')
+  const enter = (trialId: string, body: object) => upload(new NextRequest(`http://x/att/api/trials/${trialId}/upload`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ boatClass: 'K1', crew: [{ name: 'Soloist', seat: 1 }], ...body }),
+  }), { params: Promise.resolve({ trialId }) })
+
+  it("enters the user's own recording and puts it on the leaderboard", async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    const { storeDeviceSession } = await import('@/lib/devices')
+    const rec = await storeDeviceSession({ deviceId: '435AC17C', userId: user.id, filename: 'track_1.csv', startedAt: '', endedAt: '', distanceMetres: 1000, points: 100 }, trackerCsv())
+    mockAuth(user.idToken)
+
+    const res = await enter(trial.id, { deviceId: '435AC17C', deviceSessionId: rec.sessionId })
+    expect(res.status).toBe(201)
+    expect((await res.json()).result.totalElapsedSeconds).toBeGreaterThan(0)
+  })
+
+  it("can't enter someone else's recording", async () => {
+    const owner = await makeUser()
+    const other = await makeUser()
+    const course = await makeCourse(other.id)
+    const trial = await makeTrial(course.id, other.id, 'open', { participation: 'public' } as never)
+    const { storeDeviceSession } = await import('@/lib/devices')
+    const rec = await storeDeviceSession({ deviceId: '435AC17C', userId: owner.id, filename: 'track_1.csv', startedAt: '', endedAt: '', distanceMetres: 1000, points: 100 }, trackerCsv())
+    mockAuth(other.idToken)
+
+    const res = await enter(trial.id, { deviceId: '435AC17C', deviceSessionId: rec.sessionId })
+    expect(res.status).toBe(404)
+  })
+})
