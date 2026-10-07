@@ -89,6 +89,22 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await listKeys('analysis/shared/')).toEqual([])
   })
 
+  // Values worked out from their data (docs/features/performance.md), such as
+  // a recording's boat-motion report, are theirs too.
+  it("deletes everything worked out from their data, and only theirs", async () => {
+    const me = await makeUser('Me')
+    const other = await makeUser('Other')
+    const { derived } = await import('@paddlesnitch/core/derived')
+    await derived({ name: 'recording-report', owner: me.id, inputs: ['x'] }, async () => ({ roll: 3 }))
+    await derived({ name: 'recording-report', owner: other.id, inputs: ['x'] }, async () => ({ roll: 4 }))
+
+    signInAs(me.idToken)
+    expect((await deleteAccount()).status).toBe(200)
+
+    expect(await listKeys(`derived/u/${me.id}/`)).toEqual([])
+    expect(await listKeys(`derived/u/${other.id}/`)).toHaveLength(1)
+  })
+
   it('unlinks their trackers and deletes the recordings and motion data they uploaded', async () => {
     const me = await makeUser('Me')
     await pairTracker(me.id, 'AABBCCDD')

@@ -11,6 +11,7 @@ import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
 import { eraseUserDevices } from '@paddlesnitch/core/devices'
+import { eraseDerived } from '@paddlesnitch/core/derived'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
 // GDPR Art. 17 (right to erasure). Permanently removes:
@@ -101,6 +102,8 @@ export async function DELETE() {
   //     Strava goes before the users/ wipe because the tokens live there.
   await eraseUserAnalysis(user.id)
   await eraseUserDevices(user.id)
+  // Everything worked out from their data (docs/features/performance.md).
+  await eraseDerived(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
   await eraseBetaApplication(user.email)

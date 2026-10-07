@@ -153,6 +153,14 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         // Counters are rewritten on every request; don't keep their history.
         noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
+        // Derived values (packages/core/src/derived.ts): keyed by the versions
+        // of their inputs, so an old copy is never read again. Recomputed on
+        // the next read once expired; no history worth keeping.
+        id: 'expire-derived-values',
+        prefix: 'derived/',
+        expiration: cdk.Duration.days(30),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
       }],
     })
 
@@ -317,6 +325,9 @@ export class AttStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       environment: {
         DATA_BUCKET: dataBucket.bucketName,
+        // The deployed commit: the default code version of derived values, so a
+        // deploy recomputes them (packages/core/src/derived.ts).
+        CODE_VERSION: process.env.GITHUB_SHA ?? 'local',
         NODE_ENV: 'production',
         NEXT_PUBLIC_BASE_URL: 'https://paddlesnitch.com',
         COGNITO_USER_POOL_ID: userPool.userPoolId,

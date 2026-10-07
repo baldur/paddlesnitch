@@ -590,6 +590,13 @@ function countMotionRows(buf: Buffer): number {
 }
 
 // The stored motion sidecar for one of the user's sessions, or null.
+/** One of the user's own recordings' metadata, or null (someone else's reads as missing). */
+export async function getDeviceSessionMeta(userId: string, deviceId: string, sessionId: string): Promise<DeviceSessionMeta | null> {
+  if (!isDeviceId(deviceId)) return null
+  const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
+  return meta && meta.userId === userId ? meta : null
+}
+
 export async function getDeviceSessionMotion(userId: string, deviceId: string, sessionId: string): Promise<Buffer | null> {
   if (!isDeviceId(deviceId)) return null
   const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
