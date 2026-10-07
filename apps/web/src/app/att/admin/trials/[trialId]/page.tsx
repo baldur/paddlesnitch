@@ -264,7 +264,7 @@ export default function TrialAdminPage({
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input readOnly value={submitLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
                   <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
-                  <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">REVOKE</button>
+                  <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">TURN OFF LINK</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">

@@ -21,8 +21,7 @@ export default function AccountStep() {
       </Steps>
 
       <p>
-        Rather not have a password? The <strong>EMAIL CODE</strong> tab emails you a 6-digit code
-        each time you sign in. You can also sign in with Strava.
+        Rather not have a password? You can sign in with Strava instead.
       </p>
 
       <Note>

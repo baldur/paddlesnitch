@@ -11,7 +11,7 @@ export default function SavedPaddlePage({ params }: { params: Promise<{ id: stri
   if (q.isPending) return <div className="fixed inset-0 bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
   if (q.isError || !q.data) return (
     <div className="fixed inset-0 bg-bg text-fg flex flex-col items-center justify-center gap-3">
-      <p className="text-sm text-muted">This paddle doesn&apos;t exist, or you can&apos;t see it.</p>
+      <p className="text-sm text-muted">We can&apos;t find this paddle.</p>
       <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
     </div>
   )

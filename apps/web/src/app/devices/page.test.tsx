@@ -5,6 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 
 // AppHeader mounts AttAccountNav (useRouter + fetch on mount) — out of scope here.
 vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header> }))
+// Which recordings became paddles (paddles.byRecording).
+const paddleOf = vi.hoisted(() => ({ data: {} as Record<string, string> }))
+vi.mock('@/lib/trpc', () => ({ trpc: { paddles: { byRecording: { useQuery: () => ({ data: paddleOf.data }) } } } }))
 
 import DevicesPage from './page'
 
@@ -61,7 +64,7 @@ describe('DEVICES page', () => {
     })
     await mount()
     expect(container.textContent).toContain('DEADBEEF')
-    expect(container.textContent).toContain('not linked')
+    expect(container.textContent).toContain('removed')
   })
 
   it('lets a user with no tracker add one right here, instead of sending them to another page', async () => {
@@ -88,12 +91,30 @@ describe('DEVICES page', () => {
     expect(container.querySelector('a[href="/guide/bluetooth"]')).not.toBeNull()
   })
 
-  it('drops the getting-started list once a recording has arrived', async () => {
+  it('keeps the getting-started list while no recording has become a paddle (a desk test is not a paddle)', async () => {
+    paddleOf.data = {}
+    stubFetch({
+      [DEVICES]: { devices: [{ deviceId: 'AABBCCDD', name: 'Boat', model: 'm', firmware: '0.16.3', linkedAt: '2026-09-01T00:00:00Z', lastSeenAt: new Date().toISOString() }] },
+      [SESSIONS]: { sessions: [{ id: 's1', sessionId: 's1', deviceId: 'AABBCCDD', filename: 'track_1.csv', uploadedAt: '2026-09-02T00:00:00Z', distanceMetres: 0 }] },
+    })
+    await mount()
+    expect(container.textContent).toContain('Getting started')
+  })
+
+  it('drops the getting-started list once a recording has become a paddle', async () => {
+    paddleOf.data = { s1: 't-s1' }
     stubFetch({
       [DEVICES]: { devices: [{ deviceId: 'AABBCCDD', name: 'Boat', model: 'm', firmware: '0.16.3', linkedAt: '2026-09-01T00:00:00Z', lastSeenAt: new Date().toISOString() }] },
       [SESSIONS]: { sessions: [{ id: 's1', deviceId: 'AABBCCDD', filename: 'track_1.csv', uploadedAt: '2026-09-02T00:00:00Z', distanceMetres: 1200 }] },
     })
     await mount()
     expect(container.textContent).not.toContain('Getting started')
+  })
+
+  it("says it couldn't load the trackers instead of claiming there are none", async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })))
+    await mount()
+    expect(container.textContent).toContain("Couldn't load your trackers")
+    expect(container.textContent).not.toContain('No trackers yet')
   })
 })

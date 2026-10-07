@@ -26,11 +26,14 @@ export function guideStep(slug: string): { step: GuideStep; number: number; prev
 // itself off; it disappears once a recording has arrived.
 export type SetupItem = { label: string; href: string; done: boolean }
 
-export function setupProgress(trackers: { linked: boolean; sessions: number }[]): { items: SetupItem[]; complete: boolean } {
+export function setupProgress(trackers: { linked: boolean; sessions: number }[], hasTrackerPaddle = false): { items: SetupItem[]; complete: boolean } {
   const items: SetupItem[] = [
     { label: 'Create your account', href: '/guide/account', done: true },   // they are on a signed-in page
     { label: 'Set up your tracker and add it here', href: '/guide/switch-on', done: trackers.some(t => t.linked) },
-    { label: 'Record a paddle and upload it', href: '/guide/record', done: trackers.some(t => t.sessions > 0) },
+    // A paddle, not just any recording: a desk test uploads too but never
+    // becomes a paddle, and ticking this for it ended the checklist with
+    // nothing to look at (one-paddle.md).
+    { label: 'Record a paddle and see it in Paddles', href: '/guide/record', done: hasTrackerPaddle },
   ]
   return { items, complete: items.every(i => i.done) }
 }

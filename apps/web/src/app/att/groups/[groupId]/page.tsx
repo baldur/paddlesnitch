@@ -397,7 +397,7 @@ export default function GroupDetailPage({
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input readOnly value={joinLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-xs`} />
                   <button type="button" onClick={() => navigator.clipboard?.writeText(joinLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
-                  <button type="button" onClick={() => patchLink({ joinLinkToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">REVOKE</button>
+                  <button type="button" onClick={() => patchLink({ joinLinkToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">TURN OFF LINK</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">

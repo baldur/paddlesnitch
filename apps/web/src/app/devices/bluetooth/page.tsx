@@ -182,7 +182,7 @@ export default function BluetoothPage() {
         },
       }, setSyncProgress)
       const n = r.sent
-      const sent = n === 0 ? 'Nothing new to send.' : `${n} recording${n === 1 ? '' : 's'} sent. ${n === 1 ? 'It' : 'They'}'ll appear on your tracker's page.`
+      const sent = n === 0 ? 'Nothing new to send.' : `${n} recording${n === 1 ? '' : 's'} sent. ${n === 1 ? 'It' : 'They'}'ll appear in Paddles in a minute or so.`
       const unusable = r.failed.filter(x => x.reason === 'unusable').length
       const other = r.failed.length - unusable
       const notes = [

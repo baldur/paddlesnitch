@@ -4,7 +4,6 @@ import { useState } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
 import type { StravaActivitySummary } from '@paddlesnitch/core/types'
 import type { TrialEntrySummary } from '@paddlesnitch/analysis/trials'
-import type { DeviceSessionMeta } from '@paddlesnitch/analysis/device-sessions'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 
@@ -37,7 +36,6 @@ export default function AddPaddlePage() {
   const [stravaMore, setStravaMore] = useState(false)
   const [stravaLoadingMore, setStravaLoadingMore] = useState(false)
   const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
-  const [deviceSessions, setDeviceSessions] = useState<DeviceSessionMeta[] | undefined>(undefined)
 
   // Signed-out is normal (the `me` procedure returns { user: null }); undefined
   // while the probe is in flight.
@@ -75,15 +73,10 @@ export default function AddPaddlePage() {
     setTrials(undefined)
     utils.sources.trials.fetch().then(setTrials).catch(() => setTrials([]))
   }
-  const loadDevices = () => {
-    setDeviceSessions(undefined)
-    utils.sources.devices.fetch().then(setDeviceSessions).catch(() => setDeviceSessions([]))
-  }
   const openTab = (t: 'file' | 'strava' | 'trials' | 'device') => {
     setTab(t)
     if (t === 'strava' && acts === undefined) loadStrava()
     if (t === 'trials' && trials === undefined) loadTrials()
-    if (t === 'device' && deviceSessions === undefined) loadDevices()
   }
 
   const analyse = async (body: FormData) => {
@@ -102,7 +95,6 @@ export default function AddPaddlePage() {
   const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
   const runStrava = (a: StravaActivitySummary) => { const fd = new FormData(); fd.append('stravaActivityId', String(a.id)); fd.append('sportType', a.sportType); analyse(fd) }
   const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
-  const runDevice = (s: DeviceSessionMeta) => { const fd = new FormData(); fd.append('deviceSessionId', s.sessionId); fd.append('deviceId', s.deviceId); analyse(fd) }
   const reset = () => { setRes(null); setFile(null); setError(''); setDupId(null) }
 
   // result → immersive view
@@ -175,16 +167,11 @@ export default function AddPaddlePage() {
             {trials && trials.length === 0 && <p className="text-xs text-muted">No time-trial submissions yet. <a href="/att" className="text-primary">Race a trial</a>, then analyse it here.</p>}
           </div>
         ) : (
-          <div className="max-h-[300px] overflow-auto">
-            {deviceSessions === undefined && <p className="text-xs text-muted">Loading your tracker sessions…</p>}
-            {deviceSessions && deviceSessions.length > 0 && deviceSessions.map(s => (
-              <button key={s.sessionId} disabled={status === 'busy'} onClick={() => runDevice(s)}
-                className="block w-full text-left px-3 py-2 border border-border mb-1 hover:border-primary disabled:opacity-40">
-                <span className="block text-sm truncate">{s.filename}</span>
-                <span className="text-[11px] text-muted">{fmtDate(s.startedAt ?? s.uploadedAt)}{s.distanceMetres ? ` · ${fmtDist(s.distanceMetres)}` : ''} · {s.points} pts</span>
-              </button>
-            ))}
-            {deviceSessions && deviceSessions.length === 0 && <p className="text-xs text-muted">No tracker recordings yet. <a href="/devices" className="text-primary">Add a tracker</a>.</p>}
+          // A tracker's recordings become paddles by themselves (one-paddle.md,
+          // phase 2), so there's nothing to pick here any more.
+          <div className="text-sm text-muted leading-relaxed flex flex-col gap-2">
+            <p>Nothing to add: your tracker&apos;s paddles appear in <a href="/paddles" className="text-primary">Paddles</a> by themselves once it uploads them.</p>
+            <p className="text-xs">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <a href="/devices" className="text-primary">Devices</a>.</p>
           </div>
         )}
 

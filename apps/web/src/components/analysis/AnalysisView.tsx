@@ -352,7 +352,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             ))}
           </div>
         )}
-        {!sectionMode && dataProp.avgSR != null && (
+        {/* The owner's setting: a stranger on a shared paddle mustn't change its numbers. */}
+        {!sectionMode && !readOnly && dataProp.avgSR != null && (
           <div className={`${PANEL} p-1.5 flex items-center gap-1`} title="Kayak and SUP files often count one stroke per left-and-right cycle. Turn this on to count each side. Leave it off for rowing.">
             <span className="text-[10px] text-muted tracking-widest px-1">DOUBLE STROKE RATE</span>
             <button onClick={toggleDouble} disabled={srSaving}
@@ -374,7 +375,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                 <div className="flex gap-1 mt-1">
                   <button onClick={copyShare}
                     className="flex-1 px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white">
-                    {shareState === 'copied' ? 'COPIED ✓' : 'COPY LINK'}
+                    {shareState === 'copied' ? 'COPIED' : 'COPY LINK'}
                   </button>
                   <button onClick={stopSharing} disabled={shareState === 'working'}
                     className="px-3 py-1.5 text-[10px] tracking-widest text-red border border-border disabled:opacity-40">
@@ -411,13 +412,13 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               className="w-full text-xs bg-bg border border-border p-2 text-fg resize-none" placeholder="Catch felt sharp today; wind picked up on the way back…" />
             <button onClick={saveNote} disabled={noteState === 'saving'}
               className="mt-1 w-full px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
-              {noteState === 'saving' ? 'SAVING…' : noteState === 'saved' ? 'SAVED ✓' : 'SAVE NOTE'}
+              {noteState === 'saving' ? 'SAVING…' : noteState === 'saved' ? 'SAVED' : 'SAVE NOTE'}
             </button>
           </div>
         )}
         {showBoat && sessionId && (
           <div className={`${PANEL} p-2 w-[240px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">BOAT CLASS {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved ✓' : ''}</div>
+            <div className="text-[10px] text-muted tracking-widest mb-1">BOAT CLASS {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved' : ''}</div>
             <label className="block text-[10px] text-muted mb-0.5">Class</label>
             <select value={boatClass} onChange={e => onBoatClass(e.target.value as BoatClass | '')}
               className="w-full text-xs bg-bg border border-border p-1.5 text-fg mb-2">

@@ -14,7 +14,7 @@ export default function SharedPaddlePage({ params }: { params: Promise<{ shareId
   if (q.isPending) return <div className="fixed inset-0 bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
   if (q.isError || !q.data) return (
     <div className="fixed inset-0 bg-bg text-fg flex flex-col items-center justify-center gap-3">
-      <p className="text-sm text-muted">This shared paddle doesn&apos;t exist, or the link was revoked.</p>
+      <p className="text-sm text-muted">We can&apos;t find this shared paddle. Its owner may have stopped sharing it.</p>
       <Link href="/paddles/new" className="text-xs tracking-widest text-primary">ANALYSE YOUR OWN →</Link>
     </div>
   )

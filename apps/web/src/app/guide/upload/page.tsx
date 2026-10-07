@@ -35,17 +35,16 @@ export default function UploadStep() {
       </ul>
 
       <h2 className="text-xs text-fg tracking-widest uppercase">On the website</h2>
-      <Steps>
-        <li>
-          Go to <Link href="/devices">Devices</Link> and open your tracker. Each uploaded recording is
-          listed with its date and distance. Open one for the detail and the boat movement charts.
-        </li>
-        <li>
-          For the full analysis of the paddle (splits, efforts, conditions and a written summary), go
-          to <Link href="/paddles">Paddles</Link>, choose <strong>+ ADD A PADDLE</strong>, then the{' '}
-          <strong>TRACKER</strong> tab, and pick the recording.
-        </li>
-      </Steps>
+      <p>
+        Each paddle appears in <Link href="/paddles">Paddles</Link> by itself, a minute or so after the
+        tracker uploads it: the map, splits, efforts and rests, the conditions that day and a written
+        summary. Its boat movement data follows a few minutes later and adds stroke rate and{' '}
+        <strong>BOAT MOTION</strong>.
+      </p>
+      <p>
+        A recording where the boat barely moved, like a test at home, doesn&apos;t become a paddle. It
+        stays on your tracker&apos;s page under <Link href="/devices">Devices</Link>.
+      </p>
 
       <h2 className="text-xs text-fg tracking-widest uppercase">Updates</h2>
       <p>

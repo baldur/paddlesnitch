@@ -157,3 +157,15 @@ describe('AnalysisView ALSO RECORDED BY', () => {
     expect(link?.textContent).toBe('ALSO RECORDED BY STRAVA →')
   })
 })
+
+// A shared paddle is the owner's: a stranger can't flip its stroke-rate setting.
+describe('AnalysisView on a shared paddle', () => {
+  const has = (label: string) => container.textContent?.includes(label)
+  it('offers DOUBLE STROKE RATE to the owner only', async () => {
+    await mount(<AnalysisView data={data} sessionId="p1" />)
+    expect(has('DOUBLE STROKE RATE')).toBe(true)
+    await act(async () => { root.unmount() }); container.remove()
+    await mount(<AnalysisView data={data} readOnly />)
+    expect(has('DOUBLE STROKE RATE')).toBe(false)
+  })
+})

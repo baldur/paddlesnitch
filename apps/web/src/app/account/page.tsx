@@ -394,12 +394,12 @@ function AccountPageInner() {
                     </button>
                   </div>
                   {/* Auto-import toggle (default on). New water-sport activities
-                      flow into My Paddles automatically via the Strava webhook. */}
+                      flow into Paddles automatically via the Strava webhook. */}
                   <label className="flex items-center justify-between gap-4 border border-border px-4 py-3 mt-2 cursor-pointer">
                     <span className="text-sm">
                       <span className="text-fg">Auto-import new paddles</span>
                       <span className="block text-xs text-muted mt-0.5">
-                        New kayak / canoe / rowing / SUP activities on Strava appear in My Paddles automatically.
+                        New kayak / canoe / rowing / SUP activities on Strava appear in Paddles automatically.
                       </span>
                     </span>
                     <input
