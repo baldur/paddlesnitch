@@ -464,6 +464,25 @@ export class AttStack extends cdk.Stack {
       },
     })
 
+    // Next's built files (/_next/static/<hash>…) never change at a given URL:
+    // a new build gives them new names. Without a Cache-Control header the
+    // browser guessed how long to keep them, then asked again about every one
+    // on later visits (304s, but dozens of round trips). Same security headers,
+    // plus "keep this for a year, it won't change". Only /_next/static/*: files
+    // under public/ keep their names across builds and must not get it.
+    const immutableAssetHeaders = new cloudfront.ResponseHeadersPolicy(this, 'ImmutableAssetHeaders', {
+      responseHeadersPolicyName: 'paddlesnitch-immutable-assets',
+      securityHeadersBehavior: {
+        strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        contentTypeOptions: { override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+      },
+      customHeadersBehavior: {
+        customHeaders: [{ header: 'Cache-Control', value: 'public, max-age=31536000, immutable', override: true }],
+      },
+    })
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       domainNames: ['paddlesnitch.com', 'www.paddlesnitch.com'],
       certificate,
@@ -483,6 +502,14 @@ export class AttStack extends cdk.Stack {
           responseHeadersPolicy: securityHeaders,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        },
+        // Built, content-hashed files: kept by the browser for a year (above).
+        // Must come before /_next/* (CloudFront takes the first match).
+        '/_next/static/*': {
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: immutableAssetHeaders,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         // All other _next assets (JS, CSS, fonts) served from S3
         '/_next/*': {
