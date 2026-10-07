@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial } from './helpers'
 import { putJson } from '@/lib/storage'
+import { rebuildLeaderboard } from '@/lib/leaderboard'
 import type { AuthUser, BoatClass } from '@/lib/types'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
@@ -21,6 +22,8 @@ async function plant(trialId: string, userId: string, opts: { submittedAt: strin
     boatClass: opts.boatClass ?? 'K1', crew: [{ seat: 1, name: 'Pat' }],
     result: { startTimestamp: '', finishTimestamp: '', totalElapsedSeconds: opts.seconds ?? 60, splits: [] },
   })
+  // As every upload does: recent results are read from the leaderboards.
+  await rebuildLeaderboard(trialId)
 }
 
 const asViewer = (u: { id: string; email: string; displayName: string }): AuthUser =>

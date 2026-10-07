@@ -3,12 +3,14 @@
 // (canViewTrial), so private/group results never surface to people who couldn't
 // already see them on the trial's leaderboard.
 //
-// This scans every entry's result.json on each call. Fine at current scale
-// (cost model: < 1000 entries/month); swap for an index if it ever gets hot.
+// Reads each visible trial's leaderboard.json (every entry, rebuilt on each
+// upload), all at once. It used to read every entry's result.json one after
+// another, track and all: about 2 s for the Trials home page, and growing with
+// every entry.
 
 import { getJson, listKeys } from './storage'
 import { canViewTrial } from './permissions'
-import type { AuthUser, TrialMetadata, CourseMetadata, BoatClass } from './types'
+import type { AuthUser, TrialMetadata, CourseMetadata, BoatClass, LeaderboardEntry } from './types'
 
 export type RecentSubmission = {
   entryId: string
@@ -23,60 +25,42 @@ export type RecentSubmission = {
   boatClass: BoatClass
 }
 
-type StoredEntry = {
-  entryId: string
-  userId: string
-  displayName: string
-  submittedAt: string
-  raceDate: string
-  boatClass: BoatClass
-  result: { totalElapsedSeconds: number }
-}
-
 export async function getRecentSubmissions(
   viewer: AuthUser | null,
   viewerGroupIds: Set<string>,
   limit = 8,
 ): Promise<RecentSubmission[]> {
-  const keys = (await listKeys('trials/'))
-    .filter(k => k.endsWith('result.json') && k.includes('/entries/'))
+  const metaKeys = (await listKeys('trials/')).filter(k => /^trials\/[^/]+\/metadata\.json$/.test(k))
+  const trials = (await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k))))
+    .filter((t): t is TrialMetadata => !!t && canViewTrial(t, viewer, viewerGroupIds))
 
-  const trialCache = new Map<string, TrialMetadata | null>()
-  const courseCache = new Map<string, CourseMetadata | null>()
-  const getTrial = async (id: string) => {
-    if (!trialCache.has(id)) trialCache.set(id, await getJson<TrialMetadata>(`trials/${id}/metadata.json`))
-    return trialCache.get(id)!
-  }
-  const getCourse = async (id: string) => {
-    if (!courseCache.has(id)) courseCache.set(id, await getJson<CourseMetadata>(`courses/${id}/metadata.json`))
-    return courseCache.get(id)!
+  const courses = new Map<string, Promise<CourseMetadata | null>>()
+  const course = (id: string) => {
+    if (!courses.has(id)) courses.set(id, getJson<CourseMetadata>(`courses/${id}/metadata.json`))
+    return courses.get(id)!
   }
 
-  const out: RecentSubmission[] = []
-  for (const key of keys) {
-    const entry = await getJson<StoredEntry>(key)
-    if (!entry) continue
-    const trialId = key.split('/')[1] // trials/{trialId}/entries/...
-    const trial = await getTrial(trialId)
-    if (!trial) continue
-    if (!canViewTrial(trial, viewer, viewerGroupIds)) continue
-    const course = await getCourse(trial.courseId)
-    if (!course) continue
-
-    out.push({
-      entryId: entry.entryId,
-      userId: entry.userId,
-      displayName: entry.displayName,
-      trialId,
+  const perTrial = await Promise.all(trials.map(async trial => {
+    const [board, c] = await Promise.all([
+      getJson<LeaderboardEntry[]>(`trials/${trial.id}/leaderboard.json`),
+      course(trial.courseId),
+    ])
+    if (!c) return []
+    return (board ?? []).map((e): RecentSubmission => ({
+      entryId: e.entryId,
+      userId: e.userId,
+      displayName: e.displayName,
+      trialId: trial.id,
       trialName: trial.name,
-      courseName: course.name,
-      totalElapsedSeconds: entry.result.totalElapsedSeconds,
-      raceDate: entry.raceDate,
-      submittedAt: entry.submittedAt,
-      boatClass: entry.boatClass,
-    })
-  }
+      courseName: c.name,
+      totalElapsedSeconds: e.totalElapsedSeconds,
+      raceDate: e.raceDate,
+      submittedAt: e.submittedAt,
+      boatClass: e.boatClass,
+    }))
+  }))
 
-  out.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
-  return out.slice(0, limit)
+  return perTrial.flat()
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+    .slice(0, limit)
 }
