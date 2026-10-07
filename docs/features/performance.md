@@ -1,6 +1,6 @@
 # Performance: assemble once, always fresh
 
-📋 **Proposal, 2026-10-08.** Nothing here is built yet, except where it says
+📋 **Proposal, 2026-10-08.** Phase 1 is built as a draft PR (https://github.com/baldur/paddlesnitch/pull/384); nothing else here is built yet, except where it says
 so. The measurement side (a check after every deploy and the
 `paddlesnitch-performance` dashboard) shipped in #383.
 
