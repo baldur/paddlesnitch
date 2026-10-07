@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant } from '@paddlesnitch/analysis/history-stats'
+import { computeHistoryStats, renderHistoryFacts, selectRelevantPaddles, renderRelevant, paddleHighlights } from '@paddlesnitch/analysis/history-stats'
 import type { SessionSummary } from '@paddlesnitch/analysis/analysis-store'
 
 // Minimal SessionSummary factory. cruiseSpeed in m/s; higher = faster.
@@ -92,5 +92,41 @@ describe('selectRelevantPaddles', () => {
     const prior = [paddle({ startLat: 40, startLng: 40, boatClass: '8+', distanceKm: 40 })]
     expect(selectRelevantPaddles(current, prior)).toEqual([])
     expect(renderRelevant([])).toBe('')
+  })
+})
+
+// Badges on the paddle page, measured against the paddles before it.
+describe('paddleHighlights', () => {
+  const now = (over: Partial<Parameters<typeof paddleHighlights>[0]> = {}) =>
+    ({ paddledAt: '2026-07-20T08:00:00Z', cruiseSpeed: 3.0, distanceKm: 8, avgSR: 60, avgDps: 3, ...over })
+
+  it('says nothing until there are two paddles to compare with', () => {
+    expect(paddleHighlights(now(), [paddle({ paddledAt: '2026-07-10T08:00:00Z' })])).toEqual([])
+  })
+
+  it('names a cruise record, a longest paddle and the pace against the 90-day average', () => {
+    const prior = [paddle({ paddledAt: '2026-07-05T08:00:00Z', cruiseSpeed: 2.5 }), paddle({ paddledAt: '2026-07-12T08:00:00Z', cruiseSpeed: 2.6 })]
+    const h = paddleHighlights(now(), prior)
+    expect(h).toContain('Fastest cruise yet')
+    expect(h).toContain('Longest paddle yet')
+    expect(h.some(x => /s\/500 faster than your 90-day average/.test(x))).toBe(true)
+  })
+
+  it('is a record for its boat class when the class is set', () => {
+    const prior = [paddle({ paddledAt: '2026-07-05T08:00:00Z', cruiseSpeed: 2.5, boatClass: 'K1' }), paddle({ paddledAt: '2026-07-12T08:00:00Z', cruiseSpeed: 3.5 })]
+    expect(paddleHighlights(now({ boatClass: 'K1' }), prior)[0]).toBe('Fastest in a K1 yet')
+  })
+
+  it('only compares with paddles before it, so an old record stays a record', () => {
+    const prior = [
+      paddle({ paddledAt: '2026-07-05T08:00:00Z', cruiseSpeed: 2.5 }), paddle({ paddledAt: '2026-07-12T08:00:00Z', cruiseSpeed: 2.6 }),
+      paddle({ paddledAt: '2026-08-01T08:00:00Z', cruiseSpeed: 4.0, distanceKm: 20 }),   // later and faster
+    ]
+    expect(paddleHighlights(now(), prior)).toContain('Fastest cruise yet')
+  })
+
+  it('notes a return after a break', () => {
+    const prior = [paddle({ paddledAt: '2026-06-01T08:00:00Z', cruiseSpeed: 3.5, distanceKm: 20 }), paddle({ paddledAt: '2026-06-20T08:00:00Z', cruiseSpeed: 3.5, distanceKm: 20 })]
+    expect(paddleHighlights(now(), prior)).toContain('First paddle in 30 days')
   })
 })

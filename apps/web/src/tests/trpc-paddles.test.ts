@@ -188,3 +188,20 @@ describe('the same outing from two sources (paddles.sameOuting, paddles.compareO
     await expect(createCaller({ user: USER }).paddles.sameOuting({ id: 'not-mine' })).rejects.toThrow()
   })
 })
+
+describe('paddles.highlights', () => {
+  const summary = (id: string, at: string, km: number, speed: number, type = 'file') =>
+    writeSession(dir, id, { id, userId: USER.id, paddledAt: at, source: { type }, result: { durationS: 3600, distanceKm: km, cruiseSpeed: speed, avgSR: null, avgDps: null, points: [], surges: [], stops: [], sets: [] } })
+
+  it("leaves the same outing's other recording out of the comparison", async () => {
+    await summary('a', '2026-09-01T09:00:00Z', 5, 2.5)
+    await summary('b', '2026-09-05T09:00:00Z', 6, 2.6)
+    await summary('t-today', '2026-09-10T09:00:00Z', 8, 3.0, 'device')
+    // Strava's copy of the same outing reads a little faster and longer: it
+    // must not stop the tracker paddle being the record.
+    await summary('strava-today', '2026-09-10T09:01:00Z', 8.1, 3.1, 'strava')
+    const h = await createCaller({ user: USER }).paddles.highlights({ id: 't-today' })
+    expect(h).toContain('Fastest cruise yet')
+    expect(h).toContain('Longest paddle yet')
+  })
+})

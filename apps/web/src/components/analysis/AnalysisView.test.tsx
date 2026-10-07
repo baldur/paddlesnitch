@@ -156,3 +156,12 @@ describe('AnalysisView on a shared paddle', () => {
     expect(has('BOAT')).toBe(false)
   })
 })
+
+describe('AnalysisView highlights', () => {
+  it('shows the paddle\'s records as badges', async () => {
+    await mount(<AnalysisView data={data} sessionId="p1" />, qc =>
+      qc.setQueryData(getQueryKey(trpc.paddles.highlights, { id: 'p1' }, 'query'), ['Fastest cruise yet', 'Longest paddle yet']))
+    const items = Array.from(container.querySelectorAll('[aria-label="Highlights"] li')).map(li => li.textContent)
+    expect(items).toEqual(['Fastest cruise yet', 'Longest paddle yet'])
+  })
+})

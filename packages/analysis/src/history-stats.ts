@@ -170,3 +170,28 @@ export function renderRelevant(list: RelevantPaddle[]): string {
   })
   return `\nTheir most comparable past paddles:\n${lines.join('\n')}`
 }
+
+// ---- Highlights on the paddle page ----
+//
+// The same history facts the written summary uses, as short badges on the
+// paddle ("Fastest cruise yet", "Longest paddle yet", "4 s/500 faster than your
+// 90-day average"). Measured against the paddles BEFORE this one, so a record
+// still reads as a record when you look back at it later. Same-outing copies
+// (the tracker and a watch) are left out by the caller.
+export function paddleHighlights(current: PaddleFacts, prior: SessionSummary[]): string[] {
+  const before = prior.filter(p => p.paddledAt < current.paddledAt)
+  if (before.length < 2) return []
+  const s = computeHistoryStats(current, before, new Date(current.paddledAt))
+  const out: string[] = []
+  if (s.isClassPB && current.boatClass) out.push(`Fastest in a ${current.boatClass} yet`)
+  else if (s.isCruisePB) out.push('Fastest cruise yet')
+  else if (s.cruiseRank != null && s.cruiseRank <= 3 && before.length >= 3) out.push(`${ordinal(s.cruiseRank)} fastest cruise`)
+  if (before.every(p => p.distanceKm < current.distanceKm)) out.push('Longest paddle yet')
+  if (s.vs90dPaceDeltaSec != null && Math.abs(s.vs90dPaceDeltaSec) >= 2) {
+    out.push(`${Math.abs(s.vs90dPaceDeltaSec).toFixed(0)} s/500 ${s.vs90dPaceDeltaSec < 0 ? 'faster' : 'slower'} than your 90-day average`)
+  }
+  if (s.daysSinceLast != null && s.daysSinceLast >= 14) out.push(`First paddle in ${s.daysSinceLast} days`)
+  else if (s.sessionsThisWeek >= 3) out.push(`${ordinal(s.sessionsThisWeek)} paddle this week`)
+  if (s.crossedMilestoneKm != null) out.push(`Passed ${s.crossedMilestoneKm} km logged`)
+  return out
+}
