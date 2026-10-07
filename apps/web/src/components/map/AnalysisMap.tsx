@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap, useMa
 import { useEffect } from 'react'
 import type { AnalysisPoint, Segment } from '@paddlesnitch/analysis/analysis'
 import { split500 } from '@paddlesnitch/analysis/analysis'
+import { ramp, quantile as q } from './colour-scale'
 
 // Esri Dark Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
 // "API key required" nag tile once over their informal limit.) Native tiles cap
@@ -26,20 +27,17 @@ function ClickCapture({ onPick }: { onPick: (lat: number, lng: number) => void }
   return null
 }
 
-function ramp(t: number): string {
-  t = Math.max(0, Math.min(1, t))
-  const st: [number, number[]][] = [[0, [37, 99, 235]], [0.4, [6, 182, 212]], [0.7, [234, 179, 8]], [1, [220, 38, 38]]]
-  for (let i = 1; i < st.length; i++) if (t <= st[i][0]) { const [a, b] = [st[i - 1], st[i]]; const f = (t - a[0]) / (b[0] - a[0]); return `rgb(${a[1].map((c, j) => Math.round(c + f * (b[1][j] - c))).join(',')})` }
-  return 'rgb(220,38,38)'
-}
-const q = (a: number[], p: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor((p / 100) * s.length)] : 0 }
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
 
 function Fit({ pts }: { pts: AnalysisPoint[] }) {
   const map = useMap()
   useEffect(() => {
     const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng)
-    map.fitBounds([[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]], { padding: [70, 70] })
+    // A margin in proportion to the map: 70 px on all sides left a phone's
+    // map showing the route as a smudge in the middle.
+    const size = map.getSize()
+    const pad = Math.round(Math.min(70, Math.min(size.x, size.y) * 0.08))
+    map.fitBounds([[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]], { padding: [pad, pad] })
   }, [map, pts])
   return null
 }

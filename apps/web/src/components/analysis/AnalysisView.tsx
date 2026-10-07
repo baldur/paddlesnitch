@@ -3,8 +3,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AnalysisMapClient from '@/components/map/AnalysisMapClient'
+import AppHeader from '@/components/AppHeader'
+import { ramp, scaleBounds } from '@/components/map/colour-scale'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
-import { fmtDur, fmtDurWords, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
+import { fmtDur, fmtClock, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
 import { gateAt, type Racer } from '@paddlesnitch/analysis/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
@@ -30,8 +32,12 @@ function WindRose({ dir }: { dir: number }) {
 
 export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number } }
 
-// The immersive full-screen analysis view. Reused by the live analyse flow and
-// the saved-session view. `sessionId` enables the diary notes editor and the
+// One paddle: the site header, the map (with only the colour scale, the replay
+// bar and section picking over it), then everything to read below it, and the
+// actions in a column beside (under, on a phone). It replaced a full-screen map
+// with floating panels that piled on top of each other on a phone (site review,
+// 2026-10). Reused by the live analyse flow, the saved paddle and the shared
+// view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
 export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile, readOnly = false }: {
   data: ViewData
@@ -74,10 +80,6 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const [note, setNote] = useState(initialNote)
   const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showDiary, setShowDiary] = useState(false)
-  // Panels float over the map; on a phone they obscure it. Let the paddler
-  // minimise the two text-heavy ones (summary + segments) to reveal the map. (#187)
-  const [hudOpen, setHudOpen] = useState(true)
-  const [effortsOpen, setEffortsOpen] = useState(true)
   // Boat metadata — the boat class + which seat the paddler was in.
   const [boatClass, setBoatClass] = useState<BoatClass | ''>(initialBoatClass ?? '')
   const [seat, setSeat] = useState<Seat | ''>(initialSeat ?? '')
@@ -242,205 +244,54 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const paddled = data.paddledAt ? new Date(data.paddledAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''
   const fmtMatchDate = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
 
-  return (
-    <div className="fixed inset-0 bg-bg text-fg">
-      <div className="absolute inset-0">
-        <AnalysisMapClient points={data.points} stops={data.stops} surges={data.surges} metric={metric} cursor={cursor}
-          pickMode={sectionMode} onPick={onPick} startLine={startLine} finishLine={finishLine}
-          markA={aIdx != null ? { lat: pts[aIdx].lat, lng: pts[aIdx].lng } : null}
-          markB={bIdx != null ? { lat: pts[bIdx].lat, lng: pts[bIdx].lng } : null} />
-      </div>
+  const cur = data.points[cursor ?? 0]
+  const scale = scaleBounds(data.points, metric)
+  // A pace too slow to read as /500 (a drift, a turn) shows as "slower".
+  const paceOr = (speed: number, fallback: string) => { const p = split500(speed); return p === '—' ? fallback : p }
+  const scaleLabel = (v: number, end: 'lo' | 'hi') => (metric === 'speed' ? `${paceOr(v, end === 'lo' ? 'slower' : 'faster')}${split500(v) === '—' ? '' : '/500'}` : `${Math.round(v)} spm`)
+  const isTracker = data.source?.type === 'device'
 
-      {/* Left column — the summary HUD (with the LLM narrative) and the SEGMENTS
-          panel stacked in ONE bounded-height flex column so they SHARE the
-          vertical space and can never overlap, at any viewport (not just mobile).
-          The HUD takes its own (capped, scrollable) height; SEGMENTS takes the
-          remainder and scrolls. The column is pointer-events-none so the map
-          stays draggable in the gaps; each panel re-enables its own. (#187) */}
-      <div className="absolute top-3 left-3 bottom-20 sm:bottom-3 z-[1000] flex flex-col gap-2 items-start max-w-[calc(100vw-1.5rem)] pointer-events-none">
-        {/* summary HUD */}
-        <div className={`${PANEL} relative max-w-[340px] p-3 text-xs shrink-0 pointer-events-auto`}>
-          <button onClick={() => setHudOpen(o => !o)} aria-label={hudOpen ? 'Minimise summary' : 'Expand summary'}
-            className="absolute top-1.5 right-1.5 z-10 w-5 h-5 leading-none text-muted hover:text-fg">{hudOpen ? '–' : '+'}</button>
-          {(paddled || boatBadge) && <div className="text-[10px] text-muted tracking-widest mb-1 pr-5">{paddled.toUpperCase()}{sourceLabel(data.source?.type)}{boatBadge && <span className="text-split"> · {boatBadge}</span>}</div>}
-          <div className="flex items-baseline gap-2 flex-wrap pr-5">
-            <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
-            <span className="text-muted tabular">{data.distanceKm.toFixed(2)} km</span>
-            {data.avgSR != null && <span className="tabular">· ~{Math.round(data.avgSR)} spm{data.strokeRateDoubled && <span className="text-muted"> ×2</span>}</span>}
-            {data.avgDps != null && <span className="text-muted tabular">· {data.avgDps.toFixed(1)} m/str</span>}
-          </div>
-          {hudOpen && (
-            // Bound the narrative so the HUD leaves room for SEGMENTS in the
-            // shared column (and scroll a very long one in place).
-            <div className="max-h-[38vh] overflow-y-auto overscroll-contain">
-              {(c?.windKmh != null || c?.flowM3s != null) && (
-                <div className="flex items-center gap-3 mt-2 text-fg tabular">
-                  {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
-                  {c?.flowM3s != null && <span className="text-[#22d3ee]">~~ {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` · ${c.flowStation}` : ''}</span>}
-                </div>
-              )}
-              <p className="mt-2 leading-relaxed text-fg border-l-2 border-primary pl-2">{data.insight}</p>
-            </div>
-          )}
+  return (
+    <main className="flex-1 flex flex-col bg-bg text-fg">
+      <AppHeader breadcrumb={readOnly
+        ? <span className="text-muted text-xs tracking-widest">SHARED PADDLE</span>
+        : <Link href="/paddles" className="tt-nav-link text-sm shrink-0">← PADDLES</Link>} />
+
+      {/* The map, with only what belongs on a map over it: the colour scale,
+          the replay bar, and picking a section. Everything to read is below. */}
+      <section className="relative h-[52vh] min-h-[300px] max-h-[640px] border-b border-border" aria-label="Map">
+        <div className="absolute inset-0">
+          <AnalysisMapClient points={data.points} stops={data.stops} surges={data.surges} metric={metric} cursor={cursor}
+            pickMode={sectionMode} onPick={onPick} startLine={startLine} finishLine={finishLine}
+            markA={aIdx != null ? { lat: pts[aIdx].lat, lng: pts[aIdx].lng } : null}
+            markB={bIdx != null ? { lat: pts[bIdx].lat, lng: pts[bIdx].lng } : null} />
         </div>
 
-        {/* SEGMENTS — takes the remaining column height and scrolls, so it can
-            never overlap the HUD above it. */}
-        {!sectionMode && (data.surges.length > 0 || data.sets.some(s => s.count > 1)) && (
-          <div className={`${PANEL} max-w-[300px] min-h-0 p-3 text-xs overflow-auto pointer-events-auto`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-muted tracking-widest">EFFORTS AND RESTS</span>
-              <button onClick={() => setEffortsOpen(o => !o)} aria-label={effortsOpen ? 'Minimise segments' : 'Expand segments'}
-                className="w-5 h-5 leading-none text-muted hover:text-fg">{effortsOpen ? '–' : '+'}</button>
-            </div>
-            {effortsOpen && (<>
-            {data.sets.some(s => s.count > 1) && (
-              <div className="mb-2">
-                <div className="text-[10px] text-muted tracking-widest mb-1">REPEATS</div>
-                {data.sets.map((s, i) => (
-                  <div key={i} className="tabular">{s.count} × {fmtDur(s.avgDurS)} at {split500(s.avgSpeed)}/500{s.avgSR != null ? `, ${Math.round(s.avgSR)} spm` : ''}</div>
-                ))}
-              </div>
-            )}
-            {data.surges.length > 0 && <div className="text-[10px] text-muted tracking-widest mb-1">EFFORTS ({data.surges.length})</div>}
-            <div className="flex flex-col gap-0.5 tabular">
-              {data.surges.map((s, i) => (
-                <div key={i}>
-                  <span className="text-muted">#{i + 1} @{fmtDur(s.fromT)}</span> {fmtDur(s.durS)} · {split500(s.avgSpeed)}
-                  {s.avgSR != null && <> · {Math.round(s.avgSR)}spm{s.srCv != null && ` (${s.srCv.toFixed(0)}%)`}</>}
-                  {s.trend && <span className="text-split"> → {s.trend}</span>}
-                </div>
+        {!sectionMode && (
+          <div className={`${PANEL} absolute top-3 right-3 z-[1000] p-1.5 flex flex-col gap-1`}>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-muted tracking-widest px-1">COLOUR</span>
+              {(['speed', 'sr'] as const).map(m => (
+                <button key={m} onClick={() => setMetric(m)} disabled={m === 'sr' && dataProp.avgSR == null}
+                  className={`px-2 py-1 text-[10px] tracking-widest disabled:opacity-30 ${metric === m ? 'bg-primary text-white' : 'text-muted hover:text-fg'}`}>
+                  {m === 'speed' ? 'SPEED' : 'RATE'}
+                </button>
               ))}
             </div>
-            {data.stops.length > 0 && <div className="mt-2 text-[10px] text-muted">RESTS: {data.stops.map(s => `${fmtDur(s.fromT)} (${Math.round(s.durS)} s)`).join(' · ')}</div>}
-            </>)}
-          </div>
-        )}
-      </div>
-
-      {/* controls — top-right. Width-capped to the viewport and the button row
-          wraps, so on a phone the leftmost controls (NEW / PADDLES / SHARE)
-          can't overflow off the left edge and become untappable. (#206) */}
-      <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 max-w-[calc(100vw-1.5rem)]">
-        <div className="flex flex-wrap justify-end gap-1">
-          {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>NEW</button>}
-          {readOnly
-            ? <Link href="/paddles/new" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>ANALYSE YOUR OWN →</Link>
-            : <Link href="/paddles" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>PADDLES</Link>}
-          {sessionId && !readOnly && <button onClick={toggleShare} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showShare ? 'text-split' : 'text-muted hover:text-fg'}`}>SHARE</button>}
-          {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-split' : 'text-muted hover:text-fg'}`}>DIARY</button>}
-          {sessionId && <button onClick={() => setShowBoat(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showBoat ? 'text-split' : 'text-muted hover:text-fg'}`}>BOAT</button>}
-          {/* The tracker's side of a tracker paddle: roll, pitch, evenness, charts. */}
-          {sessionId && !readOnly && data.source?.type === 'device' && <Link href={`/paddles/${sessionId}/motion`} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>BOAT MOTION</Link>}
-          {sessionId && <button onClick={() => (sectionMode ? exitSection() : setSectionMode(true))} title="Pick part of this paddle to look at closely, or compare with your other paddles" className={`px-3 py-1.5 text-[10px] tracking-widest border ${sectionMode ? 'bg-transparent border-[#7c3aed] text-split' : 'bg-[#7c3aed] border-[#7c3aed] text-white hover:bg-[#6d28d9]'}`}>{sectionMode ? 'EXIT SECTION' : 'PICK A SECTION'}</button>}
-        </div>
-        {/* The same outing from another source (one-paddle.md, phase 4). */}
-        {sameOuting.map(o => (
-          <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`}
-            className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg`}>
-            ALSO RECORDED BY {o.sourceType === 'device' ? 'THE TRACKER' : sourceName(o.sourceType)} →
-          </Link>
-        ))}
-        {!sectionMode && (
-          <div className={`${PANEL} p-1.5 flex items-center gap-1`}>
-            <span className="text-[10px] text-muted tracking-widest px-1">COLOUR</span>
-            {(['speed', 'sr'] as const).map(m => (
-              <button key={m} onClick={() => setMetric(m)}
-                className={`px-2 py-1 text-[10px] tracking-widest ${metric === m ? 'bg-primary text-white' : 'text-muted hover:text-fg'}`}>
-                {m === 'speed' ? 'SPEED' : 'RATE'}
-              </button>
-            ))}
-          </div>
-        )}
-        {/* The owner's setting: a stranger on a shared paddle mustn't change its numbers. */}
-        {!sectionMode && !readOnly && dataProp.avgSR != null && (
-          <div className={`${PANEL} p-1.5 flex items-center gap-1`} title="Kayak and SUP files often count one stroke per left-and-right cycle. Turn this on to count each side. Leave it off for rowing.">
-            <span className="text-[10px] text-muted tracking-widest px-1">DOUBLE STROKE RATE</span>
-            <button onClick={toggleDouble} disabled={srSaving}
-              className={`px-2 py-1 text-[10px] tracking-widest disabled:opacity-50 ${srDoubled ? 'bg-primary text-white' : 'text-muted hover:text-fg'}`}>
-              {srDoubled ? 'ON' : 'OFF'}
-            </button>
-          </div>
-        )}
-        {showShare && sessionId && !readOnly && (
-          <div className={`${PANEL} p-2 w-[280px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">SHARE</div>
-            <div className="text-[10px] text-muted mb-1">Anyone with the link can see this paddle.</div>
-            {shareState === 'working' && !shareUrl ? (
-              <div className="text-xs text-muted">Creating link…</div>
-            ) : shareUrl ? (
-              <>
-                <input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()}
-                  className="w-full text-xs bg-bg border border-border p-2 text-fg" />
-                <div className="flex gap-1 mt-1">
-                  <button onClick={copyShare}
-                    className="flex-1 px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white">
-                    {shareState === 'copied' ? 'COPIED' : 'COPY LINK'}
-                  </button>
-                  <button onClick={stopSharing} disabled={shareState === 'working'}
-                    className="px-3 py-1.5 text-[10px] tracking-widest text-red border border-border disabled:opacity-40">
-                    STOP SHARING
-                  </button>
+            {scale && (
+              <div className="px-1" aria-label="Colour scale">
+                <div className="h-1.5" style={{ background: `linear-gradient(to right, ${[0, 0.4, 0.7, 1].map(ramp).join(',')})` }} />
+                <div className="flex justify-between text-[9px] text-muted tabular mt-0.5">
+                  <span>{scaleLabel(scale.lo, 'lo')}</span><span>{scaleLabel(scale.hi, 'hi')}</span>
                 </div>
-                <button onClick={downloadImage}
-                  className="w-full mt-1 px-3 py-1.5 text-[10px] tracking-widest text-muted border border-border hover:text-fg hover:border-primary">
-                  DOWNLOAD IMAGE
-                </button>
-                <div className="text-[10px] text-muted mt-1 leading-snug">Posts of this link show a map and stats. DOWNLOAD IMAGE saves that picture.</div>
-                {data.source?.type === 'strava' && (
-                  <div className="mt-2 pt-2 border-t border-border">
-                    {data.source.stravaActivityId && (
-                      <a href={`https://www.strava.com/activities/${data.source.stravaActivityId}`} target="_blank" rel="noopener noreferrer"
-                        className="block w-full px-3 py-1.5 text-[10px] tracking-widest text-center text-[#fc4c02] border border-border hover:border-[#fc4c02]">
-                        OPEN MY STRAVA ACTIVITY ↗
-                      </a>
-                    )}
-                    <div className="text-[10px] text-muted mt-1 leading-snug">Paste the link into your Strava description, and add the image as a photo.</div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-xs text-red">Couldn&apos;t create a link. Close and try again.</div>
+              </div>
             )}
           </div>
         )}
-        {showDiary && sessionId && (
-          <div className={`${PANEL} p-2 w-[280px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">DIARY</div>
-            <div className="text-[10px] text-muted mb-1">How did it feel?</div>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={5}
-              className="w-full text-xs bg-bg border border-border p-2 text-fg resize-none" placeholder="Catch felt sharp today; wind picked up on the way back…" />
-            <button onClick={saveNote} disabled={noteState === 'saving'}
-              className="mt-1 w-full px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
-              {noteState === 'saving' ? 'SAVING…' : noteState === 'saved' ? 'SAVED' : 'SAVE NOTE'}
-            </button>
-          </div>
-        )}
-        {showBoat && sessionId && (
-          <div className={`${PANEL} p-2 w-[240px]`}>
-            <div className="text-[10px] text-muted tracking-widest mb-1">BOAT CLASS {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved' : ''}</div>
-            <label className="block text-[10px] text-muted mb-0.5">Class</label>
-            <select value={boatClass} onChange={e => onBoatClass(e.target.value as BoatClass | '')}
-              className="w-full text-xs bg-bg border border-border p-1.5 text-fg mb-2">
-              <option value="">— not set —</option>
-              <optgroup label="Kayak">{BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
-              <optgroup label="Rowing">{BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'rowing').map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
-            </select>
-            {boatClass && BOAT_CLASS_INFO[boatClass].crewSize > 1 && (
-              <>
-                <label className="block text-[10px] text-muted mb-0.5">Your seat</label>
-                <select value={seat === '' ? '' : String(seat)} onChange={e => onSeat(e.target.value === '' ? '' : (e.target.value === 'C' ? 'C' : Number(e.target.value)))}
-                  className="w-full text-xs bg-bg border border-border p-1.5 text-fg">
-                  <option value="">— not set —</option>
-                  {expectedSeats(boatClass).map(s => <option key={String(s)} value={String(s)}>{seatLabel(boatClass, s)}</option>)}
-                </select>
-              </>
-            )}
-          </div>
-        )}
-        {/* match list */}
+
+        {/* section match list */}
         {sectionMode && findState === 'done' && (
-          <div className={`${PANEL} p-2 w-[300px] max-h-[52vh] overflow-auto`}>
+          <div className={`${PANEL} absolute top-3 right-3 z-[1000] p-2 w-[min(300px,calc(100vw-1.5rem))] max-h-[40vh] overflow-auto`}>
             <div className="text-[10px] text-muted tracking-widest mb-1">
               {matches.length ? `${matches.length} OTHER ${matches.length === 1 ? 'PADDLE COVERS' : 'PADDLES COVER'} THIS SECTION` : 'NO OTHER PADDLES COVER THIS SECTION'}
             </div>
@@ -459,52 +310,239 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             })}
             {matches.length > 0 && (
               <button onClick={raceSelected} disabled={selected.size === 0}
-                className="mt-2 w-full px-3 py-1.5 text-[10px] tracking-widest bg-green text-[#052e16] font-bold disabled:opacity-40">
+                className="mt-2 w-full px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
                 RACE SELECTED ({selected.size}) →
               </button>
             )}
           </div>
         )}
-      </div>
 
-      {/* (SEGMENTS panel now lives in the shared left column above.) */}
+        {/* bottom: replay bar, OR the section-picking panel */}
+        {sectionMode ? (
+          <div className={`${PANEL} absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] p-3 w-[min(520px,calc(100vw-1.5rem))] text-xs`}>
+            <div className="text-[10px] text-split tracking-widest mb-1">PICK A SECTION</div>
+            <div className="text-fg leading-relaxed">
+              {aIdx == null && 'Tap where the section starts on your track.'}
+              {aIdx != null && bIdx == null && 'Now tap where it ends.'}
+              {aIdx != null && bIdx != null && (
+                <span>Section: <b className="tabular text-fg">{(sectionM / 1000).toFixed(2)} km</b>, <span className="text-green">start</span> to <span className="text-red">finish</span>. Look at it closely, or compare it with your other paddles.</span>
+              )}
+            </div>
+            {sectionErr && <div className="text-red mt-1">{sectionErr}</div>}
+            {sectionInsight && <div className="mt-2 border-l-2 border-split pl-2 text-fg leading-relaxed">{sectionInsight.text}</div>}
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <button onClick={analyseSection} disabled={aIdx == null || bIdx == null || insightLoading}
+                className="px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
+                {insightLoading ? 'ANALYSING…' : sectionInsight ? 'ANALYSE AGAIN' : 'ANALYSE THIS SECTION'}
+              </button>
+              <button onClick={findSimilar} disabled={aIdx == null || bIdx == null || findState === 'loading'}
+                className="px-3 py-1.5 text-[10px] tracking-widest border border-primary text-fg disabled:opacity-40">
+                {findState === 'loading' ? 'SEARCHING…' : 'COMPARE WITH OTHER PADDLES →'}
+              </button>
+              {(aIdx != null || bIdx != null) && <button onClick={resetSection} className="px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg border border-border">RESET</button>}
+              <button onClick={exitSection} className="px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg border border-border">DONE</button>
+            </div>
+          </div>
+        ) : (
+          <div className={`${PANEL} absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] p-2 flex items-center gap-3 w-[min(520px,calc(100vw-1.5rem))]`} aria-label="Replay">
+            <button onClick={() => { if (cursor == null || cursor >= data.points.length - 1) setCursor(0); setPlaying(p => !p) }}
+              aria-label={playing ? 'Pause' : 'Play'} className="text-sm w-6 text-split">{playing ? '⏸' : '▶'}</button>
+            <input type="range" min={0} max={data.points.length - 1} value={cursor ?? 0} aria-label="Position in the paddle"
+              onChange={e => { setCursor(Number(e.target.value)); setPlaying(false) }} className="flex-1 min-w-0 accent-split" />
+            <span className="text-[11px] text-muted tabular whitespace-nowrap">
+              {fmtClock(cur?.t ?? 0)}
+              {cur && cur.speed > 0 && split500(cur.speed) !== '—' && <> · {split500(cur.speed)}/500</>}
+              {cur?.sr != null && <> · {Math.round(cur.sr)} spm</>}
+            </span>
+          </div>
+        )}
+      </section>
 
-      {/* bottom-center: replay scrubber, OR the section-selection panel */}
-      {sectionMode ? (
-        <div className={`${PANEL} absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] p-3 w-[min(520px,86vw)] text-xs`}>
-          <div className="text-[10px] text-split tracking-widest mb-1">PICK A SECTION</div>
-          <div className="text-fg leading-relaxed">
-            {aIdx == null && 'Tap where the section starts on your track.'}
-            {aIdx != null && bIdx == null && 'Now tap where it ends.'}
-            {aIdx != null && bIdx != null && (
-              <span>Section: <b className="tabular text-fg">{(sectionM / 1000).toFixed(2)} km</b> — <span className="text-green">start</span> to <span className="text-red">finish</span>. Look at this section closely, or compare it with your other paddles.</span>
+      <div className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full grid gap-8 md:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="flex flex-col gap-6 min-w-0 order-2 md:order-1">
+          {/* what this paddle was */}
+          <div>
+            <div className="text-[10px] text-muted tracking-widest">
+              {paddled.toUpperCase()}{sourceLabel(data.source?.type)}{boatBadge && <span className="text-split"> · {boatBadge}</span>}
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+              <Stat label="Time" value={fmtClock(data.durationS)} />
+              <Stat label="Distance" value={`${data.distanceKm.toFixed(2)} km`} />
+              <Stat label="Pace" value={`${split500(data.cruiseSpeed)}`} note="/500, cruising" />
+              <Stat label="Stroke rate" value={data.avgSR != null ? `${Math.round(data.avgSR)}` : '—'} note={data.avgSR != null ? `spm${data.strokeRateDoubled ? ', doubled' : ''}` : 'not in this file'} />
+              <Stat label="Per stroke" value={data.avgDps != null ? `${data.avgDps.toFixed(1)} m` : '—'} />
+            </div>
+            {(c?.windKmh != null || c?.flowM3s != null) && (
+              <div className="flex items-center gap-4 mt-3 text-sm text-fg tabular flex-wrap">
+                {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> wind {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
+                {c?.flowM3s != null && <span className="text-[#22d3ee]">river {c.flowM3s.toFixed(1)} m³/s{c.flowStation ? ` at ${c.flowStation}` : ''}</span>}
+              </div>
             )}
           </div>
-          {sectionErr && <div className="text-red mt-1">{sectionErr}</div>}
-          {sectionInsight && (
-            <div className="mt-2 border-l-2 border-split pl-2 text-fg leading-relaxed">
-              {sectionInsight.text}
+
+          <p className="leading-relaxed text-fg border-l-2 border-primary pl-3">{data.insight}</p>
+
+          {sameOuting.length > 0 && (
+            <div className="flex flex-col gap-1">
+              {sameOuting.map(o => (
+                <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`} className="text-sm text-primary">
+                  ALSO RECORDED BY {o.sourceType === 'device' ? 'THE TRACKER' : sourceName(o.sourceType)} →
+                </Link>
+              ))}
             </div>
           )}
-          <div className="flex gap-2 mt-2 flex-wrap">
-            <button onClick={analyseSection} disabled={aIdx == null || bIdx == null || insightLoading}
-              className="px-3 py-1.5 text-[10px] tracking-widest bg-[#7c3aed] text-white disabled:opacity-40">
-              {insightLoading ? 'ANALYSING…' : sectionInsight ? 'RE-ANALYSE SECTION' : 'ANALYSE THIS SECTION'}
-            </button>
-            <button onClick={findSimilar} disabled={aIdx == null || bIdx == null || findState === 'loading'}
-              className="px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
-              {findState === 'loading' ? 'SEARCHING…' : 'COMPARE WITH OTHER PADDLES →'}
-            </button>
-            {(aIdx != null || bIdx != null) && <button onClick={resetSection} className="px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg border border-border">RESET</button>}
-          </div>
+
+          {(data.surges.length > 0 || data.stops.length > 0) && (
+            <section aria-label="Efforts and rests">
+              <h2 className="text-xs text-muted tracking-widest mb-2">EFFORTS AND RESTS</h2>
+              {data.sets.some(s => s.count > 1) && (
+                <div className="mb-3 text-sm">
+                  <div className="text-[10px] text-muted tracking-widest mb-1">REPEATS</div>
+                  {data.sets.filter(s => s.count > 1).map((s, i) => (
+                    <div key={i} className="tabular">{s.count} × {fmtDur(s.avgDurS)} at {split500(s.avgSpeed)}/500{s.avgSR != null ? `, ${Math.round(s.avgSR)} spm` : ''}</div>
+                  ))}
+                </div>
+              )}
+              {data.surges.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm tabular">
+                    <thead>
+                      <tr className="text-[10px] text-muted tracking-widest text-left">
+                        <th className="font-normal py-1 pr-3">#</th>
+                        <th className="font-normal py-1 pr-3">AT</th>
+                        <th className="font-normal py-1 pr-3">FOR</th>
+                        <th className="font-normal py-1 pr-3">/500</th>
+                        <th className="font-normal py-1 pr-3">SPM</th>
+                        <th className="font-normal py-1">HOW IT WENT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.surges.map((s, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="py-1.5 pr-3 text-muted">{i + 1}</td>
+                          <td className="py-1.5 pr-3 text-muted">{fmtClock(s.fromT)}</td>
+                          <td className="py-1.5 pr-3">{fmtDur(s.durS)}</td>
+                          <td className="py-1.5 pr-3">{split500(s.avgSpeed)}</td>
+                          <td className="py-1.5 pr-3">{s.avgSR != null ? Math.round(s.avgSR) : '—'}</td>
+                          <td className="py-1.5 text-split text-xs">{s.trend ?? ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {data.stops.length > 0 && (
+                <div className="mt-3 text-xs text-muted">
+                  <span className="tracking-widest text-[10px]">RESTS </span>
+                  {data.stops.map((s, i) => <span key={i} className="inline-block mr-3 tabular">{s.durS >= 60 ? fmtDur(s.durS) : `${Math.round(s.durS)} s`} at {fmtClock(s.fromT)}</span>)}
+                </div>
+              )}
+            </section>
+          )}
         </div>
-      ) : (
-        <div className={`${PANEL} absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] p-2 flex items-center gap-3 w-[min(460px,60vw)]`}>
-          <button onClick={() => { if (cursor == null || cursor >= data.points.length - 1) setCursor(0); setPlaying(p => !p) }} className="text-sm w-6 text-split">{playing ? '⏸' : '▶'}</button>
-          <input type="range" min={0} max={data.points.length - 1} value={cursor ?? 0} onChange={e => { setCursor(Number(e.target.value)); setPlaying(false) }} className="flex-1 accent-split" />
-          <span className="text-[11px] text-muted tabular w-12 text-right">{fmtDur(data.points[cursor ?? 0]?.t ?? 0)}</span>
-        </div>
-      )}
+
+        {/* What you can do with it. Panels open in place, not over the map. */}
+        <aside className="order-1 md:order-2 flex flex-row flex-wrap md:flex-col md:flex-nowrap gap-2 text-xs content-start" aria-label="Actions">
+          {onNewFile && <button onClick={onNewFile} className={ACTION}>ADD ANOTHER</button>}
+          {readOnly && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
+          {sessionId && !readOnly && <button onClick={toggleShare} className={`${ACTION} ${showShare ? 'border-primary text-fg' : ''}`}>SHARE</button>}
+          {showShare && sessionId && !readOnly && (
+            <div className={BOX}>
+              <div className="text-[10px] text-muted mb-1">Anyone with the link can see this paddle.</div>
+              {shareState === 'working' && !shareUrl ? (
+                <div className="text-xs text-muted">Creating link…</div>
+              ) : shareUrl ? (
+                <>
+                  <input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()} className="w-full text-xs bg-bg border border-border p-2 text-fg" />
+                  <div className="flex gap-1 mt-1">
+                    <button onClick={copyShare} className="flex-1 px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white">{shareState === 'copied' ? 'COPIED' : 'COPY LINK'}</button>
+                    <button onClick={stopSharing} disabled={shareState === 'working'} className="px-3 py-1.5 text-[10px] tracking-widest text-red border border-border disabled:opacity-40">STOP SHARING</button>
+                  </div>
+                  <button onClick={downloadImage} className="w-full mt-1 px-3 py-1.5 text-[10px] tracking-widest text-muted border border-border hover:text-fg hover:border-primary">DOWNLOAD IMAGE</button>
+                  <div className="text-[10px] text-muted mt-1 leading-snug">Posts of this link show a map and stats. DOWNLOAD IMAGE saves that picture.</div>
+                  {data.source?.type === 'strava' && (
+                    <div className="mt-2 pt-2 border-t border-border">
+                      {data.source.stravaActivityId && (
+                        <a href={`https://www.strava.com/activities/${data.source.stravaActivityId}`} target="_blank" rel="noopener noreferrer"
+                          className="block w-full px-3 py-1.5 text-[10px] tracking-widest text-center text-[#fc4c02] border border-border hover:border-[#fc4c02]">
+                          OPEN MY STRAVA ACTIVITY ↗
+                        </a>
+                      )}
+                      <div className="text-[10px] text-muted mt-1 leading-snug">Paste the link into your Strava description, and add the image as a photo.</div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-xs text-red">Couldn&apos;t create a link. Close and try again.</div>
+              )}
+            </div>
+          )}
+          {sessionId && !readOnly && <button onClick={() => setShowDiary(s => !s)} className={`${ACTION} ${showDiary ? 'border-primary text-fg' : ''}`}>NOTES</button>}
+          {showDiary && sessionId && !readOnly && (
+            <div className={BOX}>
+              <div className="text-[10px] text-muted mb-1">How did it feel? Only you see this.</div>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={5}
+                className="w-full text-xs bg-bg border border-border p-2 text-fg resize-none" placeholder="Catch felt sharp today; wind picked up on the way back…" />
+              <button onClick={saveNote} disabled={noteState === 'saving'} className="mt-1 w-full px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
+                {noteState === 'saving' ? 'SAVING…' : noteState === 'saved' ? 'SAVED' : 'SAVE NOTE'}
+              </button>
+            </div>
+          )}
+          {!showDiary && note.trim() && !readOnly && <p className="basis-full text-xs text-muted border-l-2 border-border pl-2 whitespace-pre-line">{note}</p>}
+          {sessionId && !readOnly && <button onClick={() => setShowBoat(s => !s)} className={`${ACTION} ${showBoat ? 'border-primary text-fg' : ''}`}>BOAT{boatBadge ? ` · ${boatBadge}` : ''}</button>}
+          {showBoat && sessionId && !readOnly && (
+            <div className={BOX}>
+              <div className="text-[10px] text-muted tracking-widest mb-1">BOAT CLASS {boatState === 'saving' ? '· saving…' : boatState === 'saved' ? '· saved' : ''}</div>
+              <select value={boatClass} onChange={e => onBoatClass(e.target.value as BoatClass | '')} aria-label="Boat class"
+                className="w-full text-xs bg-bg border border-border p-1.5 text-fg mb-2">
+                <option value="">— not set —</option>
+                <optgroup label="Kayak">{BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
+                <optgroup label="Rowing">{BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'rowing').map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
+              </select>
+              {boatClass && BOAT_CLASS_INFO[boatClass].crewSize > 1 && (
+                <>
+                  <label className="block text-[10px] text-muted mb-0.5">Your seat</label>
+                  <select value={seat === '' ? '' : String(seat)} onChange={e => onSeat(e.target.value === '' ? '' : (e.target.value === 'C' ? 'C' : Number(e.target.value)))}
+                    className="w-full text-xs bg-bg border border-border p-1.5 text-fg mb-2">
+                    <option value="">— not set —</option>
+                    {expectedSeats(boatClass).map(s => <option key={String(s)} value={String(s)}>{seatLabel(boatClass, s)}</option>)}
+                  </select>
+                </>
+              )}
+              {/* The stroke-rate count belongs with the boat: kayak and SUP
+                  files often count one stroke per left-and-right cycle. */}
+              {dataProp.avgSR != null && (
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                  <span className="text-[10px] text-muted leading-snug">Count each side (kayak and SUP files often count one per pair)</span>
+                  <button onClick={toggleDouble} disabled={srSaving} aria-label="Double stroke rate"
+                    className={`px-2 py-1 text-[10px] tracking-widest border border-border disabled:opacity-50 ${srDoubled ? 'bg-primary text-white' : 'text-muted hover:text-fg'}`}>
+                    {srDoubled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {sessionId && !readOnly && isTracker && <Link href={`/paddles/${sessionId}/motion`} className={ACTION}>BOAT MOTION →</Link>}
+          {sessionId && !readOnly && (
+            <button onClick={() => (sectionMode ? exitSection() : (setSectionMode(true), window.scrollTo({ top: 0, behavior: 'smooth' })))}
+              title="Pick part of this paddle to look at closely, or compare with your other paddles"
+              className={`${ACTION} ${sectionMode ? 'border-split text-split' : ''}`}>{sectionMode ? 'STOP PICKING A SECTION' : 'PICK A SECTION'}</button>
+          )}
+        </aside>
+      </div>
+    </main>
+  )
+}
+
+const ACTION = 'md:w-full text-left px-3 py-2 text-[11px] tracking-widest text-muted border border-border hover:border-primary hover:text-fg'
+const BOX = 'basis-full border border-border bg-surface p-2'
+
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="border border-border bg-surface px-3 py-2 min-w-0">
+      <div className="text-[9px] text-muted tracking-widest uppercase">{label}</div>
+      <div className="text-lg text-fg tabular truncate">{value}</div>
+      {note && <div className="text-[10px] text-muted truncate">{note}</div>}
     </div>
   )
 }

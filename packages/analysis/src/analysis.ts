@@ -53,6 +53,13 @@ const cv = (a: number[]) => (a.length < 2 || mean(a) === 0 ? 0 : std(a) / mean(a
 const pct = (a: number[], p: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : 0 }
 const slope = (xs: number[], ys: number[]) => { const mx = mean(xs), my = mean(ys); let n = 0, d = 0; xs.forEach((x, i) => { n += (x - mx) * (ys[i] - my); d += (x - mx) ** 2 }); return d ? n / d : 0 }
 export const fmtDur = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+// A duration as a clock: 3896 → "1:04:56", 725 → "12:05". Denser than words
+// where numbers sit side by side.
+export function fmtClock(s: number): string {
+  const t = Math.round(s), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60
+  const ss = String(sec).padStart(2, '0')
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+}
 // A duration in plain words: 3600 → "1 hour", 3720 → "1 hour 2 minutes",
 // 120 → "2 minutes", 82 → "1 minute 22 seconds", 45 → "45 seconds".
 // Sessions never exceed a few hours, so hours are the largest unit (no days).

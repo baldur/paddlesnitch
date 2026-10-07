@@ -11,12 +11,12 @@ export default function SharedPaddlePage({ params }: { params: Promise<{ shareId
   const { shareId } = use(params)
   const q = trpc.paddles.shared.useQuery({ shareId }, { retry: false })
 
-  if (q.isPending) return <div className="fixed inset-0 bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
+  if (q.isPending) return <main className="flex-1 flex items-center justify-center text-sm text-muted">Loading…</main>
   if (q.isError || !q.data) return (
-    <div className="fixed inset-0 bg-bg text-fg flex flex-col items-center justify-center gap-3">
+    <main className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
       <p className="text-sm text-muted">We can&apos;t find this shared paddle. Its owner may have stopped sharing it.</p>
       <Link href="/paddles/new" className="text-xs tracking-widest text-primary">ANALYSE YOUR OWN →</Link>
-    </div>
+    </main>
   )
 
   const session = q.data
