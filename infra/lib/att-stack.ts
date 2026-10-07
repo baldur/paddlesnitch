@@ -75,6 +75,33 @@ export class AttStack extends cdk.Stack {
       maxSessionDuration: cdk.Duration.hours(1),
     })
 
+    // The performance check (.github/workflows/perf.yml) sends its timings to
+    // CloudWatch. Its own role, trusted only in the `perf` environment, that
+    // can do exactly one thing: put metrics in the Paddlesnitch/Perf namespace.
+    // Not the deploy role (AdministratorAccess) for a job that times pages.
+    const perfRole = new iam.Role(this, 'GithubPerfRole', {
+      roleName: 'att-github-perf',
+      assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
+        StringLike: {
+          'token.actions.githubusercontent.com:sub': [
+            'repo:baldur@759/paddlesnitch@1254392477:environment:perf',
+            'repo:baldur/paddlesnitch:environment:perf',
+          ],
+        },
+        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
+      }),
+      maxSessionDuration: cdk.Duration.hours(1),
+    })
+    perfRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['cloudwatch:PutMetricData'],
+      resources: ['*'],   // PutMetricData has no resource-level permissions…
+      conditions: { StringEquals: { 'cloudwatch:namespace': 'Paddlesnitch/Perf' } },   // …so the namespace is the limit
+    }))
+    new cdk.CfnOutput(this, 'PerfRoleArn', {
+      value: perfRole.roleArn,
+      description: 'Role for the performance check workflow (repository variable AWS_PERF_ROLE_ARN)',
+    })
+
     // ---------------------------------------------------------------------------
     // Storage
     // ---------------------------------------------------------------------------
@@ -1089,6 +1116,78 @@ export class AttStack extends cdk.Stack {
         { notification: { notificationType: 'FORECASTED', comparisonOperator: 'GREATER_THAN', threshold: 100, thresholdType: 'PERCENTAGE' },
           subscribers: [{ subscriptionType: 'EMAIL', address: alertEmail }] },
       ],
+    })
+
+    // ---------------------------------------------------------------------------
+    // Performance dashboard: the scheduled check's page timings (the same pages
+    // every run, so a line is a trend) next to what real visitors got from the
+    // server Lambda, and CloudFront's error rate.
+    // ---------------------------------------------------------------------------
+    const perfDashboard = new cloudwatch.Dashboard(this, 'PerfDashboard', {
+      dashboardName: 'paddlesnitch-performance',
+      defaultInterval: cdk.Duration.days(14),
+    })
+    // Kept in step with PAGES in apps/web/scripts/perf.ts (perf-dashboard.test.ts).
+    const perfPages = ['Home', 'Trials', 'Courses', 'Help', 'Guide', 'Sign in', 'Privacy', 'A trial', 'A course']
+    const ttfb = (page: string) => new cloudwatch.Metric({
+      namespace: 'Paddlesnitch/Perf', metricName: 'TTFB', dimensionsMap: { Page: page },
+      statistic: 'Average', period: cdk.Duration.hours(1), label: page,
+    })
+    const serverDuration = (stat: string) => serverFn.metricDuration({ statistic: stat, period: cdk.Duration.minutes(15), label: `server ${stat}` })
+    perfDashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Page time to first byte, from the performance check (ms)',
+        left: perfPages.map(ttfb),
+        width: 24, height: 8,
+        leftYAxis: { min: 0 },
+      }),
+    )
+    perfDashboard.addWidgets(
+      new cloudwatch.SingleValueWidget({
+        title: 'Latest check, per page (ms)',
+        metrics: perfPages.map(ttfb),
+        width: 24, height: 4,
+      }),
+    )
+    perfDashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Server time per request, real visitors (ms)',
+        left: ['p50', 'p95', 'p99'].map(serverDuration),
+        width: 12, height: 6,
+        leftYAxis: { min: 0 },
+      }),
+      new cloudwatch.LogQueryWidget({
+        title: 'Cold starts per hour and how long they took (ms)',
+        logGroupNames: [`/aws/lambda/${serverFn.functionName}`],
+        view: cloudwatch.LogQueryVisualizationType.LINE,
+        queryLines: [
+          'filter @type = "REPORT"',
+          'stats count(@initDuration) as coldStarts, avg(@initDuration) as initMs by bin(1h)',
+        ],
+        width: 12, height: 6,
+      }),
+    )
+    // CloudFront publishes its metrics in us-east-1, whatever the stack's region.
+    const cf = (metricName: string, statistic: string) => new cloudwatch.Metric({
+      namespace: 'AWS/CloudFront', metricName, region: 'us-east-1',
+      dimensionsMap: { DistributionId: distribution.distributionId, Region: 'Global' },
+      statistic, period: cdk.Duration.hours(1), label: metricName,
+    })
+    perfDashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'CloudFront error rates (%)',
+        left: [cf('4xxErrorRate', 'Average'), cf('5xxErrorRate', 'Average')],
+        width: 12, height: 6,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'CloudFront requests per hour',
+        left: [cf('Requests', 'Sum')],
+        width: 12, height: 6,
+      }),
+    )
+    new cdk.CfnOutput(this, 'PerfDashboardUrl', {
+      value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards/dashboard/paddlesnitch-performance`,
+      description: 'CloudWatch dashboard for page speed',
     })
 
     new cdk.CfnOutput(this, 'DashboardUrl', {
