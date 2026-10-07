@@ -35,8 +35,12 @@ describe('getting started checklist', () => {
   it('ticks the tracker once one is on the account', () => {
     expect(done([{ linked: true, sessions: 0 }])).toEqual([true, true, false])
   })
-  it('is complete once a recording has arrived, and then goes away', () => {
-    expect(setupProgress([{ linked: true, sessions: 1 }]).complete).toBe(true)
+  it('is complete once a recording has become a paddle, and then goes away', () => {
+    expect(setupProgress([{ linked: true, sessions: 1 }], true).complete).toBe(true)
+  })
+  it('does not count a recording that never became a paddle (a desk test)', () => {
+    expect(done([{ linked: true, sessions: 3 }])).toEqual([true, true, false])
+    expect(setupProgress([{ linked: true, sessions: 3 }], false).complete).toBe(false)
   })
   it('does not count a removed tracker as set up', () => {
     expect(done([{ linked: false, sessions: 0 }])).toEqual([true, false, false])

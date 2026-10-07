@@ -28,13 +28,19 @@ describe('#210 — landing page is compact on mobile', () => {
     expect(html).toContain('Paddles')
     expect(html).toContain('OPEN PADDLES')
     expect(html).toContain('href="/paddles"')
+    // The tracker has a way in from the front door: the setup guide was
+    // linked only from Devices, which a new tester can't find.
+    expect(html).toContain('SET UP A TRACKER')
+    expect(html).toContain('href="/guide"')
+    // Everything listed is available, so the badge said nothing.
+    expect(html).not.toContain('AVAILABLE NOW')
   })
 
   it('hides the long marketing paragraphs on mobile (details only from sm: up)', () => {
     // The two product `details` paragraphs and the hero subtitle carry
     // `hidden sm:block` so a phone sees the compact cards; three in all.
     const hidden = html.match(/hidden sm:block/g) ?? []
-    expect(hidden.length).toBe(3)
+    expect(hidden.length).toBe(4)
   })
 
   it('drops the oversized hero padding that pushed Analyse below the fold', () => {

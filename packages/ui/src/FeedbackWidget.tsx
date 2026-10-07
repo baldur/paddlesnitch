@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 // The ONE "Report an issue" widget for the whole platform (att + Analyse),
 // replacing att's FeedbackTrigger + FeedbackWidget and Analyse's own copy. It's
@@ -15,7 +16,11 @@ import { useEffect, useState } from 'react'
 
 const OPEN_EVENT = 'paddlesnitch:open-feedback'
 
-export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { endpoint?: string }) {
+// `noButtonOn`: paths (regex sources) where the floating button would sit on
+// top of the page's own controls, such as a full-screen map's replay bar. The
+// widget still opens there from the event.
+export default function FeedbackWidget({ endpoint = '/att/api/feedback', noButtonOn = [] }: { endpoint?: string; noButtonOn?: string[] }) {
+  const pathname = usePathname() ?? ''
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
   const [email, setEmail] = useState('')
@@ -68,6 +73,7 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
 
   // z-indexes clear Leaflet's panes (z-200..z-800) + controls.
   if (!open) {
+    if (noButtonOn.some(re => new RegExp(re).test(pathname))) return null
     return (
       <button type="button" onClick={() => setOpen(true)} aria-label="Report an issue"
         className="fixed bottom-4 right-4 z-[1100] border border-border bg-surface shadow-md px-3 py-2 text-xs text-muted tracking-widest hover:border-primary hover:text-fg transition-colors">

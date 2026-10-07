@@ -37,6 +37,11 @@ const BANNED: [RegExp, string][] = [
   [/\bdigs?\b|breathers?\b|rock-steady|\(fatigue\)/, 'plain words for efforts and rests'],
   [/growing suite|seamless|unlock|journey|actually happened|no-bloat|GO DEEPER/i, 'no marketing filler'],
   [/RESCIND|Tears down|GEOMETRY \(/, 'plain words'],
+  [/\bMy (Paddles|Devices|Profile|Tracker)\b/, 'the pages dropped "My", in prose too'],
+  [/\bREVOKE\b|was revoked/, 'plain words: "turn off" a link, "remove" a tracker'],
+  [/>not linked</, 'a tracker taken off an account is "removed"'],
+  [/doesn&apos;t exist, or you can&apos;t see it|doesn't exist, or you can't see it/, "don't blame the reader: \"We can't find this …\""],
+  [/📓|🔒|(COPIED|SAVED|saved) ✓/, 'no emoji, and no ticks inside button labels'],
   [/not derivable|motion sidecar|OPEN FULL VIEW|Boat attitude|Rock evenness|no cadence|\bfw \b/, 'tracker pages speak to paddlers, not firmware developers (engineering detail lives under TECHNICAL DETAILS)'],
 ]
 

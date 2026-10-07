@@ -77,8 +77,8 @@ function CompareInner() {
 
         {(A.note?.trim() || B.note?.trim()) && (
           <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">📓 {fmtDate(A.paddledAt)}</div>{A.note || <span className="text-muted">no note</span>}</div>
-            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">📓 {fmtDate(B.paddledAt)}</div>{B.note || <span className="text-muted">no note</span>}</div>
+            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">NOTE · {fmtDate(A.paddledAt)}</div>{A.note || <span className="text-muted">no note</span>}</div>
+            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">NOTE · {fmtDate(B.paddledAt)}</div>{B.note || <span className="text-muted">no note</span>}</div>
           </div>
         )}
       </div>

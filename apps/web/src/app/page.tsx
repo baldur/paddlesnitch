@@ -65,6 +65,15 @@ const PRODUCTS: Product[] = [
     href: '/paddles',
     cta: 'OPEN PADDLES',
   },
+  {
+    name: 'The tracker',
+    short: 'Got a paddlesnitch tracker? Set it up.',
+    details:
+      'It records your paddle and the boat\u2019s movement, and sends it home by WiFi or your phone. Your paddles then appear here by themselves, with stroke rate and how the boat rocked.',
+    status: 'available',
+    href: '/guide',
+    cta: 'SET UP A TRACKER',
+  },
 ]
 
 // The campaign landings we can serve. `example1` reuses the default content
@@ -125,9 +134,6 @@ export function LandingContent({ variant }: { variant?: string } = {}) {
       </section>
 
       <section className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
-        <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-          Products
-        </h2>
         <div className="flex flex-col gap-4">
           {PRODUCTS.map((p, i) => {
             if (p.status === 'coming-soon') {
@@ -148,12 +154,7 @@ export function LandingContent({ variant }: { variant?: string } = {}) {
                 key={p.name}
                 className="border border-border p-5 flex flex-col gap-2"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <h3 className="text-lg font-bold text-fg">{p.name}</h3>
-                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-green text-green whitespace-nowrap shrink-0">
-                    AVAILABLE NOW
-                  </span>
-                </div>
+                <h3 className="text-lg font-bold text-fg">{p.name}</h3>
                 <p className="text-sm text-fg">{p.short}</p>
                 <p className="text-sm text-muted leading-relaxed hidden sm:block">
                   {p.details}

@@ -5,6 +5,7 @@ import AppHeader from '@/components/AppHeader'
 import AddTrackerForm from '@/components/devices/AddTrackerForm'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { setupProgress } from '@/lib/guide'
+import { trpc } from '@/lib/trpc'
 import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDate, fmtDist, crashNote } from '@/lib/device-view'
 
 // DEVICES: your trackers, one card each (the tracker is the unit; its
@@ -14,8 +15,8 @@ import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, d
 
 // Until the first recording arrives: what's done and what's next, each linking
 // to the guide step for it.
-function GettingStarted({ rows }: { rows: DeviceSummary[] }) {
-  const { items, complete } = setupProgress(rows)
+function GettingStarted({ rows, hasTrackerPaddle }: { rows: DeviceSummary[]; hasTrackerPaddle: boolean }) {
+  const { items, complete } = setupProgress(rows, hasTrackerPaddle)
   if (complete) return null
   const next = items.find(i => !i.done)
   return (
@@ -38,18 +39,25 @@ function GettingStarted({ rows }: { rows: DeviceSummary[] }) {
 
 export default function DevicesPage() {
   const [rows, setRows] = useState<DeviceSummary[] | undefined>(undefined)
+  // Whether any recording has become a paddle: what "set up" means for the
+  // getting-started checklist.
+  const hasTrackerPaddle = Object.keys(trpc.paddles.byRecording.useQuery(undefined, { retry: false }).data ?? {}).length > 0
   // What the stable channel offers, so a version can be shown as up-to-date or
   // behind rather than as a number the reader has to calibrate themselves.
   const [stable, setStable] = useState<string | null>(null)
 
+  // A failed load is said as such: treating it as "no trackers" told owners
+  // they had none and offered to add one again.
+  const [loadFailed, setLoadFailed] = useState(false)
   const load = () => {
-    Promise.all([
-      fetch('/api/account/devices').then(r => (r.ok ? r.json() : { devices: [] })).catch(() => ({ devices: [] })),
-      fetch('/api/account/devices/sessions').then(r => (r.ok ? r.json() : { sessions: [] })).catch(() => ({ sessions: [] })),
-    ]).then(([d, s]: [{ devices?: DeviceView[]; stableVersion?: string | null }, { sessions?: DeviceSessionMeta[] }]) => {
-      setStable(d.stableVersion ?? null)
-      setRows(deviceSummaries(d.devices ?? [], s.sessions ?? []))
-    })
+    const get = (url: string) => fetch(url).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+    Promise.all([get('/api/account/devices'), get('/api/account/devices/sessions')])
+      .then(([d, s]: [{ devices?: DeviceView[]; stableVersion?: string | null }, { sessions?: DeviceSessionMeta[] }]) => {
+        setLoadFailed(false)
+        setStable(d.stableVersion ?? null)
+        setRows(deviceSummaries(d.devices ?? [], s.sessions ?? []))
+      })
+      .catch(() => setLoadFailed(true))
   }
   useEffect(load, [])
 
@@ -73,9 +81,13 @@ export default function DevicesPage() {
           </p>
         </div>
 
-        {rows !== undefined && <GettingStarted rows={rows} />}
+        {rows !== undefined && <GettingStarted rows={rows} hasTrackerPaddle={hasTrackerPaddle} />}
 
-        {rows === undefined ? (
+        {loadFailed ? (
+          <p className="text-sm text-red" role="alert">
+            Couldn&apos;t load your trackers. <button type="button" onClick={load} className="underline">Try again</button>.
+          </p>
+        ) : rows === undefined ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : rows.length === 0 ? (
           <div className="border border-border bg-surface px-4 py-6 text-sm text-muted leading-relaxed">
@@ -93,7 +105,7 @@ export default function DevicesPage() {
                 <span className="min-w-0">
                   <span className="block text-sm text-fg truncate">
                     {d.name}
-                    {!d.linked && <span className="ml-2 text-[10px] tracking-widest uppercase text-muted">not linked</span>}
+                    {!d.linked && <span className="ml-2 text-[10px] tracking-widest uppercase text-muted">removed</span>}
                   </span>
                   <span className="block text-xs text-muted tabular">
                     {d.deviceId}
@@ -154,8 +166,8 @@ export default function DevicesPage() {
         </div>
 
         <p className="text-xs text-muted">
-          To analyse a recording, <Link href="/paddles/new" className="text-primary">add a paddle</Link> and
-          choose it from your tracker. To remove a tracker, open it.
+          Each tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary">Paddles</Link> by
+          themselves. To remove a tracker, open it.
         </p>
       </div>
     </main>

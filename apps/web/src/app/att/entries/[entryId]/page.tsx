@@ -74,7 +74,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
   if (!data) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-muted">This entry doesn&apos;t exist, or you can&apos;t see it.</p>
+        <p className="text-sm text-muted">We can&apos;t find this result.</p>
         <Link href="/att" className="tt-nav-link text-xs tracking-widest">← TRIALS</Link>
       </main>
     )
@@ -178,7 +178,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
           <section className="border-t border-border pt-6">
             <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-1">Your note</h2>
             <p className="text-xs text-muted mb-3">
-              🔒 Only you can see this. Jot down how the race felt, kit, tactics — anything.
+              Only you can see this. Jot down how the race felt, kit, tactics: anything.
             </p>
             <textarea
               value={note}

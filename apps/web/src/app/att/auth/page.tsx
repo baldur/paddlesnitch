@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { EMAIL_DELIVERY } from '@/lib/email-delivery'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { safeNext } from '@paddlesnitch/core/url'
@@ -33,7 +34,7 @@ function AuthForm() {
   // legacy magic-link). Map known keys to user-friendly messages once.
   const initialError = (() => {
     const e = searchParams.get('error')
-    if (e === 'magic_disabled') return 'That sign-in link no longer works. Use an email code or your password.'
+    if (e === 'magic_disabled') return 'That sign-in link no longer works. Use your password, or sign in with Strava.'
     if (e === 'strava_denied') return 'You cancelled the Strava sign-in.'
     if (e === 'strava_state_mismatch') return 'Strava sign-in didn’t finish. Please try again.'
     if (e === 'strava_exchange_failed') return 'Strava sign-in didn’t finish. Please try again.'
@@ -189,9 +190,11 @@ function AuthForm() {
         <button type="button" onClick={() => { setTab('signup'); setError('') }} className={tabClass('signup')}>
           SIGN UP
         </button>
+{EMAIL_DELIVERY && (
         <button type="button" onClick={() => { setTab('code'); setError(''); setOtpSession(''); setOtpCode('') }} className={tabClass('code')}>
           EMAIL CODE
         </button>
+        )}
       </div>
 
       {tab === 'signin' && (
@@ -331,7 +334,7 @@ function AuthForm() {
         </form>
       )}
 
-      {tab === 'code' && (
+      {EMAIL_DELIVERY && tab === 'code' && (
         otpSession ? (
           <form onSubmit={handleOtpVerify} className="flex flex-col gap-4">
             <p className="text-xs text-muted">

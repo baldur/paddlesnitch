@@ -4,6 +4,7 @@ import './globals.css'
 import Footer from '@/components/Footer'
 import CookieNotice from '@/components/CookieNotice'
 import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
+import { FULL_SCREEN_MAPS } from '@/lib/full-screen-maps'
 import AttContactBanner from '@/components/AttContactBanner'
 import Analytics from '@/components/Analytics'
 import TRPCProvider from '@/components/TRPCProvider'
@@ -36,7 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <Footer />
           <CookieNotice />
-          <FeedbackWidget />
+          {/* Not on the full-screen paddle map: it covered the replay bar. */}
+          <FeedbackWidget noButtonOn={FULL_SCREEN_MAPS} />
           <Analytics />
         </TRPCProvider>
       </body>
