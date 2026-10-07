@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AnalysisMapClient from '@/components/map/AnalysisMapClient'
 import AppHeader from '@/components/AppHeader'
+import PaddleChart from './PaddleChart'
 import { ramp, scaleBounds } from '@/components/map/colour-scale'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 import { fmtDur, fmtClock, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
@@ -385,6 +386,9 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               </div>
             )}
           </div>
+
+          <PaddleChart points={data.points} surges={data.surges} stops={data.stops} cursor={cursor}
+            onSeek={i => { setCursor(i); setPlaying(false) }} />
 
           <p className="leading-relaxed text-fg border-l-2 border-primary pl-3">{data.insight}</p>
 
