@@ -5,6 +5,7 @@ describe('shared wording for stored values', () => {
   it('writes a day the same way on the server and in the browser', () => {
     expect(fmtDay('2025-04-12')).toBe('12 Apr 2025')
     expect(fmtDay('2025-04-12T23:30:00Z')).toBe('12 Apr 2025')
+    expect(fmtDay('2026-09-13')).toBe('13 Sep 2026')   // not 'Sept', whatever the ICU version
     expect(fmtDay('not a date')).toBe('not a date')
   })
   it('says what "both" means', () => {
