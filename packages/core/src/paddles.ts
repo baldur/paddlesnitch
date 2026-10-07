@@ -130,3 +130,29 @@ export function groupSameOuting<T extends Dated & { source: { type: string } }>(
     return { lead: sorted[0], others: sorted.slice(1) }
   })
 }
+
+/**
+ * A paddler's year at a glance, for their own profile: how far this year, the
+ * longest paddle and the fastest cruise (each with its id, to link to it),
+ * and the weekly streak. Pure.
+ */
+export function paddlingSummary<T extends Dated & { id: string; cruiseSpeed: number }>(paddles: T[], now: Date): {
+  count: number
+  thisYearKm: number
+  longest: { id: string; km: number; paddledAt: string } | null
+  fastest: { id: string; cruiseSpeed: number; paddledAt: string } | null
+  streak: number
+} {
+  const year = now.getUTCFullYear()
+  const thisYearKm = paddles.filter(p => new Date(p.paddledAt).getUTCFullYear() === year).reduce((s, p) => s + (p.distanceKm || 0), 0)
+  const longest = paddles.reduce<T | null>((b, p) => (!b || p.distanceKm > b.distanceKm ? p : b), null)
+  const moving = paddles.filter(p => p.cruiseSpeed > 0.2)
+  const fastest = moving.reduce<T | null>((b, p) => (!b || p.cruiseSpeed > b.cruiseSpeed ? p : b), null)
+  return {
+    count: paddles.length,
+    thisYearKm: Math.round(thisYearKm * 10) / 10,
+    longest: longest ? { id: longest.id, km: longest.distanceKm, paddledAt: longest.paddledAt } : null,
+    fastest: fastest ? { id: fastest.id, cruiseSpeed: fastest.cruiseSpeed, paddledAt: fastest.paddledAt } : null,
+    streak: weekStreak(paddles, now),
+  }
+}
