@@ -5,12 +5,16 @@
 // Dates are written in UTC with a fixed locale, so a server-rendered page and
 // the browser agree (a trial date is a calendar day, stored as YYYY-MM-DD).
 
-const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+// Month names spelled here, not by Intl: ICU versions differ ('Sep' or
+// 'Sept'), and the server and the browser can carry different ones.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** '2025-04-12' or an ISO timestamp → '12 Apr 2025'. Unparseable → as given. */
 export function fmtDay(value: string): string {
   const t = Date.parse(value.length === 10 ? `${value}T00:00:00Z` : value)
-  return Number.isFinite(t) ? DAY.format(t) : value
+  if (!Number.isFinite(t)) return value
+  const d = new Date(t)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
 }
 
 /** A course's sport for a label: 'both' is meaningless on its own. */
