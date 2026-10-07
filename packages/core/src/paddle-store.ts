@@ -37,9 +37,37 @@ function toCard(s: StoredSession): PaddleCard {
   }
 }
 
-// A user's saved paddles as lean cards, newest paddle first.
+// A paddle's small summary (analysis/{userId}/{id}/summary.json, written by
+// the analysis store beside each paddle): enough for a card, ~2 KB instead of
+// the ~100 KB paddle.
+type StoredSummary = {
+  id: string; paddledAt: string; source?: { type?: string }; boatClass?: unknown
+  distanceKm?: number; durationS?: number; cruiseSpeed?: number; avgSR?: number | null; route?: [number, number][]
+}
+
+function summaryToCard(s: StoredSummary): PaddleCard {
+  return {
+    id: s.id, paddledAt: s.paddledAt,
+    distanceKm: s.distanceKm ?? 0, durationS: s.durationS ?? 0, cruiseSpeed: s.cruiseSpeed ?? 0, avgSR: s.avgSR ?? null,
+    boatClass: isBoatClass(s.boatClass) ? s.boatClass : undefined,
+    sourceType: s.source?.type ?? 'file',
+    route: s.route ?? [],
+  }
+}
+
+// A user's saved paddles as lean cards, newest paddle first. Reads each
+// paddle's summary where there is one, the full paddle otherwise.
 export async function listPaddleCards(userId: string): Promise<PaddleCard[]> {
-  const keys = (await listKeys(`analysis/${userId}/`)).filter(k => k.endsWith('session.json'))
-  const sessions = (await Promise.all(keys.map(k => getJson<StoredSession>(k)))).filter((s): s is StoredSession => !!s && !!s.id)
-  return sessions.map(toCard).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
+  const keys = await listKeys(`analysis/${userId}/`)
+  const has = new Set(keys)
+  const cards = await Promise.all(keys.filter(k => k.endsWith('/session.json')).map(async k => {
+    const sumKey = k.replace(/session\.json$/, 'summary.json')
+    if (has.has(sumKey)) {
+      const sum = await getJson<StoredSummary>(sumKey).catch(() => null)
+      if (sum?.id) return summaryToCard(sum)
+    }
+    const full = await getJson<StoredSession>(k)
+    return full?.id ? toCard(full) : null
+  }))
+  return cards.filter((c): c is PaddleCard => !!c).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
 }

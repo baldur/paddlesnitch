@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
-import { sourceLabel, weeklyKm, weekStreak, monthKm, groupSameOuting } from '@paddlesnitch/core/paddles'
+import { sourceLabel, weeklyKm, weekStreak, monthKm, groupSameOuting, paddleTotals } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import RouteThumb from '@paddlesnitch/ui/RouteThumb'
@@ -46,11 +46,10 @@ export default function PaddlesPage() {
   // signed out logged a 401 in the console on every visit.
   const me = trpc.me.useQuery()
   const signedIn = !!me.data?.user
-  const list = trpc.paddles.list.useQuery(undefined, { retry: false, enabled: signedIn })
   const q = trpc.paddles.sessions.useQuery(undefined, { retry: false, enabled: signedIn })
   const utils = trpc.useUtils()
   const delMut = trpc.paddles.delete.useMutation({
-    onSuccess: () => { utils.paddles.sessions.invalidate(); utils.paddles.list.invalidate() },
+    onSuccess: () => { utils.paddles.sessions.invalidate() },
   })
 
   const del = async (id: string) => {
@@ -77,7 +76,8 @@ export default function PaddlesPage() {
   )
 
   const sessions = q.data
-  const totals = list.data?.totals
+  // Worked out from the same list: a second request read every paddle again.
+  const totals = sessions ? paddleTotals(sessions) : undefined
 
   return (
     <main className="flex-1 flex flex-col">

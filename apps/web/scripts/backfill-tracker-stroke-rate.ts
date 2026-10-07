@@ -16,7 +16,8 @@
 
 import { realpathSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { listKeys, getJson, putJson } from '../src/lib/storage'
+import { listKeys, getJson } from '../src/lib/storage'
+import { saveSession } from '@paddlesnitch/analysis/analysis-store'
 import { loadDeviceSessionTrack } from '@paddlesnitch/analysis/device-sessions'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 import type { AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
@@ -48,7 +49,7 @@ export async function run(apply: boolean): Promise<{ checked: number; changed: n
     changed++
     const sr = next.result.avgSR != null ? `${Math.round(next.result.avgSR)} spm` : '-'
     console.log(`${key}: stroke rate ${s.result.avgSR ?? '-'} -> ${sr}${s.doubleStrokeRate ? ' (doubling turned off)' : ''}`)
-    if (apply) await putJson(key, next)
+    if (apply) await saveSession(next)   // keeps the paddle's summary in step
   }
   console.log(`backfill-tracker-stroke-rate: ${changed} of ${checked} tracker paddle(s) ${apply ? 'rewritten' : 'would change (dry run; add --apply)'}.`)
   return { checked, changed }
