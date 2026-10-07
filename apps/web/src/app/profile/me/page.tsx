@@ -8,7 +8,7 @@ import { getProfileSettings } from '@/lib/profile'
 // back here.
 export default async function MyProfilePage() {
   const user = await getAuthUser()
-  if (!user) redirect('/att/auth?next=/profile/me')
+  if (!user) redirect('/signin?next=/profile/me')
   const settings = await getProfileSettings(user.id)
   redirect(`/profile/${settings.handle ?? user.id}`)
 }

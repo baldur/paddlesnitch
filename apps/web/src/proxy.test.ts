@@ -9,7 +9,7 @@ function req(method: string, path: string, authed = false): NextRequest {
   return r
 }
 const redirectsToAuth = (res: Response) =>
-  res.status >= 300 && res.status < 400 && (res.headers.get('location') ?? '').includes('/att/auth')
+  res.status >= 300 && res.status < 400 && (res.headers.get('location') ?? '').includes('/signin')
 
 describe('tracker QR: uppercase /L/', () => {
   it('serves /L/<code> from the /l/<code> handler (an internal rewrite, no extra redirect)', () => {
@@ -69,12 +69,12 @@ describe('proxy auth gate', () => {
   it('carries the query string through sign-in, not just the path', () => {
     // Regression: `next` was set to the pathname alone while the cloned URL
     // kept the original params, so /devices?code=ABC123 became
-    // /att/auth?code=ABC123&next=/account and the code was dropped
+    // /signin?code=ABC123&next=/account and the code was dropped
     // on the way back. That silently breaks scan-to-link for anyone not
     // already signed in -- i.e. most people setting up a device.
     const res = proxy(req('GET', '/devices?code=ABC123'))
     const loc = new URL(res.headers.get('location') ?? '', 'https://paddlesnitch.com')
-    expect(loc.pathname).toBe('/att/auth')
+    expect(loc.pathname).toBe('/signin')
     expect(loc.searchParams.get('next')).toBe('/devices?code=ABC123')
     // ...and the code must not be left loose on the auth URL itself.
     expect(loc.searchParams.get('code')).toBeNull()

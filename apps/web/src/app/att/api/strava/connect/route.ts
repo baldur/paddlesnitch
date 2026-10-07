@@ -10,7 +10,7 @@ import { canonicalBaseUrl } from '@/lib/url'
 export async function GET(req: NextRequest) {
   const base = canonicalBaseUrl(req)
   const user = await getAuthUser()
-  if (!user) return NextResponse.redirect(new URL('/att/auth?next=/account', base))
+  if (!user) return NextResponse.redirect(new URL('/signin?next=/account', base))
 
   const state = randomBytes(24).toString('hex')
   // redirect_uri MUST match what's registered in the Strava API app exactly,

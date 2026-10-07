@@ -30,7 +30,7 @@ function ResetForm() {
       if (!res.ok) throw new Error(data?.error ?? 'Couldn’t reset your password. Please try again.')
       // Server auto-signs the user in if it can; if it couldn't, send to login.
       if (data?.signedIn) router.push('/')
-      else router.push('/att/auth?reset=ok')
+      else router.push('/signin?reset=ok')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t reset your password. Please try again.')
       setLoading(false)
@@ -100,7 +100,7 @@ function ResetForm() {
         </button>
         <p className="text-xs text-muted text-center">
           Didn&apos;t get a code?{' '}
-          <Link href="/att/auth/forgot" className="tt-link">Request another</Link>
+          <Link href="/signin/forgot" className="tt-link">Request another</Link>
         </p>
       </form>
     </div>

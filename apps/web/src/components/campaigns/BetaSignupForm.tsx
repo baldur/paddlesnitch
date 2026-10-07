@@ -90,7 +90,7 @@ export default function BetaSignupForm() {
       <div className="flex flex-col gap-3">
         <p className="text-xs text-muted">
           We’ll be in touch. We only use this to choose and contact beta testers.{' '}
-          <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
+          <Link href="/privacy" className="tt-link">Privacy policy</Link>.
         </p>
         <button type="submit" disabled={status === 'sending'}
           className="w-full px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">

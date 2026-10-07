@@ -82,7 +82,7 @@ export default function GroupDetailPage({
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-sm text-muted">You need to sign in to view this group.</p>
-        <Link href={`/att/auth?next=/att/groups/${groupId}`} className="px-6 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary transition-colors">SIGN IN</Link>
+        <Link href={`/signin?next=/att/groups/${groupId}`} className="px-6 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary transition-colors">SIGN IN</Link>
       </main>
     )
   }

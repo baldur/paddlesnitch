@@ -20,7 +20,7 @@ export function proxy(req: NextRequest) {
   }
 
   // Auth routes always public
-  if (pathname.startsWith('/att/auth') || pathname.startsWith('/att/api/auth')) {
+  if (pathname.startsWith('/signin') || pathname.startsWith('/att/api/auth')) {
     return NextResponse.next()
   }
 
@@ -54,12 +54,12 @@ export function proxy(req: NextRequest) {
     // `next` carries the QUERY STRING as well as the path. It used to be the
     // pathname alone, while the clone kept the original params — so a gated URL
     // like /devices?code=ABC123 redirected to
-    // /att/auth?code=ABC123&next=/devices and the code was silently
+    // /signin?code=ABC123&next=/devices and the code was silently
     // dropped on the way back. That breaks the scan-to-link QR for anyone not
     // already signed in, which is most people setting up a device.
     const target = pathname + req.nextUrl.search
     const url = req.nextUrl.clone()
-    url.pathname = '/att/auth'
+    url.pathname = '/signin'
     url.search = ''
     url.searchParams.set('next', target)
     return NextResponse.redirect(url)

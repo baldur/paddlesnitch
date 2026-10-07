@@ -7,7 +7,7 @@ const replace = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push: replace }),
   useSearchParams: () => new URLSearchParams('next=/paddles'),
-  usePathname: () => '/att/tos/accept',
+  usePathname: () => '/terms/accept',
 }))
 vi.mock('@/components/AppHeader', () => ({ default: () => <header /> }))
 
@@ -55,6 +55,6 @@ describe('accept the Terms page', () => {
 
   it('sends someone who is signed out to sign in first', async () => {
     await mount({ status: 401 })
-    expect(replace.mock.calls[0][0]).toMatch(/^\/att\/auth\?next=/)
+    expect(replace.mock.calls[0][0]).toMatch(/^\/signin\?next=/)
   })
 })

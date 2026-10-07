@@ -33,7 +33,7 @@ const nav = (extra: Record<string, unknown> = {}) => (
     user={USER}
     profileHref="/profile/me"
     accountHref="/account"
-    signInHref="/att/auth"
+    signInHref="/signin"
     onSignOut={() => {}}
     {...extra}
   />

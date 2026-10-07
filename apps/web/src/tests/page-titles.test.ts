@@ -7,7 +7,7 @@ import { metadata as root } from '@/app/layout'
 import { metadata as trials } from '@/app/att/layout'
 import { metadata as paddles } from '@/app/paddles/layout'
 import { metadata as profile } from '@/app/profile/layout'
-import { metadata as privacy } from '@/app/att/privacy/page'
+import { metadata as privacy } from '@/app/privacy/page'
 import { metadata as devices } from '@/app/devices/layout'
 import { metadata as guide } from '@/app/guide/layout'
 

@@ -69,7 +69,7 @@ describe('#53 — group invitations send email to recipient', () => {
     expect(email.subject).toMatch(/invited you to join/)
     // Signup link includes ?next= so the recipient lands on the group
     // after signup; applyPendingInvitations promotes the pending invite.
-    expect(email.text).toMatch(/\/att\/auth\?[^\s]*next=/)
+    expect(email.text).toMatch(/\/signin\?[^\s]*next=/)
     expect(email.text).toMatch(/groups%2F[^\s&]+/)
   })
 

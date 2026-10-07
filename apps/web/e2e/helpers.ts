@@ -20,7 +20,7 @@ export async function signUpFlow(
   const displayName = opts.displayName ?? 'E2E User'
   const password = opts.password ?? 'Password123'
 
-  await page.goto('/att/auth')
+  await page.goto('/signin')
   // The auth page renders three tab <button> elements (SIGN IN /
   // SIGN UP / EMAIL CODE) above whichever form is active. The form's
   // submit button reads "CREATE ACCOUNT", which keeps tab and submit
@@ -44,7 +44,7 @@ export async function signInFlow(
   email: string,
   password = 'Password123',
 ): Promise<void> {
-  await page.goto('/att/auth')
+  await page.goto('/signin')
   // SIGN IN is the default tab; just fill and submit. The submit
   // button reads "SIGN IN" too, but the tab's "SIGN IN" button is
   // also visible — both are valid targets at this point because

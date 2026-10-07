@@ -204,8 +204,8 @@ export default async function Home() {
           <Link href="/att/courses" className="tt-nav-link text-xs tracking-widest">
             BROWSE ALL COURSES →
           </Link>
-          <Link href="/att/faq" className="tt-nav-link text-xs tracking-widest">
-            HELP / FAQ
+          <Link href="/help" className="tt-nav-link text-xs tracking-widest">
+            HELP
           </Link>
         </div>
       </section>

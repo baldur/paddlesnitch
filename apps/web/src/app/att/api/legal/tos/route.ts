@@ -5,7 +5,7 @@ import { CURRENT_TOS_VERSION } from '@/lib/types'
 // GET /att/api/legal/tos
 // Returns the current Terms of Service markdown + version. Public — no
 // auth required. Used by the signup form to render the ToS inline, and
-// by the standalone /att/tos page.
+// by the standalone /terms page.
 export async function GET() {
   const body = await readTosDoc(CURRENT_TOS_VERSION)
   if (!body) {

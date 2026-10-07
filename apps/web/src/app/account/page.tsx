@@ -280,7 +280,7 @@ function AccountPageInner() {
               Sign in to view or manage your account data.
             </p>
             <Link
-              href="/att/auth?next=/account"
+              href="/signin?next=/account"
               className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors self-center"
             >
               SIGN IN
@@ -576,7 +576,7 @@ function AccountPageInner() {
 
             <section className="text-xs text-muted border-t border-border pt-6">
               See the{' '}
-              <Link href="/att/privacy" className="tt-link">privacy policy</Link>{' '}
+              <Link href="/privacy" className="tt-link">privacy policy</Link>{' '}
               for what we hold and why. For anything else, email{' '}
               <a href="mailto:privacy@paddlesnitch.com" className="tt-link">
                 privacy@paddlesnitch.com
