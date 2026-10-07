@@ -15,6 +15,7 @@ import { getQueryKey } from '@trpc/react-query'
 // The Leaflet map + next router/link aren't relevant here — stub them so the
 // panels render in jsdom.
 vi.mock('@/components/map/AnalysisMapClient', () => ({ default: () => null }))
+vi.mock('@/components/AppHeader', () => ({ default: ({ breadcrumb }: { breadcrumb?: React.ReactNode }) => <header>{breadcrumb}</header> }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href?: string }) => <a href={href}>{children}</a> }))
 
@@ -64,74 +65,57 @@ const data: ViewData = {
 
 const btn = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
 
-describe('AnalysisView mobile panels (#187)', () => {
-  it('minimises the summary HUD to hide the insight text and reveal the map', async () => {
-    await mount(<AnalysisView data={data} />)
-    expect(container.textContent).toContain('strong steady rhythm')
-
-    await act(async () => { btn('Minimise summary')!.click() })
-    expect(container.textContent).not.toContain('strong steady rhythm')
-    // The at-a-glance stats stay visible when collapsed.
-    expect(container.textContent).toContain('3.20 km')
-
-    await act(async () => { btn('Expand summary')!.click() })
-    expect(container.textContent).toContain('strong steady rhythm')
-  })
-
-  it('keeps the narrative + SEGMENTS in one bounded flex column so they cannot overlap', async () => {
-    // Regression (not mobile-only): a long LLM narrative used to grow the
-    // top-left HUD until it overlapped the bottom-left SEGMENTS panel. Both now
-    // live as siblings in ONE bounded-height flex column, sharing the space; the
-    // narrative is additionally height-capped + scrollable.
-    await mount(<AnalysisView data={{ ...data, insight: 'x '.repeat(400).trim() }} />)
-    const divs = Array.from(container.querySelectorAll('div'))
-    const narrative = divs.find(el => el.className.includes('overflow-y-auto') && el.textContent?.includes('x x'))
-    expect(narrative).toBeTruthy()
-    expect(narrative!.className).toMatch(/max-h-\[\d+vh\]/)
-    // the SAME flex column contains both the narrative and the SEGMENTS panel
-    const column = divs.find(el =>
-      el.className.includes('flex-col') && el.textContent?.includes('x x') && el.textContent?.includes('EFFORTS AND RESTS'))
-    expect(column).toBeTruthy()
-  })
-
-  it('minimises the segments panel to hide the efforts list', async () => {
-    await mount(<AnalysisView data={data} />)
-    expect(container.textContent).toContain('EFFORTS')
-
-    await act(async () => { btn('Minimise segments')!.click() })
-    expect(container.textContent).not.toMatch(/EFFORTS \(\d+\)/)
-    // The panel header (with the expand control) is still there.
-    expect(container.textContent).toContain('EFFORTS AND RESTS')
-    expect(btn('Expand segments')).not.toBeNull()
-  })
-})
-
-describe('AnalysisView SHARE control (#206)', () => {
+// The paddle page (site review, 2026-10): the map on top with only the colour
+// scale, replay and section picking over it; everything to read below it; the
+// actions in a column. It replaced floating panels that piled on top of each
+// other and the map on a phone (#187, #206 were patches on that).
+describe('AnalysisView layout', () => {
   const textBtn = (label: string) =>
     Array.from(container.querySelectorAll('button')).find(b => b.textContent?.trim() === label)
+  const mapSection = () => container.querySelector('section[aria-label="Map"]')!
+
+  it('puts the summary, the numbers and the efforts below the map, not over it', async () => {
+    await mount(<AnalysisView data={data} sessionId="abc123" />)
+    expect(container.textContent).toContain('strong steady rhythm')
+    expect(container.textContent).toContain('3.20 km')
+    expect(container.querySelector('section[aria-label="Efforts and rests"]')).not.toBeNull()
+    expect(mapSection().textContent).not.toContain('strong steady rhythm')
+    expect(mapSection().textContent).not.toContain('SHARE')
+  })
+
+  it('shows times as a clock, not in words', async () => {
+    await mount(<AnalysisView data={{ ...data, durationS: 3896 }} />)
+    expect(container.textContent).toContain('1:04:56')
+    expect(container.textContent).not.toContain('hour')
+  })
+
+  it('lists the efforts as a table', async () => {
+    await mount(<AnalysisView data={data} />)
+    const rows = container.querySelectorAll('section[aria-label="Efforts and rests"] tbody tr')
+    expect(rows.length).toBe(1)
+    expect(rows[0].textContent).toContain('70')
+  })
+
+  it("shows the replay position's pace and stroke rate, not just the time", async () => {
+    await mount(<AnalysisView data={data} />)
+    expect(container.querySelector('[aria-label="Replay"]')?.textContent).toMatch(/0:00 · \d+:\d+\/500 · 60 spm/)
+  })
 
   it('shows a SHARE button when the paddle is saved (has a sessionId)', async () => {
     await mount(<AnalysisView data={data} sessionId="abc123" />)
     expect(textBtn('SHARE')).toBeTruthy()
   })
 
-  it('keeps the top-right controls on screen on a phone: the button row wraps and the column is viewport-capped', async () => {
-    // On a 426px phone the un-wrapped control row (NEW / PADDLES / SHARE /
-    // DIARY / BOAT / ANALYSE A SECTION) overflowed off the left edge, hiding the
-    // SHARE button. The row must wrap and the column must be width-capped.
-    await mount(<AnalysisView data={data} sessionId="abc123" />)
-    const share = textBtn('SHARE')!
-    const row = share.parentElement!
-    expect(row.className).toContain('flex-wrap')
-    const column = row.parentElement!
-    expect(column.className).toContain('max-w-[calc(100vw-1.5rem)]')
+  it('has a colour legend for the track', async () => {
+    await mount(<AnalysisView data={data} />)
+    expect(container.querySelector('[aria-label="Colour scale"]')).not.toBeNull()
   })
 })
 
 // One paddle (one-paddle.md, phase 3): a tracker paddle's boat motion is a
 // side page of the paddle, reached from the paddle itself.
 describe('AnalysisView BOAT MOTION', () => {
-  const link = () => Array.from(container.querySelectorAll('a')).find(a => a.textContent?.trim() === 'BOAT MOTION')
+  const link = () => Array.from(container.querySelectorAll('a')).find(a => a.textContent?.trim() === 'BOAT MOTION →')
 
   it('offers BOAT MOTION on a saved tracker paddle', async () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />)
@@ -161,11 +145,14 @@ describe('AnalysisView ALSO RECORDED BY', () => {
 // A shared paddle is the owner's: a stranger can't flip its stroke-rate setting.
 describe('AnalysisView on a shared paddle', () => {
   const has = (label: string) => container.textContent?.includes(label)
-  it('offers DOUBLE STROKE RATE to the owner only', async () => {
+  it('offers the stroke-rate doubling to the owner only, under BOAT', async () => {
     await mount(<AnalysisView data={data} sessionId="p1" />)
-    expect(has('DOUBLE STROKE RATE')).toBe(true)
+    const boat = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.startsWith('BOAT'))!
+    await act(async () => { boat.click() })
+    expect(container.querySelector('button[aria-label="Double stroke rate"]')).not.toBeNull()
     await act(async () => { root.unmount() }); container.remove()
     await mount(<AnalysisView data={data} readOnly />)
-    expect(has('DOUBLE STROKE RATE')).toBe(false)
+    expect(container.querySelector('button[aria-label="Double stroke rate"]')).toBeNull()
+    expect(has('BOAT')).toBe(false)
   })
 })

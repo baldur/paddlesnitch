@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyseTrack, fmtDurAdj, fmtDurWords, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
+import { analyseTrack, fmtClock, fmtDurAdj, fmtDurWords, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
 import { paddleTotals } from '@paddlesnitch/core/paddles'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
@@ -194,5 +194,14 @@ describe('plain summary wording', () => {
     expect(r.insight).toMatch(/^A \S+ paddle at about \d+:\d+\/500, 58 spm, with 1 hard effort and 1 rest\./)
     expect(r.insight).not.toMatch(/dig|breather|rock-steady|drifted|wandered|—/)
     for (const s of r.surges) expect(s.trend ?? 'steady').not.toMatch(/fatigue|negative split|built/)
+  })
+})
+
+describe('fmtClock', () => {
+  it('shows a duration as a clock: hours only when there are some', () => {
+    expect(fmtClock(3896)).toBe('1:04:56')
+    expect(fmtClock(725)).toBe('12:05')
+    expect(fmtClock(59.6)).toBe('1:00')
+    expect(fmtClock(0)).toBe('0:00')
   })
 })

@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
 import type { StravaActivitySummary } from '@paddlesnitch/core/types'
@@ -28,6 +29,7 @@ export default function AddPaddlePage() {
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
   const [error, setError] = useState('')
+  const router = useRouter()
   const [res, setRes] = useState<Result | null>(null)
   const [dupId, setDupId] = useState<string | null>(null)
   const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
@@ -88,6 +90,9 @@ export default function AddPaddlePage() {
       // Already in the library (#178) — point the paddler at the existing one
       // instead of silently creating a second copy.
       if (data.duplicate) setDupId(data.id as string)
+      // Go to the paddle's own page: rendering it here at /paddles/new meant
+      // a refresh lost it and the URL couldn't be shared or bookmarked.
+      else if (data.id) router.replace(`/paddles/${data.id}`)
       else setRes(data)
     } catch (err) { setError(err instanceof Error ? err.message : 'Couldn’t analyse that paddle. Please try again.') }
     finally { setStatus('idle') }
