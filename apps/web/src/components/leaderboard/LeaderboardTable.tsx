@@ -48,6 +48,7 @@ export default function LeaderboardTable({
   entries,
   uploadHref,
   profileLinks,
+  marks,
 }: {
   entries: LeaderboardEntry[]
   // If set, the empty state shows an upload CTA. Only pass for open trials.
@@ -56,6 +57,8 @@ export default function LeaderboardTable({
   // paddlers whose profile is public. A name links to its profile when present,
   // otherwise renders as plain text (no dead links to private profiles).
   profileLinks?: Record<string, string>
+  // entryId -> 'COURSE RECORD' | 'PB' (lib/course-records.ts resultMarks).
+  marks?: Record<string, string>
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [classFilter, setClassFilter] = useState<BoatClass | 'all'>('all')
@@ -150,6 +153,11 @@ export default function LeaderboardTable({
                         </Link>
                       ) : (
                         entry.displayName
+                      )}
+                      {marks?.[entry.entryId] && (
+                        <span className={`ml-2 text-[10px] tracking-widest px-1.5 py-0.5 border ${marks[entry.entryId] === 'COURSE RECORD' ? 'border-split text-split' : 'border-green text-green'}`}>
+                          {marks[entry.entryId]}
+                        </span>
                       )}
                     </td>
                     <td className="py-3 pr-4 text-muted tabular text-xs">{entry.boatClass}</td>

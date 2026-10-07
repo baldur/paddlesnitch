@@ -7,7 +7,9 @@ import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
 import { canViewCourse, canManageCourse, isListedForViewer } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
-import type { CourseMetadata, TrialMetadata } from '@/lib/types'
+import type { CourseMetadata, TrialMetadata, LeaderboardEntry } from '@/lib/types'
+import { courseRecords } from '@/lib/course-records'
+import { formatTime } from '@/lib/geo'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +43,12 @@ export default async function CourseDetailPage({
   const sortedTrials = [...trials].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
+
+  // Course records: the fastest result per boat class, from the trials above
+  // (so only results the viewer may already see on those leaderboards).
+  const records = courseRecords(await Promise.all(sortedTrials.map(async t => ({
+    trialId: t.id, entries: (await getJson<LeaderboardEntry[]>(`trials/${t.id}/leaderboard.json`)) ?? [],
+  }))))
 
   // Manage (edit course / open trials on it) belongs to the owning group's
   // admins (phase 2), not just the original creator.
@@ -79,10 +87,28 @@ export default async function CourseDetailPage({
           <CourseMapClient course={course} />
         </section>
 
+        {records.length > 0 && (
+          <section aria-label="Course records">
+            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Course records</h2>
+            <table className="w-full text-sm tabular">
+              <tbody>
+                {records.map(r => (
+                  <tr key={r.boatClass} className="border-t border-border">
+                    <td className="py-2 pr-3 text-muted w-12">{r.boatClass}</td>
+                    <td className="py-2 pr-3"><Link href={`/att/entries/${r.entryId}`} className="text-primary font-bold">{formatTime(r.seconds)}</Link></td>
+                    <td className="py-2 pr-3 text-fg truncate">{r.displayName}</td>
+                    <td className="py-2 text-muted text-right whitespace-nowrap">{fmtDay(r.raceDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs text-muted tracking-[0.2em] uppercase">
-              Time Trials
+              Time trials
             </h2>
             {canManage && (
               <Link

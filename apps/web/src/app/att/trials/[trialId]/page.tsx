@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
 import { notFound } from 'next/navigation'
-import { getJson } from '@/lib/storage'
+import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { canViewTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
 import { getPublicProfileLinks } from '@/lib/profile'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
+import { resultMarks } from '@/lib/course-records'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import AppHeader from '@/components/AppHeader'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult } from '@/lib/types'
@@ -38,6 +39,15 @@ export default async function TrialPage({
     ? await getJson<StoredEntry>(`trials/${trialId}/entries/${winner.userId}/${winner.entryId}/result.json`)
     : null
   const winnerTrack = winnerEntry?.result.trackSegment
+
+  // COURSE RECORD and PB marks, from every result on this course the viewer
+  // may see (the same rule as this leaderboard: canViewTrial).
+  const sameCourse = (await Promise.all(
+    (await listKeys('trials/')).filter(k => /^trials\/[^/]+\/metadata\.json$/.test(k)).map(k => getJson<TrialMetadata>(k)),
+  )).filter((t): t is TrialMetadata => !!t && t.courseId === trial.courseId && canViewTrial(t, viewer, viewerGroupIds))
+  const marks = resultMarks(await Promise.all(sameCourse.map(async t => ({
+    trialId: t.id, entries: t.id === trialId ? (leaderboard ?? []) : ((await getJson<LeaderboardEntry[]>(`trials/${t.id}/leaderboard.json`)) ?? []),
+  }))))
 
   // Link each athlete's name to their profile — but only for paddlers whose
   // profile is public (opt-in), so private profiles never become dead links.
@@ -128,6 +138,7 @@ export default async function TrialPage({
             entries={leaderboard ?? []}
             uploadHref={trial.status === 'open' ? `/att/trials/${trialId}/upload` : undefined}
             profileLinks={profileLinks}
+            marks={marks}
           />
         </section>
       </div>
