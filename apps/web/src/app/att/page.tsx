@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer, canManageTrial } from '@/lib/permissions'
@@ -136,8 +137,8 @@ export default async function Home() {
                           {trial.name}
                         </div>
                         <div className="text-xs text-muted mt-0.5">
-                          {course?.name ?? 'Unknown course'} · {trial.date}
-                          {course && ` · ${course.sport}`}
+                          {course?.name ?? 'Unknown course'} · {fmtDay(trial.date)}
+                          {course && ` · ${sportLabel(course.sport).toLowerCase()}`}
                         </div>
                       </div>
                       <span className="text-xs border border-green text-green px-2 py-0.5">
@@ -187,7 +188,7 @@ export default async function Home() {
                         <Link href={`/att/trials/${r.trialId}`} className="hover:text-primary transition-colors">
                           {r.courseName}
                         </Link>{' '}
-                        · {r.raceDate} · {r.boatClass}
+                        · {fmtDay(r.raceDate)} · {r.boatClass}
                       </div>
                     </div>
                     <span className="text-sm tabular font-bold text-primary shrink-0">

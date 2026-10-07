@@ -107,10 +107,6 @@ export default function DevicesPage() {
                     {d.name}
                     {!d.linked && <span className="ml-2 text-[10px] tracking-widest uppercase text-muted">removed</span>}
                   </span>
-                  <span className="block text-xs text-muted tabular">
-                    {d.deviceId}
-                    {d.model ? ` · ${d.model}` : ''}
-                  </span>
                   {d.linked && (
                     <span className="block text-xs tabular mt-1">
                       {/* Running version, and whether it is the released one.
@@ -137,6 +133,10 @@ export default function DevicesPage() {
                       ? 'no recordings yet'
                       : `${d.sessions} recording${d.sessions === 1 ? '' : 's'}${d.totalDistanceM > 0 ? ` · ${fmtDist(d.totalDistanceM)}` : ''}${d.motionSessions > 0 ? ` · ${d.motionSessions} with boat motion` : ''}`}
                     {d.latestAt ? ` · latest ${fmtDate(d.latestAt)}` : ''}
+                  </span>
+                  {/* The id is for support, not for recognising your tracker: last, small. */}
+                  <span className="block text-[10px] text-muted tabular mt-1 opacity-70">
+                    {d.deviceId}{d.model ? ` · ${d.model}` : ''}
                   </span>
                 </span>
                 <span className="text-muted shrink-0" aria-hidden="true">→</span>

@@ -18,7 +18,8 @@
     "./firmware": "./src/firmware.ts",
     "./rate-limit": "./src/rate-limit.ts",
     "./paddles": "./src/paddles.ts",
-    "./paddle-store": "./src/paddle-store.ts"
+    "./paddle-store": "./src/paddle-store.ts",
+    "./format": "./src/format.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1146.0",

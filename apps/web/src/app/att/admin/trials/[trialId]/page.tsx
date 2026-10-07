@@ -1,4 +1,5 @@
 'use client'
+import { fmtDay, participationLabel } from '@paddlesnitch/core/format'
 import Link from 'next/link'
 import { useEffect, useState, use } from 'react'
 import AppHeader from '@/components/AppHeader'
@@ -169,7 +170,7 @@ export default function TrialAdminPage({
               {trial.name.toUpperCase()}
             </h1>
             <p className="text-xs text-muted">
-              {course.name} · {trial.date}
+              {course.name} · {fmtDay(trial.date)}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -212,7 +213,7 @@ export default function TrialAdminPage({
             >
               {trial.visibility === 'public' ? 'MAKE PRIVATE' : 'MAKE PUBLIC'}
             </button>
-            <span className="text-xs text-muted tracking-widest self-center">SUBMIT:</span>
+            <span className="text-xs text-muted tracking-widest self-center">WHO CAN ENTER:</span>
             {(['members', 'invitational', 'public'] as const).map(v => (
               <button
                 key={v}
@@ -224,7 +225,7 @@ export default function TrialAdminPage({
                     : 'border-border text-muted hover:border-primary hover:text-primary'
                 }`}
               >
-                {v.toUpperCase()}
+                {participationLabel(v)}
               </button>
             ))}
           </div>
