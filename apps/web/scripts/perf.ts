@@ -107,6 +107,23 @@ async function main() {
         for (let i = 0; i < RUNS; i++) samples.push((await time(BASE + p.path, auth)).sample)
         results.push(summarise(p.name, p.path, samples, p.budgetMs))
       }
+      // Download my data, the way the account page does it: ask for a link, then
+      // fetch the file from it (from S3 in production). Failed for accounts with
+      // many paddles until the file stopped coming straight back (#392).
+      {
+        const t0 = performance.now()
+        const link = await fetch(`${BASE}/api/account/export`, { method: 'POST', headers: auth }).catch(() => null)
+        const url = link?.ok ? ((await link.json()) as { url?: string }).url : undefined
+        const file = url ? await fetch(new URL(url, BASE), { headers: url.startsWith('/') ? auth : {} }).catch(() => null) : null
+        const data = file?.ok ? await file.json().catch(() => null) as { user?: { email?: string } } | null : null
+        checks.push({
+          name: 'Download my data: the link gives the file',
+          ok: data?.user?.email === email,
+          detail: data ? `${Math.round(performance.now() - t0)} ms, ${file!.headers.get('content-disposition')?.includes('attachment') ? 'as a download' : 'NOT as a download'}`
+            : `link ${link?.status ?? 'failed'}${url ? `, file ${file?.status ?? 'failed'}` : ''}`,
+        })
+      }
+
       // A repeat view the browser already has should cost no body at all.
       const motion = signedIn.find(p => p.name === 'Boat motion (data)')
       if (motion) {
