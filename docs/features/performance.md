@@ -352,7 +352,7 @@ and keep it only if the dashboard shows a gain.
 | phase | what | expected gain | cost/month | risk |
 |---|---|---|---|---|
 | 1 | B (boat motion once) + the `derived()` interface with S3 + L1. **Shipped 2026-10-08 (#384): boat motion 912 → 99 ms, repeat view 304** | BOAT MOTION ~instant; the pattern in place | ~$0 | low |
-| 2 | A (data in the first HTML) for Paddles, a paddle, Devices; header user from the server | 0.3–0.8 s on phones | $0 | low–medium |
+| 2 | A (data in the first HTML) for Paddles, a paddle, Devices; header user from the server. **Pages shipped 2026-10-08; the header still asks for the user itself** | 0.3–0.8 s on phones | $0 | low–medium |
 | 3 | C (warmer + ARM); review cold starts after 1–2 weeks. **Shipped 2026-10-08; review ~2026-10-22** | most cold starts gone; −20% compute cost | ~$0.10 | low |
 | 4 | F (paddle opens before its AI summary) | add a paddle 5–15 s → ~1 s | $0 | low |
 | 5 | D (indexes as S3 objects, conditional writes) | flat with growth | ~$0 | medium |

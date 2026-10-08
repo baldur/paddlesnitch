@@ -17,6 +17,23 @@ export function fmtDay(value: string): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** An ISO timestamp → 'Sun, 13 Sep 2026'. Unparseable → as given. */
+export function fmtWeekday(value: string): string {
+  const t = Date.parse(value)
+  if (!Number.isFinite(t)) return value
+  return `${WEEKDAYS[new Date(t).getUTCDay()]}, ${fmtDay(value)}`
+}
+
+/** An ISO timestamp → 'Sep 2026'. Unparseable → as given. */
+export function fmtMonth(value: string): string {
+  const t = Date.parse(value)
+  if (!Number.isFinite(t)) return value
+  const d = new Date(t)
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
 /** A course's sport for a label: 'both' is meaningless on its own. */
 export function sportLabel(sport: string): string {
   switch (sport) {
