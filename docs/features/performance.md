@@ -355,7 +355,7 @@ and keep it only if the dashboard shows a gain.
 | 2 | A (data in the first HTML) for Paddles, a paddle, Devices; header user from the server. **Pages shipped 2026-10-08; the header still asks for the user itself** | 0.3–0.8 s on phones | $0 | low–medium |
 | 3 | C (warmer + ARM); review cold starts after 1–2 weeks. **Shipped 2026-10-08; review ~2026-10-22** | most cold starts gone; −20% compute cost | ~$0.10 | low |
 | 4 | F (paddle opens before its AI summary). **Shipped 2026-10-08** (client-driven: `after()` turned out to hold the response on our Lambda; see below) | add a paddle 5–15 s → ~1 s | $0 | low |
-| 5 | D (indexes as S3 objects, conditional writes) | flat with growth | ~$0 | medium |
+| 5 | D (indexes as S3 objects, conditional writes) | flat with growth | ~$0 | medium. **Partly shipped 2026-10-08:** a user's trackers and recordings from a per-user index (#396); trials and courses listed by folder, not by every entry (#400). Left: `getEntry(entryId)` scans `trials/` (needs an entry-id index) |
 | 6 | E (public pages from the edge) | ~20 ms public pages | ~$0 | medium (privacy care) |
 | 7 | G, H as measured | small | ~$0 | low |
 
@@ -375,7 +375,14 @@ wait:
   not within Strava's ~2 s. Strava retries; duplicate detection absorbs it.
 - **Tracker uploads:** the last part's response waits for the paddle to be made.
 
-Fix options:
+**Update (2026-10-08, later):** no AI call runs while anyone waits any more
+(#397). Every paddle (file, Strava, tracker) is saved with the plain summary and
+the paddle page writes the AI one on first open. So the webhook and a tracker's
+last part now wait for weather and analysis only (a few seconds), not 5–15 s
+of AI. Trade-off: a paddle never opened keeps the plain summary and isn't in the
+athlete profile.
+
+Fix options for the rest:
 1. Async self-invoke (`InvocationType: Event`) of the server Lambda with a job
    event the handler recognises before Next, like the warmer. Cheapest; no new
    service.
@@ -417,3 +424,15 @@ Recommendation: 1.
    expensive and stable, with a test tying the version to its code.
 4. **A test account for the performance check**, so it times the signed-in
    pages and the data behind them too.
+
+## Found by the night of 2026-10-08 (limits that only big accounts hit)
+
+Each was proved with a test or a live request before it was fixed:
+
+| what | proof | fix |
+|---|---|---|
+| Download my data failed past ~40 paddles | a Lambda answer is capped at 6 MB; 60 real-size paddles export > 6 MB (`export-large-account.test.ts`) | the file goes to S3, the page downloads from a 5-minute link (#392); checked on the live site by the perf check (#403) |
+| Deleting a well-used account could stop halfway | 834 storage calls one at a time: 7.5 s at 10 ms each, 17–33 s at S3's real latency (`erasure-big-account.test.ts`) | parallel gathering + S3 DeleteObjects in batches of 1,000 (#393) |
+| Trace files over ~4.6 MB could not be uploaded, with "please try again" | live: 4.5 MB reached the app, 4.8 MB got AWS's own 413 | gzip in the browser (GPX ~10× smaller), `.gz` in `parseTrace`, a "too big" message for what can't fit (#394) |
+| Repeat boat-motion views were sent in full | CI saw 200 not 304: CloudFront hands back a weakened `W/"…"` ETag | weak comparison (#389) |
+
