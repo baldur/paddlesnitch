@@ -97,6 +97,18 @@ export class AttStack extends cdk.Stack {
       resources: ['*'],   // PutMetricData has no resource-level permissions…
       conditions: { StringEquals: { 'cloudwatch:namespace': 'Paddlesnitch/Perf' } },   // …so the namespace is the limit
     }))
+    // The test account's password (scripts/perf-account.ts), so the check can
+    // time the signed-in pages. This one parameter only; SecureStrings are
+    // encrypted with the AWS-managed SSM key, readable only through SSM.
+    perfRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/att/perf-check-password`],
+    }))
+    perfRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['kms:Decrypt'],
+      resources: ['*'],
+      conditions: { StringEquals: { 'kms:ViaService': `ssm.${this.region}.amazonaws.com` } },
+    }))
     new cdk.CfnOutput(this, 'PerfRoleArn', {
       value: perfRole.roleArn,
       description: 'Role for the performance check workflow (repository variable AWS_PERF_ROLE_ARN)',
@@ -1129,6 +1141,8 @@ export class AttStack extends cdk.Stack {
     })
     // Kept in step with PAGES in apps/web/scripts/perf.ts (perf-dashboard.test.ts).
     const perfPages = ['Home', 'Trials', 'Courses', 'Help', 'Guide', 'Sign in', 'Privacy', 'A trial', 'A course']
+    // Signed in as the performance check's test account (scripts/perf-account.ts).
+    const perfSignedIn = ['Paddles', 'Paddles (data)', 'Devices (data)', 'A paddle', 'A paddle (data)', 'Boat motion (data)']
     const ttfb = (page: string) => new cloudwatch.Metric({
       namespace: 'Paddlesnitch/Perf', metricName: 'TTFB', dimensionsMap: { Page: page },
       statistic: 'Average', period: cdk.Duration.hours(1), label: page,
@@ -1143,9 +1157,17 @@ export class AttStack extends cdk.Stack {
       }),
     )
     perfDashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Signed-in pages and their data, from the performance check (ms)',
+        left: perfSignedIn.map(ttfb),
+        width: 24, height: 8,
+        leftYAxis: { min: 0 },
+      }),
+    )
+    perfDashboard.addWidgets(
       new cloudwatch.SingleValueWidget({
         title: 'Latest check, per page (ms)',
-        metrics: perfPages.map(ttfb),
+        metrics: [...perfPages, ...perfSignedIn].map(ttfb),
         width: 24, height: 4,
       }),
     )

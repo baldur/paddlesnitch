@@ -50,13 +50,37 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # AWS for two things, both optional: the test account's password (to time
+      # the signed-in pages) and sending the timings to CloudWatch. Without it
+      # the check still times the public pages and reports.
+      - name: AWS credentials (metrics + test account password only)
+        id: aws
+        if: vars.AWS_PERF_ROLE_ARN != ''
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_PERF_ROLE_ARN }}
+          aws-region: eu-west-1
+
       # A cold Lambda after a deploy is a different question from "is this
       # page slow"; the first run per page is reported separately anyway.
       - name: Time the pages
         working-directory: apps/web
         env:
           PERF_BASE_URL: ${{ inputs.base_url || 'https://paddlesnitch.com' }}
-        run: pnpm perf
+          HAVE_AWS: ${{ steps.aws.outcome == 'success' }}
+        # The test account's password is read here, inside the step that uses
+        # it, so it's never a step output kept with the run. No password (no
+        # AWS, or no access): public pages only.
+        run: |
+          if [ "$HAVE_AWS" = "true" ]; then
+            pw=$(aws ssm get-parameter --name /att/perf-check-password --with-decryption --query Parameter.Value --output text 2>/dev/null || true)
+            if [ -n "$pw" ]; then
+              echo "::add-mask::$pw"
+              export PERF_EMAIL=perf-check@paddlesnitch.com PERF_PASSWORD="$pw"
+            fi
+          fi
+          pnpm perf
 
       - name: Keep the results
         if: always()
@@ -65,16 +89,6 @@ jobs:
           name: perf-results
           path: apps/web/perf-results.json
           if-no-files-found: warn
-
-      # Sending to CloudWatch is a bonus: the report above stands without it.
-      - name: AWS credentials (metrics only)
-        id: aws
-        if: vars.AWS_PERF_ROLE_ARN != ''
-        continue-on-error: true
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ vars.AWS_PERF_ROLE_ARN }}
-          aws-region: eu-west-1
 
       - name: Send the timings to CloudWatch
         if: steps.aws.outcome == 'success'
