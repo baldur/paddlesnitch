@@ -386,7 +386,7 @@ export default function TrialAdminPage({
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
                     <td className="py-2.5 text-right text-muted text-xs">
-                      {new Date(entry.submittedAt).toLocaleDateString()}
+                      {fmtDay(entry.submittedAt)}
                     </td>
                   </tr>
                 ))}

@@ -7,13 +7,14 @@ import type { Racer } from '@paddlesnitch/analysis/similar'
 import { trpc } from '@/lib/trpc'
 import SectionRaceMapClient from '@/components/map/SectionRaceMapClient'
 import AppHeader from '@/components/AppHeader'
+import { fmtDay } from '@paddlesnitch/core/format'
 
 // Palette: source is blue; the picked racers cycle through the rest.
 const SOURCE_COLOR = '#38bdf8'
 const RACER_COLORS = ['#22c55e', '#a78bfa', '#eab308', '#f472b6', '#fb923c', '#2dd4bf']
 const colorFor = (racers: Racer[], i: number) => (racers[i].isSource ? SOURCE_COLOR : RACER_COLORS[racers.slice(0, i).filter(r => !r.isSource).length % RACER_COLORS.length])
 
-function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
+const fmtDate = fmtDay
 const signed = (s: number) => (Math.abs(s) < 0.5 ? '—' : `${s < 0 ? '−' : '+'}${Math.abs(s) < 60 ? `${Math.abs(s).toFixed(0)}s` : fmtDur(Math.abs(s))}`)
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const compass = (d?: number | null) => (d == null ? '' : ` ${COMPASS[Math.round(d / 45) % 8]}`)

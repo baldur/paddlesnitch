@@ -9,7 +9,7 @@ import AppHeader from '@/components/AppHeader'
 import { listSessionSummaries } from '@paddlesnitch/analysis/analysis-store'
 import { split500 } from '@paddlesnitch/analysis/analysis'
 import { paddlingSummary, groupSameOuting } from '@paddlesnitch/core/paddles'
-import { fmtDay } from '@paddlesnitch/core/format'
+import { fmtDay, fmtMonth } from '@paddlesnitch/core/format'
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -27,7 +27,7 @@ function fmtKm(metres: number): string {
 function fmtMonthYear(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(`${iso}T00:00:00Z`)
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+  return isNaN(d.getTime()) ? '—' : fmtMonth(d.toISOString())
 }
 
 export default async function ProfilePage({
