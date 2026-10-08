@@ -13,7 +13,7 @@
 //   - `deviceId` is NOT a secret (it's on every LoRa packet) — it authenticates
 //     nothing on its own.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
-import { getJson, putJson, getObject, putObject, listKeys, deleteObject } from './storage'
+import { getJson, putJson, getObject, putObject, listKeys, deleteObject, deleteObjects } from './storage'
 
 export type DeviceClaim = {
   claimCode: string
@@ -719,29 +719,30 @@ export async function exportUserDevices(userId: string): Promise<{ trackers: Exp
 // hands still holds the previous owner's recordings, and those are not ours to
 // delete.
 export async function eraseUserDevices(userId: string): Promise<void> {
+  // Gathered in parallel and deleted in batches: one call at a time, a
+  // well-used account ran past the server's time limit (erasure-big-account.test.ts).
+  const keys: string[] = []
   // 1. Recordings they uploaded (track, motion sidecar, staged motion parts)
   //    and the idempotency-index entry that points at each one.
-  for (const s of await listUserDeviceSessions(userId)) {
-    for (const k of await listKeys(`devices/${s.deviceId}/sessions/${s.sessionId}/`)) await deleteObject(k)
+  await Promise.all((await listUserDeviceSessions(userId)).map(async s => {
+    keys.push(...await listKeys(`devices/${s.deviceId}/sessions/${s.sessionId}/`))
     const idx = await getJson<{ sessionId: string }>(uploadIndexKey(s.deviceId, s.filename))
-    if (idx?.sessionId === s.sessionId) await deleteObject(uploadIndexKey(s.deviceId, s.filename))
-  }
+    if (idx?.sessionId === s.sessionId) keys.push(uploadIndexKey(s.deviceId, s.filename))
+  }))
   // 2. Trackers they own: the token (so the tracker is signed out), the record,
   //    any half-uploaded parts (only the current owner's tracker uploads), and
-  //    the claim that bound it to them.
-  for (const d of await listUserDevices(userId)) {
-    if (d.tokenHash) await deleteObject(tokenKey(d.tokenHash))
-    await deleteObject(deviceKey(d.deviceId))
-    for (const k of await listKeys(`devices/${d.deviceId}/parts/`)) await deleteObject(k)
-    // Its health reports and crash history.
-    for (const k of await listKeys(`devices/${d.deviceId}/health/`)) await deleteObject(k)
-    for (const k of await listKeys(crashPrefix(d.deviceId))) await deleteObject(k)
-  }
+  //    the claim that bound it to them; its health reports and crash history.
+  await Promise.all((await listUserDevices(userId)).map(async d => {
+    if (d.tokenHash) keys.push(tokenKey(d.tokenHash))
+    keys.push(deviceKey(d.deviceId))
+    for (const prefix of [`devices/${d.deviceId}/parts/`, `devices/${d.deviceId}/health/`, crashPrefix(d.deviceId)]) {
+      keys.push(...await listKeys(prefix))
+    }
+  }))
   // 3. Claims they linked, including any still outstanding, and their code index.
-  for (const k of await listKeys('device-claims/')) {
+  await Promise.all((await listKeys('device-claims/')).map(async k => {
     const c = await getJson<DeviceClaim>(k)
-    if (c?.userId !== userId) continue
-    await deleteObject(claimCodeKey(c.claimCode))
-    await deleteObject(k)
-  }
+    if (c?.userId === userId) keys.push(claimCodeKey(c.claimCode), k)
+  }))
+  await deleteObjects(keys)
 }
