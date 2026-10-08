@@ -56,6 +56,13 @@ describe("a recording's report", () => {
     expect(await again.text()).toBe('')
   })
 
+  it('still answers 304 when a hop on the way weakened the ETag (W/)', async () => {
+    auth.user = { id: 'u1', email: 'a@x', displayName: 'A' }
+    const id = await recording()
+    const etag = (await get(id)).headers.get('etag')!
+    expect((await get(id, `W/${etag}`)).status).toBe(304)
+  })
+
   it('is a new report, with a new ETag, when the motion data lands', async () => {
     auth.user = { id: 'u1', email: 'a@x', displayName: 'A' }
     const id = await recording()
