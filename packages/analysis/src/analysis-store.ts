@@ -41,6 +41,10 @@ export type AnalysisSession = {
   // (#202). Anyone with the token can view a read-only copy at
   // /analyse/shared/{shareId}; the owner can revoke it. Absent = private.
   shareId?: string
+  // The AI summary hasn't been written yet: the paddle was saved with the plain
+  // one so it could open at once (performance.md, phase 4). writePendingSummary
+  // (pipeline.ts) writes it and clears this.
+  insightPending?: true
 }
 
 // Compact shape for the library list + the history digest fed back to the LLM.

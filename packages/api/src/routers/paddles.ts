@@ -12,6 +12,7 @@ import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
 import { paddleHighlights } from '@paddlesnitch/analysis/history-stats'
+import { writePendingSummary } from '@paddlesnitch/analysis/pipeline'
 import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling,
@@ -78,6 +79,15 @@ export const paddlesRouter = router({
   // Full saved paddle (result + note + insight). Owner only.
   get: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
     const session = await getSession(ctx.user.id, input.id)
+    if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
+    return session
+  }),
+
+  // Write the AI summary of a paddle that was saved without one so it could
+  // open at once (performance.md, phase 4). The paddle page calls this while
+  // it shows "writing your summary…". Already written → the paddle as it is.
+  writeSummary: protectedProcedure.input(byId).mutation(async ({ ctx, input }) => {
+    const session = await writePendingSummary(ctx.user.id, input.id)
     if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
     return session
   }),

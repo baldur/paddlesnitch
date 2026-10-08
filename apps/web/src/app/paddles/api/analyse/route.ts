@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@paddlesnitch/core/auth'
 import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
 import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
@@ -86,10 +86,11 @@ async function analysePaddle(req: NextRequest, userId: string): Promise<NextResp
   }
   if (track.length < 2) return NextResponse.json({ error: 'That file has too few GPS points to analyse.' }, { status: 422 })
 
-  // Shared pipeline: conditions → analysis → duplicate detection → memory-aware
-  // LLM narrative → save. The profile-refresh follow-up runs via `after()` so it
-  // stays off the response's critical path.
-  const { session, duplicate } = await analyseAndSave(userId, track, source, { schedule: after })
+  // Shared pipeline: conditions → analysis → duplicate detection → save, with the
+  // plain summary. The AI summary (and the profile update after it) is written
+  // when the paddle page asks (paddles.writeSummary): after() can't keep it off
+  // this response, because on our Lambda the response waits for after() work.
+  const { session, duplicate } = await analyseAndSave(userId, track, source, { deferSummary: true })
   return NextResponse.json({
     ...session.result, id: session.id, note: session.note,
     source: session.source, paddledAt: session.paddledAt,
