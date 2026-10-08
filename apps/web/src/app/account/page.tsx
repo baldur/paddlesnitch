@@ -219,19 +219,13 @@ function AccountPageInner() {
     setError('')
     setWorking('export')
     try {
-      const res = await fetch('/api/account/export')
-      if (!res.ok) throw new Error('Couldn’t prepare your download. Please try again.')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      // Server already sets Content-Disposition; the anchor download attribute
-      // is the cross-browser fallback. Filename comes from the server header.
-      a.download = ''
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      // The file is prepared on the server and fetched from a short-lived link:
+      // sent straight back, a well-used account's file was over what the server
+      // can return in one answer, and the download failed.
+      const res = await fetch('/api/account/export', { method: 'POST' })
+      const url = res.ok ? ((await res.json()) as { url?: string }).url : undefined
+      if (!url) throw new Error('Couldn’t prepare your download. Please try again.')
+      window.location.assign(url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t prepare your download. Please try again.')
     } finally {

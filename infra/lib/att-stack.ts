@@ -156,6 +156,12 @@ export class AttStack extends cdk.Stack {
         // Counters are rewritten on every request; don't keep their history.
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // Prepared "Download my data" files: fetched within minutes of being made.
+        id: 'expire-account-exports',
+        prefix: 'exports/',
+        expiration: cdk.Duration.days(1),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Derived values (packages/core/src/derived.ts): keyed by the versions
         // of their inputs, so an old copy is never read again. Recomputed on
         // the next read once expired; no history worth keeping.
