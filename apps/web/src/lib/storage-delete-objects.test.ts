@@ -15,14 +15,13 @@ vi.mock('@aws-sdk/client-s3', () => ({
 
 import { deleteObjects } from '@paddlesnitch/core/storage'
 
-const env = { ...process.env }
 beforeEach(() => {
   sent.batches = []; sent.errors = null
-  delete process.env.USE_LOCAL_STORAGE
-  process.env.NODE_ENV = 'production'
-  process.env.DATA_BUCKET = 'bucket'
+  vi.stubEnv('USE_LOCAL_STORAGE', '')
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('DATA_BUCKET', 'bucket')
 })
-afterEach(() => { process.env = { ...env } })
+afterEach(() => { vi.unstubAllEnvs() })
 
 describe('deleteObjects against S3', () => {
   it('deletes 2,500 keys in three calls, each key once', async () => {

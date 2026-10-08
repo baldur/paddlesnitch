@@ -5,6 +5,7 @@ import { parseCsv } from './csv'
 import { parseTcx } from './tcx'
 import { looksLikeSpeedCoach, parseSpeedCoachCsv } from './speedcoach'
 import { readZip } from './unzip'
+import { gunzipSync } from 'zlib'
 
 export type ParseResult =
   | { ok: true; track: TrackPoint[] }
@@ -58,6 +59,17 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
       const inner = entries.find((e) => TRACE_EXTS.includes(e.filename.split('.').pop()?.toLowerCase() ?? ''))
       if (!inner) return { ok: false, reason: 'unknown_format' }
       return parseTrace(inner.filename, inner.data)
+    }
+
+    // A trace the browser gzipped before uploading (lib/trace-upload.ts): the
+    // server only takes ~4.6 MB per request, and GPX/TCX/CSV text shrinks ~10x.
+    // Capped like a zip entry, so a small file can't inflate to fill memory.
+    if (ext === 'gz') {
+      const inner = filename.slice(0, -3)
+      const innerExt = inner.split('.').pop()?.toLowerCase() ?? ''
+      if (!TRACE_EXTS.includes(innerExt) && innerExt !== 'zip') return { ok: false, reason: 'unknown_format' }
+      const out = gunzipSync(Buffer.from(data), { maxOutputLength: 50 * 1024 * 1024 })
+      return parseTrace(inner, out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer)
     }
 
     return { ok: false, reason: 'unknown_format' }

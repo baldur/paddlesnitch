@@ -9,6 +9,7 @@ import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import ViewOnStrava from '@/components/strava/ViewOnStrava'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
+import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
 
 // What the upload route returns alongside a "did not cross the lines" failure:
 // the parsed track + the course geometry, enough to draw a diagnostic map. For
@@ -258,7 +259,7 @@ export default function UploadPage({
       router.push(`/att/trials/${trialId}`)
       return
     }
-    setError(typeof data.error === 'string' ? data.error : fallback)
+    setError(uploadErrorMessage(res.status, data, fallback))
     const diag = data.diagnostic
     setDiagnostic(
       diag && Array.isArray(diag.track) && diag.course
@@ -279,8 +280,12 @@ export default function UploadPage({
     setError('')
     setDiagnostic(null)
 
+    let upload: File
+    try { upload = await prepareTraceUpload(file) }
+    catch (err) { setError(err instanceof Error ? err.message : TOO_BIG_MESSAGE); setStatus('error'); return }
+
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', upload)
     formData.append('boatClass', boatClass)
     formData.append('crew', JSON.stringify(crew))
 

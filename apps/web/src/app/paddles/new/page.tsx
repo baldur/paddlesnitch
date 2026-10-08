@@ -7,6 +7,7 @@ import type { StravaActivitySummary } from '@paddlesnitch/core/types'
 import type { TrialEntrySummary } from '@paddlesnitch/analysis/trials'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
+import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
 
 const PANEL = 'bg-surface/95 border border-border'
 type Result = ViewData & { id: string }
@@ -85,7 +86,7 @@ export default function AddPaddlePage() {
     setStatus('busy'); setError(''); setDupId(null)
     try {
       const r = await fetch('/paddles/api/analyse', { method: 'POST', body })
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Couldn’t analyse that paddle. Please try again.')
+      if (!r.ok) throw new Error(uploadErrorMessage(r.status, await r.json().catch(() => ({})), 'Couldn’t analyse that paddle. Please try again.'))
       const data = await r.json()
       // Already in the library (#178) — point the paddler at the existing one
       // instead of silently creating a second copy.
@@ -97,7 +98,12 @@ export default function AddPaddlePage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Couldn’t analyse that paddle. Please try again.') }
     finally { setStatus('idle') }
   }
-  const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
+  const runFile = async () => {
+    if (!file) return
+    let upload: File
+    try { upload = await prepareTraceUpload(file) } catch (err) { setError(err instanceof Error ? err.message : TOO_BIG_MESSAGE); return }
+    const fd = new FormData(); fd.append('file', upload); analyse(fd)
+  }
   const runStrava = (a: StravaActivitySummary) => { const fd = new FormData(); fd.append('stravaActivityId', String(a.id)); fd.append('sportType', a.sportType); analyse(fd) }
   const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
   const reset = () => { setRes(null); setFile(null); setError(''); setDupId(null) }

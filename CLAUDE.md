@@ -585,6 +585,9 @@ Two shapes, auto-detected:
 #### ZIP (fitness-app export wrapper)
 Garmin Connect (and others) export an activity as a single trace file wrapped in a `.zip`. `parseTrace` detects `.zip`, unwraps it via `readZip` (`src/lib/unzip.ts` — zero-dep central-directory reader + `zlib.inflateRawSync`; Garmin local headers use a data descriptor with zeroed sizes, so the central directory is the reliable source of sizes), finds the first entry with a supported extension (`gpx`/`fit`/`csv`/`tcx`), and recurses. A zip with no supported file → `unknown_format`; a corrupt zip → `parse_error`. Regression fixture: `src/tests/fixtures/garmin-activity-export.zip` (a real Garmin `*_ACTIVITY.fit` export). See issue #130.
 
+#### Big files (.gz)
+A request to the server can be at most **~4.6 MB** (AWS's Lambda request limit after base64; measured on the live site 2026-10-08: 4.5 MB reached the app, 4.8 MB got AWS's own `413 {"Message": …}`). So the browser gzips GPX/TCX/CSV of 1 MB or more before uploading (`apps/web/src/lib/trace-upload.ts` `prepareTraceUpload`, used by ADD A PADDLE, the trial upload page and the reference-trace check) and `parseTrace` reads `name.gpx.gz` (inflate capped at 50 MB, like zip entries). A file that still can't fit is refused before upload, and a 413 is reported as "too big" (`uploadErrorMessage`), never "try again".
+
 #### KML (rejected)
 KML exports (Strava, Google Earth) are geometry only — `<coordinates>` with no per-point timestamps — so a race time can't be computed. `parseTrace` returns `{ ok:false, reason:'kml_no_timing' }`, and the upload route surfaces "export GPX/FIT/TCX instead". (Some tools emit `<gx:Track>` with `<when>` times, but common exports don't — not worth the false promise.)
 
