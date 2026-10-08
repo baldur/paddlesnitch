@@ -17,6 +17,8 @@ import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions'
 import * as budgets from 'aws-cdk-lib/aws-budgets'
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets'
 import * as ses from 'aws-cdk-lib/aws-ses'
+import * as events from 'aws-cdk-lib/aws-events'
+import * as eventsTargets from 'aws-cdk-lib/aws-events-targets'
 import * as sesActions from 'aws-cdk-lib/aws-ses-actions'
 import { Construct } from 'constructs'
 
@@ -317,6 +319,10 @@ export class AttStack extends cdk.Stack {
     const serverFn = new lambda.Function(this, 'ServerFn', {
       logRetention: LOG_RETENTION,
       runtime: lambda.Runtime.NODEJS_22_X,
+      // Graviton: ~20% cheaper per ms (docs/features/performance.md, phase 3).
+      // The bundle has no native modules; open-next.config.ts installs for arm64.
+      // Revert = delete this line and the install arch.
+      architecture: lambda.Architecture.ARM_64,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../apps/web/.open-next/server-functions/default')
@@ -450,6 +456,19 @@ export class AttStack extends cdk.Stack {
       ],
       resources: [userPool.userPoolArn],
     }))
+
+    // Keep one server warm (performance.md, phase 3 + decision 1): every 5
+    // minutes EventBridge sends OpenNext's warmer event, which the handler
+    // answers after 75 ms without running Next. ~8,640 invocations a month,
+    // ~$0.10. Review the cold-start chart on paddlesnitch-performance after
+    // one to two weeks; provisioned concurrency only if it still hurts.
+    new events.Rule(this, 'ServerWarmer', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
+      targets: [new eventsTargets.LambdaFunction(serverFn, {
+        event: events.RuleTargetInput.fromObject({ type: 'warmer', warmerId: 'eventbridge', index: 0, concurrency: 1, delay: 75 }),
+        retryAttempts: 0,
+      })],
+    })
 
     const serverUrl = serverFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
