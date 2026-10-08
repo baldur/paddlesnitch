@@ -9,7 +9,9 @@
 // Writes perf-results.json and perf-metrics.json (CloudWatch metric data for
 // `aws cloudwatch put-metric-data --cli-input-json file://perf-metrics.json`),
 // prints a Markdown report, and appends it to $GITHUB_STEP_SUMMARY in CI.
-// Signed-out pages only: the signed-in ones need an account to sign in with.
+// With PERF_EMAIL and PERF_PASSWORD (the test account: scripts/perf-account.ts;
+// in CI the password comes from SSM) it also signs in and times the signed-in
+// pages and the data behind them. Without them it times the public pages only.
 
 import { appendFileSync, writeFileSync } from 'fs'
 import { summarise, checkImmutable, markdown, metricData, type Sample, type PageResult, type Check } from '../src/lib/perf'
@@ -31,10 +33,10 @@ const PAGES: { name: string; path: string; budgetMs: number }[] = [
   { name: 'Privacy', path: '/privacy', budgetMs: 500 },
 ]
 
-async function time(url: string): Promise<{ sample: Sample; headers: Headers; body: string }> {
+async function time(url: string, extra: Record<string, string> = {}): Promise<{ sample: Sample; headers: Headers; body: string }> {
   const t0 = performance.now()
   try {
-    const res = await fetch(url, { redirect: 'manual', headers: { 'accept-encoding': 'gzip, br' } })
+    const res = await fetch(url, { redirect: 'manual', headers: { 'accept-encoding': 'gzip, br', ...extra } })
     const ttfbMs = performance.now() - t0
     const body = await res.text()
     return { sample: { status: res.status, ttfbMs, totalMs: performance.now() - t0, bytes: Buffer.byteLength(body) }, headers: res.headers, body }
@@ -70,6 +72,54 @@ async function main() {
       if (p.path === '/' && !homeHtml) homeHtml = r.body
     }
     results.push(summarise(p.name, p.path, samples, p.budgetMs))
+  }
+
+  // Signed in, with the test account: the pages people actually use, and the
+  // data behind them (these pages fetch it after they load).
+  const email = process.env.PERF_EMAIL, password = process.env.PERF_PASSWORD
+  if (email && password) {
+    const login = await fetch(`${BASE}/att/api/auth/login`, {
+      method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }),
+    })
+    const cookie = (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ')
+    if (!login.ok || !cookie) {
+      checks.push({ name: 'Signed in as the test account', ok: false, detail: `sign-in answered ${login.status}` })
+    } else {
+      const auth = { cookie }
+      const data = async (p: string) => JSON.parse((await time(BASE + p, auth)).body || 'null')
+      const sessions = (await data('/api/trpc/paddles.sessions'))?.result?.data as { id: string; source: { type: string; deviceId?: string; deviceSessionId?: string } }[] | undefined
+      const tracker = sessions?.find(x => x.source.type === 'device')
+      const paddleId = tracker?.id ?? sessions?.[0]?.id
+      const signedIn: { name: string; path: string; budgetMs: number }[] = [
+        { name: 'Paddles', path: '/paddles', budgetMs: 500 },
+        { name: 'Paddles (data)', path: '/api/trpc/paddles.sessions', budgetMs: 800 },
+        { name: 'Devices (data)', path: '/api/account/devices/sessions', budgetMs: 800 },
+        ...(paddleId ? [
+          { name: 'A paddle', path: `/paddles/${paddleId}`, budgetMs: 500 },
+          { name: 'A paddle (data)', path: `/api/trpc/paddles.get?input=${encodeURIComponent(JSON.stringify({ id: paddleId }))}`, budgetMs: 800 },
+        ] : []),
+        ...(tracker?.source.deviceSessionId ? [
+          { name: 'Boat motion (data)', path: `/api/account/devices/sessions/${tracker.source.deviceSessionId}?deviceId=${tracker.source.deviceId}`, budgetMs: 800 },
+        ] : []),
+      ]
+      for (const p of signedIn) {
+        const samples: Sample[] = []
+        for (let i = 0; i < RUNS; i++) samples.push((await time(BASE + p.path, auth)).sample)
+        results.push(summarise(p.name, p.path, samples, p.budgetMs))
+      }
+      // A repeat view the browser already has should cost no body at all.
+      const motion = signedIn.find(p => p.name === 'Boat motion (data)')
+      if (motion) {
+        const first = await time(BASE + motion.path, auth)
+        const etag = first.headers.get('etag')
+        const again = etag ? await time(BASE + motion.path, { ...auth, 'if-none-match': etag }) : null
+        checks.push({
+          name: 'Boat motion: a repeat view is a 304',
+          ok: again?.sample.status === 304,
+          detail: etag ? `repeat answered ${again?.sample.status} in ${Math.round(again!.sample.ttfbMs)} ms` : 'no ETag sent',
+        })
+      }
+    }
   }
 
   // One built file: is it marked "keep for a year"?

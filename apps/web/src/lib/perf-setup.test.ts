@@ -15,13 +15,16 @@ const names = (src: string) => [...src.matchAll(/name: '([^']+)', path:/g)].map(
 
 describe('performance check setup', () => {
   it('charts every page the check times (a renamed page starts a new series)', () => {
-    const charted = JSON.parse(/const perfPages = (\[[^\]]+\])/.exec(stack)![1].replace(/'/g, '"'))
-    expect(charted).toEqual(names(script))
+    const list = (name: string) => JSON.parse(new RegExp(`const ${name} = (\\[[^\\]]+\\])`).exec(stack)![1].replace(/'/g, '"'))
+    expect([...list('perfPages'), ...list('perfSignedIn')]).toEqual(names(script))
   })
 
   it("gives the check's role metrics in its own namespace and nothing else", () => {
     const role = stack.slice(stack.indexOf("new iam.Role(this, 'GithubPerfRole'"), stack.indexOf("new cdk.CfnOutput(this, 'PerfRoleArn'"))
     expect(role).toContain("actions: ['cloudwatch:PutMetricData']")
+    // …and reading the test account's password: that one parameter only.
+    expect(role).toContain("actions: ['ssm:GetParameter']")
+    expect(role.match(/parameter\/[^`'\]]+/g)).toEqual(['parameter/att/perf-check-password'])
     expect(role).toContain("'cloudwatch:namespace': 'Paddlesnitch/Perf'")
     expect(role).toContain('environment:perf')
     expect(role).not.toContain('environment:production')
@@ -33,10 +36,14 @@ describe('performance check setup', () => {
     expect(workflow).not.toContain('environment: production')
   })
 
-  it('reports even when CloudWatch is out of reach', () => {
-    const send = workflow.slice(workflow.indexOf('- name: AWS credentials'))
-    expect(send.match(/continue-on-error: true/g)?.length).toBe(2)
-    expect(workflow.indexOf('pnpm perf')).toBeLessThan(workflow.indexOf('- name: AWS credentials'))
+  it('reports even when AWS is out of reach (no password: public pages only)', () => {
+    const creds = workflow.slice(workflow.indexOf('- name: AWS credentials'), workflow.indexOf('- name: Time the pages'))
+    expect(creds).toContain('continue-on-error: true')
+    const timing = workflow.slice(workflow.indexOf('- name: Time the pages'), workflow.indexOf('- name: Keep the results'))
+    expect(timing).not.toMatch(/\n\s+if:/)        // always runs
+    expect(timing).toContain('::add-mask::')        // the password never shows in the log
+    const send = workflow.slice(workflow.indexOf('- name: Send the timings'))
+    expect(send).toContain('continue-on-error: true')
     expect(workflow).toMatch(/- name: Keep the results\n\s+if: always\(\)/)
   })
 })
