@@ -168,7 +168,7 @@ Behind it, layered, all with the same keys:
 | L1: memory in the warm Lambda | Map, size-capped | free | ~0 ms | Lost on cold start. Safe because keys are versioned. |
 | L2: S3 (default) | `derived/` prefix in the data bucket | ~$0.0004 per 1,000 reads | 20–60 ms | Already there, no network changes. Lifecycle rule 30 days. |
 | L2 alternative: DynamoDB | items ≤ 400 KB | $0.14 per million reads | ~5 ms | Worth it if hit rates get high. No VPC. |
-| L2 alternative: ElastiCache (Valkey) | in-memory | see below | <1 ms | Only if we outgrow DynamoDB. |
+| L2 alternative: ElastiCache (Valkey) | in-memory | see below | <1 ms | Only if we outgrow S3 and DynamoDB. |
 
 Pages and procedures only ever call `derived()` and the view writers, so the
 store underneath can change without touching them. The existing `storage`
@@ -181,7 +181,7 @@ eu-west-1 on-demand prices, from the AWS Pricing API (2026-10-08):
 | option | fixed monthly | per use | extra requirements | verdict |
 |---|---|---|---|---|
 | **S3 for derived values** | $0 | GET ~$0.0004/1k, PUT ~$0.005/1k | none | **Start here** |
-| **DynamoDB on-demand** | $0 | $0.1415 per M reads, $0.705 per M writes, storage ~$0.28/GB | none (public endpoint, IAM) | **Next step**, for indexes, views and hot derived values |
+| DynamoDB on-demand | $0 | $0.1415 per M reads, $0.705 per M writes, storage ~$0.28/GB | none (public endpoint, IAM) | **Later, if S3 stops being enough** (decision 2: stay on S3) |
 | ElastiCache Serverless Valkey | ~$6.90 (100 MB minimum at $0.094/GB-h) | $0.0025 per M ECPU | **Lambda in a VPC → NAT gateway $35/month + $0.048/GB** (we call Strava, Open-Meteo, EA, GitHub, Bedrock, SES, Cognito) | **~$42+/month** before it stores anything. Not yet |
 | ElastiCache t4g.micro Valkey | $9.93 | – | same VPC and NAT | ~$45/month. Not yet |
 | CloudFront caching of public pages | $0 | already paying per request | Next's page cache (OpenNext: S3 + DynamoDB tags) | **Yes**, for fully public pages |
@@ -235,8 +235,8 @@ computed **on upload** (in `after()`), so even the first view is a hit.
 | ARM (Graviton) | −20% per ms; init usually as fast or faster | saves | Needs a check that no native module breaks (sharp is in the image function, not this one). |
 | Slimmer server bundle (34 MB today) | shorter init | $0 | Takes some digging: what makes 34 MB? |
 
-Recommendation: warmer + ARM now; provisioned concurrency only if the
-dashboard still shows cold starts hurting.
+Decided: warmer + ARM now; review the cold-start chart after one to two
+weeks; provisioned concurrency only if cold starts still hurt.
 
 ### D. Stop listing everything (indexes)
 
@@ -246,10 +246,12 @@ dashboard still shows cold starts hurting.
 - the same for courses, groups and profile stats.
 
 **Change:** per-owner and per-parent indexes written on change, for example
-`users/{id}/recordings.json` and `courses/{id}/trials.json`. Either as S3
-objects (no new service, careful with concurrent writers) or as a
-**DynamoDB table** (conditional writes, queries by owner, about $0/month at
-today's scale).
+`users/{id}/recordings.json` and `courses/{id}/trials.json`.
+- **As S3 objects (decided).** One object per item where possible, and S3
+  conditional writes (`If-Match`) with a retry for shared ones, so two
+  writers can't overwrite each other.
+- **A DynamoDB table** (queries by owner, about $0/month) stays the next step
+  if S3 stops being enough.
 
 | | |
 |---|---|
@@ -267,8 +269,10 @@ hit the server on every request: Next's page cache is switched off
 (`open-next.config.ts`: `incrementalCache: 'dummy'`), and the default
 behaviour has caching disabled.
 
-**Change:** turn on OpenNext's S3 page cache and DynamoDB tag cache, and let
-CloudFront cache fully public pages:
+**Change:** turn on OpenNext's S3 page cache and let CloudFront cache fully
+public pages. OpenNext's tag cache needs DynamoDB, and decision 2 keeps us on
+S3, so freshness comes either from time-based revalidation or from a
+CloudFront invalidation when a write changes the page. The pages:
 - the guide pages;
 - the legal pages;
 - signed-out Trials pages, with `revalidateTag` when an upload rebuilds a
@@ -349,9 +353,9 @@ and keep it only if the dashboard shows a gain.
 |---|---|---|---|---|
 | 1 | B (boat motion once) + the `derived()` interface with S3 + L1 | BOAT MOTION ~instant; the pattern in place | ~$0 | low |
 | 2 | A (data in the first HTML) for Paddles, a paddle, Devices; header user from the server | 0.3–0.8 s on phones | $0 | low–medium |
-| 3 | C (warmer + ARM) | most cold starts gone; −20% compute cost | ~$0.10 | low |
+| 3 | C (warmer + ARM); review cold starts after 1–2 weeks | most cold starts gone; −20% compute cost | ~$0.10 | low |
 | 4 | F (paddle opens before its AI summary) | add a paddle 5–15 s → ~1 s | $0 | low |
-| 5 | D (indexes, probably DynamoDB) | flat with growth | ~$0–1 | medium |
+| 5 | D (indexes as S3 objects, conditional writes) | flat with growth | ~$0 | medium |
 | 6 | E (public pages from the edge) | ~20 ms public pages | ~$0 | medium (privacy care) |
 | 7 | G, H as measured | small | ~$0 | low |
 
@@ -372,15 +376,20 @@ Each phase is one or two PRs, measured before and after on the
   timing exists, with a test account, add Paddles and a paddle with tight
   budgets.
 
-## Open decisions
+## Decisions (owner, 2026-10-08)
 
-1. **Provisioned concurrency** ($12/month) or the warmer ($0.10)? I'd start
-   with the warmer and look at the cold-start chart after a week.
-2. **DynamoDB**, as a second datastore for indexes and views, or S3 index
-   objects for now? I'd go to DynamoDB at phase 5: conditional writes make
-   views safe with concurrent writers, and it costs nothing at this size.
-3. **Code version for derived values:** the deploy's commit (always correct,
-   recomputes after each deploy) or explicit numbers (saves recomputes, needs
-   discipline)? I'd use the commit by default.
-4. **A test account for signed-in performance checks**, so the dashboard
-   covers the pages that matter most.
+1. **Cold starts: the warmer first.** Review the cold-start chart on the
+   `paddlesnitch-performance` dashboard after one to two weeks. Provisioned
+   concurrency ($12/month) only if it still hurts.
+2. **Stay on S3.** No DynamoDB for now, to keep one datastore. Indexes and
+   views are S3 objects, made safe with concurrent writers by:
+   - one object per item where possible (`summary.json` per paddle);
+   - S3's conditional writes (`If-Match` on the ETag read) for shared ones,
+     retrying on a conflict.
+
+   DynamoDB stays the documented next step if S3 stops being enough.
+3. **Code version: the deploy's commit.** Every deploy recomputes derived
+   values once. Explicit per-computation versions only for something
+   expensive and stable, with a test tying the version to its code.
+4. **A test account for the performance check**, so it times the signed-in
+   pages and the data behind them too.
