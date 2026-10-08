@@ -182,8 +182,8 @@ export default function AddPaddlePage() {
           // A tracker's recordings become paddles by themselves (one-paddle.md,
           // phase 2), so there's nothing to pick here any more.
           <div className="text-sm text-muted leading-relaxed flex flex-col gap-2">
-            <p>Nothing to add: your tracker&apos;s paddles appear in <a href="/paddles" className="text-primary">Paddles</a> by themselves once it uploads them.</p>
-            <p className="text-xs">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <a href="/devices" className="text-primary">Devices</a>.</p>
+            <p>Nothing to add: your tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary">Paddles</Link> by themselves once it uploads them.</p>
+            <p className="text-xs">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <Link href="/devices" className="text-primary">Devices</Link>.</p>
           </div>
         )}
 

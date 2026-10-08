@@ -5,8 +5,9 @@
 // See public/strava/ (#107).
 export default function PoweredByStrava({ className }: { className?: string }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- official brand asset
-    // served as-is from public/; must not be optimised/restyled (guidelines).
+    // Official brand asset, served as-is from public/: must not be optimised
+    // or restyled (Strava's guidelines).
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src="/strava/powered-by-strava.svg"
       alt="Powered by Strava"

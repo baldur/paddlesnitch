@@ -4,7 +4,6 @@ import {
   getGroup,
   getInvitation,
   putGroup,
-  putInvitation,
   deleteInvitation,
   addUserToGroupIndex,
 } from '@/lib/groups'

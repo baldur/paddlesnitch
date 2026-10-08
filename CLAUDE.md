@@ -915,7 +915,7 @@ pnpm e2e:ui        # Playwright UI mode — for debugging failing tests
 pnpm e2e:install   # one-time install of the chromium browser
 ```
 
-CI: **every pull request** runs `checks.yml` (vitest, `pnpm typecheck` over the app, packages and test files, infra `tsc`, and firmware host tests when `firmware/` changed) and `e2e.yml` (Playwright). After a merge, `deploy.yml` runs vitest again before deploying. Until 2026-10-08 PRs ran only Playwright, so a failing unit test or a type error in a test file could merge (#381, #393). `pr-checks.test.ts` pins it. The Playwright workflow caches `~/.cache/ms-playwright` keyed by the package version, so cold runs only pay the ~90 MB Chromium download on a version bump.
+CI: **every pull request** runs `checks.yml` (vitest, `pnpm typecheck` over the app, packages and test files, `pnpm lint` (errors fail; `.open-next/` is ignored, and `react-hooks/set-state-in-effect` only warns: nine fetch-on-mount pages use it, don't add more), infra `tsc`, and firmware host tests when `firmware/` changed) and `e2e.yml` (Playwright). After a merge, `deploy.yml` runs vitest again before deploying. Until 2026-10-08 PRs ran only Playwright, so a failing unit test or a type error in a test file could merge (#381, #393). `pr-checks.test.ts` pins it. The Playwright workflow caches `~/.cache/ms-playwright` keyed by the package version, so cold runs only pay the ~90 MB Chromium download on a version bump.
 
 #### Discipline
 
