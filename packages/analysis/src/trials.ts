@@ -10,6 +10,7 @@ import { getJson, getObject, listKeys } from '@paddlesnitch/core/storage'
 import { streamsToTrack } from '@paddlesnitch/core/strava'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
+import { listUserEntryResultKeys } from '@paddlesnitch/core/catalogue'
 
 // Only the fields we read off the att-owned result.json / metadata.json — we
 // deliberately don't import att's types (separate app).
@@ -40,9 +41,7 @@ const ID = /^[\w-]+$/
 // each result.json (like the att entry + analysis-session listings do).
 export async function listUserTrialEntries(userId: string): Promise<TrialEntrySummary[]> {
   if (!ID.test(userId)) return []
-  const keys = (await listKeys('trials/')).filter(
-    k => k.includes(`/entries/${userId}/`) && k.endsWith('/result.json'),
-  )
+  const keys = await listUserEntryResultKeys(userId)
   const trialMetaCache = new Map<string, TrialMeta | null>()
   const courseMetaCache = new Map<string, CourseMeta | null>()
 

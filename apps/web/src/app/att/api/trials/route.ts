@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
-import { getJson, putJson, listKeys } from '@/lib/storage'
+import { getJson, putJson } from '@/lib/storage'
 import { canViewCourse, canManageCourse, canManageTrial, isListedForViewer } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
 import { trialForViewer } from '@/lib/trial-view'
+import { listTrials } from '@/lib/catalogue'
 
 function isVisibility(v: unknown): v is Visibility {
   return v === 'public' || v === 'private' || v === 'group'
@@ -21,13 +22,7 @@ export async function GET(req: NextRequest) {
   const viewer = await getAuthUser()
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
 
-  const keys = await listKeys('trials/')
-  const metaKeys = keys.filter(
-    k => k.endsWith('metadata.json') && !k.includes('/entries/')
-  )
-  const all = (
-    await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k)))
-  ).filter((t): t is TrialMetadata => t !== null)
+  const all = await listTrials()
 
   const scoped = courseId ? all.filter(t => t.courseId === courseId) : all
   const adminGroupIds = viewer ? new Set(await getUserAdminGroupIds(viewer.id)) : new Set<string>()

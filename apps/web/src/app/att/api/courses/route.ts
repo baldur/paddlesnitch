@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
-import { getJson, putJson, listKeys } from '@/lib/storage'
+import { putJson } from '@/lib/storage'
 import { isListedForViewer, canCreateCourseInGroup, canManageCourse } from '@/lib/permissions'
 import { getGroup, getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import type { CourseMetadata, Visibility } from '@/lib/types'
+import { listCourses } from '@/lib/catalogue'
 
 function isVisibility(v: unknown): v is Visibility {
   return v === 'public' || v === 'private' || v === 'group'
@@ -19,11 +20,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const manageableOnly = searchParams.get('manageable') === '1'
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
-  const keys = await listKeys('courses/')
-  const metaKeys = keys.filter(k => k.endsWith('metadata.json'))
-  const courses = (
-    await Promise.all(metaKeys.map(k => getJson<CourseMetadata>(k)))
-  ).filter((c): c is CourseMetadata => !!c)
+  const courses = await listCourses()
 
   if (manageableOnly) {
     if (!viewer) return NextResponse.json([])

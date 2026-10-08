@@ -8,9 +8,10 @@
 // Profiles are keyed by userId (/profile/{userId}); a user may also claim a vanity
 // handle (/profile/baldur) resolved via a usernames/{slug}.json -> userId index.
 
-import { getJson, putJson, deleteObject, listKeys } from './storage'
+import { getJson, putJson, deleteObject } from './storage'
 import { canViewTrial } from './permissions'
 import type { AuthUser, TrialMetadata, CourseMetadata, BoatClass } from './types'
+import { listUserEntryResultKeys } from '@/lib/catalogue'
 
 export type ProfileSettings = {
   public: boolean
@@ -178,8 +179,7 @@ export async function buildProfileStats(
   viewerGroupIds: Set<string>,
 ): Promise<ProfileStats> {
   // The entry path embeds the userId, so we target the listing directly.
-  const entryKeys = (await listKeys('trials/'))
-    .filter(k => k.endsWith('result.json') && k.includes(`/entries/${userId}/`))
+  const entryKeys = await listUserEntryResultKeys(userId)
 
   const trialCache = new Map<string, TrialMetadata | null>()
   const courseCache = new Map<string, CourseMetadata | null>()

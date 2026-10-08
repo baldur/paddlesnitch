@@ -116,6 +116,34 @@ export async function listKeys(prefix: string): Promise<string[]> {
   return keys
 }
 
+/**
+ * The immediate "folders" under `prefix` (which ends in '/'), as names: for
+ * 'trials/' the trial ids. One S3 listing with a delimiter, so it doesn't
+ * page through everything below them (every entry of every trial).
+ */
+export async function listPrefixes(prefix: string): Promise<string[]> {
+  if (isDev()) {
+    try {
+      const entries = await fs.readdir(path.join(localRoot(), prefix), { withFileTypes: true })
+      return entries.filter(e => e.isDirectory()).map(e => e.name).sort()
+    } catch {
+      return []
+    }
+  }
+  const { ListObjectsV2Command } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
+  const names: string[] = []
+  let token: string | undefined
+  do {
+    const res = await s3.send(new ListObjectsV2Command({
+      Bucket: process.env.DATA_BUCKET!, Prefix: prefix, Delimiter: '/', ContinuationToken: token,
+    }))
+    for (const p of res.CommonPrefixes ?? []) if (p.Prefix) names.push(p.Prefix.slice(prefix.length).replace(/\/$/, ''))
+    token = res.IsTruncated ? res.NextContinuationToken : undefined
+  } while (token)
+  return names.sort()
+}
+
 export async function deleteObject(key: string): Promise<void> {
   if (isDev()) {
     const filePath = path.join(localRoot(), key)

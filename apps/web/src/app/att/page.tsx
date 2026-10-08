@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
-import { getJson, listKeys } from '@/lib/storage'
+import { getJson } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer, canManageTrial } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
@@ -8,7 +8,8 @@ import { getRecentSubmissions } from '@/lib/recent'
 import { getPublicProfileLinks } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
 import AppHeader from '@/components/AppHeader'
-import type { TrialMetadata, CourseMetadata, AuthUser } from '@/lib/types'
+import type { CourseMetadata, AuthUser } from '@/lib/types'
+import { listTrials } from '@/lib/catalogue'
 
 // Reads live trial state from storage on every request — never prerender.
 // Without this, `next build` tries to fetch from S3 at build time and fails
@@ -17,13 +18,7 @@ export const dynamic = 'force-dynamic'
 
 async function getOpenTrials(viewer: AuthUser | null) {
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
-  const keys = await listKeys('trials/')
-  const metaKeys = keys.filter(
-    k => k.endsWith('metadata.json') && !k.includes('/entries/')
-  )
-  const trials = (
-    await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k)))
-  ).filter((t): t is TrialMetadata => t !== null && t.status === 'open')
+  const trials = (await listTrials()).filter(t => t.status === 'open')
     .filter(t => isListedForViewer(t, viewer, viewerGroupIds))
     // Order by event date (newest first), tie-broken by creation time — so the
     // list isn't in storage-key (nanoid) order. Matches the createdAt-desc

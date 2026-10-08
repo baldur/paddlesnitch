@@ -230,7 +230,7 @@ scannable on a 64 px panel. Two things are load-bearing: the path stays **short*
 user to the raw Lambda hostname, where the `tt_id` cookie does not apply and a
 signed-in user arrives signed out.
 
-**Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId.
+**Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId. **List trials and courses with `listTrials()` / `listCourses()` (`apps/web/src/lib/catalogue.ts`, over `@paddlesnitch/core/catalogue`), and a user's entries with `listUserEntryResultKeys`/`listUserFailedUploadKeys`:** they list the trial/course folders (S3 delimiter, `listPrefixes` in core storage) instead of `listKeys('trials/')`, which pages through every entry, trace and leaderboard on the site. Sixteen places used to do that, each with its own filter. The one left is `getEntry(entryId)` (`src/lib/entries.ts`), which needs an entry-id index to stop scanning.
 
 #### Anti-bot gate
 
