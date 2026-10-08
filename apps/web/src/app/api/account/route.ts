@@ -104,6 +104,8 @@ export async function DELETE() {
   await eraseUserDevices(user.id)
   // Everything worked out from their data (docs/features/performance.md).
   await eraseDerived(user.id)
+  // Prepared "Download my data" files (a lifecycle rule also drops them daily).
+  for (const k of await listKeys(`exports/${user.id}/`)) await deleteObject(k)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
   await eraseBetaApplication(user.email)

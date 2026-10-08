@@ -9,6 +9,8 @@ function localRoot() {
 function isDev() {
   return process.env.NODE_ENV === 'development' || process.env.USE_LOCAL_STORAGE === 'true'
 }
+/** True when objects live on the local filesystem (dev, tests), not S3. */
+export const usesLocalStorage = isDev
 
 // In dev: filesystem under .local-data/
 // In prod: S3 (same interface, different backing)
@@ -187,7 +189,11 @@ export function devPresignValid(key: string, exp: string | null, sig: string | n
  * `origin` is only consulted in dev (to build an absolute same-origin URL); in
  * production the URL points at S3 and the origin is irrelevant.
  */
-export async function presignGetUrl(key: string, expiresInSeconds: number, origin?: string): Promise<string> {
+export async function presignGetUrl(
+  key: string, expiresInSeconds: number, origin?: string,
+  // Production only: S3 serves it as a download with this file name (JSON).
+  opts: { downloadAs?: string } = {},
+): Promise<string> {
   if (isDev()) {
     const exp = Date.now() + expiresInSeconds * 1000
     const q = new URLSearchParams({ key, exp: String(exp), sig: devPresignSignature(key, exp) })
@@ -198,7 +204,13 @@ export async function presignGetUrl(key: string, expiresInSeconds: number, origi
   const s3 = await client()
   return getSignedUrl(
     s3,
-    new GetObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key }),
+    new GetObjectCommand({
+      Bucket: process.env.DATA_BUCKET!, Key: key,
+      ...(opts.downloadAs ? {
+        ResponseContentDisposition: `attachment; filename="${opts.downloadAs.replace(/[^A-Za-z0-9._-]/g, '_')}"`,
+        ResponseContentType: 'application/json; charset=utf-8',
+      } : {}),
+    }),
     { expiresIn: expiresInSeconds },
   )
 }
