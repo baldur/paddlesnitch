@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react'
 import { formatTime } from '@/lib/geo'
 import type { Line, CourseType } from '@/lib/types'
+import { prepareTraceUpload, uploadErrorMessage } from '@/lib/trace-upload'
 
 // Organiser tool (#71): upload a reference GPS trace and check it matches the
 // course geometry being drawn — especially gate directions. Validation only;
@@ -29,11 +30,11 @@ export default function ReferenceTraceValidator({ geometry }: { geometry: Geomet
     setStatus('validating'); setError(''); setResult(null)
     try {
       const form = new FormData()
-      form.append('file', file)
+      form.append('file', await prepareTraceUpload(file))
       form.append('geometry', JSON.stringify(geometry))
       const res = await fetch('/att/api/courses/validate-trace', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Couldn’t check that file. Please try again.')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(uploadErrorMessage(res.status, data, 'Couldn’t check that file. Please try again.'))
       setResult(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t check that file. Please try again.')
