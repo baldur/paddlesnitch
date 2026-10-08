@@ -131,6 +131,33 @@ export async function deleteObject(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key }))
 }
 
+/**
+ * Deletes many objects at once: S3's DeleteObjects, 1,000 keys a call. Erasing
+ * an account one deleteObject at a time ran past the server's 30 s limit for
+ * a well-used account (tests/erasure-big-account.test.ts). Throws if S3
+ * reports any key it couldn't delete, so a caller never believes data gone
+ * that isn't.
+ */
+export async function deleteObjects(keys: string[]): Promise<void> {
+  const unique = [...new Set(keys)]
+  if (unique.length === 0) return
+  if (isDev()) { await Promise.all(unique.map(k => deleteObject(k))); return }
+  const { DeleteObjectsCommand } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
+  for (let i = 0; i < unique.length; i += 1000) {
+    const res = await s3.send(new DeleteObjectsCommand({
+      Bucket: process.env.DATA_BUCKET!,
+      Delete: { Objects: unique.slice(i, i + 1000).map(Key => ({ Key })), Quiet: true },
+    }))
+    if (res.Errors?.length) throw new Error(`could not delete ${res.Errors.length} object(s), e.g. ${res.Errors[0].Key}: ${res.Errors[0].Code}`)
+  }
+}
+
+/** Deletes every object under `prefix`. */
+export async function deletePrefix(prefix: string): Promise<void> {
+  await deleteObjects(await listKeys(prefix))
+}
+
 export async function getJson<T>(key: string): Promise<T | null> {
   const buf = await getObject(key)
   if (!buf) return null

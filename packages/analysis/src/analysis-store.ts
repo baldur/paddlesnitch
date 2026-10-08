@@ -2,7 +2,7 @@
 // analysis/{userId}/{id}/session.json (S3 in prod, .local-data in dev), private
 // to the user. Small scale → list = read each session.json, like att entries.
 import { nanoid } from 'nanoid'
-import { getJson, putJson, listKeys, deleteObject } from '@paddlesnitch/core/storage'
+import { getJson, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 import { thumbRoute } from '@paddlesnitch/core/paddles'
 import type { AnalysisResult } from './analysis'
@@ -127,10 +127,8 @@ export async function deleteSession(userId: string, id: string): Promise<void> {
 // any shared paddle (it lives outside the user's prefix, so it needs an explicit
 // delete or a shared link would keep resolving).
 export async function eraseUserAnalysis(userId: string): Promise<void> {
-  for (const s of await listSessions(userId)) {
-    if (s.shareId) await deleteObject(sharedKey(s.shareId))
-  }
-  for (const k of await listKeys(`analysis/${userId}/`)) await deleteObject(k)
+  const shared = (await listSessions(userId)).filter(s => s.shareId).map(s => sharedKey(s.shareId!))
+  await deleteObjects([...shared, ...(await listKeys(`analysis/${userId}/`))])
 }
 
 // ---- Sharing: an opt-in, unlisted public link for one paddle (#202) ----

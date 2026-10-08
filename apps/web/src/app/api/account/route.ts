@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getAuthUser, clearAuthCookies } from '@/lib/auth'
-import { getJson, listKeys, deleteObject } from '@/lib/storage'
+import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { deleteUser, revoke } from '@/lib/cognito'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
@@ -49,12 +49,12 @@ export async function DELETE() {
   )
   const trials = await Promise.all(trialKeys.map(k => getJson<TrialMetadata>(k)))
   const ownedTrialIds = new Set<string>()
-  for (const t of trials) {
-    if (!t || t.adminUserId !== user.id || t.groupId) continue
+  await Promise.all(trials.map(async t => {
+    if (!t || t.adminUserId !== user.id || t.groupId) return
     const entrants = new Set((await listKeys(`trials/${t.id}/entries/`)).map(k => k.split('/')[3]))
     entrants.delete(user.id)
     if (entrants.size === 0) ownedTrialIds.add(t.id)
-  }
+  }))
 
   // 3. Find every other trial that holds this user's entries — we will remove
   //    those entries and rebuild the leaderboard.
@@ -64,38 +64,38 @@ export async function DELETE() {
     .map(t => t.id)
 
   // 4. Delete every key whose path indicates ownership by this user.
-  //    Iterating per trial keeps the listing scoped and cheap.
-  for (const trialId of allTrialIds) {
+  //    Iterating per trial keeps the listing scoped and cheap. All trials are
+  //    listed at once and the keys deleted in batches: one call at a time, a
+  //    well-used account ran past the server's 30 s limit and stopped halfway
+  //    (tests/erasure-big-account.test.ts).
+  const trialKeysToDelete: string[] = []
+  await Promise.all(allTrialIds.map(async trialId => {
     if (ownedTrialIds.has(trialId)) {
       // Whole trial goes — metadata, leaderboard, all entries by anyone.
-      const allTrialKeys = await listKeys(`trials/${trialId}/`)
-      for (const k of allTrialKeys) await deleteObject(k)
-      continue
+      trialKeysToDelete.push(...await listKeys(`trials/${trialId}/`))
+      return
     }
     // Not owned by this user — surgically remove only their own data: their
     // entries AND any failed-upload diagnostics they left here. Only entries
     // affect the leaderboard, so only those trigger a rebuild.
-    const userEntryKeys = await listKeys(`trials/${trialId}/entries/${user.id}/`)
-    const userFailedKeys = await listKeys(`trials/${trialId}/failed-uploads/${user.id}/`)
-    if (userEntryKeys.length === 0 && userFailedKeys.length === 0) continue
-    for (const k of userEntryKeys) await deleteObject(k)
-    for (const k of userFailedKeys) await deleteObject(k)
+    const [userEntryKeys, userFailedKeys] = await Promise.all([
+      listKeys(`trials/${trialId}/entries/${user.id}/`),
+      listKeys(`trials/${trialId}/failed-uploads/${user.id}/`),
+    ])
+    trialKeysToDelete.push(...userEntryKeys, ...userFailedKeys)
     if (userEntryKeys.length > 0) trialsWithUserEntries.add(trialId)
-  }
+  }))
+  await deleteObjects(trialKeysToDelete)
 
   // 5. Rebuild leaderboards for trials we trimmed (not the ones we wiped).
-  for (const trialId of trialsWithUserEntries) {
-    await rebuildLeaderboard(trialId)
-  }
+  await Promise.all([...trialsWithUserEntries].map(trialId => rebuildLeaderboard(trialId)))
 
   // 6. Delete the courses they created that no group owns and no remaining
   //    trial runs on (a kept trial keeps its course).
   const keptTrialCourses = new Set(
     trials.filter((t): t is TrialMetadata => t !== null && !ownedTrialIds.has(t.id)).map(t => t.courseId),
   )
-  for (const c of createdCourses) {
-    if (!keptTrialCourses.has(c.id)) await deleteObject(`courses/${c.id}/metadata.json`)
-  }
+  await deleteObjects(createdCourses.filter(c => !keptTrialCourses.has(c.id)).map(c => `courses/${c.id}/metadata.json`))
 
   // 6a. Paddles, trackers, groups, Strava. These live outside users/{userId}/,
   //     so the prefix wipe below never reached them (GDPR gap until 2026-09).
@@ -105,7 +105,7 @@ export async function DELETE() {
   // Everything worked out from their data (docs/features/performance.md).
   await eraseDerived(user.id)
   // Prepared "Download my data" files (a lifecycle rule also drops them daily).
-  for (const k of await listKeys(`exports/${user.id}/`)) await deleteObject(k)
+  await deletePrefix(`exports/${user.id}/`)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
   await eraseBetaApplication(user.email)
@@ -127,7 +127,7 @@ export async function DELETE() {
   //     tos-consent. Previously these survived erasure (GDPR gap).
   const profile = await getJson<{ handle?: string }>(`users/${user.id}/profile.json`)
   if (profile?.handle) await deleteObject(`usernames/${profile.handle}.json`)
-  for (const k of await listKeys(`users/${user.id}/`)) await deleteObject(k)
+  await deletePrefix(`users/${user.id}/`)
 
   // 7. Revoke any active refresh token then delete the Cognito user.
   //    Order matters: if Cognito delete fails we want their session still revoked.

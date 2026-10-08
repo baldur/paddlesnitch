@@ -15,7 +15,7 @@
 // account erasure (eraseDerived). Never put anything that depends on who is
 // LOOKING into a derived value: cache the owner's data, filter per viewer after.
 import { createHash } from 'crypto'
-import { getObject, putObject, listKeys, deleteObject } from './storage'
+import { getObject, putObject, deletePrefix } from './storage'
 
 export type VersionToken = string | number | boolean | null | undefined
 
@@ -79,7 +79,7 @@ export async function derived<T>(spec: DerivedSpec, compute: () => Promise<T> | 
 /** Account erasure: every derived value owned by this user. */
 export async function eraseDerived(owner: string): Promise<void> {
   if (owner === 'public') return
-  for (const k of await listKeys(ownerPrefix(owner))) await deleteObject(k)
+  await deletePrefix(ownerPrefix(owner))
   for (const k of [...memory.keys()]) if (k.startsWith(ownerPrefix(owner))) memory.delete(k)
 }
 
