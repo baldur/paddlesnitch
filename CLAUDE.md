@@ -904,7 +904,7 @@ Two tiers. Don't blur them — they catch different bugs and the cost profiles a
 | Tier | Lives in | What it catches | Cost |
 |---|---|---|---|
 | **Unit + integration** (vitest) | `src/lib/*.test.ts`, `src/tests/*.test.ts` | Pure-function correctness, route-handler behaviour, every row of the permission matrix as a story-style test name | ~2 s for the whole suite |
-| **E2E critical paths** (Playwright) | `e2e/critical/*.spec.ts` | Real-browser cookie flows, form-to-route-to-page round trips, redirect chains, multi-page navigations | ~30 s per scenario; 3–5 scenarios target |
+| **E2E critical paths** (Playwright) | `e2e/critical/*.spec.ts` | Real-browser cookie flows, form-to-route-to-page round trips, redirect chains, multi-page navigations. Includes adding a paddle from a file (open it, find it in the list) and Download my data | ~30 s per scenario; keep it to the flows that matter most |
 
 #### Run
 
