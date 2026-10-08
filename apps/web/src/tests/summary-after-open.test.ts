@@ -28,8 +28,8 @@ beforeEach(async () => { dataDir = await makeDataDir(); ai.calls = 0; ai.profile
 afterEach(async () => { await cleanDataDir(dataDir) })
 
 describe('a paddle opens before its AI summary', () => {
-  it('is saved with the plain summary and no AI call when deferred', async () => {
-    const { session } = await analyseAndSave(USER, track, { type: 'file' }, { deferSummary: true })
+  it('is saved with the plain summary and no AI call', async () => {
+    const { session } = await analyseAndSave(USER, track, { type: 'file' })
     expect(ai.calls).toBe(0)
     expect(ai.profile).toBe(0)
     const saved = (await getSession(USER, session.id))!
@@ -39,7 +39,7 @@ describe('a paddle opens before its AI summary', () => {
   })
 
   it('the page gets the written summary, and the profile is updated once', async () => {
-    const { session } = await analyseAndSave(USER, track, { type: 'file' }, { deferSummary: true })
+    const { session } = await analyseAndSave(USER, track, { type: 'file' })
     const written = await createCaller({ user: { id: USER, email: 'a@x', displayName: 'A' } }).paddles.writeSummary({ id: session.id })
     expect(written.insight).toBe('A written summary.')
     expect(written.result.insight).toBe('A written summary.')
@@ -53,7 +53,7 @@ describe('a paddle opens before its AI summary', () => {
   })
 
   it('keeps a note written while the summary was being written', async () => {
-    const { session } = await analyseAndSave(USER, track, { type: 'file' }, { deferSummary: true })
+    const { session } = await analyseAndSave(USER, track, { type: 'file' })
     ai.during = async () => { await updateSessionNote(USER, session.id, 'windy today') }
     const written = (await writePendingSummary(USER, session.id))!
     expect(written.note).toBe('windy today')
@@ -61,21 +61,21 @@ describe('a paddle opens before its AI summary', () => {
   })
 
   it('does not bring back a paddle deleted while its summary was being written', async () => {
-    const { session } = await analyseAndSave(USER, track, { type: 'file' }, { deferSummary: true })
+    const { session } = await analyseAndSave(USER, track, { type: 'file' })
     ai.during = async () => { await deleteSession(USER, session.id) }
     expect(await writePendingSummary(USER, session.id)).toBeNull()
     expect(await getSession(USER, session.id)).toBeNull()
   })
 
   it("can't write someone else's paddle's summary", async () => {
-    const { session } = await analyseAndSave(USER, track, { type: 'file' }, { deferSummary: true })
+    const { session } = await analyseAndSave(USER, track, { type: 'file' })
     await expect(createCaller({ user: { id: 'someone-else', email: 'b@x', displayName: 'B' } }).paddles.writeSummary({ id: session.id })).rejects.toThrow()
     expect(ai.calls).toBe(0)
   })
 
-  it('without deferring, the summary is written before saving, as before', async () => {
-    const { session } = await analyseAndSave(USER, track, { type: 'file' })
-    expect(session.insight).toBe('A written summary.')
-    expect(session.insightPending).toBeUndefined()
+  it('a tracker paddle is saved without an AI call too: the tracker is waiting on that response', async () => {
+    const { session } = await analyseAndSave(USER, track, { type: 'device', deviceId: 'ABCD1234', deviceSessionId: 's1' }, { id: 't-s1' })
+    expect(ai.calls).toBe(0)
+    expect(session.insightPending).toBe(true)
   })
 })

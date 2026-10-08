@@ -6,14 +6,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir } from './helpers'
 import { sidecar, trackCsv } from './tracker-fixtures'
 
-// Weather and river flow are external HTTP.
-vi.mock('@paddlesnitch/timing/weather', () => ({ getWeatherAt: () => Promise.resolve(null) }))
-// The written summary is the slow step just before a paddle is saved, which
-// lets a test land the motion data mid-call. No AI: no summary (the plain one).
+// Weather and river flow are external HTTP. The weather lookup is the slow
+// step between deciding to make a paddle and saving it, which lets a test
+// land the motion data mid-call.
 const duringSummary = vi.hoisted(() => ({ hook: null as null | (() => Promise<void>) }))
-vi.mock('@paddlesnitch/analysis/llm', () => ({
-  generateInsight: async () => { const h = duringSummary.hook; duringSummary.hook = null; await h?.(); return null },
+vi.mock('@paddlesnitch/timing/weather', () => ({
+  getWeatherAt: async () => { const h = duringSummary.hook; duringSummary.hook = null; await h?.(); return null },
 }))
+// No AI: no summary (the plain one).
+vi.mock('@paddlesnitch/analysis/llm', () => ({ generateInsight: async () => null }))
 vi.mock('@paddlesnitch/timing/river-flow', () => ({ getFlowAt: () => Promise.resolve(null) }))
 
 // Capture after() so the upload route test can run the scheduled job.
@@ -103,7 +104,10 @@ describe('a tracker recording becomes a paddle by itself', () => {
       await addMotion()
       expect(await paddleForRecording(USER, DEVICE, id)).toMatchObject({ status: 'created' })
     }
-    expect(await paddleForRecording(USER, DEVICE, id)).toEqual({ status: 'skipped', reason: 'superseded' })
+    // The first call makes no second paddle: it finds the fuller one already
+    // saved (unchanged) or, landing later in its work, drops its own (superseded).
+    const first = await paddleForRecording(USER, DEVICE, id)
+    expect(first.status === 'unchanged' || (first.status === 'skipped' && first.reason === 'superseded')).toBe(true)
     const all = await listSessionSummaries(USER)
     expect(all.length).toBe(1)
     expect(all[0].avgSR).toBeGreaterThan(52)

@@ -2,10 +2,10 @@ import { after } from 'next/server'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { recordingReport } from '@/lib/recording-report'
 
-// Make or update a tracker recording's paddle after the response has gone
-// (docs/features/one-paddle.md, phase 2): the tracker, or the phone relaying
-// over Bluetooth, shouldn't wait on the weather lookup and the written summary.
-// The athlete-profile refresh runs inside the same job.
+// Make or update a tracker recording's paddle (docs/features/one-paddle.md,
+// phase 2). Through after(), which on our Lambda still holds the tracker's
+// response until it finishes (performance.md): so no AI call here, and the
+// summary is written when the paddle is first opened (pipeline.ts).
 export function makePaddleAfterResponse(userId: string, deviceId: string, deviceSessionId: string): void {
   const job = async () => {
     try {

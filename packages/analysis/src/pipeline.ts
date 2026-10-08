@@ -1,12 +1,16 @@
 // The shared "analyse a resolved track and save it to the library" core, used by
-// BOTH the manual analyse route (file / Strava / trial / device) and the Strava
-// auto-import webhook. It owns everything after the track is resolved: real
-// conditions, the deterministic analysis, duplicate detection, the memory-aware
-// LLM narrative, and the save — plus the follow-up athlete-profile refresh.
+// every way a paddle arrives: the analyse route (file / Strava / trial), the
+// Strava auto-import webhook and tracker recordings. It owns everything after
+// the track is resolved: real conditions, the deterministic analysis, duplicate
+// detection and the save.
 //
-// Framework-agnostic: the profile refresh is a second LLM call kept off the
-// caller's critical path, so the caller passes a `schedule` (e.g. Next's
-// `after`); with no scheduler it just awaits inline (webhook / tests).
+// The AI summary is NOT written here. A paddle is saved with the plain summary
+// and `insightPending`, and the paddle page asks for the written one
+// (writePendingSummary, below), which then folds the paddle into the athlete
+// profile. On our Lambda, work scheduled with after() still holds the response
+// until it finishes (performance.md), so an AI call here kept someone waiting:
+// the person adding a paddle (5-15 s), Strava's webhook (it wants ~2 s), or a
+// tracker inside its 20 s request timeout.
 import { nanoid } from 'nanoid'
 import { getWeatherAt } from '@paddlesnitch/timing/weather'
 import { getFlowAt } from '@paddlesnitch/timing/river-flow'
@@ -41,17 +45,12 @@ export async function analyseAndSave(
   track: TrackPoint[],
   source: AnalysisSource,
   opts: {
-    now?: Date; sport?: string; schedule?: (fn: () => void | Promise<void>) => void
+    now?: Date
     // The paddle's id, when the caller needs a fixed one (a tracker recording's
     // paddle, so two jobs for one recording write the same paddle).
     id?: string
-    // Asked just before saving (after the slow summary): false drops the save.
+    // Asked just before saving: false drops the save.
     shouldSave?: () => Promise<boolean>
-    // Save with the plain summary and return without calling the LLM; the
-    // paddle page then asks for the written one (writePendingSummary). For a
-    // person waiting on the upload: on our Lambda, work scheduled with after()
-    // still holds the response until it finishes, so it can't hide the LLM.
-    deferSummary?: boolean
   } = {},
 ): Promise<AnalyseSaveResult> {
   const now = opts.now ?? new Date()
@@ -70,12 +69,10 @@ export async function analyseAndSave(
 
   const result = analyseTrack(track, { doubleStrokeRate: false, conditions })
 
-  // Read the library ONCE; reuse for both duplicate detection and memory context.
+  // Duplicate detection (#178): return the existing paddle instead of a 2nd copy.
   let prior: SessionSummary[] = []
   try { prior = await listSessionSummaries(userId) }
   catch (err) { console.error('[analyse] history read failed', err) }
-
-  // Duplicate detection (#178): return the existing paddle instead of a 2nd copy.
   const fp = paddleFingerprint(when, result.durationS, result.distanceKm)
   const dup = prior.find(s => paddleFingerprint(s.paddledAt, s.durationS, s.distanceKm) === fp)
   if (dup) {
@@ -83,23 +80,12 @@ export async function analyseAndSave(
     if (existing) return { session: existing, duplicate: true }
   }
 
-  const sportSignal = opts.sport ?? (source.type === 'strava' ? source.sport : undefined)
-  if (!opts.deferSummary) await narrate(userId, result, when, prior, now, sportSignal)
   const session: AnalysisSession = {
     id: opts.id ?? nanoid(), userId, createdAt: now.toISOString(), paddledAt: when,
-    source, doubleStrokeRate: false, note: '', insight: result.insight, result,
-    ...(opts.deferSummary ? { insightPending: true as const } : {}),
+    source, doubleStrokeRate: false, note: '', insight: result.insight, result, insightPending: true,
   }
   if (opts.shouldSave && !(await opts.shouldSave())) return { session, duplicate: false, dropped: true }
   await saveSession(session)
-  // The profile is folded in when the written summary is (writePendingSummary).
-  if (opts.deferSummary) return { session, duplicate: false }
-
-  // Fold this paddle into the persistent athlete profile for NEXT time (a 2nd LLM
-  // call). Off the critical path when a scheduler is given; awaited otherwise.
-  const refresh = () => foldIntoProfile(userId, session.id)
-  if (opts.schedule) opts.schedule(refresh); else await refresh()
-
   return { session, duplicate: false }
 }
 
@@ -171,18 +157,14 @@ async function narrate(
 
 /**
  * Re-analyses a saved paddle from a fuller track (a tracker paddle whose motion
- * data arrived after it was made: one-paddle.md, phase 2) and rewrites its
- * summary. Keeps everything the paddler set: diary note, boat class and seat,
- * share link. Not folded into the athlete profile again (it already was).
+ * data arrived after it was made: one-paddle.md, phase 2). Keeps everything the
+ * paddler set: diary note, boat class and seat, share link. Its summary is
+ * written again on the next visit (insightPending). Not folded into the athlete
+ * profile again (it already was, or will be when its summary is written).
  */
-export async function reanalyseAndSave(userId: string, existing: AnalysisSession, track: TrackPoint[], opts: { now?: Date } = {}): Promise<AnalysisSession> {
-  const now = opts.now ?? new Date()
+export async function reanalyseAndSave(userId: string, existing: AnalysisSession, track: TrackPoint[]): Promise<AnalysisSession> {
   const result = analyseTrack(track, { doubleStrokeRate: existing.doubleStrokeRate, conditions: existing.result.conditions })
-  let prior: SessionSummary[] = []
-  try { prior = (await listSessionSummaries(userId)).filter(s => s.id !== existing.id) }
-  catch (err) { console.error('[analyse] history read failed', err) }
-  await narrate(userId, result, existing.paddledAt, prior, now)
-  const session: AnalysisSession = { ...existing, insight: result.insight, result }
+  const session: AnalysisSession = { ...existing, insight: result.insight, result, insightPending: true }
   await saveSession(session)
   return session
 }
