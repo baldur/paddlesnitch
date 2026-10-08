@@ -47,6 +47,11 @@ export async function analyseAndSave(
     id?: string
     // Asked just before saving (after the slow summary): false drops the save.
     shouldSave?: () => Promise<boolean>
+    // Save with the plain summary and return without calling the LLM; the
+    // paddle page then asks for the written one (writePendingSummary). For a
+    // person waiting on the upload: on our Lambda, work scheduled with after()
+    // still holds the response until it finishes, so it can't hide the LLM.
+    deferSummary?: boolean
   } = {},
 ): Promise<AnalyseSaveResult> {
   const now = opts.now ?? new Date()
@@ -79,26 +84,63 @@ export async function analyseAndSave(
   }
 
   const sportSignal = opts.sport ?? (source.type === 'strava' ? source.sport : undefined)
-  await narrate(userId, result, when, prior, now, sportSignal)
+  if (!opts.deferSummary) await narrate(userId, result, when, prior, now, sportSignal)
   const session: AnalysisSession = {
     id: opts.id ?? nanoid(), userId, createdAt: now.toISOString(), paddledAt: when,
     source, doubleStrokeRate: false, note: '', insight: result.insight, result,
+    ...(opts.deferSummary ? { insightPending: true as const } : {}),
   }
   if (opts.shouldSave && !(await opts.shouldSave())) return { session, duplicate: false, dropped: true }
   await saveSession(session)
+  // The profile is folded in when the written summary is (writePendingSummary).
+  if (opts.deferSummary) return { session, duplicate: false }
 
   // Fold this paddle into the persistent athlete profile for NEXT time (a 2nd LLM
   // call). Off the critical path when a scheduler is given; awaited otherwise.
-  const refresh = async () => {
-    try {
-      const all = await listSessionSummaries(userId)
-      const latest = all.find(s => s.id === session.id)
-      if (latest) await refreshAthleteProfile(userId, latest, all, new Date().toISOString())
-    } catch (err) { console.error('[analyse] profile refresh failed', err) }
-  }
+  const refresh = () => foldIntoProfile(userId, session.id)
   if (opts.schedule) opts.schedule(refresh); else await refresh()
 
   return { session, duplicate: false }
+}
+
+async function foldIntoProfile(userId: string, id: string): Promise<void> {
+  try {
+    const all = await listSessionSummaries(userId)
+    const latest = all.find(s => s.id === id)
+    if (latest) await refreshAthleteProfile(userId, latest, all, new Date().toISOString())
+  } catch (err) { console.error('[analyse] profile refresh failed', err) }
+}
+
+/**
+ * Writes the AI summary of a paddle saved with `deferSummary`, then folds the
+ * paddle into the athlete profile, as analyseAndSave would have. A paddle whose
+ * summary is already written is returned as it is, so asking twice costs one
+ * LLM call at most per request that finds it pending. Everything the paddler
+ * changed meanwhile (note, boat, share link) is kept: the paddle is read again
+ * just before saving, and a paddle deleted meanwhile stays deleted (null).
+ */
+export async function writePendingSummary(userId: string, id: string, opts: { now?: Date } = {}): Promise<AnalysisSession | null> {
+  const before = await getSession(userId, id)
+  if (!before?.insightPending) return before
+  const now = opts.now ?? new Date()
+  let prior: SessionSummary[] = []
+  try { prior = (await listSessionSummaries(userId)).filter(s => s.id !== id) }
+  catch (err) { console.error('[analyse] history read failed', err) }
+  const result: AnalysisResult = { ...before.result }
+  const sport = before.source.type === 'strava' ? before.source.sport : undefined
+  await narrate(userId, result, before.paddledAt, prior, now, sport)
+
+  const latest = await getSession(userId, id)
+  if (!latest) return null
+  if (!latest.insightPending) return latest
+  const { insightPending: _, ...rest } = latest
+  const session: AnalysisSession = {
+    ...rest, insight: result.insight,
+    result: { ...latest.result, insight: result.insight, ...(result.insightModel ? { insightModel: result.insightModel } : {}) },
+  }
+  await saveSession(session)
+  await foldIntoProfile(userId, id)
+  return session
 }
 
 // The memory-aware written summary (docs/features/personable-insights.md), in

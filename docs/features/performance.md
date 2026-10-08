@@ -354,13 +354,37 @@ and keep it only if the dashboard shows a gain.
 | 1 | B (boat motion once) + the `derived()` interface with S3 + L1. **Shipped 2026-10-08 (#384): boat motion 912 → 99 ms, repeat view 304** | BOAT MOTION ~instant; the pattern in place | ~$0 | low |
 | 2 | A (data in the first HTML) for Paddles, a paddle, Devices; header user from the server. **Pages shipped 2026-10-08; the header still asks for the user itself** | 0.3–0.8 s on phones | $0 | low–medium |
 | 3 | C (warmer + ARM); review cold starts after 1–2 weeks. **Shipped 2026-10-08; review ~2026-10-22** | most cold starts gone; −20% compute cost | ~$0.10 | low |
-| 4 | F (paddle opens before its AI summary) | add a paddle 5–15 s → ~1 s | $0 | low |
+| 4 | F (paddle opens before its AI summary). **Shipped 2026-10-08** (client-driven: `after()` turned out to hold the response on our Lambda; see below) | add a paddle 5–15 s → ~1 s | $0 | low |
 | 5 | D (indexes as S3 objects, conditional writes) | flat with growth | ~$0 | medium |
 | 6 | E (public pages from the edge) | ~20 ms public pages | ~$0 | medium (privacy care) |
 | 7 | G, H as measured | small | ~$0 | low |
 
 Each phase is one or two PRs, measured before and after on the
 `paddlesnitch-performance` dashboard (#383), and revertable on its own.
+
+## Found while building phase 4: `after()` holds the response
+
+OpenNext's buffered Lambda wrapper gives Next no `waitUntil`, so work scheduled
+with `after()` runs **before** the response is returned, not after. So phase 4
+couldn't just move the AI summary into `after()`: the paddle is saved with the
+plain summary and the paddle page asks for the written one
+(`paddles.writeSummary`). Two other places still rely on `after()` and so still
+wait:
+
+- **Strava webhook:** answers after the whole import (AI summary included),
+  not within Strava's ~2 s. Strava retries; duplicate detection absorbs it.
+- **Tracker uploads:** the last part's response waits for the paddle to be made.
+
+Fix options:
+1. Async self-invoke (`InvocationType: Event`) of the server Lambda with a job
+   event the handler recognises before Next, like the warmer. Cheapest; no new
+   service.
+2. SQS plus a small worker. More moving parts.
+3. Response streaming (`aws-lambda-streaming` wrapper with a streaming
+   function URL), after which OpenNext can keep working once the stream ends.
+   The broadest change: every response goes through it.
+
+Recommendation: 1.
 
 ## Guardrails (tests that keep it true)
 

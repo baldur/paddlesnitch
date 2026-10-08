@@ -41,7 +41,7 @@ export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: str
 // 2026-10). Reused by the live analyse flow, the saved paddle and the shared
 // view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
-export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile, readOnly = false }: {
+export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile, readOnly = false, summaryPending = false }: {
   data: ViewData
   sessionId?: string
   initialNote?: string
@@ -51,6 +51,9 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   // Public shared view: hide the owner-only "PADDLES" link and show a
   // "analyse your own" call to action instead (#202).
   readOnly?: boolean
+  // The AI summary is still being written (performance.md, phase 4): the
+  // plain one shows meanwhile, with a line saying so.
+  summaryPending?: boolean
 }) {
   const router = useRouter()
   const utils = trpc.useUtils()
@@ -392,7 +395,10 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           <PaddleChart points={data.points} surges={data.surges} stops={data.stops} cursor={cursor}
             onSeek={i => { setCursor(i); setPlaying(false) }} />
 
-          <p className="leading-relaxed text-fg border-l-2 border-primary pl-3">{data.insight}</p>
+          <div className="border-l-2 border-primary pl-3">
+            <p className="leading-relaxed text-fg">{data.insight}</p>
+            {summaryPending && <p className="text-xs text-muted mt-1" role="status">Writing your summary…</p>}
+          </div>
 
           {sameOuting.length > 0 && (
             <div className="flex flex-col gap-1">
