@@ -116,7 +116,8 @@ async function main() {
         checks.push({
           name: 'Boat motion: a repeat view is a 304',
           ok: again?.sample.status === 304,
-          detail: etag ? `repeat answered ${again?.sample.status} in ${Math.round(again!.sample.ttfbMs)} ms` : 'no ETag sent',
+          // The tags themselves, so a miss says why (a weakened tag, a changed one).
+          detail: etag ? `repeat answered ${again?.sample.status} in ${Math.round(again!.sample.ttfbMs)} ms (sent ${etag.slice(0, 14)}…, got back ${(again?.headers.get('etag') ?? 'none').slice(0, 14)}…)` : 'no ETag sent',
         })
       }
     }

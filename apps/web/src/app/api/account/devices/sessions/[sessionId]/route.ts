@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { recordingReport, recordingReportVersion } from '@/lib/recording-report'
+import { etagMatches } from '@/lib/etag'
 
 // GET /api/account/devices/sessions/[sessionId]?deviceId=X — AUTHENTICATED.
 // The raw-data diagnostic for one of the user's device sessions: every column,
@@ -22,7 +23,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ sessionI
   const etag = `"${version}"`
   // Private: only this signed-in user's browser keeps it, and checks back each time.
   const headers = { ETag: etag, 'Cache-Control': 'private, no-cache' }
-  if (req.headers.get('if-none-match') === etag) return new NextResponse(null, { status: 304, headers })
+  if (etagMatches(req.headers.get('if-none-match'), etag)) return new NextResponse(null, { status: 304, headers })
 
   const r = await recordingReport(user.id, deviceId, sessionId)
   if (!r) return NextResponse.json({ error: 'not_found' }, { status: 404 })
