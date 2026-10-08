@@ -5,20 +5,15 @@
 // uninterpretable. Editing geometry on a course-with-entries is rejected (409);
 // name/visibility/sport stay editable. Clone-and-recompute is tracked in #72.
 
-import { listKeys, getJson } from './storage'
-import type { TrialMetadata } from './types'
+import { listKeys } from './storage'
+import { listTrials } from '@/lib/catalogue'
 
 // True iff at least one trial on this course has at least one entry.
 // O(trials) on listKeys plus a single listKeys per trial — fine at our
 // scale, can be cached later if it becomes a hotspot.
 export async function courseHasEntries(courseId: string): Promise<boolean> {
-  const trialKeys = await listKeys('trials/')
-  const trialMetaKeys = trialKeys.filter(
-    k => k.endsWith('metadata.json') && !k.includes('/entries/')
-  )
-  for (const key of trialMetaKeys) {
-    const trial = await getJson<TrialMetadata>(key)
-    if (!trial || trial.courseId !== courseId) continue
+  for (const trial of await listTrials()) {
+    if (trial.courseId !== courseId) continue
     const entryKeys = await listKeys(`trials/${trial.id}/entries/`)
     // result.json is the canonical "this trial has an entry" marker;
     // raw trace files may or may not exist depending on source.

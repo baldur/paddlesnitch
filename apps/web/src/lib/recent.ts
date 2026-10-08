@@ -8,9 +8,10 @@
 // another, track and all: about 2 s for the Trials home page, and growing with
 // every entry.
 
-import { getJson, listKeys } from './storage'
+import { getJson } from './storage'
 import { canViewTrial } from './permissions'
-import type { AuthUser, TrialMetadata, CourseMetadata, BoatClass, LeaderboardEntry } from './types'
+import type { AuthUser, CourseMetadata, BoatClass, LeaderboardEntry } from './types'
+import { listTrials } from '@/lib/catalogue'
 
 export type RecentSubmission = {
   entryId: string
@@ -30,9 +31,7 @@ export async function getRecentSubmissions(
   viewerGroupIds: Set<string>,
   limit = 8,
 ): Promise<RecentSubmission[]> {
-  const metaKeys = (await listKeys('trials/')).filter(k => /^trials\/[^/]+\/metadata\.json$/.test(k))
-  const trials = (await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k))))
-    .filter((t): t is TrialMetadata => !!t && canViewTrial(t, viewer, viewerGroupIds))
+  const trials = (await listTrials()).filter(t => canViewTrial(t, viewer, viewerGroupIds))
 
   const courses = new Map<string, Promise<CourseMetadata | null>>()
   const course = (id: string) => {

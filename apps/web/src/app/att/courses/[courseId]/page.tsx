@@ -1,15 +1,16 @@
 import Link from 'next/link'
 import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
 import { notFound } from 'next/navigation'
-import { getJson, listKeys } from '@/lib/storage'
+import { getJson } from '@/lib/storage'
 import AppHeader from '@/components/AppHeader'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
 import { canViewCourse, canManageCourse, isListedForViewer } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
-import type { CourseMetadata, TrialMetadata, LeaderboardEntry } from '@/lib/types'
+import type { CourseMetadata, LeaderboardEntry } from '@/lib/types'
 import { courseRecords } from '@/lib/course-records'
 import { formatTime } from '@/lib/geo'
+import { listTrials } from '@/lib/catalogue'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,13 +29,7 @@ export default async function CourseDetailPage({
   const viewerGroupIds = user ? new Set(await getUserGroupIds(user.id)) : undefined
   if (!canViewCourse(course, user, viewerGroupIds)) notFound()
 
-  const trialKeys = await listKeys('trials/')
-  const trialMetaKeys = trialKeys.filter(
-    k => k.endsWith('metadata.json') && !k.includes('/entries/')
-  )
-  const trials = (
-    await Promise.all(trialMetaKeys.map(k => getJson<TrialMetadata>(k)))
-  ).filter((t): t is TrialMetadata => t !== null && t.courseId === courseId)
+  const trials = (await listTrials()).filter(t => t.courseId === courseId)
     // Only surface trials the viewer is allowed to see — so a private
     // trial on a public course doesn't leak through the course detail
     // page.

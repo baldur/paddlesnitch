@@ -1,8 +1,7 @@
 // Everything the system holds about one user, as the "Download my data" file
 // (GDPR Art. 15 + 20). Shared by the direct download and the large-account
 // path (app/api/account/export/route.ts).
-import { getJson, listKeys } from '@/lib/storage'
-import type { CourseMetadata, TrialMetadata } from '@/lib/types'
+import { getJson } from '@/lib/storage'
 import { getUserGroupIds, getGroup, groupRoleOf } from '@/lib/groups'
 import { getStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { listSessions, getAthleteProfile } from '@paddlesnitch/analysis/analysis-store'
@@ -10,33 +9,24 @@ import { exportUserDevices } from '@paddlesnitch/core/devices'
 import { listFeedbackContactsForUser } from '@/lib/feedback-contacts'
 import { getBetaApplication } from '@/lib/beta-signups'
 import type { AuthUser } from '@paddlesnitch/core/types'
+import { listTrials, listCourses, listUserEntryResultKeys, listUserFailedUploadKeys } from '@/lib/catalogue'
 
 export async function buildAccountExport(user: AuthUser) {
   // Courses the user owns.
-  const courseKeys = (await listKeys('courses/')).filter(k => k.endsWith('metadata.json'))
-  const allCourses = await Promise.all(courseKeys.map(k => getJson<CourseMetadata>(k)))
-  const ownedCourses = allCourses
-    .filter((c): c is CourseMetadata => c !== null && c.adminUserId === user.id)
+  const ownedCourses = (await listCourses()).filter(c => c.adminUserId === user.id)
 
   // Trials the user owns.
-  const trialKeys = (await listKeys('trials/')).filter(
-    k => k.endsWith('metadata.json') && !k.includes('/entries/')
-  )
-  const allTrials = await Promise.all(trialKeys.map(k => getJson<TrialMetadata>(k)))
-  const ownedTrials = allTrials
-    .filter((t): t is TrialMetadata => t !== null && t.adminUserId === user.id)
+  const ownedTrials = (await listTrials()).filter(t => t.adminUserId === user.id)
 
   // Entries the user submitted (in any trial — owned or not). The entry path
   // includes the user's id, so we can target the listing directly.
-  const entryKeys = (await listKeys(`trials/`))
-    .filter(k => k.endsWith('result.json') && k.includes(`/entries/${user.id}/`))
+  const entryKeys = await listUserEntryResultKeys(user.id)
   const submittedEntries = (await Promise.all(entryKeys.map(k => getJson(k))))
     .filter((e): e is Record<string, unknown> => e !== null)
 
   // Failed uploads the user submitted — GPS tracks of traces that didn't match
   // a course, retained for debugging. Same id-scoped path as entries.
-  const failedKeys = (await listKeys(`trials/`))
-    .filter(k => k.endsWith('diagnostic.json') && k.includes(`/failed-uploads/${user.id}/`))
+  const failedKeys = await listUserFailedUploadKeys(user.id)
   const failedUploads = (await Promise.all(failedKeys.map(k => getJson(k))))
     .filter((e): e is Record<string, unknown> => e !== null)
 
