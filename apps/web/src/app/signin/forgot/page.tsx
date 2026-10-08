@@ -1,8 +1,9 @@
 'use client'
 import Link from 'next/link'
 import { EMAIL_DELIVERY } from '@/lib/email-delivery'
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useMountedAt } from '@/lib/use-mounted-at'
 
 // Step 1 of password reset: user types their email, we ask Cognito to send a
 // code. We always show the same "code sent" message regardless of whether the
@@ -15,7 +16,7 @@ export default function ForgotPasswordPage() {
   // Anti-bot fields for the reset-code request (which sends an email): a
   // honeypot the user never sees, and elapsed time since the page loaded.
   const [website, setWebsite] = useState('')
-  const mountedAt = useRef(Date.now())
+  const mountedAt = useMountedAt()
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()

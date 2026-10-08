@@ -7,7 +7,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
 import { GET as listGroups, POST as createGroup } from '@/app/att/api/groups/route'
 import { GET as getGroupRoute, PATCH as patchGroup, DELETE as deleteGroupRoute } from '@/app/att/api/groups/[groupId]/route'
-import { POST as inviteToGroup, GET as listInvites } from '@/app/att/api/groups/[groupId]/invitations/route'
+import { POST as inviteToGroup } from '@/app/att/api/groups/[groupId]/invitations/route'
 import { POST as acceptInvite } from '@/app/att/api/groups/[groupId]/invitations/[invitationId]/accept/route'
 import { DELETE as kickMember } from '@/app/att/api/groups/[groupId]/members/[userId]/route'
 import { POST as requestJoin, GET as listJoinReqs } from '@/app/att/api/groups/[groupId]/join-requests/route'

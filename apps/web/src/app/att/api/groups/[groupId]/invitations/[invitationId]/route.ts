@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import {
   getGroup,
-  getInvitation,
   deleteInvitation,
 } from '@/lib/groups'
 import { canManageGroup } from '@/lib/permissions'

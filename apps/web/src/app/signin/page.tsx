@@ -1,12 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { EMAIL_DELIVERY } from '@/lib/email-delivery'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { termsAcceptPath } from '@/lib/terms-path'
+import { useMountedAt } from '@/lib/use-mounted-at'
 
 function AuthForm() {
   const router = useRouter()
@@ -56,7 +57,7 @@ function AuthForm() {
   // Anti-bot fields for the passwordless code request (which sends an email):
   // a honeypot the user never sees, and the elapsed time since the page loaded.
   const [website, setWebsite] = useState('')
-  const mountedAt = useRef(Date.now())
+  const mountedAt = useMountedAt()
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import GuidePage, { Note, Screens, Steps } from '@/components/guide/GuidePage'
+import GuidePage, { Note, Screens } from '@/components/guide/GuidePage'
 import TrackerScreen from '@/components/guide/TrackerScreen'
 
 export const metadata: Metadata = { title: 'Upload it and look at it' }

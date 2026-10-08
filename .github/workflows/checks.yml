@@ -39,6 +39,10 @@ jobs:
         run: pnpm test
       - name: Typecheck (app, packages, tests)
         run: pnpm typecheck
+      # Errors fail; warnings are reported. (It used to lint the generated
+      # .open-next bundle: 16,000 problems, so nobody read any of them.)
+      - name: Lint
+        run: pnpm lint
       - name: Typecheck (infra)
         working-directory: infra
         run: npx tsc --noEmit -p .

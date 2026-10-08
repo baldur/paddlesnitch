@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import { useMountedAt } from '@/lib/use-mounted-at'
 
 // The beta tester application form. Posts to /api/beta-signup with the same
 // invisible bot checks as the other public forms (a hidden `website` field and
@@ -17,7 +18,7 @@ const field = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outlin
 const label = 'text-xs text-muted tracking-widest uppercase'
 
 export default function BetaSignupForm() {
-  const mountedAt = useRef(Date.now())
+  const mountedAt = useMountedAt()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [sport, setSport] = useState('')

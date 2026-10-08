@@ -10,9 +10,10 @@ const pkg = JSON.parse(readFileSync(path.resolve(__dirname, '../../../../package
 
 describe('PR checks', () => {
   it('run on every pull request', () => expect(workflow).toMatch(/on:\n\s+pull_request:/))
-  it('run the unit tests and the typecheck', () => {
+  it('run the unit tests, the typecheck and lint', () => {
     expect(workflow).toContain('run: pnpm test')
     expect(workflow).toContain('run: pnpm typecheck')
+    expect(workflow).toContain('run: pnpm lint')
     expect(pkg.scripts.typecheck).toContain('tsc --noEmit')
   })
   it('are read-only: no secrets, no AWS, no environment', () => {

@@ -16,7 +16,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 import { parseGpx } from '../src/lib/gpx'
 import { processTrace, haversine } from '../src/lib/geo'
-import { BOAT_CLASS_INFO, expectedSeats } from '../src/lib/types'
+import { expectedSeats } from '../src/lib/types'
 import type { CourseMetadata, TrialMetadata, GroupMetadata, LeaderboardEntry, BoatClass, CrewMember } from '../src/lib/types'
 
 const ROOT = path.join(process.cwd(), '.local-data')
