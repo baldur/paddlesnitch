@@ -8,12 +8,9 @@ import LoadingState from '@/components/LoadingState'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
+import { fmtDayTime } from '@paddlesnitch/core/format'
 
-const fmtDate = (iso?: string) => {
-  if (!iso) return '—'
-  try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
-  catch { return iso.slice(0, 16) }
-}
+const fmtDate = (iso?: string) => (iso ? fmtDayTime(iso) : '—')
 
 export default function RecordingMotion() {
   const params = useParams<{ deviceId: string; sessionId: string }>()

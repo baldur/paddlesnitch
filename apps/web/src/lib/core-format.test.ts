@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtDay, fmtWeekday, fmtMonth, sportLabel, participationLabel } from '@paddlesnitch/core/format'
+import { fmtDay, fmtWeekday, fmtMonth, fmtDayMonth, fmtDayTime, sportLabel, participationLabel } from '@paddlesnitch/core/format'
 
 describe('shared wording for stored values', () => {
   it('writes a day the same way on the server and in the browser', () => {
@@ -12,6 +12,12 @@ describe('shared wording for stored values', () => {
     expect(fmtWeekday('2026-09-13T08:11:30Z')).toBe('Sun, 13 Sep 2026')
     expect(fmtMonth('2026-09-13T08:11:30Z')).toBe('Sep 2026')
     expect(fmtWeekday('nope')).toBe('nope')
+  })
+  it('writes a day without the year, and a day with the local time of day', () => {
+    expect(fmtDayMonth('2026-09-13T08:11:30Z')).toBe('13 Sep')
+    const local = new Date(2026, 8, 13, 9, 5)   // 13 Sep 2026, 09:05 wherever the test runs
+    expect(fmtDayTime(local.toISOString())).toBe('13 Sep 2026, 09:05')
+    expect(fmtDayTime('nope')).toBe('nope')
   })
   it('says what "both" means', () => {
     expect(sportLabel('both')).toBe('KAYAK AND ROWING')

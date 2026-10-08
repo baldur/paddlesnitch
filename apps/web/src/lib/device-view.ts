@@ -2,17 +2,10 @@
 // the grouping rule that decides what a device card says is unit-tested rather
 // than eyeballed in the browser.
 import type { DeviceSessionMeta } from '@/lib/devices'
+import { fmtDay as coreFmtDay, fmtDayTime } from '@paddlesnitch/core/format'
 
-export const fmtDate = (iso?: string) => {
-  if (!iso) return '—'
-  try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
-  catch { return iso.slice(0, 16) }
-}
-export const fmtDay = (iso?: string) => {
-  if (!iso) return 'never'
-  try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) }
-  catch { return iso.slice(0, 10) }
-}
+export const fmtDate = (iso?: string) => (iso ? fmtDayTime(iso) : '—')
+export const fmtDay = (iso?: string) => (iso ? coreFmtDay(iso) : 'never')
 export const fmtDist = (m?: number) => (m == null ? '—' : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`)
 export const fmtDur = (s?: number | null) => {
   if (s == null) return '—'

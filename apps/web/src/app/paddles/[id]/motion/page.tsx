@@ -9,6 +9,7 @@ import { trpc } from '@/lib/trpc'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
+import { fmtDayTime } from '@paddlesnitch/core/format'
 
 // A tracker paddle's BOAT MOTION (docs/features/one-paddle.md, phase 3): the
 // roll, pitch and evenness charts that used to live on the recording's page,
@@ -17,11 +18,7 @@ import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 type Recording = { report: DeviceDataReport; cadence: CadenceReport | null; attitude: AttitudeReport | null }
 
-const fmtDate = (iso?: string) => {
-  if (!iso) return ''
-  try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
-  catch { return iso.slice(0, 16) }
-}
+const fmtDate = (iso?: string) => (iso ? fmtDayTime(iso) : '')
 
 export default function PaddleMotionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)

@@ -6,6 +6,7 @@
 import type { AnalysisSession } from './analysis-store'
 import { split500 } from './analysis'
 import { BOAT_CLASS_INFO, isBoatClass } from '@paddlesnitch/core/types'
+import { fmtDay } from '@paddlesnitch/core/format'
 // projectRoute now lives in the shared timing package (both apps' route
 // thumbnails use it); re-exported here so existing importers/tests are unchanged.
 import { projectRoute } from '@paddlesnitch/timing/geo'
@@ -31,9 +32,9 @@ function fmtClock(totalS: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
 }
 
+// The site's one way to write a day ('13 Sep 2026'); empty if unparseable.
 function fmtDate(iso: string): string {
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  return Number.isFinite(Date.parse(iso)) ? fmtDay(iso) : ''
 }
 
 const CARD_W = 640

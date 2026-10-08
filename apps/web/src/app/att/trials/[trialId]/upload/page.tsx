@@ -10,6 +10,7 @@ import ViewOnStrava from '@/components/strava/ViewOnStrava'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
 import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
+import { fmtDayMonth } from '@paddlesnitch/core/format'
 
 // What the upload route returns alongside a "did not cross the lines" failure:
 // the parsed track + the course geometry, enough to draw a diagnostic map. For
@@ -23,13 +24,7 @@ function formatDistance(metres: number): string {
   if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km`
   return `${Math.round(metres)} m`
 }
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-  } catch {
-    return iso.slice(0, 10)
-  }
-}
+const formatDate = fmtDayMonth
 
 // These three editors MUST live at module scope. If you nest them inside
 // UploadPage, React sees a new component type on every parent re-render

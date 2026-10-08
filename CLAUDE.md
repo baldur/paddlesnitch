@@ -974,6 +974,7 @@ Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on 
 5. **One idea per sentence, ~20 words max;** helper text two sentences at most. No marketing filler (suite, seamless, unlock, journey, "actually happened"), no lists of three for rhythm, few em-dashes.
 6. **Don't blame the reader** ("We can't find this paddle", not "it isn't yours"), and **don't claim causes the data can't show** ("slowed", not "faded (fatigue)").
 7. **Units:** lowercase with a space — `2.1 km`, `/500 m`, `58 spm`; pace is `/500`, not m/s.
+7a. **Dates:** only through `@paddlesnitch/core/format`: `fmtDay` '13 Sep 2026', `fmtWeekday` 'Sun, 13 Sep 2026', `fmtMonth` 'Sep 2026', `fmtDayMonth` '13 Sep' (all UTC, month names spelled out, safe on server-rendered pages) and `fmtDayTime` '13 Sep 2026, 09:11' (viewer's time zone: browser-only pages). Never `toLocale*`: browsers and servers write it differently ('Sept', 'Sep 13'), which also breaks hydration. `one-date-format.test.ts` fails on a new one.
 8. **No AI model names on screen.** AI-written text follows the same rules.
 
 ### Key Conventions

@@ -8,6 +8,7 @@ import type { TrialEntrySummary } from '@paddlesnitch/analysis/trials'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
+import { fmtDayMonth } from '@paddlesnitch/core/format'
 
 const PANEL = 'bg-surface/95 border border-border'
 type Result = ViewData & { id: string }
@@ -23,7 +24,7 @@ function Frame({ children }: { children: React.ReactNode }) {
 }
 
 function fmtDist(m: number) { return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m` }
-function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) } catch { return iso.slice(0, 10) } }
+const fmtDate = fmtDayMonth
 
 export default function AddPaddlePage() {
   const [tab, setTab] = useState<'file' | 'strava' | 'trials' | 'device'>('file')

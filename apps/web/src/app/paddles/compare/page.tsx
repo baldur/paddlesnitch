@@ -6,12 +6,13 @@ import { fmtDurWords, split500 } from '@paddlesnitch/analysis/analysis'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import SameOuting from '@/components/analysis/SameOuting'
+import { fmtDay } from '@paddlesnitch/core/format'
 
 export default function ComparePage() {
   return <Suspense fallback={<div className="min-h-screen bg-bg" />}><CompareInner /></Suspense>
 }
 
-function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
+const fmtDate = fmtDay
 
 function Row({ label, a, b, better }: { label: string; a: string; b: string; better?: 'a' | 'b' | '' }) {
   return (

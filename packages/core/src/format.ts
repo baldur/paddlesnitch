@@ -34,6 +34,28 @@ export function fmtMonth(value: string): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
 }
 
+/** An ISO timestamp → '13 Sep' (UTC, no year: for lists within a season). Unparseable → as given. */
+export function fmtDayMonth(value: string): string {
+  const t = Date.parse(value)
+  if (!Number.isFinite(t)) return value
+  const d = new Date(t)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+/**
+ * An ISO timestamp → '13 Sep 2026, 09:11' in the VIEWER's time zone: for when
+ * a recording started, where the time of day matters. Browser-only pages
+ * (the device pages fetch their data); a server-rendered page would print the
+ * server's time zone and then disagree with the browser. Unparseable → as given.
+ */
+export function fmtDayTime(value: string): string {
+  const t = Date.parse(value)
+  if (!Number.isFinite(t)) return value
+  const d = new Date(t)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 /** A course's sport for a label: 'both' is meaningless on its own. */
 export function sportLabel(sport: string): string {
   switch (sport) {
