@@ -87,10 +87,9 @@ async function analysePaddle(req: NextRequest, userId: string): Promise<NextResp
   if (track.length < 2) return NextResponse.json({ error: 'That file has too few GPS points to analyse.' }, { status: 422 })
 
   // Shared pipeline: conditions → analysis → duplicate detection → save, with the
-  // plain summary. The AI summary (and the profile update after it) is written
-  // when the paddle page asks (paddles.writeSummary): after() can't keep it off
-  // this response, because on our Lambda the response waits for after() work.
-  const { session, duplicate } = await analyseAndSave(userId, track, source, { deferSummary: true })
+  // plain summary. The AI one is written when the paddle page asks
+  // (paddles.writeSummary; see pipeline.ts for why not here).
+  const { session, duplicate } = await analyseAndSave(userId, track, source)
   return NextResponse.json({
     ...session.result, id: session.id, note: session.note,
     source: session.source, paddledAt: session.paddledAt,

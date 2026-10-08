@@ -71,7 +71,6 @@ export async function planForRecording(userId: string, deviceId: string, deviceS
 
 export async function paddleForRecording(
   userId: string, deviceId: string, deviceSessionId: string,
-  opts: { schedule?: (fn: () => void | Promise<void>) => void } = {},
 ): Promise<TrackerPaddleOutcome> {
   const plan = await planForRecording(userId, deviceId, deviceSessionId)
   switch (plan.action) {
@@ -83,7 +82,6 @@ export async function paddleForRecording(
   }
   const r = await analyseAndSave(userId, plan.track, { type: 'device', deviceId, deviceSessionId }, {
     id: trackerPaddleId(deviceSessionId),
-    schedule: opts.schedule,
     // The motion data landed while this GPS-only paddle was being written: the
     // call it triggered makes the fuller one. Only "landed meanwhile": motion
     // that was there from the start but gives no stroke rate (single-sided, too
