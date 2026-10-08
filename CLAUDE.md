@@ -820,7 +820,6 @@ aws sso login --profile paddlesnitch
 
 These flows have no automated tests yet:
 - Magic link auth (currently disabled — re-add tests when the Lambda triggers ship)
-- Token refresh path in `getAuthUser()` (manual smoke only)
 - Map components (UI only — manual)
 
 When fixing a bug in any uncovered area, add a regression test at the same time.
@@ -883,7 +882,7 @@ Use **Vitest**. Vitest `globalSetup` spawns its own cognito-local on :9230 so au
 - `src/tests/upload.test.ts` — integration: full upload pipeline → leaderboard (real filesystem + cognito-local)
 - `src/tests/cognito-test-server.ts` + `src/tests/global-setup.ts` — spawn the test cognito-local instance, create pool/client, set env
 
-Pattern: pure lib functions get unit tests; API routes get integration tests against real temp filesystem + real cognito-local. Only `next/headers` is mocked (Next.js server-only API). No SDK mocks.
+Pattern: pure lib functions get unit tests; API routes get integration tests against real temp filesystem + real cognito-local. Mock what leaves the process (Next's `next/headers`, outside HTTP: weather, river flow, Strava, the AI model, email) or what can't run locally (S3's own API, in `storage-s3.test.ts`); keep storage and Cognito real. Staying signed in (the silent refresh in `getAuthUser()`) is covered by `auth-refresh.test.ts`.
 
 Run: `pnpm test`
 
