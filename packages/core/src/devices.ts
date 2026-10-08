@@ -196,6 +196,7 @@ export async function redeemToken(deviceId: string, claimSecret: string): Promis
     deviceId, userId: c.userId, name: c.name ?? `Tracker ${deviceId}`, model: c.model, firmware: c.firmware,
     linkedAt: ts, lastSeenAt: ts, tokenHash,
   } satisfies DeviceRecord)
+  await putJson(userTrackerKey(c.userId, deviceId), {})
   c.consumedAt = ts
   await putJson(key, c)  // tombstone — single use, repeat poll → 410
   // The code is spent the moment the token is issued; drop its index so it
@@ -232,6 +233,7 @@ export async function linkByTokenHash(
     deviceId: d.deviceId, userId, name: d.name ?? existing?.name ?? `Tracker ${d.deviceId}`,
     model: d.model, firmware: d.firmware, linkedAt: ts, lastSeenAt: ts, tokenHash: d.tokenHash,
   } satisfies DeviceRecord)
+  await putJson(userTrackerKey(userId, d.deviceId), {})
   return { deviceId: d.deviceId, model: d.model }
 }
 
@@ -309,10 +311,42 @@ export async function touchDevice(
   }
 }
 
+// ---- Per-user indexes (docs/features/performance.md, phase D) ----
+// One small object per tracker and per recording under users/{userId}/, so a
+// user's lists read only their own records. They used to list every key under
+// devices/ -- every tracker's recordings, parts and health reports, everyone's
+// -- and read every record to find theirs: the slowest call on the Devices page,
+// and it grew with every upload by anyone. Account erasure already wipes
+// users/{userId}/. An account from before the index builds it from one full
+// scan on its first read; the marker says it's done.
+const userTrackerKey = (userId: string, deviceId: string) => `users/${userId}/trackers/${deviceId}.json`
+const userRecordingKey = (userId: string, deviceId: string, sessionId: string) => `users/${userId}/recordings/${deviceId}.${sessionId}.json`
+const deviceIndexMarker = (userId: string) => `users/${userId}/device-index.json`
+
+async function ensureDeviceIndex(userId: string): Promise<void> {
+  if (await getJson(deviceIndexMarker(userId))) return
+  const keys = await listKeys('devices/')
+  const [records, metas] = await Promise.all([
+    Promise.all(keys.filter(k => k.endsWith('/metadata.json')).map(k => getJson<DeviceRecord>(k))),
+    Promise.all(keys.filter(k => k.endsWith('/session.json')).map(k => getJson<DeviceSessionMeta>(k))),
+  ])
+  await Promise.all([
+    ...records.filter(d => d?.userId === userId).map(d => putJson(userTrackerKey(userId, d!.deviceId), {})),
+    ...metas.filter(m => m?.userId === userId).map(m => putJson(userRecordingKey(userId, m!.deviceId, m!.sessionId), {})),
+  ])
+  await putJson(deviceIndexMarker(userId), { builtAt: nowIso() })
+}
+
+// The entries under an index prefix, as [deviceId, sessionId?].
+async function indexEntries(prefix: string): Promise<string[][]> {
+  return (await listKeys(prefix)).map(k => k.slice(prefix.length).replace(/\.json$/, '').split('.'))
+}
+
 // The signed-in user's devices (owner-filtered).
 export async function listUserDevices(userId: string): Promise<DeviceRecord[]> {
-  const keys = await listKeys('devices/')
-  const all = await Promise.all(keys.filter(k => k.endsWith('/metadata.json')).map(k => getJson<DeviceRecord>(k)))
+  await ensureDeviceIndex(userId)
+  const all = await Promise.all((await indexEntries(`users/${userId}/trackers/`)).map(([deviceId]) => getJson<DeviceRecord>(deviceKey(deviceId))))
+  // The record is the truth: an entry whose tracker has moved on is ignored.
   return all.filter((d): d is DeviceRecord => !!d && d.userId === userId)
     .sort((a, b) => (b.lastSeenAt > a.lastSeenAt ? 1 : -1))
 }
@@ -325,6 +359,7 @@ export async function revokeDevice(userId: string, deviceId: string): Promise<bo
   if (!d || d.userId !== userId) return false
   if (d.tokenHash) await deleteObject(tokenKey(d.tokenHash))
   await deleteObject(deviceKey(deviceId))
+  await deleteObject(userTrackerKey(userId, deviceId))
   return true
 }
 
@@ -387,6 +422,7 @@ export async function storeDeviceSession(
   await putObject(sessionTraceKey(meta.deviceId, sessionId), csv)
   await putJson(sessionMetaKey(meta.deviceId, sessionId), full)
   await putJson(uploadIndexKey(meta.deviceId, meta.filename), { sessionId })
+  await putJson(userRecordingKey(meta.userId, meta.deviceId, sessionId), {})
   return full
 }
 
@@ -606,8 +642,9 @@ export async function getDeviceSessionMotion(userId: string, deviceId: string, s
 
 // The signed-in user's device uploads, newest first (owner-filtered).
 export async function listUserDeviceSessions(userId: string): Promise<DeviceSessionMeta[]> {
-  const keys = await listKeys('devices/')
-  const metas = await Promise.all(keys.filter(k => k.endsWith('/session.json')).map(k => getJson<DeviceSessionMeta>(k)))
+  await ensureDeviceIndex(userId)
+  const metas = await Promise.all((await indexEntries(`users/${userId}/recordings/`))
+    .map(([deviceId, sessionId]) => getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))))
   return metas.filter((m): m is DeviceSessionMeta => !!m && m.userId === userId)
     .sort((a, b) => (b.uploadedAt > a.uploadedAt ? 1 : -1))
 }
