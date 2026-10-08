@@ -1,34 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { listUserDevices, revokeDevice, getDeviceHealth, getLastCrash } from '@/lib/devices'
-import { getChannelVersion } from '@/lib/firmware'
+import { revokeDevice } from '@/lib/devices'
+import { deviceList } from '@/lib/device-list'
 
-// GET /api/account/devices — AUTHENTICATED. The signed-in user's linked devices.
-//
-// `tokenHash` is stripped rather than shipped: it is sha256 of the device's
-// bearer token, it authenticates nothing on the browser side, and it has no
-// business in a client bundle. Serialise the fields explicitly so a field added
-// to DeviceRecord later isn't published by accident.
+// GET /api/account/devices — AUTHENTICATED. The signed-in user's linked devices
+// (lib/device-list.ts, which also fills the DEVICES page's first HTML).
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const devices = await Promise.all((await listUserDevices(user.id)).map(async d => {
-    // The last start-up or heartbeat report, reduced to what the page shows.
-    const h = await getDeviceHealth(d.deviceId)
-    const crash = await getLastCrash(d.deviceId)
-    return {
-      deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware,
-      linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt,
-      ...(h ? { health: { at: h.at, kind: h.kind, resetReason: h.resetReason, crashTask: h.crash?.task } } : {}),
-      ...(crash?.crash ? { lastCrash: { at: crash.at, task: crash.crash.task } } : {}),
-    }
-  }))
-  // What the stable channel currently offers, so the page can say whether a
-  // device is BEHIND rather than just printing a version nobody can calibrate.
-  // Never fails the request: a device list is useful without it.
-  let stableVersion: string | null = null
-  try { stableVersion = await getChannelVersion('stable') } catch { /* non-fatal */ }
-  return NextResponse.json({ devices, stableVersion })
+  return NextResponse.json(await deviceList(user.id))
 }
 
 // DELETE /api/account/devices — AUTHENTICATED. Revoke one device ({ deviceId }):

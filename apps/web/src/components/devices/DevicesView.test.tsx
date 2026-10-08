@@ -9,7 +9,7 @@ vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header
 const paddleOf = vi.hoisted(() => ({ data: {} as Record<string, string> }))
 vi.mock('@/lib/trpc', () => ({ trpc: { paddles: { byRecording: { useQuery: () => ({ data: paddleOf.data }) } } } }))
 
-import DevicesPage from './page'
+import DevicesPage, { type DevicesInitial } from './DevicesView'
 
 let container: HTMLDivElement
 let root: Root
@@ -26,11 +26,11 @@ function stubFetch(routes: Record<string, unknown>) {
   } as Response)))
 }
 
-async function mount() {
+async function mount(initial?: DevicesInitial) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root.render(<DevicesPage />) })
+  await act(async () => { root.render(<DevicesPage initial={initial} />) })
   await act(async () => { await Promise.resolve() })
   await act(async () => { await Promise.resolve() })
 }
@@ -53,6 +53,20 @@ describe('DEVICES page', () => {
     expect(container.textContent).toContain('10.79 km')
     const card = [...container.querySelectorAll('a')].find(a => a.textContent?.includes("Baldur's tracker"))
     expect(card?.getAttribute('href')).toBe('/devices/5A43CA48')
+  })
+
+  it('renders the trackers the server put in the first HTML, without fetching them again', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    await mount({
+      devices: [{ deviceId: '5A43CA48', name: "Baldur's tracker", model: 'lilygo-tbeam-s3-supreme', firmware: '0.9.0', lastSeenAt: '2026-09-18T09:00:00Z' }],
+      stableVersion: '0.9.0',
+      sessions: [{ sessionId: 's1', deviceId: '5A43CA48', userId: 'u1', filename: 'track_0001.csv', uploadedAt: '2026-09-19T10:00:00Z', points: 3600, distanceMetres: 10790 }],
+    })
+    expect(container.textContent).toContain("Baldur's tracker")
+    expect(container.textContent).toContain('up to date')
+    expect(container.textContent).not.toContain('Loading')
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('still shows a revoked tracker, because its uploads are still the user\'s', async () => {

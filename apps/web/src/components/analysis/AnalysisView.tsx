@@ -10,6 +10,7 @@ import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 import { fmtDur, fmtClock, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
 import { gateAt, type Racer } from '@paddlesnitch/analysis/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
+import { fmtDay } from '@paddlesnitch/core/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 import { sourceLabel } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
@@ -243,8 +244,9 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   }
 
   const c = data.conditions
-  const paddled = data.paddledAt ? new Date(data.paddledAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''
-  const fmtMatchDate = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
+  // The shared fixed format: this view is rendered on the server too.
+  const paddled = data.paddledAt ? fmtDay(data.paddledAt) : ''
+  const fmtMatchDate = fmtDay
 
   const cur = data.points[cursor ?? 0]
   const scale = scaleBounds(data.points, metric)
