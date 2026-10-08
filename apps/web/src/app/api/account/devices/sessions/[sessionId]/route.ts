@@ -1,42 +1,30 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { getDeviceSessionTrace, getDeviceSessionMotion } from '@/lib/devices'
-import { describeDeviceData } from '@paddlesnitch/timing/device'
-import { deriveCadence, movingRangesFromTrack } from '@paddlesnitch/timing/cadence'
-import { deriveAttitude } from '@paddlesnitch/timing/attitude'
+import { recordingReport, recordingReportVersion } from '@/lib/recording-report'
 
 // GET /api/account/devices/sessions/[sessionId]?deviceId=X — AUTHENTICATED.
 // The raw-data diagnostic for one of the user's device sessions: every column,
-// fix/no-fix counts, movement-gated distance, and an honest stroke-rate verdict
-// (see docs/features/device-data.md). Owner-gated via getDeviceSessionTrace.
+// fix/no-fix counts, movement-gated distance, an honest stroke-rate verdict and
+// the boat motion (docs/features/device-data.md). Owner-gated: someone else's
+// recording is 404.
+//
+// Worked out once per recording version (lib/recording-report.ts), and sent
+// with that version as its ETag: a repeat view the browser already has is a
+// 304 with no body, before anything but the recording's metadata is read.
 export async function GET(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { sessionId } = await params
   const deviceId = (new URL(req.url).searchParams.get('deviceId') ?? '').toUpperCase()
 
-  const buf = await getDeviceSessionTrace(user.id, deviceId, sessionId)
-  if (!buf) return NextResponse.json({ error: 'not_found' }, { status: 404 })
-  const csv = buf.toString('utf8')
-  const report = describeDeviceData(csv)
+  const version = await recordingReportVersion(user.id, deviceId, sessionId)
+  if (!version) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  const etag = `"${version}"`
+  // Private: only this signed-in user's browser keeps it, and checks back each time.
+  const headers = { ETag: etag, 'Cache-Control': 'private, no-cache' }
+  if (req.headers.get('if-none-match') === etag) return new NextResponse(null, { status: 304, headers })
 
-  // Real cadence, when the motion sidecar has been uploaded for this session.
-  // Best-effort: a missing or unreadable sidecar leaves the existing honest
-  // "not derivable from 1 Hz peaks" verdict in place rather than failing the page.
-  let cadence = null
-  let attitude = null
-  try {
-    const motion = await getDeviceSessionMotion(user.id, deviceId, sessionId)
-    if (motion) {
-      const text = motion.toString('utf8')
-      const movingRanges = movingRangesFromTrack(csv)
-      cadence = deriveCadence(text, { movingRanges })
-      attitude = deriveAttitude(text, { movingRanges })
-    }
-  } catch {
-    cadence = null
-    attitude = null
-  }
-
-  return NextResponse.json({ report, cadence, attitude })
+  const r = await recordingReport(user.id, deviceId, sessionId)
+  if (!r) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  return NextResponse.json(r, { headers })
 }

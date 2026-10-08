@@ -1,5 +1,6 @@
 import { after } from 'next/server'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
+import { recordingReport } from '@/lib/recording-report'
 
 // Make or update a tracker recording's paddle after the response has gone
 // (docs/features/one-paddle.md, phase 2): the tracker, or the phone relaying
@@ -9,6 +10,9 @@ export function makePaddleAfterResponse(userId: string, deviceId: string, device
   const job = async () => {
     try {
       const r = await paddleForRecording(userId, deviceId, deviceSessionId)
+      // Work out the recording's report now, so BOAT MOTION's first view is
+      // instant too (docs/features/performance.md, phase 1). Best effort.
+      await recordingReport(userId, deviceId, deviceSessionId).catch(err => console.error('[recording-report] warm failed', err))
       console.log(`[tracker-paddle] ${deviceId}/${deviceSessionId}: ${r.status}${'paddleId' in r ? ` ${r.paddleId}` : ` (${r.reason})`}`)
     } catch (err) {
       console.error(`[tracker-paddle] ${deviceId}/${deviceSessionId} failed`, err)
