@@ -11,6 +11,7 @@
 #include "ota.h"
 #include "ota_policy.h"
 #include "upload_policy.h"
+#include "upload_index.h"
 #include "compress.h"
 #include "health.h"
 #include "ble_about.h"
@@ -26,6 +27,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <vector>
 
 static const char *UPLOADED_INDEX = "/uploaded.txt";
 
@@ -198,28 +200,23 @@ static void markUploaded(const String &name, int rc)
     f.close();
 }
 
-// The HTTP code the index recorded for a file, or 0 if it has none.
-static int indexRc(const String &name)
+// The upload index read ONCE, keeping the lines for the names `ix` wants. A scan
+// over the card names its files first, then calls this: one pass over the
+// index, not one per file (upload_index.h has why: the watchdog restart loop).
+static void readUploadIndex(UploadIndex &ix)
 {
     SpiBusGuard bus(5000);
-    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return 0; }
+    if (!bus) { DBGE("sd", "%s: bus busy", __func__); return; }
     File f = SD.open(UPLOADED_INDEX, FILE_READ);
-    if (!f) return 0;
-    int found = 0;
+    if (!f) return;
+    int n = 0;
     while (f.available()) {
         String line = f.readStringUntil('\n');
-        line.trim();
-        int tab = line.indexOf('\t');
-        if (tab < 0) continue;
-        if (line.substring(0, tab) != name) continue;
-        found = line.substring(tab + 1).toInt();
-        break;
+        ix.addLine(line.c_str());
+        if ((++n & 31) == 0) vTaskDelay(1);   // let the idle task (and its watchdog) run
     }
     f.close();
-    return found;
 }
-
-static bool confirmedUploaded(const String &name) { return indexRcConfirmed(indexRc(name)); }
 
 // ---------------------------------------------------------------------------
 // Claim
@@ -675,27 +672,40 @@ static void computeCounts(UplinkStatus &st)
     SpiBusGuard bus(5000);
     if (!bus) { DBGE("sd", "bus busy counting"); st.countsValid = false; return; }
 
-    int on = 0, up = 0, rejected = 0;
+    const uint32_t t0 = millis();
+    // Name the tracks on the card, then read the index once for them.
+    std::vector<std::string> names;
+    UploadIndex ix;
     File root = SD.open("/");
+    int seen = 0;
     for (File f = root.openNextFile(); f; f = root.openNextFile()) {
         bool dir = f.isDirectory();
         String name = f.name();
         if (name.startsWith("/")) name = name.substring(1);
         bool isTrack = isTrackUpload(name);
         f.close();
+        if ((++seen & 15) == 0) vTaskDelay(1);
         if (dir || !isTrack) continue;
+        names.emplace_back(name.c_str());
+        ix.want(name.c_str());
+    }
+    root.close();
+    readUploadIndex(ix);
+
+    int on = 0, up = 0, rejected = 0;
+    for (const auto &name : names) {
         on++;
-        const int rc = indexRc(name);
+        const int rc = ix.rc(name.c_str());
         if (indexRcConfirmed(rc)) up++;
         else if (indexRcRejected(rc)) rejected++;
     }
-    root.close();
 
     st.onDevice = on;
     st.uploaded = up;
     st.rejected = rejected;
     st.pending  = on - up - rejected;   // rejected ones will never upload
     st.countsValid = true;
+    Serial.printf("sync: counted %d recording(s), %d uploaded, in %lu ms\n", on, up, (unsigned long)(millis() - t0));
 }
 
 // Deletes EVERY session the server has confirmed (200/201/409). No keep-newest-N
@@ -727,9 +737,13 @@ static int deleteConfirmedAll()
     }
     root.close();
 
+    UploadIndex ix;
+    for (int i = 0; i < n; i++) ix.want(names[i].c_str());
+    readUploadIndex(ix);
+
     int deleted = 0;
     for (int i = 0; i < n; i++) {
-        if (!confirmedUploaded(names[i])) continue;
+        if (!indexRcConfirmed(ix.rc(names[i].c_str()))) continue;
         if (SD.remove("/" + names[i])) {
             Serial.printf("  deleted %s\n", names[i].c_str());
             deleted++;
@@ -774,21 +788,32 @@ int uplinkSyncSessions()
         if (!bus) { DBGE("sync", "bus busy listing"); return 0; }
         File root = SD.open("/");
         if (!root) { DBGE("sync", "cannot open root"); return 0; }
+        // Name the candidates, then read the index once for them.
+        std::vector<std::string> cand;
+        UploadIndex ix;
+        int seen = 0;
         for (File f = root.openNextFile(); f; f = root.openNextFile()) {
             if (f.isDirectory()) { f.close(); continue; }
             String name = f.name();
             if (name.startsWith("/")) name = name.substring(1);
             f.close();
-            // Only files still to send take a slot. Listing uploaded ones too
-            // meant a card holding 128 recordings never uploaded another
-            // (audit 2026-09); the next sync picks up anything past 128.
-            if (isTrackUpload(name)) {
-                if (name != active && nTracks < 128 && !alreadyUploaded(name)) tracks[nTracks++] = name;
-            } else if (isMotionUpload(name)) {
-                if (name != activeUp && nSide < 128 && !alreadyUploaded(name)) sidecars[nSide++] = name;
+            if ((++seen & 15) == 0) vTaskDelay(1);
+            if ((isTrackUpload(name) && name != active) || (isMotionUpload(name) && name != activeUp)) {
+                cand.emplace_back(name.c_str());
+                ix.want(name.c_str());
             }
         }
         root.close();
+        readUploadIndex(ix);
+        // Only files still to send take a slot. Listing uploaded ones too
+        // meant a card holding 128 recordings never uploaded another
+        // (audit 2026-09); the next sync picks up anything past 128.
+        for (const auto &c : cand) {
+            if (ix.has(c.c_str())) continue;
+            String name(c.c_str());
+            if (isTrackUpload(name)) { if (nTracks < 128) tracks[nTracks++] = name; }
+            else if (nSide < 128) sidecars[nSide++] = name;
+        }
     }
     DBGI("sync", "listed %d track(s), %d sidecar(s)", nTracks, nSide);
 
