@@ -180,6 +180,10 @@ export default function BluetoothPage() {
           })
           return { status: res.status, body: await res.json().catch(() => ({})) }
         },
+        staged: async rec => {
+          const res = await fetch(`/api/account/devices/${f.about.id}/sessions?${new URLSearchParams({ filename: rec.upload })}`)
+          return res.ok ? ((await res.json()) as { parts?: number[] }).parts ?? [] : []
+        },
       }, setSyncProgress)
       const n = r.sent
       const sent = n === 0 ? 'Nothing new to send.' : `${n} recording${n === 1 ? '' : 's'} sent. ${n === 1 ? 'It' : 'They'}'ll appear in Paddles in a minute or so.`

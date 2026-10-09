@@ -219,6 +219,8 @@ export type SyncIo = {
   seek(offset: number): Promise<void>                            // write DATA {op:seek}
   upload(r: PendingRecording, part: number, parts: number, bytes: Uint8Array, compressed: boolean):
     Promise<{ status: number; body: { error?: string; receipt?: string } }>
+  // The pieces the server already has from a sync that broke off.
+  staged?(r: PendingRecording): Promise<number[]>
 }
 export type SyncProgress = { index: number; total: number; name: string; part: number; parts: number }
 export type SyncResult = { sent: number; failed: { name: string; reason: 'unusable' | 'receipt' | 'failed' }[] }
@@ -253,11 +255,25 @@ export async function syncOverBluetooth(io: SyncIo, onProgress?: (p: SyncProgres
   for (let i = 0; i < list.length; i++) {
     const rec = list[i]
     try {
-      let parts = 1, receipt: string | undefined
-      for (let part = 1; part <= parts; part++) {
-        await io.command({ op: 'piece', name: rec.name, part })
-        const st = await waitForTracker(io, ['ready'])
-        parts = Math.max(1, st.parts)
+      // A sync that broke off leaves its pieces on the server: carry on from
+      // there rather than reading them across Bluetooth again (the slow part).
+      // Safe because every attempt, over Bluetooth or WiFi, cuts the file into
+      // the same 64 KB pieces (UPLOAD_CHUNK in firmware/src/uplink.cpp).
+      const have = new Set(io.staged ? await io.staged(rec).catch(() => []) : [])
+      // Asking for piece 1 tells us how many there are; the tracker only
+      // prepares it, nothing crosses Bluetooth until it's read.
+      await io.command({ op: 'piece', name: rec.name, part: 1 })
+      let st = await waitForTracker(io, ['ready'])
+      const parts = Math.max(1, st.parts)
+      // The last piece always goes: its arrival is what makes the server put
+      // the file together.
+      const todo = Array.from({ length: parts }, (_, k) => k + 1).filter(p => !have.has(p) || p === parts)
+      let receipt: string | undefined
+      for (const part of todo) {
+        if (part !== 1) {
+          await io.command({ op: 'piece', name: rec.name, part })
+          st = await waitForTracker(io, ['ready'])
+        }
         onProgress?.({ index: i + 1, total: list.length, name: rec.name, part, parts })
         const bytes = await readPayload(io.readPage, io.seek, st.len)
         const r = await io.upload(rec, part, parts, bytes, st.compressed)
