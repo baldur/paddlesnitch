@@ -521,6 +521,17 @@ export async function storeUploadPart(
   return { status: 'assembled', body }
 }
 
+/**
+ * The part numbers already staged for an upload that hasn't been put together
+ * yet: what an interrupted sync left. A sync that asks first carries on from
+ * there instead of sending every piece again.
+ */
+export async function stagedUploadParts(deviceId: string, filename: string): Promise<number[]> {
+  if (!isDeviceId(deviceId) || !safeName(filename)) return []
+  const prefix = `devices/${deviceId}/parts/${filename}/`
+  return (await listKeys(prefix)).map(k => Number(k.slice(prefix.length))).filter(n => Number.isInteger(n) && n > 0).sort((a, b) => a - b)
+}
+
 /** Drops the staged parts once the caller has successfully handled the whole file. */
 export async function clearUploadParts(deviceId: string, filename: string, parts: number): Promise<void> {
   for (let i = 1; i <= parts; i++) await deleteObject(uploadPartKey(deviceId, filename, i))

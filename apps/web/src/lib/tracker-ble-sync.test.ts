@@ -109,3 +109,68 @@ describe('syncing recordings over Bluetooth', () => {
     await expect(syncOverBluetooth(io)).rejects.toThrow('recording')
   })
 })
+
+// A server that keeps pieces until the last one arrives with all the others,
+// like storeUploadPart, and can drop the connection once at a given piece.
+function stagingServer(io: SyncIo, opts: { failAt?: number } = {}) {
+  const staged: Record<string, Map<number, Buffer>> = {}
+  const assembled: Record<string, string> = {}
+  let failAt = opts.failAt
+  io.upload = async (r: PendingRecording, part: number, parts: number, bytes: Uint8Array, compressed: boolean) => {
+    if (failAt === part) { failAt = undefined; throw new Error('Bluetooth dropped') }
+    const { inflateSync } = await import('zlib')
+    const m = (staged[r.upload] ??= new Map())
+    m.set(part, compressed ? inflateSync(Buffer.from(bytes)) : Buffer.from(bytes))
+    if (part < parts) return { status: 202, body: {} }
+    if (m.size < parts) return { status: 409, body: { error: 'parts_missing' } }
+    assembled[r.upload] = Buffer.concat([...Array(parts)].map((_, k) => m.get(k + 1)!)).toString()
+    delete staged[r.upload]
+    return { status: 201, body: { receipt: `receipt-for-${r.upload}` } }
+  }
+  io.staged = async r => [...(staged[r.upload]?.keys() ?? [])]
+  return { staged, assembled }
+}
+
+describe('a sync that breaks off', () => {
+  const file = 'timestamp,lat,lon\n' + big(20000)   // several 64 KB pieces
+
+  it('carries on from the piece it stopped at, without sending the earlier ones again', async () => {
+    const { io, marked } = fakeTracker({ 'track_c.csv': file })
+    const server = stagingServer(io, { failAt: 4 })
+    const first = await syncOverBluetooth(io)
+    expect(first.sent).toBe(0)
+    expect([...server.staged['track_c.csv'].keys()]).toEqual([1, 2, 3])
+
+    const sentParts: number[] = []
+    let parts = 0
+    const second = await syncOverBluetooth(io, p => { sentParts.push(p.part); parts = p.parts })
+    expect(second).toEqual({ sent: 1, failed: [] })
+    expect(sentParts[0]).toBe(4)                                  // carries on at 4 …
+    expect(sentParts).toEqual(Array.from({ length: parts - 3 }, (_, k) => k + 4))   // … to the end, once each
+    expect(server.assembled['track_c.csv']).toBe(file)            // byte-exact
+    expect(marked).toEqual(['track_c.csv'])
+  })
+
+  it('when every piece got there but the answer was lost, sends only the last one again', async () => {
+    const { io, marked } = fakeTracker({ 'track_d.csv': file })
+    const server = stagingServer(io)
+    // Every piece staged, never put together (the last answer was lost).
+    const raw = Buffer.from(file), PIECE = 64 * 1024, parts = Math.ceil(raw.length / PIECE)
+    server.staged['track_d.csv'] = new Map(Array.from({ length: parts }, (_, k) => [k + 1, raw.subarray(k * PIECE, (k + 1) * PIECE)]))
+    const sentParts: number[] = []
+    expect(await syncOverBluetooth(io, p => sentParts.push(p.part))).toEqual({ sent: 1, failed: [] })
+    expect(sentParts).toEqual([parts])
+    expect(server.assembled['track_d.csv']).toBe(file)
+    expect(marked).toEqual(['track_d.csv'])
+  })
+
+  it('a fresh recording still sends every piece from 1', async () => {
+    const { io } = fakeTracker({ 'track_e.csv': file })
+    stagingServer(io)
+    const sentParts: number[] = []
+    await syncOverBluetooth(io, p => sentParts.push(p.part))
+    expect(sentParts[0]).toBe(1)
+    expect(new Set(sentParts).size).toBe(sentParts.length)
+  })
+})
+

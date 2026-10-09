@@ -6,7 +6,7 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { POST as relay } from '@/app/api/account/devices/[deviceId]/sessions/route'
+import { POST as relay, GET as staged } from '@/app/api/account/devices/[deviceId]/sessions/route'
 import { POST as linkBluetooth } from '@/app/api/account/devices/link-bluetooth/route'
 import { listUserDeviceSessions, uploadReceipt } from '@/lib/devices'
 import { cookies } from 'next/headers'
@@ -90,3 +90,29 @@ describe('uploading a recording relayed over Bluetooth', () => {
     expect((await relay(post(`filename=${NAME}`, TRACK), params({ deviceId: DEVICE }))).status).toBe(401)
   })
 })
+
+describe('carrying on a relay that broke off', () => {
+  const ask = (filename: string, deviceId = DEVICE) =>
+    staged(new Request(`http://x/api/account/devices/${deviceId}/sessions?filename=${filename}`), params({ deviceId }))
+
+  it('tells the owner which pieces it already has, and none once the file is put together', async () => {
+    await ownerWithTracker()
+    const half = Math.ceil(TRACK.length / 3)
+    const pieces = [TRACK.slice(0, half), TRACK.slice(half, 2 * half), TRACK.slice(2 * half)]
+    expect((await relay(post(`filename=${NAME}&part=1&parts=3`, pieces[0]), params({ deviceId: DEVICE }))).status).toBe(202)
+    expect((await relay(post(`filename=${NAME}&part=2&parts=3`, pieces[1]), params({ deviceId: DEVICE }))).status).toBe(202)
+    expect(await (await ask(NAME)).json()).toEqual({ parts: [1, 2] })
+    expect((await relay(post(`filename=${NAME}&part=3&parts=3`, pieces[2]), params({ deviceId: DEVICE }))).status).toBe(201)
+    expect(await (await ask(NAME)).json()).toEqual({ parts: [] })
+  })
+
+  it("is the owner's business only", async () => {
+    await ownerWithTracker()
+    const other = await makeUser('Someone else')
+    mockAuth(other.idToken)
+    expect((await ask(NAME)).status).toBe(404)
+    mockAuth(null)
+    expect((await ask(NAME)).status).toBe(401)
+  })
+})
+

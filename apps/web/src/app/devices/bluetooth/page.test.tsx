@@ -323,7 +323,11 @@ describe('Bluetooth test page', () => {
       const btn = [...container.querySelectorAll('button')].find(b => b.textContent === 'SYNC OVER BLUETOOTH')!
       await act(async () => { btn.click() })
       for (let i = 0; i < 30; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-      const call = fetchMock.mock.calls.find(c => String(c[0]).startsWith('/api/account/devices/435AC17C/sessions'))!
+      // First it asks which pieces the server already has (none: a fresh one) …
+      const asked = fetchMock.mock.calls.find(c => String(c[0]).startsWith('/api/account/devices/435AC17C/sessions') && !(c[1] as RequestInit | undefined)?.method)!
+      expect(String(asked[0])).toBe('/api/account/devices/435AC17C/sessions?filename=track_z.csv')
+      // … then uploads it.
+      const call = fetchMock.mock.calls.find(c => String(c[0]).startsWith('/api/account/devices/435AC17C/sessions') && (c[1] as RequestInit | undefined)?.method === 'POST')!
       expect(String(call[0])).toContain('filename=track_z.csv')
       expect(String(call[0])).toContain('part=1&parts=1')
       expect((call[1] as RequestInit).headers).toMatchObject({ 'content-type': 'text/csv', 'x-device-firmware': '0.18.0' })

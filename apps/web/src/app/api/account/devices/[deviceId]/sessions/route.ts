@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { getUserDevice, touchDevice, uploadReceipt } from '@/lib/devices'
+import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts } from '@/lib/devices'
 import { handleSessionUpload } from '@/lib/session-upload'
 import { reportedFirmware, reportedModel } from '@/lib/device-route'
 
@@ -31,4 +31,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ deviceI
   if (res.status === 409 && body.error !== 'already_uploaded') return NextResponse.json(body, { status: 409 })
   const filename = new URL(req.url).searchParams.get('filename') ?? ''
   return NextResponse.json({ ...body, receipt: uploadReceipt(device.tokenHash, deviceId, filename) }, { status: res.status })
+}
+
+// GET /api/account/devices/[deviceId]/sessions?filename=X — AUTHENTICATED.
+// The pieces of X the server already holds from a sync that broke off, so the
+// page sends only the rest: { parts: [1, 2, …] }. Empty once the file has been
+// put together (its pieces are cleared), and for a file never started.
+export async function GET(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
+  const user = await getAuthUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { deviceId } = await params
+  if (!(await getUserDevice(user.id, deviceId))) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  const filename = new URL(req.url).searchParams.get('filename') ?? ''
+  return NextResponse.json({ parts: await stagedUploadParts(deviceId, filename) })
 }
