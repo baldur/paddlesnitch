@@ -1,5 +1,7 @@
 #include "identity.h"
 #include "claim_proof.h"
+#include "card_cleanup.h"
+#include <algorithm>
 #include "uplink.h"
 #include "spibus.h"
 #include "naming.h"
@@ -205,10 +207,15 @@ static void markUploaded(const String &name, int rc)
 // The upload index read ONCE, keeping the lines for the names `ix` wants. A scan
 // over the card names its files first, then calls this: one pass over the
 // index, not one per file (upload_index.h has why: the watchdog restart loop).
+static const char *UPLOADED_INDEX_TMP = "/uploaded.tmp";
+
 static void readUploadIndex(UploadIndex &ix)
 {
     SpiBusGuard bus(5000);
     if (!bus) { DBGE("sd", "%s: bus busy", __func__); return; }
+    // A trim (trimUploadIndex) cut off between removing the old index and
+    // renaming the new one leaves only the new one. Finish the rename.
+    if (!SD.exists(UPLOADED_INDEX) && SD.exists(UPLOADED_INDEX_TMP)) SD.rename(UPLOADED_INDEX_TMP, UPLOADED_INDEX);
     File f = SD.open(UPLOADED_INDEX, FILE_READ);
     if (!f) return;
     int n = 0;
@@ -780,48 +787,149 @@ static void computeCounts(UplinkStatus &st)
     Serial.printf("sync: counted %d recording(s), %d uploaded, in %lu ms\n", on, up, (unsigned long)(millis() - t0));
 }
 
-// Deletes EVERY session the server has confirmed (200/201/409). No keep-newest-N
-// safety: this is a deliberate, user-confirmed action from the Sync screen, and
-// after a 200 paddlesnitch is the system of record. Files rejected 422 and files
-// never uploaded are left untouched -- 422 is the evidence if a parse problem is
-// ever suspected, and an un-uploaded file exists nowhere else yet.
+// Every file in the card's root, with its size. The directory entry carries the
+// size, so this reads no file data. Our files are the only thing on the card, so
+// their sum is what the card has used -- measured this way rather than asking
+// the filesystem for its free space, which on a FAT32 card can mean reading the
+// whole allocation table (tens of MB) and would trip the task watchdog.
+static bool listCard(std::vector<CardFile> &out)
+{
+    SpiBusGuard bus(5000);
+    if (!bus) { DBGE("sd", "bus busy listing"); return false; }
+    File root = SD.open("/");
+    if (!root) return false;
+    int seen = 0;
+    for (File f = root.openNextFile(); f; f = root.openNextFile()) {
+        if (!f.isDirectory()) {
+            String name = f.name();
+            if (name.startsWith("/")) name = name.substring(1);
+            out.push_back({ std::string(name.c_str()), (uint64_t)f.size() });
+        }
+        f.close();
+        if ((++seen & 15) == 0) vTaskDelay(1);
+    }
+    root.close();
+    return true;
+}
+
+static std::string activeBase()
+{
+    String a = storageRecording() ? String(storageFilename()) : String();
+    if (a.startsWith("/")) a = a.substring(1);
+    return cardUnitBase(std::string(a.c_str()));
+}
+
+// Delete `names`, one bus hold each so core 1 is never shut out for long, and
+// stop at once if a recording starts or the uplink is asked to yield. Returns
+// how many TRACKS went (what the Sync screen reports).
+static int deleteFiles(const std::vector<std::string> &names)
+{
+    int tracks = 0;
+    for (const auto &n : names) {
+        if (storageRecording() || g_yield) break;
+        bool ok;
+        {
+            SpiBusGuard bus(5000);
+            if (!bus) break;
+            ok = SD.remove(("/" + n).c_str());
+        }
+        if (ok) {
+            Serial.printf("  deleted %s\n", n.c_str());
+            if (isTrackUpload(String(n.c_str()))) tracks++;
+        }
+        vTaskDelay(1);
+    }
+    return tracks;
+}
+
+// #417: drop index lines whose paddle is no longer on the card. Written to a
+// temp file first; readUploadIndex finishes a rename a power cut interrupted.
+// Losing the index outright would only cost re-uploads (the server answers 409
+// already_uploaded, which counts as confirmed) -- never a recording.
+static void trimUploadIndex(const std::vector<CardFile> &files)
+{
+    SpiBusGuard bus(5000);
+    if (!bus) return;
+    File in = SD.open(UPLOADED_INDEX, FILE_READ);
+    if (!in) return;
+    File out = SD.open(UPLOADED_INDEX_TMP, FILE_WRITE);
+    if (!out) { in.close(); return; }
+    int kept = 0, dropped = 0, n = 0;
+    bool writeOk = true;
+    while (in.available()) {
+        String line = in.readStringUntil('\n');
+        line.trim();
+        if (!line.length()) continue;
+        int tab = line.indexOf('\t');
+        String name = tab < 0 ? line : line.substring(0, tab);
+        if (cardIndexLineKeep(std::string(name.c_str()), files)) {
+            writeOk &= out.printf("%s\n", line.c_str()) > 0;
+            kept++;
+        } else {
+            dropped++;
+        }
+        if ((++n & 31) == 0) vTaskDelay(1);
+    }
+    in.close();
+    out.close();
+    if (!dropped || !writeOk) { SD.remove(UPLOADED_INDEX_TMP); return; }
+    if (SD.remove(UPLOADED_INDEX) && SD.rename(UPLOADED_INDEX_TMP, UPLOADED_INDEX)) {
+        DBGI("sd", "upload index trimmed: kept %d, dropped %d", kept, dropped);
+        Serial.printf("sync: upload index trimmed, kept %d line(s), dropped %d\n", kept, dropped);
+    }
+}
+
+// What a deletion leaves on the card, for trimming the index afterwards.
+static std::vector<CardFile> without(const std::vector<CardFile> &files, const std::vector<std::string> &gone)
+{
+    std::vector<CardFile> left;
+    for (const auto &f : files)
+        if (std::find(gone.begin(), gone.end(), f.name) == gone.end()) left.push_back(f);
+    return left;
+}
+
+// The Sync screen's "delete uploaded": a deliberate, held and confirmed action.
+// Every confirmed track and its confirmed 10 Hz motion file (which used to be
+// left behind for ever); never a file the server lacks, never the full-rate
+// motion file (card_cleanup.h has the rule). Returns how many recordings went.
 static int deleteConfirmedAll()
 {
     if (!storageReady()) return 0;
-
-    SpiBusGuard bus(5000);
-    if (!bus) { DBGE("sd", "bus busy deleting"); return 0; }
-
-    // Collect names first; deleting while iterating the directory handle is
-    // asking for trouble. Static for the same stack reason as uplinkSyncSessions
-    // above -- this runs on the same 8 KB task.
-    static String names[128];
-    int n = 0;
-    for (int i = 0; i < 128; i++) names[i] = "";
-    File root = SD.open("/");
-    for (File f = root.openNextFile(); f && n < 128; f = root.openNextFile()) {
-        bool dir = f.isDirectory();
-        String name = f.name();
-        if (name.startsWith("/")) name = name.substring(1);
-        bool isTrack = isTrackUpload(name);
-        f.close();
-        if (!dir && isTrack) names[n++] = name;
-    }
-    root.close();
-
+    std::vector<CardFile> files;
+    if (!listCard(files)) return 0;
     UploadIndex ix;
-    for (int i = 0; i < n; i++) ix.want(names[i].c_str());
     readUploadIndex(ix);
-
-    int deleted = 0;
-    for (int i = 0; i < n; i++) {
-        if (!indexRcConfirmed(ix.rc(names[i].c_str()))) continue;
-        if (SD.remove("/" + names[i])) {
-            Serial.printf("  deleted %s\n", names[i].c_str());
-            deleted++;
-        }
-    }
+    const auto plan = cardManualPlan(files, ix, activeBase());
+    const int deleted = deleteFiles(plan);
+    trimUploadIndex(without(files, plan));
     return deleted;
+}
+
+// After a sync: if the card is past 80% full, free whole uploaded paddles,
+// oldest first, down to 70% -- including their full-rate motion files, the
+// only thing big enough to matter and the only thing with no other copy. A
+// full card would otherwise stop recording NEW paddles. Also trims the index
+// once per start (it grew for ever before, #417).
+static void cardMaintain()
+{
+    static bool trimmedThisBoot = false;
+    if (!storageReady() || storageRecording() || g_yield) return;
+    const uint64_t total = storageCardSizeMB() * 1024ull * 1024ull;
+    std::vector<CardFile> files;
+    if (!total || !listCard(files)) return;
+    UploadIndex ix;
+    readUploadIndex(ix);
+    const auto plan = cardSpacePlan(files, ix, total, activeBase());
+    if (!plan.empty()) {
+        DBGW("sd", "card over %u%% full: freeing %u file(s) of uploaded paddles", CARD_CLEAN_START_PCT, (unsigned)plan.size());
+        Serial.printf("sync: card over %u%% full -- freeing %u file(s) of the oldest uploaded paddles\n",
+                      CARD_CLEAN_START_PCT, (unsigned)plan.size());
+        deleteFiles(plan);
+    }
+    if (!plan.empty() || !trimmedThisBoot) {
+        trimUploadIndex(without(files, plan));
+        trimmedThisBoot = true;
+    }
 }
 
 int uplinkSyncSessions()
@@ -1329,6 +1437,15 @@ static void uplinkTask(void *)
         DBGI("wifi", "down");
         st.wifiUp = false;
         statusSet(st);
+
+        // Room on the card for the next paddle (and a shorter upload index),
+        // now that this sync has confirmed what it could. With the radio OFF:
+        // this board's card reads stall with WiFi associated (see uploadChunked).
+        if (!g_yield && !storageRecording()) {
+            g_sdBusy = true;
+            cardMaintain();
+            g_sdBusy = false;
+        }
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
