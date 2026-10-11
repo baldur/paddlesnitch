@@ -324,3 +324,56 @@ function motionEvidence(m: MotionEnvelope | null): string | null {
     ? `${base} Handling the device off the water hit ${still} dps in the same file — that gap is what a real cadence signal would have to clear.`
     : base
 }
+
+// Why a recording didn't become a paddle, in plain words, worked out from the
+// file itself (backlog #408). A row "has GPS" only with a position AND, when
+// the file says, at least one satellite: older firmware kept writing the last
+// position with 0 satellites after losing the sky, which looks like a boat
+// that stopped dead.
+export type NoPaddleReason =
+  | { kind: 'no_gps'; recordedS: number }
+  | { kind: 'gps_lost'; lostAfterS: number; recordedS: number }
+  | { kind: 'too_short'; movedM: number; minM: number }
+
+/** The GPS covered less than this share of the recording: it was lost, not just patchy. */
+const GPS_LOST_SHARE = 0.5
+/** And the recording carried on at least this long after it. */
+const GPS_LOST_MIN_S = 120
+
+export function noPaddleReason(csv: string, minPaddleM: number): NoPaddleReason | null {
+  const { header, rows } = splitRows(csv)
+  const idx = (pred: (n: string) => boolean) => header.findIndex(h => pred(norm(h)))
+  const latI = idx(n => n === 'lat' || n === 'latitude')
+  const lonI = idx(n => n === 'lon' || n === 'lng' || n === 'longitude')
+  const timeI = idx(n => n === 'timestamp' || n === 'time' || n === 'datetime')
+  const satsI = idx(n => n === 'sats' || n === 'satellites')
+  const cell = (row: string[], i: number) => (i >= 0 && i < row.length ? row[i].trim() : '')
+
+  const timed = rows.map(r => ({ r, t: Date.parse(cell(r, timeI)) })).filter(x => !isNaN(x.t))
+  if (!timed.length) return null
+  const t0 = timed[0].t, recordedS = Math.round((timed[timed.length - 1].t - t0) / 1000)
+  const hasGps = (r: string[]) => cell(r, latI) !== '' && cell(r, lonI) !== '' && (satsI < 0 || cell(r, satsI) === '' || Number(cell(r, satsI)) > 0)
+  const gps = timed.filter(x => hasGps(x.r))
+
+  if (!gps.length) return { kind: 'no_gps', recordedS }
+  const lastS = (gps[gps.length - 1].t - t0) / 1000
+  const coveredS = (gps[gps.length - 1].t - gps[0].t) / 1000
+  if (recordedS - lastS >= GPS_LOST_MIN_S && coveredS < recordedS * GPS_LOST_SHARE) {
+    return { kind: 'gps_lost', lostAfterS: Math.round(lastS), recordedS }
+  }
+  const movedM = Math.round(movementDistanceM(gps.map(x => ({ lat: Number(cell(x.r, latI)), lng: Number(cell(x.r, lonI)), tMs: x.t }))))
+  if (movedM < minPaddleM) return { kind: 'too_short', movedM, minM: minPaddleM }
+  return null
+}
+
+const span = (s: number) => (s < 90 ? `${Math.max(1, Math.round(s))} seconds` : s < 5400 ? `${Math.round(s / 60)} minutes` : `${(s / 3600).toFixed(1)} hours`)
+
+/** The reason as the recording's page says it. `hasMotion`: the boat motion was recorded. */
+export function noPaddleMessage(r: NoPaddleReason, hasMotion: boolean): string {
+  const motion = hasMotion ? ' The boat motion was.' : ''
+  switch (r.kind) {
+    case 'no_gps': return `The GPS never found the sky, so no route was recorded.${motion}`
+    case 'gps_lost': return `The GPS lost the sky ${span(r.lostAfterS)} after you set off, so no route was recorded after that.${motion}`
+    case 'too_short': return `Too short to be a paddle: the boat moved ${r.movedM} m, and a paddle needs ${r.minM} m.`
+  }
+}

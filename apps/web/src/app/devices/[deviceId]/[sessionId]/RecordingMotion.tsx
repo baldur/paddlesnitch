@@ -19,6 +19,7 @@ export default function RecordingMotion() {
   const [meta, setMeta] = useState<DeviceSessionMeta | null | 'missing'>(null)
   const [attitude, setAttitude] = useState<AttitudeReport | null>(null)
   const [cadence, setCadence] = useState<CadenceReport | null>(null)
+  const [noPaddle, setNoPaddle] = useState<string | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function RecordingMotion() {
         if (cancelled) return
         setAttitude(d.attitude ?? null)
         setCadence(d.cadence ?? null)
+        setNoPaddle(d.noPaddle ?? null)
         setState('ready')
       } catch {
         if (!cancelled) setState('error')
@@ -70,6 +72,7 @@ export default function RecordingMotion() {
               <p className="text-sm text-muted mt-1 tabular">
                 {fmtDate(meta.startedAt ?? meta.uploadedAt)} · {meta.filename}
               </p>
+              {noPaddle && <p className="text-sm text-fg mt-3 border-l-2 border-primary pl-3">{noPaddle}</p>}
             </div>
 
             <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} />

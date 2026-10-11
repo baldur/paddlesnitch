@@ -1,10 +1,15 @@
 import { derived, derivedKey, type DerivedSpec } from '@paddlesnitch/core/derived'
 import { getDeviceSessionMeta, getDeviceSessionTrace, getDeviceSessionMotion, type DeviceSessionMeta } from '@paddlesnitch/core/devices'
-import { describeDeviceData, type DeviceDataReport } from '@paddlesnitch/timing/device'
+import { describeDeviceData, noPaddleReason, noPaddleMessage, type DeviceDataReport } from '@paddlesnitch/timing/device'
+import { MIN_PADDLE_METRES } from '@paddlesnitch/analysis/tracker-paddle'
 import { deriveCadence, movingRangesFromTrack, type CadenceReport } from '@paddlesnitch/timing/cadence'
 import { deriveAttitude, type AttitudeReport } from '@paddlesnitch/timing/attitude'
 
-export type RecordingReport = { report: DeviceDataReport; cadence: CadenceReport | null; attitude: AttitudeReport | null }
+export type RecordingReport = {
+  report: DeviceDataReport; cadence: CadenceReport | null; attitude: AttitudeReport | null
+  /** Why it isn't a paddle, in plain words (GPS lost, no GPS, too short), or null. */
+  noPaddle: string | null
+}
 
 /**
  * A tracker recording's report (diagnostics, stroke rate, boat motion), for
@@ -51,6 +56,7 @@ export async function recordingReport(userId: string, deviceId: string, sessionI
         attitude = deriveAttitude(text, { movingRanges })
       }
     } catch { cadence = null; attitude = null }
-    return { report, cadence, attitude }
+    const why = noPaddleReason(csv, MIN_PADDLE_METRES)
+    return { report, cadence, attitude, noPaddle: why ? noPaddleMessage(why, !!meta.motion) : null }
   })
 }

@@ -7,7 +7,7 @@ import RemoveTrackerButton from '@/components/devices/RemoveTrackerButton'
 import TechnicalDetails, { Stat } from '@/components/devices/TechnicalDetails'
 import { strokeRateCopy, gpsCopy } from '@/lib/tracker-copy'
 import type { DeviceSessionMeta } from '@/lib/devices'
-import { type DeviceView, fmtDate, fmtDay, fmtDist, fmtDur, MIN_PADDLE_METRES } from '@/lib/device-view'
+import { type DeviceView, fmtDate, fmtDay, fmtDist, fmtDur } from '@/lib/device-view'
 import { trpc } from '@/lib/trpc'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
@@ -21,16 +21,17 @@ type SessionReport = {
   report: DeviceDataReport
   cadence: CadenceReport | null
   attitude: AttitudeReport | null
+  noPaddle?: string | null
 }
 
-function Report({ report, cadence, attitude, sessionId, deviceId }: SessionReport & { sessionId: string; deviceId: string }) {
+function Report({ report, cadence, attitude, noPaddle, sessionId, deviceId }: SessionReport & { sessionId: string; deviceId: string }) {
   const sr = strokeRateCopy(report, cadence)
   const gps = gpsCopy(report)
   // Derived from the fields already in the report — no server change.
   const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
-      {!report.looksUsable && (
+      {noPaddle ? <p className="text-fg">{noPaddle}</p> : !report.looksUsable && (
         <p className="text-muted">This recording has no paddle in it. It may have been started on land, or stopped before you set off.</p>
       )}
 
@@ -163,7 +164,7 @@ export default function DeviceDetailPage() {
                   <span className="min-w-0">
                     <span className="block text-sm text-fg truncate">{fmtDate(s.startedAt ?? s.uploadedAt)}{s.distanceMetres ? ` · ${fmtDist(s.distanceMetres)}` : ''}</span>
                     <span className="block text-xs text-muted tabular truncate">
-                      {(s.distanceMetres ?? 0) < MIN_PADDLE_METRES ? 'not a paddle: the boat barely moved' : 'not a paddle yet'} · {s.filename}
+                      not a paddle: open to see why · {s.filename}
                     </span>
                   </span>
                   <span className="text-muted text-lg leading-none shrink-0">{open === s.sessionId ? '–' : '+'}</span>
