@@ -13,7 +13,7 @@
 //   - `deviceId` is NOT a secret (it's on every LoRa packet) — it authenticates
 //     nothing on its own.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
-import { getJson, putJson, getObject, putObject, listKeys, deleteObject, deleteObjects } from './storage'
+import { getJson, putJson, getObject, putObject, listKeys, deleteObject, deleteObjects, STAGED_PART_TAG } from './storage'
 
 export type DeviceClaim = {
   claimCode: string
@@ -494,7 +494,7 @@ export async function storeUploadPart(
   if (part < 1 || parts < 1 || part > parts || parts > MAX_MOTION_PARTS) return { status: 'bad_request' }
 
   // Idempotent by index: a retried chunk overwrites, so a reboot mid-sync resumes.
-  await putObject(uploadPartKey(deviceId, filename, part), chunk)
+  await putObject(uploadPartKey(deviceId, filename, part), chunk, { tags: STAGED_PART_TAG })
   if (part !== parts) {
     const have = (await listKeys(`devices/${deviceId}/parts/${filename}/`)).length
     return { status: 'stored', have, parts }
@@ -590,7 +590,7 @@ export async function storeMotionPart(
 
   // Idempotent by index: a retried chunk overwrites rather than duplicating, so a
   // device that reboots mid-sync resumes instead of starting over.
-  await putObject(motionPartKey(deviceId, sessionId, part), chunk)
+  await putObject(motionPartKey(deviceId, sessionId, part), chunk, { tags: STAGED_PART_TAG })
 
   const prefix = `devices/${deviceId}/sessions/${sessionId}/motion.parts/`
   const have = (await listKeys(prefix)).length
