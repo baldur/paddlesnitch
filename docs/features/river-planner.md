@@ -250,6 +250,7 @@ Researched 2026-10-11. No paid API, no sign-up.
 ## P1 as built
 
 - **`/plan`** (`app/plan/page.tsx` → `components/plan/Planner.tsx`): the map (`components/map/PlanMap.tsx`: every link of the region, land outside the region greyed, the route, the ends, the stops) and the route sheet beside it.
+  - The map carries Esri's place-name layer (`World_Dark_Gray_Reference`, same host as the base tiles) above the rivers. The region is outlined dashed, land beyond it is darkened, and a caption on the map says so. A **GO TO** list jumps to a town on the water (`places` in `regions.ts`, upstream first; a test checks each is on the network and in order).
   - First click sets the start, the second the finish; after that a click moves the nearer end. SWAP reverses the trip, CLEAR starts again. A click more than `SNAP_MAX_M` (1 km) from the water is refused with a message.
   - ONE-WAY / RETURN, a start time (`datetime-local`, the browser's zone), pace in km/h (default 8) and minutes per portage (default 3).
   - Summary: distance, portages, paddling time, time with portages, finish time. Stop list in travel order: chainage, arrival time (`fmtTime`, with "+1" after midnight) or elapsed time without a start time, and what's known (portage side, said as unknown when it is; crew directions, parking and postcode; facilities; the bank of a towpath access point). A return shows where it turns. Filters: PORTAGES, WEIRS, GET IN / OUT, WATER AND TOILETS on; TOWPATH ACCESS (hundreds of points) off.

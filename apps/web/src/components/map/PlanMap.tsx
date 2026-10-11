@@ -1,6 +1,6 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, Polyline, Polygon, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Pane, Polyline, Polygon, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useEffect } from 'react'
 import type { LatLng } from '@paddlesnitch/waterways/types'
 
@@ -9,6 +9,8 @@ import type { LatLng } from '@paddlesnitch/waterways/types'
 // page decides whether it's the start or the finish.
 
 const DARK = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+// Esri's place names, drawn above the rivers but below the markers and clicks.
+const LABELS = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
 const ATTR = 'Tiles &copy; Esri · Waterways &copy; OpenStreetMap contributors, Canal &amp; River Trust, Environment Agency'
 
 export type MapStop = { id: string; at: LatLng; name: string; colour: string }
@@ -37,9 +39,11 @@ function Frame({ route, bbox, view }: { route: LatLng[]; bbox: [number, number, 
   return null
 }
 
-function Focus({ at }: { at: LatLng | null }) {
+export type MapFocus = { at: LatLng; zoom: number }
+
+function Focus({ focus }: { focus: MapFocus | null }) {
   const map = useMap()
-  useEffect(() => { if (at) map.setView(at, Math.max(map.getZoom(), 15)) }, [map, at])
+  useEffect(() => { if (focus) map.setView(focus.at, Math.max(map.getZoom(), focus.zoom)) }, [map, focus])
   return null
 }
 
@@ -52,7 +56,7 @@ export default function PlanMap({
   start: LatLng | null
   finish: LatLng | null
   stops: MapStop[]
-  focus: LatLng | null
+  focus: MapFocus | null
   view?: { at: LatLng; zoom: number }
   onPick: (p: LatLng) => void
 }) {
@@ -62,8 +66,13 @@ export default function PlanMap({
   return (
     <MapContainer center={[(s + n) / 2, (w + e) / 2]} zoom={9} preferCanvas className="h-full w-full" data-testid="plan-map">
       <TileLayer url={DARK} attribution={ATTR} maxNativeZoom={16} maxZoom={19} />
+      {/* Land beyond the region is darkened: we have no river data there yet. */}
       <Polygon positions={[world, region]} interactive={false} pathOptions={{ stroke: false, fillColor: '#0b1220', fillOpacity: 0.6 }} />
+      <Polygon positions={region} interactive={false} pathOptions={{ color: '#94a3b8', weight: 1, dashArray: '6 6', fill: false }} />
       <Polyline positions={network} interactive={false} pathOptions={{ color: '#06b6d4', weight: 2, opacity: 0.55 }} />
+      <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
+        <TileLayer url={LABELS} maxNativeZoom={16} maxZoom={19} />
+      </Pane>
       {route.length > 0 && <Polyline positions={route} interactive={false} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }} />}
       {stops.map(st => (
         <CircleMarker key={st.id} center={st.at} radius={5} pathOptions={{ color: st.colour, fillColor: st.colour, fillOpacity: 0.9, weight: 1 }}>
@@ -74,7 +83,7 @@ export default function PlanMap({
       {finish && <CircleMarker center={finish} radius={8} pathOptions={{ color: '#fff', fillColor: '#f87171', fillOpacity: 1, weight: 2 }}><Tooltip>Finish</Tooltip></CircleMarker>}
       <Clicks onPick={onPick} />
       <Frame route={route} bbox={bbox} view={view} />
-      <Focus at={focus} />
+      <Focus focus={focus} />
     </MapContainer>
   )
 }
