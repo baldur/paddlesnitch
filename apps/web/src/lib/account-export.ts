@@ -6,6 +6,7 @@ import { getUserGroupIds, getGroup, groupRoleOf } from '@/lib/groups'
 import { getStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { listSessions, getAthleteProfile } from '@paddlesnitch/analysis/analysis-store'
 import { exportUserDevices } from '@paddlesnitch/core/devices'
+import { exportBuddies } from '@paddlesnitch/core/buddies'
 import { listFeedbackContactsForUser } from '@/lib/feedback-contacts'
 import { getBetaApplication } from '@/lib/beta-signups'
 import type { AuthUser } from '@paddlesnitch/core/types'
@@ -70,6 +71,8 @@ export async function buildAccountExport(user: AuthUser) {
     groups,
     trackers,
     trackerRecordings,
+    // Buddies (ids), requests both ways, and whether buddies see your paddles.
+    buddies: await exportBuddies(user.id),
     issueReports: await listFeedbackContactsForUser(user.id),
     betaApplication: await getBetaApplication(user.email),
     notes: [

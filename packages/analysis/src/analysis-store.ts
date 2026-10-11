@@ -45,6 +45,8 @@ export type AnalysisSession = {
   // one so it could open at once (performance.md, phase 4). writePendingSummary
   // (pipeline.ts) writes it and clears this.
   insightPending?: true
+  // The owner hid this paddle from their buddies (docs/features/buddies-and-compare.md).
+  hiddenFromBuddies?: true
 }
 
 // Compact shape for the library list + the history digest fed back to the LLM.
