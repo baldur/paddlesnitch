@@ -209,16 +209,18 @@ const km = (m: number) => `${(m / 1000).toFixed(1)} km`
  */
 export function lineSummary(c: LineCompare, aName = 'A', bName = 'B'): string[] {
   const out: string[] = []
+  // "You were", not "You was" (a buddy comparison labels your side "You · 11 Oct").
+  const was = (name: string) => (/^you\b/i.test(name) ? 'were' : 'was')
   const d = c.total.bSecs - c.total.aSecs
   out.push(Math.abs(d) < 2
     ? `Over the shared ${km(c.toM - c.fromM)}, the two took the same time.`
-    : `Over the shared ${km(c.toM - c.fromM)}, ${d < 0 ? bName : aName} was ${Math.round(Math.abs(d))} s faster.`)
+    : `Over the shared ${km(c.toM - c.fromM)}, ${d < 0 ? bName : aName} ${was(d < 0 ? bName : aName)} ${Math.round(Math.abs(d))} s faster.`)
   // The lines: the widest stretch apart (at least 10 m).
   const wide = [...c.bins].filter(x => x.gapM >= 10).sort((x, y) => y.gapM - x.gapM)[0]
   if (wide) {
     const shorter = wide.bMetres - wide.aMetres
     const side = wide.side === 1 ? 'right' : wide.side === -1 ? 'left' : 'off'
-    out.push(`The lines were furthest apart at ${km(wide.fromM)}: ${bName} was ${Math.round(wide.gapM)} m to the ${side} of ${aName}` +
+    out.push(`The lines were furthest apart at ${km(wide.fromM)}: ${bName} ${was(bName)} ${Math.round(wide.gapM)} m to the ${side} of ${aName.replace(/^You\b/, 'you')}` +
       (Math.abs(shorter) >= 3 ? `, and covered ${Math.round(Math.abs(shorter))} m ${shorter < 0 ? 'less' : 'more'} there.` : '.'))
   } else {
     out.push(`The two lines stayed within 10 m of each other.`)
