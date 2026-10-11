@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import type { LatLng, Line } from '@/lib/types'
 import RiverLayer from './RiverLayer'
+import { useIsClient } from '@/lib/use-is-client'
 
 const TILES = {
   // Esri Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
@@ -121,10 +122,8 @@ export default function DrawingMap({
       ? initialGates.map(g => ({ pts: [...g.line], direction: g.direction }))
       : [{ pts: [], direction: 1 }, { pts: [], direction: 1 }]
   )
-  const [mounted, setMounted] = useState(false)
+  const mounted = useIsClient()
   const [dark, setDark] = useState(false)
-
-  useEffect(() => { setMounted(true) }, [])
 
   // When the user explicitly switches course type from the picker, wipe
   // the working state. Skipped on the very first render so initial lines

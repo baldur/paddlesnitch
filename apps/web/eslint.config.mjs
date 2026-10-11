@@ -7,11 +7,10 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
-      // React Compiler's rule against setState in an effect flags the
-      // fetch-on-mount pattern nine pages use. It works, and rewriting those
-      // pages is its own piece of work, so it warns instead of failing the PR
-      // checks. Don't add new ones.
-      "react-hooks/set-state-in-effect": "warn",
+      // No setState synchronously in an effect body (#401, #410). Load data
+      // with a tRPC query hook or set state in the fetch's callback; read
+      // browser-only values with useSyncExternalStore (see useIsClient).
+      "react-hooks/set-state-in-effect": "error",
       // A leading underscore marks a parameter or variable as unused on purpose.
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" }],
     },

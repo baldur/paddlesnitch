@@ -1,27 +1,34 @@
 'use client'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 
 const STORAGE_KEY = 'tt_cookie_acked'
+
+// Read once after hydration; OK in this tab is tracked in state below.
+const subscribe = () => () => {}
+
+function notAcked() {
+  try {
+    return !localStorage.getItem(STORAGE_KEY)
+  } catch {
+    // localStorage may be blocked (private mode, etc.) — fail silent
+    return false
+  }
+}
 
 // One-line dismissable banner. The only cookies are the two sign-in ones
 // (tt_id, tt_refresh). Page views are counted with a per-tab random id in
 // sessionStorage (not a cookie, not linked to an account) -- say so plainly
 // rather than deny counting anything. See the privacy page.
 export default function CookieNotice() {
-  const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem(STORAGE_KEY)) setShow(true)
-    } catch {
-      // localStorage may be blocked (private mode, etc.) — fail silent
-    }
-  }, [])
+  // Hidden on the server and during hydration; read storage after that.
+  const unacked = useSyncExternalStore(subscribe, notAcked, () => false)
+  const [dismissed, setDismissed] = useState(false)
+  const show = unacked && !dismissed
 
   function dismiss() {
     try { localStorage.setItem(STORAGE_KEY, '1') } catch {}
-    setShow(false)
+    setDismissed(true)
   }
 
   if (!show) return null

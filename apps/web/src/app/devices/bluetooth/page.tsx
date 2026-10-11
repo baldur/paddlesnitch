@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import AppHeader from '@/components/AppHeader'
 import {
   TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, WIFI_WAIT,
@@ -31,10 +31,12 @@ const OWNER_TEXT = {
   unlinked: 'Not added to an account yet',
 } as const
 
+const noSubscribe = () => () => {}
+
 export default function BluetoothPage() {
-  // Read after mount: the server render has no navigator, and the first client
-  // render must match it.
-  const [supported, setSupported] = useState<boolean | undefined>(undefined)
+  // Read after hydration: the server render has no navigator, and the first
+  // client render must match it (undefined until then).
+  const supported = useSyncExternalStore(noSubscribe, () => browserBluetooth() !== null, () => undefined)
   const [mine, setMine] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [found, setFound] = useState<Found | null>(null)
@@ -63,7 +65,6 @@ export default function BluetoothPage() {
   const [syncMsg, setSyncMsg] = useState<Msg>(null)
 
   useEffect(() => {
-    setSupported(browserBluetooth() !== null)
     fetch('/api/account/devices')
       .then(r => (r.ok ? r.json() : { devices: [] }))
       .then((d: { devices?: { deviceId: string }[] }) => setMine(new Set((d.devices ?? []).map(x => x.deviceId))))

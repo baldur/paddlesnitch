@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState, use } from 'react'
 import AppHeader from '@/components/AppHeader'
 import CourseMapClient from '@/components/map/CourseMapClient'
@@ -37,6 +38,7 @@ function compass(deg: number): string {
 
 export default function EntryDetailPage({ params }: { params: Promise<{ entryId: string }> }) {
   const { entryId } = use(params)
+  const router = useRouter()
   const [data, setData] = useState<EntryDetail | null | undefined>(undefined)
   const [note, setNote] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
@@ -64,7 +66,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
       const res = await fetch('/paddles/api/analyse', { method: 'POST', body: fd })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.id) throw new Error()
-      window.location.href = `/paddles/${d.id}`
+      router.push(`/paddles/${d.id}`)
     } catch {
       setOpenErr('Couldn’t open it as a paddle. Please try again.')
       setOpening(false)

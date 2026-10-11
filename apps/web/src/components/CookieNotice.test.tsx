@@ -51,3 +51,27 @@ describe('cookie notice vs the floating report button', () => {
     expect(zOf(notice)).toBeGreaterThan(800)
   })
 })
+
+describe('cookie notice: shown until acknowledged', () => {
+  const notice = () => [...container.querySelectorAll('div')].find(d => d.textContent?.includes('We use cookies'))
+
+  it('stays hidden once the visitor has acknowledged it', async () => {
+    localStorage.setItem('tt_cookie_acked', '1')
+    await mount(<CookieNotice />)
+    expect(notice()).toBeUndefined()
+  })
+
+  it('hides and remembers the acknowledgement when OK is pressed', async () => {
+    await mount(<CookieNotice />)
+    const ok = [...container.querySelectorAll('button')].find(b => b.textContent?.trim() === 'OK')!
+    await act(async () => { ok.click() })
+    expect(notice()).toBeUndefined()
+    expect(localStorage.getItem('tt_cookie_acked')).toBe('1')
+  })
+
+  it('stays hidden when storage is blocked', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } })
+    await mount(<CookieNotice />)
+    expect(notice()).toBeUndefined()
+  })
+})

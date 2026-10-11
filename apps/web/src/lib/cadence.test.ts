@@ -104,8 +104,8 @@ describe('strokeRateSeries (stroke rate through the paddle)', () => {
       sidecar({ seconds: 120, hz: 10, strokesPerMin: 72, startMs: 120_000 }),
     )
     const pts = strokeRateSeries(csv)
-    for (const v of at(pts, 0, 100_000)) expect(v).toBeGreaterThan(44), expect(v).toBeLessThan(52)
-    for (const v of at(pts, 140_000, 240_000)) expect(v).toBeGreaterThan(67), expect(v).toBeLessThan(77)
+    for (const v of at(pts, 0, 100_000)) { expect(v).toBeGreaterThan(44); expect(v).toBeLessThan(52) }
+    for (const v of at(pts, 140_000, 240_000)) { expect(v).toBeGreaterThan(67); expect(v).toBeLessThan(77) }
   })
 
   it('leaves a rest as a gap, never a zero or a guess', () => {

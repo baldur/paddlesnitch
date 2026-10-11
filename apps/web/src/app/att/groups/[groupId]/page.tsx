@@ -30,6 +30,35 @@ type GroupView = {
 
 type PendingRequest = { id: string; userId: string; displayName: string; email: string }
 
+// Loads the page's data, setting each piece as it arrives (the group shows
+// before an admin's invitations and join requests do). Outside the component so
+// the mount effect sets state only in these async callbacks.
+async function loadGroupPage(groupId: string, set: {
+  setUser: (u: AuthUser | null) => void
+  setGroup: (g: GroupView | null) => void
+  setInvitations: (i: Invitation[]) => void
+  setJoinRequests: (r: PendingRequest[]) => void
+}) {
+  const { setUser, setGroup, setInvitations, setJoinRequests } = set
+  const [meRes, groupRes] = await Promise.all([
+    fetch('/att/api/auth/me').then(r => r.ok ? r.json() : null),
+    fetch(`/att/api/groups/${groupId}`),
+  ])
+  setUser(meRes)
+  if (!groupRes.ok) { setGroup(null); return }
+  const g: GroupView = await groupRes.json()
+  setGroup(g)
+  const canManage = g.viewerStatus === 'owner' || g.viewerStatus === 'admin'
+  if (canManage) {
+    const [invRes, reqRes] = await Promise.all([
+      fetch(`/att/api/groups/${groupId}/invitations`),
+      fetch(`/att/api/groups/${groupId}/join-requests`),
+    ])
+    if (invRes.ok) setInvitations((await invRes.json()).invitations ?? [])
+    if (reqRes.ok) setJoinRequests((await reqRes.json()).requests ?? [])
+  }
+}
+
 // /att/groups/[groupId] — view a group, manage members (admins), or join
 // (non-members). Self-serve join is phase 4.
 export default function GroupDetailPage({
@@ -54,26 +83,8 @@ export default function GroupDetailPage({
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState('')
 
-  const loadAll = async () => {
-    const [meRes, groupRes] = await Promise.all([
-      fetch('/att/api/auth/me').then(r => r.ok ? r.json() : null),
-      fetch(`/att/api/groups/${groupId}`),
-    ])
-    setUser(meRes)
-    if (!groupRes.ok) { setGroup(null); return }
-    const g: GroupView = await groupRes.json()
-    setGroup(g)
-    const canManage = g.viewerStatus === 'owner' || g.viewerStatus === 'admin'
-    if (canManage) {
-      const [invRes, reqRes] = await Promise.all([
-        fetch(`/att/api/groups/${groupId}/invitations`),
-        fetch(`/att/api/groups/${groupId}/join-requests`),
-      ])
-      if (invRes.ok) setInvitations((await invRes.json()).invitations ?? [])
-      if (reqRes.ok) setJoinRequests((await reqRes.json()).requests ?? [])
-    }
-  }
-  useEffect(() => { loadAll() }, [groupId])
+  const loadAll = () => loadGroupPage(groupId, { setUser, setGroup, setInvitations, setJoinRequests })
+  useEffect(() => { loadGroupPage(groupId, { setUser, setGroup, setInvitations, setJoinRequests }) }, [groupId])
 
   if (user === undefined || group === undefined) {
     return <main className="flex-1 flex"><LoadingState /></main>

@@ -5,6 +5,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
+const push = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
 vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header> }))
 vi.mock('@/components/map/CourseMapClient', () => ({ default: () => null }))
 
@@ -38,6 +40,7 @@ describe('a trial result opens as a paddle', () => {
     const body = call[1].body as FormData
     expect(body.get('trialEntryId')).toBe('e1')
     expect(body.get('trialId')).toBe('t1')
+    expect(push).toHaveBeenCalledWith('/paddles/p9')
   })
 
   it("isn't offered on someone else's result", async () => {

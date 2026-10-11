@@ -314,7 +314,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               const on = selected.has(m.sessionId)
               return (
                 <label key={m.sessionId} className={`flex items-center gap-2 py-1 px-1 cursor-pointer text-xs ${on ? 'bg-primary/20' : 'hover:bg-surface-2'}`}>
-                  <input type="checkbox" checked={on} onChange={() => setSelected(s => { const n = new Set(s); n.has(m.sessionId) ? n.delete(m.sessionId) : n.add(m.sessionId); return n })} className="accent-primary" />
+                  <input type="checkbox" checked={on} onChange={() => setSelected(s => { const n = new Set(s); if (n.has(m.sessionId)) n.delete(m.sessionId); else n.add(m.sessionId); return n })} className="accent-primary" />
                   <span className="flex-1 min-w-0">
                     <span className="text-fg">{fmtMatchDate(m.paddledAt)}</span>
                     <span className="text-muted"> · {Math.round(m.score * 100)}% same route</span>

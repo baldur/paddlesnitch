@@ -63,8 +63,6 @@ const data: ViewData = {
   insight: 'You held a strong steady rhythm throughout.',
 }
 
-const btn = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
-
 // The paddle page (site review, 2026-10): the map on top with only the colour
 // scale, replay and section picking over it; everything to read below it; the
 // actions in a column. It replaced floating panels that piled on top of each
