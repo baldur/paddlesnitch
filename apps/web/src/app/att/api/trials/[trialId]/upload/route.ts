@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { fetchPublicFile } from '@/lib/fetch-public-file'
 import { getJson, putJson, putObject } from '@/lib/storage'
+import { indexEntry } from '@/lib/entries'
 import { trackToCsv } from '@paddlesnitch/timing/csv'
 import { parseTrace, parseFailureMessage } from '@/lib/parse'
 import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint } from '@/lib/geo'
@@ -195,6 +196,7 @@ async function processTrack(
     ...(conditions ? { conditions } : {}),
   }
   await putJson(`${basePath}/result.json`, stored)
+  await indexEntry(entryId, trialId, user.id)
   await rebuildLeaderboard(trialId)
 
   emitMetric('upload')

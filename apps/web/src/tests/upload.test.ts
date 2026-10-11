@@ -60,6 +60,8 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const body = await res.json()
     expect(body.result.totalElapsedSeconds).toBeGreaterThan(0)
     expect(body.entryId).toBeTruthy()
+    // Indexed, so its page finds it without listing every trial (#409).
+    expect(await getJson(`entry-ids/${body.entryId}.json`)).toEqual({ trialId: trial.id, userId: user.id })
   })
 
   // Privacy audit 2026-09: the privacy page says heart rate is never stored, but

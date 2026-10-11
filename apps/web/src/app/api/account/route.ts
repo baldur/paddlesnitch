@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getAuthUser, clearAuthCookies } from '@/lib/auth'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
+import { unindexEntries } from '@/lib/entries'
 import { deleteUser, revoke } from '@/lib/cognito'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
@@ -79,6 +80,7 @@ export async function DELETE() {
     if (userEntryKeys.length > 0) trialsWithUserEntries.add(trialId)
   }))
   await deleteObjects(trialKeysToDelete)
+  await unindexEntries(trialKeysToDelete)
 
   // 5. Rebuild leaderboards for trials we trimmed (not the ones we wiped).
   await Promise.all([...trialsWithUserEntries].map(trialId => rebuildLeaderboard(trialId)))
