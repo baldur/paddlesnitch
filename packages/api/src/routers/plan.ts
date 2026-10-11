@@ -1,13 +1,21 @@
 // Saved river plans (docs/features/river-planner.md). Using the planner needs
-// no account; saving does. Plans are private to their owner.
+// no account; saving does. Plans are private to their owner until shared:
+// then anyone with the link may view one, and the owner's buddies see it
+// listed. Names, never emails.
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { router, protectedProcedure } from '../trpc'
+import { router, protectedProcedure, publicProcedure } from '../trpc'
+import { listBuddies } from '@paddlesnitch/core/buddies'
+import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
-import { savePlan, getPlan, listPlans, deletePlan, MAX_TITLE } from '@paddlesnitch/waterways/plan-store'
+import {
+  savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, MAX_TITLE,
+} from '@paddlesnitch/waterways/plan-store'
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 const latLng = z.tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)])
+const nameOf = async (userId: string) => (await findUserBySub(userId))?.displayName || 'A paddler'
+
 const fields = z.object({
   title: z.string().max(MAX_TITLE),
   region: z.string().refine(r => r in REGIONS, 'unknown region'),
@@ -35,6 +43,37 @@ export const planRouter = router({
     if (saved === 'too_many') throw new TRPCError({ code: 'BAD_REQUEST', message: 'too_many_plans' })
     if (!saved) throw new TRPCError({ code: 'NOT_FOUND' })
     return saved
+  }),
+
+  share: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {
+    const plan = await sharePlan(ctx.user.id, input.id)
+    if (!plan) throw new TRPCError({ code: 'NOT_FOUND' })
+    return plan
+  }),
+
+  unshare: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {
+    const plan = await unsharePlan(ctx.user.id, input.id)
+    if (!plan) throw new TRPCError({ code: 'NOT_FOUND' })
+    return plan
+  }),
+
+  // A shared plan, for anyone with its link (signed in or not).
+  shared: publicProcedure.input(z.object({ shareId: id })).query(async ({ ctx, input }) => {
+    const found = await getSharedPlan(input.shareId)
+    if (!found) throw new TRPCError({ code: 'NOT_FOUND' })
+    return { plan: found.plan, owner: await nameOf(found.userId), mine: ctx.user?.id === found.userId }
+  }),
+
+  // Your buddies' shared plans, newest first.
+  buddies: protectedProcedure.query(async ({ ctx }) => {
+    const buddies = await listBuddies(ctx.user.id)
+    const lists = await Promise.all(buddies.map(async b => {
+      const shared = (await listPlans(b.userId)).filter(p => p.shareId)
+      if (!shared.length) return []
+      const owner = await nameOf(b.userId)
+      return shared.map(p => ({ shareId: p.shareId!, title: p.title, shape: p.shape, updatedAt: p.updatedAt, owner }))
+    }))
+    return lists.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }),
 
   delete: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { signUpFlow } from '../helpers'
 
 // Critical path: plan a paddle by clicking the water, and open a plan from a
 // link. No account needed (docs/features/river-planner.md).
@@ -28,4 +29,30 @@ test('a plan link opens the whole Devizes to Westminster route', async ({ page }
   await page.getByRole('button', { name: 'RETURN' }).click()
   await expect(summary).toContainText('402.6 km')
   await expect(page.getByTestId('stop-list')).toContainText(/TURN AT/)
+})
+
+test('a saved, shared plan opens from its link for someone signed out', async ({ browser }) => {
+  const ownerCtx = await browser.newContext(), guestCtx = await browser.newContext()
+  const owner = await ownerCtx.newPage()
+  await signUpFlow(owner, { displayName: 'Plan Owner' })
+  await owner.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
+  await expect(owner.getByTestId('plan-summary')).toContainText('201.3 km', { timeout: 15_000 })
+  await owner.getByLabel('Plan name').fill('DW crew plan')
+  await owner.getByRole('button', { name: 'SAVE', exact: true }).click()
+  await expect(owner).toHaveURL(/\/plan\/(?!shared)[^/?]+$/, { timeout: 15_000 })
+
+  await owner.getByRole('button', { name: 'SHARE', exact: true }).click()
+  const link = (await owner.getByTestId('share-link').innerText()).trim()
+  expect(link).toMatch(/\/plan\/shared\/[\w-]+$/)
+
+  const guest = await guestCtx.newPage()
+  await guest.goto(new URL(link).pathname)
+  await expect(guest.getByText('Shared by Plan Owner.', { exact: false })).toBeVisible({ timeout: 15_000 })
+  await expect(guest.getByTestId('plan-summary')).toContainText('201.3 km')
+
+  await owner.getByRole('button', { name: 'STOP SHARING' }).click()
+  await expect(owner.getByRole('button', { name: 'SHARE', exact: true })).toBeVisible()
+  await guest.reload()
+  await expect(guest.getByText("We can't find this plan.", { exact: false })).toBeVisible()
+  await ownerCtx.close(); await guestCtx.close()
 })

@@ -15,6 +15,7 @@ import { eraseUserDevices } from '@paddlesnitch/core/devices'
 import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
+import { erasePlanShares } from '@paddlesnitch/waterways/plan-store'
 
 // GDPR Art. 17 (right to erasure). Permanently removes:
 //   - the Cognito user record (no more sign-ins)
@@ -25,6 +26,7 @@ import { eraseBuddies } from '@paddlesnitch/core/buddies'
 //   - every entry they ever submitted, in any trial, owned or not
 //   - every failed-upload diagnostic (GPS track) they left, in any trial
 //   - every paddle, the coach profile, and the share link of any shared paddle
+//   - every river plan and the link of any shared plan
 //   - every tracker they own (signed out) and every recording they uploaded
 //   - their Strava link (deauthorised, and the athlete -> account index)
 //   - their place in groups; a group they own passes to an admin or member
@@ -103,6 +105,8 @@ export async function DELETE() {
   await deletePrefix(`exports/${user.id}/`)
   // Both sides of every buddy friendship, requests to and from them, their invite link.
   await eraseBuddies(user.id)
+  // Shared plan links (the plans themselves live under users/{id}/plans/).
+  await erasePlanShares(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
   await eraseBetaApplication(user.email)

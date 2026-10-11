@@ -30,7 +30,11 @@ const KIND: Record<string, string> = {
   facility: 'Facilities', crew_point: 'Towpath access', hazard: 'Hazard',
 }
 
-export default function Planner({ initial, view, saved }: { initial: PlanDraft; view?: View; saved?: SavedPlan }) {
+/** Someone's shared plan, seen from its link: the route can't be changed or
+ *  saved here, but pace, start time and one-way/return can be tried. */
+export type SharedView = { owner: string; mine: boolean; planId: string }
+
+export default function Planner({ initial, view, saved, shared }: { initial: PlanDraft; view?: View; saved?: SavedPlan; shared?: SharedView }) {
   const router = useRouter()
   const [data, setData] = useState<RegionDataset | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -46,10 +50,10 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
 
   // An unsaved plan lives in the address bar, so a reload or a link keeps it.
   useEffect(() => {
-    if (saved) return
+    if (saved || shared) return
     const q = draftParams(draft)
     window.history.replaceState(null, '', `/plan${q ? `?${q}` : ''}`)
-  }, [draft, saved])
+  }, [draft, saved, shared])
 
   const input = asInput(draft)
   const result = useMemo(() => (data && input ? computePlan(data, input) : null), [data, input?.start, input?.finish, input?.shape, input?.startAt, input?.paceKmh, input?.portageMinutes]) // eslint-disable-line react-hooks/exhaustive-deps -- recompute on the inputs' values
@@ -76,7 +80,7 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
             }))}
             focus={focus}
             view={view}
-            onPick={p => setDraft(d => placeClick(d, p))}
+            onPick={p => { if (!shared) setDraft(d => placeClick(d, p)) }}
           />
         ) : <LoadingState label="Loading the rivers…" />}
         <p className="absolute top-2 right-2 z-[500] max-w-[16rem] bg-bg/85 border border-border px-2 py-1 text-xs text-muted pointer-events-none">
@@ -86,10 +90,17 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
         <section>
-          <h1 className="text-sm tracking-[0.2em] uppercase text-fg mb-1">{saved ? saved.title : 'Plan a paddle'}</h1>
-          <p className="text-xs text-muted">
-            {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
-          </p>
+          <h1 className="text-sm tracking-[0.2em] uppercase text-fg mb-1">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
+          {shared ? (
+            <p className="text-xs text-muted">
+              {shared.mine ? <>This is your plan. <a className="underline hover:text-fg" href={`/plan/${shared.planId}`}>Open it to change it</a>.</>
+                : <>Shared by {shared.owner}. Try your own pace and start time here, or <a className="underline hover:text-fg" href={`/plan?${draftParams(draft)}`}>make your own copy</a>.</>}
+            </p>
+          ) : (
+            <p className="text-xs text-muted">
+              {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
+            </p>
+          )}
           <label className="mt-3 flex items-center gap-2">
             <span className="text-xs text-muted tracking-widest shrink-0">GO TO</span>
             <select className={INPUT} value="" aria-label="Go to a town"
@@ -112,9 +123,9 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
                 {sh === 'one_way' ? 'ONE-WAY' : 'RETURN'}
               </button>
             ))}
-            <button type="button" className={BTN} disabled={!draft.start || !draft.finish}
+            <button type="button" className={BTN} disabled={!!shared || !draft.start || !draft.finish}
               onClick={() => setDraft(d => ({ ...d, start: d.finish, finish: d.start }))}>SWAP</button>
-            <button type="button" className={BTN} disabled={!draft.start}
+            <button type="button" className={BTN} disabled={!!shared || !draft.start}
               onClick={() => setDraft(d => ({ ...d, start: null, finish: null }))}>CLEAR</button>
           </div>
         </section>
@@ -162,7 +173,7 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
           </section>
         )}
 
-        <SaveBox draft={draft} saved={saved} canSave={!!plan} onSaved={p => { if (!saved) router.push(`/plan/${p.id}`) }} />
+        {!shared && <SaveBox draft={draft} saved={saved} canSave={!!plan} onSaved={p => { if (!saved) router.push(`/plan/${p.id}`) }} />}
 
         <section className="text-xs text-muted space-y-2">
           <p>This plan is not a navigation authority. Check stream warnings, lock notices and, below Teddington, the tide before you go.</p>
@@ -239,6 +250,45 @@ function StopList({ plan, stops, startAt, onFocus }: { plan: ComputedPlan; stops
   )
 }
 
+const initialTitle = (p: PlanDraft) => ('title' in p && typeof p.title === 'string' ? p.title : 'Shared plan')
+
+function ShareBox({ plan }: { plan: SavedPlan }) {
+  const utils = trpc.useUtils()
+  const [copied, setCopied] = useState(false)
+  const done = (p: SavedPlan) => utils.plan.get.setData({ id: p.id }, p)
+  const share = trpc.plan.share.useMutation({ onSuccess: done })
+  const unshare = trpc.plan.unshare.useMutation({ onSuccess: done })
+  // The server doesn't know which host the page is on; the browser fills it in after hydrating.
+  const origin = useSyncExternalStore(() => () => {}, () => window.location.origin, () => 'https://paddlesnitch.com')
+  const url = plan.shareId ? `${origin}/plan/shared/${plan.shareId}` : null
+  const copy = async () => {
+    if (!url) return
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) }
+    catch { /* clipboard blocked: the link is shown to copy by hand */ }
+  }
+  return (
+    <div className="mt-4">
+      <h2 className={H2}>Share</h2>
+      {!url ? (
+        <>
+          <button type="button" className={BTN} disabled={share.isPending} onClick={() => share.mutate({ id: plan.id })}>{share.isPending ? 'SHARING…' : 'SHARE'}</button>
+          <p className="mt-1 text-xs text-muted">Anyone with the link can see this plan. Your buddies see it in their list.</p>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-muted break-all" data-testid="share-link">{url}</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" className={BTN} onClick={copy}>{copied ? 'COPIED' : 'COPY LINK'}</button>
+            <button type="button" className={BTN} disabled={unshare.isPending} onClick={() => unshare.mutate({ id: plan.id })}>{unshare.isPending ? 'STOPPING…' : 'STOP SHARING'}</button>
+          </div>
+          <p className="mt-1 text-xs text-muted">Stopping sharing breaks the link and takes it off your buddies&apos; lists.</p>
+        </>
+      )}
+      {(share.error || unshare.error) && <p className="mt-2 text-sm text-red">Couldn&apos;t change sharing. Please try again.</p>}
+    </div>
+  )
+}
+
 function SaveBox({ draft, saved, canSave, onSaved }: {
   draft: PlanDraft; saved?: SavedPlan; canSave: boolean; onSaved: (p: SavedPlan) => void
 }) {
@@ -246,6 +296,7 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
   const utils = trpc.useUtils()
   const me = trpc.me.useQuery(undefined, { retry: false })
   const plans = trpc.plan.list.useQuery(undefined, { enabled: !!me.data?.user && !saved, retry: false })
+  const buddyPlans = trpc.plan.buddies.useQuery(undefined, { enabled: !!me.data?.user && !saved, retry: false })
   const [title, setTitle] = useState(saved?.title ?? '')
   const [confirming, setConfirming] = useState(false)
   const q = draftParams(draft)
@@ -279,8 +330,9 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
         </button>
       </div>
       {save.error && <p className="mt-2 text-sm text-red">Couldn&apos;t save this plan. Please try again.</p>}
+      {saved && <ShareBox plan={saved} />}
       {saved && (
-        <div className="mt-3 flex gap-2 items-center text-xs">
+        <div className="mt-4 flex gap-2 items-center text-xs">
           {!confirming
             ? <button type="button" className={`${BTN} text-red`} onClick={() => setConfirming(true)}>DELETE PLAN</button>
             : <>
@@ -297,7 +349,20 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
             {plans.data.map(p => (
               <li key={p.id} className="text-sm">
                 <a href={`/plan/${p.id}`} className="tt-link">{p.title}</a>
-                <span className="text-muted text-xs"> · {p.shape === 'return' ? 'return' : 'one-way'} · {fmtDay(p.updatedAt)}</span>
+                <span className="text-muted text-xs"> · {p.shape === 'return' ? 'return' : 'one-way'}{p.shareId ? ' · shared' : ''} · {fmtDay(p.updatedAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!saved && !!buddyPlans.data?.length && (
+        <div className="mt-4">
+          <h2 className={H2}>Buddies&apos; plans</h2>
+          <ul className="space-y-1">
+            {buddyPlans.data.map(p => (
+              <li key={p.shareId} className="text-sm">
+                <a href={`/plan/shared/${p.shareId}`} className="tt-link">{p.title}</a>
+                <span className="text-muted text-xs"> · {p.owner} · {p.shape === 'return' ? 'return' : 'one-way'} · {fmtDay(p.updatedAt)}</span>
               </li>
             ))}
           </ul>

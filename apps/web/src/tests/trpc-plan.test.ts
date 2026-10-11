@@ -10,7 +10,7 @@ import { cookies } from 'next/headers'
 import { createCaller } from '@paddlesnitch/api'
 import { GET as exportData } from '@/app/api/account/export/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
-import { listKeys } from '@/lib/storage'
+import { listKeys, getJson } from '@/lib/storage'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const anon = createCaller({ user: null })
@@ -73,6 +73,88 @@ describe('saved plans', () => {
   })
 })
 
+const befriend = async (a: TestUser, b: TestUser) => {
+  await as(a).buddies.request({ userId: b.id })
+  await as(b).buddies.accept({ userId: a.id })
+}
+
+describe('sharing a plan', () => {
+  it('a shared plan opens from its link for anyone, signed in or not, with the owner named', async () => {
+    const ann = await makeUser('Ann Paddler'), bob = await makeUser('Bob')
+    const saved = await as(ann).plan.save(DW)
+    const shared = await as(ann).plan.share({ id: saved.id })
+    expect(shared.shareId).toEqual(expect.any(String))
+    expect((await as(ann).plan.share({ id: saved.id })).shareId).toBe(shared.shareId)   // same link again
+
+    const seen = await anon.plan.shared({ shareId: shared.shareId! })
+    expect(seen).toMatchObject({ owner: 'Ann Paddler', mine: false, plan: { title: 'DW training', start: DW.start } })
+    expect(JSON.stringify(seen)).not.toContain(ann.email)
+    expect((await as(bob).plan.shared({ shareId: shared.shareId! })).mine).toBe(false)
+    expect((await as(ann).plan.shared({ shareId: shared.shareId! })).mine).toBe(true)
+  })
+
+  it('an unshared plan has no link, and stopping sharing breaks the old one', async () => {
+    const ann = await makeUser('Ann')
+    const saved = await as(ann).plan.save(DW)
+    await expect(anon.plan.shared({ shareId: 'made-up-link' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    const { shareId } = await as(ann).plan.share({ id: saved.id })
+    expect((await as(ann).plan.unshare({ id: saved.id })).shareId).toBeUndefined()
+    await expect(anon.plan.shared({ shareId: shareId! })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    // Sharing again makes a new link; the old one stays dead.
+    const again = await as(ann).plan.share({ id: saved.id })
+    expect(again.shareId).not.toBe(shareId)
+    await expect(anon.plan.shared({ shareId: shareId! })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('editing a shared plan keeps it shared, and the link shows the change', async () => {
+    const ann = await makeUser('Ann')
+    const saved = await as(ann).plan.save(DW)
+    const { shareId } = await as(ann).plan.share({ id: saved.id })
+    await as(ann).plan.save({ ...DW, id: saved.id, shape: 'return' })
+    expect((await anon.plan.shared({ shareId: shareId! })).plan.shape).toBe('return')
+  })
+
+  it('deleting a shared plan breaks its link', async () => {
+    const ann = await makeUser('Ann')
+    const saved = await as(ann).plan.save(DW)
+    const { shareId } = await as(ann).plan.share({ id: saved.id })
+    await as(ann).plan.delete({ id: saved.id })
+    await expect(anon.plan.shared({ shareId: shareId! })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(await getJson(`plans/shared/${shareId}.json`)).toBeNull()
+  })
+
+  it('only the owner can share it', async () => {
+    const ann = await makeUser('Ann'), bob = await makeUser('Bob')
+    const saved = await as(ann).plan.save(DW)
+    await expect(as(bob).plan.share({ id: saved.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(as(bob).plan.unshare({ id: saved.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+})
+
+describe("buddies' plans", () => {
+  it("lists your buddies' shared plans, never their private ones, and nobody else's", async () => {
+    const ann = await makeUser('Ann Paddler'), bob = await makeUser('Bob'), cat = await makeUser('Cat')
+    await befriend(ann, bob)
+    const open = await as(ann).plan.save({ ...DW, title: 'Shared one' })
+    await as(ann).plan.save({ ...DW, title: 'Private one' })
+    const { shareId } = await as(ann).plan.share({ id: open.id })
+    const catsShared = await as(cat).plan.save({ ...DW, title: "Cat's" })
+    await as(cat).plan.share({ id: catsShared.id })   // Cat isn't Bob's buddy
+
+    expect(await as(bob).plan.buddies()).toEqual([
+      { shareId, title: 'Shared one', shape: 'one_way', updatedAt: expect.any(String), owner: 'Ann Paddler' },
+    ])
+    expect(await as(cat).plan.buddies()).toEqual([])
+
+    await as(ann).plan.unshare({ id: open.id })
+    expect(await as(bob).plan.buddies()).toEqual([])
+  })
+
+  it('needs an account', async () => {
+    await expect(anon.plan.buddies()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+})
+
 describe('plans and your account', () => {
   it('are in Download my data', async () => {
     const me = await makeUser('Me')
@@ -82,12 +164,15 @@ describe('plans and your account', () => {
     expect(body.account.plans).toEqual([saved])
   })
 
-  it('are deleted with the account', async () => {
+  it('are deleted with the account, and their links stop working', async () => {
     const me = await makeUser('Me')
-    await as(me).plan.save(DW)
+    const saved = await as(me).plan.save(DW)
+    const { shareId } = await as(me).plan.share({ id: saved.id })
     expect(await listKeys(`users/${me.id}/plans/`)).toHaveLength(1)
     signInAs(me.idToken)
     expect((await deleteAccount()).status).toBe(200)
     expect(await listKeys(`users/${me.id}/plans/`)).toEqual([])
+    expect(await getJson(`plans/shared/${shareId}.json`)).toBeNull()
+    await expect(anon.plan.shared({ shareId: shareId! })).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 })
