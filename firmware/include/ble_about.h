@@ -34,8 +34,9 @@ static inline int bleAboutJson(char *out, size_t n, const char *id, const char *
 // ---- Setup over Bluetooth (both readable/writable only when paired) --------
 //
 // LINK: write {"op":"begin"} -> the tracker makes a fresh token and keeps it
-// pending; read -> its id and the token's sha256 (never the token); the page
-// registers the hash with the server, then writes {"op":"commit","tokenHash":h}
+// pending; read -> its id, the token's sha256 (never the token) and its signature
+// over both; the page registers the hash with the server (relaying the
+// signature), then writes {"op":"commit","tokenHash":h}
 // and the tracker keeps that token as its own. The token never leaves it.
 #define PS_BLE_LINK_UUID    "04dd0a04-9cd1-403e-a461-0b4af515a1b4"
 // WIFI: write {"ssid":..,"pass":..} -> the tracker tries the network and saves
@@ -44,10 +45,15 @@ static inline int bleAboutJson(char *out, size_t n, const char *id, const char *
 
 // state: "idle" (nothing pending), "pending" (begin done, hash below is the
 // one to register), "committed" (the tracker now uses that token).
-static inline int bleLinkJson(char *out, size_t n, const char *id, const char *state, const char *tokenHash)
+// sig: the tracker's signature over its id + that hash (include/claim_proof.h),
+// relayed by the page so the server knows the tracker itself is asking. "" when
+// nothing is pending.
+#define BLE_LINK_JSON_MAX 320
+static inline int bleLinkJson(char *out, size_t n, const char *id, const char *state, const char *tokenHash,
+                              const char *sig)
 {
-    return snprintf(out, n, "{\"v\":1,\"id\":\"%s\",\"state\":\"%s\",\"tokenHash\":\"%s\"}",
-                    id, state, tokenHash ? tokenHash : "");
+    return snprintf(out, n, "{\"v\":1,\"id\":\"%s\",\"state\":\"%s\",\"tokenHash\":\"%s\",\"sig\":\"%s\"}",
+                    id, state, tokenHash ? tokenHash : "", sig ? sig : "");
 }
 
 // state: idle, trying, joined, wrong_password, not_found, failed.

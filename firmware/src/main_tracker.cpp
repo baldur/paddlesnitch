@@ -14,6 +14,8 @@
 #include <esp_ota_ops.h>
 #include "ota.h"
 #include "ota_verify.h"
+#include "identity.h"
+#include "device_id.h"
 #include "tutorial.h"
 #include "track_policy.h"
 #include "setup_policy.h"
@@ -294,6 +296,7 @@ void setup()
     // which is where several of the hard faults have shown themselves.
     spiBusInit();
     dbgInit();
+    identityInit();
     Serial.printf("\n=== T-Beam S3 Supreme bring-up (fw %s) ===\n", FIRMWARE_VERSION);
     DBGI("boot", "fw %s, reset=%s", FIRMWARE_VERSION, resetReasonStr());
     // BEFORE any hardware init. If this image is on trial and has already failed
@@ -972,12 +975,23 @@ static void handleSerialCommand()
             // Does the update-signature check work on this hardware, with the
             // production key? Good vector must pass, tampered ones must fail.
             else if (!strncmp(buf, "SIGTEST", 7)) Serial.println(otaSignatureSelfTest() ? "SIGTEST ok" : "SIGTEST FAILED");
+            // Sign the rest of the line with the tracker's key, so a bench
+            // check can verify it with openssl against the IDENT public key.
+            else if (!strncmp(buf, "IDSIGN ", 7)) Serial.printf("IDSIGN %s\n", identitySign(buf + 7, strlen(buf + 7)).c_str());
             else if (!strncmp(buf, "PUTFILE ", 8)) {
                 char name[64]; unsigned long size = 0;
                 if (sscanf(buf + 8, "%63s %lu", name, &size) == 2 && size > 0) storagePut(name, size);
                 else Serial.println("<<<PUT ERR usage: PUTFILE <name> <size>>>>");
             }
 #endif
+            // For tools/enroll.sh: the IDs this tracker can be claimed under and
+            // its public key, on one line. The key is made here if it has none.
+            else if (!strncmp(buf, "IDENT", 5)) {
+                char uid[9];
+                deviceIdUnique(ESP.getEfuseMac(), uid);
+                String key = identityPublicKey();
+                Serial.printf("IDENT %s %s %s\n", netDeviceId().c_str(), uid, key.length() ? key.c_str() : "-");
+            }
             else if (!strncmp(buf, "REC", 3))  toggleRecording();
             else if (!strncmp(buf, "NERD", 4)) {
                 if (menu == Menu::None && uiScreen == Screen::Nerd) { menu = Menu::Settings; menuSel = 0; Serial.println("screen settings"); }
@@ -1061,12 +1075,14 @@ static void handleSerialCommand()
                     "FORGET            clear WiFi credentials AND the token\n"
                     "SYNC              ask the uplink task to sync now\n"
                     "HOLD / RESUME     take the SD card off the uploader / give it back\n"
+                    "IDENT             device id, unique id, public key (for tools/enroll.sh)\n"
                     "LS                list files on the card\n"
                     "CAT <f>           dump a file (framed <<<CAT>>> .. <<<END>>>)\n"
 #if BENCH_TOOLS
                     "PUTFILE <f> <n>   bench: write n raw bytes to the card as f\n"
                     "CRASH             bench: crash on purpose (release testing)\n"
                     "SIGTEST           bench: check the update-signature verifier\n"
+                    "IDSIGN <text>     bench: sign text with the tracker key\n"
 #endif
                     "SDPROBE <f>       read a file on CORE 1, radio off then on\n"
                     "SDPROBE0 <f>      the same read on CORE 0 (the uplink task)\n"

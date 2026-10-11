@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createHash, randomBytes } from 'crypto'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { provedPoll, linkProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -37,13 +38,21 @@ const newToken = () => randomBytes(32).toString('base64url')
 const DEVICE = '435AC17C'
 const body = (tokenHash: string, extra: Record<string, unknown> = {}) =>
   ({ deviceId: DEVICE, tokenHash, model: 'lilygo-tbeam-s3-supreme', firmware: '0.18.0', ...extra })
+// What the page sends: the body plus the tracker's own signature over its ID and
+// token hash, read from the tracker with the hash (see device-claim-proof.test.ts
+// for what happens without one).
+const signed = async (tokenHash: string, extra: Record<string, unknown> = {}) => {
+  const b = body(tokenHash, extra)
+  const ok = /^[0-9A-F]{8}$/.test(String(b.deviceId)) && /^[0-9a-f]{64}$/.test(tokenHash)
+  return { ...b, signature: ok ? await linkProof(String(b.deviceId), tokenHash) : undefined }
+}
 
 describe('linking a tracker over Bluetooth', () => {
   it("links the tracker to the signed-in account; the tracker's own token then works", async () => {
     const u = await makeUser('Bluetooth Owner')
     mockAuth(u.idToken)
     const t = newToken()
-    const res = await linkBluetooth(jreq(body(sha(t), { name: "Baldur's tracker" })))
+    const res = await linkBluetooth(jreq(await signed(sha(t), { name: "Baldur's tracker" })))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ deviceId: DEVICE, model: 'lilygo-tbeam-s3-supreme' })
     // The tracker uploads with the token it never sent anywhere.
@@ -55,23 +64,23 @@ describe('linking a tracker over Bluetooth', () => {
 
   it('needs a signed-in user', async () => {
     mockAuth(null)
-    expect((await linkBluetooth(jreq(body(sha(newToken()))))).status).toBe(401)
+    expect((await linkBluetooth(jreq(await signed(sha(newToken()))))).status).toBe(401)
   })
 
   it('rejects a malformed tracker id or token hash', async () => {
     const u = await makeUser('Sloppy')
     mockAuth(u.idToken)
-    expect((await linkBluetooth(jreq(body(sha(newToken()), { deviceId: 'not-an-id' })))).status).toBe(400)
-    expect((await linkBluetooth(jreq(body('abc')))).status).toBe(400)
+    expect((await linkBluetooth(jreq(await signed(sha(newToken()), { deviceId: 'not-an-id' })))).status).toBe(400)
+    expect((await linkBluetooth(jreq(await signed('abc')))).status).toBe(400)
   })
 
   it("won't take a tracker that is on someone else's account", async () => {
     const owner = await makeUser('Owner')
     const other = await makeUser('Other')
     mockAuth(owner.idToken)
-    await linkBluetooth(jreq(body(sha(newToken()))))
+    await linkBluetooth(jreq(await signed(sha(newToken()))))
     mockAuth(other.idToken)
-    const res = await linkBluetooth(jreq(body(sha(newToken()))))
+    const res = await linkBluetooth(jreq(await signed(sha(newToken()))))
     expect(res.status).toBe(409)
     expect((await res.json()).error).toBe('owned_elsewhere')
   })
@@ -81,10 +90,10 @@ describe('linking a tracker over Bluetooth', () => {
     const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
     mockAuth(owner.idToken)
     await link(jreq({ claimCode }))
-    await token(jreq({ deviceId: DEVICE, claimSecret }))
+    await token(jreq(await provedPoll(DEVICE, claimSecret)))
     const other = await makeUser('Squatter')
     mockAuth(other.idToken)
-    expect((await linkBluetooth(jreq(body(sha(newToken()))))).status).toBe(409)
+    expect((await linkBluetooth(jreq(await signed(sha(newToken()))))).status).toBe(409)
   })
 
   // The guard this route adds: registering a hash that is already some
@@ -94,10 +103,10 @@ describe('linking a tracker over Bluetooth', () => {
     const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: '5A43CA48', model: 'm', firmware: 'f' }))).json()
     mockAuth(owner.idToken)
     await link(jreq({ claimCode }))
-    const victimToken = (await (await token(jreq({ deviceId: '5A43CA48', claimSecret }))).json()).deviceToken
+    const victimToken = (await (await token(jreq(await provedPoll('5A43CA48', claimSecret)))).json()).deviceToken
     const attacker = await makeUser('Attacker')
     mockAuth(attacker.idToken)
-    const res = await linkBluetooth(jreq(body(sha(victimToken))))
+    const res = await linkBluetooth(jreq(await signed(sha(victimToken))))
     expect(res.status).toBe(409)
     expect((await res.json()).error).toBe('token_in_use')
     // The victim's tracker still uploads as itself.
@@ -108,9 +117,9 @@ describe('linking a tracker over Bluetooth', () => {
     const u = await makeUser('Relinker')
     mockAuth(u.idToken)
     const first = newToken()
-    await linkBluetooth(jreq(body(sha(first))))
+    await linkBluetooth(jreq(await signed(sha(first))))
     const second = newToken()
-    expect((await linkBluetooth(jreq(body(sha(second))))).status).toBe(200)
+    expect((await linkBluetooth(jreq(await signed(sha(second))))).status).toBe(200)
     expect(await getDeviceAuth(bearer(first))).toBeNull()
     expect(await getDeviceAuth(bearer(second))).toEqual({ deviceId: DEVICE, userId: u.id })
   })

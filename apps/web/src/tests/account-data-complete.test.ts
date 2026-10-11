@@ -5,6 +5,7 @@
 // Strava links and group memberships were all missed before.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { claimProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 // The Strava deauthorize call must never leave the test process.
@@ -53,7 +54,7 @@ async function pairTracker(userId: string, deviceId: string) {
   const claim = await createClaim(deviceId, 'T-Beam', '0.14.0')
   const linked = await linkClaim(claim.claimCode, userId, 'Boat tracker')
   if ('error' in linked) throw new Error(`link failed: ${linked.error}`)
-  const bound = await redeemToken(deviceId, claim.claimSecret)
+  const bound = await redeemToken(deviceId, claim.claimSecret, await claimProof(deviceId, claim.claimSecret))
   if (bound.status !== 'bound') throw new Error(`redeem failed: ${bound.status}`)
   // Sanity: the tracker really is paired, so the erasure tests can't pass vacuously.
   if ((await listUserDevices(userId)).length === 0) throw new Error('tracker not paired')

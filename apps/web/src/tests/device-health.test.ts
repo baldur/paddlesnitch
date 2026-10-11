@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { provedPoll } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -36,7 +37,7 @@ async function linkedTracker() {
   const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'lilygo-tbeam-s3-supreme', firmware: '0.18.0' }))).json()
   mockAuth(u.idToken)
   await link(jreq({ claimCode }))
-  const deviceToken = (await (await token(jreq({ deviceId: DEVICE, claimSecret }))).json()).deviceToken as string
+  const deviceToken = (await (await token(jreq(await provedPoll(DEVICE, claimSecret)))).json()).deviceToken as string
   return { u, deviceToken }
 }
 const report = (dt: string, body: unknown) =>

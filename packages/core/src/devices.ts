@@ -11,8 +11,10 @@
 //   - the claimSecret is compared in constant time.
 //   - claims are single-use and TTL-bounded (10 min).
 //   - `deviceId` is NOT a secret (it's on every LoRa packet) — it authenticates
-//     nothing on its own.
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
+//     nothing on its own. Binding a tracker to an account therefore needs a
+//     signature from that tracker's own key, enrolled when it was flashed
+//     (see "Proof of possession" below).
+import { createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify, type KeyObject } from 'crypto'
 import { getJson, putJson, getObject, putObject, listKeys, deleteObject, deleteObjects, STAGED_PART_TAG } from './storage'
 
 export type DeviceClaim = {
@@ -149,16 +151,79 @@ export async function linkClaim(claimCode: string, userId: string, name?: string
   return { deviceId: c.deviceId, model: c.model }
 }
 
+// ---------------------------------------------------------------------------
+// Proof of possession
+// ---------------------------------------------------------------------------
+//
+// Every tracker makes an ECDSA P-256 key the first time it needs one and keeps
+// it in its own NVS namespace, which a factory reset leaves alone. Its public
+// half is enrolled here, at `device-keys/{deviceId}.json`:
+//   - by cable, when the owner flashes it (firmware/tools/enroll.sh writes the
+//     record straight to the bucket with the owner's AWS login), or
+//   - by the tracker itself, once, over its device token -- only for the ID that
+//     token is bound to, and never replacing a key already there. That is how
+//     trackers already on an account when this shipped get a key without a cable.
+// Binding needs a signature by that key over a fresh value: the server's claim
+// secret (by code) or the tracker's new token hash (over Bluetooth). Knowing the
+// ID is no longer enough to take it.
+
+export type DeviceIdentity = { publicKey: string; enrolledAt: string; via: 'cable' | 'token' }
+const identityKey = (deviceId: string) => `device-keys/${deviceId}.json`
+
+export const claimProofMessage = (deviceId: string, claimSecret: string) => `paddlesnitch-claim\n${deviceId}\n${claimSecret}\n`
+export const linkProofMessage = (deviceId: string, tokenHash: string) => `paddlesnitch-link\n${deviceId}\n${tokenHash}\n`
+
+/** A base64 SPKI DER P-256 public key, or null for anything else. */
+function p256PublicKey(b64: unknown): KeyObject | null {
+  if (typeof b64 !== 'string' || b64.length > 200 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return null
+  try {
+    const k = createPublicKey({ key: Buffer.from(b64, 'base64'), format: 'der', type: 'spki' })
+    return k.asymmetricKeyType === 'ec' && k.asymmetricKeyDetails?.namedCurve === 'prime256v1' ? k : null
+  } catch { return null }
+}
+
+export type ProofCheck = 'ok' | 'not_enrolled' | 'bad_proof'
+
+/** Did this tracker's enrolled key sign `message`? `proof` is base64 DER ECDSA. */
+export async function checkDeviceProof(deviceId: string, message: string, proof: unknown): Promise<ProofCheck> {
+  const id = await getJson<DeviceIdentity>(identityKey(deviceId))
+  const key = p256PublicKey(id?.publicKey)
+  if (!key) return 'not_enrolled'
+  if (typeof proof !== 'string' || !proof || proof.length > 200) return 'bad_proof'
+  try {
+    return verify('sha256', Buffer.from(message), key, Buffer.from(proof, 'base64')) ? 'ok' : 'bad_proof'
+  } catch { return 'bad_proof' }
+}
+
+/** Enrol (or, by cable, re-enrol) a tracker's public key. */
+export async function enrolDeviceKey(deviceId: string, publicKey: string, via: DeviceIdentity['via']): Promise<boolean> {
+  if (!isDeviceId(deviceId) || !p256PublicKey(publicKey)) return false
+  await putJson(identityKey(deviceId), { publicKey, enrolledAt: nowIso(), via } satisfies DeviceIdentity)
+  return true
+}
+
+/** A tracker on an account registering its own key over its token. First key
+ *  wins; replacing one takes a cable (enroll.sh). */
+export async function registerDeviceKeyByToken(deviceId: string, publicKey: unknown): Promise<'registered' | 'already' | 'conflict' | 'bad_key'> {
+  if (!p256PublicKey(publicKey)) return 'bad_key'
+  const existing = await getJson<DeviceIdentity>(identityKey(deviceId))
+  if (existing) return existing.publicKey === publicKey ? 'already' : 'conflict'
+  await enrolDeviceKey(deviceId, publicKey as string, 'token')
+  return 'registered'
+}
+
 type RedeemResult =
   | { status: 'pending' }
   | { status: 'expired' }
+  | { status: 'not_enrolled' }
+  | { status: 'bad_proof' }
   | { status: 'bound'; deviceToken: string; userId: string; deviceName?: string }
 
 // The device polls with { deviceId, claimSecret }. We find its pending claim by
 // matching the deviceId AND a constant-time secret check, so a wrong secret is
 // indistinguishable from "not entered yet" (both → pending). On success: mint
 // the token, write the device record, consume the claim (single use).
-export async function redeemToken(deviceId: string, claimSecret: string): Promise<RedeemResult> {
+export async function redeemToken(deviceId: string, claimSecret: string, proof?: unknown): Promise<RedeemResult> {
   // ONE read, whatever else is outstanding in the bucket. This is the whole
   // point of keying claims by deviceId: the device polls this every 5 seconds
   // for up to five minutes, and it used to be a full listing plus a read per
@@ -182,6 +247,12 @@ export async function redeemToken(deviceId: string, claimSecret: string): Promis
     return { status: 'expired' }
   }
   if (!c.userId) return { status: 'pending' }
+
+  // Only the tracker itself may collect the token: whoever started this claim
+  // knows the secret, but only the enrolled key can sign it. Checked after the
+  // secret, so these answers go only to the claim's own starter.
+  const proven = await checkDeviceProof(deviceId, claimProofMessage(deviceId, claimSecret), proof)
+  if (proven !== 'ok') return { status: proven }
 
   const token = randomBytes(32).toString('base64url')
   const tokenHash = sha256(token)
@@ -213,14 +284,17 @@ export async function redeemToken(deviceId: string, claimSecret: string): Promis
  *
  * Same rules as linkClaim + redeemToken, plus one: a hash that is already some
  * tracker's token is refused, or registering it would point that tracker's
- * uploads at this record. (Squatting a never-linked id is possible here exactly
- * as it is with a claim: the id is not a secret. See linkClaim.)
+ * uploads at this record. The tracker signs its new token hash with its
+ * enrolled key and the page relays the signature, so knowing the ID is not
+ * enough to register one (see "Proof of possession").
  */
 export async function linkByTokenHash(
   userId: string,
-  d: { deviceId: string; tokenHash: string; model: string; firmware: string; name?: string },
-): Promise<{ deviceId: string; model: string } | { error: 'bad_request' | 'owned_elsewhere' | 'token_in_use' }> {
+  d: { deviceId: string; tokenHash: string; model: string; firmware: string; name?: string; signature?: unknown },
+): Promise<{ deviceId: string; model: string } | { error: 'bad_request' | 'owned_elsewhere' | 'token_in_use' | 'not_enrolled' | 'bad_proof' }> {
   if (!isDeviceId(d.deviceId) || !/^[0-9a-f]{64}$/.test(d.tokenHash)) return { error: 'bad_request' }
+  const proven = await checkDeviceProof(d.deviceId, linkProofMessage(d.deviceId, d.tokenHash), d.signature)
+  if (proven !== 'ok') return { error: proven }
   const existing = await getJson<DeviceRecord>(deviceKey(d.deviceId))
   if (existing && existing.userId !== userId) return { error: 'owned_elsewhere' }
   if (await getJson<DeviceTokenRecord>(tokenKey(d.tokenHash))) return { error: 'token_in_use' }

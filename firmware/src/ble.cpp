@@ -1,4 +1,6 @@
 #if BLE_ENABLED
+#include "identity.h"
+#include "claim_proof.h"
 #include "ble.h"
 #include "ble_about.h"
 #include "device_id.h"
@@ -65,7 +67,7 @@ void bleForgetAll()
 }
 
 // ---- LINK: the tracker makes its own token; only the hash leaves it --------
-static String s_pendingToken, s_pendingHash;
+static String s_pendingToken, s_pendingHash, s_pendingSig;
 static bool   s_committed = false;
 
 static String sha256Hex(const String &s)
@@ -99,9 +101,9 @@ static String newToken()
 class LinkCallbacks : public NimBLECharacteristicCallbacks {
     void onRead(NimBLECharacteristic *c) override
     {
-        char json[200];
+        char json[BLE_LINK_JSON_MAX];
         const char *state = s_committed ? "committed" : s_pendingHash.length() ? "pending" : "idle";
-        bleLinkJson(json, sizeof(json), netDeviceId().c_str(), state, s_pendingHash.c_str());
+        bleLinkJson(json, sizeof(json), netDeviceId().c_str(), state, s_pendingHash.c_str(), s_pendingSig.c_str());
         c->setValue((const uint8_t *)json, strlen(json));
     }
     void onWrite(NimBLECharacteristic *c) override
@@ -112,6 +114,12 @@ class LinkCallbacks : public NimBLECharacteristicCallbacks {
         if (!strcmp(op, "begin")) {
             s_pendingToken = newToken();
             s_pendingHash  = sha256Hex(s_pendingToken);
+            // Sign id + hash with the tracker's own key: the server binds the
+            // tracker only with this, so the page cannot invent a hash for an
+            // ID it merely knows.
+            char msg[128];
+            size_t n = linkProofMessage(netDeviceId().c_str(), s_pendingHash.c_str(), msg, sizeof(msg));
+            s_pendingSig = n ? identitySign(msg, n) : String();
             s_committed    = false;
             DBGI("ble", "link: begin");
             Serial.println("BLE: link begun (token made, hash ready)");
@@ -126,6 +134,8 @@ class LinkCallbacks : public NimBLECharacteristicCallbacks {
                 // Bluetooth upload receipts with, so a paired peer reading it
                 // could forge "the server has this" and get recordings deleted.
                 s_pendingHash = "";
+                s_pendingSig = "";
+                identitySetRegistered();   // the server just checked this key
                 s_committed = true;
                 DBGI("ble", "link: committed");
                 Serial.println("BLE: linked to an account over Bluetooth");

@@ -21,10 +21,13 @@ export async function POST(req: Request) {
   const limit = await limitTokenPoll(deviceId)
   if (limit.limited) return limit.response
 
-  const r = await redeemToken(deviceId, claimSecret)
+  // The tracker's signature over claimSecret (see redeemToken). Firmware before
+  // 0.19.1 sends none and can no longer be claimed -- it must be updated first.
+  const r = await redeemToken(deviceId, claimSecret, body?.proof)
   if (r.status === 'bound') {
     return NextResponse.json({ deviceToken: r.deviceToken, userId: r.userId, deviceName: r.deviceName }, { status: 200 })
   }
   if (r.status === 'expired') return NextResponse.json({ error: 'claim_expired' }, { status: 410 })
+  if (r.status === 'not_enrolled' || r.status === 'bad_proof') return NextResponse.json({ error: r.status }, { status: 403 })
   return NextResponse.json({ status: 'pending' }, { status: 202 })
 }

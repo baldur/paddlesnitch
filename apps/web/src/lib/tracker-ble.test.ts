@@ -100,9 +100,19 @@ describe('setup over Bluetooth', () => {
   it('reads the link status the tracker writes (bleLinkJson)', () => {
     const h = '0123456789abcdef'.repeat(4)
     expect(parseLinkStatus(`{"v":1,"id":"435AC17C","state":"pending","tokenHash":"${h}"}\u0000`))
-      .toEqual({ id: '435AC17C', state: 'pending', tokenHash: h })
+      .toEqual({ id: '435AC17C', state: 'pending', tokenHash: h, sig: '' })
     expect(parseLinkStatus('{"v":1,"id":"435AC17C","state":"idle","tokenHash":""}')!.tokenHash).toBe('')
     expect(parseLinkStatus('{"v":1,"id":"435AC17C","state":"weird","tokenHash":""}')).toBeNull()
+  })
+
+  // The tracker signs its token hash so the server knows the request came from
+  // the tracker and not from someone who only knows its ID. The page relays it.
+  it("carries the tracker's signature over the hash, and none from older trackers", () => {
+    const h = 'a'.repeat(64)
+    const sig = 'MEUCIQDf+abc/123=='
+    expect(parseLinkStatus(`{"v":1,"id":"435AC17C","state":"pending","tokenHash":"${h}","sig":"${sig}"}`)!.sig).toBe(sig)
+    expect(parseLinkStatus(`{"v":1,"id":"435AC17C","state":"pending","tokenHash":"${h}"}`)!.sig).toBe('')
+    expect(parseLinkStatus(`{"v":1,"id":"435AC17C","state":"pending","tokenHash":"${h}","sig":"<script>"}`)).toBeNull()
   })
 
   it('reads the WiFi state and says it in plain words', () => {
@@ -128,6 +138,10 @@ describe('setup over Bluetooth', () => {
     expect(linkErrorMessage(409, 'owned_elsewhere')).toMatch(/another account/)
     expect(linkErrorMessage(429)).toMatch(/wait/i)
     expect(linkErrorMessage(500)).toMatch(/^Couldn't/)
+    // Refused because the tracker could not prove it is itself: an older
+    // tracker that doesn't sign yet, or one never registered when flashed.
+    expect(linkErrorMessage(403, 'bad_proof')).toMatch(/update/i)
+    expect(linkErrorMessage(403, 'not_enrolled')).toMatch(/registered/i)
   })
 })
 

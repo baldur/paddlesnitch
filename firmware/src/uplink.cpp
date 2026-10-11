@@ -1,3 +1,5 @@
+#include "identity.h"
+#include "claim_proof.h"
 #include "uplink.h"
 #include "spibus.h"
 #include "naming.h"
@@ -238,6 +240,41 @@ static void showCode(const String &code)
     // drawLinking() renders it. The screen has one owner.
 }
 
+// POST /api/devices/identity once per key. 201/200: the server has it. 409: it
+// has a DIFFERENT key for this ID -- only a cable enrolment fixes that, so stop
+// asking until the next start rather than every sync.
+static void registerIdentityOnce()
+{
+    static bool gaveUp = false;
+    if (gaveUp || identityRegistered()) return;
+    String key = identityPublicKey();
+    if (!key.length()) { gaveUp = true; return; }
+
+    WiFiClientSecure client;
+    configureClient(client);
+    HTTPClient http;
+    if (!http.begin(client, netcfg.baseUrl + "/api/devices/identity")) return;
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "Bearer " + netcfg.token);
+    http.addHeader("X-Device-Firmware", FIRMWARE_VERSION);
+    http.addHeader("X-Device-Model", "lilygo-tbeam-s3-supreme");
+    http.setTimeout(15000);
+    String body = "{\"publicKey\":\"" + key + "\"}";
+    int rc = http.POST(body);
+    http.end();
+    if (rc == 200 || rc == 201) {
+        identitySetRegistered();
+        DBGI("ident", "key registered (%d)", rc);
+        Serial.println("identity: key registered with the server");
+    } else if (rc == 409) {
+        gaveUp = true;
+        DBGW("ident", "server has a different key for this tracker");
+        Serial.println("identity: the server has a DIFFERENT key for this tracker -- enrol by cable (tools/enroll.sh)");
+    } else {
+        DBGW("ident", "register failed http %d", rc);
+    }
+}
+
 ClaimStatus uplinkClaim(uint32_t timeoutMs)
 {
     ClaimStatus st;
@@ -286,6 +323,21 @@ ClaimStatus uplinkClaim(uint32_t timeoutMs)
         netcfgSaveClaimSecret(secret);
     }
 
+    // Proof that this is the tracker itself: our key's signature over the
+    // server's fresh claim secret. Without it the server binds nothing, so
+    // knowing this tracker's ID is not enough to put it on someone's account.
+    String proof;
+    {
+        char msg[160];
+        size_t n = claimProofMessage(netDeviceId().c_str(), secret.c_str(), msg, sizeof(msg));
+        if (n) proof = identitySign(msg, n);
+        if (!proof.length()) {
+            st.state = ClaimState::Failed; st.message = "could not sign the claim";
+            Serial.println("claim failed: could not sign with the tracker key");
+            return st;
+        }
+    }
+
     statusClaimCode(code.c_str());   // BEFORE the poll, not after it
     showCode(code);
     st.code  = code;
@@ -303,6 +355,7 @@ ClaimStatus uplinkClaim(uint32_t timeoutMs)
         JsonDocument body;
         body["deviceId"]    = netDeviceId();
         body["claimSecret"] = secret;
+        body["proof"]       = proof;
         String out; serializeJson(body, out);
 
         int rc = http.POST(out);
@@ -316,12 +369,22 @@ ClaimStatus uplinkClaim(uint32_t timeoutMs)
                 String token = res["deviceToken"] | "";
                 if (token.length()) {
                     netcfgSaveToken(token);
+                    identitySetRegistered();   // the server checked this very key
                     st.state = ClaimState::Claimed;
                     st.message = "linked";
                     Serial.println("device linked");
                     return st;
                 }
             }
+        }
+        // The server would not take our proof: this tracker's key was never
+        // enrolled (it needs tools/enroll.sh over a cable), or it was enrolled
+        // with a different key (a full flash erase made a new one).
+        if (rc == 403) {
+            st.state = ClaimState::Failed;
+            st.message = payload.indexOf("not_enrolled") >= 0 ? "tracker not registered" : "tracker key refused";
+            Serial.printf("claim refused: %s -- enrol this tracker by cable (tools/enroll.sh)\n", st.message.c_str());
+            return st;
         }
         if (rc == 410) {   // code expired -- the user took too long
             st.state = ClaimState::Failed; st.message = "claim code expired";
@@ -1242,6 +1305,11 @@ static void uplinkTask(void *)
             st.busy       = false;
             statusSet(st);
         }
+
+        // A tracker that was on an account before trackers had keys registers
+        // its key once, over its token, so it can be re-added later without a
+        // cable. The server never lets this replace a key it already has.
+        if (netIsClaimed() && !g_yield) registerIdentityOnce();
 
         // OTA, while the radio is still up and the card is free. Order matters:
         // the ack first (it is small, and a rollback report is the thing we most

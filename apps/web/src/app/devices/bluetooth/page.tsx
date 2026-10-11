@@ -134,7 +134,9 @@ export default function BluetoothPage() {
       if (!st || st.state !== 'pending' || !st.tokenHash) throw new Error('no hash')
       const res = await fetch('/api/account/devices/link-bluetooth', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ deviceId: st.id, tokenHash: st.tokenHash, model: found.about.model, firmware: found.about.firmware }),
+        // sig: the tracker's own signature over its ID and this hash -- the
+        // server's proof that the request comes from the tracker itself.
+        body: JSON.stringify({ deviceId: st.id, tokenHash: st.tokenHash, signature: st.sig, model: found.about.model, firmware: found.about.firmware }),
       })
       if (!res.ok) {
         const b = await res.json().catch(() => ({})) as { error?: string }

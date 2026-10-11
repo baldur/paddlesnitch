@@ -88,17 +88,20 @@ export async function readWhenPaired(
   return { paired: false, lastError }
 }
 
-export type LinkStatus = { id: string; state: 'idle' | 'pending' | 'committed'; tokenHash: string }
+export type LinkStatus = { id: string; state: 'idle' | 'pending' | 'committed'; tokenHash: string; sig: string }
 
-/** The LINK item (bleLinkJson): the tracker's id, where the link is, and the
- *  sha256 of the token it made -- never the token itself. */
+/** The LINK item (bleLinkJson): the tracker's id, where the link is, the
+ *  sha256 of the token it made -- never the token itself -- and the tracker's
+ *  signature over that hash ('' from trackers too old to sign). */
 export function parseLinkStatus(raw: string): LinkStatus | null {
   try {
     const o = JSON.parse(trimValue(raw)) as Record<string, unknown>
     if (o.v !== 1 || typeof o.id !== 'string' || !/^[0-9A-F]{8}$/.test(o.id)) return null
     if (o.state !== 'idle' && o.state !== 'pending' && o.state !== 'committed') return null
     if (typeof o.tokenHash !== 'string' || !/^([0-9a-f]{64})?$/.test(o.tokenHash)) return null
-    return { id: o.id, state: o.state, tokenHash: o.tokenHash }
+    const sig = o.sig ?? ''
+    if (typeof sig !== 'string' || !/^[A-Za-z0-9+/]{0,200}={0,2}$/.test(sig)) return null
+    return { id: o.id, state: o.state, tokenHash: o.tokenHash, sig }
   } catch { return null }
 }
 
@@ -145,6 +148,9 @@ export function setupErrorMessage(e: unknown, trackerName: string): string {
 /** Why adding the tracker to the account failed, from the server's answer. */
 export function linkErrorMessage(status: number, code?: string): string {
   if (code === 'owned_elsewhere') return 'This tracker is on another account. Its owner needs to remove it first.'
+  if (code === 'bad_proof') return 'This tracker needs a software update before it can be added. Leave it on WiFi for a while, then try again.'
+  if (code === 'not_enrolled') return "This tracker hasn't been registered with paddlesnitch yet, so it can't be added."
+
   if (status === 429) return 'Too many tries. Please wait a while, then try again.'
   return "Couldn't add the tracker. Please try again."
 }

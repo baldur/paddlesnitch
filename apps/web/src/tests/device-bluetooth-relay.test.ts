@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createHash, createHmac, randomBytes } from 'crypto'
 import { deflateSync } from 'zlib'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { linkProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -43,7 +44,7 @@ async function ownerWithTracker() {
   const u = await makeUser('Relay Owner')
   mockAuth(u.idToken)
   const token = randomBytes(32).toString('base64url')
-  await linkBluetooth(new Request('http://x', { method: 'POST', body: JSON.stringify({ deviceId: DEVICE, tokenHash: sha(token), model: 'm', firmware: 'f' }), headers: { 'content-type': 'application/json' } }))
+  await linkBluetooth(new Request('http://x', { method: 'POST', body: JSON.stringify({ deviceId: DEVICE, tokenHash: sha(token), model: 'm', firmware: 'f', signature: await linkProof(DEVICE, sha(token)) }), headers: { 'content-type': 'application/json' } }))
   return { u, token }
 }
 

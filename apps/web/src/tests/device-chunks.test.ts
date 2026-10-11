@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createHash } from 'crypto'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { provedPoll } from './device-proof'
 import { POST as claim } from '@/app/api/devices/claim/route'
 import { POST as token } from '@/app/api/devices/token/route'
 import { POST as link } from '@/app/api/account/devices/link/route'
@@ -28,7 +29,7 @@ async function boundToken(u: { id: string; idToken: string }): Promise<string> {
   const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
   mockAuth(u.idToken)
   await link(jreq({ claimCode }))
-  return (await (await token(jreq({ deviceId: DEVICE, claimSecret }))).json()).deviceToken
+  return (await (await token(jreq(await provedPoll(DEVICE, claimSecret)))).json()).deviceToken
 }
 
 const TRACK = [
