@@ -13,6 +13,8 @@ import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
 import { paddleHighlights } from '@paddlesnitch/analysis/history-stats'
 import { writePendingSummary } from '@paddlesnitch/analysis/pipeline'
+import { comparablePaddles } from '@paddlesnitch/analysis/comparable'
+import { canViewPaddle } from '@paddlesnitch/core/buddies'
 import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling, updateSessionHidden,
@@ -152,6 +154,15 @@ export const paddlesRouter = router({
     const session = await getSharedSession(input.shareId)
     if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
     return othersView(session)
+  }),
+
+  // Your paddles worth comparing with one paddle, best first, with why: yours,
+  // or a buddy's (owner = their id, through the buddy rules).
+  comparable: protectedProcedure.input(byId.extend({ owner: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional() })).query(async ({ ctx, input }) => {
+    const owner = input.owner ?? ctx.user.id
+    const target = await getSession(owner, input.id)
+    if (!target || !(await canViewPaddle(ctx.user.id, owner, target))) throw new TRPCError({ code: 'NOT_FOUND' })
+    return comparablePaddles(ctx.user.id, target)
   }),
 
   // Hide this paddle from your buddies, or show it again.

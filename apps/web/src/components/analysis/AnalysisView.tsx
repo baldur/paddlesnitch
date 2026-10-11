@@ -9,7 +9,6 @@ import { ramp, scaleBounds } from '@/components/map/colour-scale'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 import { fmtDur, fmtClock, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
 import { gateAt, type Racer } from '@paddlesnitch/analysis/similar'
-import { rankForComparison } from '@paddlesnitch/analysis/same-outing'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { fmtDay } from '@paddlesnitch/core/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
@@ -472,9 +471,14 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         <aside className="order-1 md:order-2 flex flex-row flex-wrap md:flex-col md:flex-nowrap gap-2 text-xs content-start" aria-label="Actions">
           {onNewFile && <button onClick={onNewFile} className={ACTION}>ADD ANOTHER</button>}
           {readOnly && !buddy && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
-          {buddy && dataProp.paddledAt && (
-            <CompareWithMine buddy={buddy} className={ACTION} box={BOX}
-              target={{ paddledAt: dataProp.paddledAt, durationS: data.durationS, startLat: pts[0]?.lat, startLng: pts[0]?.lng }} />
+          {buddy && (
+            <ComparePicker label="COMPARE WITH ONE OF MINE" buddy className={ACTION} box={BOX}
+              target={{ id: buddy.paddleId, owner: buddy.userId }}
+              hrefFor={mine => `/paddles/compare?a=${mine}&b=${buddy.paddleId}&bOwner=${buddy.userId}`} />
+          )}
+          {sessionId && !readOnly && (
+            <ComparePicker label="COMPARE WITH…" buddy={false} className={ACTION} box={BOX}
+              target={{ id: sessionId }} hrefFor={other => `/paddles/compare?a=${sessionId}&b=${other}`} />
           )}
           {sessionId && !readOnly && (
             <button onClick={() => setHidden.mutate({ id: sessionId, hidden: !hiddenFromBuddies })} disabled={setHidden.isPending}
@@ -584,28 +588,34 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   )
 }
 
-// On a buddy's paddle: pick one of yours to compare with it. The outing you
-// paddled together first, then the same water newest first (rankForComparison).
-function CompareWithMine({ buddy, target, className, box }: {
-  buddy: { userId: string; paddleId: string }
-  target: { paddledAt: string; durationS: number; startLat?: number; startLng?: number }
+// Pick one of your paddles to compare with this one (yours or a buddy's): the
+// server ranks them by the water you both covered the same way
+// (paddles.comparable, route-match.ts) and offers only ones worth comparing.
+function ComparePicker({ label, target, hrefFor, buddy, className, box }: {
+  label: string
+  target: { id: string; owner?: string }
+  hrefFor: (myPaddleId: string) => string
+  buddy: boolean
   className: string; box: string
 }) {
   const [open, setOpen] = useState(false)
-  const mine = trpc.paddles.sessions.useQuery(undefined, { enabled: open, retry: false })
-  const picks = rankForComparison(target, mine.data ?? []).slice(0, 12)
+  const q = trpc.paddles.comparable.useQuery(target, { enabled: open, retry: false })
+  const why = (p: { kind: string; sharedM: number }) =>
+    p.kind === 'together' ? (buddy ? 'paddled together' : 'same outing')
+      : p.kind === 'same_route' ? 'same route'
+      : `${(p.sharedM / 1000).toFixed(1)} km shared`
   return (
     <>
-      <button onClick={() => setOpen(o => !o)} className={`${className} ${open ? 'border-primary text-fg' : ''}`}>COMPARE WITH ONE OF MINE</button>
+      <button onClick={() => setOpen(o => !o)} className={`${className} ${open ? 'border-primary text-fg' : ''}`}>{label}</button>
       {open && (
         <div className={`${box} max-h-72 overflow-y-auto`}>
-          {mine.isPending ? <div className="text-muted">Loading…</div>
-            : picks.length === 0 ? <div className="text-muted">You have no paddles yet.</div>
-            : picks.map(({ paddle: s, kind }) => (
-              <Link key={s.id} href={`/paddles/compare?a=${s.id}&b=${buddy.paddleId}&bOwner=${buddy.userId}`} className="block py-1 hover:text-primary">
-                {fmtDay(s.paddledAt)} · {s.distanceKm.toFixed(1)} km
-                {kind === 'together' && <span className="text-green"> · paddled together</span>}
-                {kind === 'elsewhere' && <span className="text-muted"> · elsewhere</span>}
+          {q.isPending ? <div className="text-muted">Finding paddles on the same water…</div>
+            : q.isError ? <div className="text-red">Couldn&apos;t load your paddles. Please try again.</div>
+            : !q.data?.length ? <div className="text-muted">None of your paddles shared enough of this water to compare.</div>
+            : q.data.map(p => (
+              <Link key={p.id} href={hrefFor(p.id)} className="block py-1 hover:text-primary">
+                {fmtDay(p.paddledAt)} · {p.distanceKm.toFixed(1)} km
+                <span className={p.kind === 'together' ? 'text-green' : 'text-muted'}> · {why(p)}</span>
               </Link>
             ))}
         </div>
