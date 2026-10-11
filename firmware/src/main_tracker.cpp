@@ -208,6 +208,8 @@ static String linkHint  = "Hold BOOT";
 static bool   gpsHasFix() { return gpsFresh(gps.location.isValid(), gps.location.age()); }
 static bool   gpsSpeedOk() { return gpsFresh(gps.speed.isValid(), gps.speed.age()); }
 static double gpsKmh()    { return gpsSpeedOk() ? gps.speed.kmph() : 0.0; }
+// A date only once the receiver has sent one: an empty RMC date reads 2000-00-00.
+static bool   gpsHasDate() { return gpsDateOk(gps.date.isValid(), gps.date.year(), gps.date.month(), gps.date.day()); }
 
 static double   lastLat = 0, lastLon = 0;
 
@@ -582,7 +584,9 @@ static void toggleRecording()
 
     // Recording before a fix produces exactly the fix-less rows that made all 31
     // of the first uploads return 422. Refuse, and say why.
-    if (!gpsHasFix()) { toast("NEED GPS"); return; }
+    // The date too: it names the file, and the receiver can send a fix a moment
+    // before it sends the date.
+    if (!gpsHasFix() || !gpsHasDate()) { toast("NEED GPS"); return; }
 
     // Both cores must never hold the SD card at once.
     if (!uplinkYieldCard()) {
@@ -595,7 +599,7 @@ static void toggleRecording()
     // deviceId+filename dedupe the way the old reused track_NNNN names did. Empty
     // stamp -> storage falls back to its NVS counter.
     char stamp[20] = "";
-    if (gps.date.isValid() && gps.time.isValid()) {
+    if (gpsHasDate() && gps.time.isValid()) {
         snprintf(stamp, sizeof(stamp), "%04d%02d%02d_%02d%02d%02d",
                  gps.date.year(), gps.date.month(), gps.date.day(),
                  gps.time.hour(), gps.time.minute(), gps.time.second());
@@ -1341,7 +1345,7 @@ void loop()
     // loss and future uses, not a dependency. The year guard rejects a bogus
     // pre-fix date.
     static bool rtcSynced = false;
-    if (!rtcSynced && gps.date.isValid() && gps.time.isValid() && gps.date.year() >= 2025) {
+    if (!rtcSynced && gpsHasDate() && gps.time.isValid()) {
         boardRtcSet(gps.date.year(), gps.date.month(), gps.date.day(),
                     gps.time.hour(), gps.time.minute(), gps.time.second());
         rtcSynced = true;
@@ -1359,7 +1363,7 @@ void loop()
         // immediately re-starts (track_policy.h, host-tested). Throttled to
         // this 1 Hz tick. toggleRecording() self-guards on the fix and the SD card.
         if (trackShouldAutoStart({ menu != Menu::None, uiScreen == Screen::Track },
-                                 storageRecording(), gpsHasFix())) {
+                                 storageRecording(), gpsHasFix() && gpsHasDate())) {
             toggleRecording();
         }
 
@@ -1392,7 +1396,7 @@ void loop()
 
         if (storageRecording()) {
             char row[320];
-            bool haveFix = gpsHasFix() && gps.date.isValid() && gps.time.isValid();
+            bool haveFix = gpsHasFix() && gpsHasDate() && gps.time.isValid();
 
             // ISO 8601 UTC when the fix is real, empty otherwise. Blank rather
             // than zero matters: 0.0,0.0 is a *valid* coordinate off the coast

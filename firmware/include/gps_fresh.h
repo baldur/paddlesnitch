@@ -13,3 +13,12 @@ static inline bool gpsFresh(bool valid, uint32_t ageMs)
 {
     return valid && ageMs < GPS_STALE_MS;
 }
+
+// Is a GPS date real? TinyGPS++ marks the date valid after an RMC whose date
+// field is EMPTY -- sent while the receiver has a time but no date yet -- and
+// the zeroed parser then reads 2000-00-00. A fix arriving first named a
+// recording track_20000000_190737 and stamped its rows 2000-00-00T...
+static inline bool gpsDateOk(bool valid, uint16_t year, uint8_t month, uint8_t day)
+{
+    return valid && year >= 2025 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
