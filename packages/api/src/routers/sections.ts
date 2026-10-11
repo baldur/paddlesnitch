@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure } from '../trpc'
 import { canViewPaddle } from '@paddlesnitch/core/buddies'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { getSession } from '@paddlesnitch/analysis/analysis-store'
 import { sectionOf, sectionPasses, passesIn, passLine } from '@paddlesnitch/analysis/section-passes'
@@ -23,7 +24,8 @@ const thin = (path: [number, number][], max = 60) => path.filter((_, i) => i % M
 async function pickedSection(viewer: string, input: z.infer<typeof picked>) {
   const owner = input.owner ?? viewer
   const src = await getSession(owner, input.sourceId)
-  if (!src || !(await canViewPaddle(viewer, owner, src))) throw new TRPCError({ code: 'NOT_FOUND' })
+  // A paddle without a map (#414) has no section to pick.
+  if (!src || isMotionOnly(src.result) || !(await canViewPaddle(viewer, owner, src))) throw new TRPCError({ code: 'NOT_FOUND' })
   const sec = sectionOf(src.result.points, input.aIdx, input.bIdx)
   if (!sec) throw new TRPCError({ code: 'BAD_REQUEST', message: 'section_too_short' })
   return sec

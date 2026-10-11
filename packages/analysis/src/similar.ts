@@ -17,6 +17,7 @@ import { haversine, processTrace } from '@paddlesnitch/timing/geo'
 import type { LatLng, Line, TrackPoint, Split } from '@paddlesnitch/timing/types'
 import type { AnalysisPoint, Conditions } from './analysis'
 import type { AnalysisSession, AnalysisSource } from './analysis-store'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 
 // Heuristic thresholds — tuned against real overlapping traces. The gate-crossing
 // test is exact; these govern the *quality* filter and are the seam a smarter
@@ -196,6 +197,8 @@ export function raceTrack(track: TrackPoint[], startLine: Line, finishLine: Line
 }
 
 function toRacer(session: AnalysisSession, startLine: Line, finishLine: Line, refPath: LatLng[], isSource: boolean): Racer | null {
+  // A paddle without a map (#414) never races: the bit of route it has isn't the paddle.
+  if (isMotionOnly(session.result)) return null
   const track = pointsToTrack(session.result.points)
   const res = raceTrack(track, startLine, finishLine)
   if (!res || !res.trackSegment) return null

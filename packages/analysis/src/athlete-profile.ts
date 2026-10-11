@@ -4,7 +4,8 @@
 // merged as each new paddle is saved, with a periodic full re-distill to prevent
 // drift. Falls back to a deterministic template when no LLM backend is
 // configured, so it never breaks. See docs/features/personable-insights.md.
-import { split500 } from './analysis'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
+import { historyBits } from './history-stats'
 import { runInsighter } from './llm'
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile, type SessionSummary } from './analysis-store'
 
@@ -20,8 +21,7 @@ const PROFILE_SYSTEM = [
 ].join(' ')
 
 function summaryLine(h: SessionSummary): string {
-  const d = h.paddledAt?.slice(0, 10) ?? '?'
-  const bits = [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
+  const bits = historyBits(h)
   if (h.avgSR != null) bits.push(`${Math.round(h.avgSR)}spm`)
   if (h.boatClass) bits.push(h.boatClass)
   let line = `  - ${bits.join(', ')}.`
@@ -42,11 +42,12 @@ function mergePrompt(current: AthleteProfile, latest: SessionSummary): string {
 // feature works with no LLM backend (and in tests). Never fabricates.
 export function deterministicProfile(summaries: SessionSummary[]): string {
   if (summaries.length < MIN_PADDLES) return ''
-  const dist = summaries.map(s => s.distanceKm)
+  // Paddles without a map (#414) have no distance to average.
+  const dist = summaries.filter(s => !isMotionOnly(s)).map(s => s.distanceKm)
   const avgDist = dist.reduce((a, b) => a + b, 0) / dist.length
   const classes = [...new Set(summaries.map(s => s.boatClass).filter(Boolean))] as string[]
   const withNotes = summaries.filter(s => s.note?.trim()).length
-  const bits = [`A paddler with ${summaries.length} logged paddles, typically around ${avgDist.toFixed(1)} km.`]
+  const bits = [`A paddler with ${summaries.length} logged paddles${dist.length ? `, typically around ${avgDist.toFixed(1)} km` : ''}.`]
   if (classes.length) bits.push(`Boat${classes.length > 1 ? 's' : ''}: ${classes.join(', ')}.`)
   if (withNotes) bits.push(`Keeps a diary — ${withNotes} of their sessions carry personal notes.`)
   return bits.join(' ')

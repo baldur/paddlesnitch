@@ -9,6 +9,7 @@ import { haversine } from '@paddlesnitch/timing/geo'
 import { split500 } from './analysis'
 import type { SessionSummary } from './analysis-store'
 import type { BoatClass } from '@paddlesnitch/core/types'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 
 // The minimal shape both a saved SessionSummary and the current (unsaved) paddle
 // satisfy. SessionSummary is assignable to this.
@@ -158,11 +159,22 @@ export function selectRelevantPaddles(current: PaddleFacts, prior: SessionSummar
   return scored.slice(0, n).map(({ summary, reason }) => ({ summary, reason }))
 }
 
+/**
+ * A past paddle's date and size for a prompt: distance and cruise pace, or,
+ * for a paddle without a map (#414), only its time paddling, so the model is
+ * never handed a 0 km to talk about.
+ */
+export function historyBits(h: SessionSummary): string[] {
+  const d = h.paddledAt?.slice(0, 10) ?? '?'
+  return isMotionOnly(h)
+    ? [`${d}: ${Math.round(h.durationS / 60)} min paddling (no GPS, so no distance or pace)`]
+    : [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
+}
+
 export function renderRelevant(list: RelevantPaddle[]): string {
   if (!list.length) return ''
   const lines = list.map(({ summary: h, reason }) => {
-    const d = h.paddledAt?.slice(0, 10) ?? '?'
-    const bits = [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
+    const bits = historyBits(h)
     if (h.avgSR != null) bits.push(`${Math.round(h.avgSR)}spm`)
     let line = `  - ${bits.join(', ')}${reason ? ` (${reason})` : ''}.`
     if (h.note?.trim()) line += ` Note: "${h.note.trim().slice(0, 120)}"`

@@ -10,6 +10,7 @@ import type { Line } from '@paddlesnitch/timing/types'
 import { listBuddies, getBuddySharing, canViewPaddle } from '@paddlesnitch/core/buddies'
 import type { AnalysisPoint } from './analysis'
 import { getSession, getRouteCells, listSessionSummaries, type AnalysisSession } from './analysis-store'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import { gateAt, pointsToTrack, pathSimilarity, COVERAGE_MIN, MIN_SECTION_M } from './similar'
 import { routeCells, cellOverlap } from './route-match'
 
@@ -48,6 +49,8 @@ export function sectionOf(points: AnalysisPoint[], aIdx: number, bIdx: number): 
 
 /** Every pass of one paddle through the section, the same way, along the same water. */
 export function passesIn(owner: string, s: AnalysisSession, sec: Section): SectionPass[] {
+  // A paddle without a map (#414): the bit of route it has isn't the paddle.
+  if (isMotionOnly(s.result)) return []
   const pts = s.result.points
   const passes = allPasses(pointsToTrack(pts), sec.startLine, sec.finishLine, sec.startSign, sec.finishSign)
   const out: SectionPass[] = []

@@ -8,7 +8,9 @@
 // LLM_MODEL) or the summaries are the plain ones.
 //
 // Recordings where the boat moved less than MIN_PADDLE_METRES (desk tests) are
-// skipped, as they are for new uploads. --skip=<file>,<file> leaves out others
+// skipped, as they are for new uploads. One whose GPS failed but whose motion
+// data shows 10 minutes or more of paddling becomes a paddle without a map
+// (#414, `create_motion`). --skip=<file>,<file> leaves out others
 // by filename (test copies of real paddles).
 //
 // Dry run by default -- prints what would change. Add --apply to write.
@@ -30,11 +32,12 @@ export async function run(apply: boolean, skip: string[] = []): Promise<Record<s
     if (skip.includes(m.filename)) { console.log(`${m.deviceId} ${m.filename}: skipped (--skip)`); continue }
     const plan = await planForRecording(m.userId, m.deviceId, m.sessionId)
     let what: string = plan.action
-    if (apply && (plan.action === 'create' || plan.action === 'update')) {
+    const changes = plan.action === 'create' || plan.action === 'create_motion' || plan.action === 'update'
+    if (apply && changes) {
       what = (await paddleForRecording(m.userId, m.deviceId, m.sessionId)).status
     }
     counts[what] = (counts[what] ?? 0) + 1
-    if (plan.action === 'create' || plan.action === 'update') console.log(`${m.deviceId} ${m.filename}: ${what}${plan.action === 'create' && plan.hasStrokeRate ? ' (with stroke rate)' : ''}`)
+    if (changes) console.log(`${m.deviceId} ${m.filename}: ${what}${plan.action === 'create' && plan.hasStrokeRate ? ' (with stroke rate)' : ''}`)
   }
   console.log(`create-tracker-paddles: ${JSON.stringify(counts)}${apply ? '' : ' (dry run; add --apply)'}`)
   return counts

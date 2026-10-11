@@ -8,8 +8,9 @@
 // no backfill: it's worked out when a paddle is opened.
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { AnalysisPoint } from './analysis'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 
-type Paddle = { paddledAt: string; result: { durationS: number; points: AnalysisPoint[] } }
+type Paddle = { paddledAt: string; result: { durationS: number; points: AnalysisPoint[]; noGps?: unknown } }
 type Window = { paddledAt: string; durationS: number }
 
 // The shorter paddle must lie at least this much inside the other in time...
@@ -68,6 +69,8 @@ export function trackGap(a: Paddle, b: Paddle, everyS = 10): OutingGap | null {
 
 /** Two paddles are the same outing: they overlap in time and in place. */
 export function isSameOuting(a: Paddle, b: Paddle): boolean {
+  // A paddle without a map (#414) is never offered to compare with another.
+  if (isMotionOnly(a.result) || isMotionOnly(b.result)) return false
   if (timeOverlapShare({ paddledAt: a.paddledAt, durationS: a.result.durationS }, { paddledAt: b.paddledAt, durationS: b.result.durationS }) < MIN_TIME_OVERLAP) return false
   const g = trackGap(a, b)
   return !!g && g.agreement >= MIN_AGREEMENT

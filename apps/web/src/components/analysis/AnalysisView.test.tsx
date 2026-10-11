@@ -155,6 +155,37 @@ describe('AnalysisView on a shared paddle', () => {
   })
 })
 
+// A paddle without a map (#414): the tracker's GPS failed, so the page shows
+// what the motion data gives and nothing that needs a route.
+describe('AnalysisView on a paddle without a map', () => {
+  const motion: ViewData = {
+    ...data, distanceKm: 0, avgSpeed: 0, cruiseSpeed: 0, avgDps: null, avgSR: 52, durationS: 6060, points: [], surges: [],
+    stops: [{ kind: 'rest', fromT: 1800, toT: 2100, durS: 300, distM: 0, avgSpeed: 0, splitPer500: 0, avgSR: null, srCv: null, avgDps: null }],
+    insight: "A 1 hr 41 min paddle from the boat's motion: about 5,200 strokes at 52 spm.",
+    noGps: { reason: { kind: 'gps_lost', lostAfterS: 30, recordedS: 6540 }, strokes: 5234 }, source: { type: 'device' },
+  }
+  const text = () => container.textContent ?? ''
+  const labels = () => Array.from(container.querySelectorAll('button, a')).map(b => b.textContent?.trim())
+
+  it('time paddling, stroke rate, strokes, rests and why there is no map; no map, distance, speed or pace', async () => {
+    await mount(<AnalysisView data={motion} sessionId="t-rec1" />)
+    expect(container.querySelector('section[aria-label="Map"]')).toBeNull()
+    expect(text()).toContain('1:41:00')
+    expect(text()).toContain('5,200')
+    expect(text()).toContain('52')
+    expect(text()).toContain('The GPS lost the sky 30 seconds after you set off, so no route was recorded after that. The boat motion was.')
+    expect(text()).toContain('RESTS 5:00 at 30:00')
+    expect(text()).not.toMatch(/0\.00 km|\/500|Pace|Per stroke/)
+  })
+
+  it('offers no compare or section, but keeps BOAT MOTION', async () => {
+    await mount(<AnalysisView data={motion} sessionId="t-rec1" />)
+    expect(labels()).not.toContain('COMPARE WITH…')
+    expect(labels()).not.toContain('PICK A SECTION')
+    expect(labels()).toContain('BOAT MOTION →')
+  })
+})
+
 describe('AnalysisView highlights', () => {
   it('shows the paddle\'s records as badges', async () => {
     await mount(<AnalysisView data={data} sessionId="p1" />, qc =>

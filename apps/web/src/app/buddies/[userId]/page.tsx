@@ -5,6 +5,8 @@ import { fmtWeekday } from '@paddlesnitch/core/format'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
 import AppHeader from '@/components/AppHeader'
 import RouteThumb from '@paddlesnitch/ui/RouteThumb'
+import NoGpsTag from '@/components/paddles/NoGpsTag'
+import { isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 
 // A buddy's paddles (docs/features/buddies-and-compare.md): the ones they let
@@ -28,11 +30,11 @@ export default function BuddyPaddlesPage({ params }: { params: Promise<{ userId:
                 <div className="flex flex-col gap-2">
                   {q.data.paddles.map(p => (
                     <Link key={p.id} href={`/buddies/${userId}/${p.id}`} className="border border-border px-4 py-3 flex gap-3 items-center hover:border-primary">
-                      {p.route && p.route.length > 1 && <RouteThumb route={p.route} />}
+                      {isMotionOnly(p) ? <NoGpsTag /> : p.route && p.route.length > 1 && <RouteThumb route={p.route} />}
                       <span className="flex-1 min-w-0">
                         <span className="block text-[10px] text-muted tracking-widest uppercase">{fmtWeekday(p.paddledAt)}</span>
                         <span className="block text-sm tabular">
-                          {p.distanceKm.toFixed(2)} km · {fmtClock(p.durationS)} · {split500(p.cruiseSpeed)}/500{p.avgSR != null ? ` · ${Math.round(p.avgSR)} spm` : ''}
+                          {paddleKm(p)} · {fmtClock(p.durationS)}{isMotionOnly(p) ? '' : ` · ${split500(p.cruiseSpeed)}/500`}{p.avgSR != null ? ` · ${Math.round(p.avgSR)} spm` : ''}
                         </span>
                       </span>
                       {p.boatClass && <span className="text-xs text-muted">{p.boatClass}</span>}

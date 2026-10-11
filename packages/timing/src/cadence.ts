@@ -451,3 +451,20 @@ export function paddlingFromMotion(report: CadenceReport): { paddlingS: number; 
   }
   return { paddlingS: Math.round(paddlingMs / 1000), strokes: Math.round(strokes), strokesPerMin: report.medianStrokesPerMin }
 }
+
+/**
+ * The rests in a paddle from the motion data alone (#414): gaps of at least
+ * `minS` between stretches with a clear stroke, as [from, to] on the tracker's
+ * millis() clock. A single missed window (a turn, a splash) leaves a 30 s gap,
+ * so the default asks for twice that before calling it a rest.
+ */
+export function restsFromMotion(report: CadenceReport, minS = 60): [number, number][] {
+  const ws = [...report.windows].sort((a, b) => a.tMs - b.tMs)
+  const out: [number, number][] = []
+  let end = -Infinity
+  for (const w of ws) {
+    if (Number.isFinite(end) && w.tMs - end >= minS * 1000) out.push([end, w.tMs])
+    end = Math.max(end, w.tMs + WINDOW_S * 1000)
+  }
+  return out
+}

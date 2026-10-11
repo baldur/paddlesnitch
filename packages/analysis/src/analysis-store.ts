@@ -4,7 +4,7 @@
 import { nanoid } from 'nanoid'
 import { getJson, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { thumbRoute } from '@paddlesnitch/core/paddles'
+import { thumbRoute, isMotionOnly } from '@paddlesnitch/core/paddles'
 import { routeCells } from './route-match'
 import type { AnalysisResult } from './analysis'
 import { rescaleDoubling } from './analysis'
@@ -75,9 +75,11 @@ export type SessionSummary = {
   // to read the shape of the outing at a glance, tiny on the wire. Derived from
   // the already-loaded result points, so it costs no extra storage read.
   route?: [number, number][]
+  // A paddle without a map: the tracker's GPS failed (#414). Test with isMotionOnly().
+  noGps?: true
 }
 
-const key = (userId: string, id: string) => `analysis/${userId}/${id}/session.json`
+const key =(userId: string, id: string) => `analysis/${userId}/${id}/session.json`
 
 // A stable identity for a paddle so re-submitting the same trace is recognised as
 // a duplicate (#178). Derived only from fields every session already stores
@@ -108,10 +110,13 @@ const summaryKey = (userId: string, id: string) => `analysis/${userId}/${id}/sum
 // it, so lists sent to the browser don't carry it.
 const cellsKey = (userId: string, id: string) => `analysis/${userId}/${id}/cells.json`
 
+// None for a paddle without a map: it is never matched against others.
+const cellsOf = (s: AnalysisSession) => (isMotionOnly(s.result) ? [] : routeCells(s.result.points))
+
 export async function saveSession(s: AnalysisSession): Promise<void> {
   await putJson(key(s.userId, s.id), s)
   // Best effort: a missing squares file is rebuilt on first use.
-  await putJson(cellsKey(s.userId, s.id), { cells: routeCells(s.result.points) }).catch(() => {})
+  await putJson(cellsKey(s.userId, s.id), { cells: cellsOf(s) }).catch(() => {})
   try { await putJson(summaryKey(s.userId, s.id), toSummary(s)) }
   catch (err) {
     // A stale summary is worse than none: without one, the list rebuilds it.
@@ -140,7 +145,7 @@ export async function getRouteCells(userId: string, id: string): Promise<string[
   if (stored?.cells) return stored.cells
   const s = await getSession(userId, id)
   if (!s) return []
-  const cells = routeCells(s.result.points)
+  const cells = cellsOf(s)
   await putJson(cellsKey(userId, id), { cells }).catch(() => {})
   return cells
 }
@@ -271,6 +276,7 @@ function toSummary(s: AnalysisSession): SessionSummary {
     ...(s.hiddenFromBuddies ? { hiddenFromBuddies: true as const } : {}),
     startLat: s.result.points[0]?.lat, startLng: s.result.points[0]?.lng,
     route: thumbRoute(s.result.points),
+    ...(isMotionOnly(s.result) ? { noGps: true as const } : {}),
   }
 }
 
