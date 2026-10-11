@@ -1,1 +1,1 @@
-Fixed: restarting itself when the card is full
+Fixed: restart loop, frozen GPS speed

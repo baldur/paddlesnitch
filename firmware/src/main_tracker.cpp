@@ -30,6 +30,7 @@
 #include "ble.h"
 #include "health.h"
 #include "ui.h"
+#include "gps_fresh.h"
 #include <WiFi.h>
 
 #ifndef TX_INTERVAL_S
@@ -202,6 +203,12 @@ static void toast(const char *t, uint32_t ms = 1500)
 
 static String linkTitle = "Not linked";
 static String linkHint  = "Hold BOOT";
+// A fix, and a speed, only while the GPS keeps updating them (gps_fresh.h):
+// TinyGPS++ leaves the last ones marked valid after the sky is lost.
+static bool   gpsHasFix() { return gpsFresh(gps.location.isValid(), gps.location.age()); }
+static bool   gpsSpeedOk() { return gpsFresh(gps.speed.isValid(), gps.speed.age()); }
+static double gpsKmh()    { return gpsSpeedOk() ? gps.speed.kmph() : 0.0; }
+
 static double   lastLat = 0, lastLon = 0;
 
 static double metresBetween(double lat1, double lon1, double lat2, double lon2)
@@ -215,14 +222,14 @@ static double metresBetween(double lat1, double lon1, double lat2, double lon2)
 
 static void updateSession()
 {
-    if (!gps.location.isValid()) return;
+    if (!gpsHasFix()) return;
     if (firstFixMs == 0) firstFixMs = millis();
 
     double lat = gps.location.lat(), lon = gps.location.lng();
     if (haveLastPos) {
         double d = metresBetween(lastLat, lastLon, lat, lon);
         // 3 m and 1.5 km/h: below both, it is GPS scatter, not paddling.
-        if (d >= 3.0 && gps.speed.isValid() && gps.speed.kmph() >= 1.5) {
+        if (d >= 3.0 && gpsSpeedOk() && gps.speed.kmph() >= 1.5) {
             sessionMetres += d;
             lastLat = lat; lastLon = lon;
         }
@@ -413,7 +420,7 @@ static void transmitPosition()
     p.flags   = 0;
     if (boardIsCharging()) p.flags |= PKT_FLAG_CHARGING;
 
-    if (gps.location.isValid()) {
+    if (gpsHasFix()) {
         p.flags |= PKT_FLAG_HAS_FIX;
         p.lat  = (int32_t)(gps.location.lat() * 1e7);
         p.lon  = (int32_t)(gps.location.lng() * 1e7);
@@ -488,7 +495,7 @@ static void drawStatus()
 {
     if (!board.display) return;
     char line[32];
-    bool fix = gps.location.isValid();
+    bool fix = gpsHasFix();
     int  sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
 
     display.clearBuffer();
@@ -517,7 +524,7 @@ static void drawStatus()
 
     // --- hero ----------------------------------------------------------
     if (fix) {
-        double kmh = gps.speed.isValid() ? gps.speed.kmph() : 0.0;
+        double kmh = gpsKmh();
         snprintf(line, sizeof(line), "%.1f", kmh);
         display.setFont(u8g2_font_logisoso24_tn);
         display.drawStr(0, 41, line);
@@ -575,7 +582,7 @@ static void toggleRecording()
 
     // Recording before a fix produces exactly the fix-less rows that made all 31
     // of the first uploads return 422. Refuse, and say why.
-    if (!gps.location.isValid()) { toast("NEED GPS"); return; }
+    if (!gpsHasFix()) { toast("NEED GPS"); return; }
 
     // Both cores must never hold the SD card at once.
     if (!uplinkYieldCard()) {
@@ -1352,12 +1359,12 @@ void loop()
         // immediately re-starts (track_policy.h, host-tested). Throttled to
         // this 1 Hz tick. toggleRecording() self-guards on the fix and the SD card.
         if (trackShouldAutoStart({ menu != Menu::None, uiScreen == Screen::Track },
-                                 storageRecording(), gps.location.isValid())) {
+                                 storageRecording(), gpsHasFix())) {
             toggleRecording();
         }
 
 
-        if (gps.location.isValid()) {
+        if (gpsHasFix()) {
             Serial.printf("fix  %.6f, %.6f  alt=%.1fm sats=%u hdop=%.1f\n",
                           gps.location.lat(), gps.location.lng(),
                           gps.altitude.meters(), gps.satellites.value(),
@@ -1385,7 +1392,7 @@ void loop()
 
         if (storageRecording()) {
             char row[320];
-            bool haveFix = gps.location.isValid() && gps.date.isValid() && gps.time.isValid();
+            bool haveFix = gpsHasFix() && gps.date.isValid() && gps.time.isValid();
 
             // ISO 8601 UTC when the fix is real, empty otherwise. Blank rather
             // than zero matters: 0.0,0.0 is a *valid* coordinate off the coast
@@ -1417,7 +1424,7 @@ void loop()
                      haveFix ? 1 : 0,
                      latS, lonS,
                      gps.altitude.isValid() ? gps.altitude.meters() : 0.0,
-                     gps.speed.isValid()    ? gps.speed.kmph()      : 0.0,
+                     gpsKmh(),
                      gps.course.isValid()   ? gps.course.deg()      : 0.0,
                      gps.satellites.isValid() ? gps.satellites.value() : 0,
                      gps.hdop.isValid() ? gps.hdop.hdop() : 0.0,
@@ -1588,10 +1595,10 @@ void loop()
         u.sdReady     = board.sdcard;
         u.recording   = storageRecording();
         u.rows        = storageRowCount();
-        u.fix         = gps.location.isValid();
+        u.fix         = gpsHasFix();
         u.sats        = gps.satellites.isValid() ? gps.satellites.value() : 0;
         u.searchSecs  = millis() / 1000;
-        u.speedKmh    = gps.speed.isValid() ? gps.speed.kmph() : 0.0;
+        u.speedKmh    = gpsKmh();
         u.distanceM   = sessionMetres;
         u.sessionSecs = firstFixMs ? (millis() - firstFixMs) / 1000 : 0;
         u.batteryPct  = boardBatteryPercent();
