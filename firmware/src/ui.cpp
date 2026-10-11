@@ -439,7 +439,7 @@ void uiPickFlash(int sel, bool settings)
 {
     if (!board_display_ok()) return;
     const char **opts = settings ? SETTINGS_OPTS : PICK_OPTS;
-    const int    n    = 3;
+    const int    n    = settings ? 4 : 3;   // as drawn by drawSettings / drawPick
     const char  *ttl  = settings ? "Settings" : nullptr;
     for (int i = 0; i < 2; i++) {
         drawMenuFrame(opts, n, sel, false, ttl); display.sendBuffer(); delay(70);

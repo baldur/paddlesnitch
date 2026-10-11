@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { makeDataDir, cleanDataDir } from '@/tests/helpers'
 
 // Verify token comes from core/strava; stub it + the storage lookups + the
 // importer so we test the webhook's ROUTING, not Strava/network. The shared
@@ -20,24 +21,23 @@ const { storage, importStravaActivity } = vi.hoisted(() => ({
 vi.mock('@paddlesnitch/core/strava-storage', () => storage)
 vi.mock('@paddlesnitch/analysis/strava-import', () => ({ importStravaActivity }))
 
-// Capture after() callbacks so the test can run + await the async processing.
-const afterFns: Array<() => unknown> = []
-vi.mock('next/server', async (orig) => {
-  const actual = await orig<typeof import('next/server')>()
-  return { ...actual, after: (fn: () => unknown) => { afterFns.push(fn) } }
-})
-
 import { NextRequest } from 'next/server'
 import { GET, POST } from './route'
+import { listKeys } from '@/lib/storage'
+import { runJob } from '@/lib/jobs'
 
 const post = (body: unknown) =>
   POST(new NextRequest('http://localhost/api/strava/webhook', {
     method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' },
   }))
-const runAfters = () => Promise.all(afterFns.splice(0).map(f => f()))
+// The POST only writes a job (lib/jobs.ts, #413); this runs what it wrote.
+const runAfters = async () => { for (const k of await listKeys('jobs/')) await runJob(k) }
 
-beforeEach(() => {
-  vi.clearAllMocks(); afterFns.length = 0
+let dataDir: string
+afterEach(async () => { await cleanDataDir(dataDir) })
+beforeEach(async () => {
+  dataDir = await makeDataDir()
+  vi.clearAllMocks()
   storage.getUserIdByAthleteId.mockResolvedValue(null)
   storage.getStravaAutoImport.mockResolvedValue(true)
 })

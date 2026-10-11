@@ -474,6 +474,15 @@ bool otaMaybeUpdate()
     Serial.printf("OTA: %s -> %s (%u bytes)\n", FIRMWARE_VERSION, version.c_str(), (unsigned)size);
     if (!downloadAndFlash(url, version, size, sha)) return false;
 
+    // "Not recording" was checked before the download, but Track's auto-start
+    // can begin a recording during it. The new image is already set to boot;
+    // restarting now would cut the paddle off. Wait for it to stop.
+    if (storageRecording()) {
+        DBGW("ota", "installed; waiting for the recording to stop before restarting");
+        Serial.println("OTA: installed -- will restart when the recording stops");
+        while (storageRecording()) vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
     delay(250);        // let the serial line drain so the last message is seen
     ESP.restart();
     return true;       // not reached

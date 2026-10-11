@@ -71,3 +71,6 @@ test-results/
 # Agent worktrees + local scratch
 .claude/
 paddle-map-*.html
+
+# River planner ingest cache (scripts/waterways/build-region.ts)
+apps/web/.cache/

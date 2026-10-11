@@ -56,6 +56,7 @@ uint32_t bleConfirmSecondsLeft()
     return used >= CONFIRM_MS ? 0 : (CONFIRM_MS - used + 999) / 1000;
 }
 void bleConfirmAnswer(bool yes) { if (s_pending) s_answer = yes ? 1 : 0; }
+uint32_t bleConfirmShownAt() { return s_since; }
 void bleForgetAll()
 {
     NimBLEDevice::deleteAllBonds();
@@ -121,6 +122,10 @@ class LinkCallbacks : public NimBLECharacteristicCallbacks {
             if (s_pendingToken.length() && s_pendingHash == h) {
                 netcfgSaveToken(s_pendingToken);
                 s_pendingToken = "";
+                // Stop showing the hash: it is also the key the tracker checks
+                // Bluetooth upload receipts with, so a paired peer reading it
+                // could forge "the server has this" and get recordings deleted.
+                s_pendingHash = "";
                 s_committed = true;
                 DBGI("ble", "link: committed");
                 Serial.println("BLE: linked to an account over Bluetooth");

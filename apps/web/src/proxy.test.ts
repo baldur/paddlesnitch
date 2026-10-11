@@ -40,6 +40,11 @@ describe('proxy auth gate', () => {
     expect(redirectsToAuth(proxy(req('POST', '/api/beta-signup')))).toBe(false)
   })
 
+  it('lets the jobs kicker (no account, no cookie) reach /api/jobs/run and /api/jobs/sweep (#413)', () => {
+    expect(redirectsToAuth(proxy(req('POST', '/api/jobs/run')))).toBe(false)
+    expect(redirectsToAuth(proxy(req('POST', '/api/jobs/sweep')))).toBe(false)
+  })
+
   it('still gates other unauthenticated API mutations to sign-in', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/courses')))).toBe(true)
     expect(redirectsToAuth(proxy(req('DELETE', '/api/account')))).toBe(true)
