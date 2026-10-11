@@ -36,6 +36,10 @@ export function parseCsv(text: string): TrackPoint[] {
   // label it every which way: cadence, cad, stroke rate, spm, sr. (findCol
   // normalises away spaces/underscores/case, so "Stroke Rate" == "strokerate".)
   const rateI = findCol(headers, 'strokerate', 'cadence', 'cad', 'spm', 'sr')
+  // A receiver that reports 0 satellites has no position, whatever the row
+  // says: tracker firmware up to 0.18.1 kept writing the last fix it had (with
+  // fix=1) after losing the sky, for 83 minutes on 2026-10-11.
+  const satsI = findCol(headers, 'sats', 'satellites', 'numsats')
 
   const points: TrackPoint[] = []
 
@@ -44,6 +48,11 @@ export function parseCsv(text: string): TrackPoint[] {
     if (!line) continue
 
     const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+    // A row cut short (or two run together) is damaged: its fields have moved,
+    // so whatever sits in the lat/lon columns isn't a position. One such row
+    // put a 2026-10-11 paddle in the Sahara (lat 27) and made it 5,452 km.
+    if (cols.length !== headers.length) continue
+    if (satsI !== -1 && cols[satsI] === '0') continue
 
     const lat = parseFloat(cols[latI] ?? '')
     const lng = parseFloat(cols[lngI] ?? '')
