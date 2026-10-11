@@ -17,6 +17,13 @@ unless some tracker acked a good start on it (`firmware-events/*/<v>/booted.json
 override `-f skip_boot_check=true`. The devices page tags beta trackers and judges
 "up to date" against what each is offered. No separate beta build: stable gets
 exactly the bytes beta ran.
+**Signed updates — built 2026-10-11 (firmware 0.19.0).** Every release is
+signed by the release job (ECDSA P-256, key in the `production` environment's
+`FIRMWARE_SIGNING_KEY`, offline copy with the owner); trackers install only an
+image whose manifest `signature` verifies over `version` + `sha256`
+(`firmware/include/ota_sign.h`). The web server's role is denied writes to
+`firmware/*`. Pre-0.19.0 builds are unsigned and cannot be rolled back to.
+Details in `firmware/CLAUDE.md` (OTA section).
 **Owner:** Baldur (product).
 **Related:** [`device-uplink.md`](device-uplink.md) (the transport and auth this
 reuses), [`device-screen-map.md`](device-screen-map.md) (screens and the error

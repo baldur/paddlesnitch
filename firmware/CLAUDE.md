@@ -406,6 +406,23 @@ runs once bring-up succeeds and cancels it. This path has worked on a real track
 real, and whether the prebuilt Arduino bootloader has
 `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE` set is **unverified**.
 
+**Updates are signed (0.19.0).** `otaMaybeUpdate()` installs only when the
+manifest's `signature` verifies (`src/ota_verify.cpp`, mbedtls ECDSA P-256)
+against `include/fw_signing_key.h`, over `otaSignedMessage(version, sha256)`
+(`include/ota_sign.h`, host-tested, byte-identical to
+`.github/scripts/firmware-sign.sh`). The download must then hash to that signed
+sha256, so together: these exact bytes, under this version, built by our release
+job. Missing or bad signature counts as a failure of that version
+(`"unsigned"` / `"bad signature"`) and nothing is downloaded. The private key is
+the `FIRMWARE_SIGNING_KEY` secret of the `production` GitHub environment (offline
+copy with the owner); the release job refuses to publish if it is missing or does
+not match the header. Consequences: **versions before 0.19.0 are unsigned and
+can no longer be rolled back to** on a signed tracker; changing the key means
+every tracker needs a cable flash. Bench check: `SIGTEST` (bench build) runs the
+verifier against a vector signed by the production key, good and tampered. The
+web server's role is also denied writes to `firmware/*` in S3 (`NoFirmwareWrites`
+in `infra/lib/att-stack.ts`). Cable flashing is unaffected — signing is OTA only.
+
 **Power loss mid-download is safe by construction:** `otadata` is untouched until
 `Update.end()` succeeds, so an interrupted download leaves a half-written
 inactive slot that is simply never booted.

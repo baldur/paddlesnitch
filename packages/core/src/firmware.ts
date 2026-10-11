@@ -28,6 +28,10 @@ export type FirmwareManifest = {
   notes: string
   builtAt: string
   gitSha?: string
+  /** Base64 DER ECDSA P-256 signature over the version + sha256, made by the
+   *  release job (firmware-release.yml). Trackers from 0.19.0 refuse an image
+   *  without a valid one; the server only passes it along. */
+  signature?: string
 }
 
 export type FirmwareOfferedRecord = {

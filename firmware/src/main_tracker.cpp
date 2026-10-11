@@ -13,6 +13,7 @@
 #include "imu.h"
 #include <esp_ota_ops.h>
 #include "ota.h"
+#include "ota_verify.h"
 #include "tutorial.h"
 #include "track_policy.h"
 #include "setup_policy.h"
@@ -968,6 +969,9 @@ static void handleSerialCommand()
             // Release testing (docs/features/release-testing.md, A6): crash on
             // purpose, to check the next start recovers. Bench build only.
             else if (!strncmp(buf, "CRASH", 5)) { Serial.println("CRASH: on purpose (bench)"); delay(100); abort(); }
+            // Does the update-signature check work on this hardware, with the
+            // production key? Good vector must pass, tampered ones must fail.
+            else if (!strncmp(buf, "SIGTEST", 7)) Serial.println(otaSignatureSelfTest() ? "SIGTEST ok" : "SIGTEST FAILED");
             else if (!strncmp(buf, "PUTFILE ", 8)) {
                 char name[64]; unsigned long size = 0;
                 if (sscanf(buf + 8, "%63s %lu", name, &size) == 2 && size > 0) storagePut(name, size);
@@ -1062,6 +1066,7 @@ static void handleSerialCommand()
 #if BENCH_TOOLS
                     "PUTFILE <f> <n>   bench: write n raw bytes to the card as f\n"
                     "CRASH             bench: crash on purpose (release testing)\n"
+                    "SIGTEST           bench: check the update-signature verifier\n"
 #endif
                     "SDPROBE <f>       read a file on CORE 1, radio off then on\n"
                     "SDPROBE0 <f>      the same read on CORE 0 (the uplink task)\n"

@@ -193,19 +193,37 @@ jobs:
         working-directory: firmware
         run: pio test -e native
 
+      # SIGNED. Trackers from 0.19.0 install only an image whose manifest carries
+      # a signature the key in firmware/include/fw_signing_key.h verifies, over
+      # this version + sha256. The private key is the FIRMWARE_SIGNING_KEY secret
+      # of the `production` environment (the owner holds an offline copy). No
+      # secret, or a key that does not match the firmware's, fails the build
+      # here -- before anything is published -- rather than releasing an image
+      # every tracker would refuse.
+      #
+      # ROLLBACK NOTE: versions built before signing (0.18.2 and older) have no
+      # signature, so a signed tracker refuses them. Promoting one of those is no
+      # longer a rollback for trackers already on 0.19.0+.
       - name: Build manifest
         id: m
         working-directory: firmware
+        env:
+          FIRMWARE_SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
         run: |
           BIN=.pio/build/tracker/firmware.bin
           test -f "$BIN" || { echo "no firmware.bin at $BIN"; exit 1; }
           SHA="$(sha256sum "$BIN" | cut -d' ' -f1)"
           SIZE="$(stat -c%s "$BIN")"
           NOTES="$(bash ../.github/scripts/firmware-notes.sh NOTES)"
+          bash ../.github/scripts/firmware-sign.test.sh
+          KEYFILE="$(mktemp)"; trap 'rm -f "$KEYFILE"' EXIT
+          printf '%s\n' "$FIRMWARE_SIGNING_KEY" > "$KEYFILE"
+          SIG="$(bash ../.github/scripts/firmware-sign.sh "${{ steps.v.outputs.version }}" "$SHA" "$KEYFILE" include/fw_signing_key.h)"
           jq -n --arg v "${{ steps.v.outputs.version }}" --arg s "$SHA" \
                 --argjson n "$SIZE" --arg notes "$NOTES" \
                 --arg built "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sha "$GITHUB_SHA" \
-            '{version:$v, sha256:$s, sizeBytes:$n, notes:$notes, builtAt:$built, gitSha:$sha}' \
+                --arg sig "$SIG" \
+            '{version:$v, sha256:$s, sizeBytes:$n, notes:$notes, builtAt:$built, gitSha:$sha, signature:$sig}' \
             > manifest.json
           cat manifest.json
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
