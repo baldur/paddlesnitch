@@ -226,6 +226,10 @@ Rules, all of them load-bearing:
 - **`imuPoll()` uses `spiBusTryTake()` and skips the sample** when the card has
   the bus. It must never block core 1's loop behind a multi-second card read,
   and a dropped IMU sample is free — a sync never runs while recording.
+- **SensorLib's SPI read cannot fail** (it returns success whatever is clocked
+  in), so "did the chip answer" is judged by gravity: a frame under 0.2 g is no
+  reading (`include/imu_alive.h`). Without this the dead-IMU watchdog (3 s
+  silent -> park CS) could never fire; a wedged chip reads 0xFFFF = -0.000244 g.
 - **Never hold the bus across a network call.** `uploadChunked` reads one chunk,
   releases, *then* POSTs, so the IMU keeps sampling through a multi-minute sync.
   `uplinkSyncSessions` lists the card under the lock, releases, and only then
@@ -276,6 +280,15 @@ deliberate); `storageStartSession(stamp)` opens `/track_YYYYMMDD_HHMMSS.csv` fro
 GPS time at record start (NVS-counter fallback `track_n<NNNNNN>.csv` when time is
 unknown), so names are unique and never overwrite a previous session. Powered by
 BLDO1, which `initPMU()` already enables.
+
+A row that fails to write (card full, pulled, failing) counts as a lost row
+and shows `!N ROWS LOST` on Track, like a bus-busy drop (0.18.2).
+
+**GPS time needs a real date and a fresh fix** (`include/gps_fresh.h`): TinyGPS++
+keeps a lost fix marked valid (the 2026-10-11 frozen 15.7 km/h), and marks the
+date valid after an RMC with an EMPTY date, reading 2000-00-00 (a recording was
+named `track_20000000_190737`). Recording starts only with both. The GPS UART
+has a 2 KB receive buffer (default 256 B lost NMEA in any loop stall over ~1 s).
 
 **Every row is flushed immediately.** This is deliberate: pulling the USB cable
 is how this device normally gets switched off, and an unflushed buffer means
@@ -521,10 +534,27 @@ place each frame; do not reintroduce per-screen booleans.
   seconds and a frozen screen reads as a crash. It draws nothing; it publishes
   into a mutex-guarded `UplinkStatus` the UI reads (the Sync screen + Nerd).
 - **Both cores must never hold the SD card.** The sync task checks a yield flag
-  *between files* — never mid-file — and `toggleRecording()` calls
-  `uplinkYieldCard()` before opening a log. If it cannot get the card it refuses
-  with `BUSY` rather than racing. Count scans and the manual delete also run on
-  the task (core 0) for the same single-owner reason.
+  between files *and between upload pieces* (0.18.2: the server keeps staged
+  pieces, so a file torn mid-upload is simply resent from piece 1), and
+  `toggleRecording()` calls `uplinkYieldCard()` before opening a log. If it
+  cannot get the card it refuses with `BUSY` rather than racing -- and calls
+  `uplinkResume()`: until 0.18.2 a refused start left the flag set and the
+  uploader parked (no sync, health or OTA) until a restart. Count scans and the
+  manual delete also run on the task (core 0) for the same single-owner reason.
+- **Only the uplink task syncs.** UI paths (the Nerd radio-page hold, onboarding's
+  `linkAttempt`) call `uplinkRequestSync()`; until 0.18.2 they ran
+  `uplinkSyncSessions()` on core 1, alongside the task's own sync (its file lists
+  are static) and even while recording.
+- **Nothing that blocks the loop runs while recording.** The WiFi portal
+  (Settings > Network hold, serial `SETUP`) holds `loop()` for up to 10 min and
+  restarts on save, so it refuses while recording (0.18.2), as Bluetooth-off
+  already did. An OTA installed while a recording started waits for it to stop
+  before restarting, and keeps Track on screen meanwhile.
+- **A motion file waits for its track.** The sync sends `_i10` only once its track
+  is confirmed in the index (or accepted earlier in the same sync), and marks it
+  rejected with a rejected track (`trackForSidecar`). The server answers 409
+  "track not uploaded" only after receiving the WHOLE file, so sending early cost
+  megabytes every sync.
 - **Sync fires at boot, on recording-stop, on a `sync now` tap, and every 5 min
   — never while recording.** The recording-stop trigger is what makes a finished
   paddle upload promptly instead of waiting for the 5-min tick.
@@ -814,7 +844,9 @@ block (the tool does this).
 (Settings > Network, page 2: tap flips pages, hold turns it on; turning it off
 restarts the tracker, the clean way to take the stack down, and is refused
 while recording). The choice is NVS `ble`/`on`; the bench build defaults it on
-(`-DBLE_DEFAULT_ON=1`). Settings could not take a fifth row: with the title the
+(`-DBLE_DEFAULT_ON=1`). A pairing is accepted only by a hold that began
+after its number appeared (`include/pair_policy.h`): requests arrive unsolicited
+from anyone in range, and a hold already under way used to say yes (0.18.2). Settings could not take a fifth row: with the title the
 fifth lands at y=73 on a 64 px panel.
 
 **Health reports (0.18.0, `src/health.*`, `include/health_report.h`):** once per
