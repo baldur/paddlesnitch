@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation'
 import { fmtDay, fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import { computePlan, fmtDuration, snapClick, type ComputedPlan, type Stop } from '@paddlesnitch/waterways/plan'
 import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
+import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
 import LoadingState from '@/components/LoadingState'
 import PlanMapClient from '@/components/map/PlanMapClient'
+import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
   asInput, draftParams, groupOf, km, localInput, placeClick, PLAN_ERROR_TEXT, STOP_GROUPS, stopLines,
@@ -34,7 +36,7 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
   const [loadFailed, setLoadFailed] = useState(false)
   const [draft, setDraft] = useState<PlanDraft>(initial)
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
-  const [focus, setFocus] = useState<LatLng | null>(null)
+  const [focus, setFocus] = useState<MapFocus | null>(null)
   // The start time box shows the browser's zone, so it stays empty until hydrated.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
@@ -77,6 +79,9 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
             onPick={p => setDraft(d => placeClick(d, p))}
           />
         ) : <LoadingState label="Loading the rivers…" />}
+        <p className="absolute top-2 right-2 z-[500] max-w-[16rem] bg-bg/85 border border-border px-2 py-1 text-xs text-muted pointer-events-none">
+          River data so far: the dashed area, {REGIONS[REGION].places[0].name} to {REGIONS[REGION].places.at(-1)!.name}. Darker land isn&apos;t covered yet.
+        </p>
       </div>
 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
@@ -85,6 +90,14 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
           <p className="text-xs text-muted">
             {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
           </p>
+          <label className="mt-3 flex items-center gap-2">
+            <span className="text-xs text-muted tracking-widest shrink-0">GO TO</span>
+            <select className={INPUT} value="" aria-label="Go to a town"
+              onChange={e => { const p = REGIONS[REGION].places.find(x => x.name === e.target.value); if (p) setFocus({ at: p.at, zoom: 14 }) }}>
+              <option value="">Choose a town…</option>
+              {REGIONS[REGION].places.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+            </select>
+          </label>
           <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-y-1 text-sm">
             <dt className="text-muted text-xs tracking-widest pt-0.5">START</dt>
             <dd>{plan ? plan.start.waterway : startSpot ? startSpot.link.name : draft.start ? '—' : 'not set'}</dd>
@@ -142,7 +155,7 @@ export default function Planner({ initial, view, saved }: { initial: PlanDraft; 
                 )
               })}
             </div>
-            <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={setFocus} />
+            <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })} />
             <p className="mt-3 text-xs text-muted">
               Portage sides and landing points are missing for most locks. An unknown side is shown as unknown, never guessed.
             </p>

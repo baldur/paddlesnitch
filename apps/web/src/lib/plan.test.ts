@@ -129,3 +129,18 @@ describe('durations', () => {
     expect(fmtDuration(29)).toBe('0 min')
   })
 })
+
+describe('the GO TO list', () => {
+  it('names towns on the water, upstream first', () => {
+    const places = REGIONS.dw.places
+    expect(places.length).toBeGreaterThan(20)
+    for (const p of places) expect(snapClick(ds, p.at), p.name).not.toBeNull()
+    const route = plan({})
+    const order = places.map(p => {
+      const r = computePlan(ds, { start: DEVIZES, finish: p.at, shape: 'one_way', paceKmh: 8, portageMinutes: 3 })
+      return { name: p.name, along: r === 'too_short' ? 0 : (r as ComputedPlan).lengthM }
+    })
+    expect(order.map(o => o.name)).toEqual([...order].sort((a, b) => a.along - b.along).map(o => o.name))
+    expect(order.at(-1)!.along).toBeLessThanOrEqual(route.lengthM + 1)
+  })
+})
