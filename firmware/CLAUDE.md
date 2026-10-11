@@ -724,8 +724,8 @@ is set from GPS on the first fix; the CSV columns are unchanged.
 **Raw motion sidecar:** during a recording the full ~50 Hz IMU stream is logged to
 `track_<stamp>_imu.csv` (`ms,ax,ay,az,gx,gy,gz`) next to the 1 Hz track file.
 
-The full-rate file **stays on the card** (delete-uploaded and the Sync counts
-still skip it) and is **never uploaded**. What gets uploaded is a second file,
+The full-rate file is **never uploaded** and is kept on the card until the card
+needs the room (below). The Sync counts skip it. What gets uploaded is a second file,
 `track_<stamp>_i10.csv`, written **during recording** at ~12 Hz alongside the 50 Hz
 one — one extra row every 80 ms, which costs nothing next to the full-rate write.
 
@@ -755,6 +755,24 @@ Three things there are load-bearing:
 
 Sidecars recorded before 0.6.0 have no `_i10` file and will not upload; the
 full-rate file is still on the card if one is ever wanted.
+
+**Card cleanup (0.19.2, `include/card_cleanup.h`, host-tested).** A paddle is up
+to three files sharing a base name. Nothing is deleted until the server has
+confirmed the track **and** its `_i10` file (or that file is absent, or refused
+for good); a refused (422) track is kept as evidence; the paddle being recorded
+is never touched.
+- **Delete uploaded** (Sync screen, held) removes confirmed tracks **and their
+  confirmed `_i10` files** — before 0.19.2 the motion files were stranded for
+  ever (~100 MB on the original card). The full-rate `_imu` stays.
+- **Automatically, after each sync, with the radio off:** above **80 %** of the
+  card, whole uploaded paddles go — full-rate file included, the only file big
+  enough to matter — **oldest first**, down to **70 %**. Usage is the sum of
+  our file sizes from the directory listing, not FAT free space (which can mean
+  reading the whole allocation table and tripping the watchdog).
+- **`uploaded.txt` is trimmed (#417):** a line goes once no file of its paddle is
+  left on the card (an `_i10` still needs its track's line to upload). Done after
+  every delete and once per start, via `uploaded.tmp` + rename;
+  `readUploadIndex` finishes a rename a power cut interrupted.
 
 Server-side derivation is **built** (`@paddlesnitch/timing/cadence` and
 `/attitude`): stroke rate ~58 spm and roll/pitch/evenness come out of that 10 Hz
