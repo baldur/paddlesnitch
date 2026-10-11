@@ -53,6 +53,8 @@ export type LineCompare = {
   ref: { atM: number; lat: number; lng: number; t: number }[]
   // Moving-clock offsets so a replay starts both boats at the shared stretch.
   aStartT: number; bStartT: number
+  // The first and last of B's points in the pass (indices into b).
+  bFrom: number; bTo: number
 }
 
 function projector(lat0: number, lng0: number) {
@@ -197,6 +199,7 @@ export function compareLines(a: LinePoint[], b: LinePoint[]): LineCompare | null
     overlapShare, fromM, toM, bins, total, ahead,
     ref: a.map((p, i) => ({ atM: sA[i], lat: p.lat, lng: p.lng, t: p.t })),
     aStartT: a0, bStartT: b0,
+    bFrom: matched[0].j, bTo: matched[matched.length - 1].j,
   }
 }
 
@@ -282,3 +285,26 @@ export function compareSection(a: AnalysisPoint[], b: AnalysisPoint[], aIdx: num
   const compare = compareLines(pa, pb)
   return compare ? { ok: true, compare, startLine, finishLine, aPass: pa, bPass: pb } : { ok: false, reason: 'no_shared_line' }
 }
+
+/**
+ * All of the water two paddles shared in the same direction, in metres along
+ * A: the longest pass, then the longest in what's left of B before and after
+ * it, and so on (up to `maxPasses`). An out-and-back turned at slightly
+ * different places shares two passes, out and back; the longest alone made the
+ * owner's identical club routes look half-shared.
+ */
+export function sharedSameWayM(a: LinePoint[], b: LinePoint[], maxPasses = 4): number {
+  let total = 0
+  const pending: LinePoint[][] = [b]
+  for (let n = 0; n < maxPasses && pending.length; n++) {
+    // The longest remaining slice of B first.
+    pending.sort((x, y) => y.length - x.length)
+    const slice = pending.shift()!
+    const c = slice.length >= 2 ? compareLines(a, slice) : null
+    if (!c) continue
+    total += c.toM - c.fromM
+    pending.push(slice.slice(0, c.bFrom), slice.slice(c.bTo + 1))
+  }
+  return total
+}
+

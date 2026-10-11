@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid'
 import { getJson, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
 import { thumbRoute } from '@paddlesnitch/core/paddles'
+import { routeCells } from './route-match'
 import type { AnalysisResult } from './analysis'
 import { rescaleDoubling } from './analysis'
 
@@ -102,9 +103,15 @@ export async function findDuplicateSession(userId: string, fingerprint: string):
 // Written by saveSession alone: anything writing session.json some other way
 // would leave its summary stale (summary-writes.test.ts checks).
 const summaryKey = (userId: string, id: string) => `analysis/${userId}/${id}/summary.json`
+// The 100 m squares the route passes through (route-match.ts): the cheap first
+// filter for "which paddles are worth comparing". Beside the summary, not in
+// it, so lists sent to the browser don't carry it.
+const cellsKey = (userId: string, id: string) => `analysis/${userId}/${id}/cells.json`
 
 export async function saveSession(s: AnalysisSession): Promise<void> {
   await putJson(key(s.userId, s.id), s)
+  // Best effort: a missing squares file is rebuilt on first use.
+  await putJson(cellsKey(s.userId, s.id), { cells: routeCells(s.result.points) }).catch(() => {})
   try { await putJson(summaryKey(s.userId, s.id), toSummary(s)) }
   catch (err) {
     // A stale summary is worse than none: without one, the list rebuilds it.
@@ -124,6 +131,18 @@ export async function deleteSession(userId: string, id: string): Promise<void> {
   if (s?.shareId) await deleteObject(sharedKey(s.shareId))
   await deleteObject(key(userId, id))
   await deleteObject(summaryKey(userId, id))
+  await deleteObject(cellsKey(userId, id))
+}
+
+/** A paddle's route squares, worked out once (older paddles on first use). */
+export async function getRouteCells(userId: string, id: string): Promise<string[]> {
+  const stored = await getJson<{ cells: string[] }>(cellsKey(userId, id)).catch(() => null)
+  if (stored?.cells) return stored.cells
+  const s = await getSession(userId, id)
+  if (!s) return []
+  const cells = routeCells(s.result.points)
+  await putJson(cellsKey(userId, id), { cells }).catch(() => {})
+  return cells
 }
 
 // GDPR erasure: every paddle, the coach profile, and the public share index of
