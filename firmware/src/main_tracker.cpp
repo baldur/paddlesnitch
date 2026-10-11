@@ -30,6 +30,8 @@
 #include "ble.h"
 #include "health.h"
 #include "ui.h"
+#include "gps_fresh.h"
+#include "pair_policy.h"
 #include <WiFi.h>
 
 #ifndef TX_INTERVAL_S
@@ -200,8 +202,17 @@ static void toast(const char *t, uint32_t ms = 1500)
     toastUntil = millis() + ms;
 }
 
+static uint32_t holdStartedMs = 0;   // when the press that fired the current hold began
 static String linkTitle = "Not linked";
 static String linkHint  = "Hold BOOT";
+// A fix, and a speed, only while the GPS keeps updating them (gps_fresh.h):
+// TinyGPS++ leaves the last ones marked valid after the sky is lost.
+static bool   gpsHasFix() { return gpsFresh(gps.location.isValid(), gps.location.age()); }
+static bool   gpsSpeedOk() { return gpsFresh(gps.speed.isValid(), gps.speed.age()); }
+static double gpsKmh()    { return gpsSpeedOk() ? gps.speed.kmph() : 0.0; }
+// A date only once the receiver has sent one: an empty RMC date reads 2000-00-00.
+static bool   gpsHasDate() { return gpsDateOk(gps.date.isValid(), gps.date.year(), gps.date.month(), gps.date.day()); }
+
 static double   lastLat = 0, lastLon = 0;
 
 static double metresBetween(double lat1, double lon1, double lat2, double lon2)
@@ -215,14 +226,14 @@ static double metresBetween(double lat1, double lon1, double lat2, double lon2)
 
 static void updateSession()
 {
-    if (!gps.location.isValid()) return;
+    if (!gpsHasFix()) return;
     if (firstFixMs == 0) firstFixMs = millis();
 
     double lat = gps.location.lat(), lon = gps.location.lng();
     if (haveLastPos) {
         double d = metresBetween(lastLat, lastLon, lat, lon);
         // 3 m and 1.5 km/h: below both, it is GPS scatter, not paddling.
-        if (d >= 3.0 && gps.speed.isValid() && gps.speed.kmph() >= 1.5) {
+        if (d >= 3.0 && gpsSpeedOk() && gps.speed.kmph() >= 1.5) {
             sessionMetres += d;
             lastLat = lat; lastLon = lon;
         }
@@ -413,7 +424,7 @@ static void transmitPosition()
     p.flags   = 0;
     if (boardIsCharging()) p.flags |= PKT_FLAG_CHARGING;
 
-    if (gps.location.isValid()) {
+    if (gpsHasFix()) {
         p.flags |= PKT_FLAG_HAS_FIX;
         p.lat  = (int32_t)(gps.location.lat() * 1e7);
         p.lon  = (int32_t)(gps.location.lng() * 1e7);
@@ -488,7 +499,7 @@ static void drawStatus()
 {
     if (!board.display) return;
     char line[32];
-    bool fix = gps.location.isValid();
+    bool fix = gpsHasFix();
     int  sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
 
     display.clearBuffer();
@@ -517,7 +528,7 @@ static void drawStatus()
 
     // --- hero ----------------------------------------------------------
     if (fix) {
-        double kmh = gps.speed.isValid() ? gps.speed.kmph() : 0.0;
+        double kmh = gpsKmh();
         snprintf(line, sizeof(line), "%.1f", kmh);
         display.setFont(u8g2_font_logisoso24_tn);
         display.drawStr(0, 41, line);
@@ -575,10 +586,13 @@ static void toggleRecording()
 
     // Recording before a fix produces exactly the fix-less rows that made all 31
     // of the first uploads return 422. Refuse, and say why.
-    if (!gps.location.isValid()) { toast("NEED GPS"); return; }
+    // The date too: it names the file, and the receiver can send a fix a moment
+    // before it sends the date.
+    if (!gpsHasFix() || !gpsHasDate()) { toast("NEED GPS"); return; }
 
     // Both cores must never hold the SD card at once.
     if (!uplinkYieldCard()) {
+        uplinkResume();             // or the uploader stays parked until a restart
         toast("BUSY");
         return;
     }
@@ -588,7 +602,7 @@ static void toggleRecording()
     // deviceId+filename dedupe the way the old reused track_NNNN names did. Empty
     // stamp -> storage falls back to its NVS counter.
     char stamp[20] = "";
-    if (gps.date.isValid() && gps.time.isValid()) {
+    if (gpsHasDate() && gps.time.isValid()) {
         snprintf(stamp, sizeof(stamp), "%04d%02d%02d_%02d%02d%02d",
                  gps.date.year(), gps.date.month(), gps.date.day(),
                  gps.time.hour(), gps.time.minute(), gps.time.second());
@@ -597,6 +611,8 @@ static void toggleRecording()
         sessionMetres = 0;
         haveLastPos   = false;
         firstFixMs    = 0;
+    } else {
+        uplinkResume();             // nothing is recording: give the card back
     }
 }
 
@@ -623,8 +639,11 @@ static void linkAttempt()
             return;
         }
     }
-    uplinkSyncSessions();
+    // The upload itself is the uplink task's (core 0). Syncing here as well ran
+    // two syncs at once over the same static file lists and WiFi, and blocked
+    // this loop -- GPS, logging, the screen -- for the whole upload.
     netDisconnect();
+    uplinkRequestSync();
 }
 
 
@@ -715,7 +734,11 @@ static void screenDoubleTap()
 static void screenHold()
 {
 #if BLE_ENABLED
-    if (bleConfirmPending(nullptr)) { bleConfirmAnswer(true); return; }    // hold = yes
+    // hold = yes, but only a press begun once the number was up (pair_policy.h)
+    if (bleConfirmPending(nullptr)) {
+        if (pairHoldAccepts(holdStartedMs, bleConfirmShownAt())) bleConfirmAnswer(true);
+        return;
+    }
 #endif
     if (tutRunning) {
         tutState = tutorialAdvance(tutState, TutEvent::Hold);
@@ -786,7 +809,13 @@ static void screenHold()
         // Only the radio page has an action, and it is the page already showing
         // UNLINKED / the SSID -- which is what you are looking at when re-linking
         // is what you came for.
-        if (nerdPage == NERD_PAGES - 1) linkAttempt();
+        // Never while recording: this brings WiFi up, and it used to stop the
+        // loop -- and the recording -- for the whole sync.
+        if (nerdPage == NERD_PAGES - 1) {
+            if (storageRecording())  toast("RECORDING");
+            else if (netIsClaimed()) { uplinkRequestSync(); toast("SYNCING"); }
+            else                     linkAttempt();
+        }
         break;
     case Screen::Network:
 #if BLE_ENABLED
@@ -802,6 +831,9 @@ static void screenHold()
 #endif
         // The portal. A hold, not a tap, because opening it drops the current
         // connection -- and because hold is what commits on every other screen.
+        // Never while recording: the portal holds this loop for up to 10 min
+        // (no rows logged) and saving restarts the tracker.
+        if (storageRecording()) { toast("STOP RECORDING FIRST"); break; }
         if (netStartPortal("Change the WiFi network or password below.")) {
             Serial.println("saved -- restarting"); delay(300); ESP.restart();
         }
@@ -864,7 +896,10 @@ static void checkButton()
         tutHeldSince = 0;
         pendingTap = 0;
         Serial.println("btn: hold");
-        screenHold();
+        holdStartedMs = heldSince;
+        // Over "Updated to X" a hold only dismisses it, on release (above):
+        // firing here opened Track underneath and started a recording.
+        if (!otaJustUpdated()) screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;
         heldSince = 0;
@@ -1052,7 +1087,8 @@ static void handleSerialCommand()
                 else dbgDump(Serial);
             }
             else if (!strncmp(buf, "SETUP", 5)) {
-                if (netStartPortal("Change the WiFi network or password below.")) {
+                if (storageRecording()) Serial.println("setup refused: recording (it would stop logging)");
+                else if (netStartPortal("Change the WiFi network or password below.")) {
                     Serial.println("saved -- restarting"); delay(300); ESP.restart();
                 }
                 else Serial.println("setup timed out");
@@ -1334,7 +1370,7 @@ void loop()
     // loss and future uses, not a dependency. The year guard rejects a bogus
     // pre-fix date.
     static bool rtcSynced = false;
-    if (!rtcSynced && gps.date.isValid() && gps.time.isValid() && gps.date.year() >= 2025) {
+    if (!rtcSynced && gpsHasDate() && gps.time.isValid()) {
         boardRtcSet(gps.date.year(), gps.date.month(), gps.date.day(),
                     gps.time.hour(), gps.time.minute(), gps.time.second());
         rtcSynced = true;
@@ -1352,12 +1388,12 @@ void loop()
         // immediately re-starts (track_policy.h, host-tested). Throttled to
         // this 1 Hz tick. toggleRecording() self-guards on the fix and the SD card.
         if (trackShouldAutoStart({ menu != Menu::None, uiScreen == Screen::Track },
-                                 storageRecording(), gps.location.isValid())) {
+                                 storageRecording(), gpsHasFix() && gpsHasDate())) {
             toggleRecording();
         }
 
 
-        if (gps.location.isValid()) {
+        if (gpsHasFix()) {
             Serial.printf("fix  %.6f, %.6f  alt=%.1fm sats=%u hdop=%.1f\n",
                           gps.location.lat(), gps.location.lng(),
                           gps.altitude.meters(), gps.satellites.value(),
@@ -1385,7 +1421,7 @@ void loop()
 
         if (storageRecording()) {
             char row[320];
-            bool haveFix = gps.location.isValid() && gps.date.isValid() && gps.time.isValid();
+            bool haveFix = gpsHasFix() && gpsHasDate() && gps.time.isValid();
 
             // ISO 8601 UTC when the fix is real, empty otherwise. Blank rather
             // than zero matters: 0.0,0.0 is a *valid* coordinate off the coast
@@ -1417,7 +1453,7 @@ void loop()
                      haveFix ? 1 : 0,
                      latS, lonS,
                      gps.altitude.isValid() ? gps.altitude.meters() : 0.0,
-                     gps.speed.isValid()    ? gps.speed.kmph()      : 0.0,
+                     gpsKmh(),
                      gps.course.isValid()   ? gps.course.deg()      : 0.0,
                      gps.satellites.isValid() ? gps.satellites.value() : 0,
                      gps.hdop.isValid() ? gps.hdop.hdop() : 0.0,
@@ -1529,7 +1565,10 @@ void loop()
             // the writer is the uplink task on core 0.
             OtaProgress op = otaGetProgress();
             u.otaActive  = (op.phase == OtaPhase::Checking || op.phase == OtaPhase::Downloading ||
-                            op.phase == OtaPhase::Verifying || op.phase == OtaPhase::Done);
+                            op.phase == OtaPhase::Verifying ||
+                            // Installed, but held until the recording stops (ota.cpp):
+                            // keep Track on screen until then.
+                            (op.phase == OtaPhase::Done && !storageRecording()));
             u.otaPercent = op.percent;
             u.otaVersion = op.version;
             u.otaMessage = op.message;
@@ -1588,10 +1627,10 @@ void loop()
         u.sdReady     = board.sdcard;
         u.recording   = storageRecording();
         u.rows        = storageRowCount();
-        u.fix         = gps.location.isValid();
+        u.fix         = gpsHasFix();
         u.sats        = gps.satellites.isValid() ? gps.satellites.value() : 0;
         u.searchSecs  = millis() / 1000;
-        u.speedKmh    = gps.speed.isValid() ? gps.speed.kmph() : 0.0;
+        u.speedKmh    = gpsKmh();
         u.distanceM   = sessionMetres;
         u.sessionSecs = firstFixMs ? (millis() - firstFixMs) / 1000 : 0;
         u.batteryPct  = boardBatteryPercent();

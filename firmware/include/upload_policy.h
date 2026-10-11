@@ -63,3 +63,14 @@ static inline bool sidecarForTrack(const char *track, char *out, size_t outSize)
     if (n < 5 || strcmp(track + n - 4, ".csv") != 0) return false;
     return snprintf(out, outSize, "%.*s_i10.csv", (int)(n - 4), track) < (int)outSize;
 }
+
+// ...and back: track_X_i10.csv -> track_X.csv. A motion file waits for its
+// track: the server answers 409 "track not uploaded" only once it has received
+// the WHOLE motion file, so sending one early costs megabytes on every sync.
+static inline bool trackForSidecar(const char *sidecar, char *out, size_t outSize)
+{
+    const size_t n = strlen(sidecar);
+    const size_t s = sizeof("_i10.csv") - 1;
+    if (n <= s || strcmp(sidecar + n - s, "_i10.csv") != 0) return false;
+    return snprintf(out, outSize, "%.*s.csv", (int)(n - s), sidecar) < (int)outSize;
+}

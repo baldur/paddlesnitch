@@ -1,4 +1,5 @@
 #include "storage.h"
+#include "motion_gate.h"
 #include "board.h"
 #include "board_pins.h"
 #include <SD.h>
@@ -21,7 +22,7 @@ static uint32_t nextFallbackSeq()
     return seq;
 }
 
-static uint32_t droppedRows  = 0;   // track rows lost to a busy bus -- shown on Track
+static uint32_t droppedRows  = 0;   // track rows lost (busy bus or failed write) -- shown on Track
 static uint64_t cachedCardMB = 0;   // cleared on (re)mount -- see storageInit
 static File     logFile;
 static bool     ready = false;
@@ -39,7 +40,7 @@ static char     imuFilename[48] = "";
 static File     upFile;
 static char     upFilename[48] = "";
 static uint32_t upRows = 0;
-static long     upLastMs = -1000000;
+static UpGate    upGate;           // the upload-rate file's row clock (motion_gate.h)
 // Gated on TIME, not every Nth sample, so it holds whatever rate the IMU poll
 // actually achieves. That matters: measured against a real session, cadence comes
 // out within 0.5% at 10.9 Hz but 19.8% LOW at 8.7 Hz, and "every 5th sample" of a
@@ -51,7 +52,7 @@ static long     upLastMs = -1000000;
 // exact position is unknown, so this brackets the known-good 10.9 Hz from above
 // instead of sitting just under it. Costs ~25% more bytes; still ~1.9 MB/hour,
 // well inside the server's 4 MB cap.
-static const long UP_INTERVAL_MS = 80;
+static const uint32_t UP_INTERVAL_MS = 80;
 static uint32_t imuRows = 0;
 static const char *IMU_HEADER = "ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n";
 
@@ -190,7 +191,7 @@ bool storageStartSession(const char *stamp)
     snprintf(upFilename, sizeof(upFilename), "/%s_i10.csv", base);
     upFile = SD.open(upFilename, FILE_WRITE);
     upRows = 0;
-    upLastMs = -1000000;
+    upGate = UpGate();
     if (upFile) { upFile.print(IMU_HEADER); upFile.flush(); }
     else        { Serial.printf("SD: could not create %s\n", upFilename); }
 
@@ -291,7 +292,15 @@ void storageLogRow(const char *csvLine)
 
     if (!ready || !logFile) return;
     spiBusAssertHeld("storageLogRow");
-    logFile.print(csvLine);
+    // A short write (card full, pulled or failing) is a lost row too: counted
+    // and shown on Track like a bus-busy drop, instead of REC carrying on with
+    // the row counter climbing over nothing.
+    const size_t want = strlen(csvLine);
+    if (logFile.print(csvLine) != want) {
+        droppedRows++;
+        DBGE("sd", "track row write FAILED (total %lu)", (unsigned long)droppedRows);
+        return;
+    }
     logFile.flush();        // deliberate: see header comment
     rows++;
 }
@@ -316,9 +325,7 @@ void storageLogImuRow(const char *csvLine)
 
     // Same row into the upload-rate file when enough time has passed.
     if (!upFile) return;
-    long ms = atol(csvLine);
-    if (ms - upLastMs < UP_INTERVAL_MS) return;
-    upLastMs = ms;
+    if (!upRowDue(upGate, (uint32_t)strtoul(csvLine, nullptr, 10), UP_INTERVAL_MS)) return;
     upFile.print(csvLine);
     if (++upRows % 10 == 0) upFile.flush();
 }
