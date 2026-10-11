@@ -15,6 +15,7 @@
 #include "ota.h"
 #include "ota_verify.h"
 #include "identity.h"
+#include "loopwatch.h"
 #include "device_id.h"
 #include "tutorial.h"
 #include "track_policy.h"
@@ -246,6 +247,9 @@ static void updateSession()
 }
 
 static void toggleRecording();
+#if BENCH_TOOLS
+static volatile bool hangNow = false;   // HANG: freeze loop() (bench watchdog test)
+#endif
 static void linkAttempt();   // defined below; used by setup() and the BOOT button
 
 static void report(const char *name, bool ok, const char *detail = "")
@@ -416,6 +420,9 @@ void setup()
                   pktNodeId(), (int)TX_INTERVAL_S, (int)DUTY_CYCLE_PERCENT);
 
     if (board.pmu) Serial.printf("Battery: %.2f V\n", boardBatteryVoltage());
+    // Last: everything above may legitimately take a while (card mount, the
+    // first claim). From here on, a loop() pass that takes 15 s is a hang.
+    loopWatchStart();
     Serial.println("Streaming GPS...\n");
 }
 
@@ -622,6 +629,7 @@ static void toggleRecording()
 
 static void linkAttempt()
 {
+    LoopWatchPause unwatched;   // waits minutes for someone to type the code
     if (!netHasWifi()) {
         linkTitle = "Setup needed";
         linkHint  = "Hold BOOT";
@@ -961,6 +969,9 @@ static void handleSerialCommand()
             if (!n) continue;
             buf[n] = 0;
             n = 0;
+            // Serial commands are a person at a laptop, and some run for a long
+            // time on purpose (CAT, SDPROBE, SETUP): not what the watchdog is for.
+            LoopWatchPause unwatched;
             // Any command other than QRTEST hands the panel back to the UI.
             if (strncmp(buf, "QRTEST", 6) != 0) qrTestHold = false;
             if      (!strncmp(buf, "LS", 2))   storageList();
@@ -974,6 +985,10 @@ static void handleSerialCommand()
             else if (!strncmp(buf, "CRASH", 5)) { Serial.println("CRASH: on purpose (bench)"); delay(100); abort(); }
             // Does the update-signature check work on this hardware, with the
             // production key? Good vector must pass, tampered ones must fail.
+            // Release testing: freeze loop() on purpose, to check the watchdog
+            // restarts the tracker and the next start reports it. Set here,
+            // done in loop(): commands themselves run unwatched.
+            else if (!strncmp(buf, "HANG", 4)) { hangNow = true; Serial.println("HANG: freezing loop() (bench)"); }
             else if (!strncmp(buf, "SIGTEST", 7)) Serial.println(otaSignatureSelfTest() ? "SIGTEST ok" : "SIGTEST FAILED");
             // Sign the rest of the line with the tracker's key, so a bench
             // check can verify it with openssl against the IDENT public key.
@@ -1083,6 +1098,7 @@ static void handleSerialCommand()
                     "CRASH             bench: crash on purpose (release testing)\n"
                     "SIGTEST           bench: check the update-signature verifier\n"
                     "IDSIGN <text>     bench: sign text with the tracker key\n"
+                    "HANG              bench: freeze loop() to test the watchdog\n"
 #endif
                     "SDPROBE <f>       read a file on CORE 1, radio off then on\n"
                     "SDPROBE0 <f>      the same read on CORE 0 (the uplink task)\n"
@@ -1342,6 +1358,9 @@ static void handleSerialCommand()
 void loop()
 {
     handleSerialCommand();
+#if BENCH_TOOLS
+    if (hangNow) for (;;) {}   // the watchdog should fire in LOOP_WATCH_TIMEOUT_S
+#endif
     checkButton();
     // Don't touch the IMU while the uplink task holds the shared SPI bus (SD
     // scan/sync/delete) -- concurrent access corrupts both. Only ever set when

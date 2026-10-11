@@ -1,3 +1,4 @@
+#include "loopwatch.h"
 #include "netcfg.h"
 #include "qr.h"
 #include "board.h"
@@ -322,6 +323,7 @@ bool   netApActive() { return g_apActive; }
 
 bool netStartPortal(const String &errorNote, uint32_t timeoutMs)
 {
+    LoopWatchPause unwatched;   // someone is typing a WiFi password on their phone
     WebServer server(80);
     DNSServer dns;
     bool saved = false;

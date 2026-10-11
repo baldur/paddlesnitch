@@ -242,6 +242,25 @@ Rules, all of them load-bearing:
 - `uplinkSdBusy()` still exists but is now **descriptive only** — the Sync screen
   and the recording-yield handshake. It is not what keeps the IMU off the bus.
 
+### Watchdog on loop() (0.19.3)
+
+Core 0's uplink task was already covered by the idle-task watchdog; **core 1
+(`loop()`: GPS, recording, screen, button) had none**, so a hang mid-paddle froze
+the screen and silently stopped recording until the battery died.
+`src/loopwatch.{h,cpp}`: `loopWatchStart()` at the **end** of `setup()` sets the
+task watchdog to **15 s** with panic (shared with core 0's idle check, which went
+from 5 s to 15 s) and subscribes the loop task; the Arduino core feeds it every
+`loop()` pass. A hang therefore **panics**: the core dump names the task and the
+stuck code, and the next start reports it through the normal crash path
+(`DeviceCrash`). Auto-record restarts the paddle in a new file.
+
+`LoopWatchPause` (RAII, nests, loop task only) unwatches **person-driven** waits:
+`netStartPortal`, `linkAttempt` (waits minutes for a claim code), and every serial
+command (CAT, SDPROBE, SETUP…). **Anything new that blocks `loop()` for seconds on
+purpose needs one too** — otherwise it restarts the tracker. Bench check: `HANG`
+freezes `loop()`; the tracker should restart after ~15 s and report a crash in
+`loopTask`.
+
 ### Flight recorder (`DBG`)
 
 `src/dbg.*` keeps an always-on ring of timestamped events in PSRAM, dumped by
