@@ -15,11 +15,29 @@ import { paddleHighlights } from '@paddlesnitch/analysis/history-stats'
 import { writePendingSummary } from '@paddlesnitch/analysis/pipeline'
 import {
   listSessionSummaries, getSession, deleteSession,
-  updateSessionNote, updateSessionBoat, updateSessionDoubling,
+  updateSessionNote, updateSessionBoat, updateSessionDoubling, updateSessionHidden,
   shareSession, unshareSession, getSharedSession,
+  type AnalysisSession,
 } from '@paddlesnitch/analysis/analysis-store'
 
 const byId = z.object({ id: z.string() })
+
+/**
+ * A paddle as someone other than its owner sees it (a share link, a buddy):
+ * the result and boat, never the note, the share token or the owner's id. The
+ * AI summary is swapped for the plain one: it is written from the owner's diary
+ * notes and coach profile, so it can repeat private text.
+ */
+export function othersView(session: AnalysisSession) {
+  return {
+    id: session.id,
+    paddledAt: session.paddledAt,
+    source: { type: session.source.type },
+    result: { ...session.result, insight: plainInsight(session.result), insightModel: undefined },
+    boatClass: session.boatClass,
+    seat: session.seat,
+  }
+}
 
 export const paddlesRouter = router({
   // Dashboard/home payload: lean cards + rolled-up totals.
@@ -129,20 +147,17 @@ export const paddlesRouter = router({
     return { ok: true as const }
   }),
 
-  // Public read-only view of a shared paddle (#202) — token only, no auth. Strips
-  // everything but result + boat (never the owner's userId or note). The AI
-  // summary is swapped for the plain one: it is written from the owner's diary
-  // notes and coach profile, so it can repeat private text.
+  // Public read-only view of a shared paddle (#202): token only, no auth.
   shared: publicProcedure.input(z.object({ shareId: z.string() })).query(async ({ input }) => {
     const session = await getSharedSession(input.shareId)
     if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
-    return {
-      id: session.id,
-      paddledAt: session.paddledAt,
-      source: { type: session.source.type },
-      result: { ...session.result, insight: plainInsight(session.result), insightModel: undefined },
-      boatClass: session.boatClass,
-      seat: session.seat,
-    }
+    return othersView(session)
+  }),
+
+  // Hide this paddle from your buddies, or show it again.
+  setHiddenFromBuddies: protectedProcedure.input(byId.extend({ hidden: z.boolean() })).mutation(async ({ ctx, input }) => {
+    const session = await updateSessionHidden(ctx.user.id, input.id, input.hidden)
+    if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
+    return { hidden: !!session.hiddenFromBuddies }
   }),
 })

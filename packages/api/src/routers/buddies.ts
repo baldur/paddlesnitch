@@ -7,8 +7,10 @@ import { router, protectedProcedure } from '../trpc'
 import {
   listBuddies, listIncomingRequests, listOutgoingRequests, requestBuddy, acceptRequest, declineRequest,
   cancelRequest, removeBuddy, getInviteToken, rotateInvite, acceptInvite, inviteOwner, areBuddies,
-  getBuddySharing, setBuddySharing,
+  getBuddySharing, setBuddySharing, canViewPaddle,
 } from '@paddlesnitch/core/buddies'
+import { listSessionSummaries, getSession } from '@paddlesnitch/analysis/analysis-store'
+import { othersView } from './paddles'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { rateLimit } from '@paddlesnitch/core/rate-limit'
 
@@ -65,6 +67,29 @@ export const buddiesRouter = router({
     const owner = await inviteOwner(input.token)
     const outcome = await acceptInvite(ctx.user.id, input.token)
     return { outcome, name: owner && outcome !== 'invalid' ? await nameOf(owner) : null }
+  }),
+
+  // A buddy's paddles, newest first: only ones they let buddies see, and only
+  // the safe fields (a stored summary also carries the note and the AI text).
+  // Not a buddy, or sharing off: NOT_FOUND, never a hint either way.
+  paddles: protectedProcedure.input(userId).query(async ({ ctx, input }) => {
+    if (input.userId === ctx.user.id || !(await canViewPaddle(ctx.user.id, input.userId, {}))) throw new TRPCError({ code: 'NOT_FOUND' })
+    const summaries = await listSessionSummaries(input.userId)
+    return {
+      name: await nameOf(input.userId),
+      paddles: summaries.filter(s => !s.hiddenFromBuddies).map(s => ({
+        id: s.id, paddledAt: s.paddledAt, source: { type: s.source.type },
+        durationS: s.durationS, distanceKm: s.distanceKm, cruiseSpeed: s.cruiseSpeed, avgSR: s.avgSR,
+        boatClass: s.boatClass, route: s.route,
+      })),
+    }
+  }),
+
+  // One of a buddy's paddles, as others see it (no note, no AI text).
+  paddle: protectedProcedure.input(userId.extend({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })).query(async ({ ctx, input }) => {
+    const session = input.userId === ctx.user.id ? null : await getSession(input.userId, input.id)
+    if (!session || !(await canViewPaddle(ctx.user.id, input.userId, session))) throw new TRPCError({ code: 'NOT_FOUND' })
+    return { name: await nameOf(input.userId), paddle: othersView(session) }
   }),
 
   setSharing: protectedProcedure.input(z.object({ paddles: z.boolean() })).mutation(async ({ ctx, input }) => {
