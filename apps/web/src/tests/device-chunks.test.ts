@@ -205,7 +205,7 @@ describe('chunked motion sidecar upload', () => {
     await uploadTrack(dt)
     for (const qs of ['part=0&parts=3', 'part=4&parts=3', 'part=-1&parts=3', 'part=x&parts=3']) {
       const res = await uploadSession(put(`filename=track_20260918_061002_imu.csv&${qs}`, 'ms,a\n1,2\n', dt))
-      expect(res.status).toBe(409)
+      expect(res.status).toBe(400)   // final: the tracker must not resend it every sync
     }
   })
 })
@@ -343,5 +343,50 @@ describe('compressed upload parts (?enc=zlib)', () => {
     expect(bomb.length).toBeLessThan(64 * 1024)
     const res = await uploadSession(put(`filename=${NAME}&part=1&parts=2&enc=zlib`, bomb, dt))
     expect(res.status).toBe(413)
+  })
+})
+
+describe('chunked upload limits', () => {
+  // Each request is capped at 4 MB unpacked, but nothing capped the assembled
+  // file: 512 parts of 4 MB is 2 GB read into one Lambda, and with &enc=zlib a
+  // 4 MB part of repeated bytes is ~4 KB on the wire.
+  it('refuses to assemble a file bigger than a tracker can ever send', async () => {
+    const u = await makeUser('Bomber')
+    const dt = await boundToken(u)
+    const { deflateSync } = await import('zlib')
+    const piece = deflateSync(Buffer.alloc(4 * 1024 * 1024 - 1, 0x31))
+    const parts = 9   // 9 x ~4 MB = ~36 MB, past the 32 MB a tracker can send (512 x 64 KB)
+    let last: Response | undefined
+    for (let i = 1; i <= parts; i++) {
+      last = await uploadSession(put(`filename=track_20260918_061002.csv&part=${i}&parts=${parts}&enc=zlib`, piece, dt))
+      if (i < parts) expect(last.status).toBe(202)
+    }
+    expect(last!.status).toBe(413)
+    expect((await last!.json()).error).toBe('too_large')
+  })
+
+  // The tracker retries a 409 and gives up on a 400: a part count the server
+  // will never accept came back 409, so the tracker sent it again every sync.
+  it('a part the server will never accept is refused for good (400), not retried', async () => {
+    const u = await makeUser('Overflow')
+    const dt = await boundToken(u)
+    const res = await uploadSession(put('filename=track_20260918_061002.csv&part=1&parts=100000', 'x', dt))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('bad_part')
+  })
+})
+
+describe('tracker upload names', () => {
+  // A tracker only ever writes track_*.csv. Any other name reached parseTrace's
+  // zip / gzip / FIT paths -- archive handling no tracker needs -- and '..' was
+  // a legal name.
+  it('accepts only the track CSV names a tracker writes', async () => {
+    const u = await makeUser('Namer')
+    const dt = await boundToken(u)
+    for (const name of ['x.zip', 'track_1.csv.gz', 'run.gpx', '..', 'track_.csv', 'probe.txt']) {
+      const res = await uploadSession(put(`filename=${encodeURIComponent(name)}`, 'x', dt))
+      expect(res.status, name).toBe(400)
+      expect((await res.json()).error).toBe('bad_filename')
+    }
   })
 })

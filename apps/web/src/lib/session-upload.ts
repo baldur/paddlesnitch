@@ -25,7 +25,10 @@ const MAX_BYTES = 4 * 1024 * 1024
 export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promise<Response> {
   const url = new URL(req.url)
   const filename = url.searchParams.get('filename') ?? ''
-  if (!/^[\w.-]{1,128}$/.test(filename)) return NextResponse.json({ error: 'bad_filename' }, { status: 400 })
+  // Only what a tracker writes (firmware storage.cpp): track_<stamp>.csv and its
+  // _imu sidecar. Anything else would reach parseTrace's zip/gzip/FIT handling,
+  // which no tracker needs.
+  if (!/^track_[\w-]{1,100}\.csv$/.test(filename)) return NextResponse.json({ error: 'bad_filename' }, { status: 400 })
 
   // Idempotency by deviceId+filename — a retry after a dropped response is a no-op.
   const existing = await findUploadedSession(auth.deviceId, filename)
@@ -79,8 +82,12 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
     }
     const r = await storeUploadPart(auth.deviceId, filename, part, parts, body, sha)
     switch (r.status) {
+      // 400, not 409: the tracker retries a 409 every sync, and this part
+      // number will never be accepted.
       case 'bad_request':
-        return NextResponse.json({ error: 'bad_part' }, { status: 409 })
+        return NextResponse.json({ error: 'bad_part' }, { status: 400 })
+      case 'too_large':
+        return NextResponse.json({ error: 'too_large' }, { status: 413 })
       case 'stored':
         return NextResponse.json({ part, parts, have: r.have }, { status: 202 })
       // 409 so the device fills the gap and re-sends the final part.

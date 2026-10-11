@@ -121,6 +121,24 @@ describe('readZip limits', () => {
     expect(() => readZip(toArrayBuffer(zip), { maxEntryBytes: 100_000 })).toThrow()
   })
 
+  // Each entry was capped, the archive was not: every central-directory record
+  // can point at the SAME compressed bytes, so one small deflate stream listed
+  // 64 times inflates 64 times over (64 x 50 MB by default = 3.2 GB).
+  it('refuses an archive whose entries together inflate past the limit', () => {
+    const one = Buffer.from(makeZip('a.gpx', Buffer.alloc(1_000_000, 0x20)))
+    const eocd = one.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+    const cdStart = one.readUInt32LE(eocd + 16)
+    const record = one.subarray(cdStart, eocd)          // one central record, local offset 0
+    const copies = 20
+    const central = Buffer.concat(Array.from({ length: copies }, () => record))
+    const end = Buffer.from(one.subarray(eocd))
+    end.writeUInt16LE(copies, 8)
+    end.writeUInt16LE(copies, 10)
+    end.writeUInt32LE(central.length, 12)
+    const bomb = toArrayBuffer(Buffer.concat([one.subarray(0, cdStart), central, end]))
+    expect(() => readZip(bomb, { maxEntryBytes: 2_000_000, maxTotalBytes: 5_000_000 })).toThrow(/too large/)
+  })
+
   it('has sensible defaults for real exports', () => {
     expect(readZip(GARMIN_ZIP).length).toBeGreaterThan(0)
   })

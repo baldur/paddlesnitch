@@ -198,8 +198,11 @@ Authorization: Bearer <deviceToken>
 Content-Type: text/csv
 ```
 
-Body is the raw CSV, streamed from the SD card (a session is typically 5–500 KB;
-cap at **2 MB**). Not multipart: assembling multipart on the device costs heap it
+Body is the raw CSV, streamed from the SD card. Each request is capped at
+**4 MB** after any `&enc=zlib` is unpacked, and a chunked file (`&part=N&parts=M`,
+at most 512 parts) at **32 MB** once assembled -- the most a tracker's 64 KB
+pieces can make. The name must be `track_<…>.csv` (what the firmware writes);
+anything else is `400 bad_filename`. Not multipart: assembling multipart on the device costs heap it
 does not have, and this endpoint has no existing convention to match.
 
 | Status | Meaning | Device behaviour |
@@ -209,6 +212,7 @@ does not have, and this endpoint has no existing convention to match.
 | `422` | parsed, but no usable track points | mark uploaded — stops re-uploading indoor sessions forever |
 | `401` | token unknown or revoked | discard token, re-claim |
 | `413` | over the size cap | mark uploaded, log |
+| `400` | bad name, bad part number (`bad_part`), bad encoding | mark uploaded (`bad_encoding`: resend plain) |
 
 ```jsonc
 // 200
@@ -282,7 +286,9 @@ The original proposal, kept for the record:
 - `/api/account/devices/link`: 10/hour per user — this is the endpoint an attacker
   would brute-force a 6-character code against. With a 10-minute TTL, single use
   and this limit, a guess has odds around 1 in 10⁷ per window.
-- `/api/devices/sessions`: 60/hour per device, 2 MB per request.
+- `/api/devices/sessions`: 4 MB per request, 32 MB per assembled file. (The
+  60/hour per device planned here was never built; a 37-part sidecar alone would
+  exceed it.)
 
 ## Phasing
 
