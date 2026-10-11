@@ -55,13 +55,25 @@ export async function deleteAthleteIndex(athleteId: number): Promise<void> {
 // it off in Account → Strava). See docs/features/strava-auto-import.md.
 const prefsKey = (userId: string) => `users/${userId}/strava-prefs.json`
 
+type StravaPrefs = { autoImport?: boolean; historyImportedAt?: string }
+
 export async function getStravaAutoImport(userId: string): Promise<boolean> {
-  const rec = await getJson<{ autoImport?: boolean }>(prefsKey(userId))
+  const rec = await getJson<StravaPrefs>(prefsKey(userId))
   return rec?.autoImport ?? true
 }
 
 export async function setStravaAutoImport(userId: string, autoImport: boolean): Promise<void> {
-  await putJson(prefsKey(userId), { autoImport })
+  await putJson(prefsKey(userId), { ...(await getJson<StravaPrefs>(prefsKey(userId))), autoImport })
+}
+
+// When the first import of the paddler's recent Strava history finished (#415):
+// done once, so it isn't offered again on every visit.
+export async function getStravaHistoryImportedAt(userId: string): Promise<string | null> {
+  return (await getJson<StravaPrefs>(prefsKey(userId)))?.historyImportedAt ?? null
+}
+
+export async function markStravaHistoryImported(userId: string, at = new Date().toISOString()): Promise<void> {
+  await putJson(prefsKey(userId), { ...(await getJson<StravaPrefs>(prefsKey(userId))), historyImportedAt: at })
 }
 
 // Has this user really revoked our Strava access? The webhook says so with a

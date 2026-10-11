@@ -8,6 +8,7 @@ import { trpc } from '@/lib/trpc'
 import { PREFILLED_FRESH_MS } from '@/lib/fresh'
 import AppHeader from '@/components/AppHeader'
 import RouteThumb from '@paddlesnitch/ui/RouteThumb'
+import { StravaFirstImport } from '@/components/strava/StravaHistoryImport'
 
 // PADDLES: every paddle you've saved, with your totals on top. This is also the
 // signed-in home (/ redirects here). It replaces two near-copies: a dashboard at
@@ -91,6 +92,9 @@ export default function PaddlesList() {
           <h1 className="text-lg font-bold tracking-widest">PADDLES</h1>
           <Link href="/paddles/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">+ ADD A PADDLE</Link>
         </div>
+
+        {/* Connecting Strava brings in about the last month by itself (#415). */}
+        <StravaFirstImport />
 
         {sessions && sessions.length > 0 && (() => {
           const now = new Date()
