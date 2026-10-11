@@ -21,7 +21,7 @@ import { getSession, listSessionSummaries, saveSession, type AnalysisSession } f
 import { motionOnlyResult, type AnalysisResult } from './analysis'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { movementDistanceM, noPaddleReason, recordingStart } from '@paddlesnitch/timing/device'
-import { deriveCadence, movingRangesFromTrack, trackClockOffset } from '@paddlesnitch/timing/cadence'
+import { deriveCadence, strokeRangesFor, trackClockOffset } from '@paddlesnitch/timing/cadence'
 
 export type TrackerPaddleOutcome =
   | { status: 'created' | 'updated'; paddleId: string }
@@ -104,10 +104,11 @@ async function motionPlan(userId: string, deviceId: string, deviceSessionId: str
   const existing = await existingPaddle(userId, deviceSessionId)
   if (existing) return { action: 'unchanged', paddleId: existing.id }
   // The cadence as the recording's page works it out (recording-report.ts),
-  // so the paddle and the page agree.
+  // so the paddle and the page agree: over the whole recording, since the GPS
+  // can't say where the boat moved after it failed.
   let result: AnalysisResult | null
   try {
-    const cadence = deriveCadence(motion.toString('utf8'), { movingRanges: movingRangesFromTrack(csv) })
+    const cadence = deriveCadence(motion.toString('utf8'), { movingRanges: strokeRangesFor(csv, true) })
     result = motionOnlyResult({ reason, cadence, startMs: Date.parse(start), clockOffsetMs: trackClockOffset(csv), track })
   } catch { return null }
   return result && { action: 'create_motion', result, paddledAt: start }

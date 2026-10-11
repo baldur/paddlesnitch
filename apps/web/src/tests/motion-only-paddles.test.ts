@@ -37,6 +37,17 @@ async function recording(name: string, csv: string): Promise<string> {
 const addMotion = (name: string, seconds: number) => storeDeviceMotion(DEVICE, me.id, name, MOTION(seconds), seconds * 10)
 
 describe('a recording whose GPS failed', () => {
+  it('counts the paddling after the GPS was lost, not only the stretch it saw moving', async () => {
+    // 5 minutes of GPS, then 10 more without: the motion data covers all 14.
+    const id = await recording('track_late.csv', lostTrackCsv(900, 300, 9, { startMs: 400_000, t0: T0 }))
+    await addMotion('track_late.csv', 840)
+    // The boat moved ~750 m before the loss: a normal paddle from the partial
+    // track, so check what the recording's motion summary says instead.
+    const { recordingReport } = await import('@/lib/recording-report')
+    const r = await recordingReport(me.id, DEVICE, id)
+    expect(r?.fromMotion).toMatch(/about 1[34] min paddling/)
+  })
+
   it('becomes a paddle without a map when its motion data lands, and only once', async () => {
     const id = await recording('track_1.csv', LOST)
     // The track alone: the boat "moved" 75 m before the GPS was lost.
