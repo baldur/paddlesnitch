@@ -28,10 +28,17 @@ function Row({ label, a, b, better }: { label: string; a: string; b: string; bet
 function CompareInner() {
   const sp = useSearchParams()
   const aId = sp.get('a'), bId = sp.get('b')
+  // B can be a buddy's paddle (bOwner = their id): fetched through the buddy
+  // rules, so it comes without their note or AI text (buddies-and-compare.md).
+  const bOwner = sp.get('bOwner')
   const aQ = trpc.paddles.get.useQuery({ id: aId ?? '' }, { enabled: !!aId, retry: false })
-  const bQ = trpc.paddles.get.useQuery({ id: bId ?? '' }, { enabled: !!bId, retry: false })
+  const bQ = trpc.paddles.get.useQuery({ id: bId ?? '' }, { enabled: !!bId && !bOwner, retry: false })
+  const buddyQ = trpc.buddies.paddle.useQuery({ userId: bOwner ?? '', id: bId ?? '' }, { enabled: !!bId && !!bOwner, retry: false })
   const A = !aId ? null : aQ.isPending ? undefined : (aQ.data ?? null)
-  const B = !bId ? null : bQ.isPending ? undefined : (bQ.data ?? null)
+  const B = !bId ? null
+    : bOwner ? (buddyQ.isPending ? undefined : buddyQ.data ? { ...buddyQ.data.paddle, note: '' } : null)
+    : bQ.isPending ? undefined : (bQ.data ?? null)
+  const buddyName = buddyQ.data?.name
 
   if (A === undefined || B === undefined) return <div className="min-h-screen bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
   if (!A || !B) return (
@@ -42,6 +49,9 @@ function CompareInner() {
   )
 
   const ra = A.result, rb = B.result
+  const labelA = bOwner ? `You · ${fmtDate(A.paddledAt)}` : fmtDate(A.paddledAt)
+  const labelB = bOwner ? `${buddyName ?? 'Buddy'} · ${fmtDate(B.paddledAt)}` : fmtDate(B.paddledAt)
+  const hrefB = bOwner ? `/buddies/${bOwner}/${B.id}` : `/paddles/${B.id}`
   const paceA = ra.cruiseSpeed, paceB = rb.cruiseSpeed // higher speed = faster = better
   const dPace = 500 / paceA - 500 / paceB // seconds/500 difference (A - B); negative = A faster
 
@@ -55,11 +65,11 @@ function CompareInner() {
 
         <div className="grid grid-cols-[1fr_auto_auto] gap-3 mb-2 text-[10px] tracking-widest text-muted">
           <span></span>
-          <Link href={`/paddles/${A.id}`} className="text-right w-24 text-muted hover:text-fg">{fmtDate(A.paddledAt)}</Link>
-          <Link href={`/paddles/${B.id}`} className="text-right w-24 text-muted hover:text-fg">{fmtDate(B.paddledAt)}</Link>
+          <Link href={`/paddles/${A.id}`} className="text-right w-24 text-muted hover:text-fg">{bOwner ? labelA : fmtDate(A.paddledAt)}</Link>
+          <Link href={hrefB} className="text-right w-24 text-muted hover:text-fg">{bOwner ? labelB : fmtDate(B.paddledAt)}</Link>
         </div>
 
-        <LineCompare a={{ label: fmtDate(A.paddledAt), points: ra.points }} b={{ label: fmtDate(B.paddledAt), points: rb.points }} />
+        <LineCompare a={{ label: labelA, points: ra.points }} b={{ label: labelB, points: rb.points }} />
 
         <Row label="TIME" a={fmtDurWords(ra.durationS)} b={fmtDurWords(rb.durationS)} />
         <Row label="DISTANCE" a={`${ra.distanceKm.toFixed(2)} km`} b={`${rb.distanceKm.toFixed(2)} km`} better={ra.distanceKm > rb.distanceKm ? 'a' : ra.distanceKm < rb.distanceKm ? 'b' : ''} />
@@ -71,15 +81,16 @@ function CompareInner() {
         <Row label="RIVER FLOW" a={ra.conditions?.flowM3s != null ? `${ra.conditions.flowM3s.toFixed(1)} m³/s` : '—'} b={rb.conditions?.flowM3s != null ? `${rb.conditions.flowM3s.toFixed(1)} m³/s` : '—'} />
 
         <div className="mt-4 border-l-2 border-primary pl-3 text-sm text-fg">
-          {fmtDate(A.paddledAt)} vs {fmtDate(B.paddledAt)}: pace was{' '}
+          {labelA} vs {labelB}: pace was{' '}
           <b>{Math.abs(dPace) < 0.5 ? 'about the same' : `${Math.abs(dPace).toFixed(0)}s/500 ${dPace < 0 ? 'faster' : 'slower'}`}</b>
           {ra.avgSR != null && rb.avgSR != null && <>, stroke rate {ra.avgSR > rb.avgSR ? 'up' : ra.avgSR < rb.avgSR ? 'down' : 'level'} {Math.abs(Math.round(ra.avgSR - rb.avgSR)) || ''} spm</>}
           , {(ra.distanceKm - rb.distanceKm) >= 0 ? '+' : ''}{(ra.distanceKm - rb.distanceKm).toFixed(1)} km distance.
         </div>
 
-        <SameOuting a={A} b={B} />
+        {/* One person's two recordings of the same outing: not for a buddy's paddle. */}
+        {!bOwner && <SameOuting a={A} b={B} />}
 
-        {(A.note?.trim() || B.note?.trim()) && (
+        {!bOwner && (A.note?.trim() || B.note?.trim()) && (
           <div className="grid grid-cols-2 gap-3 mt-4">
             <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">NOTE · {fmtDate(A.paddledAt)}</div>{A.note || <span className="text-muted">no note</span>}</div>
             <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">NOTE · {fmtDate(B.paddledAt)}</div>{B.note || <span className="text-muted">no note</span>}</div>

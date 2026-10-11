@@ -55,7 +55,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   // plain one shows meanwhile, with a line saying so.
   summaryPending?: boolean
   // A buddy's paddle (read-only): whose it is, and their list to go back to.
-  buddy?: { name: string; href: string }
+  buddy?: { name: string; href: string; userId: string; paddleId: string }
   // The owner hid this paddle from their buddies.
   initialHiddenFromBuddies?: boolean
 }) {
@@ -471,6 +471,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         <aside className="order-1 md:order-2 flex flex-row flex-wrap md:flex-col md:flex-nowrap gap-2 text-xs content-start" aria-label="Actions">
           {onNewFile && <button onClick={onNewFile} className={ACTION}>ADD ANOTHER</button>}
           {readOnly && !buddy && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
+          {buddy && <CompareWithMine buddy={buddy} start={pts[0]} className={ACTION} box={BOX} />}
           {sessionId && !readOnly && (
             <button onClick={() => setHidden.mutate({ id: sessionId, hidden: !hiddenFromBuddies })} disabled={setHidden.isPending}
               className={`${ACTION} ${hiddenFromBuddies ? 'border-primary text-fg' : ''}`} title="Your buddies see your paddles unless you hide one">
@@ -578,3 +579,33 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
     </div>
   )
 }
+
+// On a buddy's paddle: pick one of yours to compare with it, nearest start
+// first (the same water is the likely match).
+function CompareWithMine({ buddy, start, className, box }: {
+  buddy: { userId: string; paddleId: string }; start?: { lat: number; lng: number }; className: string; box: string
+}) {
+  const [open, setOpen] = useState(false)
+  const mine = trpc.paddles.sessions.useQuery(undefined, { enabled: open, retry: false })
+  const near = (mine.data ?? [])
+    .map(s => ({ s, d: start && s.startLat != null && s.startLng != null ? haversine([start.lat, start.lng], [s.startLat, s.startLng]) : Infinity }))
+    .sort((x, y) => x.d - y.d || (x.s.paddledAt < y.s.paddledAt ? 1 : -1))
+    .slice(0, 8)
+  return (
+    <>
+      <button onClick={() => setOpen(o => !o)} className={`${className} ${open ? 'border-primary text-fg' : ''}`}>COMPARE WITH ONE OF MINE</button>
+      {open && (
+        <div className={box}>
+          {mine.isPending ? <div className="text-muted">Loading…</div>
+            : near.length === 0 ? <div className="text-muted">You have no paddles yet.</div>
+            : near.map(({ s, d }) => (
+              <Link key={s.id} href={`/paddles/compare?a=${s.id}&b=${buddy.paddleId}&bOwner=${buddy.userId}`} className="block py-1 hover:text-primary">
+                {fmtDay(s.paddledAt)} · {s.distanceKm.toFixed(1)} km{Number.isFinite(d) && d < 500 ? ' · same start' : ''}
+              </Link>
+            ))}
+        </div>
+      )}
+    </>
+  )
+}
+
