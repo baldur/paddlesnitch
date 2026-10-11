@@ -340,20 +340,31 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               {aIdx == null && 'Tap where the section starts on your track.'}
               {aIdx != null && bIdx == null && 'Now tap where it ends.'}
               {aIdx != null && bIdx != null && (
-                <span>Section: <b className="tabular text-fg">{(sectionM / 1000).toFixed(2)} km</b>, <span className="text-green">start</span> to <span className="text-red">finish</span>. Look at it closely, or compare it with your other paddles.</span>
+                <span>Section: <b className="tabular text-fg">{(sectionM / 1000).toFixed(2)} km</b>, <span className="text-green">start</span> to <span className="text-red">finish</span>. See every time you{buddy ? '' : ' and your buddies'} paddled it, look at it closely, or compare it with your other paddles.</span>
               )}
             </div>
             {sectionErr && <div className="text-red mt-1">{sectionErr}</div>}
             {sectionInsight && <div className="mt-2 border-l-2 border-split pl-2 text-fg leading-relaxed">{sectionInsight.text}</div>}
             <div className="flex gap-2 mt-2 flex-wrap">
-              <button onClick={analyseSection} disabled={aIdx == null || bIdx == null || insightLoading}
-                className="px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white disabled:opacity-40">
-                {insightLoading ? 'ANALYSING…' : sectionInsight ? 'ANALYSE AGAIN' : 'ANALYSE THIS SECTION'}
-              </button>
-              <button onClick={findSimilar} disabled={aIdx == null || bIdx == null || findState === 'loading'}
-                className="px-3 py-1.5 text-[10px] tracking-widest border border-primary text-fg disabled:opacity-40">
-                {findState === 'loading' ? 'SEARCHING…' : 'COMPARE WITH OTHER PADDLES →'}
-              </button>
+              {/* Every time you or your buddies paddled this section the same way. */}
+              {aIdx != null && bIdx != null && (
+                <Link href={buddy
+                  ? `/paddles/section?src=${buddy.paddleId}&owner=${buddy.userId}&a=${aIdx}&b=${bIdx}`
+                  : `/paddles/section?src=${sessionId}&a=${aIdx}&b=${bIdx}`}
+                  className="px-3 py-1.5 text-[10px] tracking-widest bg-primary text-white">EVERY PASS →</Link>
+              )}
+              {!buddy && (
+                <>
+                  <button onClick={analyseSection} disabled={aIdx == null || bIdx == null || insightLoading}
+                    className="px-3 py-1.5 text-[10px] tracking-widest border border-primary text-fg disabled:opacity-40">
+                    {insightLoading ? 'ANALYSING…' : sectionInsight ? 'ANALYSE AGAIN' : 'ANALYSE THIS SECTION'}
+                  </button>
+                  <button onClick={findSimilar} disabled={aIdx == null || bIdx == null || findState === 'loading'}
+                    className="px-3 py-1.5 text-[10px] tracking-widest border border-primary text-fg disabled:opacity-40">
+                    {findState === 'loading' ? 'SEARCHING…' : 'COMPARE WITH OTHER PADDLES →'}
+                  </button>
+                </>
+              )}
               {(aIdx != null || bIdx != null) && <button onClick={resetSection} className="px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg border border-border">RESET</button>}
               <button onClick={exitSection} className="px-3 py-1.5 text-[10px] tracking-widest text-muted hover:text-fg border border-border">DONE</button>
             </div>
@@ -564,7 +575,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             </div>
           )}
           {sessionId && !readOnly && isTracker && <Link href={`/paddles/${sessionId}/motion`} className={ACTION}>BOAT MOTION →</Link>}
-          {sessionId && !readOnly && (
+          {((sessionId && !readOnly) || buddy) && (
             <button onClick={() => (sectionMode ? exitSection() : (setSectionMode(true), window.scrollTo({ top: 0, behavior: 'smooth' })))}
               title="Pick part of this paddle to look at closely, or compare with your other paddles"
               className={`${ACTION} ${sectionMode ? 'border-split text-split' : ''}`}>{sectionMode ? 'STOP PICKING A SECTION' : 'PICK A SECTION'}</button>

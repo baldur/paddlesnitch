@@ -10,6 +10,7 @@
     "./line-compare": "./src/line-compare.ts",
     "./route-match": "./src/route-match.ts",
     "./comparable": "./src/comparable.ts",
+    "./section-passes": "./src/section-passes.ts",
     "./strava-import": "./src/strava-import.ts",
     "./athlete-profile": "./src/athlete-profile.ts",
     "./history-stats": "./src/history-stats.ts",
