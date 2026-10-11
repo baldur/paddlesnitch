@@ -12,6 +12,17 @@ This file is the source of truth for *current* behaviour. It's organised as: **W
 
 After completing any task that changes behaviour, adds a feature, or introduces a new convention: update this file and the memory files in `~/.claude/projects/…/memory/` to reflect the new state. Do not wait to be asked.
 
+### The backlog (GitHub issues)
+
+The to-do list is **GitHub issues labelled `backlog`** (`gh issue list --label backlog`). It exists so there is always something worth doing when the owner leaves Claude working (overnight, during the day). Labels:
+
+- **`unattended-ok`**: Claude may do it alone and merge it: reversible, provable with a test, no owner decision. **`p1`** first, then oldest.
+- **`needs-decision`**: the owner chooses first. Write up the options and a recommendation on the issue; don't build it.
+- **`owner-task`**: needs the owner or hardware (testing on the water, merging firmware, admin settings). Remind, don't do.
+- **`firmware`**: PRs wait for the owner's merge (a merge releases to every tracker).
+
+**Working it** ("work the backlog"): take `unattended-ok` issues in order; for each, prove the problem (a failing test or a measurement), fix, test, open a PR that says `Closes #n`, merge when the PR checks pass. Comment on the issue as you go: the issues are the report. When the list runs dry, propose new issues rather than inventing work. **Filing:** each issue says what's wrong and how we know, how to prove it's fixed, and what done looks like. **The repo is public:** no personal data in issues (no emails, account ids, training details, tracker serials). **Never use `claude-go` / `claude-active`** for backlog work: they start the CI Claude workflows on the same item.
+
 ### General coding guidelines
 
 Behavioral guidelines to reduce common LLM coding mistakes.
