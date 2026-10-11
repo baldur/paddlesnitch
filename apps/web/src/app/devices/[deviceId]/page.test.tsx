@@ -22,7 +22,7 @@ const SESSIONS = [
 ]
 
 describe("a tracker's page (one paddle)", () => {
-  it('links a recording that became a paddle to it, and keeps a desk test here with the reason', async () => {
+  it('links a recording that became a paddle to it, and keeps a desk test here, saying where to see why', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(
       url.includes('/sessions') ? { sessions: SESSIONS } : { devices: [{ deviceId: '435AC17C', name: 'Number001' }] },
     ))))
@@ -33,7 +33,7 @@ describe("a tracker's page (one paddle)", () => {
 
     const link = container.querySelector('a[href="/paddles/t-rec1"]')
     expect(link?.textContent).toContain('with boat motion')
-    expect(container.textContent).toContain('not a paddle: the boat barely moved')
+    expect(container.textContent).toContain('not a paddle: open to see why')
     expect(container.querySelectorAll('a[href^="/paddles/"]').length).toBe(1)
   })
 })
