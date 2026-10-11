@@ -7,6 +7,7 @@
     "./analysis": "./src/analysis.ts",
     "./analysis-store": "./src/analysis-store.ts",
     "./pipeline": "./src/pipeline.ts",
+    "./line-compare": "./src/line-compare.ts",
     "./strava-import": "./src/strava-import.ts",
     "./athlete-profile": "./src/athlete-profile.ts",
     "./history-stats": "./src/history-stats.ts",

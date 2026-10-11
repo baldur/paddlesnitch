@@ -6,6 +6,7 @@ import { fmtDurWords, split500 } from '@paddlesnitch/analysis/analysis'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import SameOuting from '@/components/analysis/SameOuting'
+import LineCompare from '@/components/analysis/LineCompare'
 import { fmtDay } from '@paddlesnitch/core/format'
 
 export default function ComparePage() {
@@ -57,6 +58,8 @@ function CompareInner() {
           <Link href={`/paddles/${A.id}`} className="text-right w-24 text-muted hover:text-fg">{fmtDate(A.paddledAt)}</Link>
           <Link href={`/paddles/${B.id}`} className="text-right w-24 text-muted hover:text-fg">{fmtDate(B.paddledAt)}</Link>
         </div>
+
+        <LineCompare a={{ label: fmtDate(A.paddledAt), points: ra.points }} b={{ label: fmtDate(B.paddledAt), points: rb.points }} />
 
         <Row label="TIME" a={fmtDurWords(ra.durationS)} b={fmtDurWords(rb.durationS)} />
         <Row label="DISTANCE" a={`${ra.distanceKm.toFixed(2)} km`} b={`${rb.distanceKm.toFixed(2)} km`} better={ra.distanceKm > rb.distanceKm ? 'a' : ra.distanceKm < rb.distanceKm ? 'b' : ''} />
