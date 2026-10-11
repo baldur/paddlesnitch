@@ -1,4 +1,5 @@
 #include "imu.h"
+#include "imu_alive.h"
 #include "spibus.h"
 #include "dbg.h"
 #include "board.h"
@@ -135,6 +136,9 @@ void imuPoll()
     bool gotAccel = qmi.getAccelerometer(ax, ay, az);
     bool gotGyro  = qmi.getGyroscope(gx, gy, gz);
     spiBusGive();
+    // The library's "got" is always true over SPI; gravity says whether the
+    // chip really answered (imu_alive.h). If it did not, neither value is real.
+    if (gotAccel && !imuAccelAlive(ax, ay, az)) gotAccel = gotGyro = false;
 
     // Runtime watchdog: give up on a chip that has stopped answering, and let go
     // of the bus.

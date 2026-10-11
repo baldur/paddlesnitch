@@ -897,7 +897,9 @@ static void checkButton()
         pendingTap = 0;
         Serial.println("btn: hold");
         holdStartedMs = heldSince;
-        screenHold();
+        // Over "Updated to X" a hold only dismisses it, on release (above):
+        // firing here opened Track underneath and started a recording.
+        if (!otaJustUpdated()) screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;
         heldSince = 0;
@@ -1563,7 +1565,10 @@ void loop()
             // the writer is the uplink task on core 0.
             OtaProgress op = otaGetProgress();
             u.otaActive  = (op.phase == OtaPhase::Checking || op.phase == OtaPhase::Downloading ||
-                            op.phase == OtaPhase::Verifying || op.phase == OtaPhase::Done);
+                            op.phase == OtaPhase::Verifying ||
+                            // Installed, but held until the recording stops (ota.cpp):
+                            // keep Track on screen until then.
+                            (op.phase == OtaPhase::Done && !storageRecording()));
             u.otaPercent = op.percent;
             u.otaVersion = op.version;
             u.otaMessage = op.message;

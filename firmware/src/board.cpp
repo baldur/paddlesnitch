@@ -137,6 +137,11 @@ BoardStatus boardInit()
     pinMode(GPS_EN_PIN, OUTPUT);
     digitalWrite(GPS_EN_PIN, HIGH);
     delay(50);
+    // 2 KB, not the 256 B default: the module sends ~374 B/s, and loop() has
+    // waits of up to 3 s (starting a recording, taking the card from the
+    // uploader). Measured on the bench: a 20 s stall kept 361 of ~7500 bytes
+    // and corrupted a sentence. Must be set before begin().
+    SerialGPS.setRxBufferSize(2048);
     SerialGPS.begin(GPS_BAUD_RATE, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
     st.gps = true;
 
