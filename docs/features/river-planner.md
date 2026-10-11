@@ -1,6 +1,6 @@
 # Feature spec: River planner
 
-**Status:** 🚧 **P0 built**, 2026-10-11: the `@paddlesnitch/waterways` package, ingest, and the Devizes→Westminster dataset plus coverage report. No UI yet.
+**Status:** 🚧 **P0 + P1 built**, 2026-10-11. P0: the `@paddlesnitch/waterways` package, ingest, and the Devizes→Westminster dataset plus coverage report. P1: the planner at `/plan` (see "P1 as built").
 **Owners:** Baldur (product), Claude (implementation).
 **Prototype:** the Thames 200 crew page (`thames200-crew.s3.eu-west-1.amazonaws.com/index.html`), a hand-built, single-race version of this idea.
 
@@ -130,6 +130,8 @@ type CrewPointDetail = {
 
 ### Plans
 
+As built in P1 (`packages/waterways/src/plan.ts`, `plan-store.ts`), a saved plan stores the **clicks** (`start`, `finish` as `[lat, lng]`), not `{ waterwayId, chainageM }`: OSM way ids change whenever a region is rebuilt, a click doesn't. `stops`, `attachments` and `visibility` below are still to come (P3, P4). The original design:
+
 ```ts
 type Plan = {
   id: string; userId: string
@@ -181,11 +183,11 @@ type Contribution = {
 
 ### Storage
 
-**Built datasets** are committed for now at `packages/waterways/data/{region}.json`: 709 KB raw, 127 KB gzipped for the DW region. They're generated, reviewable in PRs, and tests run against them. P1 decides how they're served, as a static asset or from S3. Everything per user lives in S3 like the rest of the platform:
+**Built datasets** are committed for now at `packages/waterways/data/{region}.json`: 709 KB raw, 127 KB gzipped for the DW region. They're generated, reviewable in PRs, and tests run against them. They're served by `GET /plan/data/{region}` (a route handler prerendered at build, `force-static`, cached), and the browser computes plans from it. Everything per user lives in S3 like the rest of the platform:
 
 ```
 waterways/conditions/stream-warnings.json  ← last parsed board, cached ~1 h
-plans/{userId}/{planId}.json
+users/{userId}/plans/{planId}.json   ← under users/, so account deletion's prefix wipe covers it
 contributions/{userId}/{id}.json       ← owner copy (source of truth)
 contributions/public/{featureId}/{id}.json  ← published index
 contributions/media/{userId}/{id}.{jpg|webp}
@@ -245,6 +247,18 @@ Researched 2026-10-11. No paid API, no sign-up.
 - **A public `/plan/gaps` page:** per waterway, which locks lack portage side, take-out and put-in, carry distance, or crew parking, sorted by how often they appear in people's plans. That's where contributions help most.
 - **No silent guessing.** An unknown portage side is shown as unknown, never defaulted to a likely side. A wrong guess sends someone to the wrong bank.
 
+## P1 as built
+
+- **`/plan`** (`app/plan/page.tsx` → `components/plan/Planner.tsx`): the map (`components/map/PlanMap.tsx`: every link of the region, land outside the region greyed, the route, the ends, the stops) and the route sheet beside it.
+  - First click sets the start, the second the finish; after that a click moves the nearer end. SWAP reverses the trip, CLEAR starts again. A click more than `SNAP_MAX_M` (1 km) from the water is refused with a message.
+  - ONE-WAY / RETURN, a start time (`datetime-local`, the browser's zone), pace in km/h (default 8) and minutes per portage (default 3).
+  - Summary: distance, portages, paddling time, time with portages, finish time. Stop list in travel order: chainage, arrival time (`fmtTime`, with "+1" after midnight) or elapsed time without a start time, and what's known (portage side, said as unknown when it is; crew directions, parking and postcode; facilities; the bank of a towpath access point). A return shows where it turns. Filters: PORTAGES, WEIRS, GET IN / OUT, WATER AND TOILETS on; TOWPATH ACCESS (hundreds of points) off.
+  - **An unsaved plan lives in the address bar** (`?from=lat,lng&to=lat,lng&shape=return&at=ISO&pace=&portage=`, plus `view=lat,lng,zoom` to centre the map), so a reload, a pasted link or the sign-in round trip keeps it. `lib/plan-ui.ts` parses and writes it.
+- **Saving** needs an account: tRPC `plan.list/get/save/delete` (`packages/api/src/routers/plan.ts`) over `plan-store.ts`. Private to the owner; another user gets NOT_FOUND. Saved plans are in "Download my data" (`account.plans`) and deleted with the account. `/plan/[id]` opens one; YOUR PLANS lists them on `/plan`.
+- **PLAN tab** in the header (`AppShell`, `sectionFor('/plan…') → 'plan'`).
+- **Tests:** `lib/plan.test.ts` (snapping, too short, chainage order, times, direction flip, return), `lib/plan-ui.test.ts` (wording, address bar, clicks), `tests/trpc-plan.test.ts` (ownership, validation, export, erasure), `e2e/critical/plan.spec.ts` (two clicks → stop list; a link → the DW route, then RETURN).
+- **Not yet:** daylight flags, the tide window, "nearest named place" for a click, crew-point drive order (P2's crew sheet), sharing a saved plan by link (P4).
+
 ## The planner (UX)
 
 1. Open `/plan` on a map of the waterways we cover. Areas we don't cover yet are greyed out.
@@ -276,7 +290,7 @@ Every view and print says the planner is not a navigation authority. Check strea
 | Phase | What | Done when |
 |---|---|---|
 | **P0 Data: DW stretch** ✅ | `@paddlesnitch/waterways` (OS grid conversion, routing, features along a route, coverage), ingest for OSM, CRT and GOV.UK Thames, the DW dataset and coverage report | Done 2026-10-11: route 201.3 km, 77 locks; tests cover parsers, routing and the built dataset (see "P0 result") |
-| **P1 Planner** | `/plan` map, click start and finish, one-way or return, computed stop list with ETAs; save plans (signed-in) | Unit tests for snapping, chainage ranges, direction flip and return; E2E for click → stop list |
+| **P1 Planner** ✅ | `/plan` map, click start and finish, one-way or return, computed stop list with ETAs; save plans (signed-in) | Done 2026-10-11 (see "P1 as built") |
 | **P2 Print** | Print page and crew sheet with printable static maps | Manual print check plus a render test of the print page |
 | **P3 Your own information** | Private notes, photos (EXIF stripped), drawings, map snippets on a plan or feature; in print; GDPR export and erasure | Tests for ownership, privacy, export and erasure |
 | **P4 Sharing and gaps** | Make-public with a CC0 release (live immediately; flag and hide), `/plan/gaps`, coverage shading, corrections | Permission story tests (private never leaks); gaps page lists the real holes |

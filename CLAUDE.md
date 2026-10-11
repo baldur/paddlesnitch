@@ -160,7 +160,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`sitemap.md`](docs/features/sitemap.md) | ✅ current map | Every route, as of the 2026-09 navigation clean-up |
 | [`security-audit-2026-09.md`](docs/features/security-audit-2026-09.md) | 🔍 audit, 2026-09-29 | Security, privacy, resilience (firmware, web, live AWS). Fixes: PRs #303–#320. The rest: 15 decisions with trade-offs. Read "Read this first" before handing trackers to testers |
 | [`behavioural-analytics.md`](docs/features/behavioural-analytics.md) | 🚧 spec, not built | Consent-gated struggle signals |
-| [`river-planner.md`](docs/features/river-planner.md) | 🚧 P0 built 2026-10-11, no UI | New **Plan** section (`/plan`): click start and finish on a waterway → portages, access and crew points with ETAs, printable route sheet. P0: `@paddlesnitch/waterways` + ingest (OSM network, CRT, EA Thames) + Devizes→Westminster dataset (201.3 km, 77 locks) and coverage report. CC0 contributions, race-agnostic, tides from our own fit of EA gauge data |
+| [`river-planner.md`](docs/features/river-planner.md) | 🚧 P0 + P1 built 2026-10-11 | New **Plan** section (`/plan`): click start and finish on a waterway → portages, access and crew points with ETAs, printable route sheet. P0: `@paddlesnitch/waterways` + ingest (OSM network, CRT, EA Thames) + Devizes→Westminster dataset (201.3 km, 77 locks) and coverage report. P1: the `/plan` planner (two clicks, one-way/return, stop list with arrival times, unsaved plan in the URL, saved plans under `users/{id}/plans/`). CC0 contributions, race-agnostic, tides from our own fit of EA gauge data |
 | [`release-testing.md`](docs/features/release-testing.md) | ✅ in use 2026-10 | Firmware release checklist: bench walk with `firmware/tools/bench.sh`, phone steps, after-merge update check, rollback; plan for beta channel + hardware in CI |
 | [`tracker-bluetooth-sync.md`](docs/features/tracker-bluetooth-sync.md) | 📋 spec, not built | Recordings home by phone/browser over Bluetooth, compression first, game-style setup |
 | [`buddies-and-compare.md`](docs/features/buddies-and-compare.md) | ✅ 2026-10-11 | Mutual buddies who see each other's paddles; two paddles on one map to study the line |
@@ -355,6 +355,10 @@ The river planner's domain ([`river-planner.md`](docs/features/river-planner.md)
 - `coverage`: which facts each lock has. Unknown stays unknown, never guessed.
 - `build`: assemble a region.
 - `ingest/{osm,crt,thames}`: parsers for each source.
+- `plan`: `computePlan(dataset, { start, finish, shape, startAt?, paceKmh, portageMinutes })` → the route and every stop with chainage, bank and arrival time, or an error (`start_off_water`, `finish_off_water`, `too_short`, `not_connected`).
+- `plan-store` (**server only**, uses core storage): saved plans at `users/{userId}/plans/{id}.json`, so account deletion's `users/` wipe covers them; listed in the account export.
+
+The browser loads a region from `GET /plan/data/{region}` (prerendered at build) and computes plans itself; `/plan` keeps an unsaved plan in the address bar (`apps/web/src/lib/plan-ui.ts`). tRPC `plan` router saves them.
 
 `pnpm --filter web waterways [region]` rebuilds `packages/waterways/data/{region}.json` plus a generated `{region}-coverage.md`, caching raw responses in `apps/web/.cache/waterways/`. The OSM parts (network, points) are ODbL and stay in their own fields, never copied into a `Feature`. Tests: `apps/web/src/lib/waterways.test.ts` (real-response fixtures in `src/tests/fixtures/waterways/`, plus checks on the built DW dataset).
 
@@ -998,7 +1002,7 @@ Maps: dark tiles (Esri World Dark Gray); Trials course maps default to dark with
 
 Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed; add to its list when you retire a word.
 
-1. **One name per thing:** Trials (URL `/att`), Paddles, Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
+1. **One name per thing:** Trials (URL `/att`), Paddles, Plan (`/plan`), Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
 2. **Buttons:** 1–3 uppercase words that say what happens (SAVE, ADD, REMOVE TRACKER). Loading = same verb + "…". No emoji.
 3. **Labels and headings:** uppercase (in source, or via `uppercase`); helper text on its own muted line below, sentence case.
 4. **Errors:** "Couldn't …" + what to do ("Please try again." only when retrying helps). Never codes, vendor names (Cognito, JWT, S3), "token", "state", "endpoint", raw enums.

@@ -1,0 +1,80 @@
+'use client'
+import 'leaflet/dist/leaflet.css'
+import { MapContainer, TileLayer, Polyline, Polygon, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { useEffect } from 'react'
+import type { LatLng } from '@paddlesnitch/waterways/types'
+
+// The planner's map: every river and canal we cover, greyed-out land beyond the
+// region, the planned route, its ends and its stops. A click is passed up; the
+// page decides whether it's the start or the finish.
+
+const DARK = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+const ATTR = 'Tiles &copy; Esri · Waterways &copy; OpenStreetMap contributors, Canal &amp; River Trust, Environment Agency'
+
+export type MapStop = { id: string; at: LatLng; name: string; colour: string }
+
+function Clicks({ onPick }: { onPick: (p: LatLng) => void }) {
+  useMapEvents({ click: e => onPick([e.latlng.lat, e.latlng.lng]) })
+  return null
+}
+
+// Fit the route when it changes, never on other re-renders (which would undo
+// the paddler's zoom); with no route, frame the region or the asked-for view.
+function Frame({ route, bbox, view }: { route: LatLng[]; bbox: [number, number, number, number]; view?: { at: LatLng; zoom: number } }) {
+  const map = useMap()
+  const first = route[0], last = route.at(-1)
+  const key = route.length ? `${first}|${last}|${route.length}` : ''
+  useEffect(() => {
+    if (route.length) {
+      const lat = route.map(p => p[0]), lng = route.map(p => p[1])
+      map.fitBounds([[Math.min(...lat), Math.min(...lng)], [Math.max(...lat), Math.max(...lng)]], { padding: [30, 30] })
+    } else if (view) {
+      map.setView(view.at, view.zoom)
+    } else {
+      map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
+    }
+  }, [map, key]) // eslint-disable-line react-hooks/exhaustive-deps -- refit on the route's content, not its identity
+  return null
+}
+
+function Focus({ at }: { at: LatLng | null }) {
+  const map = useMap()
+  useEffect(() => { if (at) map.setView(at, Math.max(map.getZoom(), 15)) }, [map, at])
+  return null
+}
+
+export default function PlanMap({
+  network, bbox, route, start, finish, stops, focus, view, onPick,
+}: {
+  network: LatLng[][]
+  bbox: [number, number, number, number]   // [south, west, north, east]
+  route: LatLng[]
+  start: LatLng | null
+  finish: LatLng | null
+  stops: MapStop[]
+  focus: LatLng | null
+  view?: { at: LatLng; zoom: number }
+  onPick: (p: LatLng) => void
+}) {
+  const [s, w, n, e] = bbox
+  const world: LatLng[] = [[-85, -180], [-85, 180], [85, 180], [85, -180]]
+  const region: LatLng[] = [[s, w], [n, w], [n, e], [s, e]]
+  return (
+    <MapContainer center={[(s + n) / 2, (w + e) / 2]} zoom={9} preferCanvas className="h-full w-full" data-testid="plan-map">
+      <TileLayer url={DARK} attribution={ATTR} maxNativeZoom={16} maxZoom={19} />
+      <Polygon positions={[world, region]} interactive={false} pathOptions={{ stroke: false, fillColor: '#0b1220', fillOpacity: 0.6 }} />
+      <Polyline positions={network} interactive={false} pathOptions={{ color: '#06b6d4', weight: 2, opacity: 0.55 }} />
+      {route.length > 0 && <Polyline positions={route} interactive={false} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }} />}
+      {stops.map(st => (
+        <CircleMarker key={st.id} center={st.at} radius={5} pathOptions={{ color: st.colour, fillColor: st.colour, fillOpacity: 0.9, weight: 1 }}>
+          <Tooltip>{st.name}</Tooltip>
+        </CircleMarker>
+      ))}
+      {start && <CircleMarker center={start} radius={8} pathOptions={{ color: '#fff', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}><Tooltip>Start</Tooltip></CircleMarker>}
+      {finish && <CircleMarker center={finish} radius={8} pathOptions={{ color: '#fff', fillColor: '#f87171', fillOpacity: 1, weight: 2 }}><Tooltip>Finish</Tooltip></CircleMarker>}
+      <Clicks onPick={onPick} />
+      <Frame route={route} bbox={bbox} view={view} />
+      <Focus at={focus} />
+    </MapContainer>
+  )
+}
