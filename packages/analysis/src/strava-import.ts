@@ -4,21 +4,33 @@
 // user's auto-import preference); this just does it, reusing the same pipeline
 // as a manual import — including duplicate detection.
 import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
-import { getActivitySport, getActivityStreams, streamsToTrack, isWaterSport } from '@paddlesnitch/core/strava'
+import { getActivitySport, getActivityStreams, streamsToTrack, isWaterSport, StravaRateLimited } from '@paddlesnitch/core/strava'
 import { analyseAndSave } from './pipeline'
 
 export type ImportOutcome =
   | { status: 'imported' | 'duplicate'; sessionId: string }
-  | { status: 'skipped'; reason: 'no_tokens' | 'not_water_sport' | 'no_track' }
+  | { status: 'skipped'; reason: 'no_tokens' | 'not_water_sport' | 'no_track' | 'rate_limited' }
 
-export async function importStravaActivity(userId: string, activityId: number): Promise<ImportOutcome> {
+/**
+ * `known`: the activity's sport and start, from the activity list (importing a
+ * paddler's history), so it costs one Strava request instead of three. Only the
+ * owner's own activity is ever fetched (their token), so a wrong hint can at
+ * worst import one of their own non-paddling activities.
+ */
+export async function importStravaActivity(userId: string, activityId: number, known?: { sport: string; startDate: string }): Promise<ImportOutcome> {
   const tokens = await getValidStravaTokens(userId)
   if (!tokens) return { status: 'skipped', reason: 'no_tokens' }
 
-  const sport = await getActivitySport(tokens.accessToken, activityId)
+  const sport = known ? known.sport : await getActivitySport(tokens.accessToken, activityId)
   if (!isWaterSport(sport)) return { status: 'skipped', reason: 'not_water_sport' }
 
-  const streams = await getActivityStreams(tokens.accessToken, activityId)
+  let streams: Awaited<ReturnType<typeof getActivityStreams>>
+  try {
+    streams = await getActivityStreams(tokens.accessToken, activityId, { startDate: known?.startDate, throwOnRateLimit: !!known })
+  } catch (e) {
+    if (e instanceof StravaRateLimited) return { status: 'skipped', reason: 'rate_limited' }
+    throw e
+  }
   if (!streams) return { status: 'skipped', reason: 'no_track' }
   const track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
   if (track.length < 2) return { status: 'skipped', reason: 'no_track' }

@@ -7,6 +7,7 @@ import {
   getActivityStreams,
   streamsToTrack,
   getAthleteProfile,
+  StravaRateLimited,
 } from './strava'
 
 const originalFetch = global.fetch
@@ -158,8 +159,20 @@ describe('listActivities', () => {
   })
 
   it('throws on non-2xx', async () => {
+    mockFetch(async () => new Response('boom', { status: 500 }))
+    await expect(listActivities('t')).rejects.toThrow(/strava_list_failed_500/)
+  })
+
+  it("says so when Strava asks us to slow down (429), so a long import can wait and carry on", async () => {
     mockFetch(async () => new Response('rate limited', { status: 429 }))
-    await expect(listActivities('t')).rejects.toThrow(/strava_list_failed_429/)
+    await expect(listActivities('t')).rejects.toBeInstanceOf(StravaRateLimited)
+  })
+
+  it('asks only for activities after a time, when given one', async () => {
+    let asked = ''
+    mockFetch(async (url) => { asked = String(url); return new Response('[]') })
+    await listActivities('t', 1, 200, { after: 1_790_000_000.7 })
+    expect(asked).toContain('per_page=200&page=1&after=1790000000')
   })
 })
 

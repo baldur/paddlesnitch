@@ -109,3 +109,24 @@ Strava allows **one** subscription per API application, so this is create-once.
 - Backfilling historical activities on connect (auto-import is forward-only; the
   manual "FROM STRAVA" picker still handles older ones).
 - Re-analysing on activity `update`; deleting paddles on activity `delete`.
+
+## Older paddles (#415, 2026-10-11)
+
+Strava only notifies about activities created after the subscription. Owner's
+decision: connecting Strava brings in about the **last month** by itself, once;
+Account → Strava offers **IMPORT OLDER PADDLES** (last 3 months / last year /
+everything) for the rest.
+
+- **The open page does the work**, one paddle per request, with progress
+  ("Bringing in your last month from Strava: 3 of 12"). No background job (the
+  choice of background mechanism is #413). Closing the page just stops: what
+  came in stays, and the next visit carries on (paddles already in are skipped
+  by `stravaActivityId`; the done-mark is set only when the list is finished).
+- **One Strava request per paddle:** the list already gives the sport and the
+  start time, so only the streams are fetched (it was three requests).
+- **Rate limits:** Strava allows ~100 requests per 15 minutes for the app. A
+  429 comes back as `rate_limited`; the page says "Strava asks us to slow
+  down. Carrying on at 10:15" and waits for the next quarter hour (up to two
+  hours of waits, then it stops and says the day's allowance is used up).
+- Code: `@paddlesnitch/analysis/strava-history`, `sources.stravaHistory` /
+  `importStravaPaddle` / `stravaHistoryDone`, `StravaHistoryImport.tsx`.

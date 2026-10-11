@@ -273,15 +273,24 @@ type RawActivity = {
 // picker shows a page, then a "get more" control fetches older pages. `hasMore`
 // is derived from the RAW (pre-filter) page being full, so a page that's all
 // bike rides doesn't falsely end paging — there may be water sports further back.
+/** Strava said we've used up its request allowance for now (HTTP 429). It
+ *  resets on each quarter hour (:00, :15, :30, :45) and daily. */
+export class StravaRateLimited extends Error {
+  constructor() { super('strava_rate_limited') }
+}
+
 export async function listActivities(
   accessToken: string,
   page = 1,
   perPage = 30,
+  opts: { after?: number } = {},   // only activities started after this (epoch seconds)
 ): Promise<{ activities: StravaActivitySummary[]; hasMore: boolean }> {
-  const res = await fetch(`${API_BASE}/athlete/activities?per_page=${perPage}&page=${page}`, {
+  const after = opts.after != null ? `&after=${Math.floor(opts.after)}` : ''
+  const res = await fetch(`${API_BASE}/athlete/activities?per_page=${perPage}&page=${page}${after}`, {
     signal: timeout(),
     headers: { Authorization: `Bearer ${accessToken}` },
   })
+  if (res.status === 429) throw new StravaRateLimited()
   if (!res.ok) throw new Error(`strava_list_failed_${res.status}`)
   const raw = (await res.json()) as RawActivity[]
   const activities = raw
@@ -366,7 +375,11 @@ type StreamSet = {
 
 // Pull lat/lng + time streams for one activity. Returns null if Strava sent
 // nothing useful back (private activity without permission, no GPS, etc).
-export async function getActivityStreams(accessToken: string, activityId: number): Promise<{
+//
+// `startDate` known already (from the activity list): one request, not two.
+// `throwOnRateLimit`: a 429 throws StravaRateLimited instead of reading as
+// "nothing useful", so a caller working through many can wait and carry on.
+export async function getActivityStreams(accessToken: string, activityId: number, opts: { startDate?: string; throwOnRateLimit?: boolean } = {}): Promise<{
   latlng: [number, number][]
   time: number[]
   startDate: string
@@ -376,19 +389,20 @@ export async function getActivityStreams(accessToken: string, activityId: number
       signal: timeout(),
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
-    fetch(`${API_BASE}/activities/${activityId}`, {
+    opts.startDate ? null : fetch(`${API_BASE}/activities/${activityId}`, {
       signal: timeout(),
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
   ])
-  if (!streamsRes.ok || !summaryRes.ok) return null
+  if (opts.throwOnRateLimit && (streamsRes.status === 429 || summaryRes?.status === 429)) throw new StravaRateLimited()
+  if (!streamsRes.ok || (summaryRes && !summaryRes.ok)) return null
   const streams = (await streamsRes.json()) as StreamSet
-  const summary = (await summaryRes.json()) as { start_date: string }
+  const startDate = opts.startDate ?? ((await summaryRes!.json()) as { start_date: string }).start_date
   if (!streams.latlng?.data?.length || !streams.time?.data?.length) return null
   return {
     latlng: streams.latlng.data,
     time: streams.time.data,
-    startDate: summary.start_date,
+    startDate,
   }
 }
 

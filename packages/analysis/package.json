@@ -20,7 +20,8 @@
     "./trials": "./src/trials.ts",
     "./device-sessions": "./src/device-sessions.ts",
     "./tracker-paddle": "./src/tracker-paddle.ts",
-    "./same-outing": "./src/same-outing.ts"
+    "./same-outing": "./src/same-outing.ts",
+    "./strava-history": "./src/strava-history.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",
