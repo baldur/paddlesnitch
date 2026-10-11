@@ -7,6 +7,7 @@
 // what everyone gets.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { provedPoll } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -37,7 +38,7 @@ const OTHER = '435C09C8'
 const IMAGE = Buffer.from('an image')
 
 async function collectToken(deviceId: string, claimSecret: string) {
-  return (await (await token(jreq({ deviceId, claimSecret }))).json()).deviceToken as string
+  return (await (await token(jreq(await provedPoll(deviceId, claimSecret)))).json()).deviceToken as string
 }
 async function boundToken(u: { idToken: string }, deviceId: string) {
   const { claimCode, claimSecret } = await (await claim(jreq({ deviceId, model: 'm', firmware: '0.18.2' }))).json()
