@@ -24,7 +24,8 @@ export const GET = withDeviceAuth(async (req, auth) => {
   const current = isFirmwareVersion(currentParam) ? currentParam : reportedFirmware(req)
   const model = reportedModel(req)
 
-  const offer = await firmwareOfferFor(current, { origin: url.origin })
+  // Per tracker: a beta tracker is offered the beta build (see versionForDevice).
+  const offer = await firmwareOfferFor(current, { origin: url.origin, deviceId: auth.deviceId })
 
   // Nothing promoted yet. Not an error — it is the state of the world until the
   // first release — so say so plainly rather than 404ing a healthy device.

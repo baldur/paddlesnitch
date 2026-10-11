@@ -69,6 +69,27 @@ describe('DEVICES page', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  // A beta tracker is judged against the beta build it is offered, not stable --
+  // otherwise it would read "update pending" while running exactly what it should.
+  it('marks a beta tracker and judges it against the build it is offered', async () => {
+    await mount({
+      devices: [
+        { deviceId: '435AC17C', name: 'Beta one', firmware: '0.19.0', beta: true, targetVersion: '0.19.0' },
+        { deviceId: '435C09C8', name: 'Everyone else', firmware: '0.18.2', targetVersion: '0.18.2' },
+      ],
+      stableVersion: '0.18.2',
+      sessions: [],
+    })
+    // The smallest element holding both the tracker's name and its firmware line.
+    const card = (name: string) => [...container.querySelectorAll('*')]
+      .filter(e => e.textContent?.includes(name) && e.textContent?.includes('firmware'))
+      .sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0))[0]?.textContent ?? ''
+    expect(card('Beta one')).toContain('· beta')
+    expect(card('Beta one')).toContain('up to date')
+    expect(card('Everyone else')).not.toContain('· beta')
+    expect(card('Everyone else')).toContain('up to date')
+  })
+
   it('still shows a revoked tracker, because its uploads are still the user\'s', async () => {
     stubFetch({
       [DEVICES]: { devices: [] },

@@ -120,10 +120,11 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
                           last request, not from what it claimed when paired. */}
                       <span className="text-muted">firmware </span>
                       <span className="text-fg">{d.firmware || 'unknown'}</span>
-                      {deviceIsBehind(d.firmware, stable) === true && (
-                        <span className="text-split"> · update pending ({stable})</span>
+                      {d.beta && <span className="text-split"> · beta</span>}
+                      {deviceIsBehind(d.firmware, d.targetVersion ?? stable) === true && (
+                        <span className="text-split"> · update pending ({d.targetVersion ?? stable})</span>
                       )}
-                      {deviceIsBehind(d.firmware, stable) === false && (
+                      {deviceIsBehind(d.firmware, d.targetVersion ?? stable) === false && (
                         <span className="text-green"> · up to date</span>
                       )}
                       <span className="text-muted"> · seen </span>

@@ -1,13 +1,25 @@
 name: Firmware build & release
 
-# MERGING RELEASES. EVERY push to main promotes the latest firmware to stable,
-# so devices pick it up on their next sync.
+# BETA FIRST, THEN EVERYONE (2026-10-11). Every push to main promotes the latest
+# firmware to the BETA channel: only trackers listed in
+# firmware/beta-devices.json (firmware/tools/beta.sh) get it. Once it has run on
+# a beta tracker, THE FLIP promotes that same version to stable, for everyone:
 #
-#   push to main touching firmware/**  -> build, publish, promote to stable
-#   any other push to main             -> promote firmware/VERSION if it is not
-#                                         already current (no build)
-#   workflow_dispatch with a version   -> promote any ALREADY-BUILT version.
-#                                         This is the rollback lever.
+#   gh workflow run firmware-release.yml -f version=0.19.3 -f channel=stable
+#
+# The flip refuses a version no tracker has reported a good start on (the ack in
+# firmware-events/), unless run with -f skip_boot_check=true. Same bytes both
+# times: there is no separate beta build, so stable gets exactly what beta ran.
+#
+#   push to main touching firmware/**  -> build, publish, promote to BETA
+#   any other push to main             -> promote firmware/VERSION to beta if it
+#                                         is not already current (no build)
+#   workflow_dispatch with a version   -> promote any ALREADY-BUILT version to
+#                                         the channel named. Stable = the flip;
+#                                         an older version = the rollback.
+#
+# (Before 2026-10-11 every merge went straight to stable. The notes below about
+# that decision still explain the guards; read "stable" there as "the channel".)
 #
 # Why every push and not only firmware/** ones: a promote that failed or was
 # skipped used to stay missed until the next firmware change. That is how 0.14.0
@@ -53,11 +65,16 @@ on:
         required: true
         type: string
       channel:
-        description: 'Channel'
+        description: 'Channel (stable = everyone: the flip, or a rollback)'
         required: true
         default: 'stable'
         type: choice
         options: [stable, beta]
+      skip_boot_check:
+        description: 'Promote to stable even if no tracker has reported a good start on it'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write        # OIDC — no long-lived AWS keys in secrets
@@ -263,7 +280,7 @@ jobs:
             echo "- size: ${{ steps.m.outputs.size }} bytes"
             echo "- sha256: \`${{ steps.m.outputs.sha256 }}\`"
             echo ""
-            echo "Promoting to **stable** next — devices take it on their next sync."
+            echo "Promoting to **beta** next — beta trackers take it on their next sync."
           } >> "$GITHUB_STEP_SUMMARY"
 
   promote:
@@ -316,7 +333,7 @@ jobs:
             # Read VERSION from the checkout, not from build's output: build is
             # skipped on a push that did not touch firmware/.
             echo "version=$(tr -d '[:space:]' < firmware/VERSION)" >> "$GITHUB_OUTPUT"
-            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
             echo "how=merge" >> "$GITHUB_OUTPUT"
           fi
 
@@ -326,6 +343,29 @@ jobs:
           printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || { echo "::error::not a semver: $V"; exit 1; }
           aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/firmware.bin"   >/dev/null
           aws s3api head-object --bucket "$DATA_BUCKET" --key "firmware/$V/manifest.json" >/dev/null
+
+      # The flip's safety check: promoting to STABLE needs at least one tracker
+      # to have started on this version and said so (bootOk, not rolled back).
+      # That is what "it works on the beta tracker" means in data. An older
+      # version that trackers once ran passes too, so a rollback is not blocked.
+      - name: A tracker has started on it (stable only)
+        if: steps.t.outputs.channel == 'stable' && github.event_name == 'workflow_dispatch' && !inputs.skip_boot_check
+        run: |
+          V="${{ steps.t.outputs.version }}"
+          KEYS="$(aws s3api list-objects-v2 --bucket "$DATA_BUCKET" --prefix firmware-events/ \
+                    --query 'Contents[].Key' --output text | tr '\t' '\n' | grep "/$V/booted.json\$" || true)"
+          GOOD=0
+          for K in $KEYS; do
+            aws s3 cp "s3://$DATA_BUCKET/$K" booted.json --quiet
+            if [ "$(jq -r '.bootOk == true and .rolledBack != true' booted.json)" = "true" ]; then
+              GOOD=$((GOOD+1)); echo "good start: $K"
+            fi
+          done
+          if [ "$GOOD" -eq 0 ]; then
+            echo "::error::No tracker has reported a good start on $V. Let a beta tracker take it first (firmware/tools/beta.sh), or re-run with skip_boot_check=true."
+            exit 1
+          fi
+          echo "- $GOOD tracker(s) reported a good start on $V" >> "$GITHUB_STEP_SUMMARY"
 
       # Merge path only. A manual run is an explicit decision (usually a
       # rollback) and always goes through.
@@ -361,6 +401,11 @@ jobs:
           {
             echo "### Released $V to $C"
             echo ""
+            if [ "$C" = "beta" ]; then
+              echo "Only beta trackers (firmware/beta-devices.json) take it. When it has run well on one,"
+              echo "flip it to everyone: \`gh workflow run firmware-release.yml -f version=$V -f channel=stable\`"
+              echo ""
+            fi
             echo "Devices take it on their next sync (~5 min, plus up to 60 s of channel cache)."
             echo "A device with nothing to upload makes no request, so it finds this via its"
             echo "hourly probe instead — power-cycle one to see it immediately."

@@ -6,6 +6,17 @@
 it compiles, all three roles link, the policy is host-tested, and no device has
 ever taken an update. The auth review in Part 1 describes what
 exists today.
+**Beta first (2026-10-11).** A merge releases firmware to the **beta** channel
+only; trackers listed in `firmware/beta-devices.json` (manage with
+`firmware/tools/beta.sh list|add|remove <id>`, owner's AWS login) get it — the
+server answers each tracker with `versionForDevice` (the newer of beta and stable
+for a beta tracker, stable for everyone else), in both `X-PS-Firmware` and the
+manifest. **The flip** promotes that same version to everyone:
+`gh workflow run firmware-release.yml -f version=<v> -f channel=stable` — refused
+unless some tracker acked a good start on it (`firmware-events/*/<v>/booted.json`),
+override `-f skip_boot_check=true`. The devices page tags beta trackers and judges
+"up to date" against what each is offered. No separate beta build: stable gets
+exactly the bytes beta ran.
 **Owner:** Baldur (product).
 **Related:** [`device-uplink.md`](device-uplink.md) (the transport and auth this
 reuses), [`device-screen-map.md`](device-screen-map.md) (screens and the error

@@ -110,9 +110,47 @@ export async function getChannelVersion(channel: FirmwareChannel = 'stable'): Pr
   return version
 }
 
+// ---------------------------------------------------------------------------
+// Beta trackers
+// ---------------------------------------------------------------------------
+//
+// A merge promotes a new build to `beta` (firmware-release.yml). Only trackers
+// listed in firmware/beta-devices.json -- { "deviceIds": ["435AC17C"] }, written
+// by the owner with firmware/tools/beta.sh; the web server cannot write under
+// firmware/ -- are offered it. Promoting the same version to `stable` (the
+// flip) offers it to everyone. A beta tracker always gets the NEWER of the two
+// channels, so a flip of a later build never sends it backwards.
+
+const BETA_DEVICES_KEY = 'firmware/beta-devices.json'
+let betaCache: { ids: Set<string>; at: number } | null = null
+
+/** The beta tracker IDs. Cached like the channel pointers; a missing or
+ *  malformed list means nobody is beta, never an error. */
+export async function getBetaDeviceIds(): Promise<Set<string>> {
+  if (betaCache && Date.now() - betaCache.at < CHANNEL_CACHE_MS) return betaCache.ids
+  let ids = new Set<string>()
+  try {
+    const doc = await getJson<{ deviceIds?: unknown }>(BETA_DEVICES_KEY)
+    if (Array.isArray(doc?.deviceIds)) ids = new Set(doc!.deviceIds.filter((d): d is string => typeof d === 'string'))
+  } catch { /* nobody is beta */ }
+  betaCache = { ids, at: Date.now() }
+  return ids
+}
+
+/** The version a tracker should be running, and which channel that came from. */
+export async function versionForDevice(deviceId?: string): Promise<{ version: string | null; channel: FirmwareChannel }> {
+  const stable = await getChannelVersion('stable')
+  if (deviceId && (await getBetaDeviceIds()).has(deviceId)) {
+    const beta = await getChannelVersion('beta')
+    // compareVersionsDesc(a, b) < 0 means a is newer.
+    if (beta && (!stable || compareVersionsDesc(beta, stable) < 0)) return { version: beta, channel: 'beta' }
+  }
+  return { version: stable, channel: 'stable' }
+}
+
 /** Test seam — the cache is process-global, so a test that promotes a version
  *  must be able to drop it. */
-export function __clearChannelCache() { channelCache.clear() }
+export function __clearChannelCache() { channelCache.clear(); betaCache = null }
 
 // ---------------------------------------------------------------------------
 // Publishing (used by the release workflow / scripts, never by a device route)
@@ -203,9 +241,12 @@ export type FirmwareOffer =
  */
 export async function firmwareOfferFor(
   current: string | null,
-  opts: { channel?: FirmwareChannel; origin?: string } = {},
+  opts: { channel?: FirmwareChannel; origin?: string; deviceId?: string } = {},
 ): Promise<FirmwareOffer> {
-  const channelVersion = await getChannelVersion(opts.channel ?? 'stable')
+  // A known tracker gets its own answer (beta or stable); otherwise the channel.
+  const channelVersion = opts.deviceId
+    ? (await versionForDevice(opts.deviceId)).version
+    : await getChannelVersion(opts.channel ?? 'stable')
   if (!channelVersion) return { status: 'no_channel' }
   if (current === channelVersion) return { status: 'up_to_date', version: channelVersion }
 

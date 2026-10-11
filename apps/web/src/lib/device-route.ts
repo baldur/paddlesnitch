@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getDeviceAuth } from '@/lib/auth'
 import type { DeviceAuth } from '@paddlesnitch/core/devices'
-import { getChannelVersion } from '@/lib/firmware'
+import { versionForDevice } from '@/lib/firmware'
 import { touchDevice } from '@/lib/devices'
 import { emitFirmwareMetric } from '@/lib/firmware-metrics'
 
@@ -60,16 +60,18 @@ export function withDeviceAuth(handler: DeviceHandler) {
     const res = auth
       ? await handler(req, auth)
       : NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    await stampFirmwareHeader(res)
+    await stampFirmwareHeader(res, auth?.deviceId)
     return res
   }
 }
 
-/** Add the channel version to a response, if there is one. Never throws: the
- *  OTA signal is strictly additive and must not be able to fail an upload. */
-export async function stampFirmwareHeader(res: Response): Promise<void> {
+/** Add the version this tracker should run to a response, if there is one --
+ *  the beta build for a beta tracker, stable otherwise (and for a request with
+ *  no valid token). Never throws: the OTA signal is strictly additive and must
+ *  not be able to fail an upload. */
+export async function stampFirmwareHeader(res: Response, deviceId?: string): Promise<void> {
   try {
-    const version = await getChannelVersion('stable')
+    const { version } = await versionForDevice(deviceId)
     if (version) res.headers.set(FIRMWARE_HEADER, version)
   } catch {
     // no signal this time; the device keeps running what it has
