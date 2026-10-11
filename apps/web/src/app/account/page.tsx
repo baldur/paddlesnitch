@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import StravaButton from '@/components/strava/StravaButton'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
@@ -36,7 +36,6 @@ export default function AccountPage() {
 }
 
 function AccountPageInner() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const stravaFlashKey = searchParams.get('strava')
   const stravaFlash = stravaFlashKey ? STRAVA_FLASH[stravaFlashKey] : undefined
@@ -242,8 +241,8 @@ function AccountPageInner() {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? 'Couldn’t delete your account. Please try again.')
       }
-      // Account gone. Send them home.
-      router.replace('/att')
+      // Account gone. Send them home, in full: the header's user came with the page.
+      window.location.replace('/att')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t delete your account. Please try again.')
       setWorking(null)
