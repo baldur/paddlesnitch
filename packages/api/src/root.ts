@@ -2,6 +2,7 @@ import { router, publicProcedure, createCallerFactory } from './trpc'
 import { paddlesRouter } from './routers/paddles'
 import { sourcesRouter } from './routers/sources'
 import { similarRouter } from './routers/similar'
+import { buddiesRouter } from './routers/buddies'
 
 // The single app router. Web (SSR + browser) and mobile consume the same tree.
 // File uploads (multipart) stay REST; firmware device endpoints stay REST.
@@ -11,6 +12,7 @@ export const appRouter = router({
   paddles: paddlesRouter,
   sources: sourcesRouter,
   similar: similarRouter,
+  buddies: buddiesRouter,
 })
 
 export type AppRouter = typeof appRouter

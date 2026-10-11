@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('404') }, redirect: () => { throw new Error('redirect') } }))
 vi.mock('@/components/AppHeader', () => ({ default: () => null }))
+// The button is a client component with its own tests; here, only whether it's offered.
+vi.mock('@/components/BuddyButton', () => ({ default: ({ userId }: { userId: string }) => <span>BUDDY-BUTTON:{userId}</span> }))
 vi.mock('@/lib/auth', () => ({ getAuthUser: vi.fn() }))
 vi.mock('@/lib/groups', () => ({ getUserGroupIds: async () => [] }))
 vi.mock('@/lib/profile', () => ({
@@ -42,5 +44,13 @@ describe('a profile', () => {
     const html = await render()
     expect(html).not.toContain('Your paddling')
     expect(listSessionSummaries).not.toHaveBeenCalled()
+    expect(html).toContain('BUDDY-BUTTON:u1')       // a signed-in visitor can ask
+  })
+
+  it('offers no buddy button to the owner or to someone signed out', async () => {
+    vi.mocked(getAuthUser).mockResolvedValue({ id: 'u1', email: 'p@x', displayName: 'Pat' })
+    expect(await render()).not.toContain('BUDDY-BUTTON')
+    vi.mocked(getAuthUser).mockResolvedValue(null)
+    expect(await render()).not.toContain('BUDDY-BUTTON')
   })
 })

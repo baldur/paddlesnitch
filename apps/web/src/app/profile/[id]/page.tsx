@@ -10,6 +10,7 @@ import { listSessionSummaries } from '@paddlesnitch/analysis/analysis-store'
 import { split500 } from '@paddlesnitch/analysis/analysis'
 import { paddlingSummary, groupSameOuting } from '@paddlesnitch/core/paddles'
 import { fmtDay, fmtMonth } from '@paddlesnitch/core/format'
+import BuddyButton from '@/components/BuddyButton'
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -76,6 +77,7 @@ export default async function ProfilePage({
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
         <div>
           <h1 className="text-2xl font-bold text-fg tracking-wide">{name}</h1>
+          {viewer && !isOwner && <div className="mt-2"><BuddyButton userId={userId} /></div>}
           <p className="text-sm text-muted mt-1">Paddler profile</p>
         </div>
 

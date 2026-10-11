@@ -46,6 +46,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith('/profile/me') ||
     pathname === '/account' || pathname.startsWith('/account/') ||
     pathname === '/devices' || pathname.startsWith('/devices/') ||
+    pathname === '/buddies' || pathname.startsWith('/buddies/') ||
     (req.method !== 'GET' &&
       (pathname.startsWith('/att/api') || pathname.startsWith('/api/account')) &&
       !pathname.startsWith('/att/api/auth'))
