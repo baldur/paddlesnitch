@@ -22,7 +22,7 @@ export default function BuddyPaddlePage({ params }: { params: Promise<{ userId: 
     <AnalysisView
       data={{ ...paddle.result, paddledAt: paddle.paddledAt, source: { type: paddle.source.type } }}
       initialBoatClass={paddle.boatClass} initialSeat={paddle.seat}
-      readOnly buddy={{ name, href: `/buddies/${userId}` }}
+      readOnly buddy={{ name, href: `/buddies/${userId}`, userId, paddleId }}
     />
   )
 }

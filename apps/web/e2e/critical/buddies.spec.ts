@@ -44,5 +44,17 @@ test('an invite link makes two paddlers buddies, and each sees the other', async
   await expect(bob.getByRole('button', { name: 'NOTES' })).toHaveCount(0)
   await expect(bob.getByRole('button', { name: 'SHARE' })).toHaveCount(0)
 
+  // Bob compares one of his own paddles with Ann's: both lines on one map.
+  const fixture = readFileSync(path.join(__dirname, '../../src/tests/fixtures/garmin-activity-export.zip'))
+  // The same file, but Bob's own paddle: duplicates are found per person.
+  expect((await bob.request.post('/paddles/api/analyse', { multipart: { file: { name: 'garmin.zip', mimeType: 'application/zip', buffer: fixture } } })).ok()).toBe(true)
+  await bob.getByRole('button', { name: 'COMPARE WITH ONE OF MINE' }).click()
+  await bob.locator('a[href*="/paddles/compare?"]').first().click()
+  await expect(bob).toHaveURL(/bOwner=/)
+  const water = bob.locator('section[aria-label="On the water"]')
+  await expect(water).toContainText('You ·')
+  await expect(water).toContainText('Ann Invites ·')
+  await expect(bob.getByText(/NOTE ·/)).toHaveCount(0)   // never Ann's notes
+
   await annCtx.close(); await bobCtx.close()
 })

@@ -1,6 +1,6 @@
 # Buddies and a truer comparison
 
-Status: 🚧 building (2026-10-11). Owner's request: overlay two paddles on one
+Status: ✅ phases 1–5 shipped 2026-10-11 (#426–#429, #431); race a section with buddies is a follow-up (#430). Owner's request: overlay two paddles on one
 map to study the line each took, and do it with friends' paddles too.
 
 ## Decisions (owner, 2026-10-11)
