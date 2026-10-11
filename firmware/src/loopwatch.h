@@ -18,6 +18,16 @@ static const uint32_t LOOP_WATCH_TIMEOUT_S = 15;
 // Arduino core feeds it once per loop() pass.
 void loopWatchStart();
 
+// Call at the top of every loop() pass: when the watchdog fires, this is how
+// its handler tells a stuck loop() from the other thing it watches (core 0's
+// idle task).
+void loopWatchBeat();
+
+// On the start after a watchdog restart: true if it was loop() that froze.
+// The crash dump cannot say so itself -- the watchdog's panic is raised on core
+// 0, so the dump names whatever core 0 was running. Read once; clears.
+bool loopWatchFroze();
+
 // Stop watching loop() while a known-long wait that a PERSON is driving runs:
 // the WiFi setup page, waiting for a claim code, a serial diagnostic. Nests;
 // a no-op off the loop task or before loopWatchStart().

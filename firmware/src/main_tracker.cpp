@@ -1357,6 +1357,7 @@ static void handleSerialCommand()
 
 void loop()
 {
+    loopWatchBeat();
     handleSerialCommand();
 #if BENCH_TOOLS
     if (hangNow) for (;;) {}   // the watchdog should fire in LOOP_WATCH_TIMEOUT_S
