@@ -9,6 +9,10 @@ import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { termsAcceptPath } from '@/lib/terms-path'
 import { useMountedAt } from '@/lib/use-mounted-at'
 
+// Signed in: load the next page in full, so its header shows the new user (the
+// root layout, where the header gets it, isn't re-rendered by router.push).
+const signedIn = (path: string) => window.location.assign(path)
+
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -71,7 +75,7 @@ function AuthForm() {
       })
       if (res.ok) {
         const data = await res.json().catch(() => ({}))
-        router.push(data?.needsTerms ? termsAcceptPath(next) : next)
+        signedIn(data?.needsTerms ? termsAcceptPath(next) : next)
       } else {
         const data = await res.json()
         setError(data.error ?? 'Couldn’t sign you in. Please try again.')
@@ -98,7 +102,7 @@ function AuthForm() {
         body: JSON.stringify({ email, displayName, password, acceptedTosVersion: CURRENT_TOS_VERSION }),
       })
       if (res.ok) {
-        router.push(next)
+        signedIn(next)
       } else {
         const data = await res.json()
         setError(data.error ?? 'Couldn’t sign you up. Please try again.')
@@ -147,7 +151,7 @@ function AuthForm() {
         if (data?.session) setOtpSession(data.session)
         throw new Error(data?.error ?? 'That code didn’t work. Check it and try again.')
       }
-      router.push(data?.needsTerms ? termsAcceptPath(next) : next)
+      signedIn(data?.needsTerms ? termsAcceptPath(next) : next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That code didn’t work. Check it and try again.')
       setLoading(false)

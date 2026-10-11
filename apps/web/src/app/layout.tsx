@@ -7,6 +7,8 @@ import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
 import AttContactBanner from '@/components/AttContactBanner'
 import Analytics from '@/components/Analytics'
 import TRPCProvider from '@/components/TRPCProvider'
+import { SessionUserProvider } from '@/components/SessionUser'
+import { sessionUser } from '@/lib/session-user'
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -27,17 +29,20 @@ export const viewport: Viewport = {
   themeColor: '#0b1220',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await sessionUser()
   return (
     <html lang="en" className={ibmPlexMono.className}>
       <body className="min-h-screen flex flex-col bg-bg text-fg">
         <TRPCProvider>
+          <SessionUserProvider user={user}>
           <AttContactBanner />
           {children}
           <Footer />
           <CookieNotice />
           <FeedbackWidget />
           <Analytics />
+          </SessionUserProvider>
         </TRPCProvider>
       </body>
     </html>

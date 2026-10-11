@@ -482,6 +482,7 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
   - `tt_id` — Cognito **ID token** (JWT). 24h maxAge, matches Cognito ID-token validity.
   - `tt_refresh` — Cognito **refresh token**. 30d maxAge.
 - **`getAuthUser()`** (`src/lib/auth.ts`): reads `tt_id` → verifies the JWT signature against the pool's JWKS (`https://cognito-idp.<region>.amazonaws.com/<poolId>/.well-known/jwks.json`, cached) → returns `{ id, email, displayName }` from claims (`sub`, `email`, `name`). If the ID token is expired and the context is mutable (Route Handler / Server Action), silently exchanges `tt_refresh` for a fresh ID token and updates the cookie.
+- **The header's user comes with the page** (#411): the root layout reads it once (`sessionUser()`, `src/lib/session-user.ts`: id + name only; `undefined` when a session cookie couldn't be confirmed, so the header asks `/att/api/auth/me` as before) and passes it through `SessionUserProvider`; `AccountMenu` shows it on first paint with no extra request. This makes every page dynamic (they were all served by the server Lambda anyway). The layout isn't re-rendered on client-side navigation, so **signing in, out, or deleting the account loads the next page in full** (`window.location`), never `router.push`. Tests: `session-user.test.ts`, `AccountMenu.test.tsx`.
 - **No server-side session store.** The cookies are the session — verification is local once the JWKS is cached.
 - **Logout**: clear both cookies; call Cognito `RevokeToken` on the refresh token.
 
