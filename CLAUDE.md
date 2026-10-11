@@ -115,6 +115,7 @@ packages/
   analysis/   @paddlesnitch/analysis  — the Analyse domain/service layer (analysis engine, analysis-store, similar, trials, device-sessions, llm, share-card, history-stats, athlete-profile)
   api/        @paddlesnitch/api       — the shared, typed tRPC router (over core/timing/analysis); consumed by web (SSR + client) and, later, mobile
   ui/         @paddlesnitch/ui        — shared UI shell + design tokens + RouteThumb
+  waterways/  @paddlesnitch/waterways — river planner domain: OSM waterway network + routing, locks/facilities from CRT/EA, coverage (docs/features/river-planner.md)
 firmware/     LilyGO T-Beam S3 Supreme tracker firmware — C/C++, built with PlatformIO, NOT pnpm
 ```
 
@@ -127,7 +128,7 @@ One Cognito user pool, one S3 bucket, one CloudFront distribution, **one server 
 **API: tRPC.** JSON endpoints are typed tRPC procedures in `@paddlesnitch/api`, mounted at `/api/trpc`. SSR calls the router in-process via `createCaller`; the browser (and, later, an Expo mobile app) call it over HTTP with a shared React client (`@/lib/trpc`, provider in the root layout). Auth context accepts the `tt_id` cookie (web) **or** a `Bearer` Cognito JWT (mobile). **File uploads stay REST** (multipart: `POST /paddles/api/analyse`, the trial upload) and **firmware device endpoints stay REST**. See [`unified-app-and-api.md`](docs/features/unified-app-and-api.md).
 
 **Conventions that keep the monorepo working:**
-- Import **per-file subpaths** (`@paddlesnitch/core/auth`, `@paddlesnitch/analysis/analysis-store`), not the barrel. The app `transpilePackages` all five packages in `next.config.ts`.
+- Import **per-file subpaths** (`@paddlesnitch/core/auth`, `@paddlesnitch/analysis/analysis-store`), not the barrel. The app `transpilePackages` all six packages in `next.config.ts`.
 - Client bundles import only client-safe subpaths (pure). Storage-backed modules are separate server-only subpaths (e.g. `core/paddles` pure vs `core/paddle-store` server; the analysis engine `@paddlesnitch/analysis/analysis` is pure, `analysis-store` is server).
 - **Don't duplicate** a domain type/util — if more than one place needs it, it belongs in a package (`core`/`timing`/`analysis`). The Analyse domain lives in `@paddlesnitch/analysis`, not the app.
 
@@ -159,6 +160,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`sitemap.md`](docs/features/sitemap.md) | ✅ current map | Every route, as of the 2026-09 navigation clean-up |
 | [`security-audit-2026-09.md`](docs/features/security-audit-2026-09.md) | 🔍 audit, 2026-09-29 | Security, privacy, resilience (firmware, web, live AWS). Fixes: PRs #303–#320. The rest: 15 decisions with trade-offs. Read "Read this first" before handing trackers to testers |
 | [`behavioural-analytics.md`](docs/features/behavioural-analytics.md) | 🚧 spec, not built | Consent-gated struggle signals |
+| [`river-planner.md`](docs/features/river-planner.md) | 🚧 P0 + P1 built 2026-10-11 | New **Plan** section (`/plan`): click start and finish on a waterway → portages, access and crew points with ETAs, printable route sheet. P0: `@paddlesnitch/waterways` + ingest (OSM network, CRT, EA Thames) + Devizes→Westminster dataset (201.3 km, 77 locks) and coverage report. P1: the `/plan` planner (two clicks, one-way/return, stop list with arrival times, unsaved plan in the URL, saved plans under `users/{id}/plans/`). CC0 contributions, race-agnostic, tides from our own fit of EA gauge data |
 | [`release-testing.md`](docs/features/release-testing.md) | ✅ in use 2026-10 | Firmware release checklist: bench walk with `firmware/tools/bench.sh`, phone steps, after-merge update check, rollback; plan for beta channel + hardware in CI |
 | [`tracker-bluetooth-sync.md`](docs/features/tracker-bluetooth-sync.md) | 📋 spec, not built | Recordings home by phone/browser over Bluetooth, compression first, game-style setup |
 | [`buddies-and-compare.md`](docs/features/buddies-and-compare.md) | ✅ 2026-10-11 | Mutual buddies who see each other's paddles; two paddles on one map to study the line |
@@ -342,6 +344,23 @@ The GPS/track domain:
 ### Buddies (`@paddlesnitch/core/buddies`)
 
 Mutual buddies who see each other's paddles ([`buddies-and-compare.md`](docs/features/buddies-and-compare.md)). Request → accept (two people asking each other are buddies), decline (the sender isn't told), cancel, remove (for both); invite links (`/buddies?invite={token}`, NEW LINK retires the old one). **`canViewPaddle(viewer, owner, paddle)` is the one rule**: the owner always; a buddy unless the owner switched sharing off (`users/{id}/buddy-sharing.json`) or set `hiddenFromBuddies` on the paddle; nobody else. Buddies never see notes, AI summaries or emails. tRPC `buddies.*` (requests rate-limited 30/hour, only to real accounts); page `/buddies` (gated in the proxy); ADD AS BUDDY on profiles (`BuddyButton`); BUDDIES with a waiting-requests badge in the account menu. Erasure ends every friendship on both sides; export lists them. **A buddy's paddles:** `/buddies/{userId}` (list) and `/buddies/{userId}/{paddleId}` (read-only `AnalysisView` with `buddy`), via `buddies.paddles` / `buddies.paddle`. Both go through `canViewPaddle` and answer NOT_FOUND for every "no" (stranger, former buddy, sharing off, hidden, nonexistent). They return only safe fields: **a stored paddle summary also carries the note and the AI text, so never hand one to a buddy**; `othersView` (paddles router) is the one projection for anyone but the owner (share links use it too). Owners hide a paddle with HIDE FROM BUDDIES (`paddles.setHiddenFromBuddies`). **Compare with a buddy:** COMPARE WITH ONE OF MINE on a buddy's paddle, and COMPARE WITH… on your own (`paddles.comparable` → `@paddlesnitch/analysis/comparable`: the 100 m squares each route passes through, stored per paddle in `cells.json` beside the summary and built once for older paddles, shortlist by square overlap ≥ 20% or paddled together; then the exact water shared the same way (`sharedSameWayM`: every same-direction pass, so an out-and-back turned at different places counts both legs), ranked by shared km × how alike the distances are; one outing recorded twice is offered once; nothing that shares under 500 m. **Not** nearest start, which is random among club outings that all start within metres) → `/paddles/compare?a={mine}&b={theirs}&bOwner={buddyId}`; B is fetched with `buddies.paddle`, labelled with their name; same-outing and notes are left out. The compare map (`CompareMap`) fits the lines only when they change (`linesKey`), never on a replay tick or scrub, so a zoom holds; from zoom 16 in it draws small arrows along each line showing which way it went (`directionMarks`, `direction-marks.test.ts`). The line comparison itself is `@paddlesnitch/analysis/line-compare` (pure): the longest chain of believable steps matching B to A's line, on moving time; `compareSection` for a stretch picked on the map. **Every pass of a section:** pick two points on a paddle's map → EVERY PASS → `/paddles/section` lists every time you or a buddy paddled between those gates the same way (laps count; another channel doesn't; one outing recorded twice once), fastest first, your best + last few, tick two to compare lines; **SAVE** it with a name (#435) → Paddles → **SECTIONS** (`/paddles/sections`, `/paddles/section?id=`), private to its maker, stored as a two-gate course shape (`gates: [{ line, direction }]` like `CourseMetadata.gates`, timed the same way) in `users/{id}/sections/`, in the export (`sections.passes`/`sections.passLine` → `@paddlesnitch/analysis/section-passes`, `allPasses` in timing/geo; every paddle through `canViewPaddle`; `section-passes.test.ts`). Tests: `buddies.test.ts` (the who-may-see matrix), `trpc-buddies.test.ts`, `buddy-paddles.test.ts` (nothing private leaks), E2E `buddies.spec.ts`.
+
+### `@paddlesnitch/waterways` (`packages/waterways/src`)
+
+The river planner's domain ([`river-planner.md`](docs/features/river-planner.md)). Pure, per-file subpaths:
+- `osgb`: OS grid reference and eastings/northings → WGS84 (Helmert, about 5 m).
+- `line`: projection onto a line, slice, simplify.
+- `network`: snap a click to the water, shortest route over OSM river/canal links (Dijkstra), `reverseRoute` for return trips.
+- `along`: features in travel order with chainage and bank.
+- `coverage`: which facts each lock has. Unknown stays unknown, never guessed.
+- `build`: assemble a region.
+- `ingest/{osm,crt,thames}`: parsers for each source.
+- `plan`: `computePlan(dataset, { start, finish, shape, startAt?, paceKmh, portageMinutes })` → the route and every stop with chainage, bank and arrival time, or an error (`start_off_water`, `finish_off_water`, `too_short`, `not_connected`).
+- `plan-store` (**server only**, uses core storage): saved plans at `users/{userId}/plans/{id}.json`, so account deletion's `users/` wipe covers them; listed in the account export.
+
+The browser loads a region from `GET /plan/data/{region}` (prerendered at build) and computes plans itself; `/plan` keeps an unsaved plan in the address bar (`apps/web/src/lib/plan-ui.ts`). tRPC `plan` router saves them.
+
+`pnpm --filter web waterways [region]` rebuilds `packages/waterways/data/{region}.json` plus a generated `{region}-coverage.md`, caching raw responses in `apps/web/.cache/waterways/`. The OSM parts (network, points) are ODbL and stay in their own fields, never copied into a `Feature`. Tests: `apps/web/src/lib/waterways.test.ts` (real-response fixtures in `src/tests/fixtures/waterways/`, plus checks on the built DW dataset).
 
 ### `@paddlesnitch/ui` (`packages/ui/src`)
 
@@ -983,7 +1002,7 @@ Maps: dark tiles (Esri World Dark Gray); Trials course maps default to dark with
 
 Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed; add to its list when you retire a word.
 
-1. **One name per thing:** Trials (URL `/att`), Paddles, Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
+1. **One name per thing:** Trials (URL `/att`), Paddles, Plan (`/plan`), Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
 2. **Buttons:** 1–3 uppercase words that say what happens (SAVE, ADD, REMOVE TRACKER). Loading = same verb + "…". No emoji.
 3. **Labels and headings:** uppercase (in source, or via `uppercase`); helper text on its own muted line below, sentence case.
 4. **Errors:** "Couldn't …" + what to do ("Please try again." only when retrying helps). Never codes, vendor names (Cognito, JWT, S3), "token", "state", "endpoint", raw enums.

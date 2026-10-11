@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // it (it re-creates them if deleted). The root CLAUDE.md covers this repo.
   agentRules: false,
   // Workspace packages ship untranspiled TypeScript — Next must transpile them.
-  transpilePackages: ['@paddlesnitch/analysis', '@paddlesnitch/api', '@paddlesnitch/core', '@paddlesnitch/timing', '@paddlesnitch/ui'],
+  transpilePackages: ['@paddlesnitch/analysis', '@paddlesnitch/api', '@paddlesnitch/core', '@paddlesnitch/timing', '@paddlesnitch/ui', '@paddlesnitch/waterways'],
   // Bundle @aws-sdk into server chunks (Turbopack otherwise externalizes it,
   // creating .next/node_modules/ copies that require @smithy/* deps to be present)
   serverExternalPackages: [],

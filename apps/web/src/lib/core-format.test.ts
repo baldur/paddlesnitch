@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtDay, fmtWeekday, fmtMonth, fmtDayMonth, fmtDayTime, sportLabel, participationLabel } from '@paddlesnitch/core/format'
+import { fmtDay, fmtWeekday, fmtMonth, fmtDayMonth, fmtDayTime, fmtTime, sportLabel, participationLabel } from '@paddlesnitch/core/format'
 
 describe('shared wording for stored values', () => {
   it('writes a day the same way on the server and in the browser', () => {
@@ -18,6 +18,8 @@ describe('shared wording for stored values', () => {
     const local = new Date(2026, 8, 13, 9, 5)   // 13 Sep 2026, 09:05 wherever the test runs
     expect(fmtDayTime(local.toISOString())).toBe('13 Sep 2026, 09:05')
     expect(fmtDayTime('nope')).toBe('nope')
+    expect(fmtTime(local.toISOString())).toBe('09:05')
+    expect(fmtTime('nope')).toBe('nope')
   })
   it('says what "both" means', () => {
     expect(sportLabel('both')).toBe('KAYAK AND ROWING')

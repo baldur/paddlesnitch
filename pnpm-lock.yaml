@@ -47,6 +47,9 @@ importers:
       '@paddlesnitch/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@paddlesnitch/waterways':
+        specifier: workspace:*
+        version: link:../../packages/waterways
       '@swc/helpers':
         specifier: ^0.5.23
         version: 0.5.23
@@ -171,6 +174,9 @@ importers:
       '@paddlesnitch/timing':
         specifier: workspace:*
         version: link:../timing
+      '@paddlesnitch/waterways':
+        specifier: workspace:*
+        version: link:../waterways
       '@trpc/server':
         specifier: ^11.19.0
         version: 11.19.0(typescript@5.9.3)
@@ -229,6 +235,18 @@ importers:
       react-dom:
         specifier: ^19
         version: 19.3.0(react@19.3.0)
+
+  packages/waterways:
+    dependencies:
+      '@paddlesnitch/core':
+        specifier: workspace:*
+        version: link:../core
+      '@paddlesnitch/timing':
+        specifier: workspace:*
+        version: link:../timing
+      nanoid:
+        specifier: ^6.0.1
+        version: 6.0.1
 
 packages:
 

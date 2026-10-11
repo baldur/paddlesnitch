@@ -41,6 +41,14 @@ const SERVICES: Record<string, string> = {
 }
 // Our own site, legal links and test-only values -- not processors.
 const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'evil.example.com', 'example.invalid'])
+// River-planner open data: fetched only by scripts/waterways/build-region.ts
+// on a developer's machine, so no visitor's data ever reaches these hosts.
+// The rest are credit links to a source. If the app ever calls one of these
+// at runtime, move it to SERVICES and name it on the privacy page.
+const BUILD_TIME_SOURCES = new Set([
+  'services.arcgis.com', 'overpass-api.de', 'overpass.kumi.systems', 'www.gov.uk',
+  'www.openstreetmap.org', 'data-canalrivertrust.opendata.arcgis.com', 'www.dwrace.co.uk',
+])
 
 describe('privacy page names every outside service the code uses', () => {
   const hosts = new Set<string>()
@@ -49,7 +57,7 @@ describe('privacy page names every outside service the code uses', () => {
   }
 
   it('has no outside host missing from the list of known services', () => {
-    const unlisted = [...hosts].filter(h => !(h in SERVICES) && !NOT_SERVICES.has(h))
+    const unlisted = [...hosts].filter(h => !(h in SERVICES) && !NOT_SERVICES.has(h) && !BUILD_TIME_SOURCES.has(h))
     expect(unlisted).toEqual([])
   })
 

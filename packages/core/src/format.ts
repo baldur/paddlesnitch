@@ -56,6 +56,15 @@ export function fmtDayTime(value: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+/** An ISO timestamp → '09:11' in the VIEWER's time zone (browser-only pages,
+ *  like fmtDayTime): an arrival time on a plan's stop list. */
+export function fmtTime(value: string): string {
+  const t = Date.parse(value)
+  if (!Number.isFinite(t)) return value
+  const d = new Date(t)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 /** A course's sport for a label: 'both' is meaningless on its own. */
 export function sportLabel(sport: string): string {
   switch (sport) {
