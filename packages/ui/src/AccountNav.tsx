@@ -27,6 +27,8 @@ export default function AccountNav({
   user,
   paddlesHref,
   devicesHref,
+  buddiesHref,
+  buddiesWaiting = 0,
   profileHref,
   accountHref,
   signInHref,
@@ -35,6 +37,8 @@ export default function AccountNav({
   user: NavUser | null | undefined   // undefined = still loading
   paddlesHref?: string               // optional PADDLES link
   devicesHref?: string               // optional DEVICES link
+  buddiesHref?: string               // optional BUDDIES link
+  buddiesWaiting?: number            // buddy requests waiting for an answer (a badge)
   profileHref: string
   accountHref: string
   signInHref: string
@@ -72,6 +76,7 @@ export default function AccountNav({
         title="Account menu"
       >
         <span className="truncate max-w-[10rem]">{user.displayName}</span>
+        {buddiesWaiting > 0 && <span className="w-2 h-2 rounded-full bg-primary" aria-label={`${buddiesWaiting} buddy request${buddiesWaiting === 1 ? '' : 's'} waiting`} />}
         <span className={`text-muted text-[0.65em] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">▼</span>
       </button>
 
@@ -79,6 +84,12 @@ export default function AccountNav({
         <div role="menu" className="absolute right-0 top-full mt-2 min-w-[10rem] border border-border bg-surface shadow-md z-[1200] flex flex-col py-1">
           {paddlesHref && <a role="menuitem" href={paddlesHref} className={`${item} text-fg hover:bg-surface-2`}>PADDLES</a>}
           {devicesHref && <a role="menuitem" href={devicesHref} className={`${item} text-fg hover:bg-surface-2`}>DEVICES</a>}
+          {buddiesHref && (
+            <a role="menuitem" href={buddiesHref} className={`${item} text-fg hover:bg-surface-2 flex items-center justify-between gap-3`}>
+              BUDDIES
+              {buddiesWaiting > 0 && <span className="text-[10px] bg-primary text-white px-1.5">{buddiesWaiting}</span>}
+            </a>
+          )}
           <a role="menuitem" href={profileHref} className={`${item} text-fg hover:bg-surface-2`}>PROFILE</a>
           <a role="menuitem" href={accountHref} className={`${item} text-muted hover:bg-surface-2 hover:text-fg`}>ACCOUNT</a>
           <button

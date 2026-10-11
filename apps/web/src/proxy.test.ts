@@ -52,6 +52,8 @@ describe('proxy auth gate', () => {
     expect(redirectsToAuth(proxy(req('GET', '/accounting')))).toBe(false)
     expect(redirectsToAuth(proxy(req('GET', '/devices')))).toBe(true)
     expect(redirectsToAuth(proxy(req('GET', '/devices/AABBCCDD')))).toBe(true)
+    expect(redirectsToAuth(proxy(req('GET', '/buddies')))).toBe(true)
+    expect(redirectsToAuth(proxy(req('GET', '/buddies/ann')))).toBe(true)
   })
 
   it('lets authenticated API mutations through', () => {
@@ -76,6 +78,9 @@ describe('proxy auth gate', () => {
     const loc = new URL(res.headers.get('location') ?? '', 'https://paddlesnitch.com')
     expect(loc.pathname).toBe('/signin')
     expect(loc.searchParams.get('next')).toBe('/devices?code=ABC123')
+    // An invite link opened signed out comes back to the invite after sign-in.
+    const inv = new URL(proxy(req('GET', '/buddies?invite=abc123')).headers.get('location')!)
+    expect(inv.searchParams.get('next')).toBe('/buddies?invite=abc123')
     // ...and the code must not be left loose on the auth URL itself.
     expect(loc.searchParams.get('code')).toBeNull()
   })

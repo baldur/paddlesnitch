@@ -339,6 +339,10 @@ The GPS/track domain:
 
 `core` depends on `timing` (Strava streams → `TrackPoint`); no cycle. The detailed geo/timing and parser behaviour is documented under **App: ATT** (Domain Model, GPS File Formats), since that's where it's exercised most — but the code lives in `timing` and is shared.
 
+### Buddies (`@paddlesnitch/core/buddies`)
+
+Mutual buddies who see each other's paddles ([`buddies-and-compare.md`](docs/features/buddies-and-compare.md)). Request → accept (two people asking each other are buddies), decline (the sender isn't told), cancel, remove (for both); invite links (`/buddies?invite={token}`, NEW LINK retires the old one). **`canViewPaddle(viewer, owner, paddle)` is the one rule**: the owner always; a buddy unless the owner switched sharing off (`users/{id}/buddy-sharing.json`) or set `hiddenFromBuddies` on the paddle; nobody else. Buddies never see notes, AI summaries or emails. tRPC `buddies.*` (requests rate-limited 30/hour, only to real accounts); page `/buddies` (gated in the proxy); ADD AS BUDDY on profiles (`BuddyButton`); BUDDIES with a waiting-requests badge in the account menu. Erasure ends every friendship on both sides; export lists them. Tests: `buddies.test.ts` (the who-may-see matrix), `trpc-buddies.test.ts`, E2E `buddies.spec.ts`.
+
 ### `@paddlesnitch/ui` (`packages/ui/src`)
 
 The shared UI shell ([`single-app-shell.md`](docs/features/single-app-shell.md)). Theme-aware,
