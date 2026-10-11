@@ -46,6 +46,19 @@ static void finds_the_motion_file_of_a_track(void)
     TEST_ASSERT_FALSE(sidecarForTrack("track_20260928_202520.csv", out, 10));
 }
 
+// The other way, so a sync can hold a motion file back until its track is
+// confirmed: the server only answers "track not uploaded" after receiving the
+// WHOLE motion file, so sending it early costs megabytes every sync.
+static void finds_the_track_of_a_motion_file(void)
+{
+    char out[64];
+    TEST_ASSERT_TRUE(trackForSidecar("track_20260928_202520_i10.csv", out, sizeof out));
+    TEST_ASSERT_EQUAL_STRING("track_20260928_202520.csv", out);
+    TEST_ASSERT_FALSE(trackForSidecar("track_20260928_202520.csv", out, sizeof out));
+    TEST_ASSERT_FALSE(trackForSidecar("_i10.csv", out, sizeof out));
+    TEST_ASSERT_FALSE(trackForSidecar("track_20260928_202520_i10.csv", out, 10));
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -81,5 +94,6 @@ int main(int, char **)
     RUN_TEST(temporary_failures_are_retried);
     RUN_TEST(the_index_tells_confirmed_from_rejected);
     RUN_TEST(finds_the_motion_file_of_a_track);
+    RUN_TEST(finds_the_track_of_a_motion_file);
     return UNITY_END();
 }

@@ -791,7 +791,8 @@ int uplinkSyncSessions()
     // only caller and syncs never overlap.
     static String tracks[128];   int nTracks = 0;
     static String sidecars[128]; int nSide = 0;
-    for (int i = 0; i < 128; i++) { tracks[i] = ""; sidecars[i] = ""; }
+    static int    sideTrackRc[128];   // each motion file's track's index code; -1 = not there yet
+    for (int i = 0; i < 128; i++) { tracks[i] = ""; sidecars[i] = ""; sideTrackRc[i] = 0; }
     {
         SpiBusGuard bus(5000);
         if (!bus) { DBGE("sync", "bus busy listing"); return 0; }
@@ -810,6 +811,8 @@ int uplinkSyncSessions()
             if ((isTrackUpload(name) && name != active) || (isMotionUpload(name) && name != activeUp)) {
                 cand.emplace_back(name.c_str());
                 ix.want(name.c_str());
+                char trk[64];
+                if (trackForSidecar(name.c_str(), trk, sizeof trk)) ix.want(trk);
             }
         }
         root.close();
@@ -821,7 +824,14 @@ int uplinkSyncSessions()
             if (ix.has(c.c_str())) continue;
             String name(c.c_str());
             if (isTrackUpload(name)) { if (nTracks < 128) tracks[nTracks++] = name; }
-            else if (nSide < 128) sidecars[nSide++] = name;
+            else if (nSide < 128) {
+                char trk[64];
+                // -1: track not in the index yet. A line with no code (very old
+                // firmware) still means uploaded, as alreadyUploaded() reads it.
+                const bool known = trackForSidecar(c.c_str(), trk, sizeof trk) && ix.has(trk);
+                sideTrackRc[nSide] = !known ? -1 : (ix.rc(trk) ? ix.rc(trk) : 200);
+                sidecars[nSide++] = name;
+            }
         }
     }
     DBGI("sync", "listed %d track(s), %d sidecar(s)", nTracks, nSide);
@@ -839,6 +849,9 @@ int uplinkSyncSessions()
         if (out == UploadOutcome::Accepted) {
             markUploaded(tracks[i], rc == 409 ? 409 : 201);
             accepted++;
+            char side[64];
+            if (sidecarForTrack(tracks[i].c_str(), side, sizeof side))
+                for (int k = 0; k < nSide; k++) if (sidecars[k] == side) sideTrackRc[k] = 201;
         } else if (out == UploadOutcome::Rejected) {
             // Recorded so it is never sent again. Its motion file can't attach
             // to a track the server doesn't have, so it goes the same way.
@@ -852,6 +865,15 @@ int uplinkSyncSessions()
     for (int i = 0; i < nSide; i++) {
         if (alreadyUploaded(sidecars[i])) continue;
         if (g_yield) { DBGW("sync", "yielding card"); Serial.println("sync: yielding card"); break; }
+        // Only once its track is on the server: the server says "track not
+        // uploaded" only after receiving the whole motion file, so an early
+        // send costs megabytes every sync. A track it will never have (rejected,
+        // e.g. by firmware before the track pass marked sidecars) rejects it too.
+        if (indexRcRejected(sideTrackRc[i])) { markUploaded(sidecars[i], sideTrackRc[i]); continue; }
+        if (!indexRcConfirmed(sideTrackRc[i])) {
+            DBGI("sync", "sidecar %s waits for its track", sidecars[i].c_str());
+            continue;
+        }
         // Uploaded under the name the SERVER keys sidecars by, read from the
         // on-card name.
         DBGI("sync", "sidecar %s", sidecars[i].c_str());
