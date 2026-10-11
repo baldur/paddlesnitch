@@ -831,6 +831,9 @@ static void screenHold()
 #endif
         // The portal. A hold, not a tap, because opening it drops the current
         // connection -- and because hold is what commits on every other screen.
+        // Never while recording: the portal holds this loop for up to 10 min
+        // (no rows logged) and saving restarts the tracker.
+        if (storageRecording()) { toast("STOP RECORDING FIRST"); break; }
         if (netStartPortal("Change the WiFi network or password below.")) {
             Serial.println("saved -- restarting"); delay(300); ESP.restart();
         }
@@ -1082,7 +1085,8 @@ static void handleSerialCommand()
                 else dbgDump(Serial);
             }
             else if (!strncmp(buf, "SETUP", 5)) {
-                if (netStartPortal("Change the WiFi network or password below.")) {
+                if (storageRecording()) Serial.println("setup refused: recording (it would stop logging)");
+                else if (netStartPortal("Change the WiFi network or password below.")) {
                     Serial.println("saved -- restarting"); delay(300); ESP.restart();
                 }
                 else Serial.println("setup timed out");
