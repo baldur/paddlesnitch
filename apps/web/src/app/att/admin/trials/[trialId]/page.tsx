@@ -9,6 +9,11 @@ import { formatTime } from '@/lib/geo'
 
 type Invitee = { sub: string; email: string; displayName: string }
 
+async function fetchInvitees(trialId: string): Promise<Invitee[] | null> {
+  const res = await fetch(`/att/api/trials/${trialId}/invitations`)
+  return res.ok ? (await res.json()).invitees : null
+}
+
 export default function TrialAdminPage({
   params,
 }: {
@@ -24,24 +29,27 @@ export default function TrialAdminPage({
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState('')
 
-  const load = async () => {
-    const t = await fetch(`/att/api/trials/${trialId}`).then(r => r.json())
-    setTrial(t)
-    const [c, lb] = await Promise.all([
-      fetch(`/att/api/courses/${t.courseId}`).then(r => r.json()),
-      fetch(`/att/api/trials/${trialId}/leaderboard`).then(r => r.json()),
-    ])
-    setCourse(c)
-    setLeaderboard(lb)
-    if (t.participation === 'invitational') loadInvitees()
-  }
-
   const loadInvitees = async () => {
-    const res = await fetch(`/att/api/trials/${trialId}/invitations`)
-    if (res.ok) setInvitees((await res.json()).invitees)
+    const list = await fetchInvitees(trialId)
+    if (list) setInvitees(list)
   }
 
-  useEffect(() => { load() }, [trialId])
+  // State is set only in the fetch callbacks, never synchronously in the effect.
+  useEffect(() => {
+    fetch(`/att/api/trials/${trialId}`).then(r => r.json()).then(async (t: TrialMetadata) => {
+      setTrial(t)
+      const [c, lb] = await Promise.all([
+        fetch(`/att/api/courses/${t.courseId}`).then(r => r.json()),
+        fetch(`/att/api/trials/${trialId}/leaderboard`).then(r => r.json()),
+      ])
+      setCourse(c)
+      setLeaderboard(lb)
+      if (t.participation === 'invitational') {
+        const list = await fetchInvitees(trialId)
+        if (list) setInvitees(list)
+      }
+    })
+  }, [trialId])
 
   const toggleStatus = async () => {
     if (!trial) return

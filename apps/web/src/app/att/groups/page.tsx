@@ -27,15 +27,15 @@ export default function GroupsCataloguePage() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
-  const load = async () => {
-    const [res, dirRes] = await Promise.all([
+  useEffect(() => {
+    Promise.all([
       fetch('/att/api/groups'),
       fetch('/att/api/groups?directory=1'),
-    ])
-    setGroups(res.ok ? (await res.json()).groups : [])
-    if (dirRes.ok) setDirectory((await dirRes.json()).groups)
-  }
-  useEffect(() => { load() }, [])
+    ]).then(async ([res, dirRes]) => {
+      setGroups(res.ok ? (await res.json()).groups : [])
+      if (dirRes.ok) setDirectory((await dirRes.json()).groups)
+    })
+  }, [])
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -223,16 +223,18 @@ export default function UploadPage({
 
   // Reset / re-template the crew list whenever the boat class changes.
   // Seat 1 (bow) is pre-filled with the signed-in user's display name so the
-  // common case of "I'm the bow rower" is one click.
-  useEffect(() => {
-    if (!boatClass) { setCrew([]); return }
-    const seats = expectedSeats(boatClass)
+  // common case of "I'm the bow rower" is one click. Done while rendering (React's
+  // "adjust state when a prop changes" pattern) rather than in an effect.
+  const crewKey = `${boatClass}\n${authUser?.displayName ?? ''}`
+  const [crewTemplatedFor, setCrewTemplatedFor] = useState(crewKey)
+  if (crewTemplatedFor !== crewKey) {
+    setCrewTemplatedFor(crewKey)
     const me = authUser?.displayName ?? ''
-    setCrew(seats.map(seat => ({
+    setCrew(boatClass ? expectedSeats(boatClass).map(seat => ({
       seat,
       name: seat === 1 ? me : '',
-    })))
-  }, [boatClass, authUser?.displayName])
+    })) : [])
+  }
 
   function updateCrewName(seat: number | 'C', name: string) {
     setCrew(prev => prev.map(m => m.seat === seat ? { ...m, name } : m))

@@ -65,7 +65,7 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
       })
       .catch(() => setLoadFailed(true))
   }
-  useEffect(() => { if (!initial) load() }, [])
+  useEffect(() => { if (!initial) load() }, [initial])
 
   return (
     <main className="flex-1 flex flex-col">

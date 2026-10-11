@@ -66,4 +66,13 @@ describe('AddTrackerForm (on /devices)', () => {
     expect((container.querySelector('input') as HTMLInputElement).value).toBe('ABC123')
     expect(container.querySelector('section')!.id).toBe('add')
   })
+
+  it('clears a code prefilled from the QR once the tracker is added', async () => {
+    window.history.replaceState(null, '', '/devices?code=abc123')
+    stubFetch(200, { deviceId: '5A43CA48' })
+    await mount(<AddTrackerForm />)
+    await submit()
+    expect(container.textContent).toContain('Tracker added')
+    expect((container.querySelector('input') as HTMLInputElement).value).toBe('')
+  })
 })

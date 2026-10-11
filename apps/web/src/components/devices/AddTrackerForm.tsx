@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 
 // Add a paddlesnitch tracker to the signed-in account with the 6-character
 // code the tracker shows on its screen. Lives on /devices (it used to be a
@@ -14,20 +14,21 @@ const LINK_ERR: Record<string, string> = {
   rate_limited: 'Too many tries. Wait a few minutes, then use the code on the tracker’s screen.',
 }
 
+const noSubscribe = () => () => {}
+const codeFromUrl = () => new URLSearchParams(window.location.search).get('code')?.toUpperCase() ?? ''
+
 export default function AddTrackerForm({ onAdded }: { onAdded?: () => void }) {
   // Prefilled from ?code= when the user arrived by scanning the QR on the
   // tracker (via /l/<code>), so the only remaining action is to confirm.
   //
-  // Set AFTER mount, not in a lazy useState initialiser: this component is
+  // Read AFTER hydration, not in a lazy useState initialiser: this component is
   // server-rendered, where there is no window, so the initialiser gave '' on the
   // server and the code on the client, and React reported a hydration mismatch
-  // on every QR arrival. Nothing reads `code` until the user presses ADD, so
-  // filling it one tick later races with nothing.
-  const [code, setCode] = useState('')
-  useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get('code')?.toUpperCase()
-    if (fromUrl) setCode(fromUrl)
-  }, [])
+  // on every QR arrival. useSyncExternalStore renders '' on the server and while
+  // hydrating, then the URL's code. Once the user types, their text wins.
+  const fromUrl = useSyncExternalStore(noSubscribe, codeFromUrl, () => '')
+  const [typed, setCode] = useState<string | null>(null)
+  const code = typed ?? fromUrl
   const [name, setName] = useState('')
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)

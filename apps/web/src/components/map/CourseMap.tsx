@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import L from 'leaflet'
 import type { CourseMetadata, LatLng, Line } from '@/lib/types'
 import RiverLayer from './RiverLayer'
+import { useIsClient } from '@/lib/use-is-client'
 
 const TILES = {
   // Esri Gray Canvas — keyless raster. (CARTO's free basemaps now serve an
@@ -73,10 +74,9 @@ function DirectionArrow({ line, direction, color }: { line: Line; direction: 1 |
 }
 
 export default function CourseMap({ course, track, highlightGateIndex }: { course: CourseMetadata; track?: LatLng[]; highlightGateIndex?: number }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useIsClient()
   // Dark by default, like the rest of the site; LIGHT MAP is a tap away.
   const [dark, setDark] = useState(true)
-  useEffect(() => { setMounted(true) }, [])
 
   if (!mounted)
     return <div style={{ height: 300 }} className="bg-surface border border-border" />

@@ -48,7 +48,7 @@ export default async function Image({ params }: { params: Promise<{ shareId: str
       </div>
       <div style={{ display: 'flex', flex: 1, alignItems: 'center', marginTop: 20 }}>
         {route
-          ? <img src={route} width={card.viewW} height={card.viewH} style={{ objectFit: 'contain' }} />
+          ? <img src={route} alt="" width={card.viewW} height={card.viewH} style={{ objectFit: 'contain' }} />
           : <div style={{ display: 'flex', width: card.viewW, height: card.viewH }} />}
         <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 56, flex: 1 }}>
           <Stat value={card.distance} label="DISTANCE" />
