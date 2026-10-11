@@ -510,6 +510,15 @@ static UploadOutcome uploadChunked(WiFiClientSecure &client, const String &path,
     bool ok = true;
     UploadOutcome failed = UploadOutcome::Retry;   // what a failed part means
     for (int part = 1; part <= parts && ok; part++) {
+        // A recording is starting: let go between pieces rather than finish a
+        // file that can take minutes. The server keeps the pieces it has, and
+        // the next sync sends this file again from piece 1.
+        if (g_yield) {
+            DBGW("sync", "%s: yielding card at part %d/%d", name.c_str(), part, parts);
+            Serial.printf("  %s: yielding card at part %d/%d\n", name.c_str(), part, parts);
+            ok = false;
+            break;
+        }
         // Published BEFORE the read, not after the POST: the read is the step
         // that used to stall, so the screen has to name the chunk it is stuck on.
         statusProgress(name.c_str(), part, parts);
@@ -822,8 +831,7 @@ int uplinkSyncSessions()
     // strand the motion data forever.
     for (int i = 0; i < nTracks; i++) {
         if (alreadyUploaded(tracks[i])) continue;
-        // Checked between files, not mid-file: a recording starting must not
-        // find the card busy, and an upload must not be torn in half.
+        // Checked between files here, and between pieces in uploadChunked.
         if (g_yield) { DBGW("sync", "yielding card"); Serial.println("sync: yielding card"); break; }
         DBGI("sync", "track %s", tracks[i].c_str());
         int rc = 0;

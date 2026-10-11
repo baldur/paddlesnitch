@@ -31,6 +31,7 @@
 #include "health.h"
 #include "ui.h"
 #include "gps_fresh.h"
+#include "pair_policy.h"
 #include <WiFi.h>
 
 #ifndef TX_INTERVAL_S
@@ -201,6 +202,7 @@ static void toast(const char *t, uint32_t ms = 1500)
     toastUntil = millis() + ms;
 }
 
+static uint32_t holdStartedMs = 0;   // when the press that fired the current hold began
 static String linkTitle = "Not linked";
 static String linkHint  = "Hold BOOT";
 // A fix, and a speed, only while the GPS keeps updating them (gps_fresh.h):
@@ -590,6 +592,7 @@ static void toggleRecording()
 
     // Both cores must never hold the SD card at once.
     if (!uplinkYieldCard()) {
+        uplinkResume();             // or the uploader stays parked until a restart
         toast("BUSY");
         return;
     }
@@ -608,6 +611,8 @@ static void toggleRecording()
         sessionMetres = 0;
         haveLastPos   = false;
         firstFixMs    = 0;
+    } else {
+        uplinkResume();             // nothing is recording: give the card back
     }
 }
 
@@ -634,8 +639,11 @@ static void linkAttempt()
             return;
         }
     }
-    uplinkSyncSessions();
+    // The upload itself is the uplink task's (core 0). Syncing here as well ran
+    // two syncs at once over the same static file lists and WiFi, and blocked
+    // this loop -- GPS, logging, the screen -- for the whole upload.
     netDisconnect();
+    uplinkRequestSync();
 }
 
 
@@ -726,7 +734,11 @@ static void screenDoubleTap()
 static void screenHold()
 {
 #if BLE_ENABLED
-    if (bleConfirmPending(nullptr)) { bleConfirmAnswer(true); return; }    // hold = yes
+    // hold = yes, but only a press begun once the number was up (pair_policy.h)
+    if (bleConfirmPending(nullptr)) {
+        if (pairHoldAccepts(holdStartedMs, bleConfirmShownAt())) bleConfirmAnswer(true);
+        return;
+    }
 #endif
     if (tutRunning) {
         tutState = tutorialAdvance(tutState, TutEvent::Hold);
@@ -797,7 +809,13 @@ static void screenHold()
         // Only the radio page has an action, and it is the page already showing
         // UNLINKED / the SSID -- which is what you are looking at when re-linking
         // is what you came for.
-        if (nerdPage == NERD_PAGES - 1) linkAttempt();
+        // Never while recording: this brings WiFi up, and it used to stop the
+        // loop -- and the recording -- for the whole sync.
+        if (nerdPage == NERD_PAGES - 1) {
+            if (storageRecording())  toast("RECORDING");
+            else if (netIsClaimed()) { uplinkRequestSync(); toast("SYNCING"); }
+            else                     linkAttempt();
+        }
         break;
     case Screen::Network:
 #if BLE_ENABLED
@@ -875,6 +893,7 @@ static void checkButton()
         tutHeldSince = 0;
         pendingTap = 0;
         Serial.println("btn: hold");
+        holdStartedMs = heldSince;
         screenHold();
     } else if (!down && heldSince) {
         uint32_t held = millis() - heldSince;

@@ -22,4 +22,5 @@ const char *bleName();     // PT-xxx, once started
 bool bleConfirmPending(uint32_t *pin);
 uint32_t bleConfirmSecondsLeft();   // for the countdown on the pairing screen
 void bleConfirmAnswer(bool yes);
+uint32_t bleConfirmShownAt();       // millis() when the number appeared
 void bleForgetAll();   // drop every pairing (bench: BLEFORGET)
