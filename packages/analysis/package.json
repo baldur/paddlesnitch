@@ -21,7 +21,8 @@
     "./device-sessions": "./src/device-sessions.ts",
     "./tracker-paddle": "./src/tracker-paddle.ts",
     "./same-outing": "./src/same-outing.ts",
-    "./strava-history": "./src/strava-history.ts"
+    "./strava-history": "./src/strava-history.ts",
+    "./saved-sections": "./src/saved-sections.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",

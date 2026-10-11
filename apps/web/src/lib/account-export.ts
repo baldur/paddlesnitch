@@ -11,6 +11,7 @@ import { listFeedbackContactsForUser } from '@/lib/feedback-contacts'
 import { getBetaApplication } from '@/lib/beta-signups'
 import type { AuthUser } from '@paddlesnitch/core/types'
 import { listTrials, listCourses, listUserEntryResultKeys, listUserFailedUploadKeys } from '@/lib/catalogue'
+import { listSavedSections } from '@paddlesnitch/analysis/saved-sections'
 
 export async function buildAccountExport(user: AuthUser) {
   // Courses the user owns.
@@ -44,6 +45,8 @@ export async function buildAccountExport(user: AuthUser) {
     termsAccepted: await getJson(`users/${user.id}/tos-consent.json`),
     strava: strava ? { connected: true, athleteId: strava.athleteId } : { connected: false },
     stravaAutoImport: await getJson(`users/${user.id}/strava-prefs.json`),
+    // Saved sections (#435): names and the gates you picked.
+    sections: await listSavedSections(user.id),
   }
 
   const groups = (await Promise.all((await getUserGroupIds(user.id)).map(id => getGroup(id))))

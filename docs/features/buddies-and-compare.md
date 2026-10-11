@@ -61,7 +61,26 @@ ticked to compare line against line (`LineCompare`).
   for yours); `@paddlesnitch/analysis/section-passes`. Every "no" is NOT_FOUND.
   Tests: `section-passes.test.ts`.
 
-Not built: saving a section with a name to come back to (needs a decision).
+### Saved sections (#435, 2026-10-11)
+
+On EVERY PASS, name the section and SAVE; **Paddles → SECTIONS**
+(`/paddles/sections`) lists them, and each opens at `/paddles/section?id=`
+with every pass, RENAME and REMOVE.
+
+- **Modelled on a time-trial gate course** (owner's decision): two gates, each
+  `{ line, direction }` with the direction as `rxsSign`, exactly the shape of
+  `CourseMetadata.gates`, so the time-trial gate timing (`processTrace(...,
+  'gate', ..., gates)`) times a pass the same way (tested), and a section could
+  become a course later.
+- **Private to whoever saved it** (`users/{userId}/sections/{id}.json`): never
+  shown to anyone else, buddies included; the passes on it include buddies'
+  paddles as on EVERY PASS. It keeps its own gates and line, so it stays valid
+  when the paddle it was picked on is deleted. Up to 200 per paddler.
+- Not checked against new paddles automatically: you see new passes when you
+  open it. In Download my data; erased with the account (`users/` prefix).
+- tRPC `sections.save` / `list` / `rename` / `remove`; `sections.passes` and
+  `passLine` take a saved `{ sectionId }` as well as a picked section.
+  `@paddlesnitch/analysis/saved-sections`. Tests: `section-passes.test.ts`.
 
 ## Storage (one object per item)
 

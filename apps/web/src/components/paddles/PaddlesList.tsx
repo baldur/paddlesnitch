@@ -90,7 +90,10 @@ export default function PaddlesList() {
       <div className="max-w-3xl mx-auto px-4 py-6 w-full">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">PADDLES</h1>
-          <Link href="/paddles/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">+ ADD A PADDLE</Link>
+          <div className="flex items-center gap-4">
+            <Link href="/paddles/sections" className="text-xs tracking-widest text-primary">SECTIONS</Link>
+            <Link href="/paddles/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">+ ADD A PADDLE</Link>
+          </div>
         </div>
 
         {/* Connecting Strava brings in about the last month by itself (#415). */}
