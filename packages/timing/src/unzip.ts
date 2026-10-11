@@ -19,11 +19,17 @@ const CENTRAL_SIG = 0x02014b50
  * Bounded (security audit 2026-09): a few MB of zip can inflate to gigabytes,
  * enough to take the 1 GB server Lambda down. An entry may not claim or
  * inflate to more than `maxEntryBytes`, nor may the archive hold more than
- * `maxEntries` files. A one-activity export is well under both.
+ * `maxEntries` files, nor its entries together inflate past `maxTotalBytes`
+ * (every central record can point at the same compressed bytes, so 64 capped
+ * entries were still 3.2 GB). A one-activity export is well under all three.
  */
 export function readZip(
   data: ArrayBuffer,
-  { maxEntryBytes = 50 * 1024 * 1024, maxEntries = 64 }: { maxEntryBytes?: number; maxEntries?: number } = {},
+  {
+    maxEntryBytes = 50 * 1024 * 1024,
+    maxEntries = 64,
+    maxTotalBytes = 100 * 1024 * 1024,
+  }: { maxEntryBytes?: number; maxEntries?: number; maxTotalBytes?: number } = {},
 ): ZipEntry[] {
   const buf = Buffer.from(data)
 
@@ -43,6 +49,7 @@ export function readZip(
   let offset = buf.readUInt32LE(eocd + 16)
 
   const entries: ZipEntry[] = []
+  let total = 0
   for (let n = 0; n < entryCount; n++) {
     if (buf.readUInt32LE(offset) !== CENTRAL_SIG) throw new Error('bad central directory')
 
@@ -79,6 +86,8 @@ export function readZip(
       throw new Error(`unsupported compression method ${method}`)
     }
     if (content.length !== uncompressedSize) throw new Error('size mismatch after inflate')
+    total += content.length
+    if (total > maxTotalBytes) throw new Error(`zip contents too large (over ${maxTotalBytes} bytes)`)
 
     // Copy into a fresh ArrayBuffer (content may be a view onto a larger,
     // pooled Buffer, and .buffer is typed ArrayBufferLike).

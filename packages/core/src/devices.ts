@@ -465,6 +465,13 @@ export type UploadPartResult =
   | { status: 'incomplete'; missing: number[]; parts: number }
   | { status: 'corrupt'; expected: string; actual: string }
   | { status: 'assembled'; body: Buffer }
+  | { status: 'too_large' }
+
+// The largest file a tracker can send: 512 parts of its 64 KB pieces
+// (UPLOAD_CHUNK in firmware/src/uplink.cpp), about 15 hours of motion data.
+// Each request is capped on its own, so without this a file could be 512
+// parts of 4 MB -- 2 GB read into one Lambda.
+export const MAX_ASSEMBLED_BYTES = 32 * 1024 * 1024
 
 /**
  * Stores one chunk of any upload, and hands back the whole file once the last
@@ -504,10 +511,13 @@ export async function storeUploadPart(
   // retried part can arrive after the final one.
   const buffers: Buffer[] = []
   const missing: number[] = []
+  let total = 0
   for (let i = 1; i <= parts; i++) {
     const b = await getObject(uploadPartKey(deviceId, filename, i))
-    if (!b) missing.push(i)
-    else buffers.push(b)
+    if (!b) { missing.push(i); continue }
+    total += b.length
+    if (total > MAX_ASSEMBLED_BYTES) return { status: 'too_large' }
+    buffers.push(b)
   }
   if (missing.length) return { status: 'incomplete', missing, parts }
 
