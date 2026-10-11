@@ -63,7 +63,19 @@ export async function getObject(key: string): Promise<Buffer | null> {
   }
 }
 
-export async function putObject(key: string, body: Buffer | string): Promise<void> {
+/**
+ * Object tags, for lifecycle rules that can't match by prefix (S3 prefixes
+ * can't have a wildcard in the middle). Ignored by the local file store.
+ */
+export type ObjectTags = Record<string, string>
+
+/** The tag on staged upload pieces: a bucket lifecycle rule expires them (#412). */
+export const STAGED_PART_TAG: ObjectTags = { lifecycle: 'staged-part' }
+
+/** Tags as S3's x-amz-tagging header value (URL-encoded query form). */
+export const taggingHeader = (tags: ObjectTags) => new URLSearchParams(tags).toString()
+
+export async function putObject(key: string, body: Buffer | string, opts: { tags?: ObjectTags } = {}): Promise<void> {
   if (isDev()) {
     const filePath = path.join(localRoot(), key)
     await fs.mkdir(path.dirname(filePath), { recursive: true })
@@ -78,6 +90,7 @@ export async function putObject(key: string, body: Buffer | string): Promise<voi
       Key: key,
       Body: body,
       ContentType: typeof body === 'string' ? 'application/json' : 'application/octet-stream',
+      ...(opts.tags ? { Tagging: taggingHeader(opts.tags) } : {}),
     })
   )
 }

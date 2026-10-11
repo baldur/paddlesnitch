@@ -169,6 +169,17 @@ export class AttStack extends cdk.Stack {
         prefix: 'derived/',
         expiration: cdk.Duration.days(30),
         noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
+        // Pieces of a tracker upload that never completed (the file was deleted
+        // from the card, the tracker was given away). A Bluetooth sync resumes
+        // from them, so they last far longer than anyone waits to resume; a
+        // resume after that just re-sends the expired pieces. They live under
+        // devices/{id}/…, which no prefix can match, so they're tagged on write
+        // (STAGED_PART_TAG in packages/core/src/storage.ts) (#412).
+        id: 'expire-staged-upload-parts',
+        tagFilters: { lifecycle: 'staged-part' },
+        expiration: cdk.Duration.days(30),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
       }],
     })
 
