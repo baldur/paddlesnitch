@@ -80,7 +80,7 @@ export const buddiesRouter = router({
       paddles: summaries.filter(s => !s.hiddenFromBuddies).map(s => ({
         id: s.id, paddledAt: s.paddledAt, source: { type: s.source.type },
         durationS: s.durationS, distanceKm: s.distanceKm, cruiseSpeed: s.cruiseSpeed, avgSR: s.avgSR,
-        boatClass: s.boatClass, route: s.route,
+        boatClass: s.boatClass, route: s.route, ...(s.noGps ? { noGps: true as const } : {}),
       })),
     }
   }),

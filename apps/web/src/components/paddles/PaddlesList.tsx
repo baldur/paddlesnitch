@@ -2,12 +2,13 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
-import { sourceLabel, weeklyKm, weekStreak, monthKm, groupSameOuting, paddleTotals } from '@paddlesnitch/core/paddles'
+import { sourceLabel, weeklyKm, weekStreak, monthKm, groupSameOuting, paddleTotals, isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
 import { fmtWeekday, fmtMonth } from '@paddlesnitch/core/format'
 import { trpc } from '@/lib/trpc'
 import { PREFILLED_FRESH_MS } from '@/lib/fresh'
 import AppHeader from '@/components/AppHeader'
 import RouteThumb from '@paddlesnitch/ui/RouteThumb'
+import NoGpsTag from './NoGpsTag'
 import { StravaFirstImport } from '@/components/strava/StravaHistoryImport'
 
 // PADDLES: every paddle you've saved, with your totals on top. This is also the
@@ -140,18 +141,23 @@ export default function PaddlesList() {
         <div className="flex flex-col gap-2">
           {sessions && groupSameOuting(sessions).map(({ lead: s, others }) => (
             <div key={s.id} className="border border-border p-3 flex gap-3 items-center">
-              <input type="checkbox" checked={sel.includes(s.id)} onChange={() => toggle(s.id)} className="accent-primary" aria-label="Compare" />
+              {/* A paddle without a map (#414) isn't offered to compare. */}
+              {isMotionOnly(s)
+                ? <span className="w-[13px] shrink-0" />
+                : <input type="checkbox" checked={sel.includes(s.id)} onChange={() => toggle(s.id)} className="accent-primary" aria-label="Compare" />}
               <Link href={`/paddles/${s.id}`} className="flex gap-3 items-center flex-1 min-w-0 group">
-                <RouteThumb route={s.route} size={64} />
+                {isMotionOnly(s) ? <NoGpsTag size={64} /> : <RouteThumb route={s.route} size={64} />}
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] text-muted tracking-widest">
                     {fmtDate(s.paddledAt).toUpperCase()}{sourceLabel(s.source.type)}{s.boatClass ? <span className="text-split"> · {s.boatClass}</span> : ''}
                   </div>
                   <div className="text-sm tabular mt-0.5 group-hover:text-primary transition-colors">
-                    <b>{s.distanceKm.toFixed(2)} km</b> · {fmtClock(s.durationS)}
+                    <b>{paddleKm(s)}</b> · {fmtClock(s.durationS)}
                   </div>
                   <div className="text-xs text-muted tabular mt-0.5">
-                    {split500(s.cruiseSpeed)}/500{s.avgSR != null && <> · {Math.round(s.avgSR)} spm</>}
+                    {isMotionOnly(s)
+                      ? <>{s.avgSR != null ? `${Math.round(s.avgSR)} spm` : ''}</>
+                      : <>{split500(s.cruiseSpeed)}/500{s.avgSR != null && <> · {Math.round(s.avgSR)} spm</>}</>}
                   </div>
                   {s.note?.trim() && <div className="text-xs text-split mt-1 truncate">{s.note}</div>}
                 </div>

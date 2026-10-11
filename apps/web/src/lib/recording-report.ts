@@ -2,7 +2,7 @@ import { derived, derivedKey, type DerivedSpec } from '@paddlesnitch/core/derive
 import { getDeviceSessionMeta, getDeviceSessionTrace, getDeviceSessionMotion, type DeviceSessionMeta } from '@paddlesnitch/core/devices'
 import { describeDeviceData, noPaddleReason, noPaddleMessage, type DeviceDataReport } from '@paddlesnitch/timing/device'
 import { MIN_PADDLE_METRES } from '@paddlesnitch/analysis/tracker-paddle'
-import { deriveCadence, movingRangesFromTrack, paddlingFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
+import { deriveCadence, strokeRangesFor, paddlingFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
 import { deriveAttitude, type AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 export type RecordingReport = {
@@ -47,19 +47,20 @@ export async function recordingReport(userId: string, deviceId: string, sessionI
     const report = describeDeviceData(csv)
     // Best effort, as before: a missing or unreadable motion file leaves the
     // report without stroke rate and boat motion rather than failing it.
+    const why = noPaddleReason(csv, MIN_PADDLE_METRES)
+    const gpsFailed = why?.kind === 'gps_lost' || why?.kind === 'no_gps'
     let cadence: CadenceReport | null = null
     let attitude: AttitudeReport | null = null
     try {
       const motion = await getDeviceSessionMotion(userId, deviceId, sessionId)
       if (motion) {
         const text = motion.toString('utf8')
-        const movingRanges = movingRangesFromTrack(csv)
+        // Where the GPS saw the boat moving; the whole recording when it failed.
+        const movingRanges = strokeRangesFor(csv, gpsFailed)
         cadence = deriveCadence(text, { movingRanges })
         attitude = deriveAttitude(text, { movingRanges })
       }
     } catch { cadence = null; attitude = null }
-    const why = noPaddleReason(csv, MIN_PADDLE_METRES)
-    const gpsFailed = why?.kind === 'gps_lost' || why?.kind === 'no_gps'
     const fromMotion = gpsFailed && cadence ? paddlingFromMotion(cadence) : null
     return {
       report, cadence, attitude,

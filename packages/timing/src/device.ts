@@ -366,6 +366,18 @@ export function noPaddleReason(csv: string, minPaddleM: number): NoPaddleReason 
   return null
 }
 
+/** When a recording started: its first row with a readable time, as ISO, or null. */
+export function recordingStart(csv: string): string | null {
+  const { header, rows } = splitRows(csv)
+  const timeI = header.findIndex(h => { const n = norm(h); return n === 'timestamp' || n === 'time' || n === 'datetime' })
+  if (timeI < 0) return null
+  for (const r of rows) {
+    const t = Date.parse((r[timeI] ?? '').trim())
+    if (!isNaN(t)) return new Date(t).toISOString()
+  }
+  return null
+}
+
 const span = (s: number) => (s < 90 ? `${Math.max(1, Math.round(s))} seconds` : s < 5400 ? `${Math.round(s / 60)} minutes` : `${(s / 3600).toFixed(1)} hours`)
 
 /** The reason as the recording's page says it. `hasMotion`: the boat motion was recorded. */

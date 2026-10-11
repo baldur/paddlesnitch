@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getSharedSession } from '@paddlesnitch/analysis/analysis-store'
 import { fmtDay } from '@paddlesnitch/core/format'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 
 // A shared paddle's own title ("4.2 km paddle on 13 Sep 2026"), for the tab
 // and for the link preview where it's posted. It used to inherit "Paddles".
@@ -10,7 +11,8 @@ export async function generateMetadata({ params }: { params: Promise<{ shareId: 
   const { shareId } = await params
   const s = await getSharedSession(shareId).catch(() => null)
   if (!s) return { title: 'A shared paddle' }
-  const title = `${s.result.distanceKm.toFixed(1)} km paddle on ${fmtDay(s.paddledAt)}`
+  // A paddle without a map (#414) has no distance to put in it.
+  const title = isMotionOnly(s.result) ? `Paddle on ${fmtDay(s.paddledAt)}` : `${s.result.distanceKm.toFixed(1)} km paddle on ${fmtDay(s.paddledAt)}`
   return { title, openGraph: { title: `${title} · paddlesnitch` } }
 }
 

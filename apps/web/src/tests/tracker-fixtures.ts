@@ -55,3 +55,10 @@ export function trackCsv(seconds: number, kmh: number, opts: { startMs?: number;
   return [...(marker ? ['<<<CAT /track.csv 1234>>>'] : []), 'timestamp,ms,fix,lat,lon,speed_kmh', ...rows].join('\n')
 }
 
+// The same, with the GPS losing the sky `lostAfterS` in: the time and millis()
+// carry on, the position and speed are empty from then on (#414).
+export function lostTrackCsv(seconds: number, lostAfterS: number, kmh: number, opts: { startMs?: number; t0?: string } = {}) {
+  const [header, ...rows] = trackCsv(seconds, kmh, opts).split('\n')
+  return [header, ...rows.map((r, i) => (i <= lostAfterS ? r : `${r.split(',').slice(0, 2).join(',')},0,,,`))].join('\n')
+}
+

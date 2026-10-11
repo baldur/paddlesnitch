@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure } from '../trpc'
 import { getSession, listSessions, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import { findSimilar, buildRace, sectionStats, MIN_SECTION_M } from '@paddlesnitch/analysis/similar'
 import {
   generateRaceInsight, buildRaceInsight,
@@ -17,7 +18,8 @@ const sel = z.object({ sourceId: z.string(), aIdx: z.number().int(), bIdx: z.num
 
 async function loadSource(userId: string, sourceId: string) {
   const source = await getSession(userId, sourceId)
-  if (!source) throw new TRPCError({ code: 'NOT_FOUND' })
+  // A paddle without a map (#414) has no section to pick.
+  if (!source || isMotionOnly(source.result)) throw new TRPCError({ code: 'NOT_FOUND' })
   return source
 }
 

@@ -7,7 +7,8 @@
 // Parity tip: llama3.2 / llama3.3 / mistral exist on BOTH Ollama and Bedrock, so
 // you can tune the SAME model locally and deploy it unchanged.
 import type { AnalysisResult, Segment } from './analysis'
-import { fmtDur, fmtDurWords, split500 } from './analysis'
+import { fmtDur, fmtDurWords, split500, roundStrokes } from './analysis'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import type { SectionRace, Racer, SectionStats } from './similar'
 
 const SYSTEM = [
@@ -92,6 +93,7 @@ export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string
     const label = describePaddleDate(ctx.paddledAt, ctx.asOf ?? new Date().toISOString())
     if (label) L.push(`Session date: ${label}.`)
   }
+  if (isMotionOnly(r)) return withHistory([...L, ...motionFacts(r)].join('\n'), ctx)
   L.push(`Session: ${fmtDurWords(r.durationS)}, ${r.distanceKm.toFixed(2)} km.`)
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
   // the SUP×2 normalisation — a small model misreads it as "the athlete doubled
@@ -115,7 +117,23 @@ export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string
   const sets = r.sets.filter(s => s.count > 1)
   if (sets.length) L.push(`Sets detected: ${sets.map(s => `${s.count} × ~${fmtDur(s.avgDurS)} @ ${split500(s.avgSpeed)}/500`).join('; ')}.`)
   if (!r.surges.length) L.push('No distinct efforts — this was a steady paddle.')
-  let out = L.join('\n')
+  return withHistory(L.join('\n'), ctx)
+}
+
+// A paddle without a map (#414): only what the motion data shows.
+function motionFacts(r: AnalysisResult): string[] {
+  const L = [
+    `Session: about ${fmtDurWords(r.durationS)} paddling, from the boat's motion sensor.`,
+    'The GPS failed, so there is NO distance, speed, pace or route. Do not mention, guess or estimate any of them.',
+  ]
+  if (r.avgSR != null) L.push(`Stroke rate ~${Math.round(r.avgSR)} spm, about ${roundStrokes(r.noGps?.strokes ?? 0)} strokes.`)
+  if (r.stops.length) L.push(`Rests: ${r.stops.length} (${r.stops.map(s => `${fmtDur(s.fromT)} for ${Math.round(s.durS)}s`).join(', ')}).`)
+  return L
+}
+
+// The paddler's profile and history after the session's own facts.
+function withHistory(facts: string, ctx: InsightContext): string {
+  let out = facts
   if (ctx.profile?.trim()) out += `\n\nWho this paddler is (their evolving profile):\n${ctx.profile.trim()}`
   out += ctx.historyFacts ?? ''
   out += ctx.relevant ?? ''

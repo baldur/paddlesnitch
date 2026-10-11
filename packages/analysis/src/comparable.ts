@@ -1,6 +1,7 @@
 // Your paddles worth comparing with a given paddle (yours or a buddy's), best
 // first, with why (route-match.ts has the rules). Server-side: it reads your
 // paddles' squares and, for a shortlist, their points.
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import { listSessionSummaries, getSession, getRouteCells, type AnalysisSession } from './analysis-store'
 import { sharedSameWayM } from './line-compare'
 import { timeOverlapShare, MIN_TIME_OVERLAP } from './same-outing'
@@ -12,10 +13,12 @@ const SHORTLIST_MAX = 25
 export type ComparablePaddle = { id: string; paddledAt: string; distanceKm: number } & Comparability
 
 export async function comparablePaddles(userId: string, target: AnalysisSession, limit = 12): Promise<ComparablePaddle[]> {
+  // A paddle without a map (#414) has no route to compare, either way round.
+  if (isMotionOnly(target.result)) return []
   const targetLine = resampleLine(target.result.points)
   const targetCells = routeCells(target.result.points)
   const window = { paddledAt: target.paddledAt, durationS: target.result.durationS }
-  const mine = (await listSessionSummaries(userId)).filter(s => !(s.id === target.id && target.userId === userId))
+  const mine = (await listSessionSummaries(userId)).filter(s => !(s.id === target.id && target.userId === userId) && !isMotionOnly(s))
 
   // Stage 1: paddled together, or enough of the same squares.
   const scored = await Promise.all(mine.map(async s => ({

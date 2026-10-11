@@ -7,6 +7,7 @@ import type { AnalysisSession } from './analysis-store'
 import { split500 } from './analysis'
 import { BOAT_CLASS_INFO, isBoatClass } from '@paddlesnitch/core/types'
 import { fmtDay } from '@paddlesnitch/core/format'
+import { isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
 // projectRoute now lives in the shared timing package (both apps' route
 // thumbnails use it); re-exported here so existing importers/tests are unchanged.
 import { projectRoute } from '@paddlesnitch/timing/geo'
@@ -43,14 +44,16 @@ const MAX_PTS = 220
 
 export function shareCard(session: AnalysisSession, viewW = CARD_W, viewH = CARD_H): ShareCard {
   const r = session.result
+  // A paddle without a map (#414): no route, distance or pace on the card.
+  const noGps = isMotionOnly(r)
   // Downsample the (already ≤900) map points so the polyline stays light.
   const step = Math.max(1, Math.ceil(r.points.length / MAX_PTS))
-  const pts = projectRoute(r.points.filter((_, i) => i % step === 0), viewW, viewH, 24)
+  const pts = noGps ? [] : projectRoute(r.points.filter((_, i) => i % step === 0), viewW, viewH, 24)
   const tag = isBoatClass(session.boatClass) ? session.boatClass : null
   return {
-    distance: `${r.distanceKm.toFixed(1)} km`,
+    distance: paddleKm(r, 1),
     duration: fmtClock(r.durationS),
-    pace: r.cruiseSpeed > 0.2 ? `${split500(r.cruiseSpeed)} /500` : '—',
+    pace: !noGps && r.cruiseSpeed > 0.2 ? `${split500(r.cruiseSpeed)} /500` : '—',
     spm: r.avgSR != null ? `${Math.round(r.avgSR)} spm` : null,
     date: fmtDate(session.paddledAt),
     tag,

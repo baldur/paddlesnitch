@@ -7,12 +7,13 @@ import AppHeader from '@/components/AppHeader'
 import PaddleChart from './PaddleChart'
 import { ramp, scaleBounds } from '@/components/map/colour-scale'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
-import { fmtDur, fmtClock, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
+import { fmtDur, fmtClock, split500, rescaleDoubling, roundStrokes } from '@paddlesnitch/analysis/analysis'
+import { noPaddleMessage } from '@paddlesnitch/timing/device'
 import { gateAt, type Racer } from '@paddlesnitch/analysis/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { fmtDay } from '@paddlesnitch/core/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { sourceLabel } from '@paddlesnitch/core/paddles'
+import { sourceLabel, isMotionOnly } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import { sourceName } from './SameOuting'
 
@@ -263,6 +264,9 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   const paceOr = (speed: number, fallback: string) => { const p = split500(speed); return p === '—' ? fallback : p }
   const scaleLabel = (v: number, end: 'lo' | 'hi') => (metric === 'speed' ? `${paceOr(v, end === 'lo' ? 'slower' : 'faster')}${split500(v) === '—' ? '' : '/500'}` : `${Math.round(v)} spm`)
   const isTracker = data.source?.type === 'device'
+  // A paddle without a map (#414): the tracker's GPS failed, so no map, speed
+  // or pace, and nothing to compare or pick a section on.
+  const motionOnly = isMotionOnly(dataProp)
 
   return (
     <main className="flex-1 flex flex-col bg-bg text-fg">
@@ -274,7 +278,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
 
       {/* The map, with only what belongs on a map over it: the colour scale,
           the replay bar, and picking a section. Everything to read is below. */}
-      <section className="relative h-[52vh] min-h-[300px] max-h-[640px] border-b border-border" aria-label="Map">
+      {!motionOnly && <section className="relative h-[52vh] min-h-[300px] max-h-[640px] border-b border-border" aria-label="Map">
         <div className="absolute inset-0">
           <AnalysisMapClient points={data.points} stops={data.stops} surges={data.surges} metric={metric} cursor={cursor}
             pickMode={sectionMode} onPick={onPick} startLine={startLine} finishLine={finishLine}
@@ -382,7 +386,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             </span>
           </div>
         )}
-      </section>
+      </section>}
 
       <div className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full grid gap-8 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex flex-col gap-6 min-w-0 order-2 md:order-1">
@@ -396,6 +400,17 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                 {highlights.map(h => <li key={h} className="text-[11px] text-split border border-split/40 px-2 py-0.5">{h}</li>)}
               </ul>
             )}
+            {motionOnly && data.noGps ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                  <Stat label="Paddling" value={fmtClock(data.durationS)} note="from the boat's motion" />
+                  <Stat label="Distance" value="—" note="no GPS" />
+                  <Stat label="Stroke rate" value={data.avgSR != null ? `${Math.round(data.avgSR)}` : '—'} note="spm" />
+                  <Stat label="Strokes" value={roundStrokes(data.noGps.strokes)} note="about" />
+                </div>
+                <p className="text-sm text-muted mt-3">{noPaddleMessage(data.noGps.reason, true)}</p>
+              </>
+            ) : (
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
               <Stat label="Time" value={fmtClock(data.durationS)} />
               <Stat label="Distance" value={`${data.distanceKm.toFixed(2)} km`} />
@@ -403,6 +418,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               <Stat label="Stroke rate" value={data.avgSR != null ? `${Math.round(data.avgSR)}` : '—'} note={data.avgSR != null ? `spm${data.strokeRateDoubled ? ', doubled' : ''}` : 'not in this file'} />
               <Stat label="Per stroke" value={data.avgDps != null ? `${data.avgDps.toFixed(1)} m` : '—'} />
             </div>
+            )}
             {(c?.windKmh != null || c?.flowM3s != null) && (
               <div className="flex items-center gap-4 mt-3 text-sm text-fg tabular flex-wrap">
                 {c?.windKmh != null && <span className="flex items-center gap-1"><WindRose dir={c.windDir ?? 0} /> wind {Math.round(c.windKmh)} km/h {compass(c.windDir)}</span>}
@@ -411,8 +427,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             )}
           </div>
 
-          <PaddleChart points={data.points} surges={data.surges} stops={data.stops} cursor={cursor}
-            onSeek={i => { setCursor(i); setPlaying(false) }} />
+          {!motionOnly && <PaddleChart points={data.points} surges={data.surges} stops={data.stops} cursor={cursor}
+            onSeek={i => { setCursor(i); setPlaying(false) }} />}
 
           <div className="border-l-2 border-primary pl-3">
             <p className="leading-relaxed text-fg">{data.insight}</p>
@@ -482,12 +498,12 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         <aside className="order-1 md:order-2 flex flex-row flex-wrap md:flex-col md:flex-nowrap gap-2 text-xs content-start" aria-label="Actions">
           {onNewFile && <button onClick={onNewFile} className={ACTION}>ADD ANOTHER</button>}
           {readOnly && !buddy && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
-          {buddy && (
+          {buddy && !motionOnly && (
             <ComparePicker label="COMPARE WITH ONE OF MINE" buddy className={ACTION} box={BOX}
               target={{ id: buddy.paddleId, owner: buddy.userId }}
               hrefFor={mine => `/paddles/compare?a=${mine}&b=${buddy.paddleId}&bOwner=${buddy.userId}`} />
           )}
-          {sessionId && !readOnly && (
+          {sessionId && !readOnly && !motionOnly && (
             <ComparePicker label="COMPARE WITH…" buddy={false} className={ACTION} box={BOX}
               target={{ id: sessionId }} hrefFor={other => `/paddles/compare?a=${sessionId}&b=${other}`} />
           )}
@@ -575,7 +591,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             </div>
           )}
           {sessionId && !readOnly && isTracker && <Link href={`/paddles/${sessionId}/motion`} className={ACTION}>BOAT MOTION →</Link>}
-          {((sessionId && !readOnly) || buddy) && (
+          {((sessionId && !readOnly) || buddy) && !motionOnly && (
             <button onClick={() => (sectionMode ? exitSection() : (setSectionMode(true), window.scrollTo({ top: 0, behavior: 'smooth' })))}
               title="Pick part of this paddle to look at closely, or compare with your other paddles"
               className={`${ACTION} ${sectionMode ? 'border-split text-split' : ''}`}>{sectionMode ? 'STOP PICKING A SECTION' : 'PICK A SECTION'}</button>

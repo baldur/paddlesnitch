@@ -5,6 +5,9 @@
 // The LLM only narrates this output later — the metrics stand alone.
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
+import type { NoPaddleReason } from '@paddlesnitch/timing/device'
+import { paddlingFromMotion, restsFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
+import { isMotionOnly } from '@paddlesnitch/core/paddles'
 
 export type AnalysisPoint = { t: number; lat: number; lng: number; speed: number; sr: number | null; dps: number | null }
 
@@ -45,6 +48,11 @@ export type AnalysisResult = {
   insight: string
   insightModel?: string   // which LLM wrote the insight (empty for the template)
   conditions?: Conditions
+  // A tracker paddle whose GPS failed (#414): durationS is the time paddling
+  // and avgSR the median stroke rate, both from the motion data; distanceKm,
+  // speeds and pace are 0 and mean nothing; points hold only the route from
+  // before the GPS was lost (often none). Test with isMotionOnly().
+  noGps?: { reason: NoPaddleReason; strokes: number }
 }
 
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0)
@@ -188,10 +196,60 @@ export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boo
 // private text. Only the average stroke rate reaches the template, and the
 // result stores it, so this matches what analyseTrack produced.
 export function plainInsight(r: AnalysisResult): string {
+  if (isMotionOnly(r)) return motionInsight(r)
   return buildInsight({
     durationS: r.durationS, distanceKm: r.distanceKm, surges: r.surges, stops: r.stops, sets: r.sets,
     allSR: r.avgSR != null ? [r.avgSR] : [], cruise: r.cruiseSpeed, conditions: r.conditions,
   })
+}
+
+/** Paddling for at least this long, by the motion data, makes a paddle without a map (#414). */
+export const MIN_MOTION_PADDLE_S = 600
+
+/**
+ * A paddle from the motion data alone, for a tracker recording whose GPS
+ * failed (#414); null when it shows under 10 minutes of paddling. `startMs`:
+ * when the recording started (UTC). `clockOffsetMs`: tracker millis() to UTC,
+ * which places the rests (none without it). `track`: what the GPS recorded
+ * before it was lost, if anything. No distance, speed or pace: the motion
+ * data can't show them, and an estimate would sit in the log looking real.
+ */
+export function motionOnlyResult(o: {
+  reason: NoPaddleReason; cadence: CadenceReport; startMs: number; clockOffsetMs: number | null; track?: TrackPoint[] | null
+}): AnalysisResult | null {
+  if (o.reason.kind === 'too_short') return null
+  const m = paddlingFromMotion(o.cadence)
+  if (!m || m.paddlingS < MIN_MOTION_PADDLE_S) return null
+  const offset = o.clockOffsetMs
+  const stops: Segment[] = offset == null ? [] : restsFromMotion(o.cadence).map(([from, to]) => ({
+    kind: 'rest' as const, fromT: q((from + offset - o.startMs) / 1000, 1), toT: q((to + offset - o.startMs) / 1000, 1), durS: (to - from) / 1000,
+    distM: 0, avgSpeed: 0, splitPer500: 0, avgSR: null, srCv: null, avgDps: null,
+  }))
+  const track = o.track ?? []
+  const step = Math.max(1, Math.ceil(track.length / 900))
+  const points = track.filter((_, i) => i % step === 0)
+    .map(p => roundPoint({ t: (p.timestamp.getTime() - o.startMs) / 1000, lat: p.lat, lng: p.lng, speed: 0, sr: null, dps: null }))
+  const r: AnalysisResult = {
+    durationS: m.paddlingS, distanceKm: 0, avgSpeed: 0, avgSR: m.strokesPerMin, avgDps: null, srCv: null,
+    cruiseSpeed: 0, strokeRateDoubled: false, points, stops, surges: [], sets: [], insight: '',
+    noGps: { reason: o.reason, strokes: m.strokes },
+  }
+  r.insight = motionInsight(r)
+  return r
+}
+
+/** A stroke count as "about" it is shown: "5,200", to the nearest hundred past a thousand. */
+export function roundStrokes(n: number): string {
+  // Not toLocaleString: the server and the browser must write it the same way.
+  return String(n >= 1000 ? Math.round(n / 100) * 100 : Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+// The plain summary of a paddle without a map: only what the motion data shows.
+function motionInsight(r: AnalysisResult): string {
+  const nR = r.stops.length
+  const rests = nR ? ` ${nR} ${nR === 1 ? 'rest' : 'rests'}.` : ''
+  const gps = r.noGps?.reason.kind === 'no_gps' ? 'the GPS never found the sky' : 'the GPS lost the sky'
+  return `A ${fmtDurAdj(r.durationS)} paddle from the boat's motion: about ${roundStrokes(r.noGps?.strokes ?? 0)} strokes at ${Math.round(r.avgSR ?? 0)} spm.${rests} No distance or pace: ${gps}.`
 }
 
 // Deterministic templated insight (the LLM replaces this later, narrating the
