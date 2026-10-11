@@ -30,5 +30,5 @@ export default function SavedPaddle({ id }: { id: string }) {
   )
 
   const session = q.data
-  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type, stravaActivityId: session.source.stravaActivityId } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} summaryPending={pending && !write.isError} />
+  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type, stravaActivityId: session.source.stravaActivityId } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} initialHiddenFromBuddies={!!session.hiddenFromBuddies} summaryPending={pending && !write.isError} />
 }

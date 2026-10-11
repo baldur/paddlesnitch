@@ -41,7 +41,7 @@ export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: str
 // 2026-10). Reused by the live analyse flow, the saved paddle and the shared
 // view. `sessionId` enables the diary notes editor and the
 // "race a section" flow (which needs a saved source to match against).
-export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile, readOnly = false, summaryPending = false }: {
+export default function AnalysisView({ data: dataProp, sessionId, initialNote = '', initialBoatClass, initialSeat, onNewFile, readOnly = false, summaryPending = false, buddy, initialHiddenFromBuddies = false }: {
   data: ViewData
   sessionId?: string
   initialNote?: string
@@ -54,9 +54,15 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   // The AI summary is still being written (performance.md, phase 4): the
   // plain one shows meanwhile, with a line saying so.
   summaryPending?: boolean
+  // A buddy's paddle (read-only): whose it is, and their list to go back to.
+  buddy?: { name: string; href: string }
+  // The owner hid this paddle from their buddies.
+  initialHiddenFromBuddies?: boolean
 }) {
   const router = useRouter()
   const utils = trpc.useUtils()
+  const [hiddenFromBuddies, setHiddenFromBuddies] = useState(initialHiddenFromBuddies)
+  const setHidden = trpc.paddles.setHiddenFromBuddies.useMutation({ onSuccess: r => setHiddenFromBuddies(r.hidden) })
   const setDoublingMut = trpc.paddles.setDoubling.useMutation()
   const setNoteMut = trpc.paddles.setNote.useMutation()
   const shareMut = trpc.paddles.share.useMutation()
@@ -260,7 +266,9 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
 
   return (
     <main className="flex-1 flex flex-col bg-bg text-fg">
-      <AppHeader breadcrumb={readOnly
+      <AppHeader breadcrumb={buddy
+        ? <Link href={buddy.href} className="tt-nav-link text-sm shrink-0">← {buddy.name.toUpperCase()}&apos;S PADDLES</Link>
+        : readOnly
         ? <span className="text-muted text-xs tracking-widest">SHARED PADDLE</span>
         : <Link href="/paddles" className="tt-nav-link text-sm shrink-0">← PADDLES</Link>} />
 
@@ -462,7 +470,13 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         {/* What you can do with it. Panels open in place, not over the map. */}
         <aside className="order-1 md:order-2 flex flex-row flex-wrap md:flex-col md:flex-nowrap gap-2 text-xs content-start" aria-label="Actions">
           {onNewFile && <button onClick={onNewFile} className={ACTION}>ADD ANOTHER</button>}
-          {readOnly && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
+          {readOnly && !buddy && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
+          {sessionId && !readOnly && (
+            <button onClick={() => setHidden.mutate({ id: sessionId, hidden: !hiddenFromBuddies })} disabled={setHidden.isPending}
+              className={`${ACTION} ${hiddenFromBuddies ? 'border-primary text-fg' : ''}`} title="Your buddies see your paddles unless you hide one">
+              {hiddenFromBuddies ? 'HIDDEN FROM BUDDIES' : 'HIDE FROM BUDDIES'}
+            </button>
+          )}
           {sessionId && !readOnly && <button onClick={toggleShare} className={`${ACTION} ${showShare ? 'border-primary text-fg' : ''}`}>SHARE</button>}
           {showShare && sessionId && !readOnly && (
             <div className={BOX}>

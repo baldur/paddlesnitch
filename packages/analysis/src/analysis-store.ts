@@ -65,6 +65,7 @@ export type SessionSummary = {
   insight: string
   boatClass?: BoatClass
   seat?: Seat
+  hiddenFromBuddies?: true
   // Start point of the track — used by relevance retrieval to group paddles by
   // venue ("your other paddles here"). Undefined on a paddle with no points.
   startLat?: number
@@ -187,6 +188,17 @@ export async function updateSessionNote(userId: string, id: string, note: string
   return s
 }
 
+// Hide a paddle from the owner's buddies, or show it again
+// (docs/features/buddies-and-compare.md).
+export async function updateSessionHidden(userId: string, id: string, hidden: boolean): Promise<AnalysisSession | null> {
+  const s = await getSession(userId, id)
+  if (!s) return null
+  if (hidden) s.hiddenFromBuddies = true
+  else delete s.hiddenFromBuddies
+  await saveSession(s)
+  return s
+}
+
 // Flip the SUP→kayak stroke-rate doubling on a saved paddle and re-persist. The
 // result's SR-derived fields are rescaled in place (no re-analysis needed).
 export async function updateSessionDoubling(userId: string, id: string, doubled: boolean): Promise<AnalysisSession | null> {
@@ -237,6 +249,7 @@ function toSummary(s: AnalysisSession): SessionSummary {
     avgSR: s.result.avgSR, cruiseSpeed: s.result.cruiseSpeed,
     effortCount: s.result.surges.length, avgDps: s.result.avgDps, note: s.note, insight: s.insight,
     boatClass: s.boatClass, seat: s.seat,
+    ...(s.hiddenFromBuddies ? { hiddenFromBuddies: true as const } : {}),
     startLat: s.result.points[0]?.lat, startLng: s.result.points[0]?.lng,
     route: thumbRoute(s.result.points),
   }

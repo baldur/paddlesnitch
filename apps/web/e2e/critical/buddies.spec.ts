@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import { readFileSync } from 'fs'
+import path from 'path'
 import { signUpFlow } from '../helpers'
 
 // Critical path: two paddlers become buddies through an invite link, each in
@@ -26,6 +28,21 @@ test('an invite link makes two paddlers buddies, and each sees the other', async
   // The link still works for Ann's next buddy, and opening it again changes nothing.
   await bob.goto(url.pathname + url.search)
   await expect(bob.getByRole('status')).toContainText('already buddies')
+
+  // Ann adds a paddle; Bob finds it under her paddles and opens it.
+  const added = await ann.request.post('/paddles/api/analyse', {
+    multipart: { file: { name: 'garmin.zip', mimeType: 'application/zip', buffer: readFileSync(path.join(__dirname, '../../src/tests/fixtures/garmin-activity-export.zip')) } },
+  })
+  expect(added.ok()).toBe(true)
+  await bob.goto('/buddies')
+  await bob.locator('section[aria-label="Your buddies"]').getByRole('link', { name: 'PADDLES →' }).click()
+  await expect(bob.getByRole('heading', { name: "ANN INVITES'S PADDLES" })).toBeVisible()
+  await bob.locator('main a[href^="/buddies/"]').first().click()
+  await expect(bob.getByRole('link', { name: "← ANN INVITES'S PADDLES" })).toBeVisible()
+  await expect(bob.getByText('km').first()).toBeVisible()
+  // A buddy can't edit or share it.
+  await expect(bob.getByRole('button', { name: 'NOTES' })).toHaveCount(0)
+  await expect(bob.getByRole('button', { name: 'SHARE' })).toHaveCount(0)
 
   await annCtx.close(); await bobCtx.close()
 })

@@ -91,6 +91,7 @@ function Buddies() {
                       <span className="block text-sm">{b.name}</span>
                       <span className="block text-xs text-muted">buddies since {fmtDay(b.since)}</span>
                     </span>
+                    {confirming !== b.userId && <Link href={`/buddies/${b.userId}`} className="text-xs tracking-widest text-primary ml-auto">PADDLES →</Link>}
                     {confirming === b.userId ? (
                       <span className="flex items-center gap-2 text-xs">
                         <span className="text-muted">Stop seeing each other&apos;s paddles?</span>
