@@ -169,6 +169,23 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await listKeys('feedback-contacts/')).toEqual(['feedback-contacts/2.json'])
   })
 
+  it('ends every buddy friendship on both sides, with requests to and from them and their invite link', async () => {
+    const me = await makeUser('Me'), buddy = await makeUser('Buddy'), asker = await makeUser('Asker'), asked = await makeUser('Asked')
+    const { requestBuddy, acceptRequest, listBuddies, getInviteToken, inviteOwner, listIncomingRequests } = await import('@paddlesnitch/core/buddies')
+    await requestBuddy(me.id, buddy.id); await acceptRequest(buddy.id, me.id)
+    await requestBuddy(asker.id, me.id); await requestBuddy(me.id, asked.id)
+    const token = await getInviteToken(me.id)
+
+    signInAs(me.idToken)
+    expect((await deleteAccount()).status).toBe(200)
+
+    expect(await listBuddies(buddy.id)).toEqual([])
+    expect(await listIncomingRequests(asked.id)).toEqual([])
+    expect(await inviteOwner(token)).toBeNull()
+    const left = [...await listKeys('buddies/'), ...await listKeys('buddy-requests/'), ...await listKeys('buddy-requests-out/'), ...await listKeys('buddy-invites/')]
+    expect(left.filter(k => k.includes(me.id))).toEqual([])
+  })
+
   it('takes them out of groups they belong to, with their invitations and join requests', async () => {
     const owner = await makeUser('Owner')
     const me = await makeUser('Me')
@@ -253,6 +270,18 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     expect(text).not.toContain('SECRET-A')
     expect(text).not.toContain('SECRET-R')
     expect(text).not.toContain('tokenHash')
+  })
+
+  it('exports their buddies and buddy requests (ids only, never emails)', async () => {
+    const me = await makeUser('Me'), buddy = await makeUser('Buddy')
+    const { requestBuddy, acceptRequest } = await import('@paddlesnitch/core/buddies')
+    await requestBuddy(me.id, buddy.id); await acceptRequest(buddy.id, me.id)
+    signInAs(me.idToken)
+    const text = await (await exportData()).text()
+    const body = JSON.parse(text)
+    expect(body.buddies.buddies.map((b: { userId: string }) => b.userId)).toEqual([buddy.id])
+    expect(body.buddies.sharing).toEqual({ paddles: true })
+    expect(text).not.toContain(buddy.email)
   })
 
   it("does not include another user's paddles or trackers", async () => {

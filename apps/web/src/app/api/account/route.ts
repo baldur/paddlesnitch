@@ -13,6 +13,7 @@ import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
 import { eraseUserDevices } from '@paddlesnitch/core/devices'
 import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
+import { eraseBuddies } from '@paddlesnitch/core/buddies'
 
 // GDPR Art. 17 (right to erasure). Permanently removes:
 //   - the Cognito user record (no more sign-ins)
@@ -98,6 +99,8 @@ export async function DELETE() {
   await eraseDerived(user.id)
   // Prepared "Download my data" files (a lifecycle rule also drops them daily).
   await deletePrefix(`exports/${user.id}/`)
+  // Both sides of every buddy friendship, requests to and from them, their invite link.
+  await eraseBuddies(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
   await eraseBetaApplication(user.email)
