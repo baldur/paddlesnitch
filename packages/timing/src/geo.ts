@@ -324,6 +324,37 @@ export function gateDiagnosisMessage(d: GateDiagnosis): string {
 
 // Try every start-line crossing and pair it with the correct finish crossing for the course type.
 // Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
+export type Pass = { startMs: number; finishMs: number; startIndex: number; finishIndex: number }
+
+/**
+ * EVERY pass through two gates, not only the fastest (processTrace): each
+ * finish crossing paired with the latest start crossing before it (and after
+ * the previous pass), so laps and repeat passes in one outing each count once.
+ * `startSign`/`finishSign` keep to one direction (the sign of rxs, as gates use).
+ */
+export function allPasses(track: TrackPoint[], startLine: Line, finishLine: Line, startSign?: number, finishSign?: number): Pass[] {
+  const starts = findAllCrossings(track, startLine, 0, startSign)
+  const finishes = findAllCrossings(track, finishLine, 0, finishSign)
+  const at = (c: Crossing) => c.trackIndex + c.t
+  const passes: Pass[] = []
+  let after = -Infinity
+  for (const f of finishes) {
+    const before = starts.filter(s => at(s) > after && at(s) < at(f))
+    if (!before.length) continue
+    const s = before[before.length - 1]
+    passes.push({ startMs: s.timestamp.getTime(), finishMs: f.timestamp.getTime(), startIndex: s.trackIndex, finishIndex: f.trackIndex + 1 })
+    after = at(f)
+  }
+  return passes
+}
+
+/** The direction (sign) a track crosses `line` at its crossing nearest point `near`, or undefined. */
+export function crossingSignNear(track: TrackPoint[], line: Line, near: number): number | undefined {
+  const all = findAllCrossings(track, line)
+  if (!all.length) return undefined
+  return all.reduce((x, y) => (Math.abs(y.trackIndex - near) < Math.abs(x.trackIndex - near) ? y : x)).rxsSign
+}
+
 export function processTrace(
   track: TrackPoint[],
   startLine: Line,

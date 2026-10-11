@@ -34,6 +34,34 @@ route that reads someone else's paddle.
 | 3 | Buddies pages: list, requests, invite link, ADD AS BUDDY on profiles, menu badge | yes |
 | 4 | A buddy's paddles: list + read-only paddle; "buddies can see my paddles" + per-paddle hide | yes |
 | 5 | Compare and race a section with buddies' paddles | yes |
+| 6 | Route-aware matching: offer paddles that share water the same way (100 m squares, shared km, distance alike) | yes (#433) |
+| 7 | Every pass of a section, yours and your buddies' (below) | yes |
+
+## Every pass of a section (phase 7)
+
+Pick two points on a paddle's map (yours, or a buddy's), then EVERY PASS →
+opens `/paddles/section?src={paddleId}&a={i}&b={j}[&owner={buddyId}]`:
+every time you or a buddy paddled between those two gates **the same way
+round**, fastest first, with your best and your last few, and any two passes
+ticked to compare line against line (`LineCompare`).
+
+- Gates are `gateAt` (120 m across, square to the line) at the two points;
+  the direction is the sign of the source paddle's own crossing
+  (`crossingSignNear`).
+- `allPasses` (timing/geo): each finish crossing paired with the latest start
+  crossing before it, so laps and repeat passes in one outing all count.
+- A pass must follow the section's water (`pathSimilarity` ≥ 0.6): through
+  both gates by another channel isn't the section.
+- Paddles are shortlisted by the section's 100 m squares (≥ 70% of them), then
+  read in full; each one through `canViewPaddle` (buddies: sharing on, not
+  hidden). One outing recorded twice is listed once (same owner, gate time
+  within 90 s), preferring the recording with stroke rate.
+- Times include any stops in the section.
+- tRPC `sections.passes` / `sections.passLine` (names, never emails; "You"
+  for yours); `@paddlesnitch/analysis/section-passes`. Every "no" is NOT_FOUND.
+  Tests: `section-passes.test.ts`.
+
+Not built: saving a section with a name to come back to (needs a decision).
 
 ## Storage (one object per item)
 
