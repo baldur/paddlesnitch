@@ -3,6 +3,7 @@
 #include "board.h"
 #include "netcfg.h"
 #include "dbg.h"
+#include "loopwatch.h"
 #include <HTTPClient.h>
 #include <esp_core_dump.h>
 
@@ -37,6 +38,12 @@ void healthCaptureBoot()
         DBGW("health", "crash (%s), no summary saved", s_reason);
     }
     free(sum);
+    // A frozen loop() is reported by the watchdog from core 0, so the dump
+    // names the wrong task. Say what actually stopped.
+    if (loopWatchFroze()) {
+        snprintf(s_crash.task, sizeof(s_crash.task), "loopTask-frozen");
+        DBGW("health", "the previous start froze in loop() (watchdog)");
+    }
 }
 
 static bool post(WiFiClientSecure &client, const char *json)
