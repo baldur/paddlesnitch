@@ -20,6 +20,7 @@ export default function RecordingMotion() {
   const [attitude, setAttitude] = useState<AttitudeReport | null>(null)
   const [cadence, setCadence] = useState<CadenceReport | null>(null)
   const [noPaddle, setNoPaddle] = useState<string | null>(null)
+  const [fromMotion, setFromMotion] = useState<string | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export default function RecordingMotion() {
         setAttitude(d.attitude ?? null)
         setCadence(d.cadence ?? null)
         setNoPaddle(d.noPaddle ?? null)
+        setFromMotion(d.fromMotion ?? null)
         setState('ready')
       } catch {
         if (!cancelled) setState('error')
@@ -72,7 +74,7 @@ export default function RecordingMotion() {
               <p className="text-sm text-muted mt-1 tabular">
                 {fmtDate(meta.startedAt ?? meta.uploadedAt)} · {meta.filename}
               </p>
-              {noPaddle && <p className="text-sm text-fg mt-3 border-l-2 border-primary pl-3">{noPaddle}</p>}
+              {noPaddle && <p className="text-sm text-fg mt-3 border-l-2 border-primary pl-3">{noPaddle}{fromMotion ? ` ${fromMotion}` : ''}</p>}
             </div>
 
             <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} />

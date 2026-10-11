@@ -431,3 +431,23 @@ export function decimateMotionCsv(csv: string, targetHz = 10): string {
   const kept = factor > 1 ? body.filter((_, i) => i % factor === 0) : body
   return [...(header ? [header] : []), ...kept].join('\n') + '\n'
 }
+
+/**
+ * What the motion data alone says about a paddle (#414), for a recording whose
+ * GPS failed: time spent paddling (the windows with a clear stroke, overlaps
+ * merged) and about how many strokes (each window's rate over its share of the
+ * time). Null when no window showed a clear stroke.
+ */
+export function paddlingFromMotion(report: CadenceReport): { paddlingS: number; strokes: number; strokesPerMin: number } | null {
+  if (!report.available || report.windows.length === 0 || report.medianStrokesPerMin == null) return null
+  const ws = [...report.windows].sort((a, b) => a.tMs - b.tMs)
+  let paddlingMs = 0, strokes = 0, end = -Infinity
+  for (const w of ws) {
+    const from = Math.max(w.tMs, end), to = w.tMs + WINDOW_S * 1000
+    if (to <= from) continue
+    paddlingMs += to - from
+    strokes += (w.strokesPerMin * (to - from)) / 60_000
+    end = to
+  }
+  return { paddlingS: Math.round(paddlingMs / 1000), strokes: Math.round(strokes), strokesPerMin: report.medianStrokesPerMin }
+}

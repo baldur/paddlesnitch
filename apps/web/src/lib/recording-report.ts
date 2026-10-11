@@ -2,13 +2,15 @@ import { derived, derivedKey, type DerivedSpec } from '@paddlesnitch/core/derive
 import { getDeviceSessionMeta, getDeviceSessionTrace, getDeviceSessionMotion, type DeviceSessionMeta } from '@paddlesnitch/core/devices'
 import { describeDeviceData, noPaddleReason, noPaddleMessage, type DeviceDataReport } from '@paddlesnitch/timing/device'
 import { MIN_PADDLE_METRES } from '@paddlesnitch/analysis/tracker-paddle'
-import { deriveCadence, movingRangesFromTrack, type CadenceReport } from '@paddlesnitch/timing/cadence'
+import { deriveCadence, movingRangesFromTrack, paddlingFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
 import { deriveAttitude, type AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 export type RecordingReport = {
   report: DeviceDataReport; cadence: CadenceReport | null; attitude: AttitudeReport | null
   /** Why it isn't a paddle, in plain words (GPS lost, no GPS, too short), or null. */
   noPaddle: string | null
+  /** When the GPS failed: what the motion data says about the paddle (#414), in plain words, or null. */
+  fromMotion: string | null
 }
 
 /**
@@ -57,6 +59,21 @@ export async function recordingReport(userId: string, deviceId: string, sessionI
       }
     } catch { cadence = null; attitude = null }
     const why = noPaddleReason(csv, MIN_PADDLE_METRES)
-    return { report, cadence, attitude, noPaddle: why ? noPaddleMessage(why, !!meta.motion) : null }
+    const gpsFailed = why?.kind === 'gps_lost' || why?.kind === 'no_gps'
+    const fromMotion = gpsFailed && cadence ? paddlingFromMotion(cadence) : null
+    return {
+      report, cadence, attitude,
+      noPaddle: why ? noPaddleMessage(why, !!meta.motion) : null,
+      fromMotion: fromMotion ? motionMessage(fromMotion) : null,
+    }
   })
 }
+
+const hm = (s: number) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.max(1, Math.round(s / 60))} min`)
+
+/** "From the motion data: about 1 h 41 min paddling, about 5,200 strokes at 52 spm." */
+export function motionMessage(m: { paddlingS: number; strokes: number; strokesPerMin: number }): string {
+  const strokes = m.strokes >= 1000 ? Math.round(m.strokes / 100) * 100 : m.strokes
+  return `From the motion data: about ${hm(m.paddlingS)} paddling, about ${strokes.toLocaleString('en-GB')} strokes at ${Math.round(m.strokesPerMin)} spm.`
+}
+

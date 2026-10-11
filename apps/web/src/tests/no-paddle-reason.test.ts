@@ -3,8 +3,10 @@
 // 30 s in; the page said nothing, so the paddler thought something was broken.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { noPaddleReason, noPaddleMessage } from '@paddlesnitch/timing/device'
-import { storeDeviceSession } from '@paddlesnitch/core/devices'
-import { recordingReport } from '@/lib/recording-report'
+import { storeDeviceSession, storeDeviceMotion } from '@paddlesnitch/core/devices'
+import { paddlingFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
+import { sidecar } from './tracker-fixtures'
+import { recordingReport, motionMessage } from '@/lib/recording-report'
 import { makeDataDir, cleanDataDir } from './helpers'
 
 const T0 = Date.parse('2026-10-11T07:00:00Z')
@@ -71,5 +73,45 @@ describe("the recording's report carries the reason", () => {
     expect((await recordingReport('u1', 'AABBCCDD', lost.sessionId))?.noPaddle).toMatch(/^The GPS lost the sky 30 seconds after you set off/)
     const ok = await storeDeviceSession({ deviceId: 'AABBCCDD', userId: 'u1', filename: 'track_2.csv', points: 3601 }, csv(3600))
     expect((await recordingReport('u1', 'AABBCCDD', ok.sessionId))?.noPaddle).toBeNull()
+  })
+})
+
+describe('what the motion data says when the GPS failed (#414)', () => {
+  const w = (tMin: number, spm: number) => ({ tMs: tMin * 60_000, cyclesPerMin: spm / 2, strokesPerMin: spm, alternating: true, confidence: 0.8 })
+  const report = (windows: ReturnType<typeof w>[]): CadenceReport => ({ available: true, reason: '', sampleRateHz: 10, rows: 1, medianStrokesPerMin: 50, windows })
+
+  it('paddling time merges overlapping windows; strokes follow each window\'s rate', () => {
+    // Windows every 30 s, 60 s long: 0-2.5 min solid, a rest, then 10-11 min.
+    const r = paddlingFromMotion(report([w(0, 50), w(0.5, 50), w(1, 50), w(1.5, 60), w(10, 40)]))
+    expect(r).toEqual({ paddlingS: 150 + 60, strokes: Math.round(50 * 2 + 60 * 0.5 + 40), strokesPerMin: 50 })
+  })
+
+  it('nothing when no window showed a clear stroke', () => {
+    expect(paddlingFromMotion({ ...report([]), available: false, medianStrokesPerMin: null })).toBeNull()
+  })
+
+  it('says it in plain words, rounded', () => {
+    expect(motionMessage({ paddlingS: 6060, strokes: 5234, strokesPerMin: 51.6 })).toBe('From the motion data: about 1 h 41 min paddling, about 5,200 strokes at 52 spm.')
+    expect(motionMessage({ paddlingS: 1500, strokes: 640, strokesPerMin: 48 })).toBe('From the motion data: about 25 min paddling, about 640 strokes at 48 spm.')
+  })
+
+  describe('on the recording', () => {
+    let dir: string
+    beforeEach(async () => { dir = await makeDataDir() })
+    afterEach(async () => { await cleanDataDir(dir) })
+
+    it('a recording whose GPS was lost but whose motion data shows paddling says how long and how many strokes', async () => {
+      const lost = await storeDeviceSession({ deviceId: 'AABBCCDD', userId: 'u1', filename: 'track_3.csv', points: 1201 }, csv(1200, { fix: s => s <= 30 }))
+      expect(await storeDeviceMotion('AABBCCDD', 'u1', 'track_3.csv', sidecar({ seconds: 600, hz: 10, strokesPerMin: 50 }), 6000)).not.toBe('no_track')
+      const r = await recordingReport('u1', 'AABBCCDD', lost.sessionId)
+      expect(r?.noPaddle).toMatch(/^The GPS lost the sky 30 seconds after you set off/)
+      expect(r?.fromMotion).toMatch(/^From the motion data: about 10 min paddling, about \d+ strokes at (49|50|51) spm\.$/)
+    })
+
+    it('a desk test (too short) gets no motion line', async () => {
+      const desk = await storeDeviceSession({ deviceId: 'AABBCCDD', userId: 'u1', filename: 'track_4.csv', points: 601 }, csv(600, { mps: 0 }))
+      await storeDeviceMotion('AABBCCDD', 'u1', 'track_4.csv', sidecar({ seconds: 600, hz: 10, strokesPerMin: 50 }), 6000)
+      expect((await recordingReport('u1', 'AABBCCDD', desk.sessionId))?.fromMotion).toBeNull()
+    })
   })
 })

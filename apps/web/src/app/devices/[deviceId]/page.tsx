@@ -22,16 +22,17 @@ type SessionReport = {
   cadence: CadenceReport | null
   attitude: AttitudeReport | null
   noPaddle?: string | null
+  fromMotion?: string | null
 }
 
-function Report({ report, cadence, attitude, noPaddle, sessionId, deviceId }: SessionReport & { sessionId: string; deviceId: string }) {
+function Report({ report, cadence, attitude, noPaddle, fromMotion, sessionId, deviceId }: SessionReport & { sessionId: string; deviceId: string }) {
   const sr = strokeRateCopy(report, cadence)
   const gps = gpsCopy(report)
   // Derived from the fields already in the report — no server change.
   const avgSpeedKmh = report.timeSpanS && report.timeSpanS > 0 ? (report.movementDistanceM / report.timeSpanS) * 3.6 : null
   return (
     <div className="mt-2 border-t border-border pt-3 flex flex-col gap-3 text-xs">
-      {noPaddle ? <p className="text-fg">{noPaddle}</p> : !report.looksUsable && (
+      {noPaddle ? <p className="text-fg">{noPaddle}{fromMotion ? ` ${fromMotion}` : ''}</p> : !report.looksUsable && (
         <p className="text-muted">This recording has no paddle in it. It may have been started on land, or stopped before you set off.</p>
       )}
 
