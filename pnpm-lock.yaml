@@ -47,6 +47,9 @@ importers:
       '@paddlesnitch/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@paddlesnitch/waterways':
+        specifier: workspace:*
+        version: link:../../packages/waterways
       '@swc/helpers':
         specifier: ^0.5.23
         version: 0.5.23
@@ -229,6 +232,12 @@ importers:
       react-dom:
         specifier: ^19
         version: 19.3.0(react@19.3.0)
+
+  packages/waterways:
+    dependencies:
+      '@paddlesnitch/timing':
+        specifier: workspace:*
+        version: link:../timing
 
 packages:
 

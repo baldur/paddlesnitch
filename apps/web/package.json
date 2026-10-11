@@ -18,6 +18,7 @@
     "cognito": "cognito-local",
     "cognito:init": "tsx --env-file-if-exists=.env.local scripts/cognito-init.ts",
     "rivers": "tsx scripts/download-rivers.ts",
+    "waterways": "tsx scripts/waterways/build-region.ts",
     "build:open-next": "npx open-next build",
     "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy",
     "strava:webhook": "tsx scripts/strava-webhook.ts"
@@ -29,6 +30,7 @@
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
     "@paddlesnitch/ui": "workspace:*",
+    "@paddlesnitch/waterways": "workspace:*",
     "@tanstack/react-query": "^5.104.1",
     "@trpc/client": "^11.19.0",
     "@trpc/react-query": "^11.19.0",

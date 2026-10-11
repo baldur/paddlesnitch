@@ -1,0 +1,26 @@
+{
+  "name": "@paddlesnitch/waterways",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./osgb": "./src/osgb.ts",
+    "./line": "./src/line.ts",
+    "./network": "./src/network.ts",
+    "./along": "./src/along.ts",
+    "./coverage": "./src/coverage.ts",
+    "./sources": "./src/sources.ts",
+    "./regions": "./src/regions.ts",
+    "./build": "./src/build.ts",
+    "./ingest/crt": "./src/ingest/crt.ts",
+    "./ingest/thames": "./src/ingest/thames.ts",
+    "./ingest/osm": "./src/ingest/osm.ts"
+  },
+  "dependencies": {
+    "@paddlesnitch/timing": "workspace:*"
+  }
+}
