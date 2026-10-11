@@ -391,6 +391,14 @@ How an update reaches the device:
   ever. It now asks outright, at most once an hour, and **only** when it has
   heard nothing that boot. A device that uploads still costs zero extra requests.
 
+**Beta first (2026-10-11).** A merge releases firmware to the **beta** channel
+only; trackers in `firmware/beta-devices.json` (`tools/beta.sh list|add|remove
+<id>`) get it — the server answers each tracker with `versionForDevice` (newer of
+beta and stable for a beta tracker), in `X-PS-Firmware` and the manifest. The
+flip to everyone: `gh workflow run firmware-release.yml -f version=<v> -f
+channel=stable`, refused unless a tracker acked a good start on it. No firmware
+change was needed: the tracker just follows what the server tells it.
+
 **Rollback is app-level.** `otaBootCheck()` runs first thing in `setup()`, before
 any hardware init, and counts boots against `OTA_MAX_BOOTS` (3). `otaMarkValid()`
 runs once bring-up succeeds and cancels it. This path has worked on a real tracker (2026-09-28: paddle02 was sent back to 0.14.0, which could not start its new-batch screen, and restored 0.15.0 by itself). An image that faults *before*

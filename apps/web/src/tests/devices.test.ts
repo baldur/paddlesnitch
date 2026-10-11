@@ -129,7 +129,7 @@ describe('device pairing (#212 device-uplink)', () => {
     mockAuth(u.idToken)
     const { devices } = await (await listDevices()).json()
     expect(devices).toHaveLength(1)
-    expect(Object.keys(devices[0]).sort()).toEqual(['deviceId', 'firmware', 'lastSeenAt', 'linkedAt', 'model', 'name'])
+    expect(Object.keys(devices[0]).sort()).toEqual(['deviceId', 'firmware', 'lastSeenAt', 'linkedAt', 'model', 'name', 'targetVersion'])
   })
 
   it('a second claim supersedes the first for that device, and the old code dies with it', async () => {

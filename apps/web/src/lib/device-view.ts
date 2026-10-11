@@ -20,6 +20,10 @@ export type DeviceView = {
   linkedAt?: string; lastSeenAt?: string
   /** The tracker's most recent crash, as it reported on its next start. */
   lastCrash?: { at: string; task: string }
+  /** On the beta list: gets merged builds before everyone else. */
+  beta?: boolean
+  /** The version it should be running (beta trackers may be ahead of stable). */
+  targetVersion?: string | null
 }
 
 /** How long a crash stays on the tracker's card. */
