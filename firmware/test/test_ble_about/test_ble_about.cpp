@@ -33,14 +33,21 @@ static void about_fits_one_read(void)
 
 static void link_status_carries_the_hash_never_a_token(void)
 {
-    char buf[200];
+    // sig: the tracker's signature over its id + this hash, which the page
+    // relays so the server knows the tracker itself asked (a full-size DER
+    // signature is 96 base64 characters; the whole thing must fit one read).
+    char buf[BLE_LINK_JSON_MAX];
+    const char *sig = "MEUCIQCx0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/0123456789abcdefghijklmno==";
     bleLinkJson(buf, sizeof(buf), "435AC17C", "pending",
-                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", sig);
     TEST_ASSERT_EQUAL_STRING(
         "{\"v\":1,\"id\":\"435AC17C\",\"state\":\"pending\","
-        "\"tokenHash\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"}", buf);
-    bleLinkJson(buf, sizeof(buf), "435AC17C", "idle", nullptr);
+        "\"tokenHash\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\","
+        "\"sig\":\"MEUCIQCx0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/0123456789abcdefghijklmno==\"}", buf);
+    TEST_ASSERT_TRUE(strlen(buf) < 512);
+    bleLinkJson(buf, sizeof(buf), "435AC17C", "idle", nullptr, nullptr);
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"tokenHash\":\"\""));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"sig\":\"\""));
 }
 
 static void wifi_status_is_one_word_the_page_maps(void)

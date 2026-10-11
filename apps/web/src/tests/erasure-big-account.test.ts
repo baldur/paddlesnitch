@@ -8,6 +8,7 @@
 // the account is deleted, and the test measures the wall time.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { claimProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 vi.mock('@paddlesnitch/core/strava', async (orig) => ({ ...(await orig<typeof import('@paddlesnitch/core/strava')>()), revoke: vi.fn() }))
@@ -50,7 +51,7 @@ describe('deleting a well-used account', () => {
     for (let i = 0; i < 150; i++) await saveSession(paddle(me.id, `p${i}`))
     const claim = await createClaim('ABCD1234', 'T-Beam', '0.18.0')
     await linkClaim(claim.claimCode, me.id, 'Boat')
-    await redeemToken('ABCD1234', claim.claimSecret)
+    await redeemToken('ABCD1234', claim.claimSecret, await claimProof('ABCD1234', claim.claimSecret))
     for (let i = 0; i < 60; i++) {
       await storeDeviceSession({ deviceId: 'ABCD1234', userId: me.id, filename: `track_${String(i).padStart(4, '0')}.csv`, startedAt: '2026-09-01T09:00:00Z', endedAt: '2026-09-01T10:00:00Z', distanceMetres: 1000, points: 10 }, 'lat,lon,timestamp\n')
     }

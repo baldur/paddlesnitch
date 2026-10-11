@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { provedPoll } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -48,7 +49,7 @@ async function boundToken(u: { id: string; idToken: string }): Promise<string> {
   const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'lilygo-tbeam-s3-supreme', firmware: '0.9.0' }))).json()
   mockAuth(u.idToken)
   await link(jreq({ claimCode }))
-  return (await (await token(jreq({ deviceId: DEVICE, claimSecret }))).json()).deviceToken
+  return (await (await token(jreq(await provedPoll(DEVICE, claimSecret)))).json()).deviceToken
 }
 
 const IMAGE = Buffer.from('a fake firmware image, but a real sha256 over it')

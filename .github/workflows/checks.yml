@@ -81,3 +81,8 @@ jobs:
       - name: Release note fits the screen
         if: steps.changed.outputs.yes == 'true'
         run: bash .github/scripts/firmware-notes.sh firmware/NOTES
+      - name: Release signing and tracker enrolment scripts
+        if: steps.changed.outputs.yes == 'true'
+        run: |
+          bash .github/scripts/firmware-sign.test.sh
+          bash firmware/tools/enroll.test.sh

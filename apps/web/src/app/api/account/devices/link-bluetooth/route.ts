@@ -6,7 +6,8 @@ import { limitLink } from '@/lib/device-limits'
 // POST /api/account/devices/link-bluetooth — AUTHENTICATED (browser). Links a
 // tracker set up over Bluetooth: the page read { deviceId, tokenHash } from the
 // tracker over a paired connection. The tracker made the token itself and keeps
-// it; only its hash comes here. Same limit as linking by code.
+// it; only its hash comes here, with the tracker's signature over it. Same limit
+// as linking by code.
 export async function POST(req: Request) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -21,7 +22,13 @@ export async function POST(req: Request) {
     model: str(b?.model, 64) || 'unknown',
     firmware: str(b?.firmware, 32) || 'unknown',
     name: typeof b?.name === 'string' && b.name.trim() ? b.name.slice(0, 64) : undefined,
+    // The tracker's signature over deviceId + tokenHash, read from it over
+    // Bluetooth alongside the hash. Without it the ID alone would do.
+    signature: b?.signature,
   })
-  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.error === 'bad_request' ? 400 : 409 })
+  if ('error' in r) {
+    const status = r.error === 'bad_request' ? 400 : r.error === 'not_enrolled' || r.error === 'bad_proof' ? 403 : 409
+    return NextResponse.json({ error: r.error }, { status })
+  }
   return NextResponse.json(r)
 }

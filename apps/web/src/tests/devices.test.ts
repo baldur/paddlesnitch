@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
+import { provedPoll } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -42,7 +43,7 @@ describe('device pairing (#212 device-uplink)', () => {
     expect(claimCode).toMatch(/^[0-9A-HJ-NP-Z]{6}$/) // safe alphabet, no 0/O/1/I/U/V
 
     // before the user enters the code, the correct secret still only gets "pending"
-    const early = await token(jreq({ deviceId: DEVICE, claimSecret }))
+    const early = await token(jreq(await provedPoll(DEVICE, claimSecret)))
     expect(early.status).toBe(202)
 
     mockAuth(u.idToken)
@@ -50,14 +51,14 @@ describe('device pairing (#212 device-uplink)', () => {
     expect(linkRes.status).toBe(200)
     expect((await linkRes.json()).deviceId).toBe(DEVICE)
 
-    const tok = await token(jreq({ deviceId: DEVICE, claimSecret }))
+    const tok = await token(jreq(await provedPoll(DEVICE, claimSecret)))
     expect(tok.status).toBe(200)
     const body = await tok.json()
     expect(body.deviceToken).toBeTruthy()
     expect(body.userId).toBe(u.id)
 
     // consumed — a retry after the claim is gone returns 410
-    const again = await token(jreq({ deviceId: DEVICE, claimSecret }))
+    const again = await token(jreq(await provedPoll(DEVICE, claimSecret)))
     expect(again.status).toBe(410)
   })
 
@@ -82,7 +83,7 @@ describe('device pairing (#212 device-uplink)', () => {
       const forLink = await createClaim(OTHER_DEVICE, 'm', 'f')
       vi.setSystemTime(new Date('2026-09-05T12:11:00Z')) // +11 min, past the 10-min TTL
 
-      const tok = await token(jreq({ deviceId: DEVICE, claimSecret: forToken.claimSecret }))
+      const tok = await token(jreq(await provedPoll(DEVICE, forToken.claimSecret)))
       expect(tok.status).toBe(410)
 
       const linkErr = await linkClaim(forLink.claimCode, 'user-x')
@@ -97,7 +98,7 @@ describe('device pairing (#212 device-uplink)', () => {
     const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
     mockAuth(u.idToken)
     await link(jreq({ claimCode }))
-    const { deviceToken } = await (await token(jreq({ deviceId: DEVICE, claimSecret }))).json()
+    const { deviceToken } = await (await token(jreq(await provedPoll(DEVICE, claimSecret)))).json()
 
     // valid bearer → device principal
     expect(await getDeviceAuth(bearer(deviceToken))).toEqual({ deviceId: DEVICE, userId: u.id })
@@ -124,7 +125,7 @@ describe('device pairing (#212 device-uplink)', () => {
     const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
     mockAuth(u.idToken)
     await link(jreq({ claimCode }))
-    await token(jreq({ deviceId: DEVICE, claimSecret }))
+    await token(jreq(await provedPoll(DEVICE, claimSecret)))
 
     mockAuth(u.idToken)
     const { devices } = await (await listDevices()).json()
@@ -148,12 +149,12 @@ describe('device pairing (#212 device-uplink)', () => {
 
     // The old secret is equally dead, and says `pending` like every other
     // non-match rather than revealing that it was once real.
-    const stale = await token(jreq({ deviceId: DEVICE, claimSecret: first.claimSecret }))
+    const stale = await token(jreq(await provedPoll(DEVICE, first.claimSecret)))
     expect(stale.status).toBe(202)
 
     // The current claim still works end to end.
     expect(await linkClaim(second.claimCode, u.id)).toMatchObject({ deviceId: DEVICE })
-    const ok = await token(jreq({ deviceId: DEVICE, claimSecret: second.claimSecret }))
+    const ok = await token(jreq(await provedPoll(DEVICE, second.claimSecret)))
     expect(ok.status).toBe(200)
   })
 
@@ -162,7 +163,7 @@ describe('device pairing (#212 device-uplink)', () => {
     const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
     mockAuth(u.idToken)
     await link(jreq({ claimCode }))
-    expect((await token(jreq({ deviceId: DEVICE, claimSecret }))).status).toBe(200)
+    expect((await token(jreq(await provedPoll(DEVICE, claimSecret)))).status).toBe(200)
     // The code index is dropped the moment the token is issued.
     expect(await linkClaim(claimCode, u.id)).toEqual({ error: 'unknown_code' })
   })
@@ -173,7 +174,7 @@ describe('device pairing (#212 device-uplink)', () => {
     mockAuth(u.idToken)
     const linked = await link(jreq({ claimCode }))
     if (linked.status !== 200) return { linked, deviceToken: undefined as string | undefined }
-    const { deviceToken } = await (await token(jreq({ deviceId, claimSecret }))).json()
+    const { deviceToken } = await (await token(jreq(await provedPoll(deviceId, claimSecret)))).json()
     return { linked, deviceToken: deviceToken as string }
   }
 
@@ -232,7 +233,7 @@ async function boundToken(u: { id: string; idToken: string }): Promise<string> {
   const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: DEVICE, model: 'm', firmware: 'f' }))).json()
   mockAuth(u.idToken)
   await link(jreq({ claimCode }))
-  return (await (await token(jreq({ deviceId: DEVICE, claimSecret }))).json()).deviceToken
+  return (await (await token(jreq(await provedPoll(DEVICE, claimSecret)))).json()).deviceToken
 }
 const csvReq = (filename: string, csv: string, deviceToken: string) =>
   new Request(`http://x/api/devices/sessions?filename=${filename}`, {
@@ -353,7 +354,7 @@ describe('motion sidecar upload', () => {
     const { claimCode, claimSecret } = await (await claim(jreq({ deviceId: 'AABBCCDD', model: 'm', firmware: 'f' }))).json()
     mockAuth(other.idToken)
     await link(jreq({ claimCode }))
-    const otherToken = (await (await token(jreq({ deviceId: 'AABBCCDD', claimSecret }))).json()).deviceToken
+    const otherToken = (await (await token(jreq(await provedPoll('AABBCCDD', claimSecret)))).json()).deviceToken
 
     const res = await uploadSession(csvReq('track_0013_imu.csv', MOTION_CSV, otherToken))
     expect(res.status).toBe(409)   // its own device has no such track

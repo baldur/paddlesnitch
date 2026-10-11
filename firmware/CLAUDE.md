@@ -351,6 +351,30 @@ of every call, so a regression shows up as e.g. `claim HTTP 404`, not silence.
   first compressed upload (stack-canary crash loop). Measured peak ~8.3 KB; every
   sync logs `stack headroom` -- check it after adding anything to that task.
 
+### Claiming needs the tracker's key (0.19.1)
+
+A tracker ID is derived from the MAC and is not a secret, so binding one to an
+account needs a signature from the tracker's own ECDSA P-256 key
+(`src/identity.{h,cpp}`, mbedtls 2.28). The key is made on first use and kept in
+NVS namespace **`ident`** — NOT `paddle`, so a factory reset (`netcfgForget`)
+keeps it; only a full flash erase loses it. What is signed is in
+`include/claim_proof.h` (host-tested, pinned to the server by a vitest contract
+test): the server's claim secret on every `/token` poll (`proof`), and the new
+token hash on a Bluetooth link (`"sig"` in the LINK read, `bleLinkJson`).
+
+- **Enrol every new tracker after flashing it:** `tools/enroll.sh` (production,
+  needs `aws sso login --profile paddlesnitch`) or `tools/enroll.sh --local`.
+  It reads `IDENT <deviceId> <uniqueId> <pubkey>` over USB and writes
+  `device-keys/<ID>.json` for both IDs. Without it the tracker shows
+  "tracker not registered" when someone tries to add it.
+- A tracker already on an account registers its key itself after a sync
+  (`registerIdentityOnce` in `uplink.cpp`, `POST /api/devices/identity`), once;
+  a 409 means the server holds a different key — re-run `enroll.sh`.
+- Bench: `IDSIGN <text>` signs text with the key, to check against `IDENT` with
+  openssl.
+- Legacy IDs collide (two boards share `5A43CA48`); the last cable enrolment of
+  a shared legacy ID wins. Unique IDs don't collide.
+
 ### OTA (introduced in firmware 0.11.0) — working over the air; rollback seen on hardware
 
 `src/ota.{h,cpp}` does the work; `src/ota_policy.{h,cpp}` holds the DECISIONS and

@@ -5,6 +5,7 @@
 // index once.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir } from './helpers'
+import { claimProof } from './device-proof'
 
 const spy = vi.hoisted(() => ({ lists: [] as string[], reads: [] as string[] }))
 vi.mock('@paddlesnitch/core/storage', async (orig) => {
@@ -24,7 +25,7 @@ import { deleteObject, listKeys } from '@paddlesnitch/core/storage'
 async function pair(userId: string, deviceId: string) {
   const c = await createClaim(deviceId, 'T-Beam', '0.18.0')
   await linkClaim(c.claimCode, userId, `${userId}'s tracker`)
-  await redeemToken(deviceId, c.claimSecret)
+  await redeemToken(deviceId, c.claimSecret, await claimProof(deviceId, c.claimSecret))
 }
 const record = (userId: string, deviceId: string, n: number) => storeDeviceSession(
   { deviceId, userId, filename: `track_${String(n).padStart(4, '0')}.csv`, startedAt: '2026-09-01T09:00:00Z', endedAt: '2026-09-01T10:00:00Z', distanceMetres: 1000, points: 10 },

@@ -56,6 +56,28 @@ MAC (`5A43CA48`). Stable across reflashes, and the same id the firmware uses as
 its LoRa node id. It is **not** a secret: it is visible in every LoRa packet, so
 it authenticates nothing on its own.
 
+**Proof of possession (firmware 0.19.1, 2026-10-11).** Because the ID is not a
+secret, anyone signed in used to be able to claim an ID nobody owned yet and
+leave the real owner with "owned elsewhere". Now each tracker has its own ECDSA
+P-256 key (made on the tracker, NVS namespace `ident`, kept through a factory
+reset) whose public half is enrolled at `device-keys/{deviceId}.json`:
+
+- **by cable** when the owner flashes it: `firmware/tools/enroll.sh` reads
+  `IDENT` over USB and writes the record with the owner's AWS login (replaces
+  any earlier key — holding the tracker is the authority);
+- **by the tracker itself**, once, over its device token:
+  `POST /api/devices/identity { publicKey }` (base64 SPKI DER). Only for the ID
+  its token is bound to; 201 new, 200 same key, **409 if a different key is
+  already enrolled** (only a cable replaces it), 400 not a P-256 key. This is how
+  trackers already on an account when this shipped got keys without a cable.
+
+Binding then needs the tracker's signature over a fresh value:
+`paddlesnitch-claim\n<deviceId>\n<claimSecret>\n` on `/token`, or
+`paddlesnitch-link\n<deviceId>\n<tokenHash>\n` on the Bluetooth link
+(`firmware/include/claim_proof.h` ↔ `claimProofMessage`/`linkProofMessage` in
+`packages/core/src/devices.ts`, pinned by a contract test). A tracker never
+enrolled can't be added (`not_enrolled`); one too old to sign gets `bad_proof`.
+
 ## Endpoints
 
 Platform-level (`apps/att/src/app/api/devices/*`), reachable at the root because
@@ -87,14 +109,19 @@ Stored at `device-claims/{claimCode}.json`:
 The device polls this every 5 s until the user enters the code.
 
 ```jsonc
-// request
-{ "deviceId": "5A43CA48", "claimSecret": "…" }
+// request -- proof: the tracker's base64 DER ECDSA signature over
+// "paddlesnitch-claim\n<deviceId>\n<claimSecret>\n" (see Device identity)
+{ "deviceId": "5A43CA48", "claimSecret": "…", "proof": "MEUCIQ…" }
 // 202 — code not yet entered
 { "status": "pending" }
 // 200 — bound
 { "deviceToken": "<opaque>", "userId": "…", "deviceName": "Baldur's tracker" }
 // 410 — expired or already consumed
 { "error": "claim_expired" }
+// 403 — the code was entered, but the proof failed: the tracker was never
+// enrolled ("not_enrolled") or this is not its key / no signature ("bad_proof").
+// Checked only after the secret, so only the claim's starter sees it.
+{ "error": "not_enrolled" }
 ```
 
 Verify `claimSecret` against the stored hash **before** revealing anything, and

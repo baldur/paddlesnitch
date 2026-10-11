@@ -143,6 +143,7 @@ describe('Bluetooth test page', () => {
 
   describe('setting the tracker up once paired', () => {
     const HASH = 'ab'.repeat(32)
+    const SIG = 'MEUCIQDsignedByTheTracker+/=='
     /** A paired tracker whose LINK and WIFI items behave like the firmware's. */
     function fakeSetupTracker(opts: { wifiResult?: string; serverStatus?: number; serverError?: string; staleWifi?: boolean } = {}) {
       const tracker = { link: 'idle', wifiReads: 0, committedWith: '' }
@@ -162,7 +163,7 @@ describe('Bluetooth test page', () => {
                 readValue: async () => {
                   if (uuid.startsWith('04dd0a02')) return enc(ABOUT_UNLINKED)
                   if (uuid.startsWith('04dd0a03')) return enc('{"v":1,"paired":true}')
-                  if (uuid.startsWith('04dd0a04')) return enc(JSON.stringify({ v: 1, id: '435AC17C', state: tracker.link, tokenHash: tracker.link === 'idle' ? '' : HASH }))
+                  if (uuid.startsWith('04dd0a04')) return enc(JSON.stringify({ v: 1, id: '435AC17C', state: tracker.link, tokenHash: tracker.link === 'idle' ? '' : HASH, sig: tracker.link === 'pending' ? SIG : '' }))
                   // WIFI: "trying" twice, then the result.
                   tracker.wifiReads++
                   return enc(JSON.stringify({ v: 1, state: tracker.wifiReads < 3 ? 'trying' : (opts.wifiResult ?? 'joined') }))
@@ -206,7 +207,7 @@ describe('Bluetooth test page', () => {
       await settle()
       expect(writes.map(w => w.body)).toEqual([{ op: 'begin' }, { op: 'commit', tokenHash: HASH }])
       const call = fetchMock.mock.calls.find(c => c[0] === '/api/account/devices/link-bluetooth')!
-      expect(JSON.parse(String(call[1]!.body))).toMatchObject({ deviceId: '435AC17C', tokenHash: HASH })
+      expect(JSON.parse(String(call[1]!.body))).toMatchObject({ deviceId: '435AC17C', tokenHash: HASH, signature: SIG })
       expect(tracker.committedWith).toBe(HASH)
       expect(container.textContent).toContain('Added to your account')
       expect(container.textContent).toContain('On your account')
