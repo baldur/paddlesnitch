@@ -403,6 +403,17 @@ export class AttStack extends cdk.Stack {
     })
 
     dataBucket.grantReadWrite(serverFn)
+    // ...except tracker updates. Every tracker installs what firmware/ points
+    // at, so the server -- the internet-facing part -- must not be able to write
+    // there. Releases are written by the release workflow's role only. An
+    // explicit Deny wins over the grant above. (firmware-events/ is a different
+    // prefix and stays writable: the server records offers and boots there.)
+    serverFn.addToRolePolicy(new iam.PolicyStatement({
+      sid: 'NoFirmwareWrites',
+      effect: iam.Effect.DENY,
+      actions: ['s3:PutObject', 's3:DeleteObject'],
+      resources: [dataBucket.arnForObjects('firmware/*')],
+    }))
 
     // Bedrock InvokeModel for the Analyse LLM insight (now served by this
     // function). Foundation-model ARNs carry no account (AWS-owned); inference

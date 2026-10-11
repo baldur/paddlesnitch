@@ -5,6 +5,8 @@
 #include "storage.h"
 #include "dbg.h"
 #include "root_ca.h"
+#include "ota_verify.h"
+#include "fw_signing_key.h"
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -354,7 +356,7 @@ static bool downloadAndFlash(const String &url, const String &version,
 }
 
 /** Fetch the manifest. Returns the HTTP status; fills the out-params on 200. */
-static int fetchManifest(String &version, String &sha, String &url, String &notes, size_t &size)
+static int fetchManifest(String &version, String &sha, String &url, String &notes, String &sig, size_t &size)
 {
     WiFiClientSecure client;
     configureClient(client);
@@ -377,6 +379,7 @@ static int fetchManifest(String &version, String &sha, String &url, String &note
     sha     = doc["sha256"]    | "";
     url     = doc["url"]       | "";
     notes   = doc["notes"]     | "";
+    sig     = doc["signature"] | "";
     size    = doc["sizeBytes"] | 0;
     if (version.isEmpty() || sha.length() != 64 || url.isEmpty() || size == 0) return -3;
     return 200;
@@ -419,9 +422,9 @@ bool otaMaybeUpdate()
         DBGI("ota", "no signal this boot -- asking outright");
     }
 
-    String version, sha, url, notes;
+    String version, sha, url, notes, sig;
     size_t size = 0;
-    int rc = fetchManifest(version, sha, url, notes, size);
+    int rc = fetchManifest(version, sha, url, notes, sig, size);
 
     // 304: already current. Not a failure -- never count it against a version.
     // Clear the signalled version too, so a header that raced a promotion does
@@ -462,6 +465,17 @@ bool otaMaybeUpdate()
     if (!otaMayRetryVersion(failCountFor(version))) {
         DBGI("ota", "holding off: %s", otaGateReason(OtaGate::TooManyFailures));
         setProgress(OtaPhase::Idle, 0, "", "");
+        return false;
+    }
+
+    // Only an image our release job signed. The signature covers this version
+    // and this sha256, and the download below must hash to that same sha256, so
+    // together they mean "these exact bytes, built and signed by us" -- whoever
+    // can write to the bucket or answer for the server. Checked before the
+    // download: a refused image costs no air time. It counts as a failure of
+    // that version, so a bad one is given up on after OTA_MAX_FAILS like any other.
+    if (!otaSignatureValid(FW_SIGNING_PUBKEY, version.c_str(), sha.c_str(), sig.c_str())) {
+        recordFailure(version, sig.isEmpty() ? "unsigned" : "bad signature");
         return false;
     }
 

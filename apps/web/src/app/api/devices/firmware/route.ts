@@ -75,6 +75,7 @@ export const GET = withDeviceAuth(async (req, auth) => {
     sha256: manifest.sha256,
     sizeBytes: manifest.sizeBytes,
     notes: manifest.notes,
+    signature: manifest.signature,
     url: offer.url,
     expiresInSeconds: offer.expiresInSeconds,
   }, { status: 200, headers: { ETag: `"${manifest.version}"` } })

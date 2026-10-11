@@ -178,6 +178,22 @@ describe('GET /api/devices/firmware', () => {
     expect(events[0].booted).toBeNull()
   })
 
+  // The release job signs every build and writes the signature into the
+  // manifest; a tracker installs nothing without one. Dropping it here would
+  // leave every tracker refusing every update.
+  it('passes the release signature through to the device', async () => {
+    const u = await makeUser('FW Signed')
+    const t = await boundToken(u)
+    const manifest = await publishFirmware('0.10.0', IMAGE, { notes: 'n' })
+    const { putJson } = await import('@/lib/storage')
+    await putJson('firmware/0.10.0/manifest.json', { ...manifest, signature: 'MEUCIQ-signed-by-ci==' })
+    await promoteFirmware('stable', '0.10.0')
+
+    const res = await getFirmware(fwReq(t, '?current=0.9.0'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).signature).toBe('MEUCIQ-signed-by-ci==')
+  })
+
   it('503s rather than silently serving nothing when the channel points at a missing manifest', async () => {
     const u = await makeUser('FW Five')
     const t = await boundToken(u)
