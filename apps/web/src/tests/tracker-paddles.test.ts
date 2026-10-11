@@ -17,17 +17,17 @@ vi.mock('@paddlesnitch/timing/weather', () => ({
 vi.mock('@paddlesnitch/analysis/llm', () => ({ generateInsight: async () => null }))
 vi.mock('@paddlesnitch/timing/river-flow', () => ({ getFlowAt: () => Promise.resolve(null) }))
 
-// Capture after() so the upload route test can run the scheduled job.
-const afterFns: Array<() => unknown> = []
-vi.mock('next/server', async (orig) => {
-  const actual = await orig<typeof import('next/server')>()
-  return { ...actual, after: (fn: () => unknown) => { afterFns.push(fn) } }
-})
 
 import { storeDeviceSession, storeDeviceMotion, listUserDeviceSessions } from '@/lib/devices'
 import { paddleForRecording, trackerPaddleId } from '@paddlesnitch/analysis/tracker-paddle'
 import { getSession, saveSession, listSessionSummaries, updateSessionNote, updateSessionBoat } from '@paddlesnitch/analysis/analysis-store'
 import { handleSessionUpload } from '@/lib/session-upload'
+import { listKeys } from '@/lib/storage'
+import { runJob } from '@/lib/jobs'
+
+// The upload routes write a job (lib/jobs.ts, #413); these find and run them.
+const jobs = () => listKeys('jobs/tracker-paddle/')
+const runJobs = async () => { for (const k of await jobs()) expect(await runJob(k)).toBe('done') }
 
 const USER = 'user-tp'
 const DEVICE = '435AC17C'
@@ -39,7 +39,6 @@ let dataDir: string
 beforeEach(async () => {
   dataDir = await makeDataDir()
   duringSummary.hook = null
-  afterFns.length = 0
 })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
@@ -146,26 +145,29 @@ describe('a tracker recording becomes a paddle by itself', () => {
   })
 })
 
-describe('the upload routes make the paddle after answering', () => {
+describe('the upload routes answer first, and make the paddle as a job', () => {
   const upload = (name: string, body: string) =>
     handleSessionUpload(new Request(`http://x/api/devices/sessions?filename=${name}`, { method: 'POST', body }), { deviceId: DEVICE, userId: USER })
 
-  it('schedules a paddle for an accepted track, and again for its motion data', async () => {
+  it('writes a paddle job for an accepted track, and again for its motion data', async () => {
     expect((await upload(NAME, TRACK)).status).toBe(201)
-    expect(afterFns.length).toBe(1)
-    await afterFns.shift()!()
     const [rec] = await listUserDeviceSessions(USER)
+    // Answered before the paddle exists: the job is waiting.
+    expect(await jobs()).toHaveLength(1)
+    expect(await getSession(USER, trackerPaddleId(rec.sessionId)).catch(() => null)).toBeNull()
+    await runJobs()
     expect((await getSession(USER, trackerPaddleId(rec.sessionId)))?.result.avgSR).toBeNull()
 
     expect((await upload(NAME.replace('.csv', '_imu.csv'), MOTION)).status).toBe(201)
-    expect(afterFns.length).toBe(1)
-    await afterFns.shift()!()
+    expect(await jobs()).toHaveLength(1)
+    await runJobs()
     expect((await getSession(USER, trackerPaddleId(rec.sessionId)))?.result.avgSR).toBeGreaterThan(52)
+    expect(await jobs()).toEqual([])
   })
 
-  it('schedules nothing for a recording it refuses', async () => {
+  it('writes no job for a recording it refuses', async () => {
     expect((await upload('track_20261006_110000.csv', 'timestamp,ms,lat,lon\n,1,,\n')).status).toBe(422)
-    expect(afterFns.length).toBe(0)
+    expect(await jobs()).toEqual([])
   })
 })
 

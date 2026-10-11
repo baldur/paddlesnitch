@@ -23,7 +23,8 @@ pipeline end to end.
    - **POST** = an event: `{ object_type, aspect_type, object_id, owner_id,
      subscription_id, event_time, updates }`. The body carries **no activity
      detail** — only ids. We **acknowledge 200 immediately** (Strava requires a
-     response within ~2 s and retries otherwise) and do the work in `after()`.
+     response within ~2 s and retries otherwise) after writing a `strava-event`
+     job; the work runs as that job (`apps/web/src/lib/jobs.ts`, #413).
 3. **Processing (after the 200):**
    - `object_type: 'activity', aspect_type: 'create'` → map `owner_id`
      (Strava athlete id) → our user via the existing `strava-athletes/{id}` reverse
@@ -61,7 +62,7 @@ owner→user lookup + the sport filter.
   `profile:read_all` for sign-in). We never write to Strava. Auto-import only
   READS activities the athlete already owns.
 - **Fast ack.** The webhook returns 200 within the required window and processes
-  asynchronously (`after()`), so we never hold Strava's request open.
+  as a job (#413), so we never hold Strava's request open.
 - **Athlete control / deauthorization.** Disconnect in-app AND the `authorized:
   'false'` webhook event both delete the athlete's stored tokens + reverse index.
   After deauth we hold no Strava credentials and make no further calls for them.

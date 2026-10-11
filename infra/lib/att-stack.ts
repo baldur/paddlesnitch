@@ -18,6 +18,7 @@ import * as budgets from 'aws-cdk-lib/aws-budgets'
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets'
 import * as ses from 'aws-cdk-lib/aws-ses'
 import * as events from 'aws-cdk-lib/aws-events'
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications'
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets'
 import * as sesActions from 'aws-cdk-lib/aws-ses-actions'
 import { Construct } from 'constructs'
@@ -178,6 +179,18 @@ export class AttStack extends cdk.Stack {
         // (STAGED_PART_TAG in packages/core/src/storage.ts) (#412).
         id: 'expire-staged-upload-parts',
         tagFilters: { lifecycle: 'staged-part' },
+        expiration: cdk.Duration.days(30),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
+        // Job bookkeeping (#413): attempts of jobs in flight, and jobs that
+        // failed every attempt (kept a month to look at, then gone).
+        id: 'expire-job-state',
+        prefix: 'jobs-state/',
+        expiration: cdk.Duration.days(30),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
+        id: 'expire-failed-jobs',
+        prefix: 'jobs-failed/',
         expiration: cdk.Duration.days(30),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }],
@@ -483,6 +496,36 @@ export class AttStack extends cdk.Stack {
       schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
       targets: [new eventsTargets.LambdaFunction(serverFn, {
         event: events.RuleTargetInput.fromObject({ type: 'warmer', warmerId: 'eventbridge', index: 0, concurrency: 1, delay: 75 }),
+        retryAttempts: 0,
+      })],
+    })
+
+    // Work done after answering (#413, apps/web/src/lib/jobs.ts): a request
+    // writes a job file under jobs/ and answers; S3 announces the file to this
+    // kicker, which asks the server to run it. Every 5 minutes the kicker also
+    // sweeps up retries and leftovers. No queue service: the jobs/ folder is
+    // the queue and the visible record. The kicker holds no secrets and no app
+    // code, only the site's address.
+    const jobsKicker = new lambda.Function(this, 'JobsKickerFn', {
+      logRetention: LOG_RETENTION,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/jobs-kicker')),
+      memorySize: 128,
+      // The server's own limit is 30 s; this waits for its answer.
+      timeout: cdk.Duration.seconds(45),
+      environment: { SITE_URL: 'https://paddlesnitch.com' },
+    })
+    dataBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(jobsKicker),
+      { prefix: 'jobs/' },
+    )
+    new events.Rule(this, 'JobsSweep', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
+      targets: [new eventsTargets.LambdaFunction(jobsKicker, {
+        event: events.RuleTargetInput.fromObject({ sweep: true }),
         retryAttempts: 0,
       })],
     })

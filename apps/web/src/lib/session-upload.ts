@@ -110,7 +110,7 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
     if (stored === 'no_track') return NextResponse.json({ error: 'track_not_uploaded', trackFilename: trackName }, { status: 409 })
     if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
     // The motion data adds stroke rate to the recording's paddle.
-    makePaddleAfterResponse(auth.userId, auth.deviceId, stored.sessionId)
+    await makePaddleAfterResponse(auth.userId, auth.deviceId, stored.sessionId)
     return NextResponse.json({ sessionId: stored.sessionId, motionRows: rows, bytes: body.length }, { status: 201 })
   }
 
@@ -138,7 +138,7 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
   )
   if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
   // Every accepted recording becomes a paddle (one-paddle.md, phase 2).
-  makePaddleAfterResponse(auth.userId, auth.deviceId, meta.sessionId)
+  await makePaddleAfterResponse(auth.userId, auth.deviceId, meta.sessionId)
   return NextResponse.json(
     { sessionId: meta.sessionId, points: track.length, startedAt, endedAt, distanceMetres: meta.distanceMetres },
     { status: 201 },

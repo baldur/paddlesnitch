@@ -393,6 +393,14 @@ Fix options for the rest:
 
 Recommendation: 1.
 
+**Done (2026-10-11, #413):** the owner chose an S3 to-do folder rather than
+any of these: a request writes `jobs/{kind}/{id}.json` and answers; S3 announces
+the file to a tiny kicker Lambda that calls `POST /api/jobs/run` on the server;
+a 5-minute sweep handles retries and leftovers; failures end in `jobs-failed/`.
+The Strava webhook and the tracker upload routes now answer in one S3 write.
+See `apps/web/src/lib/jobs.ts` and CLAUDE.md "`after()` does NOT run after the
+response here".
+
 ## Guardrails (tests that keep it true)
 
 - **Freshness.** For every `derived()` use, a test changes each input and
