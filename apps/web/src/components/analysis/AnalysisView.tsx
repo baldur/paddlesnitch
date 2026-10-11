@@ -9,6 +9,7 @@ import { ramp, scaleBounds } from '@/components/map/colour-scale'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 import { fmtDur, fmtClock, split500, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
 import { gateAt, type Racer } from '@paddlesnitch/analysis/similar'
+import { rankForComparison } from '@paddlesnitch/analysis/same-outing'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { fmtDay } from '@paddlesnitch/core/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
@@ -471,7 +472,10 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
         <aside className="order-1 md:order-2 flex flex-row flex-wrap md:flex-col md:flex-nowrap gap-2 text-xs content-start" aria-label="Actions">
           {onNewFile && <button onClick={onNewFile} className={ACTION}>ADD ANOTHER</button>}
           {readOnly && !buddy && <Link href="/" className={ACTION}>WHAT IS PADDLESNITCH? →</Link>}
-          {buddy && <CompareWithMine buddy={buddy} start={pts[0]} className={ACTION} box={BOX} />}
+          {buddy && dataProp.paddledAt && (
+            <CompareWithMine buddy={buddy} className={ACTION} box={BOX}
+              target={{ paddledAt: dataProp.paddledAt, durationS: data.durationS, startLat: pts[0]?.lat, startLng: pts[0]?.lng }} />
+          )}
           {sessionId && !readOnly && (
             <button onClick={() => setHidden.mutate({ id: sessionId, hidden: !hiddenFromBuddies })} disabled={setHidden.isPending}
               className={`${ACTION} ${hiddenFromBuddies ? 'border-primary text-fg' : ''}`} title="Your buddies see your paddles unless you hide one">
@@ -580,27 +584,28 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   )
 }
 
-// On a buddy's paddle: pick one of yours to compare with it, nearest start
-// first (the same water is the likely match).
-function CompareWithMine({ buddy, start, className, box }: {
-  buddy: { userId: string; paddleId: string }; start?: { lat: number; lng: number }; className: string; box: string
+// On a buddy's paddle: pick one of yours to compare with it. The outing you
+// paddled together first, then the same water newest first (rankForComparison).
+function CompareWithMine({ buddy, target, className, box }: {
+  buddy: { userId: string; paddleId: string }
+  target: { paddledAt: string; durationS: number; startLat?: number; startLng?: number }
+  className: string; box: string
 }) {
   const [open, setOpen] = useState(false)
   const mine = trpc.paddles.sessions.useQuery(undefined, { enabled: open, retry: false })
-  const near = (mine.data ?? [])
-    .map(s => ({ s, d: start && s.startLat != null && s.startLng != null ? haversine([start.lat, start.lng], [s.startLat, s.startLng]) : Infinity }))
-    .sort((x, y) => x.d - y.d || (x.s.paddledAt < y.s.paddledAt ? 1 : -1))
-    .slice(0, 8)
+  const picks = rankForComparison(target, mine.data ?? []).slice(0, 12)
   return (
     <>
       <button onClick={() => setOpen(o => !o)} className={`${className} ${open ? 'border-primary text-fg' : ''}`}>COMPARE WITH ONE OF MINE</button>
       {open && (
-        <div className={box}>
+        <div className={`${box} max-h-72 overflow-y-auto`}>
           {mine.isPending ? <div className="text-muted">Loading…</div>
-            : near.length === 0 ? <div className="text-muted">You have no paddles yet.</div>
-            : near.map(({ s, d }) => (
+            : picks.length === 0 ? <div className="text-muted">You have no paddles yet.</div>
+            : picks.map(({ paddle: s, kind }) => (
               <Link key={s.id} href={`/paddles/compare?a=${s.id}&b=${buddy.paddleId}&bOwner=${buddy.userId}`} className="block py-1 hover:text-primary">
-                {fmtDay(s.paddledAt)} · {s.distanceKm.toFixed(1)} km{Number.isFinite(d) && d < 500 ? ' · same start' : ''}
+                {fmtDay(s.paddledAt)} · {s.distanceKm.toFixed(1)} km
+                {kind === 'together' && <span className="text-green"> · paddled together</span>}
+                {kind === 'elsewhere' && <span className="text-muted"> · elsewhere</span>}
               </Link>
             ))}
         </div>
@@ -608,4 +613,3 @@ function CompareWithMine({ buddy, start, className, box }: {
     </>
   )
 }
-

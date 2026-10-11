@@ -90,3 +90,29 @@ export function strokeRateSideBySide(a: Paddle, b: Paddle, binS = 60): { minute:
   return [...ma.keys()].filter(k => mb.has(k)).sort((x, y) => x - y)
     .map(k => ({ minute: k - first, a: mean(ma.get(k)!), b: mean(mb.get(k)!) }))
 }
+
+/** Starting within this far apart counts as the same water. */
+export const SAME_WATER_M = 1000
+
+export type ComparePick<T> = { paddle: T; kind: 'together' | 'same_water' | 'elsewhere' }
+
+/**
+ * Your paddles to offer for comparison with someone's paddle, best first:
+ * the same outing (recorded at the same time: you paddled together), then
+ * the same water, newest first, then the rest, newest first.
+ *
+ * Not "nearest start first": club outings all start within metres of each
+ * other, so that order was effectively random. A buddy's paddle from this
+ * morning came out behind the owner's from two days earlier.
+ */
+export function rankForComparison<T extends { paddledAt: string; durationS: number; startLat?: number; startLng?: number }>(
+  target: { paddledAt: string; durationS: number; startLat?: number; startLng?: number },
+  mine: T[],
+): ComparePick<T>[] {
+  const near = (p: T) => target.startLat != null && target.startLng != null && p.startLat != null && p.startLng != null &&
+    haversine([target.startLat, target.startLng], [p.startLat, p.startLng]) <= SAME_WATER_M
+  const rank = { together: 0, same_water: 1, elsewhere: 2 }
+  return mine
+    .map(p => ({ paddle: p, kind: (timeOverlapShare(target, p) >= MIN_TIME_OVERLAP ? 'together' : near(p) ? 'same_water' : 'elsewhere') as ComparePick<T>['kind'] }))
+    .sort((x, y) => rank[x.kind] - rank[y.kind] || (x.paddle.paddledAt < y.paddle.paddledAt ? 1 : -1))
+}

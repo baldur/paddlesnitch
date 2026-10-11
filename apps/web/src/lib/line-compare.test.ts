@@ -161,3 +161,12 @@ describe('club outings (both start and finish at the same spot)', () => {
   })
 })
 
+describe('the summary reads right with "You"', () => {
+  it('"You were", and "of you"', () => {
+    const c = compareLines(boat(bend(), () => 3.3), boat(bend(0, 25), () => 3))!
+    const text = lineSummary(c, 'You · 11 Oct', 'Ann · 11 Oct').join(' ')
+    expect(text).toMatch(/You · 11 Oct were \d+ s faster/)
+    expect(text).toMatch(/Ann · 11 Oct was \d+ m to the \w+ of you · 11 Oct/)
+  })
+})
+
