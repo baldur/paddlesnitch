@@ -5,8 +5,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser, type TestUser } from './helpers'
 import { createCaller } from '@paddlesnitch/api'
-import { saveSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
-import { allPasses, crossingSignNear } from '@paddlesnitch/timing/geo'
+import { saveSession, deleteSession, getSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
+import { allPasses, crossingSignNear, processTrace } from '@paddlesnitch/timing/geo'
+import { getSavedSection } from '@paddlesnitch/analysis/saved-sections'
+import { pointsToTrack } from '@paddlesnitch/analysis/similar'
+import { buildAccountExport } from '@/lib/account-export'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const LAT0 = 51.46, LNG0 = -0.93
@@ -81,12 +84,12 @@ describe('every pass of a section', () => {
   })
 
   it("gives one pass's line, but never one from a paddle you may not see", async () => {
-    const line = await as(me).sections.passLine({ ...SECTION, paddleOwner: ann.id, paddleId: 'hers', n: 1 })
+    const line = await as(me).sections.passLine({ where: SECTION, paddleOwner: ann.id, paddleId: 'hers', n: 1 })
     expect(line.length).toBeGreaterThan(250); expect(line.length).toBeLessThan(310)   // ~1 km at 3.5 m/s
     expect(Object.keys(line[0]).sort()).toEqual(['dps', 'lat', 'lng', 'speed', 'sr', 't'])
-    expect(await code(as(me).sections.passLine({ ...SECTION, paddleOwner: ann.id, paddleId: 'hers-hidden', n: 1 }))).toBe('NOT_FOUND')
-    expect(await code(as(me).sections.passLine({ ...SECTION, paddleOwner: eve.id, paddleId: 'strangers', n: 1 }))).toBe('NOT_FOUND')
-    expect(await code(as(me).sections.passLine({ ...SECTION, paddleOwner: me.id, paddleId: 'laps', n: 3 }))).toBe('NOT_FOUND')
+    expect(await code(as(me).sections.passLine({ where: SECTION, paddleOwner: ann.id, paddleId: 'hers-hidden', n: 1 }))).toBe('NOT_FOUND')
+    expect(await code(as(me).sections.passLine({ where: SECTION, paddleOwner: eve.id, paddleId: 'strangers', n: 1 }))).toBe('NOT_FOUND')
+    expect(await code(as(me).sections.passLine({ where: SECTION, paddleOwner: me.id, paddleId: 'laps', n: 3 }))).toBe('NOT_FOUND')
   })
 })
 
@@ -109,5 +112,76 @@ describe('allPasses', () => {
     // Asking for the up way: never the down leg (what's left is a loop round, which
     // passesIn then drops for not following the section's water).
     expect(allPasses(t, line(500), line(100), up, up).map(p => p.startMs)).not.toContain(down[0].startMs)
+  })
+})
+
+describe('saved sections (#435)', () => {
+  it('saves a picked section with a name and lists it', async () => {
+    const { id } = await as(me).sections.save({ ...SECTION, name: '  Bridge to the lock  ' })
+    const list = await as(me).sections.list()
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ id, name: 'Bridge to the lock' })
+    expect(list[0].distanceMetres).toBeGreaterThan(950); expect(list[0].distanceMetres).toBeLessThan(1050)
+    expect(list[0].path.length).toBeLessThanOrEqual(61)
+  })
+
+  it('gives the same passes as picking it, and still works when the paddle it came from is deleted', async () => {
+    const picked = await as(me).sections.passes(SECTION)
+    const { id } = await as(me).sections.save({ ...SECTION, name: 'Mile' })
+    const tag = (r: { passes: { paddleId: string; n: number }[] }) => r.passes.map(p => `${p.paddleId}#${p.n}`)
+    const saved = await as(me).sections.passes({ sectionId: id })
+    expect(saved.saved).toEqual({ id, name: 'Mile' })
+    expect(tag(saved)).toEqual(tag(picked))
+    await deleteSession(me.id, 'source')
+    const after = await as(me).sections.passes({ sectionId: id })
+    expect(tag(after)).toEqual(tag(picked).filter(t => !t.startsWith('source#')))
+    const line = await as(me).sections.passLine({ where: { sectionId: id }, paddleOwner: ann.id, paddleId: 'hers', n: 1 })
+    expect(line.length).toBeGreaterThan(250)
+  })
+
+  it('is a two-gate course: the time-trial gate timing gives the same time', async () => {
+    const { id } = await as(me).sections.save({ ...SECTION, name: 'Mile' })
+    const sec = (await getSavedSection(me.id, id))!
+    const hers = (await getSession(ann.id, 'hers'))!
+    const course = processTrace(pointsToTrack(hers.result.points), sec.gates[0].line, sec.gates[1].line, 'gate', 0, undefined, sec.gates)
+    const pass = (await as(me).sections.passes({ sectionId: id })).passes.find(p => p.paddleId === 'hers')!
+    expect(course?.totalElapsedSeconds).toBeCloseTo(pass.elapsedS, 0)
+    // Going the other way round isn't the section, for the course timing either.
+    const reversed = sec.gates.map(g => ({ ...g, direction: (g.direction * -1) as 1 | -1 }))
+    const down = processTrace(pointsToTrack((await getSession(me.id, 'downstream-only'))!.result.points), reversed[1].line, reversed[0].line, 'gate', 0, undefined, [reversed[1], reversed[0]])
+    expect(down).not.toBeNull()
+    expect(processTrace(pointsToTrack((await getSession(me.id, 'downstream-only'))!.result.points), sec.gates[0].line, sec.gates[1].line, 'gate', 0, undefined, sec.gates)).toBeNull()
+  })
+
+  it("is private: nobody else, buddies included, can see, rename or remove it", async () => {
+    const { id } = await as(me).sections.save({ ...SECTION, name: 'Mine' })
+    expect(await as(ann).sections.list()).toEqual([])
+    expect(await code(as(ann).sections.passes({ sectionId: id }))).toBe('NOT_FOUND')
+    expect(await code(as(ann).sections.passLine({ where: { sectionId: id }, paddleOwner: me.id, paddleId: 'source', n: 1 }))).toBe('NOT_FOUND')
+    expect(await code(as(ann).sections.rename({ sectionId: id, name: 'Hers' }))).toBe('NOT_FOUND')
+    expect(await code(as(eve).sections.remove({ sectionId: id }))).toBe('NOT_FOUND')
+    expect((await as(me).sections.list())[0].name).toBe('Mine')
+  })
+
+  it("can be saved from a buddy's paddle you may see, not from one you may not", async () => {
+    expect((await as(me).sections.save({ sourceId: 'hers', owner: ann.id, aIdx: 286, bIdx: 571, name: 'Hers' })).id).toBeTruthy()
+    expect(await code(as(me).sections.save({ sourceId: 'hers-hidden', owner: ann.id, aIdx: 333, bIdx: 667, name: 'x' }))).toBe('NOT_FOUND')
+    expect(await code(as(me).sections.save({ ...SECTION, bIdx: 340, name: 'x' }))).toBe('BAD_REQUEST')
+    expect(await code(as(me).sections.save({ ...SECTION, name: '   ' }))).toBe('BAD_REQUEST')
+  })
+
+  it('renames and removes', async () => {
+    const { id } = await as(me).sections.save({ ...SECTION, name: 'Old' })
+    await as(me).sections.rename({ sectionId: id, name: 'New' })
+    expect((await as(me).sections.list())[0].name).toBe('New')
+    await as(me).sections.remove({ sectionId: id })
+    expect(await as(me).sections.list()).toEqual([])
+    expect(await code(as(me).sections.passes({ sectionId: id }))).toBe('NOT_FOUND')
+  })
+
+  it('is in Download my data', async () => {
+    await as(me).sections.save({ ...SECTION, name: 'Mile' })
+    const data = await buildAccountExport({ id: me.id, email: me.email, displayName: me.displayName })
+    expect((data as unknown as { account: { sections: { name: string }[] } }).account.sections.map(s => s.name)).toEqual(['Mile'])
   })
 })
