@@ -258,7 +258,11 @@ Researched 2026-10-11. No paid API, no sign-up.
 - **Saving** needs an account: tRPC `plan.list/get/save/delete` (`packages/api/src/routers/plan.ts`) over `plan-store.ts`. Private to the owner; another user gets NOT_FOUND. Saved plans are in "Download my data" (`account.plans`) and deleted with the account. `/plan/[id]` opens one; YOUR PLANS lists them on `/plan`.
 - **PLAN tab** in the header (`AppShell`, `sectionFor('/plan…') → 'plan'`).
 - **Tests:** `lib/plan.test.ts` (snapping, too short, chainage order, times, direction flip, return), `lib/plan-ui.test.ts` (wording, address bar, clicks), `tests/trpc-plan.test.ts` (ownership, validation, export, erasure), `e2e/critical/plan.spec.ts` (two clicks → stop list; a link → the DW route, then RETURN).
-- **Not yet:** daylight flags, the tide window, "nearest named place" for a click, crew-point drive order (P2's crew sheet), sharing a saved plan by link (P4).
+- **Sharing (2026-10-11, pulled forward from P4):** one SHARE switch per saved plan. A shared plan has a `shareId`; `plans/shared/{shareId}.json → { userId, planId }` resolves the link without the owner's id in the URL.
+  - **The link** `/plan/shared/{shareId}` opens for anyone, signed in or not (tRPC `plan.shared`, public). It names the owner by display name, never email. A viewer can try their own pace, start time and one-way/return but can't move the ends or save; "make your own copy" opens the same route as a new unsaved plan.
+  - **Buddies** see a shared plan listed under BUDDIES' PLANS on `/plan` (`plan.buddies`). Private plans never show.
+  - STOP SHARING (or deleting the plan) drops the index, so the link stops working at once; sharing again makes a new link. Editing keeps the plan shared. Account deletion drops every share index (`erasePlanShares`).
+- **Not yet:** daylight flags, the tide window, "nearest named place" for a click, crew-point drive order (P2's crew sheet).
 
 ## The planner (UX)
 
