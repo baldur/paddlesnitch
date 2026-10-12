@@ -1,13 +1,50 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, Pane, Polyline, Polygon, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
-import { useEffect } from 'react'
+import { MapContainer, TileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
 import { mapTiles } from '@/lib/plan-ui'
 
-// The planner's map: every river and canal we cover, greyed-out land beyond the
-// region, the planned route, its ends and its stops. A click is passed up; the
-// page decides whether it's the start or the finish.
+// The planner's map: the rivers and canals of the UK and Ireland, the planned
+// route, its ends and its stops. A click is passed up; the page decides whether
+// it's the start or the finish.
+
+/** The UK and Ireland, for a first look with nothing planned. */
+const HOME: [[number, number], [number, number]] = [[49.9, -10.6], [60.9, 1.8]]
+
+// Network pieces already fetched, shared across map instances; keyed by URL.
+const loaded = new Map<string, Promise<LatLng[][]>>()
+const fetchLines = (url: string) => {
+  let p = loaded.get(url)
+  if (!p) {
+    p = fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    p.catch(() => loaded.delete(url))   // let a later pan retry
+    loaded.set(url, p)
+  }
+  return p
+}
+
+/** The network for what's on screen: the overview when zoomed out, the
+ *  detailed areas in view when zoomed in. */
+function Network({ version }: { version: string }) {
+  const map = useMap()
+  const [lines, setLines] = useState<LatLng[][]>([])
+  const latest = useRef(0)   // a slow earlier fetch mustn't overwrite a newer view
+  const refresh = useCallback(() => {
+    const n = ++latest.current
+    const b = map.getBounds()
+    const urls = map.getZoom() < AREA_MIN_ZOOM
+      ? [`/plan/data/${version}/overview`]
+      : areasIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).map(k => `/plan/data/${version}/area-${k}`)
+    Promise.allSettled(urls.map(fetchLines)).then(rs => {
+      if (n === latest.current) setLines(rs.flatMap(r => (r.status === 'fulfilled' ? r.value : [])))
+    })
+  }, [map, version])
+  useMapEvents({ moveend: refresh })
+  useEffect(() => { refresh() }, [refresh])
+  return <Polyline positions={lines} interactive={false} pathOptions={{ color: '#06b6d4', weight: 2, opacity: 0.55 }} />
+}
 
 export type MapStop = { id: string; at: LatLng; name: string; colour: string }
 
@@ -17,8 +54,8 @@ function Clicks({ onPick }: { onPick: (p: LatLng) => void }) {
 }
 
 // Fit the route when it changes, never on other re-renders (which would undo
-// the paddler's zoom); with no route, frame the region or the asked-for view.
-function Frame({ route, bbox, view }: { route: LatLng[]; bbox: [number, number, number, number]; view?: { at: LatLng; zoom: number } }) {
+// the paddler's zoom); with no route, the asked-for view or the UK and Ireland.
+function Frame({ route, view }: { route: LatLng[]; view?: { at: LatLng; zoom: number } }) {
   const map = useMap()
   const first = route[0], last = route.at(-1)
   const key = route.length ? `${first}|${last}|${route.length}` : ''
@@ -29,7 +66,7 @@ function Frame({ route, bbox, view }: { route: LatLng[]; bbox: [number, number, 
     } else if (view) {
       map.setView(view.at, view.zoom)
     } else {
-      map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
+      map.fitBounds(HOME)
     }
   }, [map, key]) // eslint-disable-line react-hooks/exhaustive-deps -- refit on the route's content, not its identity
   return null
@@ -44,10 +81,9 @@ function Focus({ focus }: { focus: MapFocus | null }) {
 }
 
 export default function PlanMap({
-  network, bbox, route, start, finish, stops, focus, view, satellite = false, onPick,
+  version, route, start, finish, stops, focus, view, satellite = false, onPick,
 }: {
-  network: LatLng[][]
-  bbox: [number, number, number, number]   // [south, west, north, east]
+  version: string                          // the dataset's version, for the network's URLs
   route: LatLng[]
   start: LatLng | null
   finish: LatLng | null
@@ -57,18 +93,12 @@ export default function PlanMap({
   satellite?: boolean
   onPick: (p: LatLng) => void
 }) {
-  const [s, w, n, e] = bbox
   const tiles = mapTiles(satellite)
-  const world: LatLng[] = [[-85, -180], [-85, 180], [85, 180], [85, -180]]
-  const region: LatLng[] = [[s, w], [n, w], [n, e], [s, e]]
   return (
-    <MapContainer center={[(s + n) / 2, (w + e) / 2]} zoom={9} preferCanvas className="h-full w-full" data-testid="plan-map">
+    <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
-      {/* Land beyond the region is darkened: we have no river data there yet. */}
-      <Polygon positions={[world, region]} interactive={false} pathOptions={{ stroke: false, fillColor: '#0b1220', fillOpacity: 0.6 }} />
-      <Polygon positions={region} interactive={false} pathOptions={{ color: '#94a3b8', weight: 1, dashArray: '6 6', fill: false }} />
-      <Polyline positions={network} interactive={false} pathOptions={{ color: '#06b6d4', weight: 2, opacity: 0.55 }} />
+      <Network version={version} />
       {/* Esri's place names, above the rivers but below the markers and clicks. */}
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
         <TileLayer key={tiles.labels} url={tiles.labels} maxNativeZoom={tiles.labelsNativeZoom} maxZoom={19} />
@@ -82,7 +112,7 @@ export default function PlanMap({
       {start && <CircleMarker center={start} radius={8} pathOptions={{ color: '#fff', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}><Tooltip>Start</Tooltip></CircleMarker>}
       {finish && <CircleMarker center={finish} radius={8} pathOptions={{ color: '#fff', fillColor: '#f87171', fillOpacity: 1, weight: 2 }}><Tooltip>Finish</Tooltip></CircleMarker>}
       <Clicks onPick={onPick} />
-      <Frame route={route} bbox={bbox} view={view} />
+      <Frame route={route} view={view} />
       <Focus focus={focus} />
     </MapContainer>
   )

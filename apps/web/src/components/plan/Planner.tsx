@@ -1,13 +1,15 @@
 'use client'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { keepPreviousData } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { fmtDay, fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
-import { computePlan, fmtDuration, snapClick, type ComputedPlan, type Stop } from '@paddlesnitch/waterways/plan'
+import manifest from '@paddlesnitch/waterways/data/manifest.json'
+import { searchPlaces, type Place } from '@paddlesnitch/waterways/places'
+import { fmtDuration, timePlan, type ComputedPlan, type Stop } from '@paddlesnitch/waterways/plan'
 import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
-import { REGIONS } from '@paddlesnitch/waterways/regions'
+import { NATIONAL } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
-import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
-import LoadingState from '@/components/LoadingState'
+import type { LatLng } from '@paddlesnitch/waterways/types'
 import PlanMapClient from '@/components/map/PlanMapClient'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
@@ -18,10 +20,10 @@ import {
 
 // PLAN (docs/features/river-planner.md): click the water for a start and a
 // finish, choose one-way or return, and get every stop between with arrival
-// times. Computed in the browser from the region's dataset. Saving needs an
-// account; an unsaved plan lives in the address bar.
+// times. The server routes on the national network (plan.route); the browser
+// works out the times, so pace and start time change instantly. Saving needs
+// an account; an unsaved plan lives in the address bar.
 
-const REGION = 'dw'
 const H2 = 'text-xs text-muted tracking-[0.2em] uppercase mb-2'
 const BTN = 'text-xs tracking-widest px-3 py-1.5 border border-border hover:border-primary disabled:opacity-40'
 const INPUT = 'bg-surface border border-border px-2 py-1 text-sm text-fg w-full'
@@ -34,20 +36,17 @@ const KIND: Record<string, string> = {
  *  saved here, but pace, start time and one-way/return can be tried. */
 export type SharedView = { owner: string; mine: boolean; planId: string }
 
+// The live dataset's version: the map's network and places URLs carry it.
+const VERSION = manifest.version ?? 'none'
+
 export default function Planner({ initial, view, saved, shared }: { initial: PlanDraft; view?: View; saved?: SavedPlan; shared?: SharedView }) {
   const router = useRouter()
-  const [data, setData] = useState<RegionDataset | null>(null)
-  const [loadFailed, setLoadFailed] = useState(false)
   const [draft, setDraft] = useState<PlanDraft>(initial)
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
   const [focus, setFocus] = useState<MapFocus | null>(null)
   const [satellite, setSatellite] = useState(false)
   // The start time box shows the browser's zone, so it stays empty until hydrated.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
-
-  useEffect(() => {
-    fetch(`/plan/data/${REGION}`).then(r => (r.ok ? r.json() : Promise.reject())).then(setData, () => setLoadFailed(true))
-  }, [])
 
   // An unsaved plan lives in the address bar, so a reload or a link keeps it.
   useEffect(() => {
@@ -56,22 +55,23 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
     window.history.replaceState(null, '', `/plan${q ? `?${q}` : ''}`)
   }, [draft, saved, shared])
 
-  const input = asInput(draft)
-  const result = useMemo(() => (data && input ? computePlan(data, input) : null), [data, input?.start, input?.finish, input?.shape, input?.startAt, input?.paceKmh, input?.portageMinutes]) // eslint-disable-line react-hooks/exhaustive-deps -- recompute on the inputs' values
-  const plan = result && typeof result !== 'string' ? result : null
-  const startSpot = data && draft.start ? snapClick(data, draft.start) : null
-  const network = useMemo(() => data?.links.map(l => l.line) ?? [], [data])
+  const routed = trpc.plan.route.useQuery(
+    { start: draft.start ?? [0, 0], finish: draft.finish, shape: draft.shape },
+    { enabled: !!draft.start, placeholderData: keepPreviousData, staleTime: Infinity },
+  )
+  const current = draft.start ? routed.data : undefined
+  const error = !draft.start ? null : current && !current.start ? 'start_off_water' as const : typeof current?.plan === 'string' ? current.plan : null
+  const plan = useMemo(
+    () => (current?.plan && typeof current.plan !== 'string' && draft.finish ? timePlan(current.plan, draft) : null),
+    [current, draft],
+  )
   const visible = plan?.stops.filter(s => shown.has(groupOf(s.feature.kind))) ?? []
-
-  if (loadFailed) return <p className="p-6 text-red">Couldn&apos;t load the river data. Please try again.</p>
 
   return (
     <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-49px)]">
       <div className="h-[50vh] lg:h-auto lg:flex-1 relative">
-        {data ? (
-          <PlanMapClient
-            network={network}
-            bbox={data.bbox}
+        <PlanMapClient
+            version={VERSION}
             route={plan?.line ?? []}
             start={draft.start}
             finish={draft.finish}
@@ -84,14 +84,15 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             satellite={satellite}
             onPick={p => { if (!shared) setDraft(d => placeClick(d, p)) }}
           />
-        ) : <LoadingState label="Loading the rivers…" />}
         {/* Aerial imagery, to see which bank you can land on. */}
         <button type="button" aria-pressed={satellite} onClick={() => setSatellite(v => !v)}
           className={`absolute top-[5.5rem] left-[10px] z-[500] bg-bg/85 ${BTN} ${satellite ? 'border-primary text-fg' : 'text-muted'}`}>
           SATELLITE
         </button>
         <p className="absolute top-2 right-2 z-[500] max-w-[16rem] bg-bg/85 border border-border px-2 py-1 text-xs text-muted pointer-events-none">
-          River data so far: the dashed area, {REGIONS[REGION].places[0].name} to {REGIONS[REGION].places.at(-1)!.name}. Darker land isn&apos;t covered yet.
+          {manifest.version
+            ? 'Rivers and canals of the UK and Ireland. Locks, portages and facilities so far: Devizes to Westminster.'
+            : 'River data so far: Devizes to Westminster.'}
         </p>
       </div>
 
@@ -108,21 +109,17 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
               {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
             </p>
           )}
-          <label className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-muted tracking-widest shrink-0">GO TO</span>
-            <select className={INPUT} value="" aria-label="Go to a town"
-              onChange={e => { const p = REGIONS[REGION].places.find(x => x.name === e.target.value); if (p) setFocus({ at: p.at, zoom: 14 }) }}>
-              <option value="">Choose a town…</option>
-              {REGIONS[REGION].places.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-            </select>
-          </label>
+          <PlaceSearch version={VERSION} near={draft.start ?? undefined}
+            onPick={p => setFocus({ at: p.at, zoom: p.kind === 'lock' || p.kind === 'weir' ? 16 : 14 })} />
           <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-y-1 text-sm">
             <dt className="text-muted text-xs tracking-widest pt-0.5">START</dt>
-            <dd>{plan ? plan.start.waterway : startSpot ? startSpot.link.name : draft.start ? '—' : 'not set'}</dd>
+            <dd>{!draft.start ? 'not set' : current?.start ? current.start.waterway || 'unnamed water' : '—'}</dd>
             <dt className="text-muted text-xs tracking-widest pt-0.5">FINISH</dt>
-            <dd>{plan ? plan.finish.waterway : draft.finish ? '—' : 'not set'}</dd>
+            <dd>{!draft.finish ? 'not set' : plan ? plan.finish.waterway || 'unnamed water' : '—'}</dd>
           </dl>
-          {typeof result === 'string' && <p className="mt-2 text-sm text-red">{PLAN_ERROR_TEXT[result]}</p>}
+          {error && <p className="mt-2 text-sm text-red">{PLAN_ERROR_TEXT[error]}</p>}
+          {routed.isError && <p className="mt-2 text-sm text-red">Couldn&apos;t work out the route. Please try again.</p>}
+          {draft.finish && routed.isFetching && <p className="mt-2 text-xs text-muted">Finding the route…</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {(['one_way', 'return'] as const).map(sh => (
               <button key={sh} type="button" aria-pressed={draft.shape === sh} onClick={() => setDraft(d => ({ ...d, shape: sh }))}
@@ -257,6 +254,46 @@ function StopList({ plan, stops, startAt, onFocus }: { plan: ComputedPlan; stops
   )
 }
 
+/** Type a town, village, lock or weir; pick one to move the map there. The
+ *  index loads the first time the box gets focus. */
+function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng; onPick: (p: Place) => void }) {
+  const [places, setPlaces] = useState<Place[] | null>(null)
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const asked = useRef(false)
+  const load = () => {
+    if (asked.current) return
+    asked.current = true
+    fetch(`/plan/data/${version}/places`).then(r => (r.ok ? r.json() : Promise.reject())).then(setPlaces, () => { asked.current = false })
+  }
+  const hits = places ? searchPlaces(places, q, near) : []
+  const pick = (p: Place) => { onPick(p); setQ(p.name); setOpen(false) }
+  return (
+    <div className="mt-3 relative">
+      <label className="flex items-center gap-2">
+        <span className="text-xs text-muted tracking-widest shrink-0">GO TO</span>
+        <input className={INPUT} value={q} placeholder="Town, village or lock" aria-label="Go to a place"
+          role="combobox" aria-expanded={open && hits.length > 0} aria-controls="place-results" autoComplete="off"
+          onFocus={() => { load(); setOpen(true) }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={e => { setQ(e.target.value); setOpen(true) }}
+          onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); pick(hits[0]) } if (e.key === 'Escape') setOpen(false) }} />
+      </label>
+      {open && hits.length > 0 && (
+        <ul id="place-results" role="listbox" className="absolute z-[600] left-14 right-0 mt-1 bg-surface border border-border max-h-72 overflow-y-auto">
+          {hits.map(p => (
+            <li key={`${p.name}@${p.at}`} role="option" aria-selected={false}>
+              <button type="button" className="w-full text-left px-2 py-1.5 text-sm hover:bg-surface-2" onMouseDown={e => e.preventDefault()} onClick={() => pick(p)}>
+                {p.name} <span className="text-muted text-xs">· {p.kind}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 const initialTitle = (p: PlanDraft) => ('title' in p && typeof p.title === 'string' ? p.title : 'Shared plan')
 
 function ShareBox({ plan }: { plan: SavedPlan }) {
@@ -332,7 +369,7 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
       <div className="flex gap-2">
         <input className={INPUT} placeholder="Name this plan" maxLength={80} value={title} onChange={e => setTitle(e.target.value)} aria-label="Plan name" />
         <button type="button" className={BTN} disabled={!canSave || !input || !changed || save.isPending}
-          onClick={() => input && save.mutate({ ...input, title, region: REGION, id: saved?.id })}>
+          onClick={() => input && save.mutate({ ...input, title, region: NATIONAL, id: saved?.id })}>
           {save.isPending ? 'SAVING…' : saved ? 'SAVE CHANGES' : 'SAVE'}
         </button>
       </div>

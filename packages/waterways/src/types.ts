@@ -30,6 +30,10 @@ export type NetLink = {
   to: string
   line: LatLng[]
   lengthM: number            // length of `line` as drawn (not OS's nominal length)
+  /** Can you paddle it, by OSM's canoe/boat tags: 'yes', 'no', or unset when
+   *  untagged. Routing prefers 'yes' (the navigation) and avoids 'no'. */
+  boat?: 'yes' | 'no'
+  culvert?: true             // underground: never route through one
 }
 
 export type FeatureKind =

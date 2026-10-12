@@ -25,17 +25,55 @@ export type Along<T> = {
   bank?: 'left' | 'right'   // looking in the direction of travel; unset when on the line
 }
 
-/** Items within `near(item)` metres of the route, in travel order. */
-export function along<T>(line: LatLng[], items: T[], at: (t: T) => LatLng, near: (t: T) => number): Along<T>[] {
+/** Items within `near(item)` metres of the route, in travel order. Only items
+ *  in grid cells the route passes near are measured, so a national feature
+ *  list costs no more than a regional one. `near` must not exceed PAD_M. */
+export function along<T extends object>(line: LatLng[], items: T[], at: (t: T) => LatLng, near: (t: T) => number): Along<T>[] {
   const cum = cumulative(line)
   const out: Along<T>[] = []
-  for (const item of items) {
+  for (const item of candidates(line, items, at)) {
     const p = at(item)
     const pr = project(line, p, cum)
     if (pr.dist > near(item)) continue
     out.push({ item, chainageM: pr.along, offM: pr.dist, bank: bankOf(line, cum, pr.along, p, pr.dist) })
   }
   return out.sort((a, b) => a.chainageM - b.chainageM)
+}
+
+const CELL = 0.01            // degrees
+const PAD_M = 500            // more than any NEAR_M
+const grids = new WeakMap<object[], Map<string, object[]>>()
+
+function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => LatLng): T[] {
+  let grid = grids.get(items) as Map<string, T[]> | undefined
+  if (!grid) {
+    grid = new Map()
+    for (const item of items) {
+      const [lat, lng] = at(item)
+      const k = `${Math.floor(lat / CELL)}:${Math.floor(lng / CELL)}`
+      const l = grid.get(k)
+      if (l) l.push(item); else grid.set(k, [item])
+    }
+    grids.set(items, grid)
+  }
+  const keys = new Set<string>()
+  const padLat = PAD_M / 111_320
+  const mark = (lat: number, lng: number) => {
+    const padLng = padLat / Math.cos((lat * Math.PI) / 180)
+    for (let y = Math.floor((lat - padLat) / CELL); y <= Math.floor((lat + padLat) / CELL); y++)
+      for (let x = Math.floor((lng - padLng) / CELL); x <= Math.floor((lng + padLng) / CELL); x++) keys.add(`${y}:${x}`)
+  }
+  for (let i = 0; i < line.length; i++) {
+    const a = line[i - 1], b = line[i]
+    mark(b[0], b[1])
+    if (!a) continue
+    // Vertices can be further apart than a cell; mark the gaps too.
+    const steps = Math.ceil(Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) / CELL)
+    for (let k = 1; k < steps; k++) mark(a[0] + ((b[0] - a[0]) * k) / steps, a[1] + ((b[1] - a[1]) * k) / steps)
+  }
+  const out: T[] = []
+  for (const k of keys) for (const item of grid.get(k) ?? []) out.push(item)
+  return out
 }
 
 export const featuresAlong = (line: LatLng[], features: Feature[]) =>

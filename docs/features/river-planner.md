@@ -183,7 +183,7 @@ type Contribution = {
 
 ### Storage
 
-**Built datasets** are committed for now at `packages/waterways/data/{region}.json`: 709 KB raw, 127 KB gzipped for the DW region. They're generated, reviewable in PRs, and tests run against them. They're served by `GET /plan/data/{region}` (a route handler prerendered at build, `force-static`, cached), and the browser computes plans from it. Everything per user lives in S3 like the rest of the platform:
+**Built datasets** are committed for now at `packages/waterways/data/{region}.json`: 709 KB raw, 127 KB gzipped for the DW region. They're generated, reviewable in PRs, and tests run against them. Since 2026-10-12 the planner runs on the national dataset instead, published to S3 and routed on the server (see [`waterways-uk-ireland.md`](waterways-uk-ireland.md)); `dw.json` remains as the test fixture and the stand-in before the first publish. Everything per user lives in S3 like the rest of the platform:
 
 ```
 waterways/conditions/stream-warnings.json  ← last parsed board, cached ~1 h
@@ -250,7 +250,7 @@ Researched 2026-10-11. No paid API, no sign-up.
 ## P1 as built
 
 - **`/plan`** (`app/plan/page.tsx` → `components/plan/Planner.tsx`): the map (`components/map/PlanMap.tsx`: every link of the region, land outside the region greyed, the route, the ends, the stops) and the route sheet beside it.
-  - The map carries Esri's place-name layer (`World_Dark_Gray_Reference`, same host as the base tiles) above the rivers. The region is outlined dashed, land beyond it is darkened, and a caption on the map says so. A **GO TO** list jumps to a town on the water (`places` in `regions.ts`, upstream first; a test checks each is on the network and in order).
+  - The map carries Esri's place-name layer (`World_Dark_Gray_Reference`, same host as the base tiles) above the rivers. A caption on the map says how far the data reaches. **GO TO** was a list of DW towns; since 2026-10-12 it's a typeahead over every town, village, lock and weir on the water (see [`waterways-uk-ireland.md`](waterways-uk-ireland.md), "Places search").
   - First click sets the start, the second the finish; after that a click moves the nearer end. SWAP reverses the trip, CLEAR starts again. A click more than `SNAP_MAX_M` (1 km) from the water is refused with a message.
   - ONE-WAY / RETURN, a start time (`datetime-local`, the browser's zone), pace in km/h (default 8) and minutes per portage (default 3).
   - Summary: distance, portages, paddling time, time with portages, finish time. Stop list in travel order: chainage, arrival time (`fmtTime`, with "+1" after midnight) or elapsed time without a start time, and what's known (portage side, said as unknown when it is; crew directions, parking and postcode; facilities; the bank of a towpath access point). A return shows where it turns. Filters: PORTAGES, WEIRS, GET IN / OUT, WATER AND TOILETS on; TOWPATH ACCESS (hundreds of points) off.
@@ -301,7 +301,7 @@ Every view and print says the planner is not a navigation authority. Check strea
 | **P3 Your own information** | Private notes, photos (EXIF stripped), drawings, map snippets on a plan or feature; in print; GDPR export and erasure | Tests for ownership, privacy, export and erasure |
 | **P4 Sharing and gaps** | Make-public with a CC0 release (live immediately; flag and hide), `/plan/gaps`, coverage shading, corrections | Permission story tests (private never leaks); gaps page lists the real holes |
 | **P5 Live conditions** | Stream warnings (parsed), EA levels, tides (ADMIRALTY), daylight; in plan and print | Best-effort: a failed fetch shows "unknown", tested |
-| **P6 UK-wide** | All CRT waterways plus the EA Thames upstream to Lechlade | Lechlade→Teddington locks match the prototype's list |
+| **P6 UK and Ireland** | Now its own spec: [`waterways-uk-ireland.md`](waterways-uk-ireland.md). National network, server routing, places search, then every nation's sources and a weekly refresh | Check routes pass in every nation; coverage published |
 | **P7 Europe** | Netherlands (Rijkswaterstaat CC0) first, then EuRIS and Germany | One NL route plans end to end |
 
 **Not in scope: races.** Plans are race-agnostic (owner, 2026-10-11). People train on these stretches far more often than they race them, and a race's checkpoints and rules are the organiser's job. No event layer, no cut-offs.
