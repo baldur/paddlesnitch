@@ -1,6 +1,6 @@
 # Feature spec: River planner data for the UK and Ireland
 
-**Status:** 🚧 in progress, started 2026-10-12. **W1 and W2 built** (network, server routing, map by area, places search); production stays on the Devizes–Westminster data until the first national version is published (W5). This is P6 of [`river-planner.md`](river-planner.md), widened from "all CRT waterways" to full coverage of England, Wales, Scotland, Northern Ireland and the Republic of Ireland.
+**Status:** 🚧 in progress, started 2026-10-12. **W1 and W2 built** (network, server routing, map by area, places search). **W3/W4 started:** CRT and the EA Thames nationally, Scottish Canals, Waterways Ireland. **W5 refresh built:** a weekly workflow and its own narrow AWS role. Production stays on the Devizes–Westminster data until the first national version is published and its PR merged. This is P6 of [`river-planner.md`](river-planner.md), widened from "all CRT waterways" to full coverage of England, Wales, Scotland, Northern Ireland and the Republic of Ireland.
 **Research:** [`waterways-uk-ireland-sources.md`](waterways-uk-ireland-sources.md), the source inventory with licences and endpoints.
 
 ## Owner decisions (2026-10-12)
@@ -32,7 +32,9 @@ So:
 
 ### Source registry
 
-One TypeScript file per dataset, `packages/waterways/src/registry/{gb|ie}/{nation}/{publisher}-{dataset}.ts`, typed by `SourceEntry`:
+**As built so far:** credits and licence flags live in `SOURCES` (`packages/waterways/src/sources.ts`, with `nonCommercial: true` on Waterways Ireland), and each source's fetch is a job in `apps/web/scripts/waterways/fetch-sources.ts`. The per-file registry below is where this goes once there are more sources than fit comfortably in one file.
+
+The design: one TypeScript file per dataset, `packages/waterways/src/registry/{gb|ie}/{nation}/{publisher}-{dataset}.ts`, typed by `SourceEntry`:
 
 ```ts
 type SourceEntry = {
@@ -88,7 +90,9 @@ The three licence layers stay as built (core, OSM, contributions) with one addit
 ### Scheduling
 
 GitHub Actions, scheduled weekly (Sunday 02:17 UTC; off the hour, because runs on the hour get delayed or dropped):
-- **refresh:** every active source, then the national build, upload of the new version, and a PR changing `manifest.json` with a summary of what changed (features added, removed and moved; coverage per nation). Merge to publish.
+- **refresh** (built: `.github/workflows/waterways-refresh.yml`, also runnable by hand): downloads the Geofabrik extract, runs `osm_extract.py`, `pnpm waterways:sources` and `pnpm waterways:national` (checks), then assumes the `att-github-waterways` role, publishes the version to `s3://paddlesnitch-data-prod/waterways/published/{version}/` and opens a PR setting `manifest.json`, with the build summary. A PR opened with `GITHUB_TOKEN` starts no `pull_request` runs, so the job dispatches `checks.yml` and `e2e.yml` on its branch. Merge to publish; the deploy then serves the new version.
+  - **The role** (`infra/lib/att-stack.ts`) trusts only jobs in the `waterways-data` environment and can read and write only `waterways/*` in the data bucket; `deploy-trust.test.ts` holds it there. The workflow derives its ARN from the deploy role's (same account). GitHub creates the environment on the first run; restricting it to `main` under Settings → Environments is worth doing.
+  - Raw snapshots under `waterways/raw/` expire after 90 days. Published versions are kept: the live one is named in git.
 - **discover:** saved searches on data.gov.uk, data.gov.ie and OpenDataNI (CKAN) and ArcGIS Hub for lock, weir, slipway, portage, canoe, blueway and navigation. Anything not in the registry opens a `candidate-source` issue.
 - **health:** a source that fails three runs in a row is marked `broken` and opens an issue.
 
@@ -112,9 +116,9 @@ Live river levels and tides are not part of this pipeline; they're fetched when 
 
 | Route | Expect | Source |
 |---|---|---|
-| Devizes → Westminster | 201 km, 77 locks | DW race |
-| Lechlade → Teddington | 45 Thames locks (199.6 km found; EA says 124 miles) | EA |
-| Corpach → Inverness (Caledonian Canal) | 29 locks (93.8 km found; 60 miles) | Scottish Canals |
+| Devizes → Westminster | 201 km, 77 locks (found: 201.4 km, 77) | DW race |
+| Lechlade → Teddington | 45 Thames locks (found: 199.6 km, 45; EA says 124 miles) | EA |
+| Corpach → Clachnaharry (Caledonian Canal) | 29 locks (found: 94.1 km, 29; 60 miles) | Scottish Canals |
 | Lanesborough → Athlone (Shannon, across Lough Ree) | connected through the lough | Waterways Ireland |
 | Athlone → Banagher (Shannon) | connected | Waterways Ireland |
 
@@ -132,7 +136,7 @@ The browser never loads the whole network. Zoomed out (below zoom 9) it draws an
 |---|---|---|
 | **W1 Network** ✅ | Geofabrik extract, national network, server routing, check routes | All check routes pass |
 | **W2 Planner** ✅ | Planner on `plan.route`, map by area, places typeahead | DW E2E passes on the national data |
-| **W3 England** | CRT national, EA navigations, Broads, EA weirs (AIMS) | England coverage report |
-| **W4 Scotland, Ireland** | Scottish Canals, SEPA, AMBER-GB; Waterways Ireland, IFI, OPW levels | Coverage report per nation |
-| **W5 Pipeline** | Registry-driven jobs, S3 staging, weekly refresh PR, discovery, health | A scheduled run opens a PR with a correct summary |
+| **W3 England** 🚧 | CRT national ✅ (1,722 locks, 1,108 weirs, 7,688 towpath access points…), EA Thames ✅ (45 locks); to do: other EA navigations, Broads, EA weirs (AIMS) | England coverage report |
+| **W4 Scotland, Ireland** 🚧 | Scottish Canals ✅ (91 locks, 57 weirs, 66 landings), Waterways Ireland ✅ (182 locks, 10 carries, put-ins, facilities, warnings); to do: SEPA, AMBER-GB, IFI, OPW levels | Coverage report per nation |
+| **W5 Pipeline** 🚧 | Weekly refresh PR ✅ with its own role; to do: raw snapshots to S3 with change detection, discovery, health | A scheduled run opens a PR with a correct summary |
 | **W6 Coverage** | Coverage map, `/plan/gaps`, contribution prompts | Gaps page lists real holes, ranked |

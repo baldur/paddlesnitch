@@ -44,3 +44,33 @@ describe('AWS deploy role trust', () => {
     expect(workflow('claude-fast-loop.yml')).toMatch(/author_association/)
   })
 })
+
+// The weekly waterways refresh (docs/features/waterways-uk-ireland.md) has its
+// own role: it must never be able to do more than write river data.
+describe('AWS waterways role', () => {
+  const start = stack.indexOf("new iam.Role(this, 'GithubWaterwaysRole'")
+  const role = stack.slice(start, stack.indexOf('\n    })', start))
+  const grant = stack.slice(start, stack.indexOf("dataBucket.grantReadWrite(waterwaysRole", start) + 80)
+
+  it('trusts only jobs in the waterways-data environment', () => {
+    expect(role).toContain("'repo:baldur@759/paddlesnitch@1254392477:environment:waterways-data'")
+    expect(role).not.toMatch(/ref:refs\/heads|environment:production/)
+  })
+
+  it('has no managed policy and can touch only waterways/* in the data bucket', () => {
+    expect(role).not.toContain('managedPolicies')
+    expect(grant).toContain("dataBucket.grantReadWrite(waterwaysRole, 'waterways/*')")
+    expect(stack.match(/\.grant\w*\(waterwaysRole/g)).toHaveLength(1)   // granted nothing else
+    expect(stack).not.toMatch(/waterwaysRole\.(add|attach)/)
+  })
+
+  it('every refresh job that assumes an AWS role declares the waterways-data environment', () => {
+    for (const [name, body] of jobs(workflow('waterways-refresh.yml'))) {
+      if (body.includes('configure-aws-credentials')) expect(body, name).toMatch(/\n    environment: waterways-data\n/)
+    }
+  })
+
+  it('the Claude workflows never run in the waterways-data environment', () => {
+    for (const f of ['claude-intake.yml', 'claude-fast-loop.yml']) expect(workflow(f)).not.toMatch(/environment:\s*waterways-data/)
+  })
+})

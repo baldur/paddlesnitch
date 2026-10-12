@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Dispatched by the weekly waterways refresh on its PR branch (see checks.yml).
+  workflow_dispatch:
 
 jobs:
   e2e:

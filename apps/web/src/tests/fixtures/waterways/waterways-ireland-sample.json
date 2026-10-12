@@ -1,0 +1,305 @@
+{
+ "infrastructure": [
+  {
+   "type": "Feature",
+   "id": 990963,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -6.40680702666887,
+     53.3294484097389
+    ]
+   },
+   "properties": {
+    "L1_ASSET_NAME": "Lock 10 Grand Canal",
+    "L2_COMPONENT_NAME": "NA",
+    "L2_COMPONENT": "NA",
+    "ASSET_CATEGORY": 1,
+    "ASSET_TYPE": "Canal Lock",
+    "Operation": "Manual",
+    "Size": "Single",
+    "Status": "Active",
+    "Navigation": "Grand Canal",
+    "Waterway": "Grand Canal Main Line",
+    "WATERWAY_SECTION": "Level 10",
+    "FinanceCode": "EGU",
+    "County": "Dublin",
+    "Townland": "Cappagh",
+    "LOCAL_NAME": null,
+    "Facility": null,
+    "Latitude": 53.32944841,
+    "Longitude": -6.40680703,
+    "IHR_REF": "1",
+    "OBJECTID": 990963,
+    "GlobalID": "2b930e36-745c-4656-b432-87310e992762",
+    "SubtypetoCategory": "Lock",
+    "AssetID": "2150"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 992467,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -6.40758834070392,
+     53.329527826026
+    ]
+   },
+   "properties": {
+    "L1_ASSET_NAME": "Lock 10 Grand Canal",
+    "L2_COMPONENT_NAME": "Lock 10 Grand Canal Upstream Waiting Jetty",
+    "L2_COMPONENT": "Waiting Jetty",
+    "ASSET_CATEGORY": 1,
+    "ASSET_TYPE": "Canal Lock",
+    "Operation": "Manual",
+    "Size": "Single",
+    "Status": "Active",
+    "Navigation": "Grand Canal",
+    "Waterway": "Grand Canal Main Line",
+    "WATERWAY_SECTION": "Level 10",
+    "FinanceCode": "EGU",
+    "County": "Dublin",
+    "Townland": "Cappagh",
+    "LOCAL_NAME": null,
+    "Facility": null,
+    "Latitude": 53.32952783,
+    "Longitude": -6.40758834,
+    "IHR_REF": "1",
+    "OBJECTID": 992467,
+    "GlobalID": "98daa8c5-f1be-43e0-98dd-5b9b38a34f3c",
+    "SubtypetoCategory": "Lock",
+    "AssetID": "9740"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 990528,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -6.96612652597567,
+     52.7817467203079
+    ]
+   },
+   "properties": {
+    "L1_ASSET_NAME": "Milford Canal Bridge",
+    "L2_COMPONENT_NAME": "NA",
+    "L2_COMPONENT": "NA",
+    "ASSET_CATEGORY": 2,
+    "ASSET_TYPE": "Road Overbridge",
+    "Operation": "Stationary",
+    "Size": "Single Span",
+    "Status": "Active",
+    "Navigation": "Barrow Navigation",
+    "Waterway": "Barrow Navigation",
+    "WATERWAY_SECTION": "Milford Level",
+    "FinanceCode": "EBN",
+    "County": "Carlow",
+    "Townland": "Ballygowan",
+    "LOCAL_NAME": null,
+    "Facility": null,
+    "Latitude": 52.78174672,
+    "Longitude": -6.96612653,
+    "IHR_REF": "1",
+    "OBJECTID": 990528,
+    "GlobalID": "7ca66f3f-1c28-4a2d-96e4-85176c6d4ca4",
+    "SubtypetoCategory": "Bridge",
+    "AssetID": "123"
+   }
+  }
+ ],
+ "access": [
+  {
+   "type": "Feature",
+   "id": 4616,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -6.8776839772248,
+     53.2612392644169
+    ]
+   },
+   "properties": {
+    "Name": "Lock 20",
+    "AccessPointType": "Carry",
+    "Activity": "Paddling",
+    "Services": null,
+    "RouteCategory": "Blueway",
+    "SectionName": "Barrow Blueway",
+    "TrailName": "Lowtown to Athy",
+    "JourneyName": "Lowtown to Lock 22",
+    "TrailID": null,
+    "Details": null,
+    "Trail_List_Details": null,
+    "County": "Kildare",
+    "Region": "East",
+    "Navigation": "Grand Barrow",
+    "Waterway": "Barrow Line",
+    "Waterway_Section": "Level 20",
+    "OBJECTID": 4616,
+    "GlobalID": "a8e0e1e3-8933-4dbd-9a22-e2831cf3ac2e",
+    "Latitude": 53.261239,
+    "Longitude": -6.877684
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 4,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -8.27951605750289,
+     52.9246339830999
+    ]
+   },
+   "properties": {
+    "Name": "Dromineer Beach",
+    "AccessPointType": "Put-In/Take-Out Point",
+    "Activity": "Paddling",
+    "Services": null,
+    "RouteCategory": "Blueway",
+    "SectionName": "Lough Derg Blueway",
+    "TrailName": "Kilgarvan to Garrykennedy",
+    "JourneyName": "Dromineer Beach to Luska Pier<br>Dromineer Beach to Garrykennedy Harbour",
+    "TrailID": null,
+    "Details": null,
+    "Trail_List_Details": null,
+    "County": "Tipperary",
+    "Region": "West",
+    "Navigation": "Shannon Navigation",
+    "Waterway": "Shannon Navigation Main Line",
+    "Waterway_Section": "Lough Derg Level",
+    "OBJECTID": 4,
+    "GlobalID": "a7f299fd-38d7-4030-9091-0f7a32fd5a8f",
+    "Latitude": 52.924634,
+    "Longitude": -8.279516
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 22,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -7.90546983758246,
+     53.7314453673608
+    ]
+   },
+   "properties": {
+    "Name": "Cloondara",
+    "AccessPointType": "Trailhead",
+    "Activity": "Walking,Cycling",
+    "Services": "Bike Hire<br>Parking<br>Food and Drink<br>Toilets<br>Shop<br>Accommodation",
+    "RouteCategory": "Greenway",
+    "SectionName": "Royal Canal Greenway",
+    "TrailName": "NA",
+    "JourneyName": "Keenagh to Cloondara",
+    "TrailID": 13,
+    "Details": "Consider beginning your journey in the peaceful village of Cloodara, located towards the top of the Royal Canal Greenway. Situated where the Royal Canal meets the River Shannon, the village\u2019s focal point is the stone-cut Richmond Harbour. This large enclosed waterscape boasts scenic views, plenty of free public parking, a playground, bike rental, paddle sports rental and several drinks and dining options. Treat yourself to a hearty pub lunch and watch the barges go by before setting off. Cloondara also has several options for overnight accommodation.",
+    "Trail_List_Details": null,
+    "County": "Longford",
+    "Region": "East",
+    "Navigation": "Royal Canal",
+    "Waterway": "Royal Canal Main Line",
+    "Waterway_Section": "Level 46",
+    "OBJECTID": 22,
+    "GlobalID": "c5fa602a-1b74-48fa-9b00-5616b31bc6c9",
+    "Latitude": 53.73144537,
+    "Longitude": -7.90546984
+   }
+  }
+ ],
+ "facilities": [
+  {
+   "type": "Feature",
+   "id": 201,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -6.67458059655359,
+     55.1443173418173
+    ]
+   },
+   "properties": {
+    "Name": "Coleraine Marina - Toilets",
+    "Type": "Toilets",
+    "Operator_Name": "Other Public Body",
+    "Car_Parking_Available": "Car Parking Available",
+    "Car_Parking_Details": "Coleraine Borough Council +44 (0)28 7034 7034",
+    "Payment_Method": "NA",
+    "Payment_Amount": "0",
+    "Operating_Hours": null,
+    "Accessibility": "Full",
+    "Provision_Refuse_Service": "Yes",
+    "Refuse_Service_Provider": "Coleraine Borough Council +44 (0)28 7034 7034",
+    "Additional_Details": null,
+    "Latitude": 55.14431734,
+    "Longitude": -6.6745806,
+    "Navigation": "Lower Bann",
+    "Waterway": "Lower Bann",
+    "Waterway_Section": "Coleraine Level",
+    "County": "Derry",
+    "Townland": "Ballysally",
+    "GlobalID": "b72c665d-e7c1-4cb6-8aee-ab75d0301972",
+    "OBJECTID": 201
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 167,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -8.2335895021296,
+     53.9857098210187
+    ]
+   },
+   "properties": {
+    "Name": "Lough Key Forest Park - Shore Power",
+    "Type": "Shore Power",
+    "Operator_Name": "Waterways Ireland",
+    "Car_Parking_Available": "Car Parking Available",
+    "Car_Parking_Details": "Exit fee applies during peak times. Privately owned by Lough Key Forest Park +353 (0)71 96 73122.",
+    "Payment_Method": "Smart Card",
+    "Payment_Amount": "2kwh Electricity = 1 unit",
+    "Operating_Hours": "Unlimited",
+    "Accessibility": "Full",
+    "Provision_Refuse_Service": null,
+    "Refuse_Service_Provider": null,
+    "Additional_Details": "6 Combined",
+    "Latitude": 53.98571,
+    "Longitude": -8.23359,
+    "Navigation": "Shannon Navigation",
+    "Waterway": "Lough Key Branch",
+    "Waterway_Section": "Lough Key Branch",
+    "County": "Roscommon",
+    "Townland": "Rockingham Demesne",
+    "GlobalID": "cc46531f-88d9-4faa-b4d0-29bd104ae286",
+    "OBJECTID": 167
+   }
+  }
+ ],
+ "warnings": [
+  {
+   "type": "Feature",
+   "id": 1,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -8.08431372517901,
+     54.4752035769661
+    ]
+   },
+   "properties": {
+    "OBJECTID": 1,
+    "Name": "Caution",
+    "Description": "Beware of strong currents.  West going current up to 6 knots.",
+    "Latitude": 54.47520358,
+    "Longitude": -8.08431373,
+    "Navigation": "Erne System",
+    "County": "Fermanagh"
+   }
+  }
+ ]
+}

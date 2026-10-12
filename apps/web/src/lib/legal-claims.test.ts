@@ -41,13 +41,14 @@ const SERVICES: Record<string, string> = {
 }
 // Our own site, legal links and test-only values -- not processors.
 const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'evil.example.com', 'example.invalid'])
-// River-planner open data: fetched only by scripts/waterways/build-region.ts
-// on a developer's machine, so no visitor's data ever reaches these hosts.
+// River-planner open data: fetched only by scripts/waterways/* on a developer's
+// machine or the weekly refresh job, so no visitor's data ever reaches these hosts.
 // The rest are credit links to a source. If the app ever calls one of these
 // at runtime, move it to SERVICES and name it on the privacy page.
 const BUILD_TIME_SOURCES = new Set([
   'services.arcgis.com', 'overpass-api.de', 'overpass.kumi.systems', 'www.gov.uk',
   'www.openstreetmap.org', 'data-canalrivertrust.opendata.arcgis.com', 'www.dwrace.co.uk',
+  'd1hxd0sho1wxko.cloudfront.net', 'www.scottishcanals.co.uk', 'www.waterwaysireland.org', 'download.geofabrik.de',
 ])
 
 describe('privacy page names every outside service the code uses', () => {

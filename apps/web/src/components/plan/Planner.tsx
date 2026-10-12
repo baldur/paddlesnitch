@@ -36,6 +36,9 @@ const KIND: Record<string, string> = {
  *  saved here, but pace, start time and one-way/return can be tried. */
 export type SharedView = { owner: string; mine: boolean; planId: string }
 
+// Every outside source we show data from, credited under the plan.
+const CREDITED = (Object.keys(SOURCES) as (keyof typeof SOURCES)[]).filter(id => id !== 'contribution' && id !== 'curated')
+
 // The live dataset's version: the map's network and places URLs carry it.
 const VERSION = manifest.version ?? 'none'
 
@@ -183,7 +186,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
           <p>This plan is not a navigation authority. Check stream warnings, lock notices and, below Teddington, the tide before you go.</p>
           <p>
             Data:{' '}
-            {(['osm', 'crt', 'ea-thames-locks', 'ea-thames-site-guides'] as const).map((id, i) => (
+            {CREDITED.map((id, i) => (
               <span key={id}>{i > 0 && ' · '}<a className="underline hover:text-fg" href={SOURCES[id].url} target="_blank" rel="noreferrer">{SOURCES[id].attribution}</a></span>
             ))}
           </p>
