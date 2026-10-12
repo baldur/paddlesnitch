@@ -3,15 +3,11 @@ import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, Pane, Polyline, Polygon, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useEffect } from 'react'
 import type { LatLng } from '@paddlesnitch/waterways/types'
+import { mapTiles } from '@/lib/plan-ui'
 
 // The planner's map: every river and canal we cover, greyed-out land beyond the
 // region, the planned route, its ends and its stops. A click is passed up; the
 // page decides whether it's the start or the finish.
-
-const DARK = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
-// Esri's place names, drawn above the rivers but below the markers and clicks.
-const LABELS = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
-const ATTR = 'Tiles &copy; Esri · Waterways &copy; OpenStreetMap contributors, Canal &amp; River Trust, Environment Agency'
 
 export type MapStop = { id: string; at: LatLng; name: string; colour: string }
 
@@ -48,7 +44,7 @@ function Focus({ focus }: { focus: MapFocus | null }) {
 }
 
 export default function PlanMap({
-  network, bbox, route, start, finish, stops, focus, view, onPick,
+  network, bbox, route, start, finish, stops, focus, view, satellite = false, onPick,
 }: {
   network: LatLng[][]
   bbox: [number, number, number, number]   // [south, west, north, east]
@@ -58,20 +54,24 @@ export default function PlanMap({
   stops: MapStop[]
   focus: MapFocus | null
   view?: { at: LatLng; zoom: number }
+  satellite?: boolean
   onPick: (p: LatLng) => void
 }) {
   const [s, w, n, e] = bbox
+  const tiles = mapTiles(satellite)
   const world: LatLng[] = [[-85, -180], [-85, 180], [85, 180], [85, -180]]
   const region: LatLng[] = [[s, w], [n, w], [n, e], [s, e]]
   return (
     <MapContainer center={[(s + n) / 2, (w + e) / 2]} zoom={9} preferCanvas className="h-full w-full" data-testid="plan-map">
-      <TileLayer url={DARK} attribution={ATTR} maxNativeZoom={16} maxZoom={19} />
+      {/* Keyed so switching swaps the layer rather than mutating its url. */}
+      <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
       {/* Land beyond the region is darkened: we have no river data there yet. */}
       <Polygon positions={[world, region]} interactive={false} pathOptions={{ stroke: false, fillColor: '#0b1220', fillOpacity: 0.6 }} />
       <Polygon positions={region} interactive={false} pathOptions={{ color: '#94a3b8', weight: 1, dashArray: '6 6', fill: false }} />
       <Polyline positions={network} interactive={false} pathOptions={{ color: '#06b6d4', weight: 2, opacity: 0.55 }} />
+      {/* Esri's place names, above the rivers but below the markers and clicks. */}
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
-        <TileLayer url={LABELS} maxNativeZoom={16} maxZoom={19} />
+        <TileLayer key={tiles.labels} url={tiles.labels} maxNativeZoom={tiles.labelsNativeZoom} maxZoom={19} />
       </Pane>
       {route.length > 0 && <Polyline positions={route} interactive={false} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }} />}
       {stops.map(st => (

@@ -59,6 +59,30 @@ export const PLAN_ERROR_TEXT: Record<PlanError, string> = {
 
 export const km = (m: number) => `${(m / 1000).toFixed(1)} km`
 
+// --- The map's tiles -----------------------------------------------------------
+
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
+const DATA_ATTR = 'Waterways &copy; OpenStreetMap contributors, Canal &amp; River Trust, Environment Agency'
+
+/** The dark map, or aerial imagery for seeing where you can land. Esri's terms
+ *  allow viewing and tracing over the imagery, never storing it, never printing
+ *  it, never training on it (docs/features/river-planner.md). */
+export function mapTiles(satellite: boolean) {
+  return satellite ? {
+    base: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
+    baseNativeZoom: 19,
+    labels: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
+    labelsNativeZoom: 19,
+    attribution: `Imagery: Esri, Vantor, Earthstar Geographics, and the GIS User Community · ${DATA_ATTR}`,
+  } : {
+    base: `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    baseNativeZoom: 16,
+    labels: `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
+    labelsNativeZoom: 16,
+    attribution: `Tiles &copy; Esri · ${DATA_ATTR}`,
+  }
+}
+
 // --- The address bar ----------------------------------------------------------
 
 export type PlanDraft = {

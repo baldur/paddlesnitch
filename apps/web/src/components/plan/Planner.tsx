@@ -41,6 +41,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
   const [draft, setDraft] = useState<PlanDraft>(initial)
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
   const [focus, setFocus] = useState<MapFocus | null>(null)
+  const [satellite, setSatellite] = useState(false)
   // The start time box shows the browser's zone, so it stays empty until hydrated.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
@@ -80,9 +81,15 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             }))}
             focus={focus}
             view={view}
+            satellite={satellite}
             onPick={p => { if (!shared) setDraft(d => placeClick(d, p)) }}
           />
         ) : <LoadingState label="Loading the rivers…" />}
+        {/* Aerial imagery, to see which bank you can land on. */}
+        <button type="button" aria-pressed={satellite} onClick={() => setSatellite(v => !v)}
+          className={`absolute top-[5.5rem] left-[10px] z-[500] bg-bg/85 ${BTN} ${satellite ? 'border-primary text-fg' : 'text-muted'}`}>
+          SATELLITE
+        </button>
         <p className="absolute top-2 right-2 z-[500] max-w-[16rem] bg-bg/85 border border-border px-2 py-1 text-xs text-muted pointer-events-none">
           River data so far: the dashed area, {REGIONS[REGION].places[0].name} to {REGIONS[REGION].places.at(-1)!.name}. Darker land isn&apos;t covered yet.
         </p>
