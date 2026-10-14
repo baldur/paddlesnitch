@@ -25,10 +25,10 @@
     "./buddies": "./src/buddies.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.1146.0",
-    "@aws-sdk/client-s3": "^3.1146.0",
-    "@aws-sdk/client-ssm": "^3.1146.0",
-    "@aws-sdk/s3-request-presigner": "^3.1146.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1149.0",
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@aws-sdk/client-ssm": "^3.1149.0",
+    "@aws-sdk/s3-request-presigner": "^3.1149.0",
     "@paddlesnitch/timing": "workspace:*",
     "aws-jwt-verify": "^5.2.1"
   },

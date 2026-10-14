@@ -27,7 +27,7 @@
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
-    "@aws-sdk/client-bedrock-runtime": "^3.1146.0",
-    "nanoid": "^6.0.1"
+    "@aws-sdk/client-bedrock-runtime": "^3.1149.0",
+    "nanoid": "^6.0.2"
   }
 }
