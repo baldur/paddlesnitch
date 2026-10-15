@@ -6,6 +6,9 @@ name: Checks
 # in a test file merged unseen (#393). Read-only: no secrets, no AWS.
 on:
   pull_request:
+  # The weekly waterways refresh opens its PR with GITHUB_TOKEN, which doesn't
+  # trigger pull_request runs; it dispatches this on its branch instead.
+  workflow_dispatch:
 
 permissions:
   contents: read

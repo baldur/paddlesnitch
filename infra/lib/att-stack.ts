@@ -193,8 +193,37 @@ export class AttStack extends cdk.Stack {
         prefix: 'jobs-failed/',
         expiration: cdk.Duration.days(30),
         noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
+        // Raw responses kept by the weekly waterways refresh, to see what a
+        // source changed. Published versions (waterways/published/) are kept:
+        // the live one is named in git and must never expire under it.
+        id: 'expire-waterways-raw',
+        prefix: 'waterways/raw/',
+        expiration: cdk.Duration.days(90),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
       }],
     })
+
+    // The weekly waterways refresh (.github/workflows/waterways-refresh.yml,
+    // docs/features/waterways-uk-ireland.md). Its own role, NOT the deploy
+    // role: it can only read and write waterways/* in the data bucket, and
+    // only a job in the `waterways-data` environment can assume it. What it
+    // writes goes live only when a person merges the PR that points
+    // packages/waterways/data/manifest.json at the new version.
+    const waterwaysRole = new iam.Role(this, 'GithubWaterwaysRole', {
+      roleName: 'att-github-waterways',
+      assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
+        StringLike: {
+          'token.actions.githubusercontent.com:sub': [
+            'repo:baldur@759/paddlesnitch@1254392477:environment:waterways-data',
+            'repo:baldur/paddlesnitch:environment:waterways-data',
+          ],
+        },
+        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
+      }),
+      maxSessionDuration: cdk.Duration.hours(1),
+    })
+    dataBucket.grantReadWrite(waterwaysRole, 'waterways/*')
 
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
       bucketName: 'paddlesnitch-assets-prod',
@@ -1330,6 +1359,10 @@ export class AttStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'GithubDeployRoleArn', {
       value: deployRole.roleArn,
       description: 'Paste into GitHub Actions workflow as AWS_ROLE_ARN',
+    })
+    new cdk.CfnOutput(this, 'GithubWaterwaysRoleArn', {
+      value: waterwaysRole.roleArn,
+      description: 'Assumed by the weekly waterways refresh (derived from AWS_ROLE_ARN in the workflow)',
     })
   }
 }

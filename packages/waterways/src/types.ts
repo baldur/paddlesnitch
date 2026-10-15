@@ -17,6 +17,8 @@ export type SourceId =
   | 'crt'                    // Canal & River Trust ArcGIS services
   | 'ea-thames-locks'        // GOV.UK "River Thames: locks and facilities for boaters"
   | 'ea-thames-site-guides'  // GOV.UK lock-and-weir site guides
+  | 'scottish-canals'        // Scottish Canals open data (OGL)
+  | 'waterways-ireland'      // Waterways Ireland ArcGIS layers (non-commercial)
   | 'osm'                    // OpenStreetMap (kept in its own table — ODbL)
   | 'contribution'           // a paddler's public contribution (CC0)
   | 'curated'                // drawn by us, committed in the repo

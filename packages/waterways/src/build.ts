@@ -23,11 +23,7 @@ export function buildRegion(input: RegionInput): RegionDataset {
   const keepM = input.keepWithinM ?? 400
   const near = nearNetwork(input.links, keepM)
 
-  const features = dedupeLocks(input.features.filter(f => near(f.at))).map(f => {
-    if (f.kind !== 'lock' || !input.crewByLock) return f
-    const crew = input.crewByLock[lockKey(f.name)]
-    return crew ? { ...f, crew } : f
-  })
+  const features = mergeFeatures(input.features.filter(f => near(f.at)), input.crewByLock)
 
   return {
     region: input.region,
@@ -37,6 +33,16 @@ export function buildRegion(input: RegionInput): RegionDataset {
     features,
     osm: input.osm.filter(o => near(o.at)),
   }
+}
+
+/** Every source's features as one list: one record per lock where sources
+ *  overlap, and crew detail (from EA site guides) attached by lock name. */
+export function mergeFeatures(features: Feature[], crewByLock?: Record<string, CrewDetail>): Feature[] {
+  return dedupeLocks(features).map(f => {
+    if (f.kind !== 'lock' || !crewByLock) return f
+    const crew = crewByLock[lockKey(f.name)]
+    return crew ? { ...f, crew } : f
+  })
 }
 
 /** "Cookham Lock" / "Lock 63, Beech Grove Lock" → "cookham" / "beech grove". */

@@ -18,6 +18,7 @@ import readline from 'readline'
 import { gzipSync } from 'zlib'
 import { putObject } from '@paddlesnitch/core/storage'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
+import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { linksFromWays, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
@@ -54,16 +55,18 @@ async function main() {
   for await (const p of lines(path.join(EXTRACT, 'points.jsonl'))) if (snap(links, p.at, OSM_NEAR_M)) osm.push(p)
   lap(`OSM points near the water: ${osm.length}`)
 
-  const features: Feature[] = []
+  const all: Feature[] = []
   const sources: Record<string, number> = {}
   for (const f of await fsp.readdir(NORMALISED).catch(() => [] as string[])) {
     if (!f.endsWith('.json')) continue
     const list: Feature[] = JSON.parse(await fsp.readFile(path.join(NORMALISED, f), 'utf8'))
     const near = list.filter(x => snap(links, x.at, OSM_NEAR_M))
-    features.push(...near)
+    all.push(...near)
     sources[f.replace(/\.json$/, '')] = near.length
   }
-  lap(`features: ${features.length} from ${Object.keys(sources).length} sources`)
+  // One record per lock where sources overlap (CRT and EA on the Kennet in Reading).
+  const features = mergeFeatures(all)
+  lap(`features: ${features.length} from ${Object.keys(sources).length} sources (${all.length - features.length} duplicate locks merged)`)
 
   const osmPlaces: { at: LatLng; tags: Record<string, string> }[] = []
   for await (const p of lines(path.join(EXTRACT, 'places.jsonl'))) osmPlaces.push(p)

@@ -8,6 +8,9 @@ export type SourceInfo = {
   url: string
   licence: string
   attribution: string
+  /** Licensed for non-commercial use only: fine while paddlesnitch is free
+   *  (owner, 2026-10-12); must never feed the CC0 contribution layer. */
+  nonCommercial?: true
 }
 
 export const SOURCES: Record<SourceId, SourceInfo> = {
@@ -34,6 +37,19 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     url: 'https://www.gov.uk/government/publications/river-thames-lock-and-weir-fishing-site-guides',
     licence: 'OGL v3',
     attribution: 'Contains public sector information licensed under the Open Government Licence v3.0',
+  },
+  'scottish-canals': {
+    name: 'Scottish Canals open data',
+    url: 'https://www.scottishcanals.co.uk/scottish-canals-data-portal',
+    licence: 'OGL v3',
+    attribution: 'Data provided by Scottish Canals, licensed under the Open Government Licence',
+  },
+  'waterways-ireland': {
+    name: 'Waterways Ireland',
+    url: 'https://www.waterwaysireland.org',
+    licence: 'Non-commercial use with acknowledgement',
+    attribution: 'Contains data from Waterways Ireland',
+    nonCommercial: true,
   },
   contribution: {
     name: 'paddlesnitch contributors',

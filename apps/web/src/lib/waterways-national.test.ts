@@ -5,11 +5,15 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
+import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { linksFromWays, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
+import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces, searchPlaces, type Place } from '@paddlesnitch/waterways/places'
 import { computePlan, routePlan, timePlan } from '@paddlesnitch/waterways/plan'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
+import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
 
 const ds: RegionDataset = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data/dw.json'), 'utf8'))
@@ -123,5 +127,54 @@ describe('places search', () => {
       { name: 'Abbey Village', kind: 'village', at: [54, -2] },
     ]
     expect(searchPlaces(ps, 'abbey', [51.5, 0]).map(p => `${p.name}@${p.at[0]}`)).toEqual(['Abbey Town@55', 'Abbey Village@51.5', 'Abbey Village@54', 'Abbey Hamlet@51.5'])
+  })
+})
+
+const FX = path.join(__dirname, '../tests/fixtures/waterways')
+
+describe('Scottish Canals (shapefile attribute tables)', () => {
+  const dbf = (name: string) => readDbf(new Uint8Array(fs.readFileSync(path.join(FX, name))))
+
+  it('reads a dBASE table', () => {
+    const rows = dbf('scottish-canals-locks-sample.dbf')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toMatchObject({ name: 'Lock 1, Clachnaharry Sea-Lock', 'sub type': 'Lock', 'location e': '264473', 'location n': '846727' })
+  })
+
+  it('places locks from their eastings and northings', () => {
+    const [sea] = featuresFromScottishCanals('locks', dbf('scottish-canals-locks-sample.dbf'), AT)
+    expect(sea).toMatchObject({ kind: 'lock', name: 'Lock 1, Clachnaharry Sea-Lock', source: { source: 'scottish-canals', sourceId: 'CD-001-005' } })
+    expect(sea.at[0]).toBeCloseTo(57.4904, 3)
+    expect(sea.at[1]).toBeCloseTo(-4.2626, 3)
+  })
+
+  it('keeps canoe landings and landing stages, not pontoons for boats', () => {
+    const kept = featuresFromScottishCanals('moorings', dbf('scottish-canals-moorings-sample.dbf'), AT)
+    expect(kept.map(f => f.kind)).toEqual(['access', 'access'])
+  })
+})
+
+describe('Waterways Ireland', () => {
+  const sample = JSON.parse(fs.readFileSync(path.join(FX, 'waterways-ireland-sample.json'), 'utf8'))
+
+  it("keeps each lock once, not its waiting jetties, and not bridges", () => {
+    const locks = featuresFromWi('infrastructure', sample.infrastructure, AT)
+    expect(locks.map(f => f.name)).toEqual(['Lock 10 Grand Canal'])
+    expect(locks[0].source.source).toBe('waterways-ireland')
+  })
+
+  it('reads carries as portages, put-ins as access, parking for crews; skips trailheads', () => {
+    expect(featuresFromWi('access', sample.access, AT).map(f => f.kind)).toEqual(['portage', 'access'])
+  })
+
+  it('keeps toilets, water and showers; warnings become hazards with their text', () => {
+    expect(featuresFromWi('facilities', sample.facilities, AT).map(f => f.facilities)).toEqual([['toilet']])
+    const [w] = featuresFromWi('warnings', sample.warnings, AT)
+    expect(w).toMatchObject({ kind: 'hazard', name: 'Beware of strong currents.  West going current up to 6 knots.' })
+  })
+
+  it('is marked non-commercial, so it can be dropped in one place', () => {
+    expect(SOURCES['waterways-ireland'].nonCommercial).toBe(true)
+    expect(SOURCES['scottish-canals'].nonCommercial).toBeUndefined()
   })
 })

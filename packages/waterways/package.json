@@ -25,7 +25,10 @@
     "./national": "./src/national.ts",
     "./places": "./src/places.ts",
     "./checks": "./src/checks.ts",
-    "./display": "./src/display.ts"
+    "./display": "./src/display.ts",
+    "./ingest/dbf": "./src/ingest/dbf.ts",
+    "./ingest/scottish-canals": "./src/ingest/scottish-canals.ts",
+    "./ingest/waterways-ireland": "./src/ingest/waterways-ireland.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",
