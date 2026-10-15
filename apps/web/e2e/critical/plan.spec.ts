@@ -18,6 +18,11 @@ test('two clicks on the water give a route and its stops', async ({ page }) => {
   await expect(page.getByTestId('plan-summary')).toContainText('DISTANCE')
   await expect(page.getByTestId('stop-list')).toContainText('Portage side not known yet.')
   await expect(page).toHaveURL(/from=.*&to=/)   // the plan is in the address bar
+
+  // SATELLITE swaps the dark map for aerial imagery, to see where to land.
+  await page.getByRole('button', { name: 'SATELLITE' }).click()
+  await expect(page.getByRole('button', { name: 'SATELLITE' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('img.leaflet-tile[src*="World_Imagery"]').first()).toBeAttached()
 })
 
 test('a plan link opens the whole Devizes to Westminster route', async ({ page }) => {

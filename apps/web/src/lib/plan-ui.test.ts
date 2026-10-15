@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature } from '@paddlesnitch/waterways/types'
-import { asInput, draftFromParams, draftParams, groupOf, localInput, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import { asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -94,5 +94,19 @@ describe('the start time box', () => {
     const local = new Date(2027, 3, 17, 8, 5)
     expect(localInput(local.toISOString())).toBe('2027-04-17T08:05')
     expect(localInput(undefined)).toBe('')
+  })
+})
+
+describe('the map tiles', () => {
+  it('switches to Esri aerial imagery, with labels that read on a photo and the imagery credited', () => {
+    const sat = mapTiles(true)
+    expect(sat.base).toContain('/World_Imagery/')
+    expect(sat.labels).toContain('/World_Boundaries_and_Places/')
+    expect(sat.attribution).toContain('Esri, Vantor, Earthstar Geographics')
+    expect(sat.baseNativeZoom).toBe(19)   // close enough to see a landing stage
+  })
+
+  it('is the dark map by default', () => {
+    expect(mapTiles(false).base).toContain('/World_Dark_Gray_Base/')
   })
 })
