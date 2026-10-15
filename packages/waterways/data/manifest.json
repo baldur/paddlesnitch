@@ -1,3 +1,17 @@
 {
-  "version": null
+  "version": "20261015-1af094f3",
+  "builtAt": "2026-10-15T18:10:18.953Z",
+  "counts": {
+    "links": 80550,
+    "km": 63296,
+    "features": 12781,
+    "osm": 203472,
+    "places": 27603
+  },
+  "sources": {
+    "crt": 11774,
+    "ea-thames": 45,
+    "scottish-canals": 213,
+    "waterways-ireland": 750
+  }
 }
