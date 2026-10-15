@@ -7,7 +7,10 @@ import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listBuddies } from '@paddlesnitch/core/buddies'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
-import { REGIONS } from '@paddlesnitch/waterways/regions'
+import { simplify } from '@paddlesnitch/waterways/line'
+import { loadNational } from '@paddlesnitch/waterways/national'
+import { routePlan, snapClick } from '@paddlesnitch/waterways/plan'
+import { NATIONAL, REGIONS } from '@paddlesnitch/waterways/regions'
 import {
   savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, MAX_TITLE,
 } from '@paddlesnitch/waterways/plan-store'
@@ -18,7 +21,7 @@ const nameOf = async (userId: string) => (await findUserBySub(userId))?.displayN
 
 const fields = z.object({
   title: z.string().max(MAX_TITLE),
-  region: z.string().refine(r => r in REGIONS, 'unknown region'),
+  region: z.string().refine(r => r === NATIONAL || r in REGIONS, 'unknown region'),
   start: latLng,
   finish: latLng,
   shape: z.enum(['one_way', 'return']),
@@ -28,6 +31,23 @@ const fields = z.object({
 })
 
 export const planRouter = router({
+  // Snap the clicks to the water and, with both ends, route between them on the
+  // national network, returning every stop along the way. No times: the browser
+  // works those out from pace and start time (timePlan), so changing them needs
+  // no new route. The line is thinned for the map; chainages use the full one.
+  route: publicProcedure.input(z.object({
+    start: latLng,
+    finish: latLng.nullable(),
+    shape: z.enum(['one_way', 'return']),
+  })).query(async ({ input }) => {
+    const ds = await loadNational()
+    const s = snapClick(ds, input.start)
+    const start = s ? { at: s.at, waterway: s.link.name } : null
+    if (!input.finish) return { start, plan: null }
+    const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: input.shape })
+    return { start, plan: typeof plan === 'string' ? plan : { ...plan, line: simplify(plan.line, 8) } }
+  }),
+
   list: protectedProcedure.query(({ ctx }) => listPlans(ctx.user.id)),
 
   get: protectedProcedure.input(z.object({ id })).query(async ({ ctx, input }) => {

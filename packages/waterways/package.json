@@ -21,7 +21,11 @@
     "./ingest/thames": "./src/ingest/thames.ts",
     "./ingest/osm": "./src/ingest/osm.ts",
     "./data/*": "./data/*",
-    "./plan-store": "./src/plan-store.ts"
+    "./plan-store": "./src/plan-store.ts",
+    "./national": "./src/national.ts",
+    "./places": "./src/places.ts",
+    "./checks": "./src/checks.ts",
+    "./display": "./src/display.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",

@@ -58,12 +58,23 @@ export type ComputedPlan = {
 
 export type PlanError = 'start_off_water' | 'finish_off_water' | 'too_short' | 'not_connected'
 
-export function snapClick(dataset: RegionDataset, p: LatLng): Snap | null {
-  const s = snap(dataset.links, p)
-  return s && s.dist <= SNAP_MAX_M ? s : null
+/** The route and what's along it, before any timing: the part that needs the
+ *  network. On the national network it's computed on the server. */
+export type RoutedStop = Omit<Stop, 'portagesBefore' | 'elapsedS' | 'eta'>
+export type RoutedPlan = Omit<ComputedPlan, 'portages' | 'movingS' | 'totalS' | 'finishAt' | 'stops'> & { stops: RoutedStop[] }
+
+export type Pace = Pick<PlanInput, 'paceKmh' | 'portageMinutes' | 'startAt'>
+
+export function snapClick(dataset: Pick<RegionDataset, 'links'>, p: LatLng): Snap | null {
+  return snap(dataset.links, p, SNAP_MAX_M)
 }
 
 export function computePlan(dataset: RegionDataset, input: PlanInput): ComputedPlan | PlanError {
+  const routed = routePlan(dataset, input)
+  return typeof routed === 'string' ? routed : timePlan(routed, input)
+}
+
+export function routePlan(dataset: Pick<RegionDataset, 'links' | 'features'>, input: Pick<PlanInput, 'start' | 'finish' | 'shape'>): RoutedPlan | PlanError {
   const s = snapClick(dataset, input.start)
   if (!s) return 'start_off_water'
   const f = snapClick(dataset, input.finish)
@@ -74,37 +85,46 @@ export function computePlan(dataset: RegionDataset, input: PlanInput): ComputedP
 
   const legs: { leg: Stop['leg']; line: LatLng[]; offsetM: number }[] = [{ leg: 'out', line: out.line, offsetM: 0 }]
   if (input.shape === 'return') legs.push({ leg: 'back', line: reverseRoute(out).line, offsetM: out.lengthM })
-  const lengthM = out.lengthM * legs.length
 
-  const mps = (input.paceKmh * 1000) / 3600
-  const portageS = input.portageMinutes * 60
-  const t0 = input.startAt ? Date.parse(input.startAt) : NaN
-
-  const stops: Stop[] = []
-  let prevM = 0, portages = 0
+  const stops: RoutedStop[] = []
+  let prevM = 0
   for (const { leg, line, offsetM } of legs) {
     for (const a of featuresAlong(line, dataset.features)) {
       const chainageM = offsetM + a.chainageM
-      const portage = PORTAGE_KINDS.has(a.item.kind)
-      const elapsedS = chainageM / mps + portages * portageS
-      stops.push({
-        feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank,
-        portage, portagesBefore: portages, elapsedS,
-        eta: Number.isFinite(t0) ? new Date(t0 + elapsedS * 1000).toISOString() : undefined,
-      })
+      stops.push({ feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind) })
       prevM = chainageM
-      if (portage) portages++
     }
   }
-
-  const movingS = lengthM / mps
-  const totalS = movingS + portages * portageS
   return {
     start: { at: s.at, waterway: s.link.name },
     finish: { at: f.at, waterway: f.link.name },
     line: out.line,
     turnM: input.shape === 'return' ? out.lengthM : undefined,
-    lengthM,
+    lengthM: out.lengthM * legs.length,
+    stops,
+  }
+}
+
+/** Arrival times at the paddler's pace, plus portage time. Pure and cheap, so
+ *  the browser redoes it as pace or start time change. */
+export function timePlan(routed: RoutedPlan, pace: Pace): ComputedPlan {
+  const mps = (pace.paceKmh * 1000) / 3600
+  const portageS = pace.portageMinutes * 60
+  const t0 = pace.startAt ? Date.parse(pace.startAt) : NaN
+  let portages = 0
+  const stops: Stop[] = routed.stops.map(st => {
+    const elapsedS = st.chainageM / mps + portages * portageS
+    const stop: Stop = {
+      ...st, portagesBefore: portages, elapsedS,
+      eta: Number.isFinite(t0) ? new Date(t0 + elapsedS * 1000).toISOString() : undefined,
+    }
+    if (st.portage) portages++
+    return stop
+  })
+  const movingS = routed.lengthM / mps
+  const totalS = movingS + portages * portageS
+  return {
+    ...routed,
     portages,
     movingS,
     totalS,

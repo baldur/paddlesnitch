@@ -11,6 +11,7 @@ import { createCaller } from '@paddlesnitch/api'
 import { GET as exportData } from '@/app/api/account/export/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { listKeys, getJson } from '@/lib/storage'
+import { GET as mapData } from '@/app/plan/data/[version]/[name]/route'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const anon = createCaller({ user: null })
@@ -174,5 +175,53 @@ describe('plans and your account', () => {
     expect(await listKeys(`users/${me.id}/plans/`)).toEqual([])
     expect(await getJson(`plans/shared/${shareId}.json`)).toBeNull()
     await expect(anon.plan.shared({ shareId: shareId! })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+})
+
+describe('routing on the server (plan.route)', () => {
+  // With no published national version in test storage, the committed
+  // Devizes–Westminster data stands in (docs/features/waterways-uk-ireland.md).
+  it('routes between two clicks for anyone, with every stop and no times', async () => {
+    const r = await anon.plan.route({ start: DW.start, finish: DW.finish, shape: 'one_way' })
+    if (!r.plan || typeof r.plan === 'string') throw new Error(String(r.plan))
+    expect(r.start?.waterway).toBe('Kennet and Avon Canal')
+    expect(r.plan.lengthM / 1000).toBeCloseTo(201.3, 0)
+    expect(r.plan.stops.filter(s => s.feature.kind === 'lock')).toHaveLength(77)
+    expect(r.plan.stops[0]).not.toHaveProperty('eta')
+  })
+
+  it('snaps the start alone, and says when a click is off the water', async () => {
+    expect((await anon.plan.route({ start: DW.start, finish: null, shape: 'one_way' }))).toMatchObject({ start: { waterway: 'Kennet and Avon Canal' }, plan: null })
+    expect((await anon.plan.route({ start: [51.32, -1.2], finish: null, shape: 'one_way' })).start).toBeNull()
+    expect((await anon.plan.route({ start: DW.start, finish: [51.32, -1.2], shape: 'one_way' })).plan).toBe('finish_off_water')
+  })
+
+  it('saves plans made on the national network', async () => {
+    const ann = await makeUser('Ann')
+    expect((await as(ann).plan.save({ ...DW, region: 'gbie' })).region).toBe('gbie')
+  })
+})
+
+describe("the map's network and places", () => {
+  const get = async (name: string, version = 'none') =>
+    mapData(new Request(`http://x/plan/data/${version}/${name}`), { params: Promise.resolve({ version, name }) })
+
+  it('serves the overview, an area in detail, and the places index', async () => {
+    const overview = await (await get('overview')).json()
+    expect(overview.length).toBeGreaterThan(10)
+    const reading = await (await get('area-102_-2')).json()   // 51.0–51.5 N, 1.0–0.5 W: Reading
+    expect(reading.length).toBeGreaterThan(10)
+    expect(await (await get('area-0_0')).json()).toEqual([])   // the Gulf of Guinea
+    const places = await (await get('places')).json()
+    expect(places.some((p: { name: string }) => /Marsh Lock/.test(p.name))).toBe(true)
+  })
+
+  it('caches the live version for good and anything else briefly', async () => {
+    expect((await get('overview', 'dw-fixture')).headers.get('Cache-Control')).toContain('immutable')
+    expect((await get('overview', 'old-version')).headers.get('Cache-Control')).toBe('public, max-age=300')
+  })
+
+  it('404s anything else', async () => {
+    expect((await get('secrets')).status).toBe(404)
   })
 })

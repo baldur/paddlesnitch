@@ -7,14 +7,82 @@ import type { LatLng, NetLink } from './types'
 
 export type Snap = { link: NetLink; along: number; dist: number; at: LatLng }
 
-/** The nearest point on any link. */
-export function snap(links: NetLink[], p: LatLng): Snap | null {
+/** The nearest point on any link. Searches a grid around the point first, so
+ *  snapping stays fast on a national network. Beyond the grid search it falls
+ *  back to every link, unless `maxM` says a far result isn't wanted anyway. */
+export function snap(links: NetLink[], p: LatLng, maxM = Infinity): Snap | null {
+  const { cells } = indexOf(links)
+  const [cy, cx] = cellOf(p)
+  const seen = new Set<NetLink>()
   let best: Snap | null = null
-  for (const link of links) {
+  const consider = (link: NetLink) => {
+    if (seen.has(link)) return
+    seen.add(link)
     const pr = project(link.line, p)
     if (!best || pr.dist < best.dist) best = { link, along: pr.along, dist: pr.dist, at: pr.at }
   }
-  return best
+  for (let r = 0; r <= RINGS; r++) {
+    for (let y = cy - r; y <= cy + r; y++) {
+      for (let x = cx - r; x <= cx + r; x++) {
+        if (Math.max(Math.abs(y - cy), Math.abs(x - cx)) !== r) continue   // this ring only
+        for (const link of cells.get(`${y}:${x}`) ?? []) consider(link)
+      }
+    }
+    // Everything within r cells is searched, so a hit that close is the nearest.
+    if (best && (best as Snap).dist <= r * CELL_MIN_M) return best
+    if (r * CELL_MIN_M >= maxM) return best && (best as Snap).dist <= maxM ? best : null
+  }
+  for (const link of links) consider(link)
+  return best && (best as Snap).dist <= maxM ? best : null
+}
+
+// --- Index: a grid for snapping and the adjacency for routing, built once per
+// links array (the national network is large; rebuilding per call isn't).
+const CELL = 0.02                                 // degrees
+const CELL_MIN_M = CELL * 111_320 * Math.cos((61 * Math.PI) / 180)   // a cell's narrowest side in the UK and Ireland
+const RINGS = 4
+const cellOf = (p: LatLng): [number, number] => [Math.floor(p[0] / CELL), Math.floor(p[1] / CELL)]
+
+type Index = {
+  byId: Map<string, NetLink>
+  cells: Map<string, NetLink[]>
+  adj: Map<string, { link: NetLink; to: string }[]>
+}
+const indexes = new WeakMap<NetLink[], Index>()
+
+function indexOf(links: NetLink[]): Index {
+  const hit = indexes.get(links)
+  if (hit) return hit
+  const cells = new Map<string, NetLink[]>()
+  const adj = new Map<string, { link: NetLink; to: string }[]>()
+  const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => { const l = m.get(k); if (l) l.push(v); else m.set(k, [v]) }
+  for (const link of links) {
+    const keys = new Set<string>()
+    for (let i = 0; i < link.line.length; i++) {
+      const [y, x] = cellOf(link.line[i])
+      keys.add(`${y}:${x}`)
+      // A long straight segment can cross cells between its vertices.
+      if (i > 0) {
+        const [py, px] = cellOf(link.line[i - 1])
+        for (let yy = Math.min(y, py); yy <= Math.max(y, py); yy++)
+          for (let xx = Math.min(x, px); xx <= Math.max(x, px); xx++) keys.add(`${yy}:${xx}`)
+      }
+    }
+    for (const k of keys) push(cells, k, link)
+    push(adj, link.from, { link, to: link.to })
+    push(adj, link.to, { link, to: link.from })
+  }
+  const index = { byId: new Map(links.map(l => [l.id, l])), cells, adj }
+  indexes.set(links, index)
+  return index
+}
+
+/** Routing cost: the navigation (boat=yes) at face value, untagged water at
+ *  twice, water marked no-boats at four times, culverts all but never. A route
+ *  then keeps to the navigation instead of a slightly shorter flood channel,
+ *  and still uses side water when it's the only way. */
+export function paddleCost(l: NetLink): number {
+  return l.lengthM * (l.culvert ? 50 : l.boat === 'yes' ? 1 : l.boat === 'no' ? 4 : 2)
 }
 
 export type Leg = { linkId: string; name: string; from: number; to: number }  // metres along that link
@@ -24,23 +92,14 @@ export type Route = { line: LatLng[]; lengthM: number; legs: Leg[] }
  *  they aren't connected. */
 export function route(
   links: NetLink[], start: Snap, finish: Snap,
-  cost: (l: NetLink) => number = l => l.lengthM,   // e.g. make unnamed ditches expensive
+  cost: (l: NetLink) => number = paddleCost,
 ): Route | null {
   if (start.link.id === finish.link.id) {
     const l = start.link
     return build([{ linkId: l.id, name: l.name, from: start.along, to: finish.along }], links)
   }
 
-  // Adjacency: node → [link, neighbour node].
-  const adj = new Map<string, { link: NetLink; to: string }[]>()
-  const add = (n: string, e: { link: NetLink; to: string }) => {
-    const list = adj.get(n)
-    if (list) list.push(e); else adj.set(n, [e])
-  }
-  for (const l of links) {
-    add(l.from, { link: l, to: l.to })
-    add(l.to, { link: l, to: l.from })
-  }
+  const { adj } = indexOf(links)
 
   // Dijkstra from a virtual start node sitting part-way along the start link.
   const dist = new Map<string, number>()
@@ -93,7 +152,7 @@ export function route(
 }
 
 function build(legs: Leg[], links: NetLink[]): Route {
-  const byId = new Map(links.map(l => [l.id, l]))
+  const { byId } = indexOf(links)
   const line: LatLng[] = []
   let lengthM = 0
   for (const leg of legs) {

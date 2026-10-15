@@ -60,10 +60,18 @@ type OverpassElement =
   | { type: 'node'; id: number; lat: number; lon: number; tags?: Record<string, string> }
   | { type: 'way' | 'relation'; id: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }
 
-/** Ways → network links, split wherever ways meet: OSM joins a side channel
- *  to the middle of the main river's way, so way ends alone aren't junctions. */
+/** A waterway way with its node ids and coordinates, from Overpass or from
+ *  the Geofabrik extract (scripts/waterways/osm_extract.py). */
+export type OsmWay = { id: number; nodes: number[]; coords: LatLng[]; tags?: Record<string, string> }
+
 export function linksFromOverpass(elements: OverpassElement[], simplifyM = 3): NetLink[] {
   const ways = elements.filter((e): e is OverpassWay => e.type === 'way' && 'nodes' in e && !!e.geometry)
+  return linksFromWays(ways.map(w => ({ id: w.id, nodes: w.nodes, coords: w.geometry.map(g => [g.lat, g.lon]), tags: w.tags })), simplifyM)
+}
+
+/** Ways → network links, split wherever ways meet: OSM joins a side channel
+ *  to the middle of the main river's way, so way ends alone aren't junctions. */
+export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
   const uses = new Map<number, number>()
   for (const w of ways) for (const n of new Set(w.nodes)) uses.set(n, (uses.get(n) ?? 0) + 1)
 
@@ -71,11 +79,12 @@ export function linksFromOverpass(elements: OverpassElement[], simplifyM = 3): N
   for (const w of ways) {
     const name = w.tags?.name ?? ''
     const form: NetLink['form'] = w.tags?.waterway === 'canal' ? 'canal' : w.tags?.tidal === 'yes' ? 'tidalRiver' : 'inlandRiver'
+    const boat = paddleable(w.tags ?? {})
+    const culvert = w.tags?.tunnel === 'culvert'
     let start = 0
     for (let i = 1; i < w.nodes.length; i++) {
       if (i < w.nodes.length - 1 && (uses.get(w.nodes[i]) ?? 0) < 2) continue
-      const raw: LatLng[] = w.geometry.slice(start, i + 1).map(g => [g.lat, g.lon])
-      const line = simplify(raw, simplifyM).map(round6)
+      const line = simplify(w.coords.slice(start, i + 1), simplifyM).map(round6)
       out.push({
         id: `w${w.id}:${start}`,
         name,
@@ -84,11 +93,21 @@ export function linksFromOverpass(elements: OverpassElement[], simplifyM = 3): N
         to: `n${w.nodes[i]}`,
         line,
         lengthM: Math.round(lineLength(line)),
+        ...(boat ? { boat } : {}),
+        ...(culvert ? { culvert: true as const } : {}),
       })
       start = i
     }
   }
   return out
+}
+
+/** canoe=* says it for paddlers; failing that, boat=* (yes on navigations). */
+function paddleable(tags: Record<string, string>): NetLink['boat'] {
+  const v = tags.canoe ?? tags.boat
+  if (v === 'yes' || v === 'designated' || v === 'permissive') return 'yes'
+  if (v === 'no' || v === 'private') return 'no'
+  return undefined
 }
 
 /** Tagged points → OSM layer elements (a way or relation sits at its centre). */

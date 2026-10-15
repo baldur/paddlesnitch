@@ -115,7 +115,7 @@ packages/
   analysis/   @paddlesnitch/analysis  — the Analyse domain/service layer (analysis engine, analysis-store, similar, trials, device-sessions, llm, share-card, history-stats, athlete-profile)
   api/        @paddlesnitch/api       — the shared, typed tRPC router (over core/timing/analysis); consumed by web (SSR + client) and, later, mobile
   ui/         @paddlesnitch/ui        — shared UI shell + design tokens + RouteThumb
-  waterways/  @paddlesnitch/waterways — river planner domain: OSM waterway network + routing, locks/facilities from CRT/EA, coverage (docs/features/river-planner.md)
+  waterways/  @paddlesnitch/waterways — river planner domain: OSM waterway network + routing (UK and Ireland), locks/facilities from CRT/EA, places search, coverage (docs/features/river-planner.md, waterways-uk-ireland.md)
 firmware/     LilyGO T-Beam S3 Supreme tracker firmware — C/C++, built with PlatformIO, NOT pnpm
 ```
 
@@ -351,17 +351,23 @@ Mutual buddies who see each other's paddles ([`buddies-and-compare.md`](docs/fea
 The river planner's domain ([`river-planner.md`](docs/features/river-planner.md)). Pure, per-file subpaths:
 - `osgb`: OS grid reference and eastings/northings → WGS84 (Helmert, about 5 m).
 - `line`: projection onto a line, slice, simplify.
-- `network`: snap a click to the water, shortest route over OSM river/canal links (Dijkstra), `reverseRoute` for return trips.
-- `along`: features in travel order with chainage and bank.
+- `network`: snap a click to the water (grid index, `snap(links, p, maxM?)`), shortest route over OSM river/canal links (Dijkstra, costed by `paddleCost`: `boat`/`canoe`=yes at face value, untagged ×2, no ×4, culverts ×50, so a route keeps to the navigation), `reverseRoute` for return trips.
+- `along`: features in travel order with chainage and bank (grid-indexed, so a national feature list is cheap).
 - `coverage`: which facts each lock has. Unknown stays unknown, never guessed.
 - `build`: assemble a region.
 - `ingest/{osm,crt,thames}`: parsers for each source.
-- `plan`: `computePlan(dataset, { start, finish, shape, startAt?, paceKmh, portageMinutes })` → the route and every stop with chainage, bank and arrival time, or an error (`start_off_water`, `finish_off_water`, `too_short`, `not_connected`).
+- `plan`: `routePlan(dataset, { start, finish, shape })` → the route and every stop with chainage and bank, or an error (`start_off_water`, `finish_off_water`, `too_short`, `not_connected`); `timePlan(routed, { paceKmh, portageMinutes, startAt? })` adds arrival times. `computePlan` is both.
+- `places`: the places search index (OSM towns and villages within 2 km of the water, plus every named lock and weir) and `searchPlaces`.
+- `display`: what the map draws (`overviewLines`, `areaLines` per 0.5° area).
+- `checks`: the check routes every national build must pass.
+- `national` (**server only**): `loadNational()` loads the published version named by `data/manifest.json` from storage (`waterways/published/{version}/*.json.gz`) once per instance. With no version published, or locally without it, the committed `data/dw.json` stands in.
 - `plan-store` (**server only**, uses core storage): saved plans at `users/{userId}/plans/{id}.json`, so account deletion's `users/` wipe covers them; listed in the account export. `sharePlan`/`unsharePlan`/`getSharedPlan` keep a `plans/shared/{shareId}.json` index; `erasePlanShares` runs on account deletion.
 
-The browser loads a region from `GET /plan/data/{region}` (prerendered at build) and computes plans itself; `/plan` keeps an unsaved plan in the address bar (`apps/web/src/lib/plan-ui.ts`). tRPC `plan` router saves them.
+**UK and Ireland ([`waterways-uk-ireland.md`](docs/features/waterways-uk-ireland.md)).** Routing runs on the server: tRPC `plan.route({ start, finish, shape })` (public) snaps and routes on the national network and returns stops without times; the browser runs `timePlan`, so pace and start time change instantly. The map loads the network from `GET /plan/data/{version}/overview` (zoomed out) and `…/area-{y}_{x}` (zoomed in), and the GO TO search from `…/places`. `/plan` keeps an unsaved plan in the address bar (`apps/web/src/lib/plan-ui.ts`); the `plan` router saves plans (region `gbie`, or `dw` for older ones).
 
-`pnpm --filter web waterways [region]` rebuilds `packages/waterways/data/{region}.json` plus a generated `{region}-coverage.md`, caching raw responses in `apps/web/.cache/waterways/`. The OSM parts (network, points) are ODbL and stay in their own fields, never copied into a `Feature`. Tests: `apps/web/src/lib/waterways.test.ts` (real-response fixtures in `src/tests/fixtures/waterways/`, plus checks on the built DW dataset).
+National build: download `britain-and-ireland-latest.osm.pbf` from Geofabrik, run `apps/web/scripts/waterways/osm_extract.py <pbf> .cache/waterways/osm/gbie` (pyosmium, in a venv), then `pnpm --filter web waterways:national` (checks only) or `… --publish` (writes a version to storage and updates `manifest.json`). Features come from `.cache/waterways/normalised/*.json`. Never commit a `manifest.json` whose version isn't in the production bucket.
+
+`pnpm --filter web waterways [region]` rebuilds `packages/waterways/data/{region}.json` plus a generated `{region}-coverage.md`, caching raw responses in `apps/web/.cache/waterways/`. The OSM parts (network, points) are ODbL and stay in their own fields, never copied into a `Feature`. Tests: `apps/web/src/lib/waterways.test.ts` (real-response fixtures in `src/tests/fixtures/waterways/`, plus checks on the built DW dataset), `waterways-national.test.ts` (routing by paddle access, grid index, route/time split, places search), `tests/trpc-plan.test.ts` (`plan.route` and the map data route).
 
 ### `@paddlesnitch/ui` (`packages/ui/src`)
 

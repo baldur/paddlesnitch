@@ -21,7 +21,8 @@
     "waterways": "tsx scripts/waterways/build-region.ts",
     "build:open-next": "npx open-next build",
     "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy",
-    "strava:webhook": "tsx scripts/strava-webhook.ts"
+    "strava:webhook": "tsx scripts/strava-webhook.ts",
+    "waterways:national": "tsx scripts/waterways/build-national.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1146.0",

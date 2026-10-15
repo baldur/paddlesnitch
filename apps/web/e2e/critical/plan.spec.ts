@@ -25,6 +25,16 @@ test('two clicks on the water give a route and its stops', async ({ page }) => {
   await expect(page.locator('img.leaflet-tile[src*="World_Imagery"]').first()).toBeAttached()
 })
 
+test('the places search moves the map to a lock', async ({ page }) => {
+  await page.goto('/plan')
+  const box = page.getByLabel('Go to a place')
+  await box.click()
+  await box.fill('marsh lo')
+  await page.getByRole('option', { name: /^Marsh Lock/ }).click()
+  await expect(box).toHaveValue('Marsh Lock')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+})
+
 test('a plan link opens the whole Devizes to Westminster route', async ({ page }) => {
   await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
   const summary = page.getByTestId('plan-summary')
