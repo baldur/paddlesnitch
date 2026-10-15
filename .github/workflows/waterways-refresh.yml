@@ -14,6 +14,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write        # the fallback when Actions may not open PRs
   actions: write       # to dispatch the checks on the PR branch
   id-token: write      # for the AWS role
 
@@ -103,7 +104,14 @@ jobs:
             grep -E '^\s+(network|OSM|features|places|✓|✗|wrote)' "$RUNNER_TEMP/build.log" | head -60
             echo '```'
           } > "$RUNNER_TEMP/body.md"
-          gh pr create --title "data(waterways): publish $version" --body-file "$RUNNER_TEMP/body.md" --head "$branch" --base main
-          # A PR opened with GITHUB_TOKEN doesn't start pull_request runs.
-          gh workflow run checks.yml --ref "$branch"
-          gh workflow run e2e.yml --ref "$branch"
+          if gh pr create --title "data(waterways): publish $version" --body-file "$RUNNER_TEMP/body.md" --head "$branch" --base main; then
+            # A PR opened with GITHUB_TOKEN doesn't start pull_request runs.
+            gh workflow run checks.yml --ref "$branch"
+            gh workflow run e2e.yml --ref "$branch"
+          else
+            # The repo setting "Allow GitHub Actions to create and approve pull
+            # requests" is off: ask a person to open it (their PR runs checks).
+            { echo "The weekly waterways refresh published \`$version\` but may not open PRs itself."; echo;
+              echo "Open the PR: https://github.com/${{ github.repository }}/compare/main...$branch?expand=1"; echo; cat "$RUNNER_TEMP/body.md"; } > "$RUNNER_TEMP/issue.md"
+            gh issue create --title "Waterways data $version is ready to publish" --body-file "$RUNNER_TEMP/issue.md"
+          fi
