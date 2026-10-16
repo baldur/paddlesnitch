@@ -50,6 +50,18 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'No licence stated (used with credit)',
     attribution: 'Environment Agency navigation maps and notices',
   },
+  sepa: {
+    name: 'SEPA — Obstacles to Fish Passage',
+    url: 'https://map.sepa.org.uk/server/rest/services/Open/Hydrography/MapServer/5',
+    licence: 'OGL v3',
+    attribution: 'Contains SEPA data © Scottish Environment Protection Agency and database right',
+  },
+  amber: {
+    name: 'AMBER barrier atlas (Great Britain)',
+    url: 'https://amber.international/european-barrier-atlas/',
+    licence: 'CC BY 4.0',
+    attribution: 'AMBER Barrier Atlas: Jones et al. (2019), CC BY 4.0',
+  },
   'scottish-canals': {
     name: 'Scottish Canals open data',
     url: 'https://www.scottishcanals.co.uk/scottish-canals-data-portal',

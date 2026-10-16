@@ -30,7 +30,8 @@
     "./ingest/scottish-canals": "./src/ingest/scottish-canals.ts",
     "./ingest/waterways-ireland": "./src/ingest/waterways-ireland.ts",
     "./ingest/ea-aims": "./src/ingest/ea-aims.ts",
-    "./ingest/ea-umap": "./src/ingest/ea-umap.ts"
+    "./ingest/ea-umap": "./src/ingest/ea-umap.ts",
+    "./ingest/barriers": "./src/ingest/barriers.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",

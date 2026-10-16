@@ -13,6 +13,7 @@ import path from 'path'
 import { lockKey } from '@paddlesnitch/waterways/build'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
+import { AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromSepa, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
@@ -134,6 +135,36 @@ JOBS['ea-umap'] = async () => {
     out.push(...featuresFromUmap(map, layers, fetchedAt))
   }
   return out
+}
+
+/** Every page of an ArcGIS layer (2,000 records a page). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- GeoJSON straight from the service; each parser checks its fields
+async function arcgisAll(source: string, layer: string): Promise<{ features: any[]; fetchedAt: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const features: any[] = []
+  let fetchedAt = now
+  for (let page = 0, offset = 0; ; page++) {
+    const res = await cached(source, `page-${page}.geojson`, arcgisPageUrl(layer, offset))
+    const json = JSON.parse(res.body)
+    features.push(...(json.features ?? []))
+    fetchedAt = res.fetchedAt
+    if (!json.properties?.exceededTransferLimit && (json.features?.length ?? 0) < 2000) break
+    if (!json.features?.length) break
+    offset += json.features.length
+  }
+  return { features, fetchedAt }
+}
+
+// SEPA: Scotland's weirs, dams and sluices, and natural waterfalls (OGL).
+JOBS.sepa = async () => {
+  const { features, fetchedAt } = await arcgisAll('sepa', SEPA_OBSTACLES)
+  return featuresFromSepa(features, fetchedAt)
+}
+
+// AMBER-GB barrier atlas: weirs, sluices and dams across Great Britain, with heights (CC BY 4.0).
+JOBS.amber = async () => {
+  const { features, fetchedAt } = await arcgisAll('amber', AMBER_GB)
+  return featuresFromAmber(features, fetchedAt)
 }
 
 async function main() {

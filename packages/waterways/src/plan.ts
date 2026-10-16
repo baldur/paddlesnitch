@@ -26,6 +26,9 @@ export const SNAP_MAX_M = 1000
 /** Start and finish closer than this aren't a trip. */
 export const MIN_TRIP_M = 100
 
+/** A weir this close (along the route) to a lock or portage is that lock's weir. */
+export const WEIR_AT_LOCK_M = 300
+
 /** Kinds you get out of the boat for. */
 const PORTAGE_KINDS: ReadonlySet<FeatureKind> = new Set(['lock', 'portage'])
 
@@ -89,7 +92,11 @@ export function routePlan(dataset: Pick<RegionDataset, 'links' | 'features'>, in
   const stops: RoutedStop[] = []
   let prevM = 0
   for (const { leg, line, offsetM } of legs) {
-    for (const a of featuresAlong(line, dataset.features)) {
+    const along = featuresAlong(line, dataset.features)
+    const lockAt = along.filter(a => PORTAGE_KINDS.has(a.item.kind)).map(a => a.chainageM)
+    for (const a of along) {
+      // A lock's own weir and sluices are part of that portage, not stops of their own.
+      if (a.item.kind === 'weir' && lockAt.some(m => Math.abs(m - a.chainageM) <= WEIR_AT_LOCK_M)) continue
       const chainageM = offsetM + a.chainageM
       stops.push({ feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind) })
       prevM = chainageM

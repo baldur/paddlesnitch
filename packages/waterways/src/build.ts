@@ -18,6 +18,8 @@ export type RegionInput = {
 /** Two sources mapping the same lock (CRT and EA overlap on the Kennet in
  *  Reading). Within this distance, keep the one carrying more detail. */
 const SAME_LOCK_M = 60
+/** The same for weirs: the barrier atlas re-publishes EA and SEPA records. */
+const SAME_WEIR_M = 40
 
 export function buildRegion(input: RegionInput): RegionDataset {
   const keepM = input.keepWithinM ?? 400
@@ -51,16 +53,38 @@ export function lockKey(name = ''): string {
 }
 
 function dedupeLocks(features: Feature[]): Feature[] {
-  const locks = features.filter(f => f.kind === 'lock')
-  const detail = (f: Feature) => (f.lock?.postcode ? 2 : 0) + (f.lock?.facilities ? 1 : 0)
+  const lockDetail = (f: Feature) => (f.lock?.postcode ? 2 : 0) + (f.lock?.facilities ? 1 : 0)
+  const weirDetail = (f: Feature) => (f.name ? 1 : 0) + (f.weir?.heightM ? 1 : 0)
+  const drop = new Set([
+    ...samePlace(features.filter(f => f.kind === 'lock'), SAME_LOCK_M, lockDetail),
+    ...samePlace(features.filter(f => f.kind === 'weir'), SAME_WEIR_M, weirDetail),
+  ])
+  return features.filter(f => !drop.has(f.id))
+}
+
+/** Ids to drop where two sources map the same thing within `m`: the one with
+ *  less detail. Grid-bucketed, so tens of thousands of weirs stay cheap. */
+function samePlace(items: Feature[], m: number, detail: (f: Feature) => number): Set<string> {
+  const cell = 0.005   // degrees, well over m
+  const key = (y: number, x: number) => `${y}:${x}`
+  const grid = new Map<string, Feature[]>()
+  for (const f of items) {
+    const k = key(Math.floor(f.at[0] / cell), Math.floor(f.at[1] / cell))
+    const l = grid.get(k)
+    if (l) l.push(f); else grid.set(k, [f])
+  }
   const drop = new Set<string>()
-  for (const a of locks) {
-    for (const b of locks) {
-      if (a === b || a.source.source === b.source.source || drop.has(a.id) || drop.has(b.id)) continue
-      if (haversine(a.at, b.at) <= SAME_LOCK_M) drop.add(detail(a) >= detail(b) ? b.id : a.id)
+  for (const a of items) {
+    if (drop.has(a.id)) continue
+    const y = Math.floor(a.at[0] / cell), x = Math.floor(a.at[1] / cell)
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      for (const b of grid.get(key(y + dy, x + dx)) ?? []) {
+        if (a === b || a.source.source === b.source.source || drop.has(a.id) || drop.has(b.id)) continue
+        if (haversine(a.at, b.at) <= m) drop.add(detail(a) >= detail(b) ? b.id : a.id)
+      }
     }
   }
-  return features.filter(f => !drop.has(f.id))
+  return drop
 }
 
 /** A fast "is this point within m of any link" test (bbox prefilter). */
