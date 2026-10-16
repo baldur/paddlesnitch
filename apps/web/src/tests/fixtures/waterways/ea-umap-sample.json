@@ -1,0 +1,633 @@
+{
+ "nene": [
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.858656,
+       52.230707
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "_umap_options": {
+       "showLabel": null,
+       "labelDirection": "right"
+      },
+      "name": "Abington Lock",
+      "description": "W3W: shine.casino.horns"
+     },
+     "id": "U0MDI"
+    },
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.334589,
+       52.552976
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Alwalton Lock",
+      "description": "Alwalton Lock \nW3W: producing.enrolling.recount"
+     },
+     "id": "U3MDA"
+    },
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.450869,
+       52.477113
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Ashton Lock 2.6m",
+      "description": "W3W: bumping.estimates.payback"
+     },
+     "id": "k2Nzk"
+    }
+   ],
+   "properties": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "name": "Locks",
+    "color": "Green",
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "Text"
+     }
+    ],
+    "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/ch5qu1tvlOZp-Lock.png",
+    "showLabel": null,
+    "remoteData": {},
+    "labelDirection": "right"
+   },
+   "id": "55ae159f-ebbe-4529-9b0e-352a6bfe3dac",
+   "rank": 10
+  },
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.679742,
+       52.291138
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Embankment Water Point",
+      "styleUrl": "#icon-1187",
+      "styleHash": "-6b0c5c40",
+      "styleMapHash": {
+       "normal": "#icon-1187-normal",
+       "highlight": "#icon-1187-highlight"
+      },
+      "description": "EA 48hr Mooring Water Point.  EA key required.",
+      "Location": "",
+      "Notes": "EA key required",
+      "_umap_options": {
+       "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/tapW.png",
+       "color": "DodgerBlue",
+       "labelDirection": "right",
+       "showLabel": null
+      }
+     },
+     "id": "Y0MDY"
+    }
+   ],
+   "_umap_options": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "editMode": "advanced",
+    "id": "7f2823c2-9661-40c2-9865-e5c29d989bb5",
+    "name": "Water Points",
+    "rank": 8,
+    "color": "DodgerBlue",
+    "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/tapW.png",
+    "remoteData": {},
+    "permissions": {
+     "edit_status": 2
+    },
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "styleUrl",
+      "type": "String"
+     },
+     {
+      "key": "styleHash",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "Text"
+     },
+     {
+      "key": "Location",
+      "type": "String"
+     },
+     {
+      "key": "Notes",
+      "type": "String"
+     }
+    ]
+   }
+  },
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.633076,
+       52.304798
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Ditchford Lock Elsan point",
+      "styleUrl": "#icon-1177",
+      "styleHash": "-521a2a88",
+      "styleMapHash": {
+       "normal": "#icon-1177-normal",
+       "highlight": "#icon-1177-highlight"
+      },
+      "description": "Private Elsan Point - Pre-book to use",
+      "_umap_options": {
+       "color": "DarkSlateGrey",
+       "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/bucketw.png",
+       "labelDirection": "right",
+       "showLabel": null
+      }
+     },
+     "id": "QyNTc"
+    },
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.57248,
+       52.366137
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Elsan point",
+      "styleUrl": "#icon-1177",
+      "styleHash": "-521a2a88",
+      "styleMapHash": {
+       "normal": "#icon-1177-normal",
+       "highlight": "#icon-1177-highlight"
+      },
+      "description": "",
+      "Notes": "",
+      "_umap_options": {
+       "color": "DarkSlateGray",
+       "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/bucketw.png",
+       "showLabel": null,
+       "labelDirection": "right"
+      }
+     },
+     "id": "U2Mjc"
+    }
+   ],
+   "_umap_options": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "editMode": "advanced",
+    "id": "08483fdb-26da-4ccc-8584-2afeea1191b4",
+    "name": "Sanitation",
+    "rank": 9,
+    "showLabel": null,
+    "remoteData": {},
+    "labelDirection": "right",
+    "permissions": {
+     "edit_status": 2
+    },
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "styleUrl",
+      "type": "String"
+     },
+     {
+      "key": "styleHash",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "Text"
+     },
+     {
+      "key": "Notes",
+      "type": "String"
+     }
+    ]
+   }
+  },
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.449777,
+       52.477123
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Ashton Weir",
+      "_umap_options": {
+       "iconClass": "Default",
+       "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/UUa1qVO9p3Wm-Caution.png",
+       "color": "White"
+      }
+     },
+     "id": "k2NTk"
+    }
+   ],
+   "_umap_options": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "editMode": "advanced",
+    "id": "86d43da0-7651-4c86-b9f6-207f5c3263dd",
+    "name": "Warnings",
+    "rank": 6,
+    "color": "White",
+    "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/triangle-R.png",
+    "showLabel": null,
+    "remoteData": {},
+    "labelDirection": "right",
+    "permissions": {
+     "edit_status": 2
+    },
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "Text"
+     }
+    ]
+   }
+  },
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "coordinates": [
+       -0.335276,
+       52.553247
+      ],
+      "type": "Point"
+     },
+     "properties": {
+      "name": "Alwalton EA 48hr Mooring",
+      "description": "Alwalton EA 48hr Mooring\nW3W: grinning.fuse.averages"
+     },
+     "id": "g5MzU"
+    }
+   ],
+   "_umap_options": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "editMode": "advanced",
+    "id": "3f76a6c0-db36-4901-aeae-41dbe73879b2",
+    "name": "Moorings",
+    "rank": 7,
+    "color": "Navy",
+    "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/Ka3Bu2rfytK6-EA-48hr-Moorings.png",
+    "showLabel": null,
+    "remoteData": {},
+    "labelDirection": "right",
+    "permissions": {
+     "edit_status": 2
+    },
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "Text"
+     },
+     {
+      "key": "Max Stay",
+      "type": "String"
+     }
+    ]
+   }
+  }
+ ],
+ "stour": [
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       0.927499,
+       51.972065
+      ]
+     },
+     "properties": {
+      "name": "Boxted Mills - levels lowered to make repairs",
+      "_umap_options": {
+       "color": "Green",
+       "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/UUa1qVO9p3Wm-Caution.png",
+       "popupShape": "Large"
+      },
+      "description": "{{https://pbs.twimg.com/media/HEbBAtKasAAoURN?format=png&name=small}}"
+     },
+     "id": "AUaBh"
+    },
+    {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       0.780178,
+       51.966836
+      ]
+     },
+     "properties": {
+      "_umap_options": {
+       "color": "Red",
+       "popupShape": "Large",
+       "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/UUa1qVO9p3Wm-Caution.png"
+      },
+      "name": "Bures Mill Downstream Canoe Portage - Closed",
+      "description": "{{https://pbs.twimg.com/media/GxRmrTxXYAUw18r?format=jpg&name=medium}}"
+     },
+     "id": "dTA3F"
+    },
+    {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       0.741873,
+       52.029067
+      ]
+     },
+     "properties": {
+      "name": "Great Cornard Downstream Portage - Closed",
+      "_umap_options": {
+       "color": "Green",
+       "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/UUa1qVO9p3Wm-Caution.png",
+       "popupShape": "Large"
+      },
+      "description": "{{https://pbs.twimg.com/media/G0pV36PXoAAb1ii?format=png&name=900x900}}"
+     },
+     "id": "OIvz3"
+    }
+   ],
+   "properties": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "name": "Navigation Notices",
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "String"
+     },
+     {
+      "key": "osm_type",
+      "type": "String"
+     },
+     {
+      "key": "osm_id",
+      "type": "String"
+     },
+     {
+      "key": "osm_key",
+      "type": "String"
+     },
+     {
+      "key": "osm_value",
+      "type": "String"
+     },
+     {
+      "key": "type",
+      "type": "String"
+     },
+     {
+      "key": "postcode",
+      "type": "String"
+     },
+     {
+      "key": "countrycode",
+      "type": "String"
+     },
+     {
+      "key": "country",
+      "type": "String"
+     },
+     {
+      "key": "city",
+      "type": "String"
+     },
+     {
+      "key": "district",
+      "type": "String"
+     },
+     {
+      "key": "street",
+      "type": "String"
+     },
+     {
+      "key": "state",
+      "type": "String"
+     },
+     {
+      "key": "county",
+      "type": "String"
+     },
+     {
+      "key": "housenumber",
+      "type": "String"
+     }
+    ],
+    "iconUrl": "https://cresign.co.uk/maps/wp-content/uploads/map-icons/11_b16abdf13020841e73274139c1709df7/uploads/UUa1qVO9p3Wm-Caution.png",
+    "remoteData": {}
+   },
+   "id": "e5528ccc-17c9-4217-aaae-27d33b38a939",
+   "rank": 2
+  },
+  {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       1.0581472,
+       51.95564
+      ]
+     },
+     "properties": {
+      "_umap_options": {
+       "color": "White",
+       "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/triangle-R.png"
+      },
+      "name": "End of EA Navigation"
+     },
+     "id": "LvmK3"
+    },
+    {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       0.7176004142475163,
+       52.0473948
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 446104915,
+      "osm_key": "building",
+      "osm_value": "yes",
+      "type": "house",
+      "postcode": "CO10 1XR",
+      "countrycode": "GB",
+      "name": "Head of EA Navigation",
+      "country": "United Kingdom",
+      "city": "Babergh",
+      "district": "Sudbury",
+      "street": "Brundon Lane",
+      "state": "England",
+      "county": "Suffolk",
+      "extent": [
+       0.717396,
+       52.0475113,
+       0.7177251,
+       52.0473035
+      ],
+      "_umap_options": {
+       "color": "White",
+       "iconUrl": "https://goba.org.uk/wp-content/uploads/2021/03/triangle-R.png"
+      }
+     },
+     "id": "A8Rk3"
+    }
+   ],
+   "_umap_options": {
+    "displayOnLoad": true,
+    "inCaption": true,
+    "browsable": true,
+    "editMode": "advanced",
+    "id": "095f0799-61f0-4e3b-9499-08e7a99c8604",
+    "name": "Warnings",
+    "rank": 1,
+    "fields": [
+     {
+      "key": "name",
+      "type": "String"
+     },
+     {
+      "key": "description",
+      "type": "Text"
+     },
+     {
+      "key": "osm_type",
+      "type": "String"
+     },
+     {
+      "key": "osm_id",
+      "type": "String"
+     },
+     {
+      "key": "osm_key",
+      "type": "String"
+     },
+     {
+      "key": "osm_value",
+      "type": "String"
+     },
+     {
+      "key": "type",
+      "type": "String"
+     },
+     {
+      "key": "postcode",
+      "type": "String"
+     },
+     {
+      "key": "countrycode",
+      "type": "String"
+     },
+     {
+      "key": "country",
+      "type": "String"
+     },
+     {
+      "key": "city",
+      "type": "String"
+     },
+     {
+      "key": "district",
+      "type": "String"
+     },
+     {
+      "key": "street",
+      "type": "String"
+     },
+     {
+      "key": "state",
+      "type": "String"
+     },
+     {
+      "key": "county",
+      "type": "String"
+     }
+    ],
+    "remoteData": {},
+    "permissions": {
+     "edit_status": 0
+    }
+   }
+  }
+ ]
+}

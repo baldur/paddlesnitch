@@ -38,6 +38,18 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'OGL v3',
     attribution: 'Contains public sector information licensed under the Open Government Licence v3.0',
   },
+  'ea-aims': {
+    name: 'Environment Agency — AIMS structures (weirs and slipways)',
+    url: 'https://www.data.gov.uk/dataset/235b866e-fde8-475a-9ae3-72ae0744457b',
+    licence: 'OGL v3',
+    attribution: '© Environment Agency copyright and/or database right',
+  },
+  'ea-umap': {
+    name: 'Environment Agency — Anglian waterways maps and navigation notices (uMap)',
+    url: 'https://www.gov.uk/guidance/river-nene-bridge-heights-locks-and-facilities',
+    licence: 'No licence stated (used with credit)',
+    attribution: 'Environment Agency navigation maps and notices',
+  },
   'scottish-canals': {
     name: 'Scottish Canals open data',
     url: 'https://www.scottishcanals.co.uk/scottish-canals-data-portal',

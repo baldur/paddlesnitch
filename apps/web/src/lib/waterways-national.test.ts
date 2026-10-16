@@ -6,7 +6,9 @@ import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
-import { linksFromWays, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
+import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
+import { linksFromWays, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
@@ -176,5 +178,72 @@ describe('Waterways Ireland', () => {
   it('is marked non-commercial, so it can be dropped in one place', () => {
     expect(SOURCES['waterways-ireland'].nonCommercial).toBe(true)
     expect(SOURCES['scottish-canals'].nonCommercial).toBeUndefined()
+  })
+})
+
+describe('Environment Agency asset register (AIMS)', () => {
+  const sample = JSON.parse(fs.readFileSync(path.join(FX, 'ea-aims-sample.json'), 'utf8'))
+
+  it('keeps weirs (drawn as lines, placed mid-river) and slipways; skips outfalls and stoplogs', () => {
+    const out = featuresFromAims(sample.features, AT)
+    expect(out.map(f => f.kind).sort()).toEqual(['slipway', 'weir'])
+    const weir = out.find(f => f.kind === 'weir')!
+    expect(weir).toMatchObject({ id: 'ea-aims:weir:186679', name: undefined, source: { source: 'ea-aims' } })
+    expect(weir.at[0]).toBeCloseTo(53.226, 2)
+  })
+})
+
+describe('Environment Agency uMap maps', () => {
+  const sample = JSON.parse(fs.readFileSync(path.join(FX, 'ea-umap-sample.json'), 'utf8'))
+
+  it('reads Nene locks without their headroom, water points, Elsan and weir warnings; not moorings', () => {
+    const out = featuresFromUmap('nene', sample.nene, AT)
+    expect(out.map(f => [f.kind, f.name])).toEqual([
+      ['lock', 'Abington Lock'], ['lock', 'Alwalton Lock'], ['lock', 'Ashton Lock'],
+      ['facility', 'Embankment Water Point'],
+      ['facility', 'Ditchford Lock Elsan point'], ['facility', 'Elsan point'],
+      ['hazard', 'Ashton Weir'],
+    ])
+    expect(out[3].facilities).toEqual(['drinking_water'])
+    expect(out[4].facilities).toEqual(['elsan'])
+  })
+
+  it('turns current notices into hazards, and skips the head and end of navigation markers', () => {
+    const out = featuresFromUmap('notices-stour', sample.stour, AT)
+    expect(out.map(f => f.name)).toEqual([
+      'Notice: Boxted Mills - levels lowered to make repairs',
+      'Notice: Bures Mill Downstream Canoe Portage - Closed',
+      'Notice: Great Cornard Downstream Portage - Closed',
+    ])
+    expect(out.every(f => f.kind === 'hazard' && f.source.url?.includes('umap'))).toBe(true)
+  })
+})
+
+describe('OSM lock chambers (filling gaps)', () => {
+  const chamber = (id: number, at: LatLng, tags: Record<string, string>): OsmWay =>
+    way(id, [id * 10, id * 10 + 1], [at, [at[0] + 0.0003, at[1]]], { waterway: 'canal', lock: 'yes', ...tags })
+
+  it('one lock per chamber, named from lock_name or a name with "lock" in it', () => {
+    const locks = osmLocks([
+      chamber(1, [52, -1], { name: 'River Nene', lock_name: 'Islip Lock' }),
+      chamber(2, [52.0001, -1], { name: 'River Nene' }),               // the same chamber, drawn twice
+      chamber(3, [52.1, -1], { name: 'Cardington Lock' }),
+      chamber(4, [52.2, -1], { name: 'River Great Ouse' }),
+    ], AT)
+    expect(locks.map(l => l.name)).toEqual(['Islip Lock', 'Cardington Lock', undefined])
+    expect(locks[0]).toMatchObject({ kind: 'lock', source: { source: 'osm', sourceId: 'way/1' } })
+  })
+
+  it('skips boat rollers and private marina locks', () => {
+    expect(osmLocks([
+      chamber(1, [51.43, -0.32], { lock_name: 'Teddington Lock Boat Rollers' }),
+      chamber(2, [51.48, -0.30], { name: 'Brentford Dock Lock', access: 'private' }),
+    ], AT)).toEqual([])
+  })
+
+  it('counts on a route only when the chamber is on the water travelled, not a side cut', () => {
+    const line: LatLng[] = [[52, -1], [52, -0.99]]
+    const at = (dLat: number): Feature => ({ id: `osm:${dLat}`, kind: 'lock', at: [52 + dLat, -0.995], source: { source: 'osm', fetchedAt: AT } })
+    expect(featuresAlong(line, [at(0.0003), at(0.0009)]).map(a => a.item.id)).toEqual(['osm:0.0003'])   // ~33 m in, ~100 m out
   })
 })

@@ -49,6 +49,7 @@ const BUILD_TIME_SOURCES = new Set([
   'services.arcgis.com', 'overpass-api.de', 'overpass.kumi.systems', 'www.gov.uk',
   'www.openstreetmap.org', 'data-canalrivertrust.opendata.arcgis.com', 'www.dwrace.co.uk',
   'd1hxd0sho1wxko.cloudfront.net', 'www.scottishcanals.co.uk', 'www.waterwaysireland.org', 'download.geofabrik.de',
+  'environment.data.gov.uk', 'umap.openstreetmap.fr', 'www.data.gov.uk',
 ])
 
 describe('privacy page names every outside service the code uses', () => {

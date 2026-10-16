@@ -14,6 +14,8 @@ import { lockKey } from '@paddlesnitch/waterways/build'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
+import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
+import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
 import { featuresFromScottishCanals, SCOTTISH_CANALS_LAYERS, type ScottishCanalsLayer } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
 import { featuresFromWi, WI_LAYERS, wiQueryUrl, type WiLayer } from '@paddlesnitch/waterways/ingest/waterways-ireland'
@@ -103,6 +105,33 @@ JOBS['waterways-ireland'] = async () => {
       if (!json.properties?.exceededTransferLimit) break
       offset += json.features.length
     }
+  }
+  return out
+}
+
+// EA asset register: every EA weir and slipway in England (OGL).
+JOBS['ea-aims'] = async () => {
+  const { bytes, fetchedAt } = await cachedBytes('ea-aims', 'structure.zip', AIMS_URL)
+  const files = readZip(new Uint8Array(bytes).buffer, { maxEntryBytes: 200 * 1024 * 1024, maxTotalBytes: 400 * 1024 * 1024 })
+  const out: Feature[] = []
+  for (const name of Object.values(AIMS_FILES)) {
+    const entry = files.find(e => e.filename.endsWith(name))
+    if (!entry) throw new Error(`${name} missing from the AIMS download`)
+    out.push(...featuresFromAims(JSON.parse(Buffer.from(entry.data).toString('utf8')).features, fetchedAt))
+  }
+  return out
+}
+
+// EA uMap maps: Nene locks and facilities, and the Anglian rivers' current notices.
+JOBS['ea-umap'] = async () => {
+  const out: Feature[] = []
+  for (const [map, id] of Object.entries(EA_UMAPS) as [EaUmap, number][]) {
+    const { body, fetchedAt } = await cached('ea-umap', `${id}.json`, umapUrl(id))
+    const layers = []
+    for (const layer of umapLayerIds(JSON.parse(body))) {
+      layers.push(JSON.parse((await cached('ea-umap', `${id}-${layer}.json`, umapLayerUrl(id, layer))).body))
+    }
+    out.push(...featuresFromUmap(map, layers, fetchedAt))
   }
   return out
 }

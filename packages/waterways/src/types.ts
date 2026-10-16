@@ -17,6 +17,8 @@ export type SourceId =
   | 'crt'                    // Canal & River Trust ArcGIS services
   | 'ea-thames-locks'        // GOV.UK "River Thames: locks and facilities for boaters"
   | 'ea-thames-site-guides'  // GOV.UK lock-and-weir site guides
+  | 'ea-aims'                // EA asset register: weirs and slipways (OGL)
+  | 'ea-umap'                // EA uMap maps: Nene locks and facilities, Anglian notices (no licence stated)
   | 'scottish-canals'        // Scottish Canals open data (OGL)
   | 'waterways-ireland'      // Waterways Ireland ArcGIS layers (non-commercial)
   | 'osm'                    // OpenStreetMap (kept in its own table — ODbL)
