@@ -14,7 +14,7 @@ import PlanMapClient from '@/components/map/PlanMapClient'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, draftParams, groupOf, km, localInput, placeClick, PLAN_ERROR_TEXT, STOP_GROUPS, stopLines,
+  asInput, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, STOP_GROUPS, stopLines,
   type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -85,7 +85,10 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             focus={focus}
             view={view}
             satellite={satellite}
-            onPick={p => { if (!shared) setDraft(d => placeClick(d, p)) }}
+            onPick={(p, zoom) => {
+              if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
+              if (!shared) setDraft(d => placeClick(d, p, error === 'start_off_water' ? 'start' : error === 'finish_off_water' ? 'finish' : null))
+            }}
           />
         {/* Aerial imagery, to see which bank you can land on. */}
         <button type="button" aria-pressed={satellite} onClick={() => setSatellite(v => !v)}
@@ -110,6 +113,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
           ) : (
             <p className="text-xs text-muted">
               {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
+              {!draft.finish && ' Zoomed out, a click zooms in first.'}
             </p>
           )}
           <PlaceSearch version={VERSION} near={draft.start ?? undefined}

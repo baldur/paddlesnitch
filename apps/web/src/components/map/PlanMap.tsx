@@ -48,8 +48,8 @@ function Network({ version }: { version: string }) {
 
 export type MapStop = { id: string; at: LatLng; name: string; colour: string }
 
-function Clicks({ onPick }: { onPick: (p: LatLng) => void }) {
-  useMapEvents({ click: e => onPick([e.latlng.lat, e.latlng.lng]) })
+function Clicks({ onPick }: { onPick: (p: LatLng, zoom: number) => void }) {
+  const map = useMapEvents({ click: e => onPick([e.latlng.lat, e.latlng.lng], map.getZoom()) })
   return null
 }
 
@@ -91,7 +91,7 @@ export default function PlanMap({
   focus: MapFocus | null
   view?: { at: LatLng; zoom: number }
   satellite?: boolean
-  onPick: (p: LatLng) => void
+  onPick: (p: LatLng, zoom: number) => void
 }) {
   const tiles = mapTiles(satellite)
   return (

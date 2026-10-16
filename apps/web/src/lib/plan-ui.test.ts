@@ -87,6 +87,14 @@ describe('clicks', () => {
     expect(placeClick(b, [51.0, -0.9]).start).toEqual([51.0, -0.9])
     expect(placeClick(b, [51.0, -0.6]).finish).toEqual([51.0, -0.6])
   })
+
+  it('move an end that missed the water, so a bad click can be fixed by clicking again', () => {
+    // The start landed in a field: the next click moves it, instead of becoming the finish.
+    const missed = placeClick(empty, [51.32, -1.2])
+    expect(placeClick(missed, [51.0, -1.0], 'start')).toMatchObject({ start: [51.0, -1.0], finish: null })
+    const both: PlanDraft = { ...empty, start: [51.0, -1.0], finish: [51.32, -1.2] }
+    expect(placeClick(both, [51.0, -0.5], 'finish')).toMatchObject({ start: [51.0, -1.0], finish: [51.0, -0.5] })
+  })
 })
 
 describe('the start time box', () => {
