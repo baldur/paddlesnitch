@@ -134,6 +134,16 @@ The EA's GOV.UK pages for the Medway, Nene, Great Ouse, Stour, Welland & Glen, B
 
 Still without lock positions: the Ancholme and four Medway locks. They show as gaps.
 
+## Weirs from the barrier inventories (2026-10-16)
+
+Two fish-passage inventories give weirs a paddler meets, everywhere the navigation authorities don't:
+- **SEPA Obstacles to Fish Passage** (Scotland, OGL): weirs, dams, sluices; natural waterfalls become hazards named "Waterfall".
+- **AMBER-GB barrier atlas** (CC BY 4.0, cite Jones et al. 2019): 21,913 weirs, sluices and dams across Great Britain, with a measured height on most (to 10 cm; a few millimetres reads as unknown). The stop says "About 1.7 m high."
+
+Both put points on the watercourse, so like OSM locks they count on a route only within 60 m (`ON_WATER_SOURCES` in `along.ts`; the EA asset register is one too). The atlas re-publishes EA and SEPA records, so weirs from different sources within 40 m merge, keeping the one with a name or height (grid-bucketed in `build.ts`).
+
+About three quarters of the weirs on a navigation are a lock's own weir and sluices (Thames: 79 of 103 within 300 m of a lock). Listing them would bury the stop list, and the lock is already the portage, so `routePlan` folds a weir within 300 m (`WEIR_AT_LOCK_M`) of a lock or portage into it. Weirs on their own (Ditchford Weir, 1.7 m) stay stops.
+
 ## Places search
 
 The GO TO list is a typeahead. The index is built from OSM place nodes (city, town, village, hamlet) within 2 km of the network, plus the name of every lock and weir in the data: 24,604 places. It's one file loaded when the search box first gets focus and searched in the browser: whole-name prefixes first, then a word in the name, then bigger places, then nearer ones.
@@ -149,6 +159,6 @@ The browser never loads the whole network. Zoomed out (below zoom 9) it draws an
 | **W1 Network** ✅ | Geofabrik extract, national network, server routing, check routes | All check routes pass |
 | **W2 Planner** ✅ | Planner on `plan.route`, map by area, places typeahead | DW E2E passes on the national data |
 | **W3 England** 🚧 | CRT national ✅ (1,722 locks, 1,108 weirs, 7,688 towpath access points…), EA Thames ✅ (45 locks), EA asset register ✅ (2,841 weirs, 149 slipways), EA uMap ✅ (55 Nene locks, water points, Elsan, weir warnings; current notices on five Anglian rivers), OSM lock chambers filling gaps ✅ (Great Ouse, Medway…); to do: the Broads, Medway and Ancholme locks OSM lacks | England coverage report |
-| **W4 Scotland, Ireland** 🚧 | Scottish Canals ✅ (91 locks, 57 weirs, 66 landings), Waterways Ireland ✅ (182 locks, 10 carries, put-ins, facilities, warnings); to do: SEPA, AMBER-GB, IFI, OPW levels | Coverage report per nation |
+| **W4 Scotland, Ireland** 🚧 | Scottish Canals ✅ (91 locks, 57 weirs, 66 landings), Waterways Ireland ✅ (182 locks, 10 carries, put-ins, facilities, warnings), SEPA obstacles ✅ (1,606 weirs, 2,456 waterfalls), AMBER-GB barrier atlas ✅ (21,913 weirs with heights, GB-wide); to do: IFI barriers, OPW and SEPA levels (live conditions) | Coverage report per nation |
 | **W5 Pipeline** 🚧 | Weekly refresh PR ✅ with its own role; to do: raw snapshots to S3 with change detection, discovery, health | A scheduled run opens a PR with a correct summary |
 | **W6 Coverage** | Coverage map, `/plan/gaps`, contribution prompts | Gaps page lists real holes, ranked |

@@ -76,13 +76,15 @@ function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => 
   return out
 }
 
-/** OSM draws a lock chamber on the water itself, where the authorities put a
- *  point beside it; so an OSM lock off the route by more than this is on a
- *  side cut or a marina entrance, not on the way. */
-export const OSM_LOCK_NEAR_M = 60
+/** Some sources put a point on the watercourse itself: OSM lock chambers and
+ *  the barrier inventories. One of those off the route by more than this is
+ *  on a side cut, a brook or a marina entrance, not on the way. The navigation
+ *  authorities put locks and weirs beside the channel, hence NEAR_M's wider net. */
+export const ON_WATER_NEAR_M = 60
+const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims'])
 
 export const featuresAlong = (line: LatLng[], features: Feature[]) =>
-  along(line, features, f => f.at, f => (f.source.source === 'osm' && f.kind === 'lock' ? OSM_LOCK_NEAR_M : NEAR_M[f.kind]))
+  along(line, features, f => f.at, f => (ON_WATER_SOURCES.has(f.source.source) ? Math.min(ON_WATER_NEAR_M, NEAR_M[f.kind]) : NEAR_M[f.kind]))
 
 export const osmAlong = (line: LatLng[], osm: OsmElement[], nearM = 250) =>
   along(line, osm, o => o.at, () => nearM)

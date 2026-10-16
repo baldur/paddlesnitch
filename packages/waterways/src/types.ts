@@ -19,6 +19,8 @@ export type SourceId =
   | 'ea-thames-site-guides'  // GOV.UK lock-and-weir site guides
   | 'ea-aims'                // EA asset register: weirs and slipways (OGL)
   | 'ea-umap'                // EA uMap maps: Nene locks and facilities, Anglian notices (no licence stated)
+  | 'sepa'                   // SEPA Obstacles to Fish Passage (OGL)
+  | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'scottish-canals'        // Scottish Canals open data (OGL)
   | 'waterways-ireland'      // Waterways Ireland ArcGIS layers (non-commercial)
   | 'osm'                    // OpenStreetMap (kept in its own table — ODbL)
@@ -86,6 +88,7 @@ export type Feature = {
   lock?: LockDetail
   portage?: PortageDetail
   crew?: CrewDetail
+  weir?: { heightM?: number }  // measured height, where the source has one
   facilities?: Facility[]
   photos?: string[]          // URLs published by the source
 }

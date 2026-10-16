@@ -70,7 +70,7 @@ async function main() {
   }
   // One record per lock where sources overlap (CRT and EA on the Kennet in Reading).
   const features = mergeFeatures(all)
-  lap(`features: ${features.length} from ${Object.keys(sources).length} sources (${all.length - features.length} duplicate locks merged)`)
+  lap(`features: ${features.length} from ${Object.keys(sources).length} sources (${all.length - features.length} duplicate locks and weirs merged)`)
 
   // OSM lock chambers fill the gaps: only where no authority lists a lock
   // nearby. ODbL, so they're published in their own file (osm-features).
@@ -118,14 +118,16 @@ function checkRoutes(links: NetLink[], features: Feature[]): number {
     const s = snap(links, c.start, SNAP_MAX_M), f = snap(links, c.finish, SNAP_MAX_M)
     const r = s && f ? route(links, s, f) : null
     const km = r ? r.lengthM / 1000 : 0
-    const locks = r ? featuresAlong(r.line, features).filter(a => a.item.kind === 'lock').length : 0
+    const along = r ? featuresAlong(r.line, features) : []
+    const locks = along.filter(a => a.item.kind === 'lock').length
+    const weirs = along.filter(a => a.item.kind === 'weir').length
     const problems: string[] = []
     if (!r) problems.push(!s ? 'start off the water' : !f ? 'finish off the water' : 'not connected')
     if (r && c.expectKm && Math.abs(km - c.expectKm) / c.expectKm > 0.03) problems.push(`expected ${c.expectKm} km`)
     if (r && c.expectLocks !== undefined && locks !== c.expectLocks) problems.push(`expected ${c.expectLocks} locks`)
     if (problems.length) failed++
     const via = r ? [...new Set(r.legs.map(l => l.name || '(unnamed)'))].join(' > ') : ''
-    console.log(`  ${problems.length ? '✗' : '✓'} ${c.name}: ${r ? `${km.toFixed(1)} km, ${locks} locks` : '—'}${problems.length ? `  [${problems.join('; ')}]` : ''}${via ? `\n      via ${via.length > 200 ? via.slice(0, 200) + '…' : via}` : ''}`)
+    console.log(`  ${problems.length ? '✗' : '✓'} ${c.name}: ${r ? `${km.toFixed(1)} km, ${locks} locks, ${weirs} weirs` : '—'}${problems.length ? `  [${problems.join('; ')}]` : ''}${via ? `\n      via ${via.length > 200 ? via.slice(0, 200) + '…' : via}` : ''}`)
   }
   return failed
 }

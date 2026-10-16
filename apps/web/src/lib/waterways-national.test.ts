@@ -5,6 +5,8 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
+import { mergeFeatures } from '@paddlesnitch/waterways/build'
+import { featuresFromAmber, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
@@ -17,6 +19,7 @@ import { computePlan, routePlan, timePlan } from '@paddlesnitch/waterways/plan'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
+import { stopLines } from './plan-ui'
 
 const ds: RegionDataset = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data/dw.json'), 'utf8'))
 const AT = '2026-10-12T00:00:00.000Z'
@@ -245,5 +248,46 @@ describe('OSM lock chambers (filling gaps)', () => {
     const line: LatLng[] = [[52, -1], [52, -0.99]]
     const at = (dLat: number): Feature => ({ id: `osm:${dLat}`, kind: 'lock', at: [52 + dLat, -0.995], source: { source: 'osm', fetchedAt: AT } })
     expect(featuresAlong(line, [at(0.0003), at(0.0009)]).map(a => a.item.id)).toEqual(['osm:0.0003'])   // ~33 m in, ~100 m out
+  })
+})
+
+describe('weirs and waterfalls from the barrier inventories', () => {
+  const read = (name: string) => JSON.parse(fs.readFileSync(path.join(FX, name), 'utf8')).features
+
+  it('SEPA: weirs, and waterfalls as hazards; not culverts or removed barriers', () => {
+    const out = featuresFromSepa(read('sepa-obstacles-sample.json'), AT)
+    expect(out.map(f => [f.kind, f.name])).toEqual([['hazard', 'Waterfall'], ['weir', undefined]])
+    expect(out[0].source).toMatchObject({ source: 'sepa', sourceId: '2062' })
+  })
+
+  it('AMBER: weirs and sluices with their name and height to 10 cm; a few mm reads as unknown; no culverts', () => {
+    const out = featuresFromAmber(read('amber-sample.json'), AT)
+    expect(out.map(f => [f.id, f.name, f.weir?.heightM])).toEqual([
+      ['amber:EN_13361_EA', 'Abingdon', 0.5],
+      ['amber:EN_1679_EA', undefined, undefined],
+      ['amber:EN_12722_EA', undefined, undefined],
+    ])
+    expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toContain('About 0.5 m high.')
+  })
+
+  it('one weir where two sources map it, keeping the one with a name or height', () => {
+    const w = (id: string, source: 'amber' | 'ea-aims', at: LatLng, extra: Partial<Feature> = {}): Feature =>
+      ({ id, kind: 'weir', at, source: { source, fetchedAt: AT }, ...extra })
+    const merged = mergeFeatures([
+      w('aims', 'ea-aims', [52, -1]),
+      w('amber', 'amber', [52.0002, -1], { name: 'Mill Weir', weir: { heightM: 1.2 } }),   // ~22 m away
+      w('far', 'ea-aims', [52.01, -1]),
+    ])
+    expect(merged.map(f => f.id).sort()).toEqual(['amber', 'far'])
+  })
+
+  it("a lock's own weir folds into the lock; a weir on its own stays a stop", () => {
+    const lock: Feature = { id: 'lock', kind: 'lock', name: 'Mill Lock', at: [51.5, -0.995], source: { source: 'crt', fetchedAt: AT } }
+    const beside: Feature = { id: 'beside', kind: 'weir', at: [51.5, -0.9945], source: { source: 'amber', fetchedAt: AT } }   // ~35 m on
+    const alone: Feature = { id: 'alone', kind: 'weir', name: 'Lone Weir', at: [51.5, -0.98], source: { source: 'amber', fetchedAt: AT } }
+    const links = linksFromWays([way(1, [1, 2], [[51.5, -1], [51.5, -0.97]], { boat: 'yes' })])
+    const r = routePlan({ links, features: [lock, beside, alone] }, { start: [51.5, -0.999], finish: [51.5, -0.971], shape: 'one_way' })
+    if (typeof r === 'string') throw new Error(r)
+    expect(r.stops.map(s => s.feature.id)).toEqual(['lock', 'alone'])
   })
 })
