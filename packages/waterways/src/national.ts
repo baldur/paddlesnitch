@@ -18,8 +18,9 @@ export type Manifest = {
 
 export const manifest = manifestJson as Manifest
 
-/** What the server keeps in memory. The OSM points layer (published as
- *  osm.json) isn't needed to route, so it isn't loaded. */
+/** What the server keeps in memory. `features` is every source's features plus
+ *  the OSM lock chambers that fill gaps (published apart, as osm-features.json).
+ *  The OSM points layer (osm.json) isn't needed to route, so it isn't loaded. */
 export type NationalDataset = {
   version: string
   links: NetLink[]
@@ -52,8 +53,9 @@ async function load(): Promise<NationalDataset> {
     if (v && !usesLocalStorage()) throw new Error(`waterways: published version ${v} not found`)
     return fixture()
   }
-  const [features, places] = await Promise.all([read<Feature[]>('features'), read<Place[]>('places')])
-  return { version: v!, links, features: features ?? [], places: places ?? [] }
+  const [features, osmFeatures, places] = await Promise.all([read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Place[]>('places')])
+  // Routing sees one list; the files stay apart (licence layers: OSM is ODbL).
+  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? [])], places: places ?? [] }
 }
 
 async function fixture(): Promise<NationalDataset> {

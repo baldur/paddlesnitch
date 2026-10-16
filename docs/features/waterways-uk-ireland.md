@@ -116,11 +116,23 @@ Live river levels and tides are not part of this pipeline; they're fetched when 
 
 | Route | Expect | Source |
 |---|---|---|
-| Devizes → Westminster | 201 km, 77 locks (found: 201.4 km, 77) | DW race |
+| Devizes → Westminster | 201 km (found: 201.4 km, 78 locks: the race's 77 portages include Dreadnought Reach, not a lock, and leave out Richmond half-tide lock, passed on the tide) | DW race |
 | Lechlade → Teddington | 45 Thames locks (found: 199.6 km, 45; EA says 124 miles) | EA |
 | Corpach → Clachnaharry (Caledonian Canal) | 29 locks (found: 94.1 km, 29; 60 miles) | Scottish Canals |
+| Northampton → Peterborough (Nene) | 37 locks (found: 94.2 km, 37) | EA River Nene map |
+| Bedford → Denver (Great Ouse) | connected (found: 96.0 km, 17 locks from OSM) | EA |
+| Tonbridge → Allington (Medway) | connected (found: 28.5 km, 6 locks) | EA |
 | Lanesborough → Athlone (Shannon, across Lough Ree) | connected through the lough | Waterways Ireland |
 | Athlone → Banagher (Shannon) | connected | Waterways Ireland |
+
+## EA rivers beyond the Thames (2026-10-16)
+
+The EA's GOV.UK pages for the Medway, Nene, Great Ouse, Stour, Welland & Glen, Black Sluice and Ancholme list locks by name only, with no grid references. Positions come from three places:
+- **EA uMap maps** (no licence set, used with credit): "The River Nene" has every Nene lock by name, plus water points, Elsan and weir warnings. The "Navigation Notices" maps for the Nene, Great Ouse, Stour, Welland & Glen and Ancholme carry current closures and hazards, such as "Bures Mill Downstream Canoe Portage - Closed". They become hazards prefixed "Notice:"; the weekly refresh keeps them current.
+- **EA asset register (AIMS Structure, OGL):** every EA weir (2,841) and slipway (149). Its navigation lock gates cluster into only 125 locks, 73 of them on the Thames, so it isn't used for locks.
+- **OSM lock chambers** (`lock=yes` ways, ODbL): published in their own file, `osm-features.json`, and used only where no authority's lock is within 120 m. They count on a route only within 60 m of it (a chamber is drawn on the water, an authority's point beside it), and boat rollers and private marina locks are skipped. This fills the Great Ouse (Bedford → Denver: 17 locks) and part of the Medway (6 of about 10).
+
+Still without lock positions: the Ancholme and four Medway locks. They show as gaps.
 
 ## Places search
 
@@ -136,7 +148,7 @@ The browser never loads the whole network. Zoomed out (below zoom 9) it draws an
 |---|---|---|
 | **W1 Network** ✅ | Geofabrik extract, national network, server routing, check routes | All check routes pass |
 | **W2 Planner** ✅ | Planner on `plan.route`, map by area, places typeahead | DW E2E passes on the national data |
-| **W3 England** 🚧 | CRT national ✅ (1,722 locks, 1,108 weirs, 7,688 towpath access points…), EA Thames ✅ (45 locks); to do: other EA navigations, Broads, EA weirs (AIMS) | England coverage report |
+| **W3 England** 🚧 | CRT national ✅ (1,722 locks, 1,108 weirs, 7,688 towpath access points…), EA Thames ✅ (45 locks), EA asset register ✅ (2,841 weirs, 149 slipways), EA uMap ✅ (55 Nene locks, water points, Elsan, weir warnings; current notices on five Anglian rivers), OSM lock chambers filling gaps ✅ (Great Ouse, Medway…); to do: the Broads, Medway and Ancholme locks OSM lacks | England coverage report |
 | **W4 Scotland, Ireland** 🚧 | Scottish Canals ✅ (91 locks, 57 weirs, 66 landings), Waterways Ireland ✅ (182 locks, 10 carries, put-ins, facilities, warnings); to do: SEPA, AMBER-GB, IFI, OPW levels | Coverage report per nation |
 | **W5 Pipeline** 🚧 | Weekly refresh PR ✅ with its own role; to do: raw snapshots to S3 with change detection, discovery, health | A scheduled run opens a PR with a correct summary |
 | **W6 Coverage** | Coverage map, `/plan/gaps`, contribution prompts | Gaps page lists real holes, ranked |

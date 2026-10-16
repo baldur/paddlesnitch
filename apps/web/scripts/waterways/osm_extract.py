@@ -20,7 +20,7 @@ import osmium
 
 # flowline and fairway carry the water across lakes (Loch Ness on the Caledonian).
 NETWORK = {'river', 'canal', 'flowline', 'fairway'}
-WAY_TAGS = ('name', 'waterway', 'tidal', 'lock', 'boat', 'canoe', 'access', 'tunnel', 'intermittent')
+WAY_TAGS = ('name', 'waterway', 'tidal', 'lock', 'lock_name', 'lock_ref', 'boat', 'canoe', 'access', 'tunnel', 'intermittent')
 POINT_WATERWAY = {'lock_gate', 'weir', 'dam'}
 POINT_AMENITY = {'drinking_water', 'water_point', 'toilets', 'parking'}
 PLACES = {'city', 'town', 'village', 'hamlet'}

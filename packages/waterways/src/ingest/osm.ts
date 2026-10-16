@@ -7,7 +7,8 @@
 // where they're part of the drainage network: most of the Kennet & Avon summit
 // pound is missing. OSM's canals and rivers run continuously through locks.
 import { lineLength, round6, simplify } from '../line'
-import type { LatLng, NetLink, OsmElement } from '../types'
+import { haversine } from '@paddlesnitch/timing/geo'
+import type { Feature, LatLng, NetLink, OsmElement } from '../types'
 
 type Bbox = [number, number, number, number]   // [south, west, north, east]
 
@@ -122,4 +123,30 @@ export function osmElementsFromOverpass(elements: OverpassElement[]): OsmElement
     if (at) out.push({ id: `${e.type}/${e.id}`, at: round6(at), tags: e.tags })
   }
   return out
+}
+
+/** Lock chambers from OSM ways tagged lock=yes, one per chamber (a chamber
+ *  drawn as several ways is merged), at the chamber's middle. These are OSM
+ *  data (ODbL): the national build publishes them in their own file and they
+ *  only fill gaps where no authority lists the lock. */
+export function osmLocks(ways: OsmWay[], fetchedAt: string, mergeM = 50): Feature[] {
+  const chambers: { ids: number[]; at: LatLng; name?: string }[] = []
+  for (const w of ways) {
+    // Boat rollers are tagged as chambers (Teddington, Richmond): a portage aid,
+    // not a lock. Private locks are marina entrances, not on anyone's way.
+    if (w.tags?.lock !== 'yes' || !w.coords.length || /roller/i.test(w.tags.lock_name ?? '')) continue
+    if (w.tags.access === 'private' || w.tags.access === 'no') continue
+    const at = w.coords[Math.floor(w.coords.length / 2)]
+    const name = w.tags.lock_name ?? (/\block\b/i.test(w.tags.name ?? '') ? w.tags.name : undefined)
+    const same = chambers.find(c => haversine(c.at, at) <= mergeM)
+    if (same) { same.ids.push(w.id); same.name ??= name; continue }
+    chambers.push({ ids: [w.id], at, name })
+  }
+  return chambers.map(c => ({
+    id: `osm:lock:way/${Math.min(...c.ids)}`,
+    kind: 'lock' as const,
+    name: c.name,
+    at: round6(c.at),
+    source: { source: 'osm' as const, sourceId: `way/${Math.min(...c.ids)}`, fetchedAt },
+  }))
 }

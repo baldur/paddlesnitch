@@ -76,8 +76,13 @@ function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => 
   return out
 }
 
+/** OSM draws a lock chamber on the water itself, where the authorities put a
+ *  point beside it; so an OSM lock off the route by more than this is on a
+ *  side cut or a marina entrance, not on the way. */
+export const OSM_LOCK_NEAR_M = 60
+
 export const featuresAlong = (line: LatLng[], features: Feature[]) =>
-  along(line, features, f => f.at, f => NEAR_M[f.kind])
+  along(line, features, f => f.at, f => (f.source.source === 'osm' && f.kind === 'lock' ? OSM_LOCK_NEAR_M : NEAR_M[f.kind]))
 
 export const osmAlong = (line: LatLng[], osm: OsmElement[], nearM = 250) =>
   along(line, osm, o => o.at, () => nearM)

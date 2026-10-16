@@ -20,7 +20,8 @@ import { putObject } from '@paddlesnitch/core/storage'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
-import { linksFromWays, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { haversine } from '@paddlesnitch/timing/geo'
+import { linksFromWays, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
@@ -36,6 +37,8 @@ const MANIFEST = path.resolve(process.cwd(), '../../packages/waterways/data/mani
 
 /** OSM points are kept only this close to the water; parking is everywhere. */
 const OSM_NEAR_M = 400
+/** An OSM lock this close to an authority's lock is the same lock. */
+const GAP_LOCK_M = 120
 
 async function* lines(file: string) {
   for await (const l of readline.createInterface({ input: fs.createReadStream(file) })) if (l) yield JSON.parse(l)
@@ -48,6 +51,7 @@ async function main() {
   const ways: OsmWay[] = []
   for await (const w of lines(path.join(EXTRACT, 'ways.jsonl'))) ways.push(w)
   const links = linksFromWays(ways, 3)
+  const osmLockList = osmLocks(ways, new Date().toISOString())
   ways.length = 0
   lap(`network: ${links.length} links, ${Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000)} km`)
 
@@ -68,12 +72,18 @@ async function main() {
   const features = mergeFeatures(all)
   lap(`features: ${features.length} from ${Object.keys(sources).length} sources (${all.length - features.length} duplicate locks merged)`)
 
+  // OSM lock chambers fill the gaps: only where no authority lists a lock
+  // nearby. ODbL, so they're published in their own file (osm-features).
+  const coreLocks = features.filter(f => f.kind === 'lock')
+  const osmFeatures = osmLockList.filter(l => snap(links, l.at, OSM_NEAR_M) && !coreLocks.some(c => haversine(c.at, l.at) <= GAP_LOCK_M))
+  lap(`OSM locks filling gaps: ${osmFeatures.length} of ${osmLockList.length}`)
+
   const osmPlaces: { at: LatLng; tags: Record<string, string> }[] = []
   for await (const p of lines(path.join(EXTRACT, 'places.jsonl'))) osmPlaces.push(p)
-  const places = buildPlaces(osmPlaces, features, links)
+  const places = buildPlaces(osmPlaces, [...features, ...osmFeatures], links)
   lap(`places: ${places.length}`)
 
-  const failed = checkRoutes(links, features)
+  const failed = checkRoutes(links, [...features, ...osmFeatures])
   lap('check routes')
 
   if (!args.includes('--publish')) {
@@ -82,7 +92,7 @@ async function main() {
   }
   if (failed) throw new Error(`${failed} check route(s) failed; not publishing`)
 
-  const files = { network: links, features, osm, places }
+  const files = { network: links, features, 'osm-features': osmFeatures, osm, places }
   const bodies = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(JSON.stringify(v))]))
   const hash = createHash('sha256')
   for (const b of Object.values(bodies)) hash.update(b)
@@ -94,7 +104,7 @@ async function main() {
   const manifest: Manifest = {
     version,
     builtAt: new Date().toISOString(),
-    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osm: osm.length, places: places.length },
+    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.length, osm: osm.length, places: places.length },
     sources,
   }
   await fsp.writeFile(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')
