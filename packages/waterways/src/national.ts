@@ -7,6 +7,7 @@ import { gunzipSync } from 'zlib'
 import { getObject, usesLocalStorage } from '@paddlesnitch/core/storage'
 import manifestJson from '../data/manifest.json'
 import type { Place } from './places'
+import { waterwayCoverage, type WaterwayCoverage } from './waterway-coverage'
 import type { Feature, NetLink, RegionDataset } from './types'
 
 export type Manifest = {
@@ -26,6 +27,17 @@ export type NationalDataset = {
   links: NetLink[]
   features: Feature[]
   places: Place[]
+}
+
+const coverage = new WeakMap<NationalDataset, WaterwayCoverage[]>()
+
+/** Coverage by waterway for the live dataset: worked out on first ask (about
+ *  half a second nationally) and kept, so nothing extra is published. */
+export async function loadCoverage(): Promise<{ version: string; rows: WaterwayCoverage[]; ds: NationalDataset }> {
+  const ds = await loadNational()
+  let rows = coverage.get(ds)
+  if (!rows) coverage.set(ds, (rows = waterwayCoverage(ds.links, ds.features)))
+  return { version: ds.version, rows, ds }
 }
 
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`

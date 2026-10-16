@@ -60,6 +60,13 @@ export const PLAN_ERROR_TEXT: Record<PlanError, string> = {
 
 export const km = (m: number) => `${(m / 1000).toFixed(1)} km`
 
+/** How well we know a waterway (see waterwayCoverage), as the map and /plan/gaps show it. */
+export const COVERAGE_LEVELS = [
+  { id: 'good', label: 'GOOD', colour: '#22c55e', says: 'Places to get in and out, crew access, and every portage side known.' },
+  { id: 'some', label: 'SOME', colour: '#f59e0b', says: 'Some locks, weirs, access or facilities; gaps remain (most often portage sides).' },
+  { id: 'thin', label: 'THIN', colour: '#f87171', says: 'Only the line of the water so far.' },
+] as const
+
 // --- The map's tiles -----------------------------------------------------------
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'

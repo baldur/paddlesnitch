@@ -41,6 +41,19 @@ test('zoomed out, a click zooms in; a start off the water is moved by the next c
   await expect(page.getByText('Now click the water where you finish.')).toBeVisible()
 })
 
+test('coverage: the map colours the water by what we know, and the gaps page lists it', async ({ page }) => {
+  await page.goto('/plan?view=51.45,-1.2,9')
+  await page.getByRole('button', { name: 'COVERAGE' }).click()
+  await expect(page.getByTestId('coverage-legend')).toContainText('How well we know each waterway')
+  await page.getByRole('link', { name: /Every waterway and its gaps/ }).click()
+  await expect(page).toHaveURL(/\/plan\/gaps$/)
+  const table = page.getByTestId('gaps-table')
+  await expect(table).toContainText('Kennet and Avon Canal', { timeout: 15_000 })
+  await page.getByLabel('Find a waterway').fill('thames')
+  await expect(table).not.toContainText('Kennet and Avon Canal')
+  await expect(table).toContainText('River Thames')
+})
+
 test('the places search moves the map to a lock', async ({ page }) => {
   await page.goto('/plan')
   const box = page.getByLabel('Go to a place')

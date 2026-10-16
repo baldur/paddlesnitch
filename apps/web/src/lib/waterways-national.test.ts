@@ -19,6 +19,7 @@ import { computePlan, routePlan, timePlan } from '@paddlesnitch/waterways/plan'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
+import { coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
 import { stopLines } from './plan-ui'
 
 const ds: RegionDataset = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data/dw.json'), 'utf8'))
@@ -289,5 +290,48 @@ describe('weirs and waterfalls from the barrier inventories', () => {
     const r = routePlan({ links, features: [lock, beside, alone] }, { start: [51.5, -0.999], finish: [51.5, -0.971], shape: 'one_way' })
     if (typeof r === 'string') throw new Error(r)
     expect(r.stops.map(s => s.feature.id)).toEqual(['lock', 'alone'])
+  })
+})
+
+describe('coverage by waterway', () => {
+  const link = (id: string, name: string, from: string, to: string, line: LatLng[], extra: Partial<NetLink> = {}): NetLink =>
+    ({ id, name, form: 'inlandRiver', from, to, line, lengthM: Math.round(line.length > 1 ? (line.at(-1)![1] - line[0][1]) * 69_000 : 0), ...extra })
+  // A 13.8 km navigation in two pieces, joined by a 140 m lock chamber with a name of its own.
+  const nav = [
+    link('a', 'River Test', 'n1', 'n2', [[51, 0], [51, 0.1]], { boat: 'yes' }),
+    link('lock', 'Test Lock', 'n2', 'n3', [[51, 0.1], [51, 0.102]], { form: 'canal' }),
+    link('b', 'River Test', 'n3', 'n4', [[51, 0.102], [51, 0.2]], { boat: 'yes' }),
+  ]
+  const brook = link('c', 'Little Brook', 'n9', 'n8', [[52, 0], [52, 0.01]])          // 690 m: too short to score
+  const unnamed = link('d', '', 'n7', 'n6', [[53, 0], [53, 0.3]])
+  const f = (id: string, kind: Feature['kind'], at: LatLng, extra: Partial<Feature> = {}): Feature => ({ id, kind, at, source: { source: 'crt', fetchedAt: AT }, ...extra })
+
+  it('one waterway per name, not split by a lock chamber; short rivers and unnamed water not scored', () => {
+    const rows = waterwayCoverage([...nav, brook, unnamed], [])
+    expect(rows.map(r => [r.name, r.kind, r.km])).toEqual([['River Test', 'navigation', 13.8]])
+  })
+
+  it("counts what's on it, including the lock on its chamber", () => {
+    const [row] = waterwayCoverage(nav, [
+      f('l', 'lock', [51, 0.101]), f('w', 'weir', [51.0005, 0.05]), f('s', 'slipway', [51, 0.15]),
+      f('far', 'access', [51.05, 0.15]),
+    ])
+    expect(row).toMatchObject({ locks: 1, locksWithSide: 0, weirs: 1, access: 1, crew: 0, sources: ['crt'] })
+  })
+
+  it('levels: thin with nothing, some with anything, good only with access, crew and every portage side', () => {
+    const base = { km: 20, locks: 0, locksWithSide: 0, weirs: 0, access: 0, crew: 0, facilities: 0 }
+    expect(levelOf(base)).toBe('thin')
+    expect(levelOf({ ...base, weirs: 3 })).toBe('some')
+    expect(levelOf({ ...base, access: 2, crew: 1 })).toBe('good')
+    expect(levelOf({ ...base, access: 2, crew: 1, locks: 4, locksWithSide: 3 })).toBe('some')
+    expect(levelOf({ ...base, access: 1, crew: 1 })).toBe('some')   // 20 km needs 2 places to get in and out
+  })
+
+  it('colours the scored water on the map by level', () => {
+    const rows = waterwayCoverage(nav, [])
+    const lines = coverageLines(nav, rows)
+    expect(lines.thin.length).toBe(3)    // all three links of River Test, the lock chamber included
+    expect(lines.good).toEqual([])
   })
 })

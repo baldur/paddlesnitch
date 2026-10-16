@@ -144,6 +144,16 @@ Both put points on the watercourse, so like OSM locks they count on a route only
 
 About three quarters of the weirs on a navigation are a lock's own weir and sluices (Thames: 79 of 103 within 300 m of a lock). Listing them would bury the stop list, and the lock is already the portage, so `routePlan` folds a weir within 300 m (`WEIR_AT_LOCK_M`) of a lock or portage into it. Weirs on their own (Ditchford Weir, 1.7 m) stay stops.
 
+## Coverage (2026-10-16)
+
+`waterwayCoverage(links, features)` (`packages/waterways/src/waterway-coverage.ts`) scores every waterway, computed from the data and never typed in:
+- **A waterway** is the named links that touch and share a name. A lone short link of another name between two pieces of one (a lock chamber) joins it, so the K&A isn't split at every lock; a stretch of another waterway doesn't. Unnamed water isn't scored, nor rivers under 10 km or canals and navigations under 1 km.
+- **Kind** is by most of its length (canal, navigation = `boat=yes`, river). The Thames has lock cuts tagged canal; it is a navigation.
+- **Counts:** each feature goes to the scored waterway it's on (snapped within its own reach, `nearOf`): locks and how many have a portage side, weirs, places to get in and out (access, slipways, portages), crew access, facilities, and which sources said so.
+- **Level:** *good* has at least one place to get in and out per 10 km, crew access or facilities, and every lock's portage side known; *thin* has nothing but the line; *some* is between. Nationally (2026-10-16): 1,881 waterways, 9 good, 1,179 some, 693 thin. Nothing with locks can be good yet: no source records portage sides.
+
+The server works coverage out on first ask (about half a second) and keeps it (`loadCoverage` in `national.ts`), so nothing extra is published. It's served as `/plan/data/{version}/coverage` (the rows, 60 KB gzipped) and `…/coverage-lines` (the scored water by level, 150 m simplification, 0.6 MB gzipped). On `/plan`, the **COVERAGE** switch colours the water green, amber or red with a legend; **`/plan/gaps`** lists every waterway with its counts (portage sides and missing access in red), filters by level and kind, a name search, and a link that opens it in the planner.
+
 ## Places search
 
 The GO TO list is a typeahead. The index is built from OSM place nodes (city, town, village, hamlet) within 2 km of the network, plus the name of every lock and weir in the data: 24,604 places. It's one file loaded when the search box first gets focus and searched in the browser: whole-name prefixes first, then a word in the name, then bigger places, then nearer ones.
@@ -161,4 +171,4 @@ The browser never loads the whole network. Zoomed out (below zoom 9) it draws an
 | **W3 England** 🚧 | CRT national ✅ (1,722 locks, 1,108 weirs, 7,688 towpath access points…), EA Thames ✅ (45 locks), EA asset register ✅ (2,841 weirs, 149 slipways), EA uMap ✅ (55 Nene locks, water points, Elsan, weir warnings; current notices on five Anglian rivers), OSM lock chambers filling gaps ✅ (Great Ouse, Medway…); to do: the Broads, Medway and Ancholme locks OSM lacks | England coverage report |
 | **W4 Scotland, Ireland** 🚧 | Scottish Canals ✅ (91 locks, 57 weirs, 66 landings), Waterways Ireland ✅ (182 locks, 10 carries, put-ins, facilities, warnings), SEPA obstacles ✅ (1,606 weirs, 2,456 waterfalls), AMBER-GB barrier atlas ✅ (21,913 weirs with heights, GB-wide); to do: IFI barriers, OPW and SEPA levels (live conditions) | Coverage report per nation |
 | **W5 Pipeline** 🚧 | Weekly refresh PR ✅ with its own role; to do: raw snapshots to S3 with change detection, discovery, health | A scheduled run opens a PR with a correct summary |
-| **W6 Coverage** | Coverage map, `/plan/gaps`, contribution prompts | Gaps page lists real holes, ranked |
+| **W6 Coverage** 🚧 | Coverage map ✅ (COVERAGE switch), `/plan/gaps` ✅; to do: contribution prompts, ranking by how often a waterway is planned | Gaps page lists real holes, ranked |
