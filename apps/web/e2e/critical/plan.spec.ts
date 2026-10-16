@@ -25,6 +25,22 @@ test('two clicks on the water give a route and its stops', async ({ page }) => {
   await expect(page.locator('img.leaflet-tile[src*="World_Imagery"]').first()).toBeAttached()
 })
 
+test('zoomed out, a click zooms in; a start off the water is moved by the next click', async ({ page }) => {
+  await page.goto('/plan')   // the whole UK and Ireland: a click there is kilometres wide
+  const map = page.locator('.leaflet-container')
+  const box = (await map.boundingBox())!
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(page.getByText('Click the water to set your start.')).toBeVisible()
+  await expect(page).not.toHaveURL(/from=/)
+
+  // A start in a field near Reading, with the map close in on the Kennet.
+  await page.goto('/plan?from=51.32,-1.2&view=51.4566,-0.9581,15')
+  await expect(page.getByText(/The start isn.t on a river or canal/)).toBeVisible({ timeout: 15_000 })
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(page.getByText(/The start isn.t on a river or canal/)).toHaveCount(0)
+  await expect(page.getByText('Now click the water where you finish.')).toBeVisible()
+})
+
 test('the places search moves the map to a lock', async ({ page }) => {
   await page.goto('/plan')
   const box = page.getByLabel('Go to a place')

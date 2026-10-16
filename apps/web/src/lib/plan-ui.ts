@@ -51,8 +51,8 @@ export function stopLines(stop: Stop): string[] {
 }
 
 export const PLAN_ERROR_TEXT: Record<PlanError, string> = {
-  start_off_water: "The start isn't on a river or canal we cover. Click on the water.",
-  finish_off_water: "The finish isn't on a river or canal we cover. Click on the water.",
+  start_off_water: "The start isn't on a river or canal we cover. Zoom in and click on the water to move it.",
+  finish_off_water: "The finish isn't on a river or canal we cover. Zoom in and click on the water to move it.",
   too_short: 'Start and finish are in the same place. Click further along the water.',
   not_connected: "We can't find a way along the water between those two points.",
 }
@@ -139,8 +139,15 @@ export function asInput(d: PlanDraft): PlanInput | null {
   return d.start && d.finish ? { ...d, start: d.start, finish: d.finish } : null
 }
 
-/** Where a new click goes: start first, then finish, then whichever is nearer. */
-export function placeClick(d: PlanDraft, p: LatLng): PlanDraft {
+/** Zoomed out further than this, one pixel is hundreds of metres and a click
+ *  can't be "on the water": it zooms in on the spot instead of placing an end. */
+export const PICK_MIN_ZOOM = 11
+
+/** Where a new click goes: to an end that missed the water, so a bad click
+ *  can be fixed by clicking again; else start first, then finish, then
+ *  whichever is nearer. */
+export function placeClick(d: PlanDraft, p: LatLng, offWater: 'start' | 'finish' | null = null): PlanDraft {
+  if (offWater) return { ...d, [offWater]: p }
   if (!d.start) return { ...d, start: p }
   if (!d.finish) return { ...d, finish: p }
   const dist = (a: LatLng) => (a[0] - p[0]) ** 2 + ((a[1] - p[1]) * Math.cos((p[0] * Math.PI) / 180)) ** 2
