@@ -1,17 +1,19 @@
 'use client'
-import { fmtTime } from '@paddlesnitch/core/format'
+import { fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import type { ComputedPlan } from '@paddlesnitch/waterways/plan'
 import type { RouteConditions } from '@paddlesnitch/waterways/live-store'
-import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km } from '@/lib/plan-ui'
+import { fmtDuration } from '@paddlesnitch/waterways/plan'
+import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, TIDE_CAVEAT, type TideWindow } from '@/lib/plan-ui'
 
 // "Conditions now" for a plan (docs/features/river-planner.md, P5): daylight
 // at the finish, the Thames boards on your reaches, and the river gauges along
 // the way. Live and best-effort: a source that can't be read says so; nothing
 // unread is ever shown as "no warning".
 
-export default function Conditions({ plan, startAt, data, loading, failed, print = false }: {
+export default function Conditions({ plan, startAt, tide, data, loading, failed, print = false }: {
   plan: ComputedPlan
   startAt?: string
+  tide: TideWindow | null
   data: RouteConditions | null | undefined
   loading: boolean
   failed: boolean
@@ -33,6 +35,28 @@ export default function Conditions({ plan, startAt, data, loading, failed, print
         </p>
       )}
       {!day && <p className={muted}>Set a start time to see where you&apos;ll be at sunset.</p>}
+
+      {plan.tidalFromM !== undefined && !startAt && <p className={muted}>Your route reaches tidal water: set a start time to see the tide when you get there.</p>}
+      {tide && (
+        <div data-testid="tide">
+          <p className="font-medium">Tide when you reach tidal water</p>
+          <p>
+            You reach it at <span className="tabular">{fmtDayTime(tide.reachAt)}</span>
+            {tide.afterHigh && <>, {Math.abs(tide.afterHigh.minutes) < 5 ? 'at high water' : `${fmtDuration(Math.abs(tide.afterHigh.minutes) * 60)} ${tide.afterHigh.minutes > 0 ? 'after' : 'before'} high water`} at {tide.afterHigh.gauge} ({fmtTime(tide.afterHigh.at)})</>}.
+          </p>
+          <ul className="space-y-0.5">
+            {tide.gauges.map(g => (
+              <li key={g.id}>
+                <span className="font-medium">{g.label}</span>:{' '}
+                {g.extremes.map((e, i) => <span key={i} className="tabular">{i > 0 && ', '}{e.type === 'high' ? 'HW' : 'LW'} {fmtTime(e.at)} ({e.height.toFixed(1)} m)</span>)}
+                <span className={muted}> · within {g.p95Min} min in 95% of last month&apos;s highs</span>
+              </li>
+            ))}
+          </ul>
+          <p className={`text-sm ${muted}`}>{TIDE_CAVEAT} Our own fit of Environment Agency gauge readings (OGL); heights above Ordnance Datum.</p>
+        </div>
+      )}
+      {plan.tidalFromM !== undefined && startAt && !tide?.gauges.length && <p className={muted}>Tide predictions aren&apos;t ready yet for this stretch.</p>}
 
       {loading && <p className={muted}>Reading the river gauges…</p>}
       {failed && <p className={warn}>Couldn&apos;t read river conditions just now: levels and stream warnings unknown.</p>}

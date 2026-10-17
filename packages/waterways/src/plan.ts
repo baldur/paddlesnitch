@@ -7,8 +7,8 @@
 import { featuresAlong } from './along'
 import { cumulative } from './line'
 import { portageOnRoute, portagesAt, type PortageOnRoute, type PublicPortage } from './portage'
-import { reverseRoute, route, snap, type Snap } from './network'
-import type { Feature, FeatureKind, LatLng, RegionDataset } from './types'
+import { linkById, reverseRoute, route, snap, type Snap } from './network'
+import type { Feature, FeatureKind, LatLng, NetLink, RegionDataset } from './types'
 
 export type PlanShape = 'one_way' | 'return'
 
@@ -60,6 +60,9 @@ export type ComputedPlan = {
   totalS: number
   finishAt?: string
   stops: Stop[]
+  /** Where the outward route first reaches tidal water (metres from the
+   *  start), for the tide window; unset when it never does. */
+  tidalFromM?: number
 }
 
 export type PlanError = 'start_off_water' | 'finish_off_water' | 'too_short' | 'not_connected'
@@ -124,8 +127,19 @@ export function routePlan(
     turnM: input.shape === 'return' ? out.lengthM : undefined,
     lengthM: out.lengthM * legs.length,
     waterways: [...new Set(out.legs.map(l => l.name).filter(Boolean))],
+    tidalFromM: tidalFrom(dataset.links, out.legs),
     stops,
   }
+}
+
+/** Metres along the route to the first tidal link, if any. */
+function tidalFrom(links: NetLink[], legs: { linkId: string; from: number; to: number }[]): number | undefined {
+  let m = 0
+  for (const leg of legs) {
+    if (linkById(links, leg.linkId)?.form === 'tidalRiver') return Math.round(m)
+    m += Math.abs(leg.to - leg.from)
+  }
+  return undefined
 }
 
 /** Arrival times at the paddler's pace, plus portage time. Pure and cheap, so

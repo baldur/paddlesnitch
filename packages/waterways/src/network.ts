@@ -151,6 +151,9 @@ export function route(
   return build(legs, links)
 }
 
+/** One link by id (from the same index routing uses). */
+export const linkById = (links: NetLink[], id: string): NetLink | undefined => indexOf(links).byId.get(id)
+
 function build(legs: Leg[], links: NetLink[]): Route {
   const { byId } = indexOf(links)
   const line: LatLng[] = []

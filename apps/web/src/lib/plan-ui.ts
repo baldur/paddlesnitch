@@ -3,6 +3,7 @@
 // sign-in round trip or a pasted link keeps it). Pure; tested in plan-ui.test.ts.
 import type { ComputedPlan, PlanError, PlanInput, PlanShape, Stop } from '@paddlesnitch/waterways/plan'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
+import { showable, tideExtremes, type TideExtreme, type TidesFile } from '@paddlesnitch/waterways/tide'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { DEFAULT_PACE_KMH, DEFAULT_PORTAGE_MINUTES } from '@paddlesnitch/waterways/plan'
 import type { Facility, FeatureKind, LatLng } from '@paddlesnitch/waterways/types'
@@ -80,6 +81,40 @@ export const GAUGE_STATE_TEXT = { high: 'above its usual range', normal: 'in its
 
 /** A Thames reach's board in a few words, and how loudly to show it. */
 export const BOARD_TEXT = { none: 'No stream warnings', caution: 'Caution (yellow boards)', strong: 'Strong stream (red boards)', other: '' } as const
+
+// --- Tides -------------------------------------------------------------------------
+
+export type TideWindow = {
+  reachAt: string                // when you reach tidal water (Teddington on the Thames)
+  gauges: { id: string; label: string; extremes: TideExtreme[]; medianMin: number; p95Min: number }[]
+  /** How your reaching tidal water sits against the nearest high water at the
+   *  first gauge with highs (Richmond on the Thames): minutes after (+) or before (−). */
+  afterHigh?: { gauge: string; minutes: number; at: string }
+}
+
+/** The tide around when a plan reaches tidal water, from our own fits. Null
+ *  when the route stays in fresh water or there's no start time. */
+export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageMinutes: number; startAt?: string }, file: TidesFile): TideWindow | null {
+  if (plan.tidalFromM === undefined || !pace.startAt) return null
+  const portagesBefore = plan.stops.filter(s => s.leg === 'out' && s.portage && s.chainageM < plan.tidalFromM!).length
+  const elapsedS = plan.tidalFromM / ((pace.paceKmh * 1000) / 3600) + portagesBefore * pace.portageMinutes * 60
+  const reach = Date.parse(pace.startAt) + elapsedS * 1000
+  const gauges = Object.entries(file.gauges).filter(([, g]) => showable(g)).map(([id, g]) => ({
+    id, label: g.label, medianMin: g.backtest.medianMin, p95Min: g.backtest.p95Min,
+    extremes: tideExtremes(g.model, reach - 6 * 3_600_000, reach + 9 * 3_600_000).filter(e => g.lows || e.type === 'high'),
+  }))
+  let afterHigh: TideWindow['afterHigh']
+  for (const g of gauges) {
+    const highs = g.extremes.filter(e => e.type === 'high')
+    if (!highs.length) continue
+    const near = highs.reduce((a, b) => (Math.abs(Date.parse(b.at) - reach) < Math.abs(Date.parse(a.at) - reach) ? b : a))
+    afterHigh = { gauge: g.label, minutes: Math.round((reach - Date.parse(near.at)) / 60_000), at: near.at }
+    break
+  }
+  return { reachAt: new Date(reach).toISOString(), gauges, afterHigh }
+}
+
+export const TIDE_CAVEAT = 'Predicted astronomical tide only. Surge, wind, pressure and the flow over Teddington weir can move times by tens of minutes, and low water above Westminster is unreliable. Not for navigation: check the PLA and Thames VTS on the day.'
 
 // --- Print -----------------------------------------------------------------------
 

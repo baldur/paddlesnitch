@@ -37,7 +37,8 @@
     "./portage-store": "./src/portage-store.ts",
     "./sun": "./src/sun.ts",
     "./live": "./src/live.ts",
-    "./live-store": "./src/live-store.ts"
+    "./live-store": "./src/live-store.ts",
+    "./tide": "./src/tide.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",
