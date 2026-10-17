@@ -24,7 +24,8 @@
     "strava:webhook": "tsx scripts/strava-webhook.ts",
     "waterways:national": "tsx scripts/waterways/build-national.ts",
     "waterways:sources": "tsx scripts/waterways/fetch-sources.ts",
-    "waterways:tides": "tsx scripts/waterways/fit-tides.ts"
+    "waterways:tides": "tsx scripts/waterways/fit-tides.ts",
+    "waterways:discover": "tsx scripts/waterways/discover.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1146.0",
