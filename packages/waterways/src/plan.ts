@@ -67,7 +67,10 @@ export type PlanError = 'start_off_water' | 'finish_off_water' | 'too_short' | '
 /** The route and what's along it, before any timing: the part that needs the
  *  network. On the national network it's computed on the server. */
 export type RoutedStop = Omit<Stop, 'portagesBefore' | 'elapsedS' | 'eta'>
-export type RoutedPlan = Omit<ComputedPlan, 'portages' | 'movingS' | 'totalS' | 'finishAt' | 'stops'> & { stops: RoutedStop[] }
+export type RoutedPlan = Omit<ComputedPlan, 'portages' | 'movingS' | 'totalS' | 'finishAt' | 'stops'> & {
+  stops: RoutedStop[]
+  waterways: string[]          // the named waterways it paddles, in order
+}
 
 export type Pace = Pick<PlanInput, 'paceKmh' | 'portageMinutes' | 'startAt'>
 
@@ -120,6 +123,7 @@ export function routePlan(
     line: out.line,
     turnM: input.shape === 'return' ? out.lengthM : undefined,
     lengthM: out.lengthM * legs.length,
+    waterways: [...new Set(out.legs.map(l => l.name).filter(Boolean))],
     stops,
   }
 }

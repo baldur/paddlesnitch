@@ -11,6 +11,7 @@ import { simplify } from '@paddlesnitch/waterways/line'
 import { loadNational } from '@paddlesnitch/waterways/national'
 import { routePlan, snapClick } from '@paddlesnitch/waterways/plan'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
+import { conditionsAlong } from '@paddlesnitch/waterways/live-store'
 import { NATIONAL, REGIONS } from '@paddlesnitch/waterways/regions'
 import {
   savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, setPlanNotes,
@@ -77,6 +78,17 @@ export const planRouter = router({
     if (saved === 'too_many') throw new TRPCError({ code: 'BAD_REQUEST', message: 'too_many_notes' })
     if (!saved) throw new TRPCError({ code: 'NOT_FOUND' })
     return saved
+  }),
+
+  // Live conditions along a route: river levels from the gauges near it and,
+  // on the Thames, the stream-warning boards. Best-effort per source. The
+  // sources are read as whole national lists, so no route leaves us. A return
+  // trip is the same water, so the one-way line covers it.
+  conditions: publicProcedure.input(z.object({ start: latLng, finish: latLng })).query(async ({ input }) => {
+    const ds = await loadNational()
+    const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: 'one_way' })
+    if (typeof plan === 'string') return null
+    return conditionsAlong(plan.line, plan.waterways, ds.features.filter(f => f.kind === 'lock'))
   }),
 
   share: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {

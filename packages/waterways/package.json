@@ -34,7 +34,10 @@
     "./ingest/barriers": "./src/ingest/barriers.ts",
     "./waterway-coverage": "./src/waterway-coverage.ts",
     "./portage": "./src/portage.ts",
-    "./portage-store": "./src/portage-store.ts"
+    "./portage-store": "./src/portage-store.ts",
+    "./sun": "./src/sun.ts",
+    "./live": "./src/live.ts",
+    "./live-store": "./src/live-store.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",

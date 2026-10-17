@@ -1,7 +1,8 @@
 // The planner page's wording and URL: what each stop says, which stops show by
 // default, and how an unsaved plan lives in the address bar (so a reload, a
 // sign-in round trip or a pasted link keeps it). Pure; tested in plan-ui.test.ts.
-import type { PlanError, PlanInput, PlanShape, Stop } from '@paddlesnitch/waterways/plan'
+import type { ComputedPlan, PlanError, PlanInput, PlanShape, Stop } from '@paddlesnitch/waterways/plan'
+import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { DEFAULT_PACE_KMH, DEFAULT_PORTAGE_MINUTES } from '@paddlesnitch/waterways/plan'
 import type { Facility, FeatureKind, LatLng } from '@paddlesnitch/waterways/types'
@@ -61,6 +62,24 @@ export function portageLines(p: PortageOnRoute): string[] {
   if (p.notes) out.push(`“${p.notes}”`)
   return out
 }
+
+// --- Daylight and conditions ---------------------------------------------------------
+
+/** Reached in the dark: needs a start time to know. */
+export const isDarkStop = (s: Stop): boolean => !!s.eta && inDark(s.eta, s.feature.at)
+
+/** Sunrise and sunset on the day you start, where you start, and how many
+ *  stops (each at its own place and time) fall in the dark. */
+export function daylightSummary(plan: ComputedPlan, startAt?: string): { sunrise?: string; sunset?: string; darkStops: number } | null {
+  if (!startAt) return null
+  const s = sunTimes(startAt, plan.start.at)
+  return { sunrise: s?.sunrise, sunset: s?.sunset, darkStops: plan.stops.filter(isDarkStop).length }
+}
+
+export const GAUGE_STATE_TEXT = { high: 'above its usual range', normal: 'in its usual range', low: 'below its usual range' } as const
+
+/** A Thames reach's board in a few words, and how loudly to show it. */
+export const BOARD_TEXT = { none: 'No stream warnings', caution: 'Caution (yellow boards)', strong: 'Strong stream (red boards)', other: '' } as const
 
 // --- Print -----------------------------------------------------------------------
 

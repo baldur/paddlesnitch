@@ -62,6 +62,30 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'CC BY 4.0',
     attribution: 'AMBER Barrier Atlas: Jones et al. (2019), CC BY 4.0',
   },
+  'ea-levels': {
+    name: 'Environment Agency real-time flood-monitoring API',
+    url: 'https://environment.data.gov.uk/flood-monitoring/doc/reference',
+    licence: 'OGL v3',
+    attribution: 'This uses Environment Agency flood and river level data from the real-time data API (Beta)',
+  },
+  'sepa-levels': {
+    name: 'SEPA river levels',
+    url: 'https://timeseries.sepa.org.uk/KiWIS/KiWIS',
+    licence: 'OGL v3',
+    attribution: 'River levels © Scottish Environment Protection Agency',
+  },
+  'opw-levels': {
+    name: 'OPW waterlevel.ie',
+    url: 'https://waterlevel.ie',
+    licence: 'CC BY 4.0',
+    attribution: 'Water levels © Office of Public Works (waterlevel.ie), CC BY 4.0',
+  },
+  'thames-conditions': {
+    name: 'GOV.UK — River Thames: current river conditions',
+    url: 'https://www.gov.uk/guidance/river-thames-current-river-conditions',
+    licence: 'OGL v3',
+    attribution: 'Thames stream warnings: contains public sector information licensed under the Open Government Licence v3.0',
+  },
   'scottish-canals': {
     name: 'Scottish Canals open data',
     url: 'https://www.scottishcanals.co.uk/scottish-canals-data-portal',

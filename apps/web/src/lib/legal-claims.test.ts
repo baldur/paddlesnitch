@@ -33,6 +33,10 @@ const SERVICES: Record<string, string> = {
   'api.open-meteo.com': 'Open-Meteo',
   'archive-api.open-meteo.com': 'Open-Meteo',
   'environment.data.gov.uk': 'Environment Agency',
+  // Live river conditions on Plan: whole national lists, never a user's route.
+  'timeseries.sepa.org.uk': 'SEPA',
+  'waterlevel.ie': 'OPW',
+  'www.gov.uk': 'GOV.UK',
   'api.github.com': 'GitHub',
   'github.com': 'GitHub',
   'server.arcgisonline.com': 'Esri',
@@ -40,13 +44,16 @@ const SERVICES: Record<string, string> = {
   'unpkg.com': 'unpkg',
 }
 // Our own site, legal links and test-only values -- not processors.
-const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org', 'evil.example.com', 'example.invalid'])
+const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org',
+  'evil.example.com', 'example.invalid',
+  'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk',   // links to a gauge's own page
+])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
 // machine or the weekly refresh job, so no visitor's data ever reaches these hosts.
 // The rest are credit links to a source. If the app ever calls one of these
 // at runtime, move it to SERVICES and name it on the privacy page.
 const BUILD_TIME_SOURCES = new Set([
-  'services.arcgis.com', 'overpass-api.de', 'overpass.kumi.systems', 'www.gov.uk',
+  'services.arcgis.com', 'overpass-api.de', 'overpass.kumi.systems',
   'www.openstreetmap.org', 'data-canalrivertrust.opendata.arcgis.com', 'www.dwrace.co.uk',
   'd1hxd0sho1wxko.cloudfront.net', 'www.scottishcanals.co.uk', 'www.waterwaysireland.org', 'download.geofabrik.de',
   'environment.data.gov.uk', 'umap.openstreetmap.fr', 'www.data.gov.uk',

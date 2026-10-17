@@ -104,6 +104,14 @@ test('your own notes, on the plan and on a stop, print on the sheet', async ({ p
   await expect(sheet).toContainText('Note: Crew meets here with food')
 })
 
+test('conditions: a dawn start shows sunrise and sunset and the stops reached in the dark', async ({ page }) => {
+  await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667&at=2027-04-17T04:00:00.000Z')
+  const conditions = page.getByTestId('conditions')
+  await expect(conditions).toContainText('Conditions now', { timeout: 15_000 })
+  await expect(page.getByTestId('daylight')).toContainText(/Sunrise \d\d:\d\d, sunset \d\d:\d\d on your start day\. \d+ stops? reached in the dark\./)
+  await expect(page.getByTestId('stop-list')).toContainText('after dark')
+})
+
 test('the places search moves the map to a lock', async ({ page }) => {
   await page.goto('/plan')
   const box = page.getByLabel('Go to a place')

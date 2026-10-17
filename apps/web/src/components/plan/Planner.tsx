@@ -16,10 +16,11 @@ import { Field, inputClass } from '@paddlesnitch/ui/Form'
 import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { Stat } from '@paddlesnitch/ui/Card'
 import PlanMapClient from '@/components/map/PlanMapClient'
+import Conditions from '@/components/plan/Conditions'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, COVERAGE_LEVELS, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines,
+  asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines,
   type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -101,6 +102,10 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
     [current, draft],
   )
   const visible = plan?.stops.filter(s => shown.has(groupOf(s.feature.kind))) ?? []
+  const conditions = trpc.plan.conditions.useQuery(
+    { start: draft.start ?? [0, 0], finish: draft.finish ?? [0, 0] },
+    { enabled: !!plan && !!draft.start && !!draft.finish, staleTime: 10 * 60_000, retry: false },
+  )
 
   return (
     <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-57px)]">
@@ -216,6 +221,8 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             <Link className={buttonClass('quiet', 'sm')} href={printHref(draft, { id: saved?.id, share: shared ? (initial as Partial<SavedPlan>).shareId : undefined, crew: true })}>Crew sheet</Link>
           </div>
         )}
+
+        {plan && <Conditions plan={plan} startAt={draft.startAt} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
 
         {plan && (
           <section>
@@ -336,6 +343,7 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
               <span className="tabular text-sm">
                 <span className="block text-fg">{km(s.chainageM)}</span>
                 <span className="block text-primary-text">{when(s)}</span>
+                {isDarkStop(s) && <span className="block text-xs text-red">after dark</span>}
               </span>
               <span className="min-w-0">
                 <span className="block text-base text-fg">
