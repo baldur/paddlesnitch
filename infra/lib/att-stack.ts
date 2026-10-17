@@ -649,6 +649,15 @@ export class AttStack extends cdk.Stack {
       },
     })
 
+    // The games live at games/ in the assets bucket (bucket root, no prefix),
+    // so /games/kayak/main.js is the key games/kayak/main.js.
+    const gamesOrigin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket)
+    const gamesRouter = new cloudfront.Function(this, 'GamesRouter', {
+      functionName: 'paddlesnitch-games-router',
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromFile({ filePath: path.join(__dirname, '../functions/games-router.js') }),
+    })
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       domainNames: ['paddlesnitch.com', 'www.paddlesnitch.com'],
       certificate,
@@ -707,6 +716,20 @@ export class AttStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
+        // The browser games (github.com/baldur/games.snitchmedia.com). Their code
+        // stays in that repo; its kayak/upload.sh syncs the files to games/ in
+        // this bucket. Nothing here deploys them, so a paddlesnitch deploy never
+        // touches them and they need no paddlesnitch deploy to ship.
+        '/games/*': {
+          origin: gamesOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          functionAssociations: [{
+            function: gamesRouter,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          }],
         },
         // /analyse is now part of the single app: its pages + API hit the default
         // server origin and its assets are under /_next/* (served from S3 above),
