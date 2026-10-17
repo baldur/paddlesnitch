@@ -7,7 +7,7 @@ import { useSessionUser } from '@/components/SessionUser'
 // The account menu in the header on every page: the shared AccountNav, wired to
 // the signed-in user and the platform routes. (There used to be two of these,
 // one per former app, with different sign-in and sign-out behaviour.)
-export default function AccountMenu() {
+export default function AccountMenu({ variant = 'menu' }: { variant?: 'menu' | 'tab' } = {}) {
   const pathname = usePathname() ?? '/'
   // From the server with the page (#411); asked for only when it couldn't tell.
   const fromServer = useSessionUser()
@@ -51,6 +51,7 @@ export default function AccountMenu() {
       // Back to where you were after signing in.
       signInHref={pathname === '/' ? '/signin' : `/signin?next=${encodeURIComponent(pathname)}`}
       onSignOut={onSignOut}
+      variant={variant}
     />
   )
 }

@@ -108,7 +108,7 @@ export default function LineCompare({ a, b }: { a: Side; b: Side }) {
       {message && <p className="mt-3 text-sm text-muted">{message}</p>}
       <div className="mt-2 flex items-center gap-3 text-xs text-muted">
         {picks.length === 0 && whole && <span>Tap two points on the blue line to compare one stretch.</span>}
-        {picks.length > 0 && <button type="button" onClick={() => choose([])} className="text-primary tracking-widest">WHOLE PADDLES</button>}
+        {picks.length > 0 && <button type="button" onClick={() => choose([])} className="text-primary-text tracking-widest">WHOLE PADDLES</button>}
       </div>
     </section>
   )

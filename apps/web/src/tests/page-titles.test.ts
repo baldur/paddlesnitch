@@ -2,7 +2,7 @@
 // "ATTS — Automated Time Trials System" whatever they were.
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('next/font/google', () => ({ IBM_Plex_Mono: () => ({ className: '' }) }))
+vi.mock('next/font/google', () => ({ IBM_Plex_Mono: () => ({ className: '', variable: '' }), IBM_Plex_Sans: () => ({ className: '', variable: '' }) }))
 import { metadata as root } from '@/app/layout'
 import { metadata as trials } from '@/app/att/layout'
 import { metadata as paddles } from '@/app/paddles/layout'

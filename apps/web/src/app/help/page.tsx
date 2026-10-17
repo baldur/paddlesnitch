@@ -28,8 +28,8 @@ export default async function FaqPage() {
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
         <h1 className="text-lg font-bold text-fg tracking-widest mb-4">HELP</h1>
         <ul className="text-sm flex flex-col gap-1 mb-8" aria-label="Help topics">
-          <li>Setting up a tracker? <Link href="/guide" className="text-primary">The setup guide</Link>, step by step.</li>
-          <li>Tracker not doing what you expect? <Link href="/guide/troubleshooting" className="text-primary">Troubleshooting</Link>.</li>
+          <li>Setting up a tracker? <Link href="/guide" className="text-primary-text">The setup guide</Link>, step by step.</li>
+          <li>Tracker not doing what you expect? <Link href="/guide/troubleshooting" className="text-primary-text">Troubleshooting</Link>.</li>
           <li>Something else? Tell us with <strong className="text-fg">Report an issue</strong>.</li>
         </ul>
         <h2 className="text-xs text-muted tracking-widest mb-4">QUESTIONS ABOUT TRIALS</h2>

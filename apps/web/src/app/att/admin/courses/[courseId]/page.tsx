@@ -234,7 +234,7 @@ export default function CourseAdminPage({
               <button
                 type="button"
                 onClick={toggleVisibility}
-                className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
+                className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
               >
                 {course.visibility === 'public' ? '→ MAKE PRIVATE' : '→ MAKE PUBLIC'}
               </button>
@@ -242,7 +242,7 @@ export default function CourseAdminPage({
                 <button
                   type="button"
                   onClick={startEdit}
-                  className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
+                  className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
                 >
                   EDIT DETAILS
                 </button>
@@ -386,7 +386,7 @@ export default function CourseAdminPage({
                   className="border border-border px-4 py-3 flex items-center justify-between hover:border-primary transition-colors group"
                 >
                   <div>
-                    <div className="text-fg text-sm group-hover:text-primary transition-colors">
+                    <div className="text-fg text-sm group-hover:text-primary-text transition-colors">
                       {t.name}
                     </div>
                     <div className="text-xs text-muted mt-0.5">{fmtDay(t.date)}</div>

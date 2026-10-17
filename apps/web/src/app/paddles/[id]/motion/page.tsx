@@ -46,7 +46,7 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
         {q.isPending && <LoadingState label="Loading" />}
         {(q.isError || (!q.isPending && !q.data)) && (
           <p className="text-sm text-muted">
-            We can&apos;t find this paddle. <Link href="/paddles" className="text-primary">Back to paddles</Link>.
+            We can&apos;t find this paddle. <Link href="/paddles" className="text-primary-text">Back to paddles</Link>.
           </p>
         )}
         {q.data && (

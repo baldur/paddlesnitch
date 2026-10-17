@@ -128,7 +128,7 @@ export default async function Home() {
                       className="px-4 py-4 flex items-center justify-between group"
                     >
                       <div>
-                        <div className="text-fg font-bold group-hover:text-primary transition-colors">
+                        <div className="text-fg font-bold group-hover:text-primary-text transition-colors">
                           {trial.name}
                         </div>
                         <div className="text-xs text-muted mt-0.5">
@@ -144,7 +144,7 @@ export default async function Home() {
                       <div className="border-t border-border px-4 py-2 flex justify-end">
                         <Link
                           href={`/att/admin/trials/${trial.id}`}
-                          className="text-xs text-muted hover:text-primary tracking-widest transition-colors"
+                          className="text-xs text-muted hover:text-primary-text tracking-widest transition-colors"
                         >
                           MANAGE / CLOSE →
                         </Link>
@@ -172,7 +172,7 @@ export default async function Home() {
                     <div className="min-w-0">
                       <div className="text-sm text-fg font-medium truncate">
                         {profileLinks[r.userId] ? (
-                          <Link href={`/profile/${profileLinks[r.userId]}`} className="hover:text-primary hover:underline transition-colors">
+                          <Link href={`/profile/${profileLinks[r.userId]}`} className="hover:text-primary-text hover:underline transition-colors">
                             {r.displayName}
                           </Link>
                         ) : (
@@ -180,13 +180,13 @@ export default async function Home() {
                         )}
                       </div>
                       <div className="text-xs text-muted mt-0.5 truncate">
-                        <Link href={`/att/trials/${r.trialId}`} className="hover:text-primary transition-colors">
+                        <Link href={`/att/trials/${r.trialId}`} className="hover:text-primary-text transition-colors">
                           {r.courseName}
                         </Link>{' '}
                         · {fmtDay(r.raceDate)} · {r.boatClass}
                       </div>
                     </div>
-                    <span className="text-sm tabular font-bold text-primary shrink-0">
+                    <span className="text-sm tabular font-bold text-primary-text shrink-0">
                       {formatTime(r.totalElapsedSeconds)}
                     </span>
                   </li>

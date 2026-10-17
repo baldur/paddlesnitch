@@ -293,12 +293,12 @@ function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPl
         const turn = i === turnAt
         return (
           <li key={`${s.leg}-${s.feature.id}-${i}`}>
-            {turn && <div className="py-1.5 text-xs tracking-widest text-primary border-b border-border">TURN AT {km(plan.turnM!)}</div>}
+            {turn && <div className="py-1.5 text-xs tracking-widest text-primary-text border-b border-border">TURN AT {km(plan.turnM!)}</div>}
             <button type="button" onClick={() => onFocus(s.feature.at)}
               className="w-full text-left grid grid-cols-[4.5rem_1fr] gap-3 py-2 border-b border-border hover:bg-surface-2">
               <span className="tabular text-xs">
                 <span className="block text-fg">{km(s.chainageM)}</span>
-                <span className="block text-primary">{when(s)}</span>
+                <span className="block text-primary-text">{when(s)}</span>
               </span>
               <span className="min-w-0">
                 <span className="block text-sm text-fg">

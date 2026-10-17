@@ -92,7 +92,7 @@ export default function PaddlesList() {
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-lg font-bold tracking-widest">PADDLES</h1>
           <div className="flex items-center gap-4">
-            <Link href="/paddles/sections" className="text-xs tracking-widest text-primary">SECTIONS</Link>
+            <Link href="/paddles/sections" className="text-xs tracking-widest text-primary-text">SECTIONS</Link>
             <Link href="/paddles/new" className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">+ ADD A PADDLE</Link>
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function PaddlesList() {
                   <div className="text-[10px] text-muted tracking-widest">
                     {fmtDate(s.paddledAt).toUpperCase()}{sourceLabel(s.source.type)}{s.boatClass ? <span className="text-split"> · {s.boatClass}</span> : ''}
                   </div>
-                  <div className="text-sm tabular mt-0.5 group-hover:text-primary transition-colors">
+                  <div className="text-sm tabular mt-0.5 group-hover:text-primary-text transition-colors">
                     <b>{paddleKm(s)}</b> · {fmtClock(s.durationS)}
                   </div>
                   <div className="text-xs text-muted tabular mt-0.5">

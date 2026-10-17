@@ -293,7 +293,7 @@ export default function GroupDetailPage({
         <section>
           <div className="flex items-start justify-between gap-4 mb-2">
             <h1 className="text-lg font-bold text-fg tracking-widest">{group.name.toUpperCase()}</h1>
-            <span className="text-xs px-2 py-0.5 border border-primary text-primary uppercase shrink-0">{role}</span>
+            <span className="text-xs px-2 py-0.5 border border-primary text-primary-text uppercase shrink-0">{role}</span>
           </div>
           {group.description && (
             <p className="text-sm text-muted mb-2 whitespace-pre-wrap">{group.description}</p>
@@ -389,8 +389,8 @@ export default function GroupDetailPage({
                   onClick={() => setJoinPolicy(p)}
                   className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
                     joinPolicy === p
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted hover:border-primary hover:text-primary'
+                      ? 'border-primary text-primary-text bg-primary/10'
+                      : 'border-border text-muted hover:border-primary hover:text-primary-text'
                   }`}
                 >
                   {p === 'invite_only' ? 'INVITE ONLY' : p.toUpperCase()}
@@ -409,11 +409,11 @@ export default function GroupDetailPage({
               {joinLink ? (
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input readOnly value={joinLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-xs`} />
-                  <button type="button" onClick={() => navigator.clipboard?.writeText(joinLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(joinLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary-text transition-colors">COPY</button>
                   <button type="button" onClick={() => patchLink({ joinLinkToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">TURN OFF LINK</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">
+                <button type="button" onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary-text transition-colors">
                   CREATE JOIN LINK
                 </button>
               )}

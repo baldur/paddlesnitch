@@ -90,7 +90,7 @@ export default async function CourseDetailPage({
                 {records.map(r => (
                   <tr key={r.boatClass} className="border-t border-border">
                     <td className="py-2 pr-3 text-muted w-12">{r.boatClass}</td>
-                    <td className="py-2 pr-3"><Link href={`/att/entries/${r.entryId}`} className="text-primary font-bold">{formatTime(r.seconds)}</Link></td>
+                    <td className="py-2 pr-3"><Link href={`/att/entries/${r.entryId}`} className="text-primary-text font-bold">{formatTime(r.seconds)}</Link></td>
                     <td className="py-2 pr-3 text-fg break-words">{r.displayName}</td>
                     <td className="py-2 text-muted text-right whitespace-nowrap">{fmtDay(r.raceDate)}</td>
                   </tr>
@@ -136,7 +136,7 @@ export default async function CourseDetailPage({
                   className="border border-border px-4 py-3 flex items-center justify-between hover:border-primary transition-colors group"
                 >
                   <div>
-                    <div className="text-fg text-sm group-hover:text-primary transition-colors">
+                    <div className="text-fg text-sm group-hover:text-primary-text transition-colors">
                       {t.name}
                     </div>
                     <div className="text-xs text-muted mt-0.5">{fmtDay(t.date)}</div>

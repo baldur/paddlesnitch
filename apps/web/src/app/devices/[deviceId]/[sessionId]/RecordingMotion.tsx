@@ -63,7 +63,7 @@ export default function RecordingMotion() {
         {state === 'ready' && meta === 'missing' && (
           <p className="text-sm text-muted">
             We can&apos;t find this recording.{' '}
-            <Link href="/devices" className="text-primary">Back to devices</Link>.
+            <Link href="/devices" className="text-primary-text">Back to devices</Link>.
           </p>
         )}
 

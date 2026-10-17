@@ -28,7 +28,7 @@ export default function GuidePage({ slug, title, overview, children }: { slug?: 
           <h1 className="text-lg font-bold text-fg tracking-widest mt-1">{title.toUpperCase()}</h1>
         </header>
 
-        <div className="flex flex-col gap-5 text-sm text-muted leading-relaxed [&_strong]:text-fg [&_a]:text-primary">
+        <div className="flex flex-col gap-5 text-sm text-muted leading-relaxed [&_strong]:text-fg [&_a]:text-primary-text">
           {children}
         </div>
 
@@ -44,7 +44,7 @@ export default function GuidePage({ slug, title, overview, children }: { slug?: 
         )}
         {slug && (
           <p className="text-xs text-muted">
-            Stuck? See <Link href="/guide/troubleshooting" className="text-primary">troubleshooting</Link>.
+            Stuck? See <Link href="/guide/troubleshooting" className="text-primary-text">troubleshooting</Link>.
           </p>
         )}
       </article>

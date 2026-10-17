@@ -102,7 +102,7 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
             <p className="text-green">Thanks — your report has been filed.</p>
             {issueUrl && (
               <p className="text-xs text-muted">Tracked at{' '}
-                <a href={issueUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{issueUrl.replace(/^https?:\/\//, '')}</a>
+                <a href={issueUrl} target="_blank" rel="noopener noreferrer" className="text-primary-text hover:underline">{issueUrl.replace(/^https?:\/\//, '')}</a>
               </p>
             )}
             <button type="button" onClick={() => { reset(); setOpen(false) }} className="self-end px-4 py-2 bg-primary text-white text-xs tracking-widest hover:opacity-90 transition-opacity">CLOSE</button>

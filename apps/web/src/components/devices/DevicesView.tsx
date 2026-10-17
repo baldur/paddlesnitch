@@ -30,7 +30,7 @@ function GettingStarted({ rows, hasTrackerPaddle }: { rows: DeviceSummary[]; has
             <span aria-hidden="true" className={i.done ? 'text-green' : 'text-muted'}>{i.done ? '✓' : '○'}</span>
             {i.done
               ? <span className="text-muted line-through">{i.label}</span>
-              : <Link href={i.href} className={i === next ? 'text-primary' : 'text-fg'}>{i.label}{i === next ? ' →' : ''}</Link>}
+              : <Link href={i.href} className={i === next ? 'text-primary-text' : 'text-fg'}>{i.label}{i === next ? ' →' : ''}</Link>}
             <span className="sr-only">{i.done ? '(done)' : '(to do)'}</span>
           </li>
         ))}
@@ -83,7 +83,7 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
           <h1 className="text-lg font-bold text-fg tracking-widest">DEVICES</h1>
           <p className="text-sm text-muted mt-1">
             Your paddlesnitch trackers and what each one has recorded. Setting one up?{' '}
-            <Link href="/guide" className="text-primary">Follow the guide</Link>.
+            <Link href="/guide" className="text-primary-text">Follow the guide</Link>.
           </p>
         </div>
 
@@ -166,7 +166,7 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
           </div>
           <p className="text-xs text-muted">
             Chrome or Edge, on Android or a computer. Bluetooth is off on the tracker until you turn it on.{' '}
-            <Link href="/guide/bluetooth" className="text-primary">How</Link>.
+            <Link href="/guide/bluetooth" className="text-primary-text">How</Link>.
           </p>
         </section>
 
@@ -175,7 +175,7 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
         </div>
 
         <p className="text-xs text-muted">
-          Each tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary">Paddles</Link> by
+          Each tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary-text">Paddles</Link> by
           themselves. To remove a tracker, open it.
         </p>
       </div>

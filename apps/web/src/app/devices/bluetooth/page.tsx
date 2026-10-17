@@ -248,7 +248,7 @@ export default function BluetoothPage() {
           </p>
           <p className="text-xs text-muted mt-1">
             Turn Bluetooth on first: on the tracker, Settings &gt; Network, tap to the second page, then hold.{' '}
-            <Link href="/guide/bluetooth" className="text-primary">How it works</Link>.
+            <Link href="/guide/bluetooth" className="text-primary-text">How it works</Link>.
           </p>
         </div>
 

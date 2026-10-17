@@ -14,7 +14,7 @@ export default function BuddyPaddlePage({ params }: { params: Promise<{ userId: 
   if (q.isError || !q.data) return (
     <main className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
       <p className="text-sm text-muted">We can&apos;t find this paddle.</p>
-      <Link href="/buddies" className="text-xs tracking-widest text-primary">← BUDDIES</Link>
+      <Link href="/buddies" className="text-xs tracking-widest text-primary-text">← BUDDIES</Link>
     </main>
   )
   const { name, paddle } = q.data

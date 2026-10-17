@@ -89,7 +89,7 @@ export default function CourseMap({ course, track, highlightGateIndex }: { cours
     <div className="relative">
       <button
         onClick={() => setDark(d => !d)}
-        className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary transition-colors"
+        className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
         title="Toggle map style"
       >
         {dark ? 'LIGHT MAP' : 'DARK MAP'}

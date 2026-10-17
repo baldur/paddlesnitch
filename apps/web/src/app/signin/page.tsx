@@ -164,7 +164,7 @@ function AuthForm() {
   const tabClass = (t: typeof tab) =>
     `px-4 py-2 text-sm tracking-widest transition-colors ${
       tab === t
-        ? 'border-b-2 border-primary text-primary -mb-px'
+        ? 'border-b-2 border-primary text-primary-text -mb-px'
         : 'text-muted hover:text-fg'
     }`
 

@@ -147,7 +147,7 @@ export default function LeaderboardTable({
                         <Link
                           href={`/profile/${profileLinks[entry.userId]}`}
                           onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                          className="hover:text-primary hover:underline transition-colors"
+                          className="hover:text-primary-text hover:underline transition-colors"
                         >
                           {entry.displayName}
                         </Link>
@@ -161,7 +161,7 @@ export default function LeaderboardTable({
                       )}
                     </td>
                     <td className="py-3 pr-2 sm:pr-4 text-muted tabular text-xs">{entry.boatClass}</td>
-                    <td className="py-3 pr-2 sm:pr-4 text-right tabular font-bold text-primary text-base">
+                    <td className="py-3 pr-2 sm:pr-4 text-right tabular font-bold text-primary-text text-base">
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
                     <td className="py-3 pr-2 sm:pr-4 text-right text-muted text-xs hidden sm:table-cell">
@@ -265,13 +265,13 @@ export default function LeaderboardTable({
                                   <td className="pr-8 py-1.5 text-right tabular text-split">
                                     {formatTime(segSecs)}
                                   </td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-primary">
+                                  <td className="pr-8 py-1.5 text-right tabular text-primary-text">
                                     {paceFor500m(segDist, segSecs)}
                                   </td>
-                                  <td className="pr-6 py-1.5 text-right tabular text-primary">
+                                  <td className="pr-6 py-1.5 text-right tabular text-primary-text">
                                     {speedKmh(segDist, segSecs)}
                                   </td>
-                                  <td className="py-1.5 text-right tabular text-primary">
+                                  <td className="py-1.5 text-right tabular text-primary-text">
                                     {speedMs(segDist, segSecs)}
                                   </td>
                                 </tr>

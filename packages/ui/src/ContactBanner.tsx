@@ -40,7 +40,7 @@ export default function ContactBanner({
     <div className="border-b border-border bg-surface px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
       <span className="text-muted min-w-0">{message}</span>
       <span className="flex items-center gap-3 shrink-0">
-        <Link href={href} className="text-primary hover:underline tracking-widest">{cta}</Link>
+        <Link href={href} className="text-primary-text hover:underline tracking-widest">{cta}</Link>
         <button type="button" onClick={dismiss} className="text-muted hover:text-fg" aria-label="Dismiss">✕</button>
       </span>
     </div>

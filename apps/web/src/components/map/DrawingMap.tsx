@@ -279,10 +279,10 @@ export default function DrawingMap({
                   onClick={() => done ? resetGate(i) : setMode(mode === i ? null : i)}
                   className={`px-3 py-1 text-xs border transition-colors ${
                     mode === i
-                      ? 'border-primary text-primary'
+                      ? 'border-primary text-primary-text'
                       : done
                       ? 'border-muted text-muted opacity-70'
-                      : 'border-border text-muted hover:border-primary hover:text-primary'
+                      : 'border-border text-muted hover:border-primary hover:text-primary-text'
                   }`}
                 >
                   {done
@@ -295,7 +295,7 @@ export default function DrawingMap({
                   <button
                     type="button"
                     onClick={() => flipGate(i)}
-                    className="px-3 py-1 text-xs border border-primary text-primary hover:bg-primary/10 transition-colors"
+                    className="px-3 py-1 text-xs border border-primary text-primary-text hover:bg-primary/10 transition-colors"
                   >
                     FLIP ⇄ {directionLabel(gate.pts as Line, gate.direction)}
                   </button>
@@ -315,7 +315,7 @@ export default function DrawingMap({
           <button
             type="button"
             onClick={addGate}
-            className="self-start px-3 py-1 text-xs border border-border text-muted hover:border-primary hover:text-primary transition-colors"
+            className="self-start px-3 py-1 text-xs border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
           >
             + ADD GATE
           </button>
@@ -363,7 +363,7 @@ export default function DrawingMap({
       <div className="relative" style={{ cursor: cursorStyle }}>
         <button
           onClick={() => setDark(d => !d)}
-          className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary transition-colors"
+          className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
         >
           {dark ? 'LIGHT MAP' : 'DARK MAP'}
         </button>
@@ -433,7 +433,7 @@ export default function DrawingMap({
       {isGate && typeof mode === 'number' && (
         <p className="text-xs text-muted">
           Click 2 points on the map to draw{' '}
-          <span className="text-primary">
+          <span className="text-primary-text">
             {mode === 0 ? 'the start gate' : mode === gateEntries.length - 1 ? 'the finish gate' : `gate ${mode}`}
           </span>. Pan/zoom with scroll and drag.
         </p>

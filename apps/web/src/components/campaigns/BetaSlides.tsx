@@ -74,7 +74,7 @@ export default function BetaSlides({ slides }: { slides: Slide[] }) {
               <p className="text-sm sm:text-base text-muted leading-relaxed">{s.body}</p>
               {n === last && (
                 // Points from the last message down to the (now bouncing) button.
-                <span aria-hidden="true" data-testid="down-arrow" className="self-center mt-2 text-3xl text-primary motion-safe:animate-bounce">↓</span>
+                <span aria-hidden="true" data-testid="down-arrow" className="self-center mt-2 text-3xl text-primary-text motion-safe:animate-bounce">↓</span>
               )}
             </article>
           ))}

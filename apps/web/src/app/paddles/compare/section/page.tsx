@@ -38,7 +38,7 @@ function Inner() {
   if (!race || race.racers.length === 0) return (
     <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-muted">{err || 'Nothing to compare here.'}</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
+      <Link href="/paddles" className="text-xs tracking-widest text-primary-text">← PADDLES</Link>
     </div>
   )
 

@@ -45,7 +45,7 @@ function CompareInner() {
   if (!A || !B) return (
     <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-muted">Couldn&apos;t load both paddles.</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
+      <Link href="/paddles" className="text-xs tracking-widest text-primary-text">← PADDLES</Link>
     </div>
   )
 
@@ -53,7 +53,7 @@ function CompareInner() {
   if (isMotionOnly(A.result) || isMotionOnly(B.result)) return (
     <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3 px-4 text-center">
       <p className="text-sm text-muted">The GPS failed on one of these paddles, so they can&apos;t be compared.</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
+      <Link href="/paddles" className="text-xs tracking-widest text-primary-text">← PADDLES</Link>
     </div>
   )
 

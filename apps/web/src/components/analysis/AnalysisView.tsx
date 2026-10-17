@@ -438,7 +438,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
           {sameOuting.length > 0 && (
             <div className="flex flex-col gap-1">
               {sameOuting.map(o => (
-                <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`} className="text-sm text-primary">
+                <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`} className="text-sm text-primary-text">
                   ALSO RECORDED BY {o.sourceType === 'device' ? 'THE TRACKER' : sourceName(o.sourceType)} →
                 </Link>
               ))}
@@ -640,7 +640,7 @@ function ComparePicker({ label, target, hrefFor, buddy, className, box }: {
             : q.isError ? <div className="text-red">Couldn&apos;t load your paddles. Please try again.</div>
             : !q.data?.length ? <div className="text-muted">None of your paddles shared enough of this water to compare.</div>
             : q.data.map(p => (
-              <Link key={p.id} href={hrefFor(p.id)} className="block py-1 hover:text-primary">
+              <Link key={p.id} href={hrefFor(p.id)} className="block py-1 hover:text-primary-text">
                 {fmtDay(p.paddledAt)} · {p.distanceKm.toFixed(1)} km
                 <span className={p.kind === 'together' ? 'text-green' : 'text-muted'}> · {why(p)}</span>
               </Link>

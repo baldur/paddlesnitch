@@ -212,7 +212,7 @@ export default function TrialAdminPage({
             <button
               type="button"
               onClick={toggleVisibility}
-              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
+              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
               title={
                 course.visibility === 'private'
                   ? 'Course is private, so this trial is private too.'
@@ -229,8 +229,8 @@ export default function TrialAdminPage({
                 onClick={() => changeParticipation(v)}
                 className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
                   trial.participation === v
-                    ? 'border-primary text-primary bg-primary/10'
-                    : 'border-border text-muted hover:border-primary hover:text-primary'
+                    ? 'border-primary text-primary-text bg-primary/10'
+                    : 'border-border text-muted hover:border-primary hover:text-primary-text'
                 }`}
               >
                 {participationLabel(v)}
@@ -255,7 +255,7 @@ export default function TrialAdminPage({
               </p>
               <div className="flex flex-col sm:flex-row gap-2 mb-4">
                 <input readOnly value={trialLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
-                <button type="button" onClick={() => copy(trialLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY LINK</button>
+                <button type="button" onClick={() => copy(trialLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary-text transition-colors">COPY LINK</button>
               </div>
 
               {gated && (
@@ -272,11 +272,11 @@ export default function TrialAdminPage({
               {submitLink ? (
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input readOnly value={submitLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
-                  <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
+                  <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary-text transition-colors">COPY</button>
                   <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">TURN OFF LINK</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">
+                <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary-text transition-colors">
                   CREATE SUBMIT LINK
                 </button>
               )}
@@ -390,7 +390,7 @@ export default function TrialAdminPage({
                   <tr key={entry.entryId} className="border-b border-surface-2">
                     <td className="py-2.5 pr-4 text-muted">{i + 1}</td>
                     <td className="py-2.5 pr-4 text-fg">{entry.displayName}</td>
-                    <td className="py-2.5 pr-4 text-right tabular text-primary font-bold">
+                    <td className="py-2.5 pr-4 text-right tabular text-primary-text font-bold">
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
                     <td className="py-2.5 text-right text-muted text-xs">

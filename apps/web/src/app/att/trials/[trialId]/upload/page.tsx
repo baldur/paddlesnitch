@@ -453,7 +453,7 @@ export default function UploadPage({
                 onClick={() => setInputMode('file')}
                 className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                   inputMode === 'file'
-                    ? 'border-b-2 border-primary text-primary -mb-px'
+                    ? 'border-b-2 border-primary text-primary-text -mb-px'
                     : 'text-muted hover:text-fg'
                 }`}
               >
@@ -464,7 +464,7 @@ export default function UploadPage({
                 onClick={() => setInputMode('url')}
                 className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                   inputMode === 'url'
-                    ? 'border-b-2 border-primary text-primary -mb-px'
+                    ? 'border-b-2 border-primary text-primary-text -mb-px'
                     : 'text-muted hover:text-fg'
                 }`}
               >
@@ -487,7 +487,7 @@ export default function UploadPage({
                   onClick={() => setInputMode('tracker')}
                   className={`px-4 py-2 text-sm tracking-widest transition-colors ${
                     inputMode === 'tracker'
-                      ? 'border-b-2 border-primary text-primary -mb-px'
+                      ? 'border-b-2 border-primary text-primary-text -mb-px'
                       : 'text-muted hover:text-fg'
                   }`}
                 >

@@ -95,7 +95,7 @@ export default function GroupsCataloguePage() {
                   className="border border-border px-4 py-3 hover:border-primary transition-colors group flex items-center justify-between"
                 >
                   <div className="min-w-0">
-                    <div className="text-fg font-bold group-hover:text-primary transition-colors">{c.name}</div>
+                    <div className="text-fg font-bold group-hover:text-primary-text transition-colors">{c.name}</div>
                     {c.description && (
                       <div className="text-xs text-muted mt-0.5 truncate">{c.description}</div>
                     )}
@@ -123,7 +123,7 @@ export default function GroupsCataloguePage() {
                   className="border border-border px-4 py-3 hover:border-primary transition-colors group flex items-center justify-between gap-3"
                 >
                   <div className="min-w-0">
-                    <div className="text-fg font-bold group-hover:text-primary transition-colors">{g.name}</div>
+                    <div className="text-fg font-bold group-hover:text-primary-text transition-colors">{g.name}</div>
                     {g.description && (
                       <div className="text-xs text-muted mt-0.5 truncate">{g.description}</div>
                     )}
@@ -134,7 +134,7 @@ export default function GroupsCataloguePage() {
                   <span className={`text-xs tracking-widest px-2 py-0.5 border shrink-0 ${
                     g.joinPolicy === 'open'
                       ? 'border-green text-green'
-                      : 'border-primary text-primary'
+                      : 'border-primary text-primary-text'
                   }`}>
                     {g.joinPolicy === 'open' ? 'JOIN' : 'REQUEST'}
                   </span>

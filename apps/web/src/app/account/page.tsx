@@ -420,7 +420,7 @@ function AccountPageInner() {
               <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Devices</h2>
               <p className="text-sm text-muted leading-relaxed">
                 Add, remove and see your paddlesnitch trackers on the{' '}
-                <Link href="/devices" className="text-primary">Devices</Link> page.
+                <Link href="/devices" className="text-primary-text">Devices</Link> page.
               </p>
             </section>
 
@@ -437,7 +437,7 @@ function AccountPageInner() {
                   type="button"
                   onClick={() => toggleProfilePublic(!profilePublic)}
                   disabled={profilePublic === undefined || profileSaving}
-                  className="px-6 py-2.5 border border-primary text-primary font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                  className="px-6 py-2.5 border border-primary text-primary-text font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
                 >
                   {profileSaving
                     ? 'SAVING…'
@@ -473,7 +473,7 @@ function AccountPageInner() {
                     type="button"
                     onClick={saveHandle}
                     disabled={handleSaving || !handleInput.trim() || handleInput.trim() === handle}
-                    className="px-4 py-2 border border-primary text-primary text-xs tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 border border-primary text-primary-text text-xs tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
                   >
                     {handleSaving ? 'SAVING…' : handle ? 'CHANGE' : 'SAVE'}
                   </button>
@@ -505,7 +505,7 @@ function AccountPageInner() {
                 type="button"
                 onClick={downloadExport}
                 disabled={working === 'export'}
-                className="px-6 py-2.5 border border-primary text-primary font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                className="px-6 py-2.5 border border-primary text-primary-text font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
               >
                 {working === 'export' ? 'PREPARING…' : 'DOWNLOAD MY DATA (.json)'}
               </button>

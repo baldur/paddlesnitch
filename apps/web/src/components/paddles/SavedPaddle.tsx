@@ -25,7 +25,7 @@ export default function SavedPaddle({ id }: { id: string }) {
   if (q.isError || !q.data) return (
     <main className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
       <p className="text-sm text-muted">We can&apos;t find this paddle.</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
+      <Link href="/paddles" className="text-xs tracking-widest text-primary-text">← PADDLES</Link>
     </main>
   )
 

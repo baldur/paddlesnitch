@@ -123,7 +123,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
           </div>
           <h1 className="text-lg font-bold text-fg tracking-widest">{entry.displayName.toUpperCase()}</h1>
           <div className="mt-2 flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-primary tabular">{formatTime(entry.totalElapsedSeconds)}</span>
+            <span className="text-3xl font-bold text-primary-text tabular">{formatTime(entry.totalElapsedSeconds)}</span>
             <span className="text-xs text-muted tabular">{entry.boatClass}{course ? ` · ${course.distanceMetres.toLocaleString()} m` : ''}{entry.avgStrokeRate != null ? ` · ${entry.avgStrokeRate} spm avg` : ''}</span>
           </div>
           {entry.runCount && entry.runCount > 1 && (

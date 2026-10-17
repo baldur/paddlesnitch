@@ -62,7 +62,7 @@ function Report({ report, cadence, attitude, noPaddle, fromMotion, sessionId, de
       {/* Always offered, never gated on the motion data being there: the charts
           page is how you find out WHETHER this recording has motion. */}
       <div>
-        <Link href={`/devices/${deviceId}/${sessionId}`} className="text-primary">BOAT MOTION CHARTS →</Link>
+        <Link href={`/devices/${deviceId}/${sessionId}`} className="text-primary-text">BOAT MOTION CHARTS →</Link>
       </div>
 
       <TechnicalDetails report={report} cadence={cadence} attitude={attitude} />
@@ -130,7 +130,7 @@ export default function DeviceDetailPage() {
           {device === null && (
             <p className="text-xs text-muted mt-2 border border-border bg-surface px-3 py-2">
               This tracker is no longer on your account, but its recordings are still yours.{' '}
-              <Link href="/devices#add" className="text-primary">Add it again</Link> to get new ones.
+              <Link href="/devices#add" className="text-primary-text">Add it again</Link> to get new ones.
             </p>
           )}
           <p className="text-sm text-muted mt-2">
@@ -139,7 +139,7 @@ export default function DeviceDetailPage() {
           </p>
           {device && (
             <p className="text-sm text-muted mt-1">
-              Away from WiFi? <Link href="/devices/bluetooth" className="text-primary">Sync over Bluetooth</Link>.
+              Away from WiFi? <Link href="/devices/bluetooth" className="text-primary-text">Sync over Bluetooth</Link>.
             </p>
           )}
         </div>
@@ -147,7 +147,7 @@ export default function DeviceDetailPage() {
         {sessions === undefined ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : sessions.length === 0 ? (
-          <p className="text-sm text-muted">No recordings from this tracker yet. It uploads them by itself when it’s switched on in range of your WiFi. <Link href="/guide/upload" className="text-primary">How uploading works</Link>.</p>
+          <p className="text-sm text-muted">No recordings from this tracker yet. It uploads them by itself when it’s switched on in range of your WiFi. <Link href="/guide/upload" className="text-primary-text">How uploading works</Link>.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {sessions.map(s => paddleOf[s.sessionId] ? (

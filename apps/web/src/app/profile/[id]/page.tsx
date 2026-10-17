@@ -82,7 +82,7 @@ export default async function ProfilePage({
         </div>
 
         {isOwner && !settings.public && (
-          <div className="border border-primary bg-primary/10 px-4 py-3 text-xs text-primary">
+          <div className="border border-primary bg-primary/10 px-4 py-3 text-xs text-primary-text">
             Only you can see this profile. Make it public from your{' '}
             <Link href="/account" className="underline">account page</Link> to share it.
           </div>
@@ -104,8 +104,8 @@ export default async function ProfilePage({
               {paddling.fastest && <Stat label="Fastest cruise" value={`${split500(paddling.fastest.cruiseSpeed)}/500`} />}
             </div>
             <ul className="text-sm flex flex-col gap-1">
-              {paddling.longest && <li>Longest: <Link href={`/paddles/${paddling.longest.id}`} className="text-primary tabular">{paddling.longest.km.toFixed(1)} km on {fmtDay(paddling.longest.paddledAt)}</Link></li>}
-              {paddling.fastest && <li>Fastest cruise: <Link href={`/paddles/${paddling.fastest.id}`} className="text-primary tabular">{split500(paddling.fastest.cruiseSpeed)}/500 on {fmtDay(paddling.fastest.paddledAt)}</Link></li>}
+              {paddling.longest && <li>Longest: <Link href={`/paddles/${paddling.longest.id}`} className="text-primary-text tabular">{paddling.longest.km.toFixed(1)} km on {fmtDay(paddling.longest.paddledAt)}</Link></li>}
+              {paddling.fastest && <li>Fastest cruise: <Link href={`/paddles/${paddling.fastest.id}`} className="text-primary-text tabular">{split500(paddling.fastest.cruiseSpeed)}/500 on {fmtDay(paddling.fastest.paddledAt)}</Link></li>}
             </ul>
           </section>
         )}
@@ -142,7 +142,7 @@ export default async function ProfilePage({
                 {stats.personalBests.map(pb => (
                   <div key={pb.courseId} className="flex items-center justify-between px-4 py-2 border-b border-surface-2 last:border-b-0">
                     <span className="text-sm text-fg min-w-0 truncate">{pb.courseName}</span>
-                    <span className="text-sm text-primary tabular shrink-0 ml-3">
+                    <span className="text-sm text-primary-text tabular shrink-0 ml-3">
                       {formatTime(pb.bestSeconds)}
                       <span className="text-muted ml-2">×{pb.raceCount}</span>
                     </span>
@@ -179,7 +179,7 @@ export default async function ProfilePage({
                       <span className="block text-sm text-fg truncate">{r.courseName}</span>
                       <span className="block text-xs text-muted tabular">{r.trialName} · {r.raceDate} · {r.boatClass}</span>
                     </span>
-                    <span className="text-sm text-primary tabular shrink-0 ml-3">{formatTime(r.totalElapsedSeconds)}</span>
+                    <span className="text-sm text-primary-text tabular shrink-0 ml-3">{formatTime(r.totalElapsedSeconds)}</span>
                   </Link>
                 ))}
               </div>

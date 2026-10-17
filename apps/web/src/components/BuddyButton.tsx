@@ -20,7 +20,7 @@ export default function BuddyButton({ userId }: { userId: string }) {
   )
   return (
     <span className="flex flex-col items-start gap-1">
-      <button type="button" className={`${btn} border-primary text-primary`} disabled={request.isPending} onClick={() => request.mutate({ userId })}>
+      <button type="button" className={`${btn} border-primary text-primary-text`} disabled={request.isPending} onClick={() => request.mutate({ userId })}>
         {request.isPending ? 'ASKING…' : 'ADD AS BUDDY'}
       </button>
       {request.error && <span className="text-xs text-red">{request.error.data?.code === 'TOO_MANY_REQUESTS' ? request.error.message : "Couldn't send the request. Please try again."}</span>}

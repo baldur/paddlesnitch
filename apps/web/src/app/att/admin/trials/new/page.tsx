@@ -165,7 +165,7 @@ function NewTrialForm() {
                   onClick={() => { if (!disabled) setVisibility(v) }}
                   className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                     active
-                      ? 'border-primary text-primary bg-primary/10'
+                      ? 'border-primary text-primary-text bg-primary/10'
                       : 'border-border text-muted hover:border-muted'
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
@@ -200,7 +200,7 @@ function NewTrialForm() {
                 onClick={() => setParticipation(v)}
                 className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                   participation === v
-                    ? 'border-primary text-primary bg-primary/10'
+                    ? 'border-primary text-primary-text bg-primary/10'
                     : 'border-border text-muted hover:border-muted'
                 }`}
               >

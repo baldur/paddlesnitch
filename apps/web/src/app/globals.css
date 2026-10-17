@@ -12,25 +12,28 @@ html, body {
   padding: 0;
   background: var(--color-bg);
   color: var(--color-fg);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   min-height: 100%;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* Numbers (times, paces, splits, distances) are set in Plex Mono so columns
+   line up and the data keeps its instrument feel; the rest of the page is sans. */
 .tabular {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.03em;
 }
 
 /* Inline body links — persistent subtle underline. */
 .tt-link {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--color-primary-text) 40%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: text-decoration-color 0.15s ease;
 }
-.tt-link:hover { text-decoration-color: var(--color-primary); }
+.tt-link:hover { text-decoration-color: var(--color-primary-text); }
 
 /* Nav / CTA links — muted resting, primary on hover. */
 .tt-nav-link {
@@ -39,7 +42,7 @@ html, body {
   transition: color 0.15s ease;
 }
 .tt-nav-link:hover {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;

@@ -150,7 +150,7 @@ export default function AddPaddlePage() {
         ) : tab === 'strava' ? (
           <div className="max-h-[300px] overflow-auto">
             {acts === undefined && <p className="text-xs text-muted">Loading your Strava activities…</p>}
-            {stravaMsg === 'not_connected' && <p className="text-xs text-muted">Strava isn&apos;t connected. <a href="/account" className="text-primary">Connect it in your account</a>, then come back.</p>}
+            {stravaMsg === 'not_connected' && <p className="text-xs text-muted">Strava isn&apos;t connected. <a href="/account" className="text-primary-text">Connect it in your account</a>, then come back.</p>}
             {acts && acts.length > 0 && acts.map(a => (
               <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a)}
                 className="block w-full text-left px-3 py-2 border border-border mb-1 hover:border-primary disabled:opacity-40">
@@ -176,14 +176,14 @@ export default function AddPaddlePage() {
                 <span className="text-[11px] text-muted">{e.trialName} · {fmtDate(e.paddledAt)}{e.distanceMetres ? ` · ${fmtDist(e.distanceMetres)}` : ''}</span>
               </button>
             ))}
-            {trials && trials.length === 0 && <p className="text-xs text-muted">No time-trial submissions yet. <a href="/att" className="text-primary">Race a trial</a>, then analyse it here.</p>}
+            {trials && trials.length === 0 && <p className="text-xs text-muted">No time-trial submissions yet. <a href="/att" className="text-primary-text">Race a trial</a>, then analyse it here.</p>}
           </div>
         ) : (
           // A tracker's recordings become paddles by themselves (one-paddle.md,
           // phase 2), so there's nothing to pick here any more.
           <div className="text-sm text-muted leading-relaxed flex flex-col gap-2">
-            <p>Nothing to add: your tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary">Paddles</Link> by themselves once it uploads them.</p>
-            <p className="text-xs">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <Link href="/devices" className="text-primary">Devices</Link>.</p>
+            <p>Nothing to add: your tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary-text">Paddles</Link> by themselves once it uploads them.</p>
+            <p className="text-xs">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <Link href="/devices" className="text-primary-text">Devices</Link>.</p>
           </div>
         )}
 

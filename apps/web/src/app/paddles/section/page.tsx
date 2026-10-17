@@ -35,7 +35,7 @@ function Inner() {
   if (!valid || !q.data) return (
     <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-muted">{q.error?.message === 'section_too_short' ? 'That section is too short.' : sectionId ? 'We can’t find this section.' : 'Couldn’t load this section.'}</p>
-      <Link href={sectionId ? '/paddles/sections' : '/paddles'} className="text-xs tracking-widest text-primary">{sectionId ? '← SECTIONS' : '← PADDLES'}</Link>
+      <Link href={sectionId ? '/paddles/sections' : '/paddles'} className="text-xs tracking-widest text-primary-text">{sectionId ? '← SECTIONS' : '← PADDLES'}</Link>
     </div>
   )
 
@@ -78,7 +78,7 @@ function Inner() {
                 <input type="checkbox" checked={picked.includes(k)} onChange={() => toggle(k)} aria-label={`Compare ${p.name} ${fmtDay(p.paddledAt)} pass ${p.n}`} />
                 <span className="text-muted text-xs">{i + 1}</span>
                 <span className={p.mine ? '' : 'text-split'}>{p.name} · {fmtDay(p.paddledAt)}{p.n > 1 ? ` · pass ${p.n}` : ''}</span>
-                <span className="text-primary">{fmtDur(p.elapsedS)}</span>
+                <span className="text-primary-text">{fmtDur(p.elapsedS)}</span>
                 <span className="text-muted text-xs w-14 text-right">{fmtDur(p.paceS500)}</span>
                 <span className="text-muted text-xs w-12 text-right">{p.avgSR != null ? `${Math.round(p.avgSR)} spm` : '—'}</span>
               </label>
@@ -124,7 +124,7 @@ function ManageSaved({ id, name }: { id: string; name: string }) {
   )
   return (
     <div className="mt-3 flex gap-4 text-[10px] tracking-widest">
-      <button type="button" onClick={() => setEditing(name)} className="text-primary">RENAME</button>
+      <button type="button" onClick={() => setEditing(name)} className="text-primary-text">RENAME</button>
       <button type="button" disabled={remove.isPending} onClick={() => remove.mutate({ sectionId: id })} className="text-red">{remove.isPending ? 'REMOVING…' : 'REMOVE'}</button>
     </div>
   )

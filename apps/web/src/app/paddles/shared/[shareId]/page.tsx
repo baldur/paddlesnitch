@@ -15,7 +15,7 @@ export default function SharedPaddlePage({ params }: { params: Promise<{ shareId
   if (q.isError || !q.data) return (
     <main className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
       <p className="text-sm text-muted">We can&apos;t find this shared paddle. Its owner may have stopped sharing it.</p>
-      <Link href="/paddles/new" className="text-xs tracking-widest text-primary">ANALYSE YOUR OWN →</Link>
+      <Link href="/paddles/new" className="text-xs tracking-widest text-primary-text">ANALYSE YOUR OWN →</Link>
     </main>
   )
 

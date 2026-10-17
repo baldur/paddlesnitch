@@ -14,15 +14,27 @@
    mode. See docs/features/single-app-shell.md. */
 
 @theme inline {
-  --font-mono: "IBM Plex Mono", "Courier New", monospace;
+  /* Type (design sprint 2026-10, docs/features/design-system.md): IBM Plex
+     Sans for reading and controls; Plex Mono only for numbers (times, paces,
+     splits — via .tabular) and small uppercase labels (Eyebrow). The
+     variables come from next/font in the app's root layout. */
+  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", "Courier New", monospace;
+
+  /* One small radius for controls, cards and sheets. Data (tables, charts,
+     maps) stays square. */
+  --radius-control: 6px;
+  --radius-sheet: 12px;
 
   --color-bg: #0b1220;        /* light: #ffffff */
   --color-surface: #0f172a;   /* light: #f8fafc */
   --color-surface-2: #1e293b; /* light: #f1f5f9 */
   --color-border: #1e293b;    /* light: #e2e8f0 */
+  --color-border-strong: #334155; /* outlines of controls (buttons, inputs) — border is too faint on surface */
   --color-fg: #e2e8f0;        /* light: #0f172a */
   --color-muted: #94a3b8;     /* light: #64748b */
   --color-primary: #0369a1;   /* buttons/CTAs — white text sits on it in both themes */
+  --color-primary-text: #38bdf8; /* blue TEXT on the dark ground (times, links): #0369a1 is only ~3:1 there, this is ~9:1 */
   --color-split: #a78bfa;     /* light: #6d28d9 */
   --color-red: #f87171;       /* light: #b91c1c */
   --color-green: #22c55e;     /* light: #15803d */

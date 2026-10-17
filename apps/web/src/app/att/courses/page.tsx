@@ -103,7 +103,7 @@ export default async function CoursesCataloguePage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-fg font-bold group-hover:text-primary transition-colors">
+                    <div className="text-fg font-bold group-hover:text-primary-text transition-colors">
                       {course.name}
                     </div>
                     <div className="text-xs text-muted mt-0.5 tabular">

@@ -992,7 +992,7 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 
 ### Design System
 
-**Aesthetic: minimal, data-centric, DARK — dense tables, IBM Plex Mono, single blue accent.** The whole platform is dark ([`single-app-shell.md`](docs/features/single-app-shell.md)); the canonical tokens live in **`@paddlesnitch/ui/tokens.css`** (Tailwind v4 `@theme`), imported by each app's `globals.css`. **Use the semantic token classes** (`bg-bg`, `bg-surface`, `text-fg`, `text-muted`, `border-border`, `text-primary`, …) — do **not** hardcode hex (`bg-[#0b1220]`); the whole point of the migration was to make colour swap in one place.
+**Aesthetic: conventional chrome, data with character, DARK — IBM Plex Sans for reading, Plex Mono for numbers, single blue accent.** Rules, feature tiers and the shared components (`Button`, `Form`, `Layout`, `Card` in `@paddlesnitch/ui`) are in [`design-system.md`](docs/features/design-system.md) — read it before building a screen. The whole platform is dark ([`single-app-shell.md`](docs/features/single-app-shell.md)); the canonical tokens live in **`@paddlesnitch/ui/tokens.css`** (Tailwind v4 `@theme`), imported by each app's `globals.css`. **Use the semantic token classes** (`bg-bg`, `bg-surface`, `text-fg`, `text-muted`, `border-border`, `text-primary-text`, …) — do **not** hardcode hex (`bg-[#0b1220]`); the whole point of the migration was to make colour swap in one place.
 
 | Token | Value (dark) | Class | Usage |
 |---|---|---|---|
@@ -1000,24 +1000,28 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 | Surface | `#0f172a` | `bg-surface` | cards, form fields |
 | Surface-2 | `#1e293b` | `bg-surface-2` | hover states |
 | Border | `#1e293b` | `border-border` | dividers |
-| Primary | `#0369a1` | `text-primary`/`bg-primary` | times, CTAs, active links (white text on it) |
+| Border-strong | `#334155` | `border-border-strong` | outlines of buttons and inputs |
+| Primary | `#0369a1` | `bg-primary` | filled buttons (white text on it) |
+| Primary text | `#38bdf8` | `text-primary-text` | blue TEXT: times, links, active tab (`#0369a1` is ~3:1 on the ground; this is ~9:1) |
 | Split | `#a78bfa` | `text-split` | split times, cadence data |
 | Green | `#22c55e` | `text-green` | start line, open status |
 | Red | `#f87171` | `text-red` | finish line, close/delete |
 | Text | `#e2e8f0` | `text-fg` | body |
 | Muted | `#94a3b8` | `text-muted` | labels, secondary text |
-| Font | IBM Plex Mono | `--font-mono` | everything — loaded via `next/font/google` |
+| Font | IBM Plex Sans | `--font-sans` | body, headings, controls — `next/font/google` variable `--font-plex-sans` |
+| Mono | IBM Plex Mono | `--font-mono` | numbers (`.tabular`) and `Eyebrow` labels — variable `--font-plex-mono` |
+| Radius | 6 px / 12 px | `rounded-control` / `rounded-sheet` | controls + cards / sheets; data stays square |
 
-CSS utilities in `globals.css`: `.tabular` (tabular-nums), `.tt-link`/`.tt-nav-link` (token-based).
-Maps: dark tiles (Esri World Dark Gray); Trials course maps default to dark with a LIGHT MAP toggle (2026-10); the organiser's course-drawing map stays light. No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets ≥ 44px. The historical light palette values (`#ffffff`/`#0f172a`/…) are retained in comments in `tokens.css` as a possible future light mode.
+CSS utilities in `globals.css`: `.tabular` (Plex Mono + tabular-nums), `.tt-link`/`.tt-nav-link` (token-based).
+Maps: dark tiles (Esri World Dark Gray); Trials course maps default to dark with a LIGHT MAP toggle (2026-10); the organiser's course-drawing map stays light. No rounded corners on data elements (tables, charts, maps). Mobile-first; tap targets ≥ 44px; phones get a bottom tab bar (Paddles, Trials, Plan, You) and the root layout pads the body for it. The historical light palette values (`#ffffff`/`#0f172a`/…) are retained in comments in `tokens.css` as a possible future light mode.
 
 ### Writing for the site
 
 Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed; add to its list when you retire a word.
 
 1. **One name per thing:** Trials (URL `/att`), Paddles, Plan (`/plan`), Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
-2. **Buttons:** 1–3 uppercase words that say what happens (SAVE, ADD, REMOVE TRACKER). Loading = same verb + "…". No emoji.
-3. **Labels and headings:** uppercase (in source, or via `uppercase`); helper text on its own muted line below, sentence case.
+2. **Buttons:** 1–3 sentence-case words that say what happens (Save, Add paddle, Remove tracker). Loading = same verb + "…". No emoji.
+3. **Headings, tabs, menus, links:** sentence case. **Uppercase only** for short mono labels over data (`<Eyebrow>`: DISTANCE, PACE /500, column heads). Helper text on its own muted line below, sentence case. See [`design-system.md`](docs/features/design-system.md).
 4. **Errors:** "Couldn't …" + what to do ("Please try again." only when retrying helps). Never codes, vendor names (Cognito, JWT, S3), "token", "state", "endpoint", raw enums.
 5. **One idea per sentence, ~20 words max;** helper text two sentences at most. No marketing filler (suite, seamless, unlock, journey, "actually happened"), no lists of three for rhythm, few em-dashes.
 6. **Don't blame the reader** ("We can't find this paddle", not "it isn't yours"), and **don't claim causes the data can't show** ("slowed", not "faded (fatigue)").
