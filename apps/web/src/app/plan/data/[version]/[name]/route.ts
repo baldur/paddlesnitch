@@ -1,11 +1,12 @@
 // What the planner's map draws, from the live national dataset
 // (docs/features/waterways-uk-ireland.md): `overview` (the whole network,
 // coarsely), `area-{y}_{x}` (one 0.5° area in detail), `places` (the places
-// search index), and coverage by waterway: `coverage` (the scores, for
+// search index), `openportage` (paddlers' portage details, CC0), and coverage by waterway: `coverage` (the scores, for
 // /plan/gaps) and `coverage-lines` (the scored water by level, for the map). The version is in the URL, so a response for the live version
 // never changes and can be cached for good.
 import { areaLines, overviewLines } from '@paddlesnitch/waterways/display'
 import { loadCoverage, loadNational } from '@paddlesnitch/waterways/national'
+import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { coverageLines } from '@paddlesnitch/waterways/waterway-coverage'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,13 @@ let covLines: { version: string; lines: unknown } | null = null
 
 export async function GET(_req: Request, { params }: { params: Promise<{ version: string; name: string }> }) {
   const { version, name } = await params
+  // OpenPortage: every visible contribution, CC0, for anyone to reuse. Not
+  // tied to a dataset version, and it changes as people add to it.
+  if (name === 'openportage') {
+    const all = (await listPublicPortages()).filter(p => !p.hidden)
+    return Response.json({ licence: 'CC0-1.0', about: 'https://paddlesnitch.com/plan/gaps', count: all.length, portages: all },
+      { headers: { 'Cache-Control': 'public, max-age=300' } })
+  }
   const ds = await loadNational()
   const area = /^area-(-?\d+_-?\d+)$/.exec(name)?.[1]
   let body: unknown

@@ -93,6 +93,11 @@ export const osmAlong = (line: LatLng[], osm: OsmElement[], nearM = 250) =>
 
 function bankOf(line: LatLng[], cum: number[], alongM: number, p: LatLng, dist: number): 'left' | 'right' | undefined {
   if (dist < 8) return undefined   // on the water line itself (a lock, a weir)
+  return sideOf(line, cum, alongM, p)
+}
+
+/** Which side of the line `p` is on, looking along it at `alongM`. */
+export function sideOf(line: LatLng[], cum: number[], alongM: number, p: LatLng): 'left' | 'right' {
   let i = 1
   while (i < cum.length - 1 && cum[i] < alongM) i++
   const a = line[i - 1], b = line[i]

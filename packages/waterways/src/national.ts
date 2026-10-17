@@ -7,6 +7,8 @@ import { gunzipSync } from 'zlib'
 import { getObject, usesLocalStorage } from '@paddlesnitch/core/storage'
 import manifestJson from '../data/manifest.json'
 import type { Place } from './places'
+import { portagesAt, type PublicPortage } from './portage'
+import { listPublicPortages } from './portage-store'
 import { waterwayCoverage, type WaterwayCoverage } from './waterway-coverage'
 import type { Feature, NetLink, RegionDataset } from './types'
 
@@ -29,15 +31,18 @@ export type NationalDataset = {
   places: Place[]
 }
 
-const coverage = new WeakMap<NationalDataset, WaterwayCoverage[]>()
+let coverage: { ds: NationalDataset; portages: PublicPortage[]; rows: WaterwayCoverage[] } | null = null
 
-/** Coverage by waterway for the live dataset: worked out on first ask (about
- *  half a second nationally) and kept, so nothing extra is published. */
+/** Coverage by waterway for the live dataset and paddlers' contributions:
+ *  worked out on first ask (about half a second nationally) and kept until
+ *  either changes, so nothing extra is published. */
 export async function loadCoverage(): Promise<{ version: string; rows: WaterwayCoverage[]; ds: NationalDataset }> {
-  const ds = await loadNational()
-  let rows = coverage.get(ds)
-  if (!rows) coverage.set(ds, (rows = waterwayCoverage(ds.links, ds.features)))
-  return { version: ds.version, rows, ds }
+  const [ds, portages] = await Promise.all([loadNational(), listPublicPortages()])
+  if (coverage?.ds !== ds || coverage.portages !== portages) {
+    const visible = portages.filter(p => !p.hidden)
+    coverage = { ds, portages, rows: waterwayCoverage(ds.links, ds.features, f => portagesAt(f, visible).length > 0) }
+  }
+  return { version: ds.version, rows: coverage.rows, ds }
 }
 
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`

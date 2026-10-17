@@ -5,6 +5,8 @@
 // A plan stores the clicks, not network ids: OSM way ids change when a region
 // is rebuilt, a click on the map doesn't.
 import { featuresAlong } from './along'
+import { cumulative } from './line'
+import { portageOnRoute, portagesAt, type PortageOnRoute, type PublicPortage } from './portage'
 import { reverseRoute, route, snap, type Snap } from './network'
 import type { Feature, FeatureKind, LatLng, RegionDataset } from './types'
 
@@ -42,6 +44,7 @@ export type Stop = {
   portagesBefore: number   // portages already done when you get here
   elapsedS: number         // from the start, moving time plus portages so far
   eta?: string             // ISO, when startAt is set
+  portages?: PortageOnRoute[]  // paddlers' portage details here (OpenPortage), as met this way
 }
 
 export type Spot = { at: LatLng; waterway: string }
@@ -77,7 +80,11 @@ export function computePlan(dataset: RegionDataset, input: PlanInput): ComputedP
   return typeof routed === 'string' ? routed : timePlan(routed, input)
 }
 
-export function routePlan(dataset: Pick<RegionDataset, 'links' | 'features'>, input: Pick<PlanInput, 'start' | 'finish' | 'shape'>): RoutedPlan | PlanError {
+export function routePlan(
+  dataset: Pick<RegionDataset, 'links' | 'features'>,
+  input: Pick<PlanInput, 'start' | 'finish' | 'shape'>,
+  contributions: PublicPortage[] = [],
+): RoutedPlan | PlanError {
   const s = snapClick(dataset, input.start)
   if (!s) return 'start_off_water'
   const f = snapClick(dataset, input.finish)
@@ -93,12 +100,17 @@ export function routePlan(dataset: Pick<RegionDataset, 'links' | 'features'>, in
   let prevM = 0
   for (const { leg, line, offsetM } of legs) {
     const along = featuresAlong(line, dataset.features)
+    const cum = contributions.length ? cumulative(line) : []
     const lockAt = along.filter(a => PORTAGE_KINDS.has(a.item.kind)).map(a => a.chainageM)
     for (const a of along) {
       // A lock's own weir and sluices are part of that portage, not stops of their own.
       if (a.item.kind === 'weir' && lockAt.some(m => Math.abs(m - a.chainageM) <= WEIR_AT_LOCK_M)) continue
       const chainageM = offsetM + a.chainageM
-      stops.push({ feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind) })
+      const theirs = (PORTAGE_KINDS.has(a.item.kind) || a.item.kind === 'weir') && contributions.length ? portagesAt(a.item, contributions) : []
+      stops.push({
+        feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind),
+        ...(theirs.length ? { portages: theirs.map(c => portageOnRoute(line, c, cum)) } : {}),
+      })
       prevM = chainageM
     }
   }

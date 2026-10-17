@@ -5,6 +5,7 @@ import { similarRouter } from './routers/similar'
 import { buddiesRouter } from './routers/buddies'
 import { sectionsRouter } from './routers/sections'
 import { planRouter } from './routers/plan'
+import { portageRouter } from './routers/portage'
 
 // The single app router. Web (SSR + browser) and mobile consume the same tree.
 // File uploads (multipart) stay REST; firmware device endpoints stay REST.
@@ -17,6 +18,7 @@ export const appRouter = router({
   buddies: buddiesRouter,
   sections: sectionsRouter,
   plan: planRouter,
+  portage: portageRouter,
 })
 
 export type AppRouter = typeof appRouter

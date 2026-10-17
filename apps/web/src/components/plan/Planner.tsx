@@ -15,7 +15,7 @@ import PlanMapClient from '@/components/map/PlanMapClient'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, COVERAGE_LEVELS, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, STOP_GROUPS, stopLines,
+  asInput, COVERAGE_LEVELS, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, STOP_GROUPS, stopLines,
   type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -50,6 +50,21 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
   const [focus, setFocus] = useState<MapFocus | null>(null)
   const [satellite, setSatellite] = useState(false)
   const [coverage, setCoverage] = useState(false)
+  // Adding portage details at a stop: the landings clicked so far (OpenPortage).
+  const [adding, setAdding] = useState<{ stop: Stop; landings: LatLng[] } | null>(null)
+  const [flagged, setFlagged] = useState<Set<string>>(new Set())
+  const me = trpc.me.useQuery(undefined, { retry: false })
+  const signedIn = !!me.data?.user
+  const mine = trpc.portage.mine.useQuery(undefined, { enabled: signedIn, retry: false })
+  const utils = trpc.useUtils()
+  const refreshPortages = () => { void utils.plan.route.invalidate(); void utils.portage.mine.invalidate() }
+  const flag = trpc.portage.flag.useMutation({ onSuccess: (_, v) => { setFlagged(f => new Set(f).add(v.id)); refreshPortages() } })
+  const withdraw = trpc.portage.delete.useMutation({ onSuccess: refreshPortages })
+  const startAdding = (stop: Stop) => {
+    setAdding({ stop, landings: [] })
+    setSatellite(true)
+    setFocus({ at: stop.feature.at, zoom: 18 })
+  }
   // The start time box shows the browser's zone, so it stays empty until hydrated.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
@@ -88,8 +103,11 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             view={view}
             satellite={satellite}
             coverage={coverage}
+            marks={adding?.landings}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
+              // While adding portage details, clicks place the two landings (a third moves the second).
+              if (adding) { setAdding(a => a && ({ ...a, landings: a.landings.length < 2 ? [...a.landings, p] : [a.landings[0], p] })); return }
               if (!shared) setDraft(d => placeClick(d, p, error === 'start_off_water' ? 'start' : error === 'finish_off_water' ? 'finish' : null))
             }}
           />
@@ -119,6 +137,8 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
       </div>
 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
+        {adding && <AddPortage stop={adding.stop} landings={adding.landings} onCancel={() => setAdding(null)}
+          onSaved={() => { setAdding(null); refreshPortages() }} />}
         <section>
           <h1 className="text-sm tracking-[0.2em] uppercase text-fg mb-1">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
           {shared ? (
@@ -193,7 +213,13 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
                 )
               })}
             </div>
-            <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })} />
+            <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })} actions={{
+              signedIn, mine: new Set(mine.data?.map(c => c.id)), flagged,
+              here: saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`,
+              onAdd: startAdding,
+              onFlag: id => flag.mutate({ id }),
+              onDelete: id => withdraw.mutate({ id }),
+            }} />
             <p className="mt-3 text-xs text-muted">
               Portage sides and landing points are missing for most locks. An unknown side is shown as unknown, never guessed.
             </p>
@@ -241,7 +267,20 @@ function dayOffset(from: string, to: string): number {
   return Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()) / 86_400_000)
 }
 
-function StopList({ plan, stops, startAt, onFocus }: { plan: ComputedPlan; stops: Stop[]; startAt?: string; onFocus: (p: LatLng) => void }) {
+/** Stops where portage details can be added: locks, portages and weirs. */
+const canAddPortage = (s: Stop) => s.portage || s.feature.kind === 'weir'
+
+type PortageActions = {
+  signedIn: boolean
+  mine: Set<string>
+  here: string                       // this page, for the sign-in round trip
+  onAdd?: (s: Stop) => void          // unset when adding isn't possible here (a shared plan)
+  onFlag: (id: string) => void
+  onDelete: (id: string) => void
+  flagged: Set<string>
+}
+
+function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPlan; stops: Stop[]; startAt?: string; onFocus: (p: LatLng) => void; actions: PortageActions }) {
   const when = (s: Stop) => {
     if (!s.eta || !startAt) return fmtDuration(s.elapsedS)
     const d = dayOffset(startAt, s.eta)
@@ -270,11 +309,74 @@ function StopList({ plan, stops, startAt, onFocus }: { plan: ComputedPlan; stops
                 {stopLines(s).map((l, j) => <span key={j} className="block text-xs text-muted">{l}</span>)}
               </span>
             </button>
+            {canAddPortage(s) && (
+              <div className="pl-[5.25rem] pb-2 -mt-1 border-b border-border space-y-1 text-xs" data-testid="portage-block">
+                {s.portages?.map(p => (
+                  <div key={p.id}>
+                    {portageLines(p).map((l, j) => <span key={j} className="block text-fg">{l}</span>)}
+                    <span className="text-muted">Added by {p.by} · CC0 · </span>
+                    {actions.mine.has(p.id)
+                      ? <button type="button" className="underline text-muted hover:text-red" onClick={() => actions.onDelete(p.id)}>delete</button>
+                      : actions.signedIn && (actions.flagged.has(p.id)
+                        ? <span className="text-muted">flagged, thanks</span>
+                        : <button type="button" className="underline text-muted hover:text-fg" onClick={() => actions.onFlag(p.id)}>flag as wrong</button>)}
+                  </div>
+                ))}
+                {actions.onAdd && (actions.signedIn
+                  ? <button type="button" className="text-primary hover:underline tracking-widest" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ ADD YOURS' : '+ ADD PORTAGE DETAILS'}</button>
+                  : <a className="text-muted underline hover:text-fg" href={`/signin?next=${encodeURIComponent(actions.here)}`}>Sign in to add portage details</a>)}
+              </div>
+            )}
           </li>
         )
       })}
       {stops.length === 0 && <li className="py-2 text-sm text-muted">No stops of these kinds on this stretch.</li>}
     </ol>
+  )
+}
+
+/** Adding portage details at a lock or weir: two clicks for the landings on
+ *  the (satellite) map, notes, rollers, and an explicit CC0 release. */
+function AddPortage({ stop, landings, onCancel, onSaved }: { stop: Stop; landings: LatLng[]; onCancel: () => void; onSaved: () => void }) {
+  const [notes, setNotes] = useState('')
+  const [rollers, setRollers] = useState(false)
+  const [cc0, setCc0] = useState(false)
+  const add = trpc.portage.add.useMutation({ onSuccess: onSaved })
+  const ready = landings.length === 2 && cc0
+  const name = stop.feature.name ?? KIND[stop.feature.kind]
+  return (
+    <section className="border border-primary p-3 space-y-3" data-testid="add-portage">
+      <h2 className="text-xs text-fg tracking-[0.2em] uppercase">Portage details: {name}</h2>
+      <p className="text-sm text-muted">
+        {landings.length === 0 ? 'Click the map where you get out of the water.'
+          : landings.length === 1 ? 'Now click where you get back in.'
+          : 'Got both landings. Click again to move the second.'}
+        {' '}Either order: the planner works out which is which for each direction.
+      </p>
+      <label className="block">
+        <span className="block text-xs text-muted tracking-widest mb-1">NOTES (OPTIONAL)</span>
+        <textarea className={`${INPUT} h-20`} maxLength={500} value={notes} onChange={e => setNotes(e.target.value)}
+          placeholder="Steps, a high landing, where the trolley path goes…" aria-label="Portage notes" />
+      </label>
+      <label className="flex gap-2 items-center text-sm">
+        <input type="checkbox" checked={rollers} onChange={e => setRollers(e.target.checked)} /> There are boat rollers
+      </label>
+      <label className="flex gap-2 items-start text-xs text-muted">
+        <input type="checkbox" className="mt-0.5" checked={cc0} onChange={e => setCc0(e.target.checked)} aria-label="Release under CC0" />
+        <span>I release this under <a className="underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer">CC0</a> (anyone may reuse it, including other open-data projects) and it&apos;s my own observation, not copied from a guidebook or map. It&apos;s public at once, with my display name.</span>
+      </label>
+      <div className="flex gap-2">
+        <button type="button" className={BTN} disabled={!ready || add.isPending}
+          onClick={() => add.mutate({ featureId: stop.feature.id, at: stop.feature.at, landings: [landings[0], landings[1]], notes: notes || undefined, rollers: rollers || undefined, cc0: true })}>
+          {add.isPending ? 'SAVING…' : 'PUBLISH'}
+        </button>
+        <button type="button" className={BTN} onClick={onCancel}>CANCEL</button>
+      </div>
+      {add.error && <p className="text-sm text-red">{
+        add.error.message === 'landings_apart' ? 'Those two landings are too far apart (or the same spot). Click again.'
+          : add.error.message === 'landings_far' ? `Both landings must be near ${name}.`
+          : 'Couldn’t save. Please try again.'}</p>}
+    </section>
   )
 }
 
