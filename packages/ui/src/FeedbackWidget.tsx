@@ -15,6 +15,17 @@ import { useEffect, useState } from 'react'
 
 const OPEN_EVENT = 'paddlesnitch:open-feedback'
 
+// A plain button anywhere on the page (the footer, an error page) that opens
+// the widget. On phones it's the way in: the floating button is hidden there
+// because it covered form fields and content.
+export function ReportIssueButton({ className, children = 'Report an issue' }: { className?: string; children?: React.ReactNode }) {
+  return (
+    <button type="button" className={className} onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EVENT))}>
+      {children}
+    </button>
+  )
+}
+
 export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { endpoint?: string }) {
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
@@ -66,11 +77,13 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
     }
   }
 
-  // z-indexes clear Leaflet's panes (z-200..z-800) + controls.
+  // z-indexes clear Leaflet's panes (z-200..z-800) + controls. Desktop only:
+  // on a phone it sat on top of fields and buttons, so phones use the footer's
+  // ReportIssueButton (and signed-in users the account menu) instead.
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} aria-label="Report an issue"
-        className="fixed bottom-4 right-4 z-[1100] border border-border bg-surface shadow-md px-3 py-2 text-xs text-muted tracking-widest hover:border-primary hover:text-fg transition-colors">
+        className="hidden sm:block fixed bottom-4 right-4 z-[1100] border border-border bg-surface shadow-md px-3 py-2 text-xs text-muted tracking-widest hover:border-primary hover:text-fg transition-colors">
         REPORT AN ISSUE
       </button>
     )

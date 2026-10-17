@@ -113,10 +113,10 @@ export default function LeaderboardTable({
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-border text-muted text-xs tracking-wider">
-              <th className="text-left py-2 pr-4 font-normal w-8">#</th>
-              <th className="text-left py-2 pr-4 font-normal">ATHLETE</th>
-              <th className="text-left py-2 pr-4 font-normal">CLASS</th>
-              <th className="text-right py-2 pr-4 font-normal">TIME</th>
+              <th className="text-left py-2 pr-2 sm:pr-4 font-normal w-8">#</th>
+              <th className="text-left py-2 pr-2 sm:pr-4 font-normal">ATHLETE</th>
+              <th className="text-left py-2 pr-2 sm:pr-4 font-normal">CLASS</th>
+              <th className="text-right py-2 pr-2 sm:pr-4 font-normal">TIME</th>
               <th className="text-right py-2 font-normal hidden sm:table-cell">DATE</th>
               <th className="w-5" />
             </tr>
@@ -141,8 +141,8 @@ export default function LeaderboardTable({
                     onClick={() => hasDetail && setExpanded(isOpen ? null : entry.entryId)}
                     className={`border-b border-surface-2 transition-colors ${hasDetail ? 'cursor-pointer hover:bg-surface' : ''}`}
                   >
-                    <td className="py-3 pr-4 text-muted tabular">{i + 1}</td>
-                    <td className="py-3 pr-4 text-fg font-medium">
+                    <td className="py-3 pr-2 sm:pr-4 text-muted tabular">{i + 1}</td>
+                    <td className="py-3 pr-2 sm:pr-4 text-fg font-medium">
                       {profileLinks?.[entry.userId] ? (
                         <Link
                           href={`/profile/${profileLinks[entry.userId]}`}
@@ -155,16 +155,16 @@ export default function LeaderboardTable({
                         entry.displayName
                       )}
                       {marks?.[entry.entryId] && (
-                        <span className={`ml-2 text-[10px] tracking-widest px-1.5 py-0.5 border ${marks[entry.entryId] === 'COURSE RECORD' ? 'border-split text-split' : 'border-green text-green'}`}>
+                        <span className={`inline-block whitespace-nowrap ml-2 text-[10px] tracking-widest px-1.5 py-0.5 border ${marks[entry.entryId] === 'COURSE RECORD' ? 'border-split text-split' : 'border-green text-green'}`}>
                           {marks[entry.entryId]}
                         </span>
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-muted tabular text-xs">{entry.boatClass}</td>
-                    <td className="py-3 pr-4 text-right tabular font-bold text-primary text-base">
+                    <td className="py-3 pr-2 sm:pr-4 text-muted tabular text-xs">{entry.boatClass}</td>
+                    <td className="py-3 pr-2 sm:pr-4 text-right tabular font-bold text-primary text-base">
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
-                    <td className="py-3 pr-4 text-right text-muted text-xs hidden sm:table-cell">
+                    <td className="py-3 pr-2 sm:pr-4 text-right text-muted text-xs hidden sm:table-cell">
                       {fmtDay(entry.raceDate ?? entry.submittedAt)}
                     </td>
                     <td className="py-3 text-muted text-xs text-right">

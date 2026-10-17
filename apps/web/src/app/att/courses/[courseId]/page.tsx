@@ -91,7 +91,7 @@ export default async function CourseDetailPage({
                   <tr key={r.boatClass} className="border-t border-border">
                     <td className="py-2 pr-3 text-muted w-12">{r.boatClass}</td>
                     <td className="py-2 pr-3"><Link href={`/att/entries/${r.entryId}`} className="text-primary font-bold">{formatTime(r.seconds)}</Link></td>
-                    <td className="py-2 pr-3 text-fg truncate">{r.displayName}</td>
+                    <td className="py-2 pr-3 text-fg break-words">{r.displayName}</td>
                     <td className="py-2 text-muted text-right whitespace-nowrap">{fmtDay(r.raceDate)}</td>
                   </tr>
                 ))}

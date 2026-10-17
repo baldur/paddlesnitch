@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ReportIssueButton } from '@paddlesnitch/ui/FeedbackWidget'
 
 // Site footer. Always visible on /att/* pages. Provides discoverability for
 // the privacy policy and surfaces the controller identity at a glance.
@@ -8,11 +9,12 @@ export default function Footer() {
       <div>
         © {new Date().getFullYear()} paddlesnitch.com
       </div>
-      <nav className="flex gap-4">
+      <nav className="flex flex-wrap gap-x-4 gap-y-2">
         <Link href="/help" className="tt-nav-link">HELP</Link>
         <Link href="/guide" className="tt-nav-link">TRACKER GUIDE</Link>
         <Link href="/privacy" className="tt-nav-link">PRIVACY</Link>
         <Link href="/account" className="tt-nav-link">ACCOUNT</Link>
+        <ReportIssueButton className="tt-nav-link">REPORT AN ISSUE</ReportIssueButton>
       </nav>
     </footer>
   )
