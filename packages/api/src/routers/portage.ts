@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { isPlatformAdmin } from '@paddlesnitch/core/admin'
+import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { MAX_CARRY_M, MAX_NOTES } from '@paddlesnitch/waterways/portage'
 import { addPortage, deletePortage, flagPortage, hidePortage, listMyPortages } from '@paddlesnitch/waterways/portage-store'
 import { router, protectedProcedure } from '../trpc'
@@ -28,7 +29,9 @@ export const portageRouter = router({
     if (haversine(a, b) > MAX_CARRY_M || haversine(a, b) < 2) throw new TRPCError({ code: 'BAD_REQUEST', message: 'landings_apart' })
     if (haversine(a, input.at) > LANDING_NEAR_M || haversine(b, input.at) > LANDING_NEAR_M) throw new TRPCError({ code: 'BAD_REQUEST', message: 'landings_far' })
     const { cc0: _, notes, ...fields } = input
-    return addPortage({ id: ctx.user.id, name: ctx.user.displayName || 'A paddler' }, { ...fields, notes: notes?.trim() || undefined })
+    // The account's name, as plan sharing shows it: the sign-in token's copy can lag behind.
+    const name = (await findUserBySub(ctx.user.id))?.displayName || ctx.user.displayName || 'A paddler'
+    return addPortage({ id: ctx.user.id, name }, { ...fields, notes: notes?.trim() || undefined })
   }),
 
   mine: protectedProcedure.query(({ ctx }) => listMyPortages(ctx.user.id)),

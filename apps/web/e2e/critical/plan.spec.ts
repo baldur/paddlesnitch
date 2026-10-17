@@ -107,7 +107,8 @@ test('OpenPortage: a paddler adds portage details at a lock and sees them on the
   await page.goto('/plan?from=51.5395,-0.9010&to=51.5470,-0.8740')
   await expect(page.getByTestId('plan-summary')).toContainText('km', { timeout: 15_000 })
   const lock = page.getByTestId('stop-list').locator('li', { hasText: 'Hambleden Lock' })
-  await lock.getByRole('button', { name: /ADD PORTAGE DETAILS/ }).click()
+  // "+ ADD YOURS" when someone (a retry of this test) already added theirs.
+  await lock.getByRole('button', { name: /ADD (PORTAGE DETAILS|YOURS)/ }).click()
 
   const panel = page.getByTestId('add-portage')
   await expect(panel).toContainText('Click the map where you get out')
