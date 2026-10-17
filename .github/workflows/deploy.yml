@@ -50,6 +50,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Run game tests
+        run: pnpm test:games
+
       # Single unified app (att now serves /att + /analyse); one OpenNext bundle.
       - name: Build OpenNext bundle
         run: pnpm build:open-next

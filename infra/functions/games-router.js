@@ -2,10 +2,14 @@
 // S3 has no directory index, so a folder URL gets its index.html; a folder
 // URL without the trailing slash is redirected to have one, because the games
 // load their siblings with relative URLs (../shared/audio.js). Tested in
-// apps/web/src/tests/games-router.test.ts.
+// apps/web/src/tests/games-router.test.ts. /games/ itself is the games index,
+// a Next page at /games.
 function handler(event) {
   var request = event.request
   var uri = request.uri
+  if (uri === '/games/') {
+    return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: '/games' } } }
+  }
   if (uri.endsWith('/')) {
     request.uri = uri + 'index.html'
     return request

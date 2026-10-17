@@ -717,10 +717,8 @@ export class AttStack extends cdk.Stack {
           responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-        // The browser games (github.com/baldur/games.snitchmedia.com). Their code
-        // stays in that repo; its kayak/upload.sh syncs the files to games/ in
-        // this bucket. Nothing here deploys them, so a paddlesnitch deploy never
-        // touches them and they need no paddlesnitch deploy to ship.
+        // The browser games: games/ at the repo root, uploaded to games/ in
+        // this bucket by the DeployGames deployment below.
         '/games/*': {
           origin: gamesOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -779,6 +777,22 @@ export class AttStack extends cdk.Stack {
     // flip the Lambda first, leaving a window where new HTML references chunks
     // that aren't uploaded yet → 404s across the site during every deploy.
     serverFn.node.addDependency(deployAssets)
+
+    // The games (games/ at the repo root): static files, no build, served at
+    // /games/* by the behavior above. Unlike the Next chunks these keep their
+    // names across deploys, so the deploy prunes what was removed and clears
+    // the CDN cache, and browsers re-check after 5 minutes. Depending on the
+    // distribution is fine here: nothing waits on this upload.
+    new s3deploy.BucketDeployment(this, 'DeployGames', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../../games'), {
+        exclude: ['tests', '*.md'],
+      })],
+      destinationBucket: assetsBucket,
+      destinationKeyPrefix: 'games',
+      cacheControl: [s3deploy.CacheControl.fromString('public, max-age=300')],
+      distribution,
+      distributionPaths: ['/games/*'],
+    })
 
     // ---------------------------------------------------------------------------
     // DNS — www alias pointing to same CloudFront distribution
