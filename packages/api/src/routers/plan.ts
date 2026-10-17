@@ -13,7 +13,8 @@ import { routePlan, snapClick } from '@paddlesnitch/waterways/plan'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { NATIONAL, REGIONS } from '@paddlesnitch/waterways/regions'
 import {
-  savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, MAX_TITLE,
+  savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, setPlanNotes,
+  MAX_PLAN_NOTES, MAX_STOP_NOTE, MAX_TITLE,
 } from '@paddlesnitch/waterways/plan-store'
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
@@ -62,6 +63,18 @@ export const planRouter = router({
     const { id: planId, ...rest } = input
     const saved = await savePlan(ctx.user.id, rest, planId)
     if (saved === 'too_many') throw new TRPCError({ code: 'BAD_REQUEST', message: 'too_many_plans' })
+    if (!saved) throw new TRPCError({ code: 'NOT_FOUND' })
+    return saved
+  }),
+
+  // The paddler's own notes on a saved plan: the whole plan's, or one stop's.
+  setNotes: protectedProcedure.input(z.object({
+    id,
+    notes: z.string().max(MAX_PLAN_NOTES).optional(),
+    stop: z.object({ featureId: z.string().min(1).max(200), text: z.string().max(MAX_STOP_NOTE) }).optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const saved = await setPlanNotes(ctx.user.id, input.id, { notes: input.notes, stop: input.stop })
+    if (saved === 'too_many') throw new TRPCError({ code: 'BAD_REQUEST', message: 'too_many_notes' })
     if (!saved) throw new TRPCError({ code: 'NOT_FOUND' })
     return saved
   }),

@@ -132,6 +132,36 @@ describe('sharing a plan', () => {
   })
 })
 
+describe('your own notes on a plan', () => {
+  it('saves a note on the plan and on stops; an empty one removes it', async () => {
+    const ann = await makeUser('Ann')
+    const saved = await as(ann).plan.save(DW)
+    await as(ann).plan.setNotes({ id: saved.id, notes: '  Kit: spare paddle  ' })
+    const withStop = await as(ann).plan.setNotes({ id: saved.id, stop: { featureId: 'ea-lock:marsh', text: 'Crew meets here with food' } })
+    expect(withStop).toMatchObject({ notes: 'Kit: spare paddle', stopNotes: { 'ea-lock:marsh': 'Crew meets here with food' } })
+    const cleared = await as(ann).plan.setNotes({ id: saved.id, stop: { featureId: 'ea-lock:marsh', text: ' ' } })
+    expect(cleared.stopNotes).toBeUndefined()
+    expect(cleared.notes).toBe('Kit: spare paddle')
+  })
+
+  it('survive saving the plan again', async () => {
+    const ann = await makeUser('Ann')
+    const saved = await as(ann).plan.save(DW)
+    await as(ann).plan.setNotes({ id: saved.id, notes: 'Kit list', stop: { featureId: 'x', text: 'Food' } })
+    const again = await as(ann).plan.save({ ...DW, id: saved.id, paceKmh: 9 })
+    expect(again).toMatchObject({ paceKmh: 9, notes: 'Kit list', stopNotes: { x: 'Food' } })
+  })
+
+  it("only the owner can write them, and a shared plan's link shows them", async () => {
+    const ann = await makeUser('Ann'), bob = await makeUser('Bob')
+    const saved = await as(ann).plan.save(DW)
+    await expect(as(bob).plan.setNotes({ id: saved.id, notes: 'mine now' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await as(ann).plan.setNotes({ id: saved.id, notes: 'Meet at Marsh Lock' })
+    const { shareId } = await as(ann).plan.share({ id: saved.id })
+    expect((await anon.plan.shared({ shareId: shareId! })).plan.notes).toBe('Meet at Marsh Lock')
+  })
+})
+
 describe("buddies' plans", () => {
   it("lists your buddies' shared plans, never their private ones, and nobody else's", async () => {
     const ann = await makeUser('Ann Paddler'), bob = await makeUser('Bob'), cat = await makeUser('Cat')

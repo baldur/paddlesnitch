@@ -62,6 +62,47 @@ export function portageLines(p: PortageOnRoute): string[] {
   return out
 }
 
+// --- Print -----------------------------------------------------------------------
+
+/** The stop kinds named in ?show= (unknown ones ignored), or the defaults. */
+export function shownGroups(param: string | undefined): Set<StopGroup> {
+  const known = new Set(STOP_GROUPS.map(g => g.id))
+  const asked = (param ?? '').split(',').filter((g): g is StopGroup => known.has(g as StopGroup))
+  return new Set(param !== undefined ? asked : STOP_GROUPS.filter(g => g.on).map(g => g.id))
+}
+
+/** On the crew sheet: places a crew can drive to and reach the bank. Towpath
+ *  access points are left off (hundreds on a canal); locks only when we know
+ *  how to get there. */
+export function isCrewStop(stop: Stop): boolean {
+  const f = stop.feature
+  if (f.kind === 'access' || f.kind === 'slipway') return true
+  if (f.kind === 'lock' || f.kind === 'portage') return !!(f.crew?.postcode || f.crew?.directions || f.crew?.parking || f.lock?.postcode)
+  return false
+}
+
+/** What a crew needs at a stop: postcode, parking, how to get there. */
+export function crewLines(stop: Stop): { postcode?: string; lines: string[] } {
+  const f = stop.feature
+  const lines: string[] = []
+  if (f.crew?.parking) lines.push(`Parking: ${f.crew.parking}`)
+  if (f.crew?.directions) lines.push(f.crew.directions)
+  return { postcode: f.crew?.postcode ?? f.lock?.postcode, lines }
+}
+
+/** The print page for what's on screen. The route and timing travel in the
+ *  address (as on /plan); a saved or shared plan adds its title and notes;
+ *  `show` carries the stop kinds switched on in the planner. */
+export function printHref(d: PlanDraft, opts: { id?: string; share?: string; crew?: boolean; show?: StopGroup[] } = {}): string {
+  const extra = new URLSearchParams()
+  if (opts.show) extra.set('show', opts.show.join(','))
+  if (opts.id) extra.set('id', opts.id)
+  if (opts.share) extra.set('share', opts.share)
+  if (opts.crew) extra.set('crew', '1')
+  const q = [draftParams(d), extra.toString().replace(/%2C/g, ',')].filter(Boolean).join('&')
+  return `/plan/print${q ? `?${q}` : ''}`
+}
+
 export const PLAN_ERROR_TEXT: Record<PlanError, string> = {
   start_off_water: "The start isn't on a river or canal we cover. Zoom in and click on the water to move it.",
   finish_off_water: "The finish isn't on a river or canal we cover. Zoom in and click on the water to move it.",

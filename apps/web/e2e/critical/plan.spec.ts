@@ -67,6 +67,43 @@ test('with nothing in the link, the planner opens close in on Reading, ready for
   await expect(page).toHaveURL(/from=/)
 })
 
+test('the route prints as a route sheet and a crew sheet', async ({ page }) => {
+  await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667&at=2027-04-17T07:00:00.000Z')
+  await expect(page.getByTestId('plan-summary')).toContainText('km', { timeout: 15_000 })
+  await page.getByRole('link', { name: 'Print route sheet' }).click()
+  await expect(page).toHaveURL(/\/plan\/print\?from=.*&show=/)
+  const sheet = page.getByTestId('print-sheet')
+  await expect(sheet).toContainText('Route sheet', { timeout: 15_000 })
+  await expect(page.getByTestId('print-stops')).toContainText('Teddington Lock')
+  await page.getByRole('link', { name: 'Crew sheet instead' }).click()
+  await expect(sheet).toContainText('Crew sheet')
+  await expect(page.getByTestId('print-stops')).toContainText(/RG\d \d[A-Z]{2}/)   // a postcode a crew can drive to
+})
+
+test('your own notes, on the plan and on a stop, print on the sheet', async ({ page }) => {
+  await signUpFlow(page)
+  await page.goto('/plan?from=51.5395,-0.9010&to=51.5470,-0.8740')
+  await expect(page.getByTestId('plan-summary')).toContainText('km', { timeout: 15_000 })
+  await page.getByLabel('Plan name').fill('Henley loop')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page).toHaveURL(/\/plan\/(?!shared)[^/?]+$/, { timeout: 15_000 })
+
+  await page.getByLabel('Your notes for this plan').fill('Spare paddle in the car')
+  await page.getByRole('button', { name: 'Save notes' }).click()
+  await expect(page.getByRole('button', { name: 'Save notes' })).toBeDisabled()
+  const lock = page.getByTestId('stop-list').locator('li', { hasText: 'Hambleden Lock' })
+  await lock.getByRole('button', { name: '+ Add a note' }).click()
+  await lock.getByLabel(/Your note on Hambleden Lock/).fill('Crew meets here with food')
+  await lock.getByRole('button', { name: 'Save note' }).click()
+  await expect(lock).toContainText('Your note: Crew meets here with food')
+
+  await page.getByRole('link', { name: 'Print route sheet' }).click()
+  const sheet = page.getByTestId('print-sheet')
+  await expect(sheet).toContainText('Henley loop', { timeout: 15_000 })
+  await expect(sheet).toContainText('Spare paddle in the car')
+  await expect(sheet).toContainText('Note: Crew meets here with food')
+})
+
 test('the places search moves the map to a lock', async ({ page }) => {
   await page.goto('/plan')
   const box = page.getByLabel('Go to a place')
