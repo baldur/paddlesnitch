@@ -45,6 +45,7 @@ describe('redirects', async () => {
     ['/att/privacy', '/privacy'],
     ['/att/tos', '/terms'],
     ['/att/tos/accept', '/terms/accept'],
+    ['/game', '/games/kayak'],
   ])('%s → %s', (from, to) => {
     expect(apply(rules, from)).toBe(to)
   })
