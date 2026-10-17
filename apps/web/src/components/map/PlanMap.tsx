@@ -99,7 +99,7 @@ function Focus({ focus }: { focus: MapFocus | null }) {
 }
 
 export default function PlanMap({
-  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, onPick,
+  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], onPick,
 }: {
   version: string                          // the dataset's version, for the network's URLs
   route: LatLng[]
@@ -110,6 +110,7 @@ export default function PlanMap({
   view?: { at: LatLng; zoom: number }
   satellite?: boolean
   coverage?: boolean                       // colour the water by how well we know it
+  marks?: LatLng[]                         // landings being placed for a portage
   onPick: (p: LatLng, zoom: number) => void
 }) {
   const tiles = mapTiles(satellite)
@@ -130,6 +131,12 @@ export default function PlanMap({
       ))}
       {start && <CircleMarker center={start} radius={8} pathOptions={{ color: '#fff', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}><Tooltip>Start</Tooltip></CircleMarker>}
       {finish && <CircleMarker center={finish} radius={8} pathOptions={{ color: '#fff', fillColor: '#f87171', fillOpacity: 1, weight: 2 }}><Tooltip>Finish</Tooltip></CircleMarker>}
+      {marks.length === 2 && <Polyline positions={marks} interactive={false} pathOptions={{ color: '#facc15', weight: 3, dashArray: '6 6' }} />}
+      {marks.map((m, i) => (
+        <CircleMarker key={i} center={m} radius={7} pathOptions={{ color: '#0b1220', fillColor: '#facc15', fillOpacity: 1, weight: 2 }}>
+          <Tooltip permanent direction="top">{i === 0 ? 'Landing 1' : 'Landing 2'}</Tooltip>
+        </CircleMarker>
+      ))}
       <Clicks onPick={onPick} />
       <Frame route={route} view={view} />
       <Focus focus={focus} />

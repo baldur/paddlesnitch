@@ -44,6 +44,7 @@ export default function PrivacyPolicy() {
             <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, Strava, a time trial or a tracker): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
             <li><strong>Buddies</strong>: who your buddies are, buddy requests you&apos;ve sent and received, and your invite link. <strong>Your buddies see your paddles</strong> (route, speed, stroke rate and boat class) unless you turn that off on the Buddies page or hide a paddle. They never see your diary notes, your automatic summaries or your email.</li>
             <li><strong>River plans</strong>: plans you save on Plan (start and finish points, start time and pace). They&apos;re private until you share one. <strong>A shared plan can be seen by anyone with its link</strong>, with your display name, and your buddies see it listed. Stop sharing and the link stops working.</li>
+            <li><strong>Portage details</strong>: where you get out and back in at a lock or weir, and any notes, if you add them on Plan. <strong>They&apos;re public the moment you save them</strong>, released under CC0 (anyone may reuse them, including other open-data projects), and shown with your display name. You can delete one at any time and it stops being shown; copies already downloaded by others can&apos;t be recalled. If people flag one, we may hide it.</li>
             <li><strong>Trackers</strong>: if you link a paddlesnitch tracker, the recordings it uploads (GPS positions and motion data), and its ID, software version and when it last synced.</li>
             <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
             <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, the name of the nearest river gauge, your recent paddles and your diary notes to an AI model on Amazon Bedrock. Please don&apos;t put health details in diary notes. We keep a short written profile of your paddling to make later summaries relevant.</li>
@@ -74,7 +75,7 @@ export default function PrivacyPolicy() {
             We keep your data for as long as your account exists. You can delete your account at any time
             from your{' '}
             <Link href="/account" className="tt-link">account page</Link>. That deletes your
-            account, paddles, diary notes, results, river plans, shared links, buddies and tracker recordings, and disconnects
+            account, paddles, diary notes, results, river plans, portage details, shared links, buddies and tracker recordings, and disconnects
             Strava. Courses and trials you created are deleted too, unless a group owns them or someone
             else has a result in them: those stay for the other paddlers, without your results. It
             happens at once and can&apos;t be undone. Our storage keeps earlier copies for 30 days so we

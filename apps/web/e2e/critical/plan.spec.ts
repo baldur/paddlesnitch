@@ -100,3 +100,27 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   await expect(guest.getByText("We can't find this plan.", { exact: false })).toBeVisible()
   await ownerCtx.close(); await guestCtx.close()
 })
+
+test('OpenPortage: a paddler adds portage details at a lock and sees them on the route', async ({ page }) => {
+  await signUpFlow(page, { displayName: 'Lock Keeper' })
+  // Henley downstream to Hambleden, through Hambleden Lock.
+  await page.goto('/plan?from=51.5395,-0.9010&to=51.5470,-0.8740')
+  await expect(page.getByTestId('plan-summary')).toContainText('km', { timeout: 15_000 })
+  const lock = page.getByTestId('stop-list').locator('li', { hasText: 'Hambleden Lock' })
+  await lock.getByRole('button', { name: /ADD PORTAGE DETAILS/ }).click()
+
+  const panel = page.getByTestId('add-portage')
+  await expect(panel).toContainText('Click the map where you get out')
+  const box = (await page.locator('.leaflet-container').boundingBox())!
+  await page.mouse.click(box.x + box.width / 2 - 40, box.y + box.height / 2)
+  await expect(panel).toContainText('Now click where you get back in')
+  await page.mouse.click(box.x + box.width / 2 + 40, box.y + box.height / 2)
+  await panel.getByLabel('Portage notes').fill('Steps by the lock cottage')
+  await panel.getByLabel('Release under CC0').check()
+  await panel.getByRole('button', { name: 'PUBLISH' }).click()
+
+  await expect(panel).toHaveCount(0)
+  await expect(lock).toContainText('Added by Lock Keeper', { timeout: 15_000 })
+  await expect(lock).toContainText('Steps by the lock cottage')
+  await expect(lock).not.toContainText('Portage side not known yet.')
+})

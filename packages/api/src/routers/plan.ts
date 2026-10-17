@@ -10,6 +10,7 @@ import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { simplify } from '@paddlesnitch/waterways/line'
 import { loadNational } from '@paddlesnitch/waterways/national'
 import { routePlan, snapClick } from '@paddlesnitch/waterways/plan'
+import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { NATIONAL, REGIONS } from '@paddlesnitch/waterways/regions'
 import {
   savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, MAX_TITLE,
@@ -44,7 +45,7 @@ export const planRouter = router({
     const s = snapClick(ds, input.start)
     const start = s ? { at: s.at, waterway: s.link.name } : null
     if (!input.finish) return { start, plan: null }
-    const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: input.shape })
+    const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: input.shape }, await listPublicPortages())
     return { start, plan: typeof plan === 'string' ? plan : { ...plan, line: simplify(plan.line, 8) } }
   }),
 

@@ -16,6 +16,7 @@ import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
 import { erasePlanShares } from '@paddlesnitch/waterways/plan-store'
+import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 
 // GDPR Art. 17 (right to erasure). Permanently removes:
 //   - the Cognito user record (no more sign-ins)
@@ -107,6 +108,8 @@ export async function DELETE() {
   await eraseBuddies(user.id)
   // Shared plan links (the plans themselves live under users/{id}/plans/).
   await erasePlanShares(user.id)
+  // Portage details they added (public copies and flags; their own copies live under users/{id}/portages/).
+  await erasePortages(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
   await eraseBetaApplication(user.email)

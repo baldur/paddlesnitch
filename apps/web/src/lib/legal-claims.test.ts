@@ -40,7 +40,7 @@ const SERVICES: Record<string, string> = {
   'unpkg.com': 'unpkg',
 }
 // Our own site, legal links and test-only values -- not processors.
-const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'evil.example.com', 'example.invalid'])
+const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org', 'evil.example.com', 'example.invalid'])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
 // machine or the weekly refresh job, so no visitor's data ever reaches these hosts.
 // The rest are credit links to a source. If the app ever calls one of these

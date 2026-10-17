@@ -39,7 +39,7 @@ const GOOD_ACCESS_PER_10KM = 1
 
 /** Group links into waterways (the same name, touching), assign each feature
  *  to the nearest one it's on, and score them. */
-export function waterwayCoverage(links: NetLink[], features: Feature[]): WaterwayCoverage[] {
+export function waterwayCoverage(links: NetLink[], features: Feature[], hasPortage: (f: Feature) => boolean = () => false): WaterwayCoverage[] {
   const groups = new Map<string, NetLink[]>()
   const groupOf = groupLinks(links)
   for (const l of links) {
@@ -74,7 +74,7 @@ export function waterwayCoverage(links: NetLink[], features: Feature[]): Waterwa
     const root = s && linkGroup.get(s.link.id)
     const row = root && rows.get(root)
     if (!row) continue
-    if (f.kind === 'lock') { row.locks++; if (f.portage?.side) row.locksWithSide++ }
+    if (f.kind === 'lock') { row.locks++; if (f.portage?.side || hasPortage(f)) row.locksWithSide++ }
     else if (f.kind === 'weir') row.weirs++
     else if (f.kind === 'access' || f.kind === 'slipway' || f.kind === 'portage') row.access++
     else if (f.kind === 'crew_point') row.crew++

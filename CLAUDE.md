@@ -360,6 +360,7 @@ The river planner's domain ([`river-planner.md`](docs/features/river-planner.md)
 - `places`: the places search index (OSM towns and villages within 2 km of the water, plus every named lock and weir) and `searchPlaces`.
 - `display`: what the map draws (`overviewLines`, `areaLines` per 0.5° area).
 - `checks`: the check routes every national build must pass.
+- `portage` (pure): OpenPortage contributions: two landings per contribution, `portageOnRoute` gives take-out/put-in and banks for the way a route goes, `portagesAt` matches them to a lock or weir (id, or within 80 m). `portage-store` (**server only**): author's copy under `users/{id}/portages/`, public copy under `portages/public/`, flags (3 hide), `erasePortages`. tRPC `portage.add/mine/delete/flag/hide` (hide is platform-admin only, `@paddlesnitch/core/admin`); `plan.route` attaches them to stops; the CC0 dump is `/plan/data/{any}/openportage`.
 - `national` (**server only**): `loadNational()` loads the published version named by `data/manifest.json` from storage (`waterways/published/{version}/*.json.gz`) once per instance. With no version published, or locally without it, the committed `data/dw.json` stands in.
 - `plan-store` (**server only**, uses core storage): saved plans at `users/{userId}/plans/{id}.json`, so account deletion's `users/` wipe covers them; listed in the account export. `sharePlan`/`unsharePlan`/`getSharedPlan` keep a `plans/shared/{shareId}.json` index; `erasePlanShares` runs on account deletion.
 

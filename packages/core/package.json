@@ -22,7 +22,8 @@
     "./format": "./src/format.ts",
     "./derived": "./src/derived.ts",
     "./catalogue": "./src/catalogue.ts",
-    "./buddies": "./src/buddies.ts"
+    "./buddies": "./src/buddies.ts",
+    "./admin": "./src/admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1146.0",

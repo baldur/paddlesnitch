@@ -2,6 +2,7 @@
 // default, and how an unsaved plan lives in the address bar (so a reload, a
 // sign-in round trip or a pasted link keeps it). Pure; tested in plan-ui.test.ts.
 import type { PlanError, PlanInput, PlanShape, Stop } from '@paddlesnitch/waterways/plan'
+import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { DEFAULT_PACE_KMH, DEFAULT_PORTAGE_MINUTES } from '@paddlesnitch/waterways/plan'
 import type { Facility, FeatureKind, LatLng } from '@paddlesnitch/waterways/types'
 
@@ -34,7 +35,7 @@ const FACILITY: Record<Facility, string> = {
 export function stopLines(stop: Stop): string[] {
   const f = stop.feature
   const out: string[] = []
-  if (stop.portage) {
+  if (stop.portage && !stop.portages?.length) {
     out.push(f.portage?.side ? `Portage on the ${f.portage.side} bank.` : 'Portage side not known yet.')
     if (f.portage?.carryM) out.push(`Carry about ${Math.round(f.portage.carryM)} m.`)
   }
@@ -48,6 +49,16 @@ export function stopLines(stop: Stop): string[] {
   if (postcode) out.push(`Postcode ${postcode}.`)
   const fac = f.facilities ?? f.lock?.facilities
   if (fac?.length) out.push(`Facilities: ${fac.map(x => FACILITY[x]).join(', ')}.`)
+  return out
+}
+
+/** A paddler's portage details as met on this route (OpenPortage). */
+export function portageLines(p: PortageOnRoute): string[] {
+  const out = [p.takeOut.bank === p.putIn.bank
+    ? `Get out on the ${p.takeOut.bank} bank; back in about ${p.carryM} m on.`
+    : `Get out on the ${p.takeOut.bank} bank; back in on the ${p.putIn.bank} bank, about ${p.carryM} m on.`]
+  if (p.rollers) out.push('Rollers.')
+  if (p.notes) out.push(`“${p.notes}”`)
   return out
 }
 

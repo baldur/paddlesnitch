@@ -16,11 +16,12 @@ import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces, searchPlaces, type Place } from '@paddlesnitch/waterways/places'
 import { computePlan, routePlan, timePlan } from '@paddlesnitch/waterways/plan'
+import { portageOnRoute, portagesAt, type PublicPortage } from '@paddlesnitch/waterways/portage'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
 import { coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
-import { stopLines } from './plan-ui'
+import { portageLines, stopLines } from './plan-ui'
 
 const ds: RegionDataset = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data/dw.json'), 'utf8'))
 const AT = '2026-10-12T00:00:00.000Z'
@@ -333,5 +334,52 @@ describe('coverage by waterway', () => {
     const lines = coverageLines(nav, rows)
     expect(lines.thin.length).toBe(3)    // all three links of River Test, the lock chamber included
     expect(lines.good).toEqual([])
+  })
+})
+
+describe('OpenPortage: portage details as met on a route', () => {
+  const line: LatLng[] = [[51.5, -1], [51.5, -0.99]]                       // heading east
+  const c: PublicPortage = {
+    id: 'p1', name: 'Ann', featureId: 'crt:locks:1', at: [51.5, -0.995], licence: 'CC0-1.0', createdAt: AT, updatedAt: AT,
+    landings: [[51.5001, -0.9945], [51.5001, -0.9955]],                   // north bank, either order
+    notes: 'Steep steps', rollers: true,
+  }
+
+  it('the landing reached first is the take-out; banks are looking the way you go', () => {
+    const east = portageOnRoute(line, c)
+    expect(east.takeOut.at).toEqual([51.5001, -0.9955])
+    expect(east.takeOut.bank).toBe('left')                                 // north, heading east
+    expect(east.carryM).toBeGreaterThan(60)
+    const west = portageOnRoute([...line].reverse(), c)
+    expect(west.takeOut.at).toEqual([51.5001, -0.9945])
+    expect(west.takeOut.bank).toBe('right')
+  })
+
+  it('belongs to its lock by id, or by place when the id changed; hidden ones never show', () => {
+    const lock: Feature = { id: 'crt:locks:1', kind: 'lock', at: [51.5, -0.995], source: { source: 'crt', fetchedAt: AT } }
+    const moved: Feature = { ...lock, id: 'crt:locks:new-id' }
+    expect(portagesAt(lock, [c]).map(x => x.id)).toEqual(['p1'])
+    expect(portagesAt(moved, [c]).map(x => x.id)).toEqual(['p1'])
+    expect(portagesAt(lock, [{ ...c, hidden: true }])).toEqual([])
+    expect(portagesAt({ ...lock, id: 'elsewhere', at: [52, -1] }, [c])).toEqual([])
+  })
+
+  it('reads as plain directions, and replaces "side not known" on the stop', () => {
+    const p = portageOnRoute(line, c)
+    expect(portageLines(p)).toEqual([`Get out on the left bank; back in about ${p.carryM} m on.`, 'Rollers.', '“Steep steps”'])
+    const lock: Feature = { id: 'l', kind: 'lock', name: 'Mill Lock', at: [51.5, -0.995], source: { source: 'crt', fetchedAt: AT } }
+    const stop = { feature: lock, leg: 'out' as const, chainageM: 0, fromPrevM: 0, portage: true, portagesBefore: 0, elapsedS: 0 }
+    expect(stopLines(stop)).toContain('Portage side not known yet.')
+    expect(stopLines({ ...stop, portages: [p] })).not.toContain('Portage side not known yet.')
+  })
+
+  it('routePlan attaches them to their stop, the right way round on each leg of a return', () => {
+    const links = linksFromWays([way(1, [1, 2], [[51.5, -1], [51.5, -0.97]], { boat: 'yes' })])
+    const lock: Feature = { id: 'crt:locks:1', kind: 'lock', at: [51.5, -0.995], source: { source: 'crt', fetchedAt: AT } }
+    const r = routePlan({ links, features: [lock] }, { start: [51.5, -0.999], finish: [51.5, -0.971], shape: 'return' }, [c])
+    if (typeof r === 'string') throw new Error(r)
+    const [out, back] = r.stops
+    expect(out.portages?.[0].takeOut.bank).toBe('left')
+    expect(back.portages?.[0].takeOut.bank).toBe('right')
   })
 })

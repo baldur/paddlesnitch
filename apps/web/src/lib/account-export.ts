@@ -13,6 +13,7 @@ import type { AuthUser } from '@paddlesnitch/core/types'
 import { listTrials, listCourses, listUserEntryResultKeys, listUserFailedUploadKeys } from '@/lib/catalogue'
 import { listSavedSections } from '@paddlesnitch/analysis/saved-sections'
 import { listPlans } from '@paddlesnitch/waterways/plan-store'
+import { listMyPortages } from '@paddlesnitch/waterways/portage-store'
 
 export async function buildAccountExport(user: AuthUser) {
   // Courses the user owns.
@@ -50,6 +51,8 @@ export async function buildAccountExport(user: AuthUser) {
     sections: await listSavedSections(user.id),
     // River plans: the clicks, shape, start time and pace of each.
     plans: await listPlans(user.id),
+    // Portage details added to Plan (published under CC0 with the display name).
+    portages: await listMyPortages(user.id),
   }
 
   const groups = (await Promise.all((await getUserGroupIds(user.id)).map(id => getGroup(id))))
