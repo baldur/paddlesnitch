@@ -62,6 +62,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'CC BY 4.0',
     attribution: 'AMBER Barrier Atlas: Jones et al. (2019), CC BY 4.0',
   },
+  ifi: {
+    name: 'Inland Fisheries Ireland — National Barriers Programme',
+    url: 'https://www.fisheriesireland.ie/what-we-do/research/national-barriers-programme',
+    licence: 'CC BY 4.0',
+    attribution: 'Barrier data © Inland Fisheries Ireland, CC BY 4.0',
+  },
   'ea-levels': {
     name: 'Environment Agency real-time flood-monitoring API',
     url: 'https://environment.data.gov.uk/flood-monitoring/doc/reference',
