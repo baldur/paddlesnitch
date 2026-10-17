@@ -38,7 +38,9 @@
     "./sun": "./src/sun.ts",
     "./live": "./src/live.ts",
     "./live-store": "./src/live-store.ts",
-    "./tide": "./src/tide.ts"
+    "./health": "./src/health.ts",
+    "./tide": "./src/tide.ts",
+    "./discovery": "./src/discovery.ts"
   },
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",

@@ -58,14 +58,6 @@ jobs:
         working-directory: apps/web
         run: python scripts/waterways/osm_extract.py "$RUNNER_TEMP/gbie.osm.pbf" .cache/waterways/osm/gbie
 
-      - name: Normalise sources
-        working-directory: apps/web
-        run: pnpm waterways:sources
-
-      - name: Build and check (no upload)
-        working-directory: apps/web
-        run: pnpm waterways:national | tee "$RUNNER_TEMP/build.log"
-
       # The waterways role sits beside the deploy role in the same account.
       - name: Work out the waterways role
         id: role
@@ -78,6 +70,36 @@ jobs:
         with:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: eu-west-1
+
+      # A source that fails or shrinks falls back to its last good copy in S3
+      # (waterways/normalised/) instead of dropping out; health.json says which.
+      - name: Normalise sources
+        working-directory: apps/web
+        env:
+          DATA_BUCKET: paddlesnitch-data-prod
+        run: pnpm waterways:sources --stage | tee "$RUNNER_TEMP/sources.log"
+
+      - name: Flag sources failing three runs in a row
+        if: always()
+        working-directory: apps/web
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 3 = FAILING_RUNS in packages/waterways/src/health.ts.
+          [ -f .cache/waterways/health.json ] || exit 0
+          for name in $(node -e "const h=require('./.cache/waterways/health.json');console.log(Object.entries(h.sources).filter(([,s])=>s.failures>=3).map(([n])=>n).join(' '))"); do
+            title="Waterways source $name is failing"
+            if [ -z "$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[].number')" ]; then
+              { echo "The weekly refresh hasn't had a fresh copy of \`$name\` for three runs; it's publishing the last good one (or none)."; echo
+                echo '```'; grep -E "^\s+$name:" "$RUNNER_TEMP/sources.log"; echo '```'; echo
+                echo "Fix its job in \`apps/web/scripts/waterways/fetch-sources.ts\`. Close this once a run's data PR shows \`$name: ok\`."; } > "$RUNNER_TEMP/failing.md"
+              gh issue create --title "$title" --body-file "$RUNNER_TEMP/failing.md"
+            fi
+          done
+
+      - name: Build and check (no upload)
+        working-directory: apps/web
+        run: pnpm waterways:national | tee "$RUNNER_TEMP/build.log"
 
       - name: Publish a new version
         working-directory: apps/web
@@ -103,6 +125,11 @@ jobs:
             echo '```'
             grep -E '^\s+(network|OSM|features|places|✓|✗|wrote)' "$RUNNER_TEMP/build.log" | head -60
             echo '```'
+            echo
+            echo 'Sources:'
+            echo '```'
+            cat "$RUNNER_TEMP/sources.log"
+            echo '```'
           } > "$RUNNER_TEMP/body.md"
           if gh pr create --title "data(waterways): publish $version" --body-file "$RUNNER_TEMP/body.md" --head "$branch" --base main; then
             # A PR opened with GITHUB_TOKEN doesn't start pull_request runs.
@@ -115,3 +142,38 @@ jobs:
               echo "Open the PR: https://github.com/${{ github.repository }}/compare/main...$branch?expand=1"; echo; cat "$RUNNER_TEMP/body.md"; } > "$RUNNER_TEMP/issue.md"
             gh issue create --title "Waterways data $version is ready to publish" --body-file "$RUNNER_TEMP/issue.md"
           fi
+
+  # Looking for improved data: one digest issue a week of new datasets about
+  # locks, weirs, slipways, canoe access and the like on data.gov.ie,
+  # OpenDataNI and ArcGIS Online (packages/waterways/src/discovery.ts).
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Search the catalogues
+        working-directory: apps/web
+        run: pnpm waterways:discover --days 8 --out "$RUNNER_TEMP/discover.md"
+
+      - name: Post the digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -s "$RUNNER_TEMP/discover.md" ] || { echo "Nothing new this week."; exit 0; }
+          gh issue create --title "Waterways data: new candidate sources $(date -u +%Y-%m-%d)" --body-file "$RUNNER_TEMP/discover.md"
