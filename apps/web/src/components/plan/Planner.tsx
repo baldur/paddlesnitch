@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { keepPreviousData } from '@tanstack/react-query'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtDay, fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import manifest from '@paddlesnitch/waterways/data/manifest.json'
@@ -14,7 +15,7 @@ import PlanMapClient from '@/components/map/PlanMapClient'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, STOP_GROUPS, stopLines,
+  asInput, COVERAGE_LEVELS, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, STOP_GROUPS, stopLines,
   type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -48,6 +49,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
   const [focus, setFocus] = useState<MapFocus | null>(null)
   const [satellite, setSatellite] = useState(false)
+  const [coverage, setCoverage] = useState(false)
   // The start time box shows the browser's zone, so it stays empty until hydrated.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
@@ -85,6 +87,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             focus={focus}
             view={view}
             satellite={satellite}
+            coverage={coverage}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
               if (!shared) setDraft(d => placeClick(d, p, error === 'start_off_water' ? 'start' : error === 'finish_off_water' ? 'finish' : null))
@@ -95,9 +98,22 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
           className={`absolute top-[5.5rem] left-[10px] z-[500] bg-bg/85 ${BTN} ${satellite ? 'border-primary text-fg' : 'text-muted'}`}>
           SATELLITE
         </button>
+        <button type="button" aria-pressed={coverage} onClick={() => setCoverage(v => !v)}
+          className={`absolute top-[8.25rem] left-[10px] z-[500] bg-bg/85 ${BTN} ${coverage ? 'border-primary text-fg' : 'text-muted'}`}>
+          COVERAGE
+        </button>
+        {coverage && (
+          <div className="absolute bottom-8 left-2 z-[500] max-w-[18rem] bg-bg/90 border border-border px-3 py-2 text-xs space-y-1" data-testid="coverage-legend">
+            <p className="text-muted">How well we know each waterway:</p>
+            {COVERAGE_LEVELS.map(l => (
+              <p key={l.id}><span className="inline-block w-3 h-1 mr-2 align-middle" style={{ background: l.colour }} /><span className="text-fg">{l.label}</span> <span className="text-muted">{l.says}</span></p>
+            ))}
+            <p><Link className="underline hover:text-fg" href="/plan/gaps">Every waterway and its gaps →</Link></p>
+          </div>
+        )}
         <p className="absolute top-2 right-2 z-[500] max-w-[16rem] bg-bg/85 border border-border px-2 py-1 text-xs text-muted pointer-events-none">
           {manifest.version
-            ? 'Rivers and canals of the UK and Ireland. Locks, portages and facilities so far: Devizes to Westminster.'
+            ? 'Rivers and canals of the UK and Ireland. Switch on COVERAGE to see how well we know each.'
             : 'River data so far: Devizes to Westminster.'}
         </p>
       </div>
@@ -187,6 +203,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
         {!shared && <SaveBox draft={draft} saved={saved} canSave={!!plan} onSaved={p => { if (!saved) router.push(`/plan/${p.id}`) }} />}
 
         <section className="text-xs text-muted space-y-2">
+          <p>Where our data is thin, and what paddlers could add: <Link className="underline hover:text-fg" href="/plan/gaps">gaps</Link>.</p>
           <p>This plan is not a navigation authority. Check stream warnings, lock notices and, below Teddington, the tide before you go.</p>
           <p>
             Data:{' '}

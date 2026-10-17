@@ -10,6 +10,8 @@ import { metadata as profile } from '@/app/profile/layout'
 import { metadata as privacy } from '@/app/privacy/page'
 import { metadata as devices } from '@/app/devices/layout'
 import { metadata as guide } from '@/app/guide/layout'
+import { metadata as plan } from '@/app/plan/layout'
+import { metadata as gaps } from '@/app/plan/gaps/page'
 
 describe('page titles', () => {
   it('the site adds its name to every page title', () => {
@@ -23,12 +25,16 @@ describe('page titles', () => {
     ['Profile', profile.title],
     ['Devices', devices.title],
     ['Guide', guide.title],
+    ['Plan', plan.title],
   ])('%s names itself and keeps the site-name template for its pages', (expected, title) => {
     expect(title).toEqual({ default: expected, template: '%s · paddlesnitch' })
   })
 
   it('the privacy page names itself', () => {
     expect(privacy.title).toBe('Privacy policy')
+  })
+  it("the planner's gaps page names itself", () => {
+    expect(gaps.title).toBe('Gaps')
   })
   it('nothing is still titled ATTS', () => {
     for (const m of [root, trials, paddles, profile, privacy, devices, guide]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)

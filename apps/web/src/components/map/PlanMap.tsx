@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap,
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { mapTiles } from '@/lib/plan-ui'
+import { COVERAGE_LEVELS, mapTiles } from '@/lib/plan-ui'
 
 // The planner's map: the rivers and canals of the UK and Ireland, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
@@ -23,6 +23,24 @@ const fetchLines = (url: string) => {
     loaded.set(url, p)
   }
   return p
+}
+
+const LEVEL_COLOUR = Object.fromEntries(COVERAGE_LEVELS.map(l => [l.id, l.colour])) as Record<'good' | 'some' | 'thin', string>
+
+/** The scored water, coloured by how well we know it (the COVERAGE switch). */
+function Coverage({ version }: { version: string }) {
+  const [lines, setLines] = useState<Record<'good' | 'some' | 'thin', LatLng[][]> | null>(null)
+  useEffect(() => {
+    fetch(`/plan/data/${version}/coverage-lines`).then(r => (r.ok ? r.json() : Promise.reject())).then(setLines, () => setLines(null))
+  }, [version])
+  if (!lines) return null
+  return (
+    <>
+      {(['thin', 'some', 'good'] as const).map(level => (
+        <Polyline key={level} positions={lines[level]} interactive={false} pathOptions={{ color: LEVEL_COLOUR[level], weight: 3, opacity: 0.85 }} />
+      ))}
+    </>
+  )
 }
 
 /** The network for what's on screen: the overview when zoomed out, the
@@ -81,7 +99,7 @@ function Focus({ focus }: { focus: MapFocus | null }) {
 }
 
 export default function PlanMap({
-  version, route, start, finish, stops, focus, view, satellite = false, onPick,
+  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, onPick,
 }: {
   version: string                          // the dataset's version, for the network's URLs
   route: LatLng[]
@@ -91,6 +109,7 @@ export default function PlanMap({
   focus: MapFocus | null
   view?: { at: LatLng; zoom: number }
   satellite?: boolean
+  coverage?: boolean                       // colour the water by how well we know it
   onPick: (p: LatLng, zoom: number) => void
 }) {
   const tiles = mapTiles(satellite)
@@ -98,7 +117,7 @@ export default function PlanMap({
     <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
-      <Network version={version} />
+      {coverage ? <Coverage version={version} /> : <Network version={version} />}
       {/* Esri's place names, above the rivers but below the markers and clicks. */}
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
         <TileLayer key={tiles.labels} url={tiles.labels} maxNativeZoom={tiles.labelsNativeZoom} maxZoom={19} />

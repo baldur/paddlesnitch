@@ -221,6 +221,14 @@ describe("the map's network and places", () => {
     expect((await get('overview', 'old-version')).headers.get('Cache-Control')).toBe('public, max-age=300')
   })
 
+  it('serves coverage by waterway, and the scored water by level for the map', async () => {
+    const rows = await (await get('coverage')).json()
+    expect(rows.find((r: { name: string }) => r.name === 'Kennet and Avon Canal')).toMatchObject({ kind: 'canal', locksWithSide: 0 })
+    const lines = await (await get('coverage-lines')).json()
+    expect(Object.keys(lines).sort()).toEqual(['good', 'some', 'thin'])
+    expect(lines.some.length).toBeGreaterThan(10)
+  })
+
   it('404s anything else', async () => {
     expect((await get('secrets')).status).toBe(404)
   })
