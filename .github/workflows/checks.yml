@@ -40,6 +40,9 @@ jobs:
         run: npm ci
       - name: Unit tests
         run: pnpm test
+      # The games (games/) are plain JS with Node's own test runner, no deps.
+      - name: Game tests
+        run: pnpm test:games
       - name: Typecheck (app, packages, tests)
         run: pnpm typecheck
       # Errors fail; warnings are reported. (It used to lint the generated

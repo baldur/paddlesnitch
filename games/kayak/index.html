@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kayak</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../shared/site.css">
+  <link rel="stylesheet" href="kayak.css">
+  <script type="module" src="main.js"></script>
+  <script src="../shared/analytics.js" defer></script>
+</head>
+<body>
+  <canvas id="view" aria-label="First-person view from the kayak"></canvas>
+
+  <header>
+    <a href="../" class="leave">&larr; Games</a>
+    <h1>Kayak</h1>
+    <button id="pause" type="button">Pause</button>
+    <button id="sound" type="button" aria-pressed="true">Sound on</button>
+  </header>
+
+  <div id="hud" hidden>
+    <div class="hud-top">
+      <span id="clock">0:00.0</span>
+      <span id="togo">6.00 km</span>
+      <span id="pos">1st / 8</span>
+    </div>
+    <p id="wash">On the wash</p>
+    <p id="assisted">Balance assist on: tilt isn't available</p>
+    <p id="touchhelp">Tap left, then right, when the ring closes · Slide a finger sideways to steer · Turn the phone to lean</p>
+    <div class="cue left" id="cueL" aria-hidden="true"><span class="ring"></span>L</div>
+    <div class="cue right" id="cueR" aria-hidden="true"><span class="ring"></span>R</div>
+    <div class="hud-bottom">
+      <div class="readout">
+        <span><b id="speed">0.0</b> km/h</span>
+        <span><b id="rate">0</b> strokes/min</span>
+      </div>
+      <div class="gauges">
+        <svg id="balance" viewBox="0 0 200 110" aria-hidden="true">
+          <path class="arc" d="M 20 100 A 80 80 0 0 1 180 100" />
+          <path class="danger" d="M 20 100 A 80 80 0 0 1 38.6 48.6" />
+          <path class="danger" d="M 161.4 48.6 A 80 80 0 0 1 180 100" />
+          <g id="needle"><line x1="100" y1="100" x2="100" y2="30" /><circle cx="100" cy="100" r="6" /></g>
+        </svg>
+        <div class="rudder" aria-hidden="true"><span id="rudder"></span></div>
+      </div>
+      <div class="meters">
+        <span>Rhythm</span>
+        <div class="bar rhythm"><div id="rhythm"></div></div>
+        <span>Stamina</span>
+        <div class="bar"><div id="stamina"></div></div>
+      </div>
+    </div>
+    <p id="flash" aria-live="assertive"></p>
+  </div>
+
+  <pre id="tiltdebug" hidden></pre>
+
+  <dialog id="menu">
+    <h2>Kayak</h2>
+    <p class="lede">A first-person marathon kayak race. Find a rhythm, keep your balance, and sit on someone's wash to save your strength for the sprint.</p>
+    <form method="dialog">
+      <fieldset class="hulls">
+        <legend>Your boat</legend>
+        <label><input type="radio" name="hull" value="stable"> Stable <small>forgiving, slower</small></label>
+        <label><input type="radio" name="hull" value="club"> Club racer <small>in between</small></label>
+        <label><input type="radio" name="hull" value="racing"> Racing <small>fast and tippy; needs a quick, steady beat</small></label>
+      </fieldset>
+      <button value="race" autofocus>Division 9 race <small>6 km, 12 paddlers</small></button>
+      <button value="practice">Practice time trial <small>1 km, on your own</small></button>
+    </form>
+    <p class="rotate-hint">Turn your phone sideways to race</p>
+    <p id="best"></p>
+    <p id="nogpu" class="warning" hidden></p>
+    <details>
+      <summary>Controls</summary>
+      <ul>
+        <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> paddle strokes. Alternate them on a steady beat, about 85-90 a minute when racing: rhythm is speed. Uneven strokes, two on one side, steering hard and bumping into people all knock you off it</li>
+        <li>The start: you begin behind the field. Paddle up into a gap on the line, stop, and wait for the horn. It comes without warning after "Are you ready?" Go early and everyone waits while the line comes up to you</li>
+        <li><kbd>A</kbd> <kbd>D</kbd> lean to keep your balance. Standing still is wobbly; speed steadies you</li>
+        <li><kbd>Q</kbd> <kbd>E</kbd> rudder. It only bites when you're moving</li>
+        <li>Tuck in right behind a boat, or alongside its back half, to ride its wash: you go further for less effort, but the boat rocks more</li>
+        <li>Race distances and times are shown four times longer than you actually paddle, so a 6 km race takes about 7 minutes</li>
+        <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes, left stick rudder, right stick lean</li>
+        <li>Phone, held sideways: tap the left or right half of the screen to stroke, in time with the rings at the sides. To steer, put a finger down and slide it left or right; the bar under the balance gauge shows your rudder. Turn the phone like a steering wheel to shift your weight: when the boat dips one way, lean the other, as you would in a real kayak. (Tilt needs the page over HTTPS on iPhone; without it, balance is done for you)</li>
+        <li><kbd>P</kbd> or <kbd>Esc</kbd> to pause, <kbd>M</kbd> to toggle sound</li>
+      </ul>
+    </details>
+    <p class="dialog-links"><a href="../" class="leave">&larr; All games</a></p>
+  </dialog>
+
+  <dialog id="paused">
+    <h2>Paused</h2>
+    <p class="rotate-hint">Turn your phone sideways to race</p>
+    <form method="dialog">
+      <button value="resume" autofocus>Resume</button>
+      <button value="restart">Restart</button>
+      <button value="menu">Quit to menu</button>
+      <button value="leave">Leave the game</button>
+    </form>
+  </dialog>
+
+  <dialog id="finished">
+    <h2 id="result"></h2>
+    <p id="details"></p>
+    <ol id="standings"></ol>
+    <form method="dialog">
+      <button value="again" autofocus>Go again</button>
+      <button value="menu">Menu</button>
+    </form>
+  </dialog>
+</body>
+</html>

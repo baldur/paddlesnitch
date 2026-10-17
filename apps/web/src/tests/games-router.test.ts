@@ -30,6 +30,12 @@ describe('games router', () => {
     expect(res.headers.location.value).toBe('/games/kayak/?seed=42')
   })
 
+  it('sends the games folder itself to the /games page', () => {
+    const res = run('/games/') as Res
+    expect(res.statusCode).toBe(301)
+    expect(res.headers.location.value).toBe('/games')
+  })
+
   it('passes files through untouched', () => {
     expect((run('/games/shared/audio.js') as Req).uri).toBe('/games/shared/audio.js')
   })
