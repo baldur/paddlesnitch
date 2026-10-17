@@ -17,10 +17,11 @@ import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { Stat } from '@paddlesnitch/ui/Card'
 import PlanMapClient from '@/components/map/PlanMapClient'
 import Conditions from '@/components/plan/Conditions'
+import { TIDES } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines,
+  asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
   type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -222,7 +223,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
           </div>
         )}
 
-        {plan && <Conditions plan={plan} startAt={draft.startAt} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
+        {plan && <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
 
         {plan && (
           <section>

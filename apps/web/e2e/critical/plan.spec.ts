@@ -110,6 +110,9 @@ test('conditions: a dawn start shows sunrise and sunset and the stops reached in
   await expect(conditions).toContainText('Conditions now', { timeout: 15_000 })
   await expect(page.getByTestId('daylight')).toContainText(/Sunrise \d\d:\d\d, sunset \d\d:\d\d on your start day\. \d+ stops? reached in the dark\./)
   await expect(page.getByTestId('stop-list')).toContainText('after dark')
+  // The route reaches the tideway at Teddington: our own tide fit says when high water is.
+  await expect(page.getByTestId('tide')).toContainText(/high water at Richmond/)
+  await expect(page.getByTestId('tide')).toContainText('Not for navigation')
 })
 
 test('the places search moves the map to a lock', async ({ page }) => {

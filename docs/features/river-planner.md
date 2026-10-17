@@ -225,21 +225,15 @@ Hand-curated additions (portage lines we draw) will live in committed JSON besid
 
 ### Tides
 
-Researched 2026-10-11. No paid API, no sign-up.
+Built 2026-10-17. No paid API, no sign-up.
 
-- **Data:** the EA flood-monitoring API publishes observed tidal levels every 15 minutes under OGL. Westminster (`0006-level-tidal_level-i-15_min-mAOD`), Tower Pier (`0007-…`), Richmond (`0009-…`), Teddington Lock tail (`3401TH_TAOD-…`).
-  - The daily archive (`/flood-monitoring/archive/readings-YYYY-MM-DD.csv`) only goes back to **2025-10-30**, so there's about 11 months of data so far. Each daily file is about 60 MB, for every station.
-  - **Owner to-do:** ask the EA for the long gauge history, which goes back to 1988–89. That would allow a far better fit.
-- **Method:** fit harmonic constituents offline with `@slackwater/engine` (MIT, pure TypeScript; formerly "neaps").
-  - Fit Tower Pier and Westminster with about 30+ constituents, including the shallow-water M4, MS4, MN4, M6 and M8 that the upper estuary needs. The annual constituents (Sa, Ssa) can't be resolved from under a year of data.
-  - Ship the constituents as static JSON and predict in the browser, so plans any date ahead work, and print works offline. Refit yearly.
-- **Backtest before showing it:** against held-out EA observations, reporting the median and 95th-percentile error in high-water time.
-- **Richmond and Teddington:** high water only, either fitted from Richmond or as Tower Pier plus the PLA's published +1:01, with credit. **No low-water time above Westminster.** Low water there is driven by Teddington flow.
-- **Rejected:**
-  - Global tide models (EOT20, FES, TPXO) don't resolve the river.
-  - Open-Meteo Marine returns nulls at Westminster and only covers about 10 days.
-  - The open constituent databases have no upper-Thames station; Sheerness is the nearest.
-- **Shown with every tide:** "Predicted astronomical tide only. Surge, wind, pressure and river flow at Teddington can shift times by tens of minutes. Upstream low water is unreliable. Not for navigation: check PLA / Thames VTS on the day." Credit: "Contains Environment Agency data, OGL v3".
+- **Data:** the EA flood-monitoring archive of observed 15-minute levels (OGL). Its daily files (`/flood-monitoring/archive/readings-YYYY-MM-DD.csv`, ~60 MB each, every station) start **2025-10-29**. `apps/web/scripts/waterways/download-tides.sh` streams each day and keeps only the tidal Thames gauges: Richmond (`0009`), Westminster (`0006`), Tower Pier (`0007`) and Teddington Lock tail (`3401TH`), a few hundred KB in all. Two days (2026-07-25, 2026-08-20) are missing from the archive.
+- **Method** (`packages/waterways/src/tide.ts`, pure): our own least-squares harmonic fit, `h(t) = z0 + Σ aᵢ cos ωᵢt + bᵢ sin ωᵢt`, with 30 constituents separable in a year of data, including the shallow-water M4, MS4, MN4, S4, M6, 2MS6, M8 the upper estuary needs. No Sa or T2 (a year needed) and no nodal corrections, so a fit is good for about a year: **refit yearly** (`download-tides.sh`, then `pnpm --filter web waterways:tides`). `@slackwater/engine` was considered and not used: it predicts from published constituents but doesn't fit them, and it's a beta.
+- **Backtest before showing** (`fit-tides.ts`): fit on all but the last 30 days, compare predicted high-water times with the observed ones in those 30 days (each observed peak refined by a parabola through its neighbours, since readings are 15 minutes apart), then refit on everything. An observed "high water" more than 1.5 m off the prediction is a gauge fault (11 October 2026: all three gauges read 2.6–3.2 m low), counted and set aside. **Result (2026-10-17):** Richmond median 11 min, 95% within 38 min; Westminster 8 and 38; Tower Pier 8 and 42 (57 high waters each). Most of the tail is neap tides, when the upper Thames high water is a long flat stand. A gauge is shown only with median ≤ 15 min and 95th percentile ≤ 45 min (`showable`), and every view shows its real figure.
+- **On a plan:** a route that reaches tidal water (its first `tidalRiver` link, `tidalFromM`) with a start time gets "Tide when you reach tidal water": when you get there (pace plus portages), how far before or after high water at Richmond that is, and high and low waters at Westminster and Tower Pier, Richmond highs only (its half-tide lock holds the water up at low tide), in a window from 6 h before to 9 h after. Also on the printed sheet. The models ship as `packages/waterways/data/tides.json` (13 KB) and predict in the browser, so print works offline.
+- **Rejected:** global tide models (EOT20, FES, TPXO) don't resolve the river; Open-Meteo Marine returns nulls at Westminster; the open constituent databases have no upper-Thames station; BODC's long record needs registration; PLA predictions forbid reuse; ADMIRALTY needs an account.
+- **Shown with every tide:** "Predicted astronomical tide only. Surge, wind, pressure and the flow over Teddington weir can move times by tens of minutes, and low water above Westminster is unreliable. Not for navigation: check the PLA and Thames VTS on the day." Credit: "Contains Environment Agency data, OGL v3".
+- **Owner to-do, still worth it:** ask the EA for the long gauge history (back to 1988–89). More years would add Sa and nodal corrections and tighten the fit.
 
 ## Being open about gaps
 
@@ -279,7 +273,7 @@ Researched 2026-10-11. No paid API, no sign-up.
   - **Thames stream warnings**: the GOV.UK "current river conditions" page (updated daily by 11am), reach by reach between named locks; a route gets the reaches whose end lock it passes or that it starts or finishes between. Red boards (strong stream) and yellow (caution) are called out; otherwise "No stream warnings on your reaches".
   - **No position leaves us**: the server reads whole national lists (station lists cached a day, readings 15 minutes, the boards 30 minutes) and matches them to the route itself. tRPC `plan.conditions({ start, finish })`, public.
   - **Honest failures**: a source that can't be read is named ("Couldn't read SEPA just now: conditions from it unknown"); a failed board read is never "no warning". Every view says the readings' time and that it's not for safety-critical use.
-- **Not yet:** the tide window, "nearest named place" for a click, crew-point drive order (P2's crew sheet).
+- **Not yet:** "nearest named place" for a click.
 
 ## The planner (UX)
 
@@ -316,7 +310,7 @@ Every view and print says the planner is not a navigation authority. Check strea
 | **P2 Print** ✅ (maps to come) | Print page and crew sheet; printable static maps still to do | Built 2026-10-17: route and crew sheets, tested by E2E |
 | **P3 Your own information** | Private notes, photos (EXIF stripped), drawings, map snippets on a plan or feature; in print; GDPR export and erasure | Tests for ownership, privacy, export and erasure |
 | **P4 Sharing and gaps** | Make-public with a CC0 release (live immediately; flag and hide), `/plan/gaps`, coverage shading, corrections | Permission story tests (private never leaks); gaps page lists the real holes |
-| **P5 Live conditions** 🚧 | Stream warnings ✅, river levels (EA, SEPA, OPW) ✅, daylight ✅, in plan and print ✅; tides (our own fit of EA gauge data) still to do | Best-effort: a failed fetch shows "unknown", tested |
+| **P5 Live conditions** ✅ | Stream warnings, river levels (EA, SEPA, OPW), daylight, tides (our own fit of EA gauge data, backtested); in plan and print | Best-effort: a failed fetch shows "unknown", tested; tides shown only past the backtest bar |
 | **P6 UK and Ireland** | Now its own spec: [`waterways-uk-ireland.md`](waterways-uk-ireland.md). National network, server routing, places search, then every nation's sources and a weekly refresh | Check routes pass in every nation; coverage published |
 | **P7 Europe** | Netherlands (Rijkswaterstaat CC0) first, then EuRIS and Germany | One NL route plans end to end |
 
