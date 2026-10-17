@@ -47,16 +47,19 @@ export default function AppShell({
   )
   return (
     <header className="border-b border-border px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
-      <div className="flex items-center gap-4 min-w-0">
+      {/* On phones this group dissolves (display: contents) so the breadcrumb
+          can take a row of its own below; squeezed beside the tabs it was cut
+          to "←…". From sm up it sits inline after the tabs as before. */}
+      <div className="contents sm:flex items-center gap-4 min-w-0">
         <a href="/" className="font-bold tracking-widest text-fg shrink-0">paddlesnitch</a>
-        <nav className="flex gap-3 shrink-0">
+        <nav className="mr-auto sm:mr-0 flex gap-3 shrink-0">
           {tab(trialsHref, 'TRIALS', active === 'trials')}
           {tab(paddlesHref, 'PADDLES', active === 'paddles')}
           {tab(planHref, 'PLAN', active === 'plan')}
         </nav>
-        {breadcrumb && <div className="min-w-0 text-muted truncate">{breadcrumb}</div>}
+        {breadcrumb && <div className="order-last basis-full sm:order-none sm:basis-auto min-w-0 text-muted truncate">{breadcrumb}</div>}
       </div>
-      <nav className="flex gap-4 text-muted items-center shrink-0">
+      <nav className="ml-auto flex gap-4 text-muted items-center shrink-0">
         {nav}
         {account}
       </nav>

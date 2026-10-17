@@ -11,6 +11,7 @@ import {
   findPendingJoinRequest,
 } from '@/lib/groups'
 import { canManageGroup, canDeleteGroup } from '@/lib/permissions'
+import { findUserBySub } from '@/lib/cognito'
 import type { GroupMetadata, JoinPolicy } from '@/lib/types'
 
 type Params = { params: Promise<{ groupId: string }> }
@@ -20,7 +21,7 @@ function isJoinPolicy(v: unknown): v is JoinPolicy {
 }
 
 // GET /att/api/groups/[groupId]
-// Members (owner/admin/member) get the full payload + viewerStatus. Everyone
+// Members (owner/admin/member) get the full payload + memberNames + viewerStatus. Everyone
 // else gets a LIMITED projection (name, description, joinPolicy, member count)
 // plus their viewerStatus ('none' | 'pending') — enough to render a join CTA
 // without exposing the member list. Groups aren't enumerable (the catalogue
@@ -33,7 +34,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   const viewer = await getAuthUser()
   const role = viewer ? groupRoleOf(group, viewer.id) : null
   if (role) {
-    return NextResponse.json({ ...group, viewerStatus: role })
+    // Members see each other by name (display name only, never email).
+    const everyone = [group.ownerId, ...group.adminUserIds, ...group.memberUserIds]
+    const names = await Promise.all(everyone.map(async id => [id, (await findUserBySub(id))?.displayName || 'A paddler'] as const))
+    return NextResponse.json({ ...group, memberNames: Object.fromEntries(names), viewerStatus: role })
   }
 
   const pending = viewer ? await findPendingJoinRequest(groupId, viewer.id) : null

@@ -22,6 +22,7 @@ type GroupView = {
   ownerId?: string
   adminUserIds?: string[]
   memberUserIds?: string[]
+  memberNames?: Record<string, string>
   joinPolicy?: JoinPolicy
   joinLinkToken?: string
   // limited payload only (non-members):
@@ -183,6 +184,7 @@ export default function GroupDetailPage({
   const adminUserIds = group.adminUserIds ?? []
   const memberUserIds = group.memberUserIds ?? []
   const ownerId = group.ownerId!
+  const names = group.memberNames ?? {}
 
   const submitInvite = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -303,12 +305,12 @@ export default function GroupDetailPage({
             Members ({1 + adminUserIds.length + memberUserIds.length})
           </h2>
           <div className="flex flex-col gap-1.5">
-            <MemberRow userId={ownerId} role="owner" canKick={false} onKick={() => {}} />
+            <MemberRow name={names[ownerId]} role="owner" canKick={false} onKick={() => {}} />
             {adminUserIds.map(id => (
-              <MemberRow key={id} userId={id} role="admin" canKick={role === 'owner' && id !== user.id} onKick={() => removeMember(id)} />
+              <MemberRow key={id} name={names[id]} role="admin" canKick={role === 'owner' && id !== user.id} onKick={() => removeMember(id)} />
             ))}
             {memberUserIds.map(id => (
-              <MemberRow key={id} userId={id} role="member" canKick={canManage && id !== user.id} onKick={() => removeMember(id)} />
+              <MemberRow key={id} name={names[id]} role="member" canKick={canManage && id !== user.id} onKick={() => removeMember(id)} />
             ))}
           </div>
           {role !== 'owner' && (
@@ -438,12 +440,12 @@ export default function GroupDetailPage({
 }
 
 function MemberRow({
-  userId,
+  name,
   role,
   canKick,
   onKick,
 }: {
-  userId: string
+  name: string | undefined
   role: 'owner' | 'admin' | 'member'
   canKick: boolean
   onKick: () => void
@@ -452,7 +454,7 @@ function MemberRow({
     <div className="flex items-center justify-between border border-border px-3 py-2 text-sm">
       <div className="min-w-0 flex items-center gap-2">
         <span className="text-xs px-2 py-0.5 border border-muted text-muted uppercase tracking-widest">{role}</span>
-        <span className="text-xs text-muted truncate tabular">{userId}</span>
+        <span className="text-fg truncate">{name ?? 'A paddler'}</span>
       </div>
       {canKick && (
         <button onClick={onKick} className="text-xs text-muted hover:text-red tracking-widest">REMOVE</button>

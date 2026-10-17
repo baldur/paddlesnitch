@@ -93,6 +93,20 @@ describe('viewing a group', () => {
     expect(res.status).toBe(200)
   })
 
+  it('a member sees every member by name, not by user ID', async () => {
+    const owner = await makeUser('Olga Owner')
+    const paddler = await makeUser('Pat Paddler')
+    mockAuth(owner.idToken)
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
+    mockAuth(owner.idToken)
+    await patchGroup(jsonReq('PATCH', { joinPolicy: 'open' }), { params: Promise.resolve({ groupId: group.id }) })
+    mockAuth(paddler.idToken)
+    await requestJoin(jsonReq('POST', {}), { params: Promise.resolve({ groupId: group.id }) })
+    const body = await (await getGroupRoute(new NextRequest('http://x'),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(body.memberNames).toEqual({ [owner.id]: 'Olga Owner', [paddler.id]: 'Pat Paddler' })
+  })
+
   it('a non-member gets a limited view — name + counts, but no member list (phase 4)', async () => {
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
