@@ -12,6 +12,7 @@ import { metadata as devices } from '@/app/devices/layout'
 import { metadata as guide } from '@/app/guide/layout'
 import { metadata as plan } from '@/app/plan/layout'
 import { metadata as gaps } from '@/app/plan/gaps/page'
+import { metadata as printSheet } from '@/app/plan/print/page'
 
 describe('page titles', () => {
   it('the site adds its name to every page title', () => {
@@ -35,6 +36,9 @@ describe('page titles', () => {
   })
   it("the planner's gaps page names itself", () => {
     expect(gaps.title).toBe('Gaps')
+  })
+  it("the planner's print page names itself", () => {
+    expect(printSheet.title).toBe('Route sheet')
   })
   it('nothing is still titled ATTS', () => {
     for (const m of [root, trials, paddles, profile, privacy, devices, guide]) expect(JSON.stringify(m)).not.toMatch(/ATTS/)

@@ -19,7 +19,7 @@ import PlanMapClient from '@/components/map/PlanMapClient'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, COVERAGE_LEVELS, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, STOP_GROUPS, stopLines,
+  asInput, COVERAGE_LEVELS, draftParams, groupOf, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines,
   type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -75,6 +75,11 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
     setSatellite(true)
     setFocus({ at: stop.feature.at, zoom: 18 })
   }
+  // The paddler's own notes (saved plans; a shared plan shows its owner's).
+  const own = (saved ?? (shared ? initial : undefined)) as Partial<SavedPlan> | undefined
+  const [notes, setNotes] = useState<{ plan: string; stops: Record<string, string> }>({ plan: own?.notes ?? '', stops: own?.stopNotes ?? {} })
+  const setNotesMut = trpc.plan.setNotes.useMutation({ onSuccess: p => setNotes({ plan: p.notes ?? '', stops: p.stopNotes ?? {} }) })
+  const saveStopNote = saved ? (featureId: string, text: string) => setNotesMut.mutateAsync({ id: saved.id, stop: { featureId, text } }) : undefined
   // The start time box shows the browser's zone, so it stays empty until hydrated.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
@@ -205,6 +210,12 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
         </section>
 
         {plan && <Summary plan={plan} />}
+        {plan && (
+          <div className="flex flex-wrap gap-2 -mt-2">
+            <Link className={BTN} href={printHref(draft, { id: saved?.id, share: shared ? (initial as Partial<SavedPlan>).shareId : undefined, show: [...shown] })}>Print route sheet</Link>
+            <Link className={buttonClass('quiet', 'sm')} href={printHref(draft, { id: saved?.id, share: shared ? (initial as Partial<SavedPlan>).shareId : undefined, crew: true })}>Crew sheet</Link>
+          </div>
+        )}
 
         {plan && (
           <section>
@@ -222,7 +233,8 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
                 )
               })}
             </div>
-            <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })} actions={{
+            <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })}
+              stopNotes={notes.stops} onSaveNote={saveStopNote} actions={{
               signedIn, mine: new Set(mine.data?.map(c => c.id)), flagged,
               here: saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`,
               onAdd: startAdding,
@@ -232,6 +244,16 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             <p className="mt-3 text-sm text-muted">
               Portage sides and landing points are missing for most locks. An unknown side is shown as unknown, never guessed.
             </p>
+            {!saved && !shared && signedIn && <p className="mt-1 text-sm text-muted">Save the plan to add your own notes to it and its stops.</p>}
+          </section>
+        )}
+
+        {saved && plan && <PlanNotes text={notes.plan} saving={setNotesMut.isPending} failed={!!setNotesMut.error}
+          onSave={text => setNotesMut.mutate({ id: saved.id, notes: text })} />}
+        {shared && notes.plan && (
+          <section>
+            <h2 className={H2}>Notes</h2>
+            <p className="text-base whitespace-pre-line">{notes.plan}</p>
           </section>
         )}
 
@@ -290,7 +312,12 @@ type PortageActions = {
   flagged: Set<string>
 }
 
-function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPlan; stops: Stop[]; startAt?: string; onFocus: (p: LatLng) => void; actions: PortageActions }) {
+function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNote }: {
+  plan: ComputedPlan; stops: Stop[]; startAt?: string; onFocus: (p: LatLng) => void; actions: PortageActions
+  stopNotes: Record<string, string>
+  onSaveNote?: (featureId: string, text: string) => Promise<unknown>   // set when it's your saved plan
+}) {
+  const [editing, setEditing] = useState<string | null>(null)
   const when = (s: Stop) => {
     if (!s.eta || !startAt) return fmtDuration(s.elapsedS)
     const d = dayOffset(startAt, s.eta)
@@ -319,6 +346,22 @@ function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPl
                 {stopLines(s).map((l, j) => <span key={j} className="block text-sm text-muted">{l}</span>)}
               </span>
             </button>
+            {(stopNotes[s.feature.id] || (onSaveNote && editing === `${s.leg}-${i}`)) && (
+              <div className="pl-[5.25rem] pb-2 -mt-1 border-b border-border text-sm" data-testid="stop-note">
+                {editing === `${s.leg}-${i}` && onSaveNote
+                  ? <NoteEditor initial={stopNotes[s.feature.id] ?? ''} label={`Your note on ${s.feature.name ?? KIND[s.feature.kind]}`}
+                      onCancel={() => setEditing(null)}
+                      onSave={async text => { await onSaveNote(s.feature.id, text); setEditing(null) }} />
+                  : <p className="text-fg whitespace-pre-line"><span className="text-muted">{onSaveNote ? 'Your note: ' : 'Note: '}</span>{stopNotes[s.feature.id]}</p>}
+              </div>
+            )}
+            {onSaveNote && editing !== `${s.leg}-${i}` && (
+              <div className="pl-[5.25rem] -mt-1 border-b border-border">
+                <button type="button" className="min-h-11 text-sm text-muted hover:text-fg" onClick={() => setEditing(`${s.leg}-${i}`)}>
+                  {stopNotes[s.feature.id] ? 'Edit your note' : '+ Add a note'}
+                </button>
+              </div>
+            )}
             {canAddPortage(s) && (
               <div className="pl-[5.25rem] pb-2 -mt-1 border-b border-border space-y-1 text-sm" data-testid="portage-block">
                 {s.portages?.map(p => (
@@ -342,6 +385,43 @@ function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPl
       })}
       {stops.length === 0 && <li className="py-2 text-sm text-muted">No stops of these kinds on this stretch.</li>}
     </ol>
+  )
+}
+
+/** A small private-note editor: a stop's note, inline in the list. */
+function NoteEditor({ initial, label, onSave, onCancel }: { initial: string; label: string; onSave: (text: string) => Promise<void>; onCancel: () => void }) {
+  const [text, setText] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  return (
+    <div className="space-y-2 pt-1">
+      <textarea className={`${INPUT} h-20`} maxLength={500} value={text} onChange={e => setText(e.target.value)} aria-label={label}
+        placeholder="Crew meets here with food, refill water, phone signal is poor…" autoFocus />
+      <div className="flex gap-2">
+        <button type="button" className={buttonClass('primary', 'sm')} disabled={busy}
+          onClick={async () => { setBusy(true); setFailed(false); try { await onSave(text) } catch { setFailed(true) } finally { setBusy(false) } }}>
+          {busy ? 'Saving…' : 'Save note'}
+        </button>
+        <button type="button" className={buttonClass('quiet', 'sm')} onClick={onCancel}>Cancel</button>
+      </div>
+      {failed && <p className="text-sm text-red">Couldn&apos;t save the note. Please try again.</p>}
+    </div>
+  )
+}
+
+/** The plan's own notes (a saved plan, its owner). */
+function PlanNotes({ text, saving, failed, onSave }: { text: string; saving: boolean; failed: boolean; onSave: (t: string) => void }) {
+  const [value, setValue] = useState(text)
+  return (
+    <section>
+      <Field label="Your notes for this plan" htmlFor="plan-notes" help="Kit, phone numbers, who drives. They're printed on the route sheet, and anyone you share the plan with sees them.">
+        <textarea id="plan-notes" className={`${INPUT} h-28`} maxLength={2000} value={value} onChange={e => setValue(e.target.value)} />
+      </Field>
+      <button type="button" className={`${buttonClass('secondary', 'sm')} mt-2`} disabled={saving || value.trim() === text.trim()} onClick={() => onSave(value)}>
+        {saving ? 'Saving…' : 'Save notes'}
+      </button>
+      {failed && <p className="mt-2 text-sm text-red">Couldn&apos;t save your notes. Please try again.</p>}
+    </section>
   )
 }
 

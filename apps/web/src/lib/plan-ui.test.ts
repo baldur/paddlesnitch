@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature } from '@paddlesnitch/waterways/types'
-import { asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import { crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -116,5 +116,31 @@ describe('the map tiles', () => {
 
   it('is the dark map by default', () => {
     expect(mapTiles(false).base).toContain('/World_Dark_Gray_Base/')
+  })
+})
+
+describe('the printed sheets', () => {
+  const draft: PlanDraft = { start: [51.355333, -1.994961], finish: [51.500833, -0.121667], shape: 'one_way', paceKmh: 8, portageMinutes: 3 }
+
+  it('carry the route, the plan behind it, the sheet and the stop kinds in the address', () => {
+    expect(printHref(draft)).toBe('/plan/print?from=51.355333,-1.994961&to=51.500833,-0.121667')
+    expect(printHref(draft, { id: 'abc', crew: true, show: ['portage', 'weir'] }))
+      .toBe('/plan/print?from=51.355333,-1.994961&to=51.500833,-0.121667&show=portage,weir&id=abc&crew=1')
+    expect(printHref(draft, { share: 'xyz' })).toContain('&share=xyz')
+  })
+
+  it("read the stop kinds back, ignoring ones that don't exist; none asked means the defaults", () => {
+    expect([...shownGroups('portage,weir,nonsense')]).toEqual(['portage', 'weir'])
+    expect([...shownGroups('')]).toEqual([])
+    expect([...shownGroups(undefined)]).toEqual(['portage', 'weir', 'access', 'facility'])
+  })
+
+  it('the crew sheet keeps places a crew can reach, with postcode and parking; not towpath points', () => {
+    const lock = feature({ crew: { postcode: 'SL6 9SR', parking: 'National Trust car park.', directions: 'Walk across the weir.' } })
+    expect(isCrewStop(stop(lock))).toBe(true)
+    expect(crewLines(stop(lock))).toEqual({ postcode: 'SL6 9SR', lines: ['Parking: National Trust car park.', 'Walk across the weir.'] })
+    expect(isCrewStop(stop(feature({})))).toBe(false)                                      // a lock we can't direct anyone to
+    expect(isCrewStop(stop(feature({ kind: 'slipway', name: 'Slipway' })))).toBe(true)
+    expect(isCrewStop(stop(feature({ kind: 'crew_point', name: 'Towpath access' })))).toBe(false)
   })
 })

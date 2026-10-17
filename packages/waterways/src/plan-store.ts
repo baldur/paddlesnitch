@@ -17,17 +17,24 @@ export type SavedPlan = PlanInput & {
   createdAt: string
   updatedAt: string
   shareId?: string
+  /** The paddler's own notes: on the whole plan, and on stops (by feature id).
+   *  Private, but a shared plan's link shows them (the crew wants them). */
+  notes?: string
+  stopNotes?: Record<string, string>
 }
 
 export const MAX_PLANS = 200
 export const MAX_TITLE = 80
+export const MAX_PLAN_NOTES = 2000
+export const MAX_STOP_NOTE = 500
+export const MAX_STOP_NOTES = 300
 
 const key = (userId: string, id: string) => `users/${userId}/plans/${id}.json`
 const sharedKey = (shareId: string) => `plans/shared/${shareId}.json`
 const validId = (id: string) => /^[\w-]{1,64}$/.test(id)
 type ShareIndex = { userId: string; planId: string }
 
-export type PlanFields = Omit<SavedPlan, 'id' | 'createdAt' | 'updatedAt' | 'shareId'>
+export type PlanFields = Omit<SavedPlan, 'id' | 'createdAt' | 'updatedAt' | 'shareId' | 'notes' | 'stopNotes'>
 
 /** Create, or update the plan with `id`. Null when `id` isn't one of theirs. */
 export async function savePlan(userId: string, fields: PlanFields, id?: string): Promise<SavedPlan | null | 'too_many'> {
@@ -42,6 +49,8 @@ export async function savePlan(userId: string, fields: PlanFields, id?: string):
     createdAt: prev?.createdAt ?? now,
     updatedAt: now,
     ...(prev?.shareId ? { shareId: prev.shareId } : {}),
+    ...(prev?.notes ? { notes: prev.notes } : {}),
+    ...(prev?.stopNotes ? { stopNotes: prev.stopNotes } : {}),
   }
   await putJson(key(userId, plan.id), plan)
   return plan
@@ -64,6 +73,29 @@ export async function deletePlan(userId: string, id: string): Promise<boolean> {
   if (plan.shareId) await deleteObject(sharedKey(plan.shareId))
   await deleteObject(key(userId, id))
   return true
+}
+
+/** Set the plan's own note, and/or one stop's (empty text removes it). Null
+ *  when the plan isn't theirs, 'too_many' past MAX_STOP_NOTES stops. */
+export async function setPlanNotes(
+  userId: string, id: string, patch: { notes?: string; stop?: { featureId: string; text: string } },
+): Promise<SavedPlan | null | 'too_many'> {
+  const plan = await getPlan(userId, id)
+  if (!plan) return null
+  const next: SavedPlan = { ...plan, updatedAt: new Date().toISOString() }
+  if (patch.notes !== undefined) {
+    const n = patch.notes.trim().slice(0, MAX_PLAN_NOTES)
+    if (n) next.notes = n; else delete next.notes
+  }
+  if (patch.stop) {
+    const stopNotes = { ...plan.stopNotes }
+    const t = patch.stop.text.trim().slice(0, MAX_STOP_NOTE)
+    if (t) stopNotes[patch.stop.featureId] = t; else delete stopNotes[patch.stop.featureId]
+    if (Object.keys(stopNotes).length > MAX_STOP_NOTES) return 'too_many'
+    if (Object.keys(stopNotes).length) next.stopNotes = stopNotes; else delete next.stopNotes
+  }
+  await putJson(key(userId, id), next)
+  return next
 }
 
 /** Give a plan a link (the same one if it already has one). */
