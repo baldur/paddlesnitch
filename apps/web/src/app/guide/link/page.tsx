@@ -34,7 +34,7 @@ export default function LinkStep() {
         recognise the code, use the one on the tracker’s screen now.
       </Note>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">The lesson</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">The lesson</h2>
       <p>
         A few seconds after you add it, the tracker starts a short lesson on the BOOT button. Do what
         each screen says:

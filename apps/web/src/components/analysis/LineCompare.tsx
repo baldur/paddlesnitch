@@ -4,6 +4,7 @@ import type { AnalysisPoint } from '@paddlesnitch/analysis/analysis'
 import { compareLines, compareSection, lineSummary, replayAt, replayLength, type LineCompare as Cmp } from '@paddlesnitch/analysis/line-compare'
 import CompareMapClient from '@/components/map/CompareMapClient'
 import { A_LINE, B_LINE } from '@/components/map/compare-colours'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 
 type LL = [number, number]
 type Side = { label: string; points: AnalysisPoint[] }
@@ -67,14 +68,14 @@ export default function LineCompare({ a, b }: { a: Side; b: Side }) {
 
   return (
     <section className="mb-6" aria-label="On the water">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xs tracking-widest text-muted">ON THE WATER</h2>
-        <div className="text-xs flex gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-2">
+        <h2 className="text-lg font-semibold text-fg">On the water</h2>
+        <div className="text-sm flex flex-wrap gap-x-3">
           <span style={{ color: A_LINE }}>━ {a.label}</span>
           <span style={{ color: B_LINE }}>┅ {b.label}</span>
         </div>
       </div>
-      <div className="h-80 border border-border">
+      <div className="h-80 sm:h-96 border border-border">
         <CompareMapClient
           a={a.points.map(p => [p.lat, p.lng])} b={b.points.map(p => [p.lat, p.lng])}
           boatA={boats.a ? [boats.a.lat, boats.a.lng] : null} boatB={boats.b ? [boats.b.lat, boats.b.lng] : null}
@@ -88,27 +89,27 @@ export default function LineCompare({ a, b }: { a: Side; b: Side }) {
       {active && (
         <div className="flex items-center gap-3 mt-2">
           <button type="button" onClick={() => { if (secs >= length) setSecs(0); setPlaying(p => !p) }}
-            className="px-3 py-1.5 bg-primary text-white text-xs tracking-widest">{playing ? 'PAUSE' : 'REPLAY'}</button>
+            className={buttonClass('secondary', 'sm', 'w-24')}>{playing ? 'Pause' : 'Replay'}</button>
           <input type="range" min={0} max={Math.max(1, Math.round(length))} value={Math.round(secs)} aria-label="Replay position"
             onChange={e => { setPlaying(false); setSecs(Number(e.target.value)) }} className="flex-1" />
-          <span className="text-xs text-muted tabular w-12 text-right">{fmtSecs(secs)}</span>
+          <span className="text-sm text-muted tabular w-12 text-right">{fmtSecs(secs)}</span>
         </div>
       )}
 
       {active && (
-        <div className="mt-3 border-l-2 border-primary pl-3 text-sm text-fg flex flex-col gap-1">
-          <p className="text-[10px] tracking-widest text-muted">
-            {section?.ok ? 'THE STRETCH YOU PICKED' : wholeOk ? 'WHOLE PADDLES'
-              : `THE LONGEST STRETCH YOU BOTH PADDLED THE SAME WAY (${((active.c.toM - active.c.fromM) / 1000).toFixed(1)} KM)`}
+        <div className="mt-3 border-l-2 border-primary pl-4 text-base text-fg flex flex-col gap-1">
+          <p className="text-sm font-medium text-muted">
+            {section?.ok ? 'The stretch you picked' : wholeOk ? 'Whole paddles'
+              : `The longest stretch you both paddled the same way (${((active.c.toM - active.c.fromM) / 1000).toFixed(1)} km)`}
           </p>
           {lineSummary(active.c, a.label, b.label).map(s => <p key={s}>{s}</p>)}
-          <p className="text-xs text-muted">Moving time only: rests don&apos;t count.{widest ? ' The yellow mark is where the lines were furthest apart.' : ''}</p>
+          <p className="text-sm text-muted">Moving time only: rests don&apos;t count.{widest ? ' The yellow mark is where the lines were furthest apart.' : ''}</p>
         </div>
       )}
       {message && <p className="mt-3 text-sm text-muted">{message}</p>}
-      <div className="mt-2 flex items-center gap-3 text-xs text-muted">
+      <div className="mt-2 flex items-center gap-3 text-sm text-muted">
         {picks.length === 0 && whole && <span>Tap two points on the blue line to compare one stretch.</span>}
-        {picks.length > 0 && <button type="button" onClick={() => choose([])} className="text-primary tracking-widest">WHOLE PADDLES</button>}
+        {picks.length > 0 && <button type="button" onClick={() => choose([])} className={buttonClass('quiet', 'sm', '-ml-3 text-primary-text')}>Whole paddles</button>}
       </div>
     </section>
   )

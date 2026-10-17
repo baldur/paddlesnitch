@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { IBM_Plex_Mono } from 'next/font/google'
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
 import Footer from '@/components/Footer'
 import CookieNotice from '@/components/CookieNotice'
@@ -10,10 +10,18 @@ import TRPCProvider from '@/components/TRPCProvider'
 import { SessionUserProvider } from '@/components/SessionUser'
 import { sessionUser } from '@/lib/session-user'
 
-const ibmPlexMono = IBM_Plex_Mono({
+// Sans for reading and controls, Mono for numbers and small labels (tokens.css).
+const plexSans = IBM_Plex_Sans({
   weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
+  variable: '--font-plex-sans',
+})
+const plexMono = IBM_Plex_Mono({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-plex-mono',
 })
 
 export const metadata: Metadata = {
@@ -32,8 +40,9 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await sessionUser()
   return (
-    <html lang="en" className={ibmPlexMono.className}>
-      <body className="min-h-screen flex flex-col bg-bg text-fg">
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
+      {/* Bottom padding on phones makes room for the bottom tab bar (AppShell). */}
+      <body className="min-h-screen flex flex-col bg-bg text-fg pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:pb-0">
         <TRPCProvider>
           <SessionUserProvider user={user}>
           <AttContactBanner />

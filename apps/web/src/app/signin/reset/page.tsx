@@ -2,6 +2,11 @@
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { Field, inputClass } from '@paddlesnitch/ui/Form'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { EMAIL_DELIVERY } from '@/lib/email-delivery'
+import NoEmailReset from '../NoEmailReset'
 
 // Step 2 of password reset: user pastes the emailed code + picks a new password.
 function ResetForm() {
@@ -37,18 +42,15 @@ function ResetForm() {
     }
   }
 
-  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
+  if (!EMAIL_DELIVERY) return <NoEmailReset />
 
   return (
-    <div className="w-full max-w-sm">
-      <h1 className="text-sm tracking-widest text-fg mb-2">SET NEW PASSWORD</h1>
-      <p className="text-xs text-muted mb-6">
-        Paste the 6-digit code from your email and choose a new password.
-      </p>
+    <Page width="narrow" className="max-w-md">
+      <PageHeader title="Set a new password" description="Paste the 6-digit code from your email and choose a new password." />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted tracking-widest">EMAIL</label>
+        <Field label="Email" htmlFor="reset-email">
           <input
+            id="reset-email"
             type="email"
             required
             autoComplete="email"
@@ -56,10 +58,10 @@ function ResetForm() {
             onChange={e => setEmail(e.target.value)}
             className={inputClass}
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted tracking-widest">CODE FROM EMAIL</label>
+        </Field>
+        <Field label="Code from the email" htmlFor="reset-code">
           <input
+            id="reset-code"
             type="text"
             required
             inputMode="numeric"
@@ -67,13 +69,13 @@ function ResetForm() {
             maxLength={6}
             value={code}
             onChange={e => setCode(e.target.value)}
-            className={`${inputClass} tracking-widest`}
+            className={`${inputClass} tabular`}
             placeholder="000000"
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted tracking-widest">NEW PASSWORD</label>
+        </Field>
+        <Field label="New password" htmlFor="reset-password" help="At least 8 characters, with an uppercase letter, a lowercase letter and a number.">
           <input
+            id="reset-password"
             type="password"
             required
             autoComplete="new-password"
@@ -82,44 +84,27 @@ function ResetForm() {
             onChange={e => setPassword(e.target.value)}
             className={inputClass}
           />
-          <p className="text-xs text-muted">
-            Minimum 8 characters — must include an uppercase letter, a lowercase letter, and a number.
-          </p>
-        </div>
+        </Field>
         {error && (
-          <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-            {error}
-          </div>
+          <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-sm text-red">{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-        >
-          {loading ? 'RESETTING…' : 'RESET PASSWORD'}
+        <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
+          {loading ? 'Resetting…' : 'Reset password'}
         </button>
-        <p className="text-xs text-muted text-center">
-          Didn&apos;t get a code?{' '}
-          <Link href="/signin/forgot" className="tt-link">Request another</Link>
+        <p className="text-sm text-muted text-center">
+          Didn&apos;t get a code? <Link href="/signin/forgot" className="tt-link">Request another</Link>
+          {' · '}
+          <Link href="/signin" className="tt-link">Back to sign in</Link>
         </p>
       </form>
-    </div>
+    </Page>
   )
 }
 
 export default function ResetPasswordPage() {
   return (
-    <main className="flex-1 flex flex-col">
-      <header className="border-b border-border px-4 py-3">
-        <Link href="/">
-          <span className="text-fg font-bold text-lg tracking-widest">paddlesnitch</span>
-        </Link>
-      </header>
-      <div className="flex-1 flex items-start justify-center pt-16 px-4">
-        <Suspense fallback={null}>
-          <ResetForm />
-        </Suspense>
-      </div>
-    </main>
+    <Suspense fallback={null}>
+      <ResetForm />
+    </Suspense>
   )
 }

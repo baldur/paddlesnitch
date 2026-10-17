@@ -15,18 +15,20 @@ test('two clicks on the water give a route and its stops', async ({ page }) => {
   await expect(page.getByText('Now click the water where you finish.')).toBeVisible()
   await page.mouse.click(box.x + box.width / 2 + 250, box.y + box.height / 2 - 60)
 
-  await expect(page.getByTestId('plan-summary')).toContainText('DISTANCE')
+  await expect(page.getByTestId('plan-summary')).toContainText('Distance')
   await expect(page.getByTestId('stop-list')).toContainText('Portage side not known yet.')
   await expect(page).toHaveURL(/from=.*&to=/)   // the plan is in the address bar
 
-  // SATELLITE swaps the dark map for aerial imagery, to see where to land.
-  await page.getByRole('button', { name: 'SATELLITE' }).click()
-  await expect(page.getByRole('button', { name: 'SATELLITE' })).toHaveAttribute('aria-pressed', 'true')
+  // Satellite swaps the dark map for aerial imagery, to see where to land.
+  await page.getByRole('button', { name: 'Satellite' }).click()
+  await expect(page.getByRole('button', { name: 'Satellite' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('img.leaflet-tile[src*="World_Imagery"]').first()).toBeAttached()
 })
 
 test('zoomed out, a click zooms in; a start off the water is moved by the next click', async ({ page }) => {
-  await page.goto('/plan')   // the whole UK and Ireland: a click there is kilometres wide
+  // Zoomed out over the UK and Ireland: a click there is kilometres wide.
+  // (/plan itself opens on Reading, close enough to click the water.)
+  await page.goto('/plan?view=54.5,-4,6')
   const map = page.locator('.leaflet-container')
   const box = (await map.boundingBox())!
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
@@ -43,7 +45,7 @@ test('zoomed out, a click zooms in; a start off the water is moved by the next c
 
 test('coverage: the map colours the water by what we know, and the gaps page lists it', async ({ page }) => {
   await page.goto('/plan?view=51.45,-1.2,9')
-  await page.getByRole('button', { name: 'COVERAGE' }).click()
+  await page.getByRole('button', { name: 'Coverage' }).click()
   await expect(page.getByTestId('coverage-legend')).toContainText('How well we know each waterway')
   await page.getByRole('link', { name: /Every waterway and its gaps/ }).click()
   await expect(page).toHaveURL(/\/plan\/gaps$/)
@@ -52,6 +54,17 @@ test('coverage: the map colours the water by what we know, and the gaps page lis
   await page.getByLabel('Find a waterway').fill('thames')
   await expect(table).not.toContainText('Kennet and Avon Canal')
   await expect(table).toContainText('River Thames')
+})
+
+test('with nothing in the link, the planner opens close in on Reading, ready for a click', async ({ page }) => {
+  await page.goto('/plan')
+  const map = page.locator('.leaflet-container')
+  await expect(page.getByText('Click the water to set your start.')).toBeVisible({ timeout: 15_000 })
+  const box = (await map.boundingBox())!
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  // Close enough in that a click places the start (on the water or not)
+  // rather than zooming in.
+  await expect(page).toHaveURL(/from=/)
 })
 
 test('the places search moves the map to a lock', async ({ page }) => {
@@ -70,9 +83,9 @@ test('a plan link opens the whole Devizes to Westminster route', async ({ page }
   await expect(summary).toContainText('201.3 km', { timeout: 15_000 })
   await expect(summary).toContainText('77')
   await expect(page.getByTestId('stop-list')).toContainText('Teddington Lock')
-  await page.getByRole('button', { name: 'RETURN' }).click()
+  await page.getByRole('button', { name: 'Return' }).click()
   await expect(summary).toContainText('402.6 km')
-  await expect(page.getByTestId('stop-list')).toContainText(/TURN AT/)
+  await expect(page.getByTestId('stop-list')).toContainText(/Turn at/)
 })
 
 test('a saved, shared plan opens from its link for someone signed out', async ({ browser }) => {
@@ -82,10 +95,10 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   await owner.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
   await expect(owner.getByTestId('plan-summary')).toContainText('201.3 km', { timeout: 15_000 })
   await owner.getByLabel('Plan name').fill('DW crew plan')
-  await owner.getByRole('button', { name: 'SAVE', exact: true }).click()
+  await owner.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(owner).toHaveURL(/\/plan\/(?!shared)[^/?]+$/, { timeout: 15_000 })
 
-  await owner.getByRole('button', { name: 'SHARE', exact: true }).click()
+  await owner.getByRole('button', { name: 'Share', exact: true }).click()
   const link = (await owner.getByTestId('share-link').innerText()).trim()
   expect(link).toMatch(/\/plan\/shared\/[\w-]+$/)
 
@@ -94,10 +107,10 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   await expect(guest.getByText('Shared by Plan Owner.', { exact: false })).toBeVisible({ timeout: 15_000 })
   await expect(guest.getByTestId('plan-summary')).toContainText('201.3 km')
 
-  await owner.getByRole('button', { name: 'STOP SHARING' }).click()
-  await expect(owner.getByRole('button', { name: 'SHARE', exact: true })).toBeVisible()
+  await owner.getByRole('button', { name: 'Stop sharing' }).click()
+  await expect(owner.getByRole('button', { name: 'Share', exact: true })).toBeVisible()
   await guest.reload()
-  await expect(guest.getByText("We can't find this plan.", { exact: false })).toBeVisible()
+  await expect(guest.getByText("We can't find this plan", { exact: false })).toBeVisible()
   await ownerCtx.close(); await guestCtx.close()
 })
 
@@ -107,8 +120,8 @@ test('OpenPortage: a paddler adds portage details at a lock and sees them on the
   await page.goto('/plan?from=51.5395,-0.9010&to=51.5470,-0.8740')
   await expect(page.getByTestId('plan-summary')).toContainText('km', { timeout: 15_000 })
   const lock = page.getByTestId('stop-list').locator('li', { hasText: 'Hambleden Lock' })
-  // "+ ADD YOURS" when someone (a retry of this test) already added theirs.
-  await lock.getByRole('button', { name: /ADD (PORTAGE DETAILS|YOURS)/ }).click()
+  // "+ Add yours" when someone (a retry of this test) already added theirs.
+  await lock.getByRole('button', { name: /Add (portage details|yours)/ }).click()
 
   const panel = page.getByTestId('add-portage')
   await expect(panel).toContainText('Click the map where you get out')
@@ -118,7 +131,7 @@ test('OpenPortage: a paddler adds portage details at a lock and sees them on the
   await page.mouse.click(box.x + box.width / 2 + 40, box.y + box.height / 2)
   await panel.getByLabel('Portage notes').fill('Steps by the lock cottage')
   await panel.getByLabel('Release under CC0').check()
-  await panel.getByRole('button', { name: 'PUBLISH' }).click()
+  await panel.getByRole('button', { name: 'Publish' }).click()
 
   await expect(panel).toHaveCount(0)
   await expect(lock).toContainText('Added by Lock Keeper', { timeout: 15_000 })

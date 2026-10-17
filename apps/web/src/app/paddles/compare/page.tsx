@@ -2,26 +2,41 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { fmtDurWords, split500 } from '@paddlesnitch/analysis/analysis'
+import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import SameOuting from '@/components/analysis/SameOuting'
 import LineCompare from '@/components/analysis/LineCompare'
 import { fmtDay } from '@paddlesnitch/core/format'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
+import { Page, PageHeader, eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { EmptyState } from '@paddlesnitch/ui/Card'
+import LoadingState from '@/components/LoadingState'
 
 export default function ComparePage() {
-  return <Suspense fallback={<div className="min-h-screen bg-bg" />}><CompareInner /></Suspense>
+  return <Suspense fallback={<Shell><LoadingState label="Loading" /></Shell>}><CompareInner /></Suspense>
+}
+
+// Every state of the page has the site header and a way back (it once had
+// neither while loading or when a paddle couldn't be read).
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="flex-1 flex flex-col">
+      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← Paddles</Link>} />
+      <Page>{children}</Page>
+    </main>
+  )
 }
 
 const fmtDate = fmtDay
 
 function Row({ label, a, b, better }: { label: string; a: string; b: string; better?: 'a' | 'b' | '' }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5 border-b border-border text-sm tabular">
-      <span className="text-muted text-xs self-center">{label}</span>
-      <span className={`text-right w-24 ${better === 'a' ? 'text-green' : ''}`}>{a}</span>
-      <span className={`text-right w-24 ${better === 'b' ? 'text-green' : ''}`}>{b}</span>
+    <div className="grid grid-cols-[1fr_auto_auto] gap-3 py-2 border-b border-border text-base tabular">
+      <span className={`${eyebrowClass} self-center`}>{label}</span>
+      <span className={`text-right w-24 sm:w-32 ${better === 'a' ? 'text-green' : ''}`}>{a}</span>
+      <span className={`text-right w-24 sm:w-32 ${better === 'b' ? 'text-green' : ''}`}>{b}</span>
     </div>
   )
 }
@@ -41,20 +56,22 @@ function CompareInner() {
     : bQ.isPending ? undefined : (bQ.data ?? null)
   const buddyName = buddyQ.data?.name
 
-  if (A === undefined || B === undefined) return <div className="min-h-screen bg-bg text-muted flex items-center justify-center text-sm">Loading…</div>
+  if (A === undefined || B === undefined) return <Shell><LoadingState label="Loading" /></Shell>
   if (!A || !B) return (
-    <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3">
-      <p className="text-sm text-muted">Couldn&apos;t load both paddles.</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
-    </div>
+    <Shell>
+      <PageHeader title="Compare" />
+      <EmptyState title="Couldn't load both paddles" body="One of them may have been deleted, or a buddy may have stopped sharing it."
+        action={<Link href="/paddles" className={buttonClass('secondary')}>Back to Paddles</Link>} />
+    </Shell>
   )
 
   // A paddle without a map (#414) has no route, distance or pace to compare.
   if (isMotionOnly(A.result) || isMotionOnly(B.result)) return (
-    <div className="min-h-screen bg-bg text-fg flex flex-col items-center justify-center gap-3 px-4 text-center">
-      <p className="text-sm text-muted">The GPS failed on one of these paddles, so they can&apos;t be compared.</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary">← PADDLES</Link>
-    </div>
+    <Shell>
+      <PageHeader title="Compare" />
+      <EmptyState title="These two can't be compared" body="The GPS failed on one of these paddles, so there's no route to compare."
+        action={<Link href="/paddles" className={buttonClass('secondary')}>Back to Paddles</Link>} />
+    </Shell>
   )
 
   const ra = A.result, rb = B.result
@@ -65,33 +82,29 @@ function CompareInner() {
   const dPace = 500 / paceA - 500 / paceB // seconds/500 difference (A - B); negative = A faster
 
   return (
-    <div className="min-h-screen">
-      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← PADDLES</Link>} />
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="text-lg font-bold tracking-widest">COMPARE</h1>
-        </div>
+    <Shell>
+        <PageHeader title="Compare" description={`${labelA} and ${labelB}`} />
 
-        <div className="grid grid-cols-[1fr_auto_auto] gap-3 mb-2 text-[10px] tracking-widest text-muted">
-          <span></span>
-          <Link href={`/paddles/${A.id}`} className="text-right w-24 text-muted hover:text-fg">{bOwner ? labelA : fmtDate(A.paddledAt)}</Link>
-          <Link href={hrefB} className="text-right w-24 text-muted hover:text-fg">{bOwner ? labelB : fmtDate(B.paddledAt)}</Link>
-        </div>
-
+        <div>
         <LineCompare a={{ label: labelA, points: ra.points }} b={{ label: labelB, points: rb.points }} />
 
-        <Row label="TIME" a={fmtDurWords(ra.durationS)} b={fmtDurWords(rb.durationS)} />
-        <Row label="DISTANCE" a={`${ra.distanceKm.toFixed(2)} km`} b={`${rb.distanceKm.toFixed(2)} km`} better={ra.distanceKm > rb.distanceKm ? 'a' : ra.distanceKm < rb.distanceKm ? 'b' : ''} />
-        <Row label="PACE /500" a={split500(paceA)} b={split500(paceB)} better={paceA > paceB ? 'a' : paceA < paceB ? 'b' : ''} />
-        <Row label="STROKE RATE" a={ra.avgSR != null ? `${Math.round(ra.avgSR)} spm` : '—'} b={rb.avgSR != null ? `${Math.round(rb.avgSR)} spm` : '—'} />
-        <Row label="DISTANCE PER STROKE" a={ra.avgDps != null ? `${ra.avgDps.toFixed(1)} m` : '—'} b={rb.avgDps != null ? `${rb.avgDps.toFixed(1)} m` : '—'} better={ra.avgDps != null && rb.avgDps != null ? (ra.avgDps > rb.avgDps ? 'a' : 'b') : ''} />
-        <Row label="EFFORTS" a={String(ra.surges.length)} b={String(rb.surges.length)} />
-        <Row label="WIND" a={ra.conditions?.windKmh != null ? `${Math.round(ra.conditions.windKmh)} km/h` : '—'} b={rb.conditions?.windKmh != null ? `${Math.round(rb.conditions.windKmh)} km/h` : '—'} />
-        <Row label="RIVER FLOW" a={ra.conditions?.flowM3s != null ? `${ra.conditions.flowM3s.toFixed(1)} m³/s` : '—'} b={rb.conditions?.flowM3s != null ? `${rb.conditions.flowM3s.toFixed(1)} m³/s` : '—'} />
+        <div className="grid grid-cols-[1fr_auto_auto] gap-3 pb-2 border-b border-border text-sm">
+          <span></span>
+          <Link href={`/paddles/${A.id}`} className="text-right w-24 sm:w-32 text-primary-text hover:underline">{labelA}</Link>
+          <Link href={hrefB} className="text-right w-24 sm:w-32 text-primary-text hover:underline">{labelB}</Link>
+        </div>
+        <Row label="Time" a={fmtClock(ra.durationS)} b={fmtClock(rb.durationS)} />
+        <Row label="Distance" a={`${ra.distanceKm.toFixed(2)} km`} b={`${rb.distanceKm.toFixed(2)} km`} better={ra.distanceKm > rb.distanceKm ? 'a' : ra.distanceKm < rb.distanceKm ? 'b' : ''} />
+        <Row label="Pace /500" a={split500(paceA)} b={split500(paceB)} better={paceA > paceB ? 'a' : paceA < paceB ? 'b' : ''} />
+        <Row label="Stroke rate" a={ra.avgSR != null ? `${Math.round(ra.avgSR)} spm` : '—'} b={rb.avgSR != null ? `${Math.round(rb.avgSR)} spm` : '—'} />
+        <Row label="Per stroke" a={ra.avgDps != null ? `${ra.avgDps.toFixed(1)} m` : '—'} b={rb.avgDps != null ? `${rb.avgDps.toFixed(1)} m` : '—'} better={ra.avgDps != null && rb.avgDps != null ? (ra.avgDps > rb.avgDps ? 'a' : 'b') : ''} />
+        <Row label="Efforts" a={String(ra.surges.length)} b={String(rb.surges.length)} />
+        <Row label="Wind" a={ra.conditions?.windKmh != null ? `${Math.round(ra.conditions.windKmh)} km/h` : '—'} b={rb.conditions?.windKmh != null ? `${Math.round(rb.conditions.windKmh)} km/h` : '—'} />
+        <Row label="River flow" a={ra.conditions?.flowM3s != null ? `${ra.conditions.flowM3s.toFixed(1)} m³/s` : '—'} b={rb.conditions?.flowM3s != null ? `${rb.conditions.flowM3s.toFixed(1)} m³/s` : '—'} />
 
-        <div className="mt-4 border-l-2 border-primary pl-3 text-sm text-fg">
+        <div className="mt-6 border-l-2 border-primary pl-4 text-base text-fg">
           {labelA} vs {labelB}: pace was{' '}
-          <b>{Math.abs(dPace) < 0.5 ? 'about the same' : `${Math.abs(dPace).toFixed(0)}s/500 ${dPace < 0 ? 'faster' : 'slower'}`}</b>
+          <b>{Math.abs(dPace) < 0.5 ? 'about the same' : `${Math.abs(dPace).toFixed(0)} s/500 ${dPace < 0 ? 'faster' : 'slower'}`}</b>
           {ra.avgSR != null && rb.avgSR != null && <>, stroke rate {ra.avgSR > rb.avgSR ? 'up' : ra.avgSR < rb.avgSR ? 'down' : 'level'} {Math.abs(Math.round(ra.avgSR - rb.avgSR)) || ''} spm</>}
           , {(ra.distanceKm - rb.distanceKm) >= 0 ? '+' : ''}{(ra.distanceKm - rb.distanceKm).toFixed(1)} km distance.
         </div>
@@ -100,12 +113,12 @@ function CompareInner() {
         {!bOwner && <SameOuting a={A} b={B} />}
 
         {!bOwner && (A.note?.trim() || B.note?.trim()) && (
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">NOTE · {fmtDate(A.paddledAt)}</div>{A.note || <span className="text-muted">no note</span>}</div>
-            <div className="text-xs"><div className="text-[10px] text-muted tracking-widest mb-1">NOTE · {fmtDate(B.paddledAt)}</div>{B.note || <span className="text-muted">no note</span>}</div>
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <div className="text-sm"><p className={`${eyebrowClass} mb-1`}>Note · {fmtDate(A.paddledAt)}</p>{A.note || <span className="text-muted">No note</span>}</div>
+            <div className="text-sm"><p className={`${eyebrowClass} mb-1`}>Note · {fmtDate(B.paddledAt)}</p>{B.note || <span className="text-muted">No note</span>}</div>
           </div>
         )}
-      </div>
-    </div>
+        </div>
+    </Shell>
   )
 }

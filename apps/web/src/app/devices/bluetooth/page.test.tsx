@@ -61,14 +61,14 @@ describe('Bluetooth test page', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })))
     await mount()
     expect(container.textContent).toContain('Chrome or Edge')
-    expect([...container.querySelectorAll('button')].some(b => b.textContent === 'CONNECT')).toBe(false)
+    expect([...container.querySelectorAll('button')].some(b => b.textContent === 'Connect')).toBe(false)
   })
 
   it('connects, reads the tracker and says it is yours', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [{ deviceId: '435AC17C' }] }) })))
     const bt = fakeBluetooth(ABOUT)
     await mount()
-    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'CONNECT')!
+    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'Connect')!
     await act(async () => { connect.click() })
     await act(async () => { await Promise.resolve() })
     // Asks the browser for paddlesnitch trackers only.
@@ -82,11 +82,11 @@ describe('Bluetooth test page', () => {
 
   async function connected() {
     await mount()
-    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'CONNECT')!
+    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'Connect')!
     await act(async () => { connect.click() })
     await act(async () => { await Promise.resolve() })
   }
-  const pairButton = () => [...container.querySelectorAll('button')].find(b => b.textContent === 'PAIR')
+  const pairButton = () => [...container.querySelectorAll('button')].find(b => b.textContent === 'Pair')
 
   it('pairs by reading the item only a paired connection may read', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [{ deviceId: '435AC17C' }] }) })))
@@ -135,7 +135,7 @@ describe('Bluetooth test page', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })))
     fakeBluetooth('garbage')
     await mount()
-    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'CONNECT')!
+    const connect = [...container.querySelectorAll('button')].find(b => b.textContent === 'Connect')!
     await act(async () => { connect.click() })
     await act(async () => { await Promise.resolve() })
     expect(container.textContent).toContain("Couldn't read this tracker")
@@ -203,7 +203,7 @@ describe('Bluetooth test page', () => {
     it('adds the tracker to the account: begin, register the hash, then commit', async () => {
       const { tracker, writes, fetchMock } = fakeSetupTracker()
       await pairedPage()
-      await act(async () => { button('ADD TO MY ACCOUNT')!.click() })
+      await act(async () => { button('Add to my account')!.click() })
       await settle()
       expect(writes.map(w => w.body)).toEqual([{ op: 'begin' }, { op: 'commit', tokenHash: HASH }])
       const call = fetchMock.mock.calls.find(c => c[0] === '/api/account/devices/link-bluetooth')!
@@ -216,7 +216,7 @@ describe('Bluetooth test page', () => {
     it("doesn't commit on the tracker when the server refused, and says why", async () => {
       const { writes } = fakeSetupTracker({ serverStatus: 409, serverError: 'owned_elsewhere' })
       await pairedPage()
-      await act(async () => { button('ADD TO MY ACCOUNT')!.click() })
+      await act(async () => { button('Add to my account')!.click() })
       await settle()
       expect(writes.map(w => (w.body as { op: string }).op)).toEqual(['begin'])
       expect(container.textContent).toContain('another account')
@@ -232,7 +232,7 @@ describe('Bluetooth test page', () => {
         set.call(ssid, 'kruttnet'); ssid.dispatchEvent(new Event('input', { bubbles: true }))
         set.call(pass, 'secret-pw'); pass.dispatchEvent(new Event('input', { bubbles: true }))
       })
-      await act(async () => { button('SAVE WIFI')!.click() })
+      await act(async () => { button('Save WiFi')!.click() })
       await settle()
       expect(writes.find(w => w.uuid.startsWith('04dd0a05'))!.body).toEqual({ ssid: 'kruttnet', pass: 'secret-pw' })
       expect(container.textContent).toContain('joined your WiFi')
@@ -248,7 +248,7 @@ describe('Bluetooth test page', () => {
         const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
         set.call(ssid, 'kruttnet'); ssid.dispatchEvent(new Event('input', { bubbles: true }))
       })
-      await act(async () => { button('SAVE WIFI')!.click() })
+      await act(async () => { button('Save WiFi')!.click() })
       await settle()
       expect(container.textContent).toContain('forget PT-17C')
     })
@@ -261,13 +261,13 @@ describe('Bluetooth test page', () => {
         const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
         set.call(ssid, 'kruttnet'); ssid.dispatchEvent(new Event('input', { bubbles: true }))
       })
-      await act(async () => { button('SAVE WIFI')!.click() })
+      await act(async () => { button('Save WiFi')!.click() })
       await settle()
       expect(container.textContent).toContain('password is probably wrong')
     })
   })
 
-  describe('SYNC OVER BLUETOOTH', () => {
+  describe('Sync over Bluetooth', () => {
     // One small recording on a fake tracker that speaks SYNC + DATA like the firmware.
     function fakeSyncTracker() {
       const csv = 'timestamp,lat,lon\n2026-10-05T06:10:02Z,51.46,-0.93'
@@ -321,7 +321,7 @@ describe('Bluetooth test page', () => {
       await connected()
       await act(async () => { pairButton()!.click() })
       for (let i = 0; i < 12; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-      const btn = [...container.querySelectorAll('button')].find(b => b.textContent === 'SYNC OVER BLUETOOTH')!
+      const btn = [...container.querySelectorAll('button')].find(b => b.textContent === 'Sync over Bluetooth')!
       await act(async () => { btn.click() })
       for (let i = 0; i < 30; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) })
       // First it asks which pieces the server already has (none: a fresh one) …

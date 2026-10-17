@@ -18,7 +18,7 @@ export default function BluetoothStep() {
         computer. iPhones and iPads can’t use Bluetooth from a web page yet.
       </Note>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">Turn Bluetooth on (once)</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Turn Bluetooth on (once)</h2>
       <p>Bluetooth is off until you turn it on. On the tracker:</p>
       <Steps>
         <li>On the menu, choose <strong>Settings</strong>, then <strong>Network</strong>.</li>
@@ -34,7 +34,7 @@ export default function BluetoothStep() {
         page; the tracker restarts. You can’t change it while you’re recording.
       </p>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">Pair your phone (once)</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Pair your phone (once)</h2>
       <Steps>
         <li>
           On your phone, open <Link href="/devices/bluetooth">Devices › Bluetooth</Link> and
@@ -47,7 +47,7 @@ export default function BluetoothStep() {
         <TrackerScreen name="pair" />
       </Screens>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">After a paddle</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">After a paddle</h2>
       <Steps>
         <li>Stop the recording.</li>
         <li>Open <Link href="/devices/bluetooth">Devices › Bluetooth</Link>, choose <strong>CONNECT</strong>, then your tracker.</li>

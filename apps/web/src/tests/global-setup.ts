@@ -1,6 +1,7 @@
 import { startCognito, stopCognito, type TestPoolHandle } from './cognito-test-server'
 
-const TEST_PORT = 9230
+// TEST_COGNITO_PORT lets several runs share a machine (parallel worktrees).
+const TEST_PORT = Number(process.env.TEST_COGNITO_PORT) || 9230
 
 // Vitest globalSetup: spawn cognito-local once for the whole run, create a pool,
 // and expose the IDs to the test environment via env vars.

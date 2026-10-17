@@ -44,7 +44,7 @@ test('uploading a GPX trace produces a leaderboard entry', async ({ page }) => {
   // hidden-input pattern transparently.
   await page.locator('input[type="file"]').setInputFiles(gpxThatCrossesDefaultCourse())
 
-  await page.getByRole('button', { name: 'SUBMIT TRACE' }).click()
+  await page.getByRole('button', { name: 'Submit entry' }).click()
 
   // On success the page redirects to the public trial detail. The
   // leaderboard table renders with our row visible.

@@ -26,9 +26,9 @@ describe('comparing the same outing from two sources', () => {
   it('shows both tracks, how far apart they were, and stroke rate from each', async () => {
     cmp.data = { same: true, gap: { samples: 60, medianM: 6, worstM: 14, agreement: 1 }, strokeRate: [{ minute: 0, a: 56, b: 28 }, { minute: 1, a: 57, b: 29 }] }
     await mount()
-    expect(container.textContent).toContain('SAME OUTING, TWO RECORDINGS')
-    expect(container.textContent).toContain('TRACKER')
-    expect(container.textContent).toContain('STRAVA')
+    expect(container.textContent).toContain('Same outing, two recordings')
+    expect(container.textContent).toContain('Tracker')
+    expect(container.textContent).toContain('Strava')
     expect(container.textContent).toContain('6 m')
     expect(container.textContent).toContain('14 m')
     expect(container.querySelector('svg[aria-label="Both tracks"]')?.querySelectorAll('polyline').length).toBe(2)

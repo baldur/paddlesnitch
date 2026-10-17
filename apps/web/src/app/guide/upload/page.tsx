@@ -22,7 +22,7 @@ export default function UploadStep() {
         <Link href="/guide/bluetooth">Sync from your phone</Link>.
       </p>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">Checking on the tracker</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Checking on the tracker</h2>
       <p>On the menu, choose <strong>Sync</strong>:</p>
       <Screens>
         <TrackerScreen name="sync" />
@@ -34,7 +34,7 @@ export default function UploadStep() {
           are already uploaded off the tracker. It never deletes one that isn’t.</li>
       </ul>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">On the website</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">On the website</h2>
       <p>
         Each paddle appears in <Link href="/paddles">Paddles</Link> by itself, a minute or so after the
         tracker uploads it: the map, splits, efforts and rests, the conditions that day and a written
@@ -46,7 +46,7 @@ export default function UploadStep() {
         stays on your tracker&apos;s page under <Link href="/devices">Devices</Link>.
       </p>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">Updates</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Updates</h2>
       <p>
         The tracker updates itself over WiFi when there’s a new version. It shows this screen
         afterwards, saying what changed. Press any button to carry on.

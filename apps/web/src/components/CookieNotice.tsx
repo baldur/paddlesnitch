@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useSyncExternalStore } from 'react'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 
 const STORAGE_KEY = 'tt_cookie_acked'
 
@@ -33,11 +34,11 @@ export default function CookieNotice() {
 
   if (!show) return null
 
-  // On desktop, bottom-16 stacks it above the floating REPORT AN ISSUE button
+  // On desktop, bottom-16 stacks it above the floating Report an issue button
   // (bottom-4, z-[1100]), which otherwise covers the OK button. Phones don't
   // show that button, so the notice sits at the bottom. z clears Leaflet's panes.
   return (
-    <div className="fixed bottom-4 sm:bottom-16 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[1100] border border-border bg-bg shadow-lg p-4 text-xs text-fg flex flex-col gap-3">
+    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-16 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[1100] rounded-control border border-border-strong bg-surface shadow-lg p-4 text-sm text-fg flex flex-col gap-3">
       <p>
         We use cookies only to keep you signed in. We count page views without cookies and
         without linking them to you. No ads, no third-party trackers.{' '}
@@ -46,7 +47,7 @@ export default function CookieNotice() {
       <button
         type="button"
         onClick={dismiss}
-        className="self-end px-4 py-1.5 bg-primary text-white tracking-widest hover:bg-primary transition-colors"
+        className={buttonClass('secondary', 'md', 'self-end')}
       >
         OK
       </button>

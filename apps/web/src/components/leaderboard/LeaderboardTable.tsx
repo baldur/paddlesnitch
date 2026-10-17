@@ -6,6 +6,10 @@ import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO } from '@/lib/types'
 import type { LeaderboardEntry, BoatClass, CrewMember } from '@/lib/types'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Badge, EmptyState } from '@paddlesnitch/ui/Card'
+import { eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { selectClass } from '@paddlesnitch/ui/Form'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import ViewOnStrava from '@/components/strava/ViewOnStrava'
 
@@ -65,19 +69,13 @@ export default function LeaderboardTable({
 
   if (entries.length === 0) {
     return (
-      <div className="border border-border p-8 flex flex-col items-center gap-4 text-center text-muted text-sm">
-        <p>
-          {uploadHref ? 'No entries yet. Be the first to submit your entry.' : 'No entries.'}
-        </p>
-        {uploadHref && (
-          <a
-            href={uploadHref}
-            className="px-4 py-2 bg-primary text-white text-xs tracking-widest hover:bg-primary transition-colors"
-          >
-            SUBMIT YOUR ENTRY
-          </a>
-        )}
-      </div>
+      <EmptyState
+        title="No entries yet"
+        body={uploadHref ? 'Be the first to submit your entry.' : undefined}
+        action={uploadHref ? (
+          <a href={uploadHref} className={buttonClass('primary')}>Submit your entry</a>
+        ) : undefined}
+      />
     )
   }
 
@@ -90,15 +88,27 @@ export default function LeaderboardTable({
     ? entries
     : entries.filter(e => e.boatClass === classFilter)
 
+  // A record mark on every class's fastest row stops meaning anything, so
+  // only the fastest record holder in view gets it (the data still marks one
+  // per class: lib/course-records.ts). Switch the class filter to see another
+  // class's record.
+  const recordHolder = filtered
+    .filter(e => marks?.[e.entryId] === 'COURSE RECORD')
+    .reduce<LeaderboardEntry | null>((b, e) => (!b || e.totalElapsedSeconds < b.totalElapsedSeconds ? e : b), null)
+  const recordLabel = classFilter === 'all' && presentClasses.length > 1 && recordHolder
+    ? `${recordHolder.boatClass} course record`
+    : 'Course record'
+
   return (
     <div className="flex flex-col gap-4">
       {presentClasses.length > 1 && (
-        <div className="flex items-center gap-3 text-xs">
-          <label className="text-muted tracking-widest">BOAT CLASS</label>
+        <div className="flex items-center gap-3">
+          <label htmlFor="leaderboard-class" className="text-sm text-muted whitespace-nowrap">Boat class</label>
           <select
+            id="leaderboard-class"
             value={classFilter}
             onChange={e => setClassFilter(e.target.value as BoatClass | 'all')}
-            className="bg-bg border border-border px-2 py-1 text-fg text-xs focus:outline-none focus:border-primary transition-colors"
+            className={`${selectClass} w-auto`}
           >
             <option value="all">All ({entries.length})</option>
             {presentClasses.map(c => {
@@ -112,12 +122,12 @@ export default function LeaderboardTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
-            <tr className="border-b border-border text-muted text-xs tracking-wider">
+            <tr className={`border-b border-border ${eyebrowClass}`}>
               <th className="text-left py-2 pr-2 sm:pr-4 font-normal w-8">#</th>
-              <th className="text-left py-2 pr-2 sm:pr-4 font-normal">ATHLETE</th>
-              <th className="text-left py-2 pr-2 sm:pr-4 font-normal">CLASS</th>
-              <th className="text-right py-2 pr-2 sm:pr-4 font-normal">TIME</th>
-              <th className="text-right py-2 font-normal hidden sm:table-cell">DATE</th>
+              <th className="text-left py-2 pr-2 sm:pr-4 font-normal">Athlete</th>
+              <th className="text-left py-2 pr-2 sm:pr-4 font-normal">Class</th>
+              <th className="text-right py-2 pr-2 sm:pr-4 font-normal">Time</th>
+              <th className="text-right py-2 font-normal hidden sm:table-cell">Date</th>
               <th className="w-5" />
             </tr>
           </thead>
@@ -139,7 +149,7 @@ export default function LeaderboardTable({
                 <React.Fragment key={entry.entryId}>
                   <tr
                     onClick={() => hasDetail && setExpanded(isOpen ? null : entry.entryId)}
-                    className={`border-b border-surface-2 transition-colors ${hasDetail ? 'cursor-pointer hover:bg-surface' : ''}`}
+                    className={`border-b border-border transition-colors ${hasDetail ? 'cursor-pointer hover:bg-surface' : ''}`}
                   >
                     <td className="py-3 pr-2 sm:pr-4 text-muted tabular">{i + 1}</td>
                     <td className="py-3 pr-2 sm:pr-4 text-fg font-medium">
@@ -147,56 +157,56 @@ export default function LeaderboardTable({
                         <Link
                           href={`/profile/${profileLinks[entry.userId]}`}
                           onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                          className="hover:text-primary hover:underline transition-colors"
+                          className="hover:text-primary-text hover:underline transition-colors"
                         >
                           {entry.displayName}
                         </Link>
                       ) : (
                         entry.displayName
                       )}
-                      {marks?.[entry.entryId] && (
-                        <span className={`inline-block whitespace-nowrap ml-2 text-[10px] tracking-widest px-1.5 py-0.5 border ${marks[entry.entryId] === 'COURSE RECORD' ? 'border-split text-split' : 'border-green text-green'}`}>
-                          {marks[entry.entryId]}
-                        </span>
-                      )}
+                      {recordHolder?.entryId === entry.entryId ? (
+                        <span className="ml-2 align-middle"><Badge tone="split">{recordLabel}</Badge></span>
+                      ) : marks?.[entry.entryId] === 'PB' ? (
+                        <span className="ml-2 align-middle"><Badge>PB</Badge></span>
+                      ) : null}
                     </td>
-                    <td className="py-3 pr-2 sm:pr-4 text-muted tabular text-xs">{entry.boatClass}</td>
-                    <td className="py-3 pr-2 sm:pr-4 text-right tabular font-bold text-primary text-base">
+                    <td className="py-3 pr-2 sm:pr-4 text-muted tabular text-sm">{entry.boatClass}</td>
+                    <td className="py-3 pr-2 sm:pr-4 text-right tabular font-bold text-primary-text text-base">
                       {formatTime(entry.totalElapsedSeconds)}
                     </td>
-                    <td className="py-3 pr-2 sm:pr-4 text-right text-muted text-xs hidden sm:table-cell">
+                    <td className="py-3 pr-2 sm:pr-4 text-right text-muted text-sm hidden sm:table-cell">
                       {fmtDay(entry.raceDate ?? entry.submittedAt)}
                     </td>
-                    <td className="py-3 text-muted text-xs text-right">
+                    <td className="py-3 text-muted text-sm text-right">
                       {hasDetail ? (isOpen ? '▲' : '▼') : ''}
                     </td>
                   </tr>
                   {isOpen && (
-                    <tr key={`${entry.entryId}-splits`} className="border-b border-surface-2 bg-surface">
+                    <tr key={`${entry.entryId}-splits`} className="border-b border-border bg-surface">
                       <td colSpan={6} className="px-4 py-3">
-                        <div className="mb-4 text-xs">
-                          <Link href={`/att/entries/${entry.entryId}`} className="tt-link tracking-widest">VIEW ENTRY →</Link>
+                        <div className="mb-3 text-sm">
+                          <Link href={`/att/entries/${entry.entryId}`} className="tt-link">View entry</Link>
                         </div>
                         {entry.stravaActivityId != null && (
-                          <div className="mb-4 text-xs text-muted">
+                          <div className="mb-3 text-sm text-muted">
                             Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" />
                           </div>
                         )}
                         {entry.runCount && entry.runCount > 1 && (
-                          <div className="mb-4 text-xs text-muted">
+                          <div className="mb-3 text-sm text-muted">
                             Best of {entry.runCount} runs in this upload — the fastest is shown.
                           </div>
                         )}
                         {entry.avgStrokeRate != null && (
-                          <div className="mb-4 text-xs">
-                            <span className="text-muted tracking-wider mr-2">AVG STROKE RATE</span>
+                          <div className="mb-3 text-sm">
+                            <span className={`${eyebrowClass} mr-2`}>Avg stroke rate</span>
                             <span className="tabular text-split">{entry.avgStrokeRate} spm</span>
                           </div>
                         )}
                         {entry.crew && entry.crew.length > 1 && (
                           <div className="mb-4">
-                            <div className="text-muted text-xs tracking-wider mb-1.5">CREW</div>
-                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                            <div className={`${eyebrowClass} mb-1.5`}>Crew</div>
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
                               {[...entry.crew].sort(seatSort).map(m => (
                                 <span key={String(m.seat)}>
                                   <span className="text-muted mr-1 tabular">{seatBadge(m.seat, entry.crew.length, !!entry.crew.find(c => c.seat === 'C'), BOAT_CLASS_INFO[entry.boatClass].sport)}</span>
@@ -208,10 +218,8 @@ export default function LeaderboardTable({
                         )}
                         {entry.conditions && (
                           <div className="mb-4">
-                            <div className="text-muted text-xs tracking-wider mb-1.5">
-                              CONDITIONS AT FINISH
-                            </div>
-                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-fg tabular">
+                            <div className={`${eyebrowClass} mb-1.5`}>Conditions at finish</div>
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-fg tabular">
                               {entry.conditions.weather?.temperatureC != null && (
                                 <span><span className="text-muted mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>
                               )}
@@ -238,15 +246,18 @@ export default function LeaderboardTable({
                           </div>
                         )}
                         {entry.splits.length > 0 && (
-                        <table className="text-xs border-collapse">
+                        // w-0 min-w-full: the splits scroll in their own box
+                        // instead of widening the leaderboard past a phone.
+                        <div className="w-0 min-w-full overflow-x-auto">
+                        <table className="text-sm border-collapse">
                           <thead>
-                            <tr className="text-muted tracking-wider">
-                              <th className="text-left pr-8 py-1 font-normal">MARK</th>
-                              <th className="text-right pr-8 py-1 font-normal">ELAPSED</th>
-                              <th className="text-right pr-8 py-1 font-normal">SPLIT</th>
-                              <th className="text-right pr-8 py-1 font-normal">PACE /500 m</th>
-                              <th className="text-right pr-6 py-1 font-normal">KM/H</th>
-                              <th className="text-right py-1 font-normal">M/S</th>
+                            <tr className={eyebrowClass}>
+                              <th className="text-left pr-6 py-1 font-normal">Mark</th>
+                              <th className="text-right pr-6 py-1 font-normal">Elapsed</th>
+                              <th className="text-right pr-6 py-1 font-normal">Split</th>
+                              <th className="text-right pr-6 py-1 font-normal whitespace-nowrap">Pace /500</th>
+                              <th className="text-right pr-6 py-1 font-normal">km/h</th>
+                              <th className="text-right py-1 font-normal">m/s</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -258,20 +269,20 @@ export default function LeaderboardTable({
                               const segDist = idx === 0 ? split.distance : split.distance - entry.splits[idx - 1].distance
                               return (
                                 <tr key={split.distance} className="border-b border-border">
-                                  <td className="pr-8 py-1.5 text-muted">{split.distance} m</td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-fg">
+                                  <td className="pr-6 py-1.5 text-muted tabular whitespace-nowrap">{split.distance} m</td>
+                                  <td className="pr-6 py-1.5 text-right tabular text-fg">
                                     {formatTime(split.elapsedSeconds)}
                                   </td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-split">
+                                  <td className="pr-6 py-1.5 text-right tabular text-split">
                                     {formatTime(segSecs)}
                                   </td>
-                                  <td className="pr-8 py-1.5 text-right tabular text-primary">
+                                  <td className="pr-6 py-1.5 text-right tabular text-primary-text">
                                     {paceFor500m(segDist, segSecs)}
                                   </td>
-                                  <td className="pr-6 py-1.5 text-right tabular text-primary">
+                                  <td className="pr-6 py-1.5 text-right tabular text-primary-text">
                                     {speedKmh(segDist, segSecs)}
                                   </td>
-                                  <td className="py-1.5 text-right tabular text-primary">
+                                  <td className="py-1.5 text-right tabular text-primary-text">
                                     {speedMs(segDist, segSecs)}
                                   </td>
                                 </tr>
@@ -279,6 +290,7 @@ export default function LeaderboardTable({
                             })}
                           </tbody>
                         </table>
+                        </div>
                         )}
                       </td>
                     </tr>

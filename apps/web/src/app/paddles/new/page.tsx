@@ -9,17 +9,26 @@ import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
 import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
 import { fmtDayMonth } from '@paddlesnitch/core/format'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Segmented } from '@paddlesnitch/ui/Form'
+import { Card, Chevron, EmptyState, cardClass } from '@paddlesnitch/ui/Card'
+import LoadingState from '@/components/LoadingState'
 
-const PANEL = 'bg-surface/95 border border-border'
+// A row to pick (a Strava activity, a time-trial entry): tapping it adds it.
+const PICK = `${cardClass} w-full text-left flex items-center gap-3 px-4 py-3 min-h-11 transition-colors hover:border-border-strong hover:bg-surface-2 disabled:opacity-50`
 type Result = ViewData & { id: string }
 
 // Shared frame for the entry-screen states: the same header as every page.
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
-      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← PADDLES</Link>} />
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">{children}</div>
-    </div>
+    <main className="flex-1 flex flex-col">
+      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← Paddles</Link>} />
+      <Page width="narrow">
+        <PageHeader title="Add a paddle" description="Upload a GPS file, or pick one from Strava, a time trial or your tracker." />
+        <div className="flex flex-col gap-4">{children}</div>
+      </Page>
+    </main>
   )
 }
 
@@ -29,6 +38,7 @@ const fmtDate = fmtDayMonth
 export default function AddPaddlePage() {
   const [tab, setTab] = useState<'file' | 'strava' | 'trials' | 'device'>('file')
   const [file, setFile] = useState<File | null>(null)
+  const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
   const [error, setError] = useState('')
   const router = useRouter()
@@ -114,88 +124,94 @@ export default function AddPaddlePage() {
 
   if (authed === false) return (
     <Frame>
-      <div className={`${PANEL} w-full max-w-md p-6 text-center`}>
-        <h1 className="text-lg font-bold tracking-widest">ADD A PADDLE</h1>
-        <p className="text-xs text-muted mt-2 mb-5">Sign in to analyse and save your paddles.</p>
-        <a href="/signin?next=/paddles/new" className="inline-block px-6 py-2.5 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90">SIGN IN</a>
-      </div>
+      <EmptyState title="Sign in to add a paddle" body="Your paddles are saved to your account."
+        action={<a href="/signin?next=/paddles/new" className={buttonClass('primary')}>Sign in</a>} />
     </Frame>
   )
 
+  const busy = status === 'busy'
   return (
     <Frame>
-      <div className={`${PANEL} w-full max-w-md p-6`}>
-        <h1 className="text-lg font-bold tracking-widest">ADD A PADDLE</h1>
-        <p className="text-xs text-muted mt-1 mb-4">Upload a GPS file, or pick one from Strava, a time trial or your tracker.</p>
+      <Segmented label="Where the paddle comes from" value={tab} onChange={openTab}
+        options={[{ value: 'file', label: 'File' }, { value: 'strava', label: 'Strava' }, { value: 'trials', label: 'Trials' }, { value: 'device', label: 'Tracker' }]} />
 
-        <div className="flex gap-1 mb-4">
-          {(['file', 'strava', 'trials', 'device'] as const).map(t => (
-            <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest ${tab === t ? 'bg-primary text-white' : 'bg-surface-2 text-muted'}`}>{t === 'file' ? 'UPLOAD FILE' : t === 'strava' ? 'FROM STRAVA' : t === 'trials' ? 'TIME TRIALS' : 'TRACKER'}</button>
-          ))}
-        </div>
+      {dupId && (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-base text-fg">You&apos;ve already added this paddle.</p>
+          <Link href={`/paddles/${dupId}`} className={buttonClass('secondary')}>Open it</Link>
+        </Card>
+      )}
 
-        {dupId && (
-          <div className="mb-4 text-xs border border-border bg-bg px-3 py-3">
-            <p className="text-muted">You&apos;ve already added this paddle.</p>
-            <Link href={`/paddles/${dupId}`} className="mt-2 inline-block px-4 py-2 bg-primary text-white font-bold tracking-widest hover:opacity-90">OPEN IT →</Link>
-          </div>
-        )}
-
-        {tab === 'file' ? (
-          <>
-            <label className="text-[10px] text-muted tracking-widest">GPS FILE (.gpx .fit .tcx .csv .zip)</label>
-            <input type="file" accept=".gpx,.fit,.tcx,.csv,.zip" onChange={e => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 block w-full text-sm text-fg file:bg-surface-2 file:text-fg file:border-0 file:px-3 file:py-1.5 file:mr-3 file:text-xs file:cursor-pointer bg-bg border border-border px-3 py-2" />
-          </>
-        ) : tab === 'strava' ? (
-          <div className="max-h-[300px] overflow-auto">
-            {acts === undefined && <p className="text-xs text-muted">Loading your Strava activities…</p>}
-            {stravaMsg === 'not_connected' && <p className="text-xs text-muted">Strava isn&apos;t connected. <a href="/account" className="text-primary">Connect it in your account</a>, then come back.</p>}
-            {acts && acts.length > 0 && acts.map(a => (
-              <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a)}
-                className="block w-full text-left px-3 py-2 border border-border mb-1 hover:border-primary disabled:opacity-40">
-                <span className="block text-sm truncate">{a.name}</span>
-                <span className="text-[11px] text-muted">{a.sportType} · {fmtDate(a.startDate)} · {fmtDist(a.distanceMetres)}</span>
-              </button>
-            ))}
-            {acts && acts.length === 0 && !stravaMsg && <p className="text-xs text-muted">No recent water activities found.</p>}
-            {acts && acts.length > 0 && stravaMore && (
-              <button disabled={stravaLoadingMore} onClick={loadMoreStrava}
-                className="block w-full text-center px-3 py-2 mt-1 text-[11px] tracking-widest text-muted border border-border hover:border-primary hover:text-fg disabled:opacity-40">
-                {stravaLoadingMore ? 'LOADING…' : 'LOAD MORE'}
-              </button>
-            )}
-          </div>
-        ) : tab === 'trials' ? (
-          <div className="max-h-[300px] overflow-auto">
-            {trials === undefined && <p className="text-xs text-muted">Loading your time-trial entries…</p>}
-            {trials && trials.length > 0 && trials.map(e => (
-              <button key={e.entryId} disabled={status === 'busy'} onClick={() => runTrial(e)}
-                className="block w-full text-left px-3 py-2 border border-border mb-1 hover:border-primary disabled:opacity-40">
-                <span className="block text-sm truncate">{e.courseName}</span>
-                <span className="text-[11px] text-muted">{e.trialName} · {fmtDate(e.paddledAt)}{e.distanceMetres ? ` · ${fmtDist(e.distanceMetres)}` : ''}</span>
-              </button>
-            ))}
-            {trials && trials.length === 0 && <p className="text-xs text-muted">No time-trial submissions yet. <a href="/att" className="text-primary">Race a trial</a>, then analyse it here.</p>}
-          </div>
-        ) : (
-          // A tracker's recordings become paddles by themselves (one-paddle.md,
-          // phase 2), so there's nothing to pick here any more.
-          <div className="text-sm text-muted leading-relaxed flex flex-col gap-2">
-            <p>Nothing to add: your tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary">Paddles</Link> by themselves once it uploads them.</p>
-            <p className="text-xs">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <Link href="/devices" className="text-primary">Devices</Link>.</p>
-          </div>
-        )}
-
-        {tab === 'file' && (
-          <button disabled={!file || status === 'busy'} onClick={runFile}
-            className="mt-4 w-full px-5 py-2.5 bg-primary text-white text-xs font-bold tracking-widest hover:opacity-90 disabled:opacity-40">
-            {status === 'busy' ? 'ANALYSING…' : 'ANALYSE'}
+      {tab === 'file' ? (
+        <div className="flex flex-col gap-4">
+          {/* A drop zone over the same file input: tap to choose, or drop a
+              file on it on a computer. */}
+          <label
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) setFile(f) }}
+            className={`${cardClass} border-2 border-dashed cursor-pointer px-6 py-10 flex flex-col items-center gap-2 text-center transition-colors focus-within:border-primary ${dragging ? 'border-primary bg-primary/10' : 'hover:border-border-strong hover:bg-surface-2'}`}>
+            <input type="file" accept=".gpx,.fit,.tcx,.csv,.zip" onChange={e => setFile(e.target.files?.[0] ?? null)} className="sr-only" />
+            <svg aria-hidden viewBox="0 0 24 24" className="w-8 h-8 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {file
+              ? <span className="text-base text-fg break-all">{file.name}</span>
+              : <span className="text-base text-fg">Choose a GPS file<span className="hidden sm:inline"> or drop it here</span></span>}
+            <span className="text-sm text-muted">{file ? 'Tap to choose another' : 'GPX, FIT, TCX, CSV or a zip from Garmin'}</span>
+          </label>
+          <button type="button" disabled={!file || busy} onClick={runFile} className={buttonClass('primary', 'md', 'w-full')}>
+            {busy ? 'Adding…' : 'Add paddle'}
           </button>
-        )}
-        {tab !== 'file' && status === 'busy' && <p className="mt-3 text-xs text-muted">Analysing…</p>}
-        {error && <div className="mt-3 text-xs text-red border border-red bg-red/10 px-3 py-2">{error}</div>}
-      </div>
+        </div>
+      ) : tab === 'strava' ? (
+        <div className="flex flex-col gap-2">
+          {acts === undefined && <LoadingState label="Loading your Strava activities" className="py-8" />}
+          {stravaMsg === 'not_connected' && <EmptyState title="Strava isn't connected" body="Connect it in your account, then come back to pick a paddle."
+            action={<a href="/account" className={buttonClass('secondary')}>Go to Account</a>} />}
+          {acts && acts.length > 0 && acts.map(a => (
+            <button key={a.id} type="button" disabled={busy} onClick={() => runStrava(a)} className={PICK}>
+              <span className="flex-1 min-w-0">
+                <span className="block text-base text-fg truncate">{a.name}</span>
+                <span className="block text-sm text-muted tabular">{a.sportType} · {fmtDate(a.startDate)} · {fmtDist(a.distanceMetres)}</span>
+              </span>
+              <Chevron />
+            </button>
+          ))}
+          {acts && acts.length === 0 && !stravaMsg && <p className="text-base text-muted">No recent paddles on Strava.</p>}
+          {stravaMsg === 'fetch_failed' && <p className="text-base text-red">Couldn&apos;t load your Strava activities. Please try again.</p>}
+          {acts && acts.length > 0 && stravaMore && (
+            <button type="button" disabled={stravaLoadingMore} onClick={loadMoreStrava} className={buttonClass('quiet', 'md', 'w-full')}>
+              {stravaLoadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          )}
+        </div>
+      ) : tab === 'trials' ? (
+        <div className="flex flex-col gap-2">
+          {trials === undefined && <LoadingState label="Loading your time-trial entries" className="py-8" />}
+          {trials && trials.length > 0 && trials.map(e => (
+            <button key={e.entryId} type="button" disabled={busy} onClick={() => runTrial(e)} className={PICK}>
+              <span className="flex-1 min-w-0">
+                <span className="block text-base text-fg truncate">{e.courseName}</span>
+                <span className="block text-sm text-muted tabular">{e.trialName} · {fmtDate(e.paddledAt)}{e.distanceMetres ? ` · ${fmtDist(e.distanceMetres)}` : ''}</span>
+              </span>
+              <Chevron />
+            </button>
+          ))}
+          {trials && trials.length === 0 && <EmptyState title="No time-trial entries yet" body="Race a trial, then add it here to see it in detail."
+            action={<a href="/att" className={buttonClass('secondary')}>Open Trials</a>} />}
+        </div>
+      ) : (
+        // A tracker's recordings become paddles by themselves (one-paddle.md,
+        // phase 2), so there's nothing to pick here any more.
+        <Card className="flex flex-col gap-2">
+          <p className="text-base text-fg">Nothing to add: your tracker&apos;s paddles appear in <Link href="/paddles" className="text-primary-text">Paddles</Link> by themselves once it uploads them.</p>
+          <p className="text-sm text-muted">Recordings where the boat barely moved, like a test at home, stay on your tracker&apos;s page under <Link href="/devices" className="text-primary-text">Devices</Link>.</p>
+        </Card>
+      )}
+
+      {tab !== 'file' && busy && <p className="text-sm text-muted" role="status">Adding…</p>}
+      {error && <p role="alert" className="text-sm text-red border border-red/50 bg-red/10 rounded-control px-3 py-2">{error}</p>}
     </Frame>
   )
 }

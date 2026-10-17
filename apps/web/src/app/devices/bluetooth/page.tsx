@@ -2,6 +2,10 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, inputClass } from '@paddlesnitch/ui/Form'
+import { cardClass } from '@paddlesnitch/ui/Card'
 import {
   TRACKER_SERVICE, TRACKER_ABOUT, TRACKER_PAIRED, TRACKER_LINK, TRACKER_WIFI, WIFI_WAIT,
   parseAbout, readWhenPaired, ownership, browserBluetooth, parseLinkStatus, parseWifiState,
@@ -232,48 +236,39 @@ export default function BluetoothPage() {
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/devices" className="tt-nav-link text-sm">← DEVICES</Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">BLUETOOTH</span>
-          </>
-        }
+        breadcrumb={<Link href="/devices" className="tt-nav-link">← Devices</Link>}
       />
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full flex flex-col gap-4">
-        <div>
-          <h1 className="text-lg font-bold text-fg tracking-widest">BLUETOOTH</h1>
-          <p className="text-sm text-muted mt-1">
-            Sync a tracker nearby through this phone or computer, add it to your account, or give it your WiFi.
-          </p>
-          <p className="text-xs text-muted mt-1">
-            Turn Bluetooth on first: on the tracker, Settings &gt; Network, tap to the second page, then hold.{' '}
-            <Link href="/guide/bluetooth" className="text-primary">How it works</Link>.
-          </p>
-        </div>
+      <Page>
+        <PageHeader
+          title="Bluetooth"
+          description="Sync a tracker nearby through this phone or computer, add it to your account, or give it your WiFi."
+        />
+        <p className="text-sm text-muted -mt-4">
+          Turn Bluetooth on first: on the tracker, Settings &gt; Network, tap to the second page, then hold.{' '}
+          <Link href="/guide/bluetooth" className="tt-link">How it works</Link>.
+        </p>
 
         {supported === false && (
-          <p className="text-sm text-fg border border-border bg-surface px-4 py-3">
+          <p className={`${cardClass} text-base text-fg p-4`}>
             This browser can&apos;t use Bluetooth. Open this page in Chrome or Edge, on a computer or an Android phone. iPhones and iPads can&apos;t use Bluetooth from a web page yet.
           </p>
         )}
 
         {supported && !found && (
           <div>
-            <button type="button" onClick={connect} disabled={busy}
-              className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
-              {busy ? 'CONNECTING…' : 'CONNECT'}
+            <button type="button" onClick={connect} disabled={busy} className={buttonClass('primary')}>
+              {busy ? 'Connecting…' : 'Connect'}
             </button>
           </div>
         )}
 
-        {error && <p className="text-sm text-red" role="alert">{error}</p>}
-        {error && detail && <p className="text-xs text-muted">Technical details: {detail}</p>}
+        {error && <p className="text-base text-red" role="alert">{error}</p>}
+        {error && detail && <p className="text-sm text-muted">Technical details: {detail}</p>}
 
         {found && (
-          <section className="border border-border bg-surface px-4 py-4 flex flex-col gap-3" aria-label="Tracker">
-            <h2 className="text-sm text-fg tracking-widest">{found.name}</h2>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+          <section className={`${cardClass} p-4 sm:p-5 flex flex-col gap-4`} aria-label="Tracker">
+            <h2 className="text-lg font-semibold text-fg">{found.name}</h2>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-base">
               <dt className="text-muted">ID</dt><dd className="text-fg tabular">{found.about.id}</dd>
               <dt className="text-muted">Firmware</dt><dd className="text-fg tabular">{found.about.firmware}</dd>
               <dt className="text-muted">Recordings</dt>
@@ -285,26 +280,25 @@ export default function BluetoothPage() {
               <dd className={paired ? 'text-green' : 'text-fg'}>{paired ? 'Paired' : 'Not paired'}</dd>
             </dl>
             {pairing && (
-              <p className="text-sm text-fg" role="status">
+              <p className="text-base text-fg" role="status">
                 Check the number on the tracker matches the one on this screen, then hold the tracker&apos;s button.
               </p>
             )}
             {!paired && !pairing && (
-              <p className="text-xs text-muted">
+              <p className="text-sm text-muted">
                 Pairing shows the same 6-digit number here and on the tracker. Hold the tracker&apos;s button if they match.
               </p>
             )}
             {paired && (
               <div className="flex flex-col gap-4 border-t border-border pt-4">
                 <div className="flex flex-col gap-2">
-                  <h3 className="text-xs text-fg tracking-widest">ACCOUNT</h3>
+                  <h3 className="text-base font-semibold text-fg">Account</h3>
                   {ownership(found.about, mine) === 'yours' ? (
-                    <p className="text-sm text-muted">This tracker is on your account.</p>
+                    <p className="text-base text-muted">This tracker is on your account.</p>
                   ) : (
                     <div>
-                      <button type="button" onClick={addToAccount} disabled={linking}
-                        className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
-                        {linking ? 'ADDING…' : 'ADD TO MY ACCOUNT'}
+                      <button type="button" onClick={addToAccount} disabled={linking} className={buttonClass('secondary')}>
+                        {linking ? 'Adding…' : 'Add to my account'}
                       </button>
                     </div>
                   )}
@@ -312,12 +306,11 @@ export default function BluetoothPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <h3 className="text-xs text-fg tracking-widest">RECORDINGS</h3>
-                  <p className="text-xs text-muted">Sends the tracker&apos;s waiting recordings through this browser. Keep this page open until it finishes.</p>
+                  <h3 className="text-base font-semibold text-fg">Recordings</h3>
+                  <p className="text-sm text-muted">Sends the tracker&apos;s waiting recordings through this browser. Keep this page open until it finishes.</p>
                   <div>
-                    <button type="button" onClick={syncRecordings} disabled={syncing}
-                      className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
-                      {syncing ? 'SYNCING…' : 'SYNC OVER BLUETOOTH'}
+                    <button type="button" onClick={syncRecordings} disabled={syncing} className={buttonClass('primary')}>
+                      {syncing ? 'Syncing…' : 'Sync over Bluetooth'}
                     </button>
                   </div>
                   {syncing && (
@@ -330,19 +323,20 @@ export default function BluetoothPage() {
                   {syncMsg && <p className={`text-sm ${syncMsg.ok ? 'text-green' : 'text-red'}`} role="status">{syncMsg.text}</p>}
                 </div>
 
-                <form onSubmit={saveWifi} className="flex flex-col gap-2" aria-label="WiFi">
-                  <h3 className="text-xs text-fg tracking-widest">WIFI</h3>
-                  <p className="text-xs text-muted">The tracker tries the network first and keeps it only if it can join.</p>
-                  <label htmlFor="bt-wifi-ssid" className="text-xs text-muted uppercase tracking-widest">Network name</label>
-                  <input id="bt-wifi-ssid" value={ssid} onChange={e => setSsid(e.target.value)} maxLength={32} autoComplete="off"
-                    className="bg-bg border border-border px-3 py-2 text-sm text-fg" />
-                  <label htmlFor="bt-wifi-pass" className="text-xs text-muted uppercase tracking-widest">Password</label>
-                  <input id="bt-wifi-pass" type="password" value={wifiPass} onChange={e => setWifiPass(e.target.value)} maxLength={64}
-                    autoComplete="off" className="bg-bg border border-border px-3 py-2 text-sm text-fg" />
+                <form onSubmit={saveWifi} className="flex flex-col gap-3" aria-label="WiFi">
+                  <h3 className="text-base font-semibold text-fg">WiFi</h3>
+                  <p className="text-sm text-muted">The tracker tries the network first and keeps it only if it can join.</p>
+                  <Field label="Network name" htmlFor="bt-wifi-ssid">
+                    <input id="bt-wifi-ssid" value={ssid} onChange={e => setSsid(e.target.value)} maxLength={32} autoComplete="off"
+                      className={inputClass} />
+                  </Field>
+                  <Field label="Password" htmlFor="bt-wifi-pass">
+                    <input id="bt-wifi-pass" type="password" value={wifiPass} onChange={e => setWifiPass(e.target.value)} maxLength={64}
+                      autoComplete="off" className={inputClass} />
+                  </Field>
                   <div>
-                    <button type="submit" disabled={wifiBusy || !ssid.trim()}
-                      className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
-                      {wifiBusy ? 'SAVING…' : 'SAVE WIFI'}
+                    <button type="submit" disabled={wifiBusy || !ssid.trim()} className={buttonClass('secondary')}>
+                      {wifiBusy ? 'Saving…' : 'Save WiFi'}
                     </button>
                   </div>
                   {wifiBusy && <p className="text-sm text-fg" role="status">The tracker is trying the network. This takes up to 30 seconds.</p>}
@@ -352,19 +346,17 @@ export default function BluetoothPage() {
             )}
             <div className="flex gap-2 flex-wrap">
               {!paired && (
-                <button type="button" onClick={pair} disabled={pairing}
-                  className="px-4 py-2 bg-primary text-white text-sm tracking-widest disabled:opacity-60">
-                  {pairing ? 'PAIRING…' : 'PAIR'}
+                <button type="button" onClick={pair} disabled={pairing} className={buttonClass('primary')}>
+                  {pairing ? 'Pairing…' : 'Pair'}
                 </button>
               )}
-              <button type="button" onClick={() => disconnect?.()}
-                className="px-4 py-2 border border-border text-sm tracking-widest text-fg">
-                DISCONNECT
+              <button type="button" onClick={() => disconnect?.()} className={buttonClass('quiet')}>
+                Disconnect
               </button>
             </div>
           </section>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

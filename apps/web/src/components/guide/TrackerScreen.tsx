@@ -116,7 +116,7 @@ export default function TrackerScreen({ name, caption }: { name: ScreenName; cap
           {screen.els.map((e, i) => <El key={i} e={e} />)}
         </svg>
       </div>
-      <figcaption className="text-xs text-muted">{caption ?? screen.label}</figcaption>
+      <figcaption className="text-sm text-muted">{caption ?? screen.label}</figcaption>
     </figure>
   )
 }

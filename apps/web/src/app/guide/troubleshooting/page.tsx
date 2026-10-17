@@ -3,42 +3,33 @@ import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import GuidePage, { Screens } from '@/components/guide/GuidePage'
 import TrackerScreen from '@/components/guide/TrackerScreen'
+import OpenFromHash from '@/components/guide/OpenFromHash'
+import { cardClass, Chevron } from '@paddlesnitch/ui/Card'
 
 export const metadata: Metadata = { title: 'Troubleshooting' }
 
-// One problem: what you see, then what to do. `id` makes each one linkable
-// (the guide's steps link to #wifi etc.).
+// One problem: what you see, then what to do. Each is a <details>, so the page
+// reads as a list of problems and opens the one you have; the answers stay in
+// the page for Ctrl-F. `id` makes each one linkable (the guide's steps link to
+// #wifi etc.), and OpenFromHash opens the one a link points at.
 function Problem({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
-    <section id={id} className="border-t border-border pt-5 flex flex-col gap-3 scroll-mt-4">
-      <h2 className="text-sm font-bold text-fg">{title}</h2>
-      {children}
-    </section>
+    <details id={id} className="group scroll-mt-4">
+      <summary className="flex items-center gap-3 px-4 py-3 min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:bg-surface-2">
+        <span className="flex-1 text-base font-medium text-fg">{title}</span>
+        <Chevron className="transition-transform group-open:rotate-90" />
+      </summary>
+      <div className="px-4 pb-5 flex flex-col gap-3">{children}</div>
+    </details>
   )
 }
-
-const PROBLEMS: [string, string][] = [
-  ['screen', 'The screen stays dark'],
-  ['setup', 'I can’t find the tracker’s WiFi, or the setup page doesn’t open'],
-  ['wifi', 'The tracker won’t join my WiFi'],
-  ['change-wifi', 'I need to change the WiFi network or password'],
-  ['code', 'The website doesn’t accept the code'],
-  ['gps', 'It says “Acquiring GPS...” and never records'],
-  ['sd', 'It says “No SD card”'],
-  ['upload', 'My paddle isn’t on the website'],
-  ['motion', 'A recording has no boat movement'],
-  ['updating', 'It’s stuck on “Updating”'],
-  ['reset', 'Starting again from scratch'],
-  ['report', 'Something else'],
-]
 
 export default function Troubleshooting() {
   return (
     <GuidePage title="Troubleshooting">
-      <ul className="flex flex-col gap-1">
-        {PROBLEMS.map(([id, title]) => <li key={id}><a href={`#${id}`}>{title}</a></li>)}
-      </ul>
-
+      <OpenFromHash />
+      <p id="top">Find what you&apos;re seeing and open it.</p>
+      <div className={`${cardClass} divide-y divide-border`}>
       <Problem id="screen" title="The screen stays dark">
         <p>
           Charge it for a while, then press the power button once. If the battery gauge in the top
@@ -202,6 +193,8 @@ export default function Troubleshooting() {
           <Link href="/devices">Devices</Link> page.
         </p>
       </Problem>
+      </div>
+      <p><a href="#top">Back to the top</a></p>
     </GuidePage>
   )
 }

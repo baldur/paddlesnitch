@@ -1,11 +1,16 @@
 'use client'
 import { fmtDay, participationLabel } from '@paddlesnitch/core/format'
-import Link from 'next/link'
 import { useEffect, useState, use } from 'react'
 import AppHeader from '@/components/AppHeader'
 import LoadingState from '@/components/LoadingState'
+import { Page, PageHeader, Section, eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, Segmented, inputClass } from '@paddlesnitch/ui/Form'
+import { Badge, cardClass } from '@paddlesnitch/ui/Card'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry } from '@/lib/types'
 import { formatTime } from '@/lib/geo'
+
+const whoCanEnterLabel = participationLabel
 
 type Invitee = { sub: string; email: string; displayName: string }
 
@@ -150,268 +155,202 @@ export default function TrialAdminPage({
     )
   }
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const trialLink = `${origin}/att/trials/${trialId}`
+  const submitLink = trial.submitToken ? `${origin}/att/trials/${trialId}/upload?invite=${trial.submitToken}` : ''
+  const gated = trial.participation === 'members' || trial.participation === 'invitational'
+  const copy = (t: string) => navigator.clipboard?.writeText(t)
+
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att" className="tt-nav-link text-sm shrink-0">
-              ← TRIALS
-            </Link>
-            <span className="text-muted shrink-0">/</span>
-            <a
-              href={`/att/admin/courses/${course.id}`}
-              className="tt-nav-link text-sm truncate"
-            >
-              {course.name.toUpperCase()}
-            </a>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm shrink-0">{trial.name.toUpperCase()}</span>
-          </>
-        }
+        breadcrumb={<a href={`/att/admin/courses/${course.id}`} className="tt-nav-link">← {course.name}</a>}
       />
 
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
-        <section className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-lg font-bold text-fg tracking-widest mb-1">
-              {trial.name.toUpperCase()}
-            </h1>
-            <p className="text-xs text-muted">
-              {course.name} · {fmtDay(trial.date)}
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <span
-              className={`text-xs px-2 py-0.5 border ${
-                trial.status === 'open'
-                  ? 'border-green text-green'
-                  : 'border-muted text-muted'
-              }`}
-            >
-              {trial.status.toUpperCase()}
-            </span>
-            <button
-              onClick={toggleStatus}
-              disabled={toggling}
-              className={`px-4 py-1.5 text-xs font-bold tracking-widest border transition-colors disabled:opacity-50 ${
-                trial.status === 'open'
-                  ? 'border-red text-red hover:bg-red hover:text-white'
-                  : 'border-green text-green hover:bg-green hover:text-white'
-              }`}
-            >
-              {toggling
-                ? '…'
-                : trial.status === 'open'
-                ? 'CLOSE TRIAL'
-                : 'REOPEN TRIAL'}
-            </button>
-            {/* Visibility flip. Server clamps to private when the parent
-                course is private, so the user can still click but it might
-                end up clamped — the next load reflects what was stored. */}
-            <button
-              type="button"
-              onClick={toggleVisibility}
-              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary transition-colors"
-              title={
-                course.visibility === 'private'
-                  ? 'Course is private, so this trial is private too.'
-                  : 'Change who can see this trial.'
-              }
-            >
-              {trial.visibility === 'public' ? 'MAKE PRIVATE' : 'MAKE PUBLIC'}
-            </button>
-            <span className="text-xs text-muted tracking-widest self-center">WHO CAN ENTER:</span>
-            {(['members', 'invitational', 'public'] as const).map(v => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => changeParticipation(v)}
-                className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
-                  trial.participation === v
-                    ? 'border-primary text-primary bg-primary/10'
-                    : 'border-border text-muted hover:border-primary hover:text-primary'
-                }`}
-              >
-                {participationLabel(v)}
-              </button>
-            ))}
-          </div>
-        </section>
+      <Page>
+        <PageHeader
+          eyebrow={<>{course.name} · {fmtDay(trial.date)}</>}
+          title={trial.name}
+          description={
+            <Badge tone={trial.status === 'open' ? 'green' : 'neutral'}>
+              {trial.status === 'open' ? 'Open for entries' : 'Closed'}
+            </Badge>
+          }
+          actions={
+            <a href={`/att/trials/${trialId}`} className={buttonClass('secondary')}>View leaderboard</a>
+          }
+        />
 
-        {/* Share — get people onto this trial with a link. */}
-        {(() => {
-          const origin = typeof window !== 'undefined' ? window.location.origin : ''
-          const trialLink = `${origin}/att/trials/${trialId}`
-          const submitLink = trial.submitToken ? `${origin}/att/trials/${trialId}/upload?invite=${trial.submitToken}` : ''
-          const gated = trial.participation === 'members' || trial.participation === 'invitational'
-          const copy = (t: string) => navigator.clipboard?.writeText(t)
-          const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-xs focus:outline-none focus:border-primary transition-colors'
-          return (
-            <section>
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Share this trial</h2>
-              <p className="text-sm text-muted mb-3">
-                Send this link — visitors can view the leaderboard, and (on an open trial) sign up and submit right from it.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                <input readOnly value={trialLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
-                <button type="button" onClick={() => copy(trialLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY LINK</button>
+        {/* Settings: who can see it, then who can enter. */}
+        <Section title="Settings">
+          <div className={`${cardClass} divide-y divide-border`}>
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-medium text-fg">Who can see it</div>
+                <p className="text-sm text-muted">
+                  {trial.visibility === 'public'
+                    ? 'Anyone, including the leaderboard.'
+                    : trial.visibility === 'group'
+                      ? 'Members of the course’s group.'
+                      : 'Only you.'}
+                  {course.visibility === 'private' && ' The course is private, so this trial is too.'}
+                </p>
               </div>
-
-              {gated && (
-                <div className="border border-border bg-surface-2 text-fg text-xs px-3 py-2 mb-4">
-                  Only {trial.participation === 'members' ? 'group members' : 'invited people'} can submit to this trial. To let
-                  anyone with the link submit, create a <b>submit link</b> below, or set Submit to <b>PUBLIC</b>.
-                </div>
-              )}
-
-              <label className="text-xs text-muted tracking-widest">SUBMIT LINK</label>
-              <p className="text-xs text-muted mt-1 mb-2">
-                Anyone with this link can sign up and submit to this trial{gated ? ', even if they aren’t in the group or invited' : ''}. Revoke it any time.
-              </p>
-              {submitLink ? (
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input readOnly value={submitLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
-                  <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
-                  <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">TURN OFF LINK</button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">
-                  CREATE SUBMIT LINK
-                </button>
-              )}
-            </section>
-          )
-        })()}
-
-        {/* Invitee management — only meaningful when participation is invitational.
-            Open trials hide the section so we don't suggest the data is there. */}
-        {trial.participation === 'invitational' && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-              Invitees ({invitees.length})
-            </h2>
-
-            <form onSubmit={submitInvite} className="flex flex-col sm:flex-row gap-2 mb-4">
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
-                placeholder="email of someone with an account"
-                className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors flex-1"
+              {/* Visibility flip. Server clamps to private when the parent
+                  course is private; the next load reflects what was stored. */}
+              <Button onClick={toggleVisibility} className="self-start sm:self-auto">
+                {trial.visibility === 'public' ? 'Make private' : 'Make public'}
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2 p-4">
+              <div className="text-sm font-medium text-fg">Who can enter</div>
+              <Segmented
+                label="Who can enter"
+                value={trial.participation}
+                onChange={changeParticipation}
+                options={(['members', 'invitational', 'public'] as const).map(v => ({ value: v, label: whoCanEnterLabel(v) }))}
               />
-              <button
-                type="submit"
-                disabled={inviting || !inviteEmail.trim()}
-                className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {inviting ? 'INVITING…' : 'INVITE'}
-              </button>
+            </div>
+          </div>
+        </Section>
+
+        {/* Invitee management — only meaningful when participation is invitational. */}
+        {trial.participation === 'invitational' && (
+          <Section title={`Invited (${invitees.length})`}>
+            <form onSubmit={submitInvite} className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <Field label="Email" htmlFor="trial-invite-email" className="flex-1" help="Someone with an account.">
+                <input
+                  id="trial-invite-email"
+                  type="email"
+                  required
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className={inputClass}
+                />
+              </Field>
+              <Button type="submit" disabled={inviting || !inviteEmail.trim()} className="sm:mb-7">
+                {inviting ? 'Inviting…' : 'Invite'}
+              </Button>
             </form>
 
-            {inviteError && (
-              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs mb-4">
-                {inviteError}
-              </div>
-            )}
+            {inviteError && <p role="alert" className="text-sm text-red">{inviteError}</p>}
 
             {invitees.length === 0 ? (
-              <p className="text-xs text-muted">
-                No one is invited yet. Only you can submit until you invite someone.
+              <p className="text-sm text-muted">
+                No one is invited yet. Only you can enter until you invite someone.
               </p>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <ul className={`${cardClass} divide-y divide-border`}>
                 {invitees.map(i => (
-                  <div
-                    key={i.sub}
-                    className="flex items-center justify-between border border-border px-3 py-2 text-sm"
-                  >
+                  <li key={i.sub} className="flex items-center justify-between gap-3 px-4 py-2 min-h-11">
                     <div className="min-w-0">
-                      <div className="text-fg truncate">{i.displayName}</div>
-                      {i.email && (
-                        <div className="text-xs text-muted truncate">{i.email}</div>
-                      )}
+                      <div className="text-base text-fg truncate">{i.displayName}</div>
+                      {i.email && <div className="text-sm text-muted truncate">{i.email}</div>}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => uninvite(i.sub)}
-                      className="text-xs text-muted hover:text-red tracking-widest"
-                    >
-                      REMOVE
-                    </button>
-                  </div>
+                    <Button size="sm" variant="quiet" onClick={() => uninvite(i.sub)}>Remove</Button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </section>
+          </Section>
         )}
 
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase">
-              Leaderboard ({leaderboard.length} entr{leaderboard.length === 1 ? 'y' : 'ies'})
-            </h2>
-            {trial.status === 'open' && (
-              <a
-                href={`/att/trials/${trialId}/upload`}
-                className="text-xs tt-link"
-              >
-                + Submit your entry
-              </a>
-            )}
+        {/* Sharing — get people onto this trial with a link. */}
+        <Section title="Share this trial">
+          <p className="text-sm text-muted -mt-1">
+            People with this link can see the leaderboard and, while the trial is open, sign up and enter from it.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <label htmlFor="trial-link" className="sr-only">Trial link</label>
+            <input id="trial-link" readOnly value={trialLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-sm`} />
+            <Button onClick={() => copy(trialLink)}>Copy link</Button>
           </div>
 
-          {leaderboard.length === 0 ? (
-            <div className="border border-border p-8 text-center text-muted text-sm">
-              No entries yet.
-              {trial.status === 'open' && (
-                <>
-                  {' '}
-                  <a href={`/att/trials/${trialId}/upload`} className="tt-link">
-                    Submit your entry
-                  </a>{' '}
-                  to get started.
-                </>
-              )}
-            </div>
-          ) : (
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-border text-muted text-xs tracking-wider">
-                  <th className="text-left py-2 pr-4 font-normal">#</th>
-                  <th className="text-left py-2 pr-4 font-normal">ATHLETE</th>
-                  <th className="text-right py-2 pr-4 font-normal">TIME</th>
-                  <th className="text-right py-2 font-normal">SUBMITTED</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((entry, i) => (
-                  <tr key={entry.entryId} className="border-b border-surface-2">
-                    <td className="py-2.5 pr-4 text-muted">{i + 1}</td>
-                    <td className="py-2.5 pr-4 text-fg">{entry.displayName}</td>
-                    <td className="py-2.5 pr-4 text-right tabular text-primary font-bold">
-                      {formatTime(entry.totalElapsedSeconds)}
-                    </td>
-                    <td className="py-2.5 text-right text-muted text-xs">
-                      {fmtDay(entry.submittedAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {gated && (
+            <p className="rounded-control border border-border bg-surface-2 text-fg text-sm px-3 py-2">
+              Only {trial.participation === 'members' ? 'group members' : 'invited paddlers'} can enter. To let
+              anyone with a link enter, create an entry link below, or set Who can enter to Anyone.
+            </p>
           )}
-        </section>
 
-        <section className="border-t border-border pt-6">
-          <p className="text-xs text-muted">
-            Public leaderboard:{' '}
-            <a href={`/att/trials/${trialId}`} className="tt-link">
-              /att/trials/{trialId}
-            </a>
+          <div className="flex flex-col gap-1.5 mt-2">
+            <span className="text-sm font-medium text-fg">Entry link</span>
+            <p className="text-sm text-muted">
+              Anyone with this link can sign up and enter{gated ? ', even if they aren’t in the group or invited' : ''}. Turn it off any time.
+            </p>
+            {submitLink ? (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <label htmlFor="submit-link" className="sr-only">Entry link</label>
+                <input id="submit-link" readOnly value={submitLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-sm`} />
+                <div className="flex gap-2">
+                  <Button onClick={() => copy(submitLink)}>Copy</Button>
+                  <Button variant="quiet" onClick={() => changeSubmitToken({ submitToken: null })}>Turn off link</Button>
+                </div>
+              </div>
+            ) : (
+              <Button onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start">
+                Create entry link
+              </Button>
+            )}
+          </div>
+        </Section>
+
+        <Section
+          title={`Entries (${leaderboard.length})`}
+          actions={trial.status === 'open' ? (
+            <a href={`/att/trials/${trialId}/upload`} className={buttonClass('quiet', 'sm')}>Submit your entry</a>
+          ) : undefined}
+        >
+          {leaderboard.length === 0 ? (
+            <p className="text-sm text-muted">No entries yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-base border-collapse">
+                <thead>
+                  <tr className={`border-b border-border ${eyebrowClass}`}>
+                    <th className="text-left py-2 pr-4 font-normal">#</th>
+                    <th className="text-left py-2 pr-4 font-normal">Athlete</th>
+                    <th className="text-right py-2 pr-4 font-normal">Time</th>
+                    <th className="text-right py-2 font-normal">Submitted</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((entry, i) => (
+                    <tr key={entry.entryId} className="border-b border-border">
+                      <td className="py-2.5 pr-4 text-muted tabular">{i + 1}</td>
+                      <td className="py-2.5 pr-4 text-fg">{entry.displayName}</td>
+                      <td className="py-2.5 pr-4 text-right tabular text-primary-text font-semibold">
+                        {formatTime(entry.totalElapsedSeconds)}
+                      </td>
+                      <td className="py-2.5 text-right text-muted text-sm whitespace-nowrap">
+                        {fmtDay(entry.submittedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+
+        {/* Closing ends entries: last, and red. */}
+        <section className="border-t border-border pt-6 flex flex-col gap-2">
+          <p className="text-sm text-muted">
+            {trial.status === 'open'
+              ? 'Closing stops new entries. The leaderboard stays up.'
+              : 'Reopening lets people enter again.'}
           </p>
+          <Button
+            variant={trial.status === 'open' ? 'danger' : 'secondary'}
+            onClick={toggleStatus}
+            disabled={toggling}
+            className="self-start"
+          >
+            {toggling ? (trial.status === 'open' ? 'Closing…' : 'Reopening…') : trial.status === 'open' ? 'Close trial' : 'Reopen trial'}
+          </Button>
         </section>
-      </div>
+      </Page>
     </main>
   )
 }

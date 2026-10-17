@@ -11,6 +11,10 @@ import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
 import { NATIONAL } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { LatLng } from '@paddlesnitch/waterways/types'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, inputClass } from '@paddlesnitch/ui/Form'
+import { eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { Stat } from '@paddlesnitch/ui/Card'
 import PlanMapClient from '@/components/map/PlanMapClient'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
@@ -25,9 +29,15 @@ import {
 // works out the times, so pace and start time change instantly. Saving needs
 // an account; an unsaved plan lives in the address bar.
 
-const H2 = 'text-xs text-muted tracking-[0.2em] uppercase mb-2'
-const BTN = 'text-xs tracking-widest px-3 py-1.5 border border-border hover:border-primary disabled:opacity-40'
-const INPUT = 'bg-surface border border-border px-2 py-1 text-sm text-fg w-full'
+const H2 = 'text-base font-semibold text-fg mb-2'
+const BTN = buttonClass('secondary', 'sm')
+// A toggle (aria-pressed): on reads as selected, off as available.
+const toggleClass = (on: boolean) => `${BTN} ${on ? 'border-primary-text! bg-surface-2! text-fg!' : 'text-muted!'}`
+const INPUT = `${inputClass} [color-scheme:dark]`
+// Where /plan opens with nothing to show: the Thames and Kennet at Reading,
+// close enough that a click sets the start (PICK_MIN_ZOOM). A link's view=,
+// from= or to= wins.
+const FIRST_VIEW: View = { at: [51.462, -0.975], zoom: 13 }
 const KIND: Record<string, string> = {
   lock: 'Lock', portage: 'Portage', weir: 'Weir', access: 'Wharf', slipway: 'Slipway',
   facility: 'Facilities', crew_point: 'Towpath access', hazard: 'Hazard',
@@ -88,7 +98,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
   const visible = plan?.stops.filter(s => shown.has(groupOf(s.feature.kind))) ?? []
 
   return (
-    <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-49px)]">
+    <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-57px)]">
       <div className="h-[50vh] lg:h-auto lg:flex-1 relative">
         <PlanMapClient
             version={VERSION}
@@ -100,7 +110,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
               colour: STOP_GROUPS.find(g => g.id === groupOf(s.feature.kind))!.colour,
             }))}
             focus={focus}
-            view={view}
+            view={view ?? (initial.start || saved || shared ? undefined : FIRST_VIEW)}
             satellite={satellite}
             coverage={coverage}
             marks={adding?.landings}
@@ -112,26 +122,28 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
             }}
           />
         {/* Aerial imagery, to see which bank you can land on. */}
-        <button type="button" aria-pressed={satellite} onClick={() => setSatellite(v => !v)}
-          className={`absolute top-[5.5rem] left-[10px] z-[500] bg-bg/85 ${BTN} ${satellite ? 'border-primary text-fg' : 'text-muted'}`}>
-          SATELLITE
-        </button>
-        <button type="button" aria-pressed={coverage} onClick={() => setCoverage(v => !v)}
-          className={`absolute top-[8.25rem] left-[10px] z-[500] bg-bg/85 ${BTN} ${coverage ? 'border-primary text-fg' : 'text-muted'}`}>
-          COVERAGE
-        </button>
+        <div className="absolute top-[5.5rem] left-[10px] z-[500] flex flex-col items-start gap-2">
+          <button type="button" aria-pressed={satellite} onClick={() => setSatellite(v => !v)}
+            className={`${toggleClass(satellite)} bg-bg/90`}>
+            Satellite
+          </button>
+          <button type="button" aria-pressed={coverage} onClick={() => setCoverage(v => !v)}
+            className={`${toggleClass(coverage)} bg-bg/90`}>
+            Coverage
+          </button>
+        </div>
         {coverage && (
-          <div className="absolute bottom-8 left-2 z-[500] max-w-[18rem] bg-bg/90 border border-border px-3 py-2 text-xs space-y-1" data-testid="coverage-legend">
+          <div className="absolute bottom-8 left-2 right-2 sm:right-auto z-[500] sm:max-w-[20rem] rounded-control bg-bg/95 border border-border px-3 py-2 text-sm space-y-1" data-testid="coverage-legend">
             <p className="text-muted">How well we know each waterway:</p>
             {COVERAGE_LEVELS.map(l => (
               <p key={l.id}><span className="inline-block w-3 h-1 mr-2 align-middle" style={{ background: l.colour }} /><span className="text-fg">{l.label}</span> <span className="text-muted">{l.says}</span></p>
             ))}
-            <p><Link className="underline hover:text-fg" href="/plan/gaps">Every waterway and its gaps →</Link></p>
+            <p><Link className="tt-link" href="/plan/gaps">Every waterway and its gaps</Link></p>
           </div>
         )}
-        <p className="absolute top-2 right-2 z-[500] max-w-[16rem] bg-bg/85 border border-border px-2 py-1 text-xs text-muted pointer-events-none">
+        <p className="hidden sm:block absolute top-2 right-2 z-[500] max-w-[16rem] rounded-control bg-bg/90 border border-border px-2 py-1 text-sm text-muted pointer-events-none">
           {manifest.version
-            ? 'Rivers and canals of the UK and Ireland. Switch on COVERAGE to see how well we know each.'
+            ? 'Rivers and canals of the UK and Ireland. Switch on Coverage to see how well we know each.'
             : 'River data so far: Devizes to Westminster.'}
         </p>
       </div>
@@ -140,59 +152,56 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
         {adding && <AddPortage stop={adding.stop} landings={adding.landings} onCancel={() => setAdding(null)}
           onSaved={() => { setAdding(null); refreshPortages() }} />}
         <section>
-          <h1 className="text-sm tracking-[0.2em] uppercase text-fg mb-1">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
+          <h1 className="text-2xl font-semibold text-fg mb-1 text-balance">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
           {shared ? (
-            <p className="text-xs text-muted">
-              {shared.mine ? <>This is your plan. <a className="underline hover:text-fg" href={`/plan/${shared.planId}`}>Open it to change it</a>.</>
-                : <>Shared by {shared.owner}. Try your own pace and start time here, or <a className="underline hover:text-fg" href={`/plan?${draftParams(draft)}`}>make your own copy</a>.</>}
+            <p className="text-base text-muted">
+              {shared.mine ? <>This is your plan. <a className="tt-link" href={`/plan/${shared.planId}`}>Open it to change it</a>.</>
+                : <>Shared by {shared.owner}. Try your own pace and start time here, or <a className="tt-link" href={`/plan?${draftParams(draft)}`}>make your own copy</a>.</>}
             </p>
           ) : (
-            <p className="text-xs text-muted">
+            <p className="text-base text-muted">
               {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
               {!draft.finish && ' Zoomed out, a click zooms in first.'}
             </p>
           )}
           <PlaceSearch version={VERSION} near={draft.start ?? undefined}
             onPick={p => setFocus({ at: p.at, zoom: p.kind === 'lock' || p.kind === 'weir' ? 16 : 14 })} />
-          <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-y-1 text-sm">
-            <dt className="text-muted text-xs tracking-widest pt-0.5">START</dt>
+          <dl className="mt-4 grid grid-cols-[5rem_1fr] gap-y-1 text-base">
+            <dt className={`${eyebrowClass} pt-1`}>Start</dt>
             <dd>{!draft.start ? 'not set' : current?.start ? current.start.waterway || 'unnamed water' : '—'}</dd>
-            <dt className="text-muted text-xs tracking-widest pt-0.5">FINISH</dt>
+            <dt className={`${eyebrowClass} pt-1`}>Finish</dt>
             <dd>{!draft.finish ? 'not set' : plan ? plan.finish.waterway || 'unnamed water' : '—'}</dd>
           </dl>
           {error && <p className="mt-2 text-sm text-red">{PLAN_ERROR_TEXT[error]}</p>}
           {routed.isError && <p className="mt-2 text-sm text-red">Couldn&apos;t work out the route. Please try again.</p>}
-          {draft.finish && routed.isFetching && <p className="mt-2 text-xs text-muted">Finding the route…</p>}
+          {draft.finish && routed.isFetching && <p className="mt-2 text-sm text-muted">Finding the route…</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {(['one_way', 'return'] as const).map(sh => (
               <button key={sh} type="button" aria-pressed={draft.shape === sh} onClick={() => setDraft(d => ({ ...d, shape: sh }))}
-                className={`${BTN} ${draft.shape === sh ? 'border-primary text-fg' : 'text-muted'}`}>
-                {sh === 'one_way' ? 'ONE-WAY' : 'RETURN'}
+                className={toggleClass(draft.shape === sh)}>
+                {sh === 'one_way' ? 'One-way' : 'Return'}
               </button>
             ))}
             <button type="button" className={BTN} disabled={!!shared || !draft.start || !draft.finish}
-              onClick={() => setDraft(d => ({ ...d, start: d.finish, finish: d.start }))}>SWAP</button>
+              onClick={() => setDraft(d => ({ ...d, start: d.finish, finish: d.start }))}>Swap ends</button>
             <button type="button" className={BTN} disabled={!!shared || !draft.start}
-              onClick={() => setDraft(d => ({ ...d, start: null, finish: null }))}>CLEAR</button>
+              onClick={() => setDraft(d => ({ ...d, start: null, finish: null }))}>Clear</button>
           </div>
         </section>
 
-        <section className="grid grid-cols-3 gap-3">
-          <label className="col-span-3 sm:col-span-1 block">
-            <span className="block text-xs text-muted tracking-widest mb-1">START TIME</span>
-            <input type="datetime-local" className={INPUT} value={mounted ? localInput(draft.startAt) : ''}
+        <section className="grid grid-cols-2 gap-3">
+          <Field label="Start time" htmlFor="plan-start-at" help="Optional: gives a clock time at every stop." className="col-span-2">
+            <input id="plan-start-at" type="datetime-local" className={INPUT} value={mounted ? localInput(draft.startAt) : ''}
               onChange={e => setDraft(d => ({ ...d, startAt: e.target.value ? new Date(e.target.value).toISOString() : undefined }))} />
-          </label>
-          <label className="block">
-            <span className="block text-xs text-muted tracking-widest mb-1">PACE KM/H</span>
-            <input type="number" min={1} max={30} step={0.5} className={INPUT} value={draft.paceKmh}
+          </Field>
+          <Field label="Pace (km/h)" htmlFor="plan-pace">
+            <input id="plan-pace" type="number" inputMode="decimal" min={1} max={30} step={0.5} className={INPUT} value={draft.paceKmh}
               onChange={e => { const v = Number(e.target.value); if (v >= 1 && v <= 30) setDraft(d => ({ ...d, paceKmh: v })) }} />
-          </label>
-          <label className="block">
-            <span className="block text-xs text-muted tracking-widest mb-1">MIN / PORTAGE</span>
-            <input type="number" min={0} max={120} step={1} className={INPUT} value={draft.portageMinutes}
+          </Field>
+          <Field label="Minutes per portage" htmlFor="plan-portage">
+            <input id="plan-portage" type="number" inputMode="numeric" min={0} max={120} step={1} className={INPUT} value={draft.portageMinutes}
               onChange={e => { const v = Number(e.target.value); if (v >= 0 && v <= 120) setDraft(d => ({ ...d, portageMinutes: v })) }} />
-          </label>
+          </Field>
         </section>
 
         {plan && <Summary plan={plan} />}
@@ -205,10 +214,10 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
                 const n = plan.stops.filter(s => groupOf(s.feature.kind) === g.id).length
                 const on = shown.has(g.id)
                 return (
-                  <button key={g.id} type="button" aria-pressed={on} className={`${BTN} ${on ? 'text-fg' : 'text-muted'}`}
+                  <button key={g.id} type="button" aria-pressed={on} className={`${BTN} ${on ? 'text-fg' : 'text-muted!'}`}
                     style={on ? { borderColor: g.colour } : undefined}
                     onClick={() => setShown(s => { const t = new Set(s); if (on) t.delete(g.id); else t.add(g.id); return t })}>
-                    {g.label} {n}
+                    {g.label} <span className="tabular">{n}</span>
                   </button>
                 )
               })}
@@ -220,7 +229,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
               onFlag: id => flag.mutate({ id }),
               onDelete: id => withdraw.mutate({ id }),
             }} />
-            <p className="mt-3 text-xs text-muted">
+            <p className="mt-3 text-sm text-muted">
               Portage sides and landing points are missing for most locks. An unknown side is shown as unknown, never guessed.
             </p>
           </section>
@@ -228,15 +237,19 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
 
         {!shared && <SaveBox draft={draft} saved={saved} canSave={!!plan} onSaved={p => { if (!saved) router.push(`/plan/${p.id}`) }} />}
 
-        <section className="text-xs text-muted space-y-2">
-          <p>Where our data is thin, and what paddlers could add: <Link className="underline hover:text-fg" href="/plan/gaps">gaps</Link>.</p>
+        <section className="text-sm text-muted space-y-2 border-t border-border pt-4">
           <p>This plan is not a navigation authority. Check stream warnings, lock notices and, below Teddington, the tide before you go.</p>
-          <p>
-            Data:{' '}
-            {CREDITED.map((id, i) => (
-              <span key={id}>{i > 0 && ' · '}<a className="underline hover:text-fg" href={SOURCES[id].url} target="_blank" rel="noreferrer">{SOURCES[id].attribution}</a></span>
-            ))}
-          </p>
+          <p>Where our data is thin, and what paddlers could add: <Link className="tt-link" href="/plan/gaps">gaps</Link>.</p>
+          <details className="group">
+            <summary className="cursor-pointer min-h-11 flex items-center gap-1 hover:text-fg list-none [&::-webkit-details-marker]:hidden">
+              Data sources <span aria-hidden className="transition-transform group-open:rotate-90">›</span>
+            </summary>
+            <ul className="space-y-1 pb-2">
+              {CREDITED.map(id => (
+                <li key={id}><a className="tt-link" href={SOURCES[id].url} target="_blank" rel="noreferrer">{SOURCES[id].attribution}</a></li>
+              ))}
+            </ul>
+          </details>
         </section>
       </aside>
     </div>
@@ -244,19 +257,16 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
 }
 
 function Summary({ plan }: { plan: ComputedPlan }) {
-  const row = (label: string, value: string) => (
-    <div><dt className="text-xs text-muted tracking-widest">{label}</dt><dd className="text-lg tabular text-fg">{value}</dd></div>
-  )
   return (
     <section>
       <h2 className="sr-only">Summary</h2>
-      <dl className="grid grid-cols-2 gap-3" data-testid="plan-summary">
-        {row('DISTANCE', km(plan.lengthM))}
-        {row('PORTAGES', String(plan.portages))}
-        {row('PADDLING', fmtDuration(plan.movingS))}
-        {row('WITH PORTAGES', fmtDuration(plan.totalS))}
-        {plan.finishAt && row('FINISH AT', fmtDayTime(plan.finishAt))}
-      </dl>
+      <div className="grid grid-cols-2 gap-4" data-testid="plan-summary">
+        <Stat label="Distance" value={km(plan.lengthM)} />
+        <Stat label="Portages" value={String(plan.portages)} />
+        <Stat label="Paddling" value={fmtDuration(plan.movingS)} />
+        <Stat label="With portages" value={fmtDuration(plan.totalS)} />
+        {plan.finishAt && <Stat label="Finish at" value={fmtDayTime(plan.finishAt)} tone="primary" />}
+      </div>
     </section>
   )
 }
@@ -293,24 +303,24 @@ function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPl
         const turn = i === turnAt
         return (
           <li key={`${s.leg}-${s.feature.id}-${i}`}>
-            {turn && <div className="py-1.5 text-xs tracking-widest text-primary border-b border-border">TURN AT {km(plan.turnM!)}</div>}
+            {turn && <div className={`py-2 border-b border-border ${eyebrowClass} text-primary-text!`}>Turn at {km(plan.turnM!)}</div>}
             <button type="button" onClick={() => onFocus(s.feature.at)}
-              className="w-full text-left grid grid-cols-[4.5rem_1fr] gap-3 py-2 border-b border-border hover:bg-surface-2">
-              <span className="tabular text-xs">
+              className="w-full text-left grid grid-cols-[4.5rem_1fr] gap-3 py-2 min-h-11 border-b border-border hover:bg-surface-2">
+              <span className="tabular text-sm">
                 <span className="block text-fg">{km(s.chainageM)}</span>
-                <span className="block text-primary">{when(s)}</span>
+                <span className="block text-primary-text">{when(s)}</span>
               </span>
               <span className="min-w-0">
-                <span className="block text-sm text-fg">
+                <span className="block text-base text-fg">
                   <span className="inline-block w-2 h-2 mr-2 align-middle" style={{ background: STOP_GROUPS.find(g => g.id === groupOf(s.feature.kind))!.colour }} />
                   {s.feature.name ?? KIND[s.feature.kind]}
-                  {s.feature.name && s.feature.kind !== 'crew_point' && <span className="text-muted text-xs"> · {KIND[s.feature.kind]}</span>}
+                  {s.feature.name && s.feature.kind !== 'crew_point' && <span className="text-muted text-sm"> · {KIND[s.feature.kind]}</span>}
                 </span>
-                {stopLines(s).map((l, j) => <span key={j} className="block text-xs text-muted">{l}</span>)}
+                {stopLines(s).map((l, j) => <span key={j} className="block text-sm text-muted">{l}</span>)}
               </span>
             </button>
             {canAddPortage(s) && (
-              <div className="pl-[5.25rem] pb-2 -mt-1 border-b border-border space-y-1 text-xs" data-testid="portage-block">
+              <div className="pl-[5.25rem] pb-2 -mt-1 border-b border-border space-y-1 text-sm" data-testid="portage-block">
                 {s.portages?.map(p => (
                   <div key={p.id}>
                     {portageLines(p).map((l, j) => <span key={j} className="block text-fg">{l}</span>)}
@@ -323,7 +333,7 @@ function StopList({ plan, stops, startAt, onFocus, actions }: { plan: ComputedPl
                   </div>
                 ))}
                 {actions.onAdd && (actions.signedIn
-                  ? <button type="button" className="text-primary hover:underline tracking-widest" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ ADD YOURS' : '+ ADD PORTAGE DETAILS'}</button>
+                  ? <button type="button" className="min-h-11 text-primary-text hover:underline" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ Add yours' : '+ Add portage details'}</button>
                   : <a className="text-muted underline hover:text-fg" href={`/signin?next=${encodeURIComponent(actions.here)}`}>Sign in to add portage details</a>)}
               </div>
             )}
@@ -345,8 +355,8 @@ function AddPortage({ stop, landings, onCancel, onSaved }: { stop: Stop; landing
   const ready = landings.length === 2 && cc0
   const name = stop.feature.name ?? KIND[stop.feature.kind]
   return (
-    <section className="border border-primary p-3 space-y-3" data-testid="add-portage">
-      <h2 className="text-xs text-fg tracking-[0.2em] uppercase">Portage details: {name}</h2>
+    <section className="rounded-control border border-primary p-4 space-y-3" data-testid="add-portage">
+      <h2 className={H2}>Portage details: {name}</h2>
       <p className="text-sm text-muted">
         {landings.length === 0 ? 'Click the map where you get out of the water.'
           : landings.length === 1 ? 'Now click where you get back in.'
@@ -354,23 +364,23 @@ function AddPortage({ stop, landings, onCancel, onSaved }: { stop: Stop; landing
         {' '}Either order: the planner works out which is which for each direction.
       </p>
       <label className="block">
-        <span className="block text-xs text-muted tracking-widest mb-1">NOTES (OPTIONAL)</span>
+        <span className="block text-sm font-medium text-fg mb-1.5">Notes (optional)</span>
         <textarea className={`${INPUT} h-20`} maxLength={500} value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Steps, a high landing, where the trolley path goes…" aria-label="Portage notes" />
       </label>
-      <label className="flex gap-2 items-center text-sm">
+      <label className="flex gap-2 items-center min-h-11 text-sm">
         <input type="checkbox" checked={rollers} onChange={e => setRollers(e.target.checked)} /> There are boat rollers
       </label>
-      <label className="flex gap-2 items-start text-xs text-muted">
+      <label className="flex gap-2 items-start text-sm text-muted">
         <input type="checkbox" className="mt-0.5" checked={cc0} onChange={e => setCc0(e.target.checked)} aria-label="Release under CC0" />
         <span>I release this under <a className="underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer">CC0</a> (anyone may reuse it, including other open-data projects) and it&apos;s my own observation, not copied from a guidebook or map. It&apos;s public at once, with my display name.</span>
       </label>
       <div className="flex gap-2">
-        <button type="button" className={BTN} disabled={!ready || add.isPending}
+        <button type="button" className={buttonClass('primary', 'sm')} disabled={!ready || add.isPending}
           onClick={() => add.mutate({ featureId: stop.feature.id, at: stop.feature.at, landings: [landings[0], landings[1]], notes: notes || undefined, rollers: rollers || undefined, cc0: true })}>
-          {add.isPending ? 'SAVING…' : 'PUBLISH'}
+          {add.isPending ? 'Publishing…' : 'Publish'}
         </button>
-        <button type="button" className={BTN} onClick={onCancel}>CANCEL</button>
+        <button type="button" className={buttonClass('quiet', 'sm')} onClick={onCancel}>Cancel</button>
       </div>
       {add.error && <p className="text-sm text-red">{
         add.error.message === 'landings_apart' ? 'Those two landings are too far apart (or the same spot). Click again.'
@@ -396,8 +406,8 @@ function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng
   const pick = (p: Place) => { onPick(p); setQ(p.name); setOpen(false) }
   return (
     <div className="mt-3 relative">
-      <label className="flex items-center gap-2">
-        <span className="text-xs text-muted tracking-widest shrink-0">GO TO</span>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-fg">Go to</span>
         <input className={INPUT} value={q} placeholder="Town, village or lock" aria-label="Go to a place"
           role="combobox" aria-expanded={open && hits.length > 0} aria-controls="place-results" autoComplete="off"
           onFocus={() => { load(); setOpen(true) }}
@@ -406,11 +416,11 @@ function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng
           onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); pick(hits[0]) } if (e.key === 'Escape') setOpen(false) }} />
       </label>
       {open && hits.length > 0 && (
-        <ul id="place-results" role="listbox" className="absolute z-[600] left-14 right-0 mt-1 bg-surface border border-border max-h-72 overflow-y-auto">
+        <ul id="place-results" role="listbox" className="absolute z-[600] left-0 right-0 mt-1 rounded-control bg-surface border border-border-strong shadow-lg max-h-72 overflow-y-auto">
           {hits.map(p => (
             <li key={`${p.name}@${p.at}`} role="option" aria-selected={false}>
-              <button type="button" className="w-full text-left px-2 py-1.5 text-sm hover:bg-surface-2" onMouseDown={e => e.preventDefault()} onClick={() => pick(p)}>
-                {p.name} <span className="text-muted text-xs">· {p.kind}</span>
+              <button type="button" className="w-full text-left px-3 py-2 min-h-11 text-base hover:bg-surface-2" onMouseDown={e => e.preventDefault()} onClick={() => pick(p)}>
+                {p.name} <span className="text-muted text-sm">· {p.kind}</span>
               </button>
             </li>
           ))}
@@ -441,17 +451,17 @@ function ShareBox({ plan }: { plan: SavedPlan }) {
       <h2 className={H2}>Share</h2>
       {!url ? (
         <>
-          <button type="button" className={BTN} disabled={share.isPending} onClick={() => share.mutate({ id: plan.id })}>{share.isPending ? 'SHARING…' : 'SHARE'}</button>
-          <p className="mt-1 text-xs text-muted">Anyone with the link can see this plan. Your buddies see it in their list.</p>
+          <button type="button" className={BTN} disabled={share.isPending} onClick={() => share.mutate({ id: plan.id })}>{share.isPending ? 'Sharing…' : 'Share'}</button>
+          <p className="mt-1 text-sm text-muted">Anyone with the link can see this plan. Your buddies see it in their list.</p>
         </>
       ) : (
         <>
-          <p className="text-xs text-muted break-all" data-testid="share-link">{url}</p>
+          <p className="text-sm text-fg break-all tabular" data-testid="share-link">{url}</p>
           <div className="mt-2 flex gap-2">
-            <button type="button" className={BTN} onClick={copy}>{copied ? 'COPIED' : 'COPY LINK'}</button>
-            <button type="button" className={BTN} disabled={unshare.isPending} onClick={() => unshare.mutate({ id: plan.id })}>{unshare.isPending ? 'STOPPING…' : 'STOP SHARING'}</button>
+            <button type="button" className={BTN} onClick={copy}>{copied ? 'Copied' : 'Copy link'}</button>
+            <button type="button" className={BTN} disabled={unshare.isPending} onClick={() => unshare.mutate({ id: plan.id })}>{unshare.isPending ? 'Stopping…' : 'Stop sharing'}</button>
           </div>
-          <p className="mt-1 text-xs text-muted">Stopping sharing breaks the link and takes it off your buddies&apos; lists.</p>
+          <p className="mt-1 text-sm text-muted">Stopping sharing breaks the link and takes it off your buddies&apos; lists.</p>
         </>
       )}
       {(share.error || unshare.error) && <p className="mt-2 text-sm text-red">Couldn&apos;t change sharing. Please try again.</p>}
@@ -481,7 +491,7 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
     return (
       <section>
         <h2 className={H2}>Save</h2>
-        <p className="text-sm text-muted"><a className="underline hover:text-fg" href={`/signin?next=${encodeURIComponent(here)}`}>Sign in</a> to save this plan.</p>
+        <p className="text-base text-muted"><a className="tt-link" href={`/signin?next=${encodeURIComponent(here)}`}>Sign in</a> to save this plan.</p>
       </section>
     )
   }
@@ -494,21 +504,21 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
       <h2 className={H2}>Save</h2>
       <div className="flex gap-2">
         <input className={INPUT} placeholder="Name this plan" maxLength={80} value={title} onChange={e => setTitle(e.target.value)} aria-label="Plan name" />
-        <button type="button" className={BTN} disabled={!canSave || !input || !changed || save.isPending}
+        <button type="button" className={buttonClass('primary')} disabled={!canSave || !input || !changed || save.isPending}
           onClick={() => input && save.mutate({ ...input, title, region: NATIONAL, id: saved?.id })}>
-          {save.isPending ? 'SAVING…' : saved ? 'SAVE CHANGES' : 'SAVE'}
+          {save.isPending ? 'Saving…' : saved ? 'Save changes' : 'Save'}
         </button>
       </div>
       {save.error && <p className="mt-2 text-sm text-red">Couldn&apos;t save this plan. Please try again.</p>}
       {saved && <ShareBox plan={saved} />}
       {saved && (
-        <div className="mt-4 flex gap-2 items-center text-xs">
+        <div className="mt-6 flex flex-wrap gap-2 items-center text-sm">
           {!confirming
-            ? <button type="button" className={`${BTN} text-red`} onClick={() => setConfirming(true)}>DELETE PLAN</button>
+            ? <button type="button" className={buttonClass('danger', 'sm')} onClick={() => setConfirming(true)}>Delete plan</button>
             : <>
                 <span className="text-muted">Delete this plan?</span>
-                <button type="button" className={`${BTN} text-red`} disabled={del.isPending} onClick={() => del.mutate({ id: saved.id })}>{del.isPending ? 'DELETING…' : 'DELETE'}</button>
-                <button type="button" className={BTN} onClick={() => setConfirming(false)}>KEEP</button>
+                <button type="button" className={buttonClass('danger', 'sm')} disabled={del.isPending} onClick={() => del.mutate({ id: saved.id })}>{del.isPending ? 'Deleting…' : 'Delete'}</button>
+                <button type="button" className={BTN} onClick={() => setConfirming(false)}>Keep</button>
               </>}
         </div>
       )}
@@ -519,7 +529,7 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
             {plans.data.map(p => (
               <li key={p.id} className="text-sm">
                 <a href={`/plan/${p.id}`} className="tt-link">{p.title}</a>
-                <span className="text-muted text-xs"> · {p.shape === 'return' ? 'return' : 'one-way'}{p.shareId ? ' · shared' : ''} · {fmtDay(p.updatedAt)}</span>
+                <span className="text-muted text-sm"> · {p.shape === 'return' ? 'return' : 'one-way'}{p.shareId ? ' · shared' : ''} · {fmtDay(p.updatedAt)}</span>
               </li>
             ))}
           </ul>
@@ -532,7 +542,7 @@ function SaveBox({ draft, saved, canSave, onSaved }: {
             {buddyPlans.data.map(p => (
               <li key={p.shareId} className="text-sm">
                 <a href={`/plan/shared/${p.shareId}`} className="tt-link">{p.title}</a>
-                <span className="text-muted text-xs"> · {p.owner} · {p.shape === 'return' ? 'return' : 'one-way'} · {fmtDay(p.updatedAt)}</span>
+                <span className="text-muted text-sm"> · {p.owner} · {p.shape === 'return' ? 'return' : 'one-way'} · {fmtDay(p.updatedAt)}</span>
               </li>
             ))}
           </ul>

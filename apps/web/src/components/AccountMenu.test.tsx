@@ -15,13 +15,14 @@ let root: Root
 afterEach(async () => { if (root) await act(async () => { root.unmount() }); container?.remove(); vi.unstubAllGlobals() })
 
 const calls = () => vi.mocked(fetch).mock.calls.map(c => String(c[0]))
-async function mount(user: { id: string; displayName: string } | null | undefined) {
+async function mount(user: { id: string; displayName: string } | null | undefined, both = false) {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(
     url.includes('/auth/me') ? { id: 'u9', displayName: 'Asked' } : { result: { data: 0 } },
   ))))
   container = document.createElement('div'); document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root.render(<SessionUserProvider user={user}><AccountMenu /></SessionUserProvider>) })
+  const menus = both ? <><AccountMenu /><AccountMenu variant="tab" /></> : <AccountMenu />
+  await act(async () => { root.render(<SessionUserProvider user={user}>{menus}</SessionUserProvider>) })
   await act(async () => { await new Promise(r => setTimeout(r, 0)) })
 }
 
@@ -37,9 +38,9 @@ describe('the account menu', () => {
     expect(calls().some(u => u.includes('/auth/me'))).toBe(false)
   })
 
-  it('signed out from the server: SIGN IN, and no requests at all', async () => {
+  it('signed out from the server: Sign in, and no requests at all', async () => {
     await mount(null)
-    expect(container.textContent).toContain('SIGN IN')
+    expect(container.textContent).toContain('Sign in')
     expect(calls()).toEqual([])
   })
 
@@ -47,5 +48,14 @@ describe('the account menu', () => {
     await mount(undefined)
     expect(calls()).toContain('/att/api/auth/me')
     expect(container.textContent).toContain('Asked')
+  })
+
+  // The header shows it twice (dropdown + the phone's You tab).
+  it('two copies on one page share each request', async () => {
+    await mount(undefined, true)
+    expect(calls().filter(u => u.includes('/auth/me'))).toHaveLength(1)
+    expect(calls().filter(u => u.includes('pendingCount'))).toHaveLength(1)
+    expect(container.textContent).toContain('Asked')
+    expect(container.textContent).toContain('You')
   })
 })

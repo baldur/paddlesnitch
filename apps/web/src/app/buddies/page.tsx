@@ -1,18 +1,22 @@
 'use client'
 import Link from 'next/link'
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtDay } from '@paddlesnitch/core/format'
 import AppHeader from '@/components/AppHeader'
 import { trpc } from '@/lib/trpc'
+import LoadingState from '@/components/LoadingState'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Card, Chevron, EmptyState, cardClass } from '@paddlesnitch/ui/Card'
 
 // BUDDIES (docs/features/buddies-and-compare.md): the people who see your
 // paddles and whose paddles you see. Mutual: a request, accepted; or your
 // invite link, opened. Either of you can remove the other.
 
-const H2 = 'text-xs text-muted tracking-[0.2em] uppercase mb-2'
-const ROW = 'border border-border px-4 py-3 flex items-center justify-between gap-3'
-const BTN = 'text-xs tracking-widest px-3 py-1.5 border border-border hover:border-primary disabled:opacity-40'
+const ROW = 'rounded-control border border-border bg-surface px-4 py-2 min-h-14 flex items-center justify-between gap-3'
+
+const noSubscribe = () => () => {}
 
 export default function BuddiesPage() {
   return <Suspense><Buddies /></Suspense>
@@ -48,103 +52,126 @@ function Buddies() {
 
   const link = invite.data && typeof window !== 'undefined' ? `${window.location.origin}/buddies?invite=${invite.data.token}` : ''
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true) } catch { /* the link is on screen */ } }
+  // On a phone, the phone's own share sheet (Messages, WhatsApp…); elsewhere,
+  // copy. A cancelled share sheet is not an error.
+  // Known only in the browser: read after the first render so the server's
+  // HTML and the first browser render agree.
+  const canShare = useSyncExternalStore(noSubscribe, () => typeof navigator.share === 'function', () => false)
+  const share = async () => {
+    if (!canShare) return copy()
+    try { await navigator.share({ title: 'Be my paddling buddy', text: 'See my paddles and compare lines with me on paddlesnitch.', url: link }) }
+    catch { /* cancelled */ }
+  }
 
   const d = q.data
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader breadcrumb={<span className="text-fg text-sm">BUDDIES</span>} />
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
-        <div>
-          <h1 className="text-lg font-bold tracking-widest">BUDDIES</h1>
-          <p className="text-sm text-muted mt-1">Buddies see each other&apos;s paddles and can compare lines with them. Add someone with your invite link, or from their profile.</p>
-        </div>
+      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← Paddles</Link>} />
+      <Page>
+        <PageHeader title="Buddies" description="Buddies see each other's paddles and can compare lines with them. Add someone with your invite link, or from their profile." />
 
-        {inviteMsg && <p role="status" className="border border-primary px-4 py-3 text-sm">{inviteMsg}</p>}
-        {q.isError && <p role="alert" className="text-sm text-red">Couldn&apos;t load your buddies. Please try again.</p>}
+        {inviteMsg && <p role="status" className={`${cardClass} border-primary px-4 py-3 text-base`}>{inviteMsg}</p>}
+        {q.isError && <p role="alert" className="text-base text-red">Couldn&apos;t load your buddies. Please try again.</p>}
 
         {d && d.incoming.length > 0 && (
-          <section aria-label="Requests">
-            <h2 className={H2}>Asking to be your buddy</h2>
-            <div className="flex flex-col gap-2">
+          <section aria-label="Requests" className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-fg">Asking to be your buddy</h2>
+            <ul className="flex flex-col gap-2">
               {d.incoming.map(r => (
-                <div key={r.userId} className={ROW}>
-                  <span className="text-sm">{r.name}</span>
+                <li key={r.userId} className={ROW}>
+                  <span className="text-base text-fg min-w-0 truncate">{r.name}</span>
                   <span className="flex gap-2">
-                    <button type="button" className={`${BTN} bg-primary text-white border-primary`} disabled={accept.isPending} onClick={() => accept.mutate({ userId: r.userId })}>ACCEPT</button>
-                    <button type="button" className={BTN} disabled={decline.isPending} onClick={() => decline.mutate({ userId: r.userId })}>DECLINE</button>
+                    <button type="button" className={buttonClass('primary', 'sm')} disabled={accept.isPending} onClick={() => accept.mutate({ userId: r.userId })}>Accept</button>
+                    <button type="button" className={buttonClass('quiet', 'sm')} disabled={decline.isPending} onClick={() => decline.mutate({ userId: r.userId })}>Decline</button>
                   </span>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )}
 
-        <section aria-label="Your buddies">
-          <h2 className={H2}>Your buddies</h2>
-          {!d ? <p className="text-sm text-muted">Loading…</p>
-            : d.buddies.length === 0 ? <p className="border border-border px-4 py-6 text-sm text-muted">No buddies yet. Send your invite link to someone you paddle with.</p>
-            : (
-              <div className="flex flex-col gap-2">
+        <section aria-label="Your buddies" className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-fg">Your buddies</h2>
+          {!d ? <LoadingState label="Loading" className="py-6" />
+            : d.buddies.length === 0 ? (
+              <EmptyState title="No buddies yet" body="Send your invite link to someone you paddle with."
+                action={link ? <button type="button" onClick={share} className={buttonClass('primary')}>{canShare ? 'Share invite link' : copied ? 'Copied' : 'Copy invite link'}</button> : undefined} />
+            ) : (
+              <ul className="flex flex-col gap-2">
                 {d.buddies.map(b => (
-                  <div key={b.userId} className={ROW}>
-                    <span className="min-w-0">
-                      <span className="block text-sm">{b.name}</span>
-                      <span className="block text-xs text-muted">buddies since {fmtDay(b.since)}</span>
-                    </span>
-                    {confirming !== b.userId && <Link href={`/buddies/${b.userId}`} className="text-xs tracking-widest text-primary ml-auto">PADDLES →</Link>}
+                  <li key={b.userId} className={cardClass}>
                     {confirming === b.userId ? (
-                      <span className="flex items-center gap-2 text-xs">
-                        <span className="text-muted">Stop seeing each other&apos;s paddles?</span>
-                        <button type="button" className={`${BTN} text-red`} onClick={() => { remove.mutate({ userId: b.userId }); setConfirming(null) }}>REMOVE</button>
-                        <button type="button" className={BTN} onClick={() => setConfirming(null)}>KEEP</button>
-                      </span>
+                      <div className="p-3 flex flex-wrap items-center gap-2">
+                        <span className="text-base text-fg flex-1 min-w-[12rem]">Stop seeing each other&apos;s paddles with {b.name}?</span>
+                        <button type="button" className={buttonClass('danger', 'sm')} onClick={() => { remove.mutate({ userId: b.userId }); setConfirming(null) }}>Remove</button>
+                        <button type="button" className={buttonClass('quiet', 'sm')} onClick={() => setConfirming(null)}>Keep</button>
+                      </div>
                     ) : (
-                      <button type="button" className={BTN} onClick={() => setConfirming(b.userId)}>REMOVE</button>
+                      <div className="flex items-center">
+                        <Link href={`/buddies/${b.userId}`} className="flex-1 min-w-0 flex items-center gap-3 p-3 rounded-control hover:bg-surface-2 transition-colors">
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-base text-fg truncate">{b.name}</span>
+                            <span className="block text-sm text-muted">Buddies since {fmtDay(b.since)}</span>
+                          </span>
+                          <span className="text-sm text-primary-text">Paddles</span>
+                          <Chevron />
+                        </Link>
+                        <button type="button" className={buttonClass('quiet', 'sm', 'mr-2')} onClick={() => setConfirming(b.userId)} aria-label={`Remove ${b.name}`}>Remove</button>
+                      </div>
                     )}
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
         </section>
 
         {d && d.outgoing.length > 0 && (
-          <section aria-label="Waiting for an answer">
-            <h2 className={H2}>Waiting for an answer</h2>
-            <div className="flex flex-col gap-2">
+          <section aria-label="Waiting for an answer" className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-fg">Waiting for an answer</h2>
+            <ul className="flex flex-col gap-2">
               {d.outgoing.map(r => (
-                <div key={r.userId} className={ROW}>
-                  <span className="text-sm">{r.name}</span>
-                  <button type="button" className={BTN} disabled={cancel.isPending} onClick={() => cancel.mutate({ userId: r.userId })}>CANCEL</button>
-                </div>
+                <li key={r.userId} className={ROW}>
+                  <span className="text-base text-fg min-w-0 truncate">{r.name}</span>
+                  <button type="button" className={buttonClass('quiet', 'sm')} disabled={cancel.isPending} onClick={() => cancel.mutate({ userId: r.userId })}>Cancel</button>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )}
 
-        <section aria-label="Your invite link">
-          <h2 className={H2}>Your invite link</h2>
-          <div className="border border-border bg-surface px-4 py-3 flex flex-col gap-2">
-            <code className="text-xs break-all">{link || 'Loading…'}</code>
-            <span className="flex gap-2">
-              <button type="button" className={`${BTN} bg-primary text-white border-primary`} disabled={!link} onClick={copy}>{copied ? 'COPIED' : 'COPY'}</button>
-              <button type="button" className={BTN} disabled={newInvite.isPending} onClick={() => { setCopied(false); newInvite.mutate() }}>NEW LINK</button>
-            </span>
-            <p className="text-xs text-muted">Anyone signed in who opens it becomes your buddy. A new link stops the old one working.</p>
-          </div>
+        <section aria-label="Your invite link" className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-fg">Your invite link</h2>
+          <Card className="flex flex-col gap-3">
+            <code className="font-mono text-sm text-fg break-all bg-bg border border-border rounded-control px-3 py-2">{link || 'Loading…'}</code>
+            <div className="flex flex-wrap gap-2">
+              {canShare && <button type="button" className={buttonClass('secondary')} disabled={!link} onClick={share}><ShareIcon />Share</button>}
+              <button type="button" className={buttonClass('secondary')} disabled={!link} onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+              <button type="button" className={buttonClass('quiet')} disabled={newInvite.isPending} onClick={() => { setCopied(false); newInvite.mutate() }}>New link</button>
+            </div>
+            <p className="text-sm text-muted">Anyone signed in who opens it becomes your buddy. A new link stops the old one working.</p>
+          </Card>
         </section>
 
         {d && (
-          <section aria-label="Sharing">
-            <h2 className={H2}>Sharing</h2>
-            <label className="flex items-center gap-3 text-sm">
-              <input type="checkbox" checked={d.sharing.paddles} disabled={sharing.isPending}
+          <section aria-label="Sharing" className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-fg">Sharing</h2>
+            <label className="flex items-center gap-3 text-base min-h-11 cursor-pointer">
+              <input type="checkbox" checked={d.sharing.paddles} disabled={sharing.isPending} className="accent-primary w-5 h-5"
                 onChange={e => sharing.mutate({ paddles: e.target.checked })} />
               Buddies can see my paddles
             </label>
-            <p className="text-xs text-muted mt-1">They never see your notes. To hide one paddle, open it in <Link href="/paddles" className="text-primary">Paddles</Link>.</p>
+            <p className="text-sm text-muted">They never see your notes. To hide one paddle, open it in <Link href="/paddles" className="text-primary-text">Paddles</Link> and choose Hide from buddies.</p>
           </section>
         )}
-      </div>
+      </Page>
     </main>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M10 3v10M6 7l4-4 4 4M4 11v5a1 1 0 001 1h10a1 1 0 001-1v-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }

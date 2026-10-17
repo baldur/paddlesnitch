@@ -4,20 +4,24 @@ import { getAuthUser } from '@/lib/auth'
 import { getUserGroupIds } from '@/lib/groups'
 import { getProfileSettings, buildProfileStats, resolveToUserId } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
-import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
+import { paceFor500m, speedKmh } from '@/lib/format'
 import AppHeader from '@/components/AppHeader'
 import { listSessionSummaries } from '@paddlesnitch/analysis/analysis-store'
 import { split500 } from '@paddlesnitch/analysis/analysis'
 import { paddlingSummary, groupSameOuting } from '@paddlesnitch/core/paddles'
 import { fmtDay, fmtMonth } from '@paddlesnitch/core/format'
 import BuddyButton from '@/components/BuddyButton'
+import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Card, Stat, EmptyState, cardClass } from '@paddlesnitch/ui/Card'
 
-function Stat({ label, value }: { label: string; value: string }) {
+// A figure in its own card. Values stay on one line; the grid gives each
+// enough room on a phone.
+function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-border bg-surface px-4 py-3">
-      <div className="text-xs text-muted tracking-[0.2em] uppercase">{label}</div>
-      <div className="text-lg text-fg tabular mt-1">{value}</div>
-    </div>
+    <Card className="min-w-0">
+      <Stat label={label} value={<span className="whitespace-nowrap">{value}</span>} />
+    </Card>
   )
 }
 
@@ -68,24 +72,24 @@ export default async function ProfilePage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader
-        breadcrumb={<Link href="/" className="tt-nav-link text-sm shrink-0">← HOME</Link>}
-      >
-        {isOwner && <Link href="/account#profile" className="tt-nav-link text-sm">EDIT PROFILE</Link>}
-      </AppHeader>
+      <AppHeader />
 
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
-        <div>
-          <h1 className="text-2xl font-bold text-fg tracking-wide">{name}</h1>
-          {viewer && !isOwner && <div className="mt-2"><BuddyButton userId={userId} /></div>}
-          <p className="text-sm text-muted mt-1">Paddler profile</p>
-        </div>
+      <Page>
+        <PageHeader
+          title={name}
+          description="Paddler profile"
+          actions={
+            isOwner
+              ? <Link href="/account#profile" className={buttonClass('secondary')}>Edit profile</Link>
+              : viewer ? <BuddyButton userId={userId} /> : undefined
+          }
+        />
 
         {isOwner && !settings.public && (
-          <div className="border border-primary bg-primary/10 px-4 py-3 text-xs text-primary">
-            Only you can see this profile. Make it public from your{' '}
-            <Link href="/account" className="underline">account page</Link> to share it.
-          </div>
+          <p className="rounded-control border border-primary/50 bg-primary/10 px-4 py-3 text-sm text-fg -mt-4">
+            Only you can see this profile. Make it public in{' '}
+            <Link href="/account#profile" className="tt-link">Account</Link> to share it.
+          </p>
         )}
 
         {/* Your paddling: from Paddles, so a tracker tester without races
@@ -94,99 +98,105 @@ export default async function ProfilePage({
         {paddling && (
           <section className="flex flex-col gap-3" aria-label="Your paddling">
             <div>
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Your paddling</h2>
-              <p className="text-[11px] text-muted mt-1">Only you see this part.</p>
+              <h2 className="text-lg font-semibold text-fg">Your paddling</h2>
+              <p className="text-sm text-muted">Only you see this part.</p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Stat label="This year" value={`${paddling.thisYearKm} km`} />
-              <Stat label="Paddles" value={String(paddling.count)} />
-              <Stat label="Streak" value={paddling.streak ? `${paddling.streak} wk` : '—'} />
-              {paddling.fastest && <Stat label="Fastest cruise" value={`${split500(paddling.fastest.cruiseSpeed)}/500`} />}
+            <div className="grid grid-cols-3 gap-3">
+              <Tile label="This year" value={`${paddling.thisYearKm} km`} />
+              <Tile label="Paddles" value={String(paddling.count)} />
+              <Tile label="Streak" value={paddling.streak ? `${paddling.streak} wk` : '—'} />
             </div>
-            <ul className="text-sm flex flex-col gap-1">
-              {paddling.longest && <li>Longest: <Link href={`/paddles/${paddling.longest.id}`} className="text-primary tabular">{paddling.longest.km.toFixed(1)} km on {fmtDay(paddling.longest.paddledAt)}</Link></li>}
-              {paddling.fastest && <li>Fastest cruise: <Link href={`/paddles/${paddling.fastest.id}`} className="text-primary tabular">{split500(paddling.fastest.cruiseSpeed)}/500 on {fmtDay(paddling.fastest.paddledAt)}</Link></li>}
-            </ul>
+            {(paddling.longest || paddling.fastest) && (
+              <ul className="text-base flex flex-col gap-1">
+                {paddling.longest && <li>Longest: <Link href={`/paddles/${paddling.longest.id}`} className="tt-link tabular whitespace-nowrap">{paddling.longest.km.toFixed(1)} km on {fmtDay(paddling.longest.paddledAt)}</Link></li>}
+                {paddling.fastest && <li>Fastest cruise: <Link href={`/paddles/${paddling.fastest.id}`} className="tt-link tabular whitespace-nowrap">{split500(paddling.fastest.cruiseSpeed)} /500 on {fmtDay(paddling.fastest.paddledAt)}</Link></li>}
+              </ul>
+            )}
           </section>
         )}
 
-        {/* Totals */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat label="Races" value={String(stats.totals.races)} />
-          <Stat label="Courses" value={String(stats.totals.courses)} />
-          <Stat label="Distance" value={fmtKm(stats.totals.distanceMetres)} />
-          <Stat label="Since" value={fmtMonthYear(stats.totals.since)} />
-        </div>
+        {/* Races: only results the viewer could already see on a leaderboard. */}
+        <Section title="Races">
+          {stats.races.length === 0 ? (
+            <EmptyState
+              title="No race results yet"
+              body={isOwner ? 'Enter a time trial and your results show here.' : undefined}
+              action={isOwner ? <Link href="/att" className={buttonClass('secondary')}>See open trials</Link> : undefined}
+            />
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Tile label="Races" value={String(stats.totals.races)} />
+              <Tile label="Courses" value={String(stats.totals.courses)} />
+              <Tile label="Race distance" value={fmtKm(stats.totals.distanceMetres)} />
+              <Tile label="Racing since" value={fmtMonthYear(stats.totals.since)} />
+            </div>
+          )}
+        </Section>
 
-        {stats.races.length === 0 ? (
-          <p className="text-sm text-muted">No race results to show yet.</p>
-        ) : (
+        {stats.races.length > 0 && (
           <>
             {/* Best pace / speed */}
             {stats.bestRace && (
-              <section className="flex flex-col gap-2">
-                <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Personal best pace</h2>
-                <div className="grid grid-cols-3 gap-3">
-                  <Stat label="Pace /500m" value={paceFor500m(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
-                  <Stat label="Speed" value={speedKmh(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
-                  <Stat label="Speed" value={speedMs(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
+              <Section title="Best race pace">
+                <div className="grid grid-cols-2 gap-3">
+                  <Tile label="Pace /500" value={paceFor500m(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
+                  <Tile label="Speed" value={speedKmh(stats.bestRace.distanceMetres, stats.bestRace.totalElapsedSeconds)} />
                 </div>
-                <p className="text-xs text-muted">on {stats.bestRace.courseName} ({formatTime(stats.bestRace.totalElapsedSeconds)})</p>
-              </section>
+                <p className="text-sm text-muted">On {stats.bestRace.courseName} (<span className="tabular">{formatTime(stats.bestRace.totalElapsedSeconds)}</span>)</p>
+              </Section>
             )}
 
             {/* Personal bests per course */}
-            <section className="flex flex-col gap-2">
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Personal bests</h2>
+            <Section title="Personal bests">
               <div className="border border-border">
                 {stats.personalBests.map(pb => (
-                  <div key={pb.courseId} className="flex items-center justify-between px-4 py-2 border-b border-surface-2 last:border-b-0">
-                    <span className="text-sm text-fg min-w-0 truncate">{pb.courseName}</span>
-                    <span className="text-sm text-primary tabular shrink-0 ml-3">
+                  <div key={pb.courseId} className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border last:border-b-0">
+                    <span className="text-base text-fg min-w-0 truncate">{pb.courseName}</span>
+                    <span className="text-base text-primary-text tabular shrink-0 whitespace-nowrap">
                       {formatTime(pb.bestSeconds)}
                       <span className="text-muted ml-2">×{pb.raceCount}</span>
                     </span>
                   </div>
                 ))}
               </div>
-            </section>
+            </Section>
 
             {/* Boat classes */}
             {stats.boatClasses.length > 0 && (
-              <section className="flex flex-col gap-2">
-                <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Boat classes</h2>
+              <Section title="Boat classes">
                 <div className="flex flex-wrap gap-2">
                   {stats.boatClasses.map(bc => (
-                    <span key={bc.boatClass} className="border border-border bg-surface px-3 py-1 text-sm text-fg tabular">
+                    <span key={bc.boatClass} className={`${cardClass} px-3 py-1.5 text-base text-fg tabular`}>
                       {bc.boatClass} <span className="text-muted">×{bc.count}</span>
                     </span>
                   ))}
                 </div>
-              </section>
+              </Section>
             )}
 
             {/* Race history */}
-            <section className="flex flex-col gap-2">
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase">Race history</h2>
+            <Section title="Race history">
               <div className="border border-border">
                 {stats.races.map(r => (
                   <Link
                     key={r.entryId}
                     href={`/att/entries/${r.entryId}`}
-                    className="flex items-center justify-between px-4 py-2 border-b border-surface-2 last:border-b-0 hover:bg-surface transition-colors"
+                    className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border last:border-b-0 hover:bg-surface transition-colors"
                   >
                     <span className="min-w-0">
-                      <span className="block text-sm text-fg truncate">{r.courseName}</span>
-                      <span className="block text-xs text-muted tabular">{r.trialName} · {r.raceDate} · {r.boatClass}</span>
+                      <span className="block text-base text-fg truncate">{r.courseName}</span>
+                      <span className="block text-sm text-muted">
+                        {r.trialName} · <span className="whitespace-nowrap">{fmtDay(r.raceDate)}</span> · {r.boatClass}
+                      </span>
                     </span>
-                    <span className="text-sm text-primary tabular shrink-0 ml-3">{formatTime(r.totalElapsedSeconds)}</span>
+                    <span className="text-base text-primary-text tabular shrink-0">{formatTime(r.totalElapsedSeconds)}</span>
                   </Link>
                 ))}
               </div>
-            </section>
+            </Section>
           </>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

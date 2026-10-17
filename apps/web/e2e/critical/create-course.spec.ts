@@ -32,5 +32,5 @@ test('a signed-in user creates a course and sees it in the catalogue', async ({ 
   // Drill in to the detail page and confirm we're allowed to see it.
   await link.click()
   await expect(page).toHaveURL(`/att/courses/${course.id}`)
-  await expect(page.getByRole('heading', { name: new RegExp(course.name.toUpperCase()) })).toBeVisible()
+  await expect(page.getByRole('heading', { name: new RegExp(course.name) })).toBeVisible()
 })

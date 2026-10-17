@@ -10,7 +10,11 @@ import ViewOnStrava from '@/components/strava/ViewOnStrava'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
 import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
-import { fmtDayMonth } from '@paddlesnitch/core/format'
+import { fmtDay, fmtDayMonth } from '@paddlesnitch/core/format'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, Segmented, inputClass, selectClass } from '@paddlesnitch/ui/Form'
+import { Card, cardClass } from '@paddlesnitch/ui/Card'
 
 // What the upload route returns alongside a "did not cross the lines" failure:
 // the parsed track + the course geometry, enough to draw a diagnostic map. For
@@ -30,8 +34,6 @@ const formatDate = fmtDayMonth
 // UploadPage, React sees a new component type on every parent re-render
 // and unmounts/remounts the subtree — input focus is lost after every
 // keystroke. Pass state down as props instead.
-
-const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors w-full'
 
 // Kayaks use "Front" / "Back"; rowing uses "Bow" / "Stroke". Middle seats
 // in either sport are just the seat number. Cox (rowing only) shows as
@@ -66,29 +68,28 @@ function CrewEditor({
     ? `One row per paddler. Seat 1 is the front, ${total} is the back.`
     : `One row per seat. Seat 1 is bow, ${total} is stroke${info.hasCox ? ', C is cox' : ''}.`
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs text-muted tracking-widest">CREW</label>
-      <p className="text-xs text-muted -mt-1">
-        {helperText}
-      </p>
-      <div className="flex flex-col gap-1.5">
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="text-sm font-medium text-fg mb-1.5">Crew</legend>
+      <p className="text-sm text-muted">{helperText}</p>
+      <div className="flex flex-col gap-2 mt-1">
         {crew.map(m => (
-          <div key={String(m.seat)} className="flex items-center gap-2">
-            <span className="text-xs text-muted tracking-widest w-20 shrink-0 tabular">
+          <div key={String(m.seat)} className="flex items-center gap-3">
+            <label htmlFor={`crew-${m.seat}`} className="text-sm text-muted w-24 shrink-0">
               {seatLabel(m.seat, total, info.sport)}
-            </span>
+            </label>
             <input
+              id={`crew-${m.seat}`}
               type="text"
               required
               placeholder={m.seat === 'C' ? 'Cox name' : 'Crew member name'}
               value={m.name}
               onChange={e => updateCrewName(m.seat, e.target.value)}
-              className={inputClass + ' flex-1'}
+              className={`${inputClass} flex-1`}
             />
           </div>
         ))}
       </div>
-    </div>
+    </fieldset>
   )
 }
 
@@ -100,15 +101,15 @@ function BoatClassPicker({
   setBoatClass: (v: BoatClass | '') => void
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs text-muted tracking-widest">BOAT CLASS</label>
+    <Field label="Boat class" htmlFor="boat-class">
       <select
+        id="boat-class"
         required
         value={boatClass}
         onChange={e => setBoatClass(e.target.value as BoatClass | '')}
-        className={inputClass}
+        className={selectClass}
       >
-        <option value="">— Select —</option>
+        <option value="">Choose your boat</option>
         <optgroup label="Kayak">
           {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => (
             <option key={c} value={c}>
@@ -126,8 +127,12 @@ function BoatClassPicker({
           })}
         </optgroup>
       </select>
-    </div>
+    </Field>
   )
+}
+
+function ErrorBox({ children }: { children: React.ReactNode }) {
+  return <div role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-3 text-red text-sm">{children}</div>
 }
 
 export default function UploadPage({
@@ -171,7 +176,23 @@ export default function UploadPage({
   // Crew is keyed by the boat class. When the class changes we re-initialise
   // crew so seat indexes always match the selected boat.
   const [crew, setCrew] = useState<CrewMember[]>([])
-  // Race date defaults to today (local timezone). Stored as YYYY-MM-DD.
+  // Which trial this is, so the page can name it (and its course).
+  const [about, setAbout] = useState<{ trialName: string; date?: string; courseName?: string } | null>(null)
+  // The picked file's name, shown in the drop zone.
+  const [fileName, setFileName] = useState('')
+
+  useEffect(() => {
+    fetch(`/att/api/trials/${trialId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(async (t: { name?: string; date?: string; courseId?: string } | null) => {
+        if (!t?.name) return
+        const c = t.courseId
+          ? await fetch(`/att/api/courses/${t.courseId}`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+          : null
+        setAbout({ trialName: t.name, date: t.date, courseName: c?.name })
+      })
+      .catch(() => {})
+  }, [trialId])
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -372,174 +393,148 @@ export default function UploadPage({
     }
   }
 
+  const trialHref = `/att/trials/${trialId}`
+  // "Spring Sprint on Elliðaár 1000 m · 12 Apr 2025": which trial you're entering.
+  const aboutLine = about ? (
+    <>
+      <a href={trialHref} className="text-fg font-medium hover:text-primary-text">{about.trialName}</a>
+      {about.courseName && <> on {about.courseName}</>}
+      {about.date && <> · {fmtDay(about.date)}</>}
+    </>
+  ) : undefined
+  const submitLabel = (busy: string, idle: string) => (status === 'uploading' ? busy : idle)
+
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <a
-              href={`/att/trials/${trialId}`}
-              className="tt-nav-link text-sm"
-            >
-              ← LEADERBOARD
-            </a>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">UPLOAD TRACE</span>
-          </>
-        }
+        breadcrumb={<a href={trialHref} className="tt-nav-link">← Leaderboard</a>}
       />
 
-      <div className="flex-1 px-4 py-8 max-w-xl mx-auto w-full">
+      <Page width="narrow">
         {authUser === null ? (
-          <div className="flex flex-col gap-4 text-center">
-            <h1 className="text-lg font-bold text-fg tracking-widest">
-              SIGN IN TO SUBMIT
-            </h1>
-            <p className="text-sm text-muted">
-              You need an account to submit a trace and appear on the leaderboard.
-            </p>
-            <a
-              href={`/signin?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
-              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
-            >
-              SIGN IN
-            </a>
-          </div>
+          <>
+            <PageHeader title="Sign in to enter" description={aboutLine} />
+            <Card className="flex flex-col gap-4">
+              <p className="text-base text-muted">
+                You need an account to submit your entry and appear on the leaderboard.
+              </p>
+              <a
+                href={`/signin?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
+                className={buttonClass('primary', 'md', 'self-start')}
+              >
+                Sign in
+              </a>
+            </Card>
+          </>
         ) : submitGate === undefined ? (
           <LoadingState label="Checking…" className="py-16" />
         ) : submitGate.canSubmit === false ? (
-          // Signed in but not allowed to submit — explain why and point at the
-          // group to join (self-serve join lands in phase 4).
-          <div className="flex flex-col gap-4 text-center">
-            <h1 className="text-lg font-bold text-fg tracking-widest">
-              {submitGate.reason === 'members' ? 'MEMBERS ONLY' : 'INVITATION ONLY'}
-            </h1>
-            {submitGate.reason === 'members' && submitGate.group ? (
-              <>
-                <p className="text-sm text-muted">
-                  Only members of <span className="text-fg font-bold">{submitGate.group.name}</span> can
-                  submit to this trial. Ask an admin of the group to add you, then come back and upload.
+          // Signed in but not allowed to submit: explain why and point at the
+          // group to join.
+          <>
+            <PageHeader
+              title={submitGate.reason === 'members' ? 'Members only' : 'Invited only'}
+              description={aboutLine}
+            />
+            <Card className="flex flex-col gap-4">
+              {submitGate.reason === 'members' && submitGate.group ? (
+                <>
+                  <p className="text-base text-muted">
+                    Only members of <span className="text-fg font-medium">{submitGate.group.name}</span> can
+                    enter this trial. Ask one of its admins to add you, then come back.
+                  </p>
+                  <a href={`/att/groups/${submitGate.group.id}`} className={buttonClass('primary', 'md', 'self-start')}>
+                    View group
+                  </a>
+                </>
+              ) : (
+                <p className="text-base text-muted">
+                  This trial is for invited paddlers. Ask the organiser for an invite, then come back.
                 </p>
-                <a
-                  href={`/att/groups/${submitGate.group.id}`}
-                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
-                >
-                  VIEW GROUP →
-                </a>
-              </>
-            ) : (
-              <p className="text-sm text-muted">
-                This trial is invitation-only. Ask the organiser for an invite, then come back and upload.
+              )}
+            </Card>
+            <a href={trialHref} className={buttonClass('quiet', 'md', 'self-start')}>Back to the leaderboard</a>
+          </>
+        ) : (
+          <>
+            <PageHeader
+              title="Submit your entry"
+              description={aboutLine ?? 'Upload your whole session, warm-up included.'}
+            />
+            {about && (
+              <p className="text-sm text-muted -mt-4">
+                Upload your whole session, warm-up included. We find the part between
+                the start and finish lines and time it.
               </p>
             )}
-            <a href={`/att/trials/${trialId}`} className="tt-link text-xs tracking-widest">
-              ← BACK TO LEADERBOARD
-            </a>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6">
-            <h1 className="text-lg font-bold text-fg tracking-widest">
-              SUBMIT YOUR ENTRY
-            </h1>
-            <p className="text-sm text-muted -mt-4">
-              Upload your whole session, warm-up included. We find the part between
-              the start and finish lines and time it.
-            </p>
 
-            {/* Mode toggle */}
-            <div className="flex border-b border-border">
-              <button
-                type="button"
-                onClick={() => setInputMode('file')}
-                className={`px-4 py-2 text-sm tracking-widest transition-colors ${
-                  inputMode === 'file'
-                    ? 'border-b-2 border-primary text-primary -mb-px'
-                    : 'text-muted hover:text-fg'
-                }`}
-              >
-                UPLOAD FILE
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputMode('url')}
-                className={`px-4 py-2 text-sm tracking-widest transition-colors ${
-                  inputMode === 'url'
-                    ? 'border-b-2 border-primary text-primary -mb-px'
-                    : 'text-muted hover:text-fg'
-                }`}
-              >
-                PASTE URL
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputMode('strava')}
-                className={`px-4 py-2 text-sm tracking-widest transition-colors ${
-                  inputMode === 'strava'
-                    ? 'border-b-2 border-strava text-strava -mb-px'
-                    : 'text-muted hover:text-fg'
-                }`}
-              >
-                FROM STRAVA
-              </button>
-              {trackerRecordings && trackerRecordings.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setInputMode('tracker')}
-                  className={`px-4 py-2 text-sm tracking-widest transition-colors ${
-                    inputMode === 'tracker'
-                      ? 'border-b-2 border-primary text-primary -mb-px'
-                      : 'text-muted hover:text-fg'
-                  }`}
-                >
-                  FROM YOUR TRACKER
-                </button>
-              )}
-            </div>
+            <Segmented
+              label="Where your entry comes from"
+              value={inputMode}
+              onChange={setInputMode}
+              options={[
+                { value: 'file', label: 'File' },
+                { value: 'url', label: 'Link' },
+                { value: 'strava', label: 'Strava' },
+                ...(trackerRecordings && trackerRecordings.length > 0
+                  ? [{ value: 'tracker' as const, label: 'Tracker' }]
+                  : []),
+              ]}
+            />
 
             {inputMode === 'file' && (
-              <form onSubmit={handleFileSubmit} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-muted tracking-widest">
-                    GPS FILE (.gpx, .fit, .tcx, .csv, or .zip)
-                  </label>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    required
-                    accept=".gpx,.fit,.tcx,.csv,.zip"
-                    className="bg-bg border border-border px-3 py-2 text-fg text-sm file:bg-surface-2 file:text-fg file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer hover:border-primary transition-colors cursor-pointer w-full"
-                  />
-                  <p className="text-xs text-muted">
-                    GPX, FIT, TCX or CSV, or a Garmin .zip export. FIT files usually include stroke rate; GPX often doesn&apos;t. Heart rate is never stored.
+              <form onSubmit={handleFileSubmit} className="flex flex-col gap-6">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-fg" id="gps-file-label">GPS file</span>
+                  {/* The real file input covers the whole zone, so a tap opens
+                      the picker and a dropped file lands in it. */}
+                  <div className={`${cardClass} border-dashed border-border-strong relative flex flex-col items-center justify-center gap-1 px-4 py-8 text-center hover:bg-surface-2 transition-colors`}>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      required
+                      aria-labelledby="gps-file-label"
+                      accept=".gpx,.fit,.tcx,.csv,.zip"
+                      onChange={e => setFileName(e.target.files?.[0]?.name ?? '')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    {fileName ? (
+                      <>
+                        <span className="text-base text-fg font-medium break-all">{fileName}</span>
+                        <span className="text-sm text-muted">Tap to choose a different file</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-base text-fg font-medium">Choose a file or drop it here</span>
+                        <span className="text-sm text-muted">.gpx, .fit, .tcx, .csv or a Garmin .zip</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted">
+                    FIT files usually include stroke rate; GPX often doesn&apos;t. Heart rate is never stored.
                   </p>
                 </div>
 
                 <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
-                {status === 'error' && (
-                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">
-                    {error}
-                  </div>
-                )}
+                {status === 'error' && <ErrorBox>{error}</ErrorBox>}
 
-                <button
-                  type="submit"
-                  disabled={status === 'uploading'}
-                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {status === 'uploading' ? 'PROCESSING…' : 'SUBMIT TRACE'}
-                </button>
+                <Button type="submit" variant="primary" disabled={status === 'uploading'} className="self-start">
+                  {submitLabel('Submitting…', 'Submit entry')}
+                </Button>
               </form>
             )}
 
             {inputMode === 'url' && (
-              <form onSubmit={handleUrlSubmit} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-muted tracking-widest">
-                    ACTIVITY URL
-                  </label>
+              <form onSubmit={handleUrlSubmit} className="flex flex-col gap-6">
+                <Field
+                  label="Activity link"
+                  htmlFor="activity-url"
+                  help="A public Strava activity link or a direct link to a .gpx file. The whole session is fine."
+                >
                   <input
+                    id="activity-url"
                     type="url"
                     required
                     placeholder="https://www.strava.com/activities/..."
@@ -547,77 +542,60 @@ export default function UploadPage({
                     onChange={e => setActivityUrl(e.target.value)}
                     className={inputClass}
                   />
-                  <p className="text-xs text-muted">
-                    Paste a public Strava activity link or a direct link to a .gpx file. The whole session is fine.
-                  </p>
-                </div>
+                </Field>
 
                 <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
-                {status === 'error' && (
-                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">
-                    {error}
-                  </div>
-                )}
+                {status === 'error' && <ErrorBox>{error}</ErrorBox>}
 
-                <button
-                  type="submit"
-                  disabled={status === 'uploading'}
-                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {status === 'uploading' ? 'FETCHING…' : 'SUBMIT URL'}
-                </button>
+                <Button type="submit" variant="primary" disabled={status === 'uploading'} className="self-start">
+                  {submitLabel('Submitting…', 'Submit link')}
+                </Button>
               </form>
             )}
 
             {inputMode === 'strava' && (
-              <form onSubmit={handleStravaSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleStravaSubmit} className="flex flex-col gap-6">
                 {stravaConnected === undefined && (
-                  <p className="text-xs text-muted">Checking Strava connection…</p>
+                  <p className="text-sm text-muted">Checking your Strava connection…</p>
                 )}
 
                 {stravaConnected === false && (
-                  <div className="flex flex-col gap-3 border border-border p-4">
-                    <p className="text-sm text-fg">
-                      Connect Strava once and you can import any recent water-sport activity straight into a time trial.
+                  <Card className="flex flex-col gap-3">
+                    <p className="text-base text-fg">
+                      Connect Strava once and you can import any recent paddling activity straight into a trial.
                     </p>
                     <StravaButton href="/att/api/strava/connect" className="self-start" />
-                    <p className="text-xs text-muted">
+                    <p className="text-sm text-muted">
                       Strava asks you to approve. You can disconnect any time in your{' '}
                       <a href="/account" className="tt-link">account</a>.
                     </p>
-                  </div>
+                  </Card>
                 )}
 
                 {stravaConnected && (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs text-muted tracking-widest">
-                      RECENT STRAVA ACTIVITIES
-                    </label>
-                    {stravaError && (
-                      <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-                        {stravaError}
-                      </div>
-                    )}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-fg">Recent Strava activities</span>
+                    {stravaError && <ErrorBox>{stravaError}</ErrorBox>}
                     {stravaActivities === undefined && !stravaError && (
-                      <p className="text-xs text-muted">Loading…</p>
+                      <p className="text-sm text-muted">Loading…</p>
                     )}
                     {stravaActivities !== undefined && stravaActivities.length === 0 && (
-                      <p className="text-xs text-muted">
-                        No recent kayak, canoe, rowing, or SUP activities found on your Strava.
+                      <p className="text-sm text-muted">
+                        No recent kayak, canoe, rowing or SUP activities on your Strava.
                       </p>
                     )}
                     {stravaActivities !== undefined && stravaActivities.length > 0 && (
-                      <ul className="flex flex-col border border-border max-h-72 overflow-y-auto">
+                      <ul className={`${cardClass} flex flex-col max-h-72 overflow-y-auto`}>
                         {stravaActivities.map(a => {
                           const checked = stravaActivityId === a.id
                           return (
                             <li
                               key={a.id}
-                              className={`border-b border-surface-2 last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface'}`}
+                              className={`border-b border-border last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
                             >
-                              <label className="flex items-center gap-3 px-3 py-2 cursor-pointer">
+                              <label className="flex items-center gap-3 px-3 py-2 min-h-11 cursor-pointer">
                                 <input
                                   type="radio"
                                   name="stravaActivity"
@@ -626,16 +604,16 @@ export default function UploadPage({
                                   className="accent-strava"
                                 />
                                 <span className="flex-1 min-w-0">
-                                  <span className="block text-sm text-fg truncate">{a.name}</span>
-                                  <span className="block text-xs text-muted tabular">
+                                  <span className="block text-base text-fg truncate">{a.name}</span>
+                                  <span className="block text-sm text-muted tabular">
                                     {a.sportType} · {formatDate(a.startDate)} · {formatDistance(a.distanceMetres)}
                                   </span>
                                 </span>
                               </label>
                               {/* Attribution link back to the source activity (outside
                                   the selecting label so it doesn't toggle the radio). */}
-                              <div className="px-3 pb-2 -mt-1">
-                                <ViewOnStrava activityId={a.id} className="tt-link text-xs" />
+                              <div className="px-3 pb-2 -mt-1 pl-10">
+                                <ViewOnStrava activityId={a.id} className="tt-link text-sm" />
                               </div>
                             </li>
                           )
@@ -651,35 +629,32 @@ export default function UploadPage({
                 <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
-                {status === 'error' && (
-                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">
-                    {error}
-                  </div>
-                )}
+                {status === 'error' && <ErrorBox>{error}</ErrorBox>}
 
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
                   disabled={status === 'uploading' || !stravaConnected || !stravaActivityId}
-                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="self-start"
                 >
-                  {status === 'uploading' ? 'IMPORTING…' : 'IMPORT FROM STRAVA'}
-                </button>
+                  {submitLabel('Importing…', 'Import from Strava')}
+                </Button>
               </form>
             )}
 
             {inputMode === 'tracker' && trackerRecordings && (
-              <form onSubmit={handleTrackerSubmit} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-muted tracking-widest">YOUR TRACKER RECORDINGS</label>
-                  <ul className="flex flex-col border border-border max-h-72 overflow-y-auto">
+              <form onSubmit={handleTrackerSubmit} className="flex flex-col gap-6">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-fg">Your tracker recordings</span>
+                  <ul className={`${cardClass} flex flex-col max-h-72 overflow-y-auto`}>
                     {trackerRecordings.map(r => {
                       const checked = trackerPick?.sessionId === r.sessionId
                       return (
-                        <li key={r.sessionId} className={`border-b border-surface-2 last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface'}`}>
-                          <label className="flex items-center gap-3 px-3 py-2 cursor-pointer">
+                        <li key={r.sessionId} className={`border-b border-border last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface-2'}`}>
+                          <label className="flex items-center gap-3 px-3 py-2 min-h-11 cursor-pointer">
                             <input type="radio" name="trackerRecording" checked={checked}
                               onChange={() => setTrackerPick({ deviceId: r.deviceId, sessionId: r.sessionId })} className="accent-primary" />
-                            <span className="text-sm text-fg tabular">
+                            <span className="text-base text-fg tabular">
                               {formatDate(r.startedAt ?? r.uploadedAt)}{r.distanceMetres ? ` · ${formatDistance(r.distanceMetres)}` : ''}
                             </span>
                           </label>
@@ -687,29 +662,24 @@ export default function UploadPage({
                       )
                     })}
                   </ul>
-                  <p className="text-xs text-muted">Pick the recording with your run on the course. The whole session is fine: we find the run in it.</p>
+                  <p className="text-sm text-muted">Pick the recording with your run on the course. The whole session is fine: we find the run in it.</p>
                 </div>
 
                 <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
                 <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
 
-                {status === 'error' && (
-                  <div className="border border-red bg-red/10 px-3 py-3 text-red text-xs">{error}</div>
-                )}
+                {status === 'error' && <ErrorBox>{error}</ErrorBox>}
 
-                <button type="submit" disabled={status === 'uploading' || !trackerPick}
-                  className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                  {status === 'uploading' ? 'ENTERING…' : 'ENTER THIS RECORDING'}
-                </button>
+                <Button type="submit" variant="primary" disabled={status === 'uploading' || !trackerPick} className="self-start">
+                  {submitLabel('Entering…', 'Enter this recording')}
+                </Button>
               </form>
             )}
 
             {diagnostic && (
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-muted tracking-widest">
-                  WHAT WE RECORDED
-                </label>
-                <p className="text-xs text-muted">
+              <section className="flex flex-col gap-2">
+                <h2 className="text-lg font-semibold text-fg">What we recorded</h2>
+                <p className="text-sm text-muted">
                   {diagnostic.gateAnalysis?.blocking
                     ? <>Your track is blue. The gate it missed is red: check your track crosses it, the right way and in order.</>
                     : <>Your track is blue, the start line green and the finish line red. If your track misses a line, your GPS may not have been recording there.</>}
@@ -719,11 +689,11 @@ export default function UploadPage({
                   track={diagnostic.track}
                   highlightGateIndex={diagnostic.gateAnalysis?.blocking ? diagnostic.gateAnalysis.blocking.gateNumber - 1 : undefined}
                 />
-              </div>
+              </section>
             )}
-          </div>
+          </>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

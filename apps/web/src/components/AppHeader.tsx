@@ -17,6 +17,6 @@ export default function AppHeader({
 }) {
   const pathname = usePathname() ?? ''
   return (
-    <AppShell active={sectionFor(pathname)} breadcrumb={breadcrumb} nav={children} account={<AccountMenu />} />
+    <AppShell active={sectionFor(pathname)} breadcrumb={breadcrumb} nav={children} account={<AccountMenu />} you={<AccountMenu variant="tab" />} />
   )
 }

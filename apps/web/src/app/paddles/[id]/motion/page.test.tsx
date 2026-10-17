@@ -33,7 +33,7 @@ describe("a tracker paddle's BOAT MOTION page", () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/account/devices/sessions/rec1?deviceId=435AC17C')
     expect(container.textContent).toContain('MOTION CHARTS sr=57.4')
     expect(container.textContent).toContain('TECHNICAL DETAILS')
-    expect(container.querySelector('a[href="/paddles/t-rec1"]')?.textContent).toBe('← PADDLE')
+    expect(container.querySelector('a[href="/paddles/t-rec1"]')?.textContent).toBe('← Paddle')
   })
 
   it("says there's no boat motion for a paddle that didn't come from a tracker", async () => {
@@ -42,6 +42,9 @@ describe("a tracker paddle's BOAT MOTION page", () => {
     vi.stubGlobal('fetch', fetchMock)
     await mount()
     expect(container.textContent).toContain("didn't come from a paddlesnitch tracker")
+    // Not a dead end: a way back to the paddle, and what the tracker is.
+    expect(container.querySelectorAll('a[href="/paddles/t-rec1"]').length).toBe(2)
+    expect(container.querySelector('a[href="/guide"]')).not.toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

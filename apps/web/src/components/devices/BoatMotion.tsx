@@ -1,4 +1,5 @@
 import { noMotionCopy } from '@/lib/tracker-copy'
+import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 // Boat motion from a tracker's motion data: roll, pitch, evenness, stroke rate,
@@ -21,10 +22,10 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
   return (
     <>
       {!attitude?.available ? (
-        <div className="border border-border bg-surface px-4 py-3 text-sm text-muted leading-relaxed">
-          <p className="text-fg mb-1">No boat motion for this recording.</p>
+        <div className="rounded-control border border-border bg-surface p-4 text-base text-muted flex flex-col gap-2">
+          <p className="text-fg font-medium">No boat motion for this recording.</p>
           <p>{noMotionCopy(attitude)}</p>
-          {attitude?.reason && <p className="mt-2 text-xs">Technical detail: {attitude.reason}</p>}
+          {attitude?.reason && <p className="text-sm">Technical detail: {attitude.reason}</p>}
         </div>
       ) : (
         <>
@@ -64,7 +65,7 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
             <HistogramChart report={attitude} />
           </Panel>
 
-          <div className="border border-border bg-surface px-4 py-3 text-xs text-muted leading-relaxed flex flex-col gap-2">
+          <div className="rounded-control border border-border bg-surface p-4 text-sm text-muted flex flex-col gap-2">
             <p>
               <span className="text-fg">Reading this.</span> Rowing: aim for little roll, so the
               boat stays level. Kayak: the boat should rock with the stroke; what matters is that
@@ -84,10 +85,10 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
 
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="border border-border bg-surface px-3 py-2">
-      <div className="text-[9px] text-muted tracking-widest uppercase">{label}</div>
+    <div className="rounded-control border border-border bg-surface px-3 py-2 min-w-0">
+      <div className={eyebrowClass}>{label}</div>
       <div className="text-fg tabular text-xl mt-0.5">{value}</div>
-      {note && <div className="text-[10px] text-muted mt-0.5">{note}</div>}
+      {note && <div className="text-sm text-muted">{note}</div>}
     </div>
   )
 }
@@ -95,9 +96,9 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
 function Panel({ title, caption, children }: { title: string; caption: string; children: React.ReactNode }) {
   return (
     <section className="border border-border bg-surface">
-      <h2 className="text-[10px] text-muted tracking-[0.2em] uppercase px-4 pt-3">{title}</h2>
+      <h2 className="text-base font-semibold text-fg px-4 pt-3">{title}</h2>
       <div className="px-2 pt-2">{children}</div>
-      <p className="text-[11px] text-muted leading-relaxed px-4 pb-3">{caption}</p>
+      <p className="text-sm text-muted px-4 pb-3">{caption}</p>
     </section>
   )
 }

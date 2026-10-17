@@ -29,7 +29,7 @@ async function mount(isOwner: boolean, fetchMock = vi.fn(async (url: string) => 
   await act(async () => { await new Promise(r => setTimeout(r, 0)) })
   return fetchMock
 }
-const button = () => Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('OPEN AS A PADDLE'))
+const button = () => Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('Open as a paddle'))
 
 describe('a trial result opens as a paddle', () => {
   it('offers it to the owner and analyses that entry', async () => {

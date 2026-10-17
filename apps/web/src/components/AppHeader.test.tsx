@@ -11,10 +11,18 @@ vi.mock('next/navigation', () => ({ usePathname: () => pathname }))
 import AppHeader from './AppHeader'
 
 describe('AppHeader (shared AppShell wrapper)', () => {
-  it('header row wraps on narrow viewports instead of overlapping (#100)', () => {
+  // #100: the header row used to overlap on narrow screens. Now the section
+  // tabs leave the header on phones (hidden below sm) for a bottom tab bar, and
+  // the breadcrumb has its own row, so the top row only holds brand + extras.
+  it('on phones the section tabs move to a bottom bar with a You tab; the breadcrumb gets its own row', () => {
     const html = renderToStaticMarkup(<AppHeader breadcrumb={<span>GROUPS</span>} />)
     expect(html).toContain('<header')
-    expect(html).toContain('flex-wrap')
+    expect(html).toMatch(/<nav aria-label="Sections" class="hidden sm:flex/)
+    expect(html).toMatch(/<nav aria-label="Sections" class="sm:hidden fixed inset-x-0 bottom-0/)
+    const bottomBar = html.slice(html.lastIndexOf('<nav aria-label="Sections"'))
+    expect(bottomBar.match(/<a href=/g)).toHaveLength(3)   // Paddles, Trials, Plan…
+    expect(bottomBar).toContain('ACCOUNTNAV')               // …and the You tab
+    expect(html).toMatch(/<div class="px-4 pb-2[^"]*"><span>GROUPS<\/span>/)
   })
 
   it('renders the brand, cross-app nav, breadcrumb, extra (section) children and account', () => {
@@ -24,9 +32,9 @@ describe('AppHeader (shared AppShell wrapper)', () => {
       </AppHeader>,
     )
     expect(html).toContain('paddlesnitch')      // brand
-    expect(html).toContain('TRIALS')            // cross-section nav
-    expect(html).toContain('PADDLES')
-    expect(html).toContain('PLAN')
+    expect(html).toContain('>Trials<')          // section tabs, sentence case
+    expect(html).toContain('>Paddles<')
+    expect(html).toContain('>Plan<')
     expect(html).toContain('BREADCRUMB')
     expect(html).toContain('EXTRA')
     // Report/Profile/Settings/Sign out moved into the account dropdown
@@ -41,8 +49,9 @@ describe('AppHeader (shared AppShell wrapper)', () => {
 // profile, account and devices pages too.
 describe('the highlighted tab follows the URL', () => {
   const lit = (html: string) => {
-    const on = [...html.matchAll(/<a href="([^"]+)" class="tracking-widest transition-colors text-fg"/g)].map(m => m[1])
-    return on
+    // the header tabs only (the bottom bar repeats them)
+    const header = html.slice(0, html.indexOf('</header>'))
+    return [...header.matchAll(/<a href="([^"]+)" aria-current="page"/g)].map(m => m[1])
   }
   it.each([
     ['/att', ['/att']],

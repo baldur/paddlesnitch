@@ -78,7 +78,7 @@ describe('AnalysisView layout', () => {
     expect(container.textContent).toContain('3.20 km')
     expect(container.querySelector('section[aria-label="Efforts and rests"]')).not.toBeNull()
     expect(mapSection().textContent).not.toContain('strong steady rhythm')
-    expect(mapSection().textContent).not.toContain('SHARE')
+    expect(mapSection().textContent).not.toContain('Share')
   })
 
   it('shows times as a clock, not in words', async () => {
@@ -99,9 +99,9 @@ describe('AnalysisView layout', () => {
     expect(container.querySelector('[aria-label="Replay"]')?.textContent).toMatch(/0:00 · \d+:\d+\/500 · 60 spm/)
   })
 
-  it('shows a SHARE button when the paddle is saved (has a sessionId)', async () => {
+  it('shows a Share button when the paddle is saved (has a sessionId)', async () => {
     await mount(<AnalysisView data={data} sessionId="abc123" />)
-    expect(textBtn('SHARE')).toBeTruthy()
+    expect(textBtn('Share')).toBeTruthy()
   })
 
   it('has a colour legend for the track', async () => {
@@ -113,7 +113,7 @@ describe('AnalysisView layout', () => {
 // One paddle (one-paddle.md, phase 3): a tracker paddle's boat motion is a
 // side page of the paddle, reached from the paddle itself.
 describe('AnalysisView BOAT MOTION', () => {
-  const link = () => Array.from(container.querySelectorAll('a')).find(a => a.textContent?.trim() === 'BOAT MOTION →')
+  const link = () => Array.from(container.querySelectorAll('a')).find(a => a.textContent?.trim() === 'Boat motion')
 
   it('offers BOAT MOTION on a saved tracker paddle', async () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />)
@@ -135,8 +135,8 @@ describe('AnalysisView ALSO RECORDED BY', () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />, qc =>
       qc.setQueryData(getQueryKey(trpc.paddles.sameOuting, { id: 't-rec1' }, 'query'),
         [{ id: 'strava1', sourceType: 'strava', paddledAt: '2026-10-06T09:01:00Z' }]))
-    const link = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('ALSO RECORDED BY'))
-    expect(link?.textContent).toBe('ALSO RECORDED BY STRAVA →')
+    const link = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('Also recorded by'))
+    expect(link?.textContent).toBe('Also recorded by Strava →')
   })
 })
 
@@ -145,13 +145,13 @@ describe('AnalysisView on a shared paddle', () => {
   const has = (label: string) => container.textContent?.includes(label)
   it('offers the stroke-rate doubling to the owner only, under BOAT', async () => {
     await mount(<AnalysisView data={data} sessionId="p1" />)
-    const boat = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.startsWith('BOAT'))!
+    const boat = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.startsWith('Boat'))!
     await act(async () => { boat.click() })
     expect(container.querySelector('button[aria-label="Double stroke rate"]')).not.toBeNull()
     await act(async () => { root.unmount() }); container.remove()
     await mount(<AnalysisView data={data} readOnly />)
     expect(container.querySelector('button[aria-label="Double stroke rate"]')).toBeNull()
-    expect(has('BOAT')).toBe(false)
+    expect(has('Boat')).toBe(false)
   })
 })
 
@@ -180,9 +180,9 @@ describe('AnalysisView on a paddle without a map', () => {
 
   it('offers no compare or section, but keeps BOAT MOTION', async () => {
     await mount(<AnalysisView data={motion} sessionId="t-rec1" />)
-    expect(labels()).not.toContain('COMPARE WITH…')
-    expect(labels()).not.toContain('PICK A SECTION')
-    expect(labels()).toContain('BOAT MOTION →')
+    expect(labels()).not.toContain('Compare with…')
+    expect(labels()).not.toContain('Pick a section')
+    expect(labels()).toContain('Boat motion')
   })
 })
 

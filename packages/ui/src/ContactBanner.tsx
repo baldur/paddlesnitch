@@ -37,11 +37,11 @@ export default function ContactBanner({
   }
 
   return (
-    <div className="border-b border-border bg-surface px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+    <div role="status" className="border-b border-border bg-surface px-4 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
       <span className="text-muted min-w-0">{message}</span>
       <span className="flex items-center gap-3 shrink-0">
-        <Link href={href} className="text-primary hover:underline tracking-widest">{cta}</Link>
-        <button type="button" onClick={dismiss} className="text-muted hover:text-fg" aria-label="Dismiss">✕</button>
+        <Link href={href} className="text-primary-text font-medium hover:underline inline-flex items-center min-h-11">{cta}</Link>
+        <button type="button" onClick={dismiss} className="text-muted hover:text-fg w-11 min-h-11 -mr-3 inline-flex items-center justify-center" aria-label="Dismiss">✕</button>
       </span>
     </div>
   )

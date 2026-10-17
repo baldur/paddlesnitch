@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import GuidePage from '@/components/guide/GuidePage'
 import { GUIDE_STEPS } from '@/lib/guide'
+import { cardLinkClass, Chevron } from '@paddlesnitch/ui/Card'
 
 export const metadata: Metadata = { title: 'Setting up your tracker' }
 
@@ -15,7 +16,7 @@ export default function GuideHome() {
       </p>
 
       <div>
-        <h2 className="text-xs text-fg tracking-widest uppercase mb-2">You need</h2>
+        <h2 className="text-lg font-semibold text-fg mb-2">You need</h2>
         <ul className="list-disc pl-5 flex flex-col gap-1">
           <li>the tracker and a USB-C cable and charger</li>
           <li>a phone with a camera</li>
@@ -26,12 +27,13 @@ export default function GuideHome() {
       <ol className="flex flex-col gap-2">
         {GUIDE_STEPS.map((s, i) => (
           <li key={s.slug}>
-            <Link href={`/guide/${s.slug}`} className="border border-border px-4 py-3 flex gap-4 items-baseline hover:bg-surface transition-colors">
-              <span className="text-muted tabular">{i + 1}</span>
-              <span className="min-w-0">
-                <span className="block text-fg">{s.title}</span>
-                <span className="block text-xs text-muted">{s.summary}</span>
+            <Link href={`/guide/${s.slug}`} className={`${cardLinkClass} px-4 py-3 flex gap-4 items-center no-underline!`}>
+              <span className="text-muted tabular w-5 shrink-0">{i + 1}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-base font-medium text-fg">{s.title}</span>
+                <span className="block text-sm text-muted">{s.summary}</span>
               </span>
+              <Chevron />
             </Link>
           </li>
         ))}

@@ -10,6 +10,9 @@ import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 import { fmtDayTime } from '@paddlesnitch/core/format'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { EmptyState } from '@paddlesnitch/ui/Card'
 
 // A tracker paddle's BOAT MOTION (docs/features/one-paddle.md, phase 3): the
 // roll, pitch and evenness charts that used to live on the recording's page,
@@ -41,27 +44,26 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader breadcrumb={<Link href={`/paddles/${id}`} className="tt-nav-link text-sm shrink-0">← PADDLE</Link>} />
-      <div className="flex-1 px-4 py-8 max-w-4xl mx-auto w-full flex flex-col gap-6">
+      <AppHeader breadcrumb={<Link href={`/paddles/${id}`} className="tt-nav-link text-sm shrink-0">← Paddle</Link>} />
+      <Page width="wide">
         {q.isPending && <LoadingState label="Loading" />}
         {(q.isError || (!q.isPending && !q.data)) && (
-          <p className="text-sm text-muted">
-            We can&apos;t find this paddle. <Link href="/paddles" className="text-primary">Back to paddles</Link>.
-          </p>
+          <EmptyState title="We can't find this paddle"
+            action={<Link href="/paddles" className={buttonClass('secondary')}>Back to Paddles</Link>} />
         )}
         {q.data && (
           <>
-            <div>
-              <h1 className="text-lg font-bold text-fg tracking-widest">BOAT MOTION</h1>
-              <p className="text-sm text-muted mt-1 tabular">{fmtDate(q.data.paddledAt)}</p>
-            </div>
+            <PageHeader title="Boat motion" eyebrow={fmtDate(q.data.paddledAt)} />
             {!fromTracker && (
-              <p className="text-sm text-muted">
-                This paddle didn&apos;t come from a paddlesnitch tracker, so there&apos;s no boat motion for it.
-              </p>
+              <EmptyState title="No boat motion for this paddle"
+                body={<>This paddle didn&apos;t come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.</>}
+                action={<>
+                  <Link href={`/paddles/${id}`} className={buttonClass('secondary')}>Back to the paddle</Link>
+                  <Link href="/guide" className={buttonClass('quiet')}>About the tracker</Link>
+                </>} />
             )}
             {fromTracker && rec === null && <LoadingState label="Loading" />}
-            {fromTracker && rec === 'error' && <p className="text-sm text-red">Couldn’t read the tracker&apos;s recording. Please try again.</p>}
+            {fromTracker && rec === 'error' && <p className="text-base text-red" role="alert">Couldn’t read the tracker&apos;s recording. Please try again.</p>}
             {fromTracker && rec && rec !== 'error' && (
               <>
                 <BoatMotion attitude={rec.attitude} strokeRate={q.data.result.avgSR} />
@@ -70,7 +72,7 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
             )}
           </>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

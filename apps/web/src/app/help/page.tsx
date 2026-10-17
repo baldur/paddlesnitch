@@ -1,10 +1,14 @@
 import Link from 'next/link'
 import { readFaqDoc, parseFaq, faqParagraphs } from '@/lib/faq'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
+import { cardClass, cardLinkClass, Chevron } from '@paddlesnitch/ui/Card'
+import { ReportIssueButton } from '@paddlesnitch/ui/FeedbackWidget'
 
 // Public read-only help page, rendered server-side from legal/faq.md.
 // Kept as Markdown so editors can add questions without touching code —
-// see #78.
+// see #78. Each question is a <details> so the page is short to scan but
+// every answer is still in the page (Ctrl-F finds it).
 export const dynamic = 'force-dynamic'
 
 export const metadata = { title: 'Help' }
@@ -15,45 +19,58 @@ export default async function FaqPage() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/" className="tt-nav-link text-sm">← HOME</Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">HELP</span>
-          </>
-        }
-      />
+      <AppHeader breadcrumb={<Link href="/" className="tt-nav-link text-sm">← Home</Link>} />
 
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-fg tracking-widest mb-4">HELP</h1>
-        <ul className="text-sm flex flex-col gap-1 mb-8" aria-label="Help topics">
-          <li>Setting up a tracker? <Link href="/guide" className="text-primary">The setup guide</Link>, step by step.</li>
-          <li>Tracker not doing what you expect? <Link href="/guide/troubleshooting" className="text-primary">Troubleshooting</Link>.</li>
-          <li>Something else? Tell us with <strong className="text-fg">Report an issue</strong>.</li>
-        </ul>
-        <h2 className="text-xs text-muted tracking-widest mb-4">QUESTIONS ABOUT TRIALS</h2>
-        {entries.length === 0 ? (
-          <p className="text-sm text-red">
-            The FAQ is unavailable right now. Please contact privacy@paddlesnitch.com.
-          </p>
-        ) : (
-          <div className="flex flex-col divide-y divide-border">
-            {entries.map(entry => (
-              <section key={entry.question} className="py-5 first:pt-0">
-                <h2 className="text-sm font-bold text-fg mb-2">{entry.question}</h2>
-                <div className="flex flex-col gap-3">
-                  {faqParagraphs(entry.answer).map((para, i) => (
-                    <p key={i} className="text-sm text-muted leading-relaxed">
-                      {para}
-                    </p>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
-      </div>
+      <Page>
+        <PageHeader title="Help" />
+
+        <nav aria-label="Help topics" className="grid gap-2 sm:grid-cols-2">
+          <Link href="/guide" className={`${cardLinkClass} px-4 py-3 flex items-center gap-3`}>
+            <span className="flex-1 min-w-0">
+              <span className="block text-base font-medium text-fg">Setting up a tracker</span>
+              <span className="block text-sm text-muted">The setup guide, step by step</span>
+            </span>
+            <Chevron />
+          </Link>
+          <Link href="/guide/troubleshooting" className={`${cardLinkClass} px-4 py-3 flex items-center gap-3`}>
+            <span className="flex-1 min-w-0">
+              <span className="block text-base font-medium text-fg">Tracker troubleshooting</span>
+              <span className="block text-sm text-muted">When it doesn&apos;t do what you expect</span>
+            </span>
+            <Chevron />
+          </Link>
+        </nav>
+
+        <Section title="Questions about trials">
+          {entries.length === 0 ? (
+            <p className="text-base text-red">
+              The questions aren&apos;t available right now. Please contact privacy@paddlesnitch.com.
+            </p>
+          ) : (
+            <div className={`${cardClass} divide-y divide-border`}>
+              {entries.map(entry => (
+                <details key={entry.question} className="group">
+                  <summary className="flex items-center gap-3 px-4 py-3 min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:bg-surface-2">
+                    <span className="flex-1 text-base font-medium text-fg">{entry.question}</span>
+                    <Chevron className="transition-transform group-open:rotate-90" />
+                  </summary>
+                  <div className="px-4 pb-4 flex flex-col gap-3 max-w-[65ch]">
+                    {faqParagraphs(entry.answer).map((para, i) => (
+                      <p key={i} className="text-base text-muted leading-relaxed">
+                        {para}
+                      </p>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        <p className="text-base text-muted">
+          Something else? <ReportIssueButton className="tt-link">Report an issue</ReportIssueButton> and tell us.
+        </p>
+      </Page>
     </main>
   )
 }

@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { buttonClass } from './Button'
+import { Field, inputClass } from './Form'
 
 // The ONE "Report an issue" widget for the whole platform (att + Analyse),
 // replacing att's FeedbackTrigger + FeedbackWidget and Analyse's own copy. It's
@@ -83,51 +85,50 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} aria-label="Report an issue"
-        className="hidden sm:block fixed bottom-4 right-4 z-[1100] border border-border bg-surface shadow-md px-3 py-2 text-xs text-muted tracking-widest hover:border-primary hover:text-fg transition-colors">
-        REPORT AN ISSUE
+        className="hidden sm:block fixed bottom-4 right-4 z-[1100] rounded-control border border-border-strong bg-surface shadow-md px-3 py-2 text-sm text-muted hover:text-fg hover:bg-surface-2 transition-colors">
+        Report an issue
       </button>
     )
   }
 
   return (
-    <div className="fixed inset-0 z-[1500] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setOpen(false)}>
-      <div className="bg-surface border border-border w-full sm:max-w-md sm:shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-          <span className="text-xs text-fg tracking-widest">REPORT AN ISSUE</span>
-          <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-fg text-sm" aria-label="Close">✕</button>
+    <div className="fixed inset-0 z-[1500] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setOpen(false)}>
+      <div role="dialog" aria-modal="true" aria-labelledby="feedback-title"
+        className="bg-surface border border-border w-full sm:max-w-md rounded-t-sheet sm:rounded-sheet shadow-xl flex flex-col pb-[env(safe-area-inset-bottom,0px)]"
+        onClick={e => e.stopPropagation()}>
+        <header className="px-4 pt-4 pb-2 flex items-center justify-between gap-3">
+          <h2 id="feedback-title" className="text-lg font-semibold text-fg">Report an issue</h2>
+          <button type="button" onClick={() => setOpen(false)} className={`${buttonClass('quiet')} -mr-2 w-11 px-0`} aria-label="Close">✕</button>
         </header>
 
         {status === 'done' ? (
-          <div className="flex flex-col gap-4 px-4 py-6 text-sm">
-            <p className="text-green">Thanks — your report has been filed.</p>
+          <div className="flex flex-col gap-4 px-4 pb-4 pt-2">
+            <p className="text-base text-green">Thanks, your report has been sent.</p>
             {issueUrl && (
-              <p className="text-xs text-muted">Tracked at{' '}
-                <a href={issueUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{issueUrl.replace(/^https?:\/\//, '')}</a>
+              <p className="text-sm text-muted">You can follow it at{' '}
+                <a href={issueUrl} target="_blank" rel="noopener noreferrer" className="text-primary-text underline break-all">{issueUrl.replace(/^https?:\/\//, '')}</a>
               </p>
             )}
-            <button type="button" onClick={() => { reset(); setOpen(false) }} className="self-end px-4 py-2 bg-primary text-white text-xs tracking-widest hover:opacity-90 transition-opacity">CLOSE</button>
+            <button type="button" onClick={() => { reset(); setOpen(false) }} className={buttonClass('primary', 'md', 'self-end')}>Close</button>
           </div>
         ) : (
-          <form onSubmit={submit} className="flex flex-col gap-4 px-4 py-4">
+          <form onSubmit={submit} className="flex flex-col gap-4 px-4 pb-4 pt-2">
             <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
               <label>Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted tracking-widest">WHAT WENT WRONG?</label>
-              <textarea required minLength={10} maxLength={5000} value={description} onChange={e => setDescription(e.target.value)} rows={5} autoFocus
-                placeholder="A short description helps. What were you doing when this happened?"
-                className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors resize-y" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted tracking-widest">EMAIL (OPTIONAL)</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="So we can follow up if needed"
-                className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors" />
-            </div>
-            {error && <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">{error}</div>}
-            <p className="text-xs text-muted">Reports are posted publicly on GitHub, so don&apos;t include personal details. We add the page and your browser. Your name and email stay private.</p>
+            <Field label="What went wrong?" htmlFor="feedback-description">
+              <textarea id="feedback-description" required minLength={10} maxLength={5000} value={description} onChange={e => setDescription(e.target.value)} rows={5} autoFocus
+                placeholder="What were you doing when it happened?"
+                className={`${inputClass} py-2 resize-y`} />
+            </Field>
+            <Field label="Email (optional)" htmlFor="feedback-email" help="So we can follow up.">
+              <input id="feedback-email" type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} />
+            </Field>
+            {error && <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-sm text-red">{error}</p>}
+            <p className="text-sm text-muted">Reports are posted publicly on GitHub, so don&apos;t include personal details. We add the page and your browser. Your name and email stay private.</p>
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setOpen(false)} disabled={status === 'sending'} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 transition-colors">CANCEL</button>
-              <button type="submit" disabled={status === 'sending' || description.trim().length < 10} className="px-4 py-2 bg-primary text-white text-xs tracking-widest hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">{status === 'sending' ? 'SENDING…' : 'SEND REPORT'}</button>
+              <button type="button" onClick={() => setOpen(false)} disabled={status === 'sending'} className={buttonClass('quiet')}>Cancel</button>
+              <button type="submit" disabled={status === 'sending' || description.trim().length < 10} className={buttonClass('primary')}>{status === 'sending' ? 'Sending…' : 'Send report'}</button>
             </div>
           </form>
         )}

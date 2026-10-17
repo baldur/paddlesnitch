@@ -4,6 +4,10 @@ import dynamic from 'next/dynamic'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, Segmented, inputClass, selectClass } from '@paddlesnitch/ui/Form'
+import { Badge, EmptyState } from '@paddlesnitch/ui/Card'
 import ReferenceTraceValidator from '@/components/ReferenceTraceValidator'
 import { haversine } from '@/lib/geo'
 import type { LatLng, Line } from '@/lib/types'
@@ -18,7 +22,6 @@ type CourseTypeOption = {
   label: string
   linesLabel: string
   summary: string
-  detail: string
 }
 
 const COURSE_TYPES: CourseTypeOption[] = [
@@ -26,22 +29,19 @@ const COURSE_TYPES: CourseTypeOption[] = [
     value: 'point_to_point',
     label: 'Point to point',
     linesLabel: '2 lines',
-    summary: 'Separate start and finish at different locations.',
-    detail: 'Draw a start line and a finish line. The clock starts when a paddler crosses the start line and stops when they cross the finish line. Use this for straight stretches of river where start and finish are in different places.',
+    summary: 'A start line and a finish line in different places. The clock runs from one to the other.',
   },
   {
     value: 'loop',
     label: 'Loop',
     linesLabel: '1 line',
-    summary: 'Cross the same line twice: go out, do the course, come back through.',
-    detail: 'Draw one line. The clock starts the first time a paddler crosses it and stops the next time, in either direction. Works for out-and-back courses, loops, or any course that comes back through the same line. Set a minimum time to filter out false starts from warmup crossings.',
+    summary: 'One line, crossed twice in either direction. For out-and-back courses and loops.',
   },
   {
     value: 'gate',
     label: 'Gate',
     linesLabel: '2+ gates',
-    summary: 'Gates passed in order, each in one direction. Checks that paddlers followed the whole course.',
-    detail: 'Add a start gate and finish gate (minimum), plus any intermediate gates around turning buoys. Each gate is a line with a direction. Paddlers must cross every gate, in order, the right way. The clock starts at gate 1 and stops at the last gate. A paddler who misses a gate or crosses one the wrong way gets no time.',
+    summary: 'Two or more gates, crossed in order and the right way. For courses round buoys.',
   },
 ]
 
@@ -163,85 +163,55 @@ export default function NewCoursePage() {
     }
   }
 
-  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
-  const selectedType = COURSE_TYPES.find(t => t.value === courseType)!
-
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att" className="tt-nav-link text-sm">
-              ← TRIALS
-            </Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">NEW COURSE</span>
-          </>
-        }
-      />
+      <AppHeader breadcrumb={<Link href="/att/courses" className="tt-nav-link">← Courses</Link>} />
 
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-fg tracking-widest mb-8">CREATE COURSE</h1>
+      <Page width="narrow">
+        <PageHeader title="New course" />
 
         {groups !== null && groups.length === 0 ? (
           // No group → no creation (phase 2). Point the would-be organiser at
           // the "create a group" on-ramp instead of a form they can't submit.
-          <div className="border border-border bg-surface p-8 text-center flex flex-col gap-4">
-            <p className="text-sm font-bold text-fg tracking-widest">CREATE A GROUP FIRST</p>
-            <p className="text-xs text-muted leading-relaxed">
-              Courses belong to a group — a club, a squad, or just you. Create one to start
-              organising; you’ll be its admin and can add courses and open trials on them.
-            </p>
-            <div>
-              <Link
-                href="/att/groups"
-                className="inline-block px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors"
-              >
-                + NEW GROUP
-              </Link>
-            </div>
-          </div>
+          <EmptyState
+            title="Create a group first"
+            body="Courses belong to a group: a club, a squad, or just you. You'll be its admin and can add courses and open trials."
+            action={<Link href="/att/groups#new-group" className={buttonClass('primary')}>New group</Link>}
+          />
         ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          {/* Name */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">COURSE NAME</label>
-            <input ref={nameRef} type="text" required placeholder="e.g. Thames — Henley Reach" className={inputClass} />
-          </div>
+          <Field label="Course name" htmlFor="course-name">
+            <input id="course-name" ref={nameRef} type="text" required placeholder="e.g. Thames, Henley Reach" className={inputClass} />
+          </Field>
 
-          {/* Sport */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">SPORT</label>
-            <select ref={sportRef} required className={inputClass}>
+          <Field label="Sport" htmlFor="course-sport">
+            <select id="course-sport" ref={sportRef} required className={selectClass}>
               <option value="kayak">Kayak</option>
               <option value="rowing">Rowing</option>
               <option value="both">Both</option>
             </select>
-          </div>
+          </Field>
 
-          {/* Group — the owning group (phase 2). Defaults to the user's only group. */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">GROUP</label>
-            <select value={groupId} onChange={e => setGroupId(e.target.value)} required className={inputClass}>
-              <option value="">{groups === null ? 'Loading…' : '— Pick a group —'}</option>
+          {/* The owning group (phase 2). Defaults to the user's only group. */}
+          <Field label="Group" htmlFor="course-group" help="Its admins can edit the course and open trials on it.">
+            <select id="course-group" value={groupId} onChange={e => setGroupId(e.target.value)} required className={selectClass}>
+              <option value="">{groups === null ? 'Loading…' : 'Choose a group'}</option>
               {(groups ?? []).map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
-            <p className="text-xs text-muted">The group that owns this course. Its admins can edit it and open trials on it.</p>
-          </div>
+          </Field>
 
-          {/* Course type */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-muted tracking-widest">COURSE TYPE</label>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="text-sm font-medium text-fg mb-1.5">Course type</legend>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {COURSE_TYPES.map(t => (
                 <label
                   key={t.value}
-                  className={`flex flex-col gap-1.5 border p-3 cursor-pointer transition-colors ${
+                  className={`flex flex-col gap-1.5 rounded-control border p-3 cursor-pointer transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary ${
                     courseType === t.value
                       ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-muted'
+                      : 'border-border-strong hover:bg-surface-2'
                   }`}
                 >
                   <input
@@ -252,29 +222,25 @@ export default function NewCoursePage() {
                     onChange={() => handleTypeChange(t.value)}
                     className="sr-only"
                   />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-fg">{t.label}</span>
-                    <span className="text-[10px] tracking-widest text-muted border border-border px-1.5 py-0.5 whitespace-nowrap">
-                      {t.linesLabel}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-base font-semibold text-fg">{t.label}</span>
+                    <Badge>{t.linesLabel}</Badge>
                   </div>
-                  <p className="text-xs text-muted">{t.summary}</p>
+                  <p className="text-sm text-muted">{t.summary}</p>
                 </label>
               ))}
             </div>
-            <div className="border border-border bg-surface px-3 py-3 text-xs text-muted leading-relaxed">
-              <span className="font-bold text-fg">{selectedType.label}: </span>
-              {selectedType.detail}
-            </div>
-          </div>
+            {courseType === 'loop' && (
+              <p className="text-sm text-muted">Set a minimum time below so warm-up crossings don&apos;t count.</p>
+            )}
+          </fieldset>
 
-          {/* Map */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-muted tracking-widest">
-              {isP2P ? 'START / FINISH LINES' : isGate ? 'GATES' : 'CROSSING LINE'}
-            </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-fg">
+              {isP2P ? 'Start and finish lines' : isGate ? 'Gates' : 'Crossing line'}
+            </span>
             <DrawingMap onChange={handleMapChange} courseType={courseType} />
-            <div className="flex gap-4 text-xs flex-wrap">
+            <div className="flex gap-4 text-sm flex-wrap">
               {isGate ? (
                 <span className={gates ? 'text-green' : 'text-muted'}>
                   {gates ? `✓ ${gates.length} gates set` : '○ Gates not complete'}
@@ -294,7 +260,7 @@ export default function NewCoursePage() {
                 </>
               )}
               {distanceMetres != null && courseType !== 'loop' && (
-                <span className="text-split">~{distanceMetres.toLocaleString()} m</span>
+                <span className="text-split tabular">~{distanceMetres.toLocaleString()} m</span>
               )}
             </div>
           </div>
@@ -304,66 +270,46 @@ export default function NewCoursePage() {
             <ReferenceTraceValidator geometry={{ type: 'gate', gates }} />
           )}
 
-          {/* Manual distance (loop only) */}
           {courseType === 'loop' && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted tracking-widest">COURSE DISTANCE (METRES) — OPTIONAL</label>
-              <input ref={distanceRef} type="number" min={0} placeholder="e.g. 1000" className={inputClass} />
-              <p className="text-xs text-muted">Nominal course length shown on the leaderboard. Leave blank if unknown.</p>
-            </div>
+            <Field label="Distance in metres (optional)" htmlFor="course-distance" help="Shown on the leaderboard. Leave blank if you don't know it.">
+              <input id="course-distance" ref={distanceRef} type="number" min={0} placeholder="e.g. 1000" className={inputClass} />
+            </Field>
           )}
 
-          {/* Minimum valid time */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">MINIMUM VALID TIME (SECONDS) — OPTIONAL</label>
-            <input ref={minValidSecondsRef} type="number" min={0} placeholder="e.g. 300" className={inputClass} />
-            <p className="text-xs text-muted">
-              Ignore results shorter than this. Useful for loop courses where warmup crossings could be mistaken for a race.
-            </p>
-          </div>
+          <Field label="Minimum time in seconds (optional)" htmlFor="course-min-time" help="Results shorter than this are ignored.">
+            <input id="course-min-time" ref={minValidSecondsRef} type="number" min={0} placeholder="e.g. 300" className={inputClass} />
+          </Field>
 
-          {/* Visibility */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-muted tracking-widest">VISIBILITY</label>
-            <div className="flex gap-2">
-              {(['public', 'private', 'group'] as const).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setVisibility(v)}
-                  className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
-                    visibility === v
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted hover:border-muted'
-                  }`}
-                >
-                  {v === 'group' ? 'MY GROUP' : v.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-muted">
-              {visibility === 'public'
-                ? 'Anyone can find this course. Group admins can open time trials on it.'
-                : visibility === 'private'
-                  ? 'Only you can see this course and the trials on it. You can change this later.'
-                  : 'Only the owning group’s members can see this course and any trials on it.'}
-            </p>
-          </div>
+          <Field
+            label="Who can see it"
+            help={visibility === 'public'
+              ? 'Anyone can find this course. Group admins can open trials on it.'
+              : visibility === 'private'
+                ? 'Only you can see this course and its trials. You can change this later.'
+                : 'Only the group’s members can see this course and its trials.'}
+          >
+            <Segmented
+              label="Who can see it"
+              value={visibility}
+              onChange={setVisibility}
+              options={[
+                { value: 'public', label: 'Anyone' },
+                { value: 'private', label: 'Only you' },
+                { value: 'group', label: 'Group' },
+              ]}
+            />
+          </Field>
 
           {error && (
-            <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">{error}</div>
+            <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-red text-sm">{error}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? 'SAVING…' : 'CREATE COURSE'}
-          </button>
+          <Button type="submit" variant="primary" disabled={saving} className="self-start">
+            {saving ? 'Creating…' : 'Create course'}
+          </Button>
         </form>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

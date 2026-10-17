@@ -4,6 +4,10 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import LoadingState from '@/components/LoadingState'
+import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, Segmented, inputClass, selectClass } from '@paddlesnitch/ui/Form'
+import { Badge, Card, cardClass } from '@paddlesnitch/ui/Card'
 import type { GroupInvitation, JoinPolicy, AuthUser } from '@/lib/types'
 
 type Invitation = GroupInvitation
@@ -92,17 +96,23 @@ export default function GroupDetailPage({
   }
   if (!user) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-muted">You need to sign in to view this group.</p>
-        <Link href={`/signin?next=/att/groups/${groupId}`} className="px-6 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary transition-colors">SIGN IN</Link>
+      <main className="flex-1 flex flex-col">
+        <AppHeader breadcrumb={<Link href="/att/groups" className="tt-nav-link">← Groups</Link>} />
+        <Page width="narrow">
+          <PageHeader title="Sign in to see this group" />
+          <Link href={`/signin?next=/att/groups/${groupId}`} className={buttonClass('primary', 'md', 'self-start')}>Sign in</Link>
+        </Page>
       </main>
     )
   }
   if (!group) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-muted">This group doesn&apos;t exist.</p>
-        <Link href="/att/groups" className="tt-nav-link text-xs tracking-widest">← BACK TO GROUPS</Link>
+      <main className="flex-1 flex flex-col">
+        <AppHeader breadcrumb={<Link href="/att/groups" className="tt-nav-link">← Groups</Link>} />
+        <Page width="narrow">
+          <PageHeader title="We can't find this group" />
+          <Link href="/att/groups" className={buttonClass('secondary', 'md', 'self-start')}>Back to groups</Link>
+        </Page>
       </main>
     )
   }
@@ -110,7 +120,6 @@ export default function GroupDetailPage({
   const role = group.viewerStatus
   const isMember = role === 'owner' || role === 'admin' || role === 'member'
   const canManage = role === 'owner' || role === 'admin'
-  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
 
   // ---- Non-member: the join view ----
   if (!isMember) {
@@ -137,45 +146,34 @@ export default function GroupDetailPage({
 
     return (
       <main className="flex-1 flex flex-col">
-        <AppHeader breadcrumb={
-          <>
-            <Link href="/att/groups" className="tt-nav-link text-sm shrink-0">← GROUPS</Link>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm truncate">{group.name.toUpperCase()}</span>
-          </>
-        } />
-        <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-6">
-          <div>
-            <h1 className="text-lg font-bold text-fg tracking-widest mb-1">{group.name.toUpperCase()}</h1>
-            <p className="text-xs text-muted">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</p>
-          </div>
-          {group.description && <p className="text-sm text-muted whitespace-pre-wrap">{group.description}</p>}
+        <AppHeader breadcrumb={<Link href="/att/groups" className="tt-nav-link">← Groups</Link>} />
+        <Page width="narrow">
+          <PageHeader
+            title={group.name}
+            description={<span className="tabular">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</span>}
+          />
+          {group.description && <p className="text-base text-muted whitespace-pre-wrap">{group.description}</p>}
 
-          <div className="border border-border bg-surface p-6 flex flex-col gap-3">
+          <Card className="flex flex-col gap-3">
             {role === 'pending' ? (
-              <p className="text-sm text-fg">Your request to join is pending an admin&apos;s approval.</p>
+              <p className="text-base text-fg">Your request to join is waiting for an admin.</p>
             ) : policy === 'invite_only' ? (
-              <p className="text-sm text-muted">This group is invite-only. Ask an admin to send you an invitation.</p>
+              <p className="text-base text-muted">This group is invite only. Ask an admin to send you an invitation.</p>
             ) : (
               <>
-                <p className="text-sm text-fg">
+                <p className="text-base text-fg">
                   {policy === 'open'
                     ? 'Anyone can join this group.'
-                    : 'Request to join — an admin will approve you.'}
+                    : 'Ask to join and an admin will let you in.'}
                 </p>
-                <button
-                  onClick={requestToJoin}
-                  disabled={joining}
-                  className="self-start px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-                >
-                  {joining ? 'WORKING…' : policy === 'open' ? 'JOIN GROUP' : 'REQUEST TO JOIN'}
-                </button>
+                <Button variant="primary" onClick={requestToJoin} disabled={joining} className="self-start">
+                  {joining ? (policy === 'open' ? 'Joining…' : 'Asking…') : policy === 'open' ? 'Join group' : 'Ask to join'}
+                </Button>
               </>
             )}
-            {joinError && <p className="text-xs text-red">{joinError}</p>}
-          </div>
-          <Link href="/att/groups" className="tt-nav-link text-xs tracking-widest">← BACK TO GROUPS</Link>
-        </div>
+            {joinError && <p className="text-sm text-red" role="alert">{joinError}</p>}
+          </Card>
+        </Page>
       </main>
     )
   }
@@ -277,34 +275,30 @@ export default function GroupDetailPage({
     ? `${typeof window !== 'undefined' ? window.location.origin : ''}/att/groups/${groupId}?join=${group.joinLinkToken}`
     : ''
 
+  const memberCount = 1 + adminUserIds.length + memberUserIds.length
+
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att/groups" className="tt-nav-link text-sm shrink-0">← GROUPS</Link>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm truncate">{group.name.toUpperCase()}</span>
-          </>
-        }
+        breadcrumb={<Link href="/att/groups" className="tt-nav-link">← Groups</Link>}
       />
 
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
-        <section>
-          <div className="flex items-start justify-between gap-4 mb-2">
-            <h1 className="text-lg font-bold text-fg tracking-widest">{group.name.toUpperCase()}</h1>
-            <span className="text-xs px-2 py-0.5 border border-primary text-primary uppercase shrink-0">{role}</span>
-          </div>
-          {group.description && (
-            <p className="text-sm text-muted mb-2 whitespace-pre-wrap">{group.description}</p>
-          )}
-        </section>
+      <Page>
+        <PageHeader
+          title={group.name}
+          description={
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="tabular">{memberCount} member{memberCount === 1 ? '' : 's'}</span>
+              {canManage && <Badge tone="primary">{role === 'owner' ? 'You own this group' : 'You are an admin'}</Badge>}
+            </span>
+          }
+        />
+        {group.description && (
+          <p className="text-base text-muted whitespace-pre-wrap -mt-4">{group.description}</p>
+        )}
 
-        <section>
-          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-            Members ({1 + adminUserIds.length + memberUserIds.length})
-          </h2>
-          <div className="flex flex-col gap-1.5">
+        <Section title="Members">
+          <ul className={`${cardClass} divide-y divide-border`}>
             <MemberRow name={names[ownerId]} role="owner" canKick={false} onKick={() => {}} />
             {adminUserIds.map(id => (
               <MemberRow key={id} name={names[id]} role="admin" canKick={role === 'owner' && id !== user.id} onKick={() => removeMember(id)} />
@@ -312,129 +306,124 @@ export default function GroupDetailPage({
             {memberUserIds.map(id => (
               <MemberRow key={id} name={names[id]} role="member" canKick={canManage && id !== user.id} onKick={() => removeMember(id)} />
             ))}
-          </div>
-          {role !== 'owner' && (
-            <button onClick={leaveGroup} className="mt-4 text-xs text-muted hover:text-red tracking-widest">
-              LEAVE GROUP
-            </button>
-          )}
-        </section>
+          </ul>
+        </Section>
 
         {canManage && joinRequests.length > 0 && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-              Join requests ({joinRequests.length})
-            </h2>
-            <div className="flex flex-col gap-1.5">
+          <Section title={`Asking to join (${joinRequests.length})`}>
+            <ul className={`${cardClass} divide-y divide-border`}>
               {joinRequests.map(r => (
-                <div key={r.id} className="flex items-center justify-between border border-border px-3 py-2 text-sm gap-3">
+                <li key={r.id} className="flex items-center justify-between px-4 py-2 gap-3">
                   <div className="min-w-0">
-                    <div className="text-fg truncate">{r.displayName}</div>
-                    {r.email && <div className="text-xs text-muted truncate">{r.email}</div>}
+                    <div className="text-base text-fg truncate">{r.displayName}</div>
+                    {r.email && <div className="text-sm text-muted truncate">{r.email}</div>}
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => approveRequest(r.id)} className="px-3 py-1 text-xs font-bold tracking-widest border border-green text-green hover:bg-green hover:text-white transition-colors">APPROVE</button>
-                    <button onClick={() => declineRequest(r.id)} className="px-3 py-1 text-xs tracking-widest text-muted hover:text-red transition-colors">DECLINE</button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" onClick={() => approveRequest(r.id)}>Approve</Button>
+                    <Button size="sm" variant="quiet" onClick={() => declineRequest(r.id)}>Decline</Button>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-          </section>
+            </ul>
+          </Section>
         )}
 
         {canManage && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">Invite a member</h2>
-            <form onSubmit={submitInvite} className="flex flex-col sm:flex-row gap-2">
-              <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email address" className={`${inputClass} flex-1`} />
-              <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'member')} className={inputClass}>
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button type="submit" disabled={inviting || !inviteEmail.trim()} className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                {inviting ? 'INVITING…' : 'INVITE'}
-              </button>
+          <Section title="Invite someone">
+            <form onSubmit={submitInvite} className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <Field label="Email" htmlFor="invite-email" className="flex-1">
+                <input id="invite-email" type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="name@example.com" className={inputClass} />
+              </Field>
+              <Field label="As" htmlFor="invite-role">
+                <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'member')} className={selectClass}>
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </Field>
+              <Button type="submit" variant="primary" disabled={inviting || !inviteEmail.trim()}>
+                {inviting ? 'Inviting…' : 'Invite'}
+              </Button>
             </form>
-            {inviteError && <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs mt-3">{inviteError}</div>}
-            {inviteWarning && <div className="border border-border bg-surface-2 px-3 py-2 text-fg text-xs mt-3">{inviteWarning}</div>}
-            <p className="text-xs text-muted mt-3">If they don’t have an account yet, they’ll join when they sign up.</p>
-          </section>
+            {inviteError && <p role="alert" className="text-sm text-red">{inviteError}</p>}
+            {inviteWarning && <p className="rounded-control border border-border bg-surface-2 px-3 py-2 text-fg text-sm">{inviteWarning}</p>}
+            <p className="text-sm text-muted">If they don’t have an account yet, they’ll join when they sign up.</p>
+          </Section>
         )}
 
         {canManage && invitations.length > 0 && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">Pending invitations ({invitations.length})</h2>
-            <div className="flex flex-col gap-1.5">
+          <Section title={`Invited (${invitations.length})`}>
+            <ul className={`${cardClass} divide-y divide-border`}>
               {invitations.map(i => (
-                <div key={i.id} className="flex items-center justify-between border border-border px-3 py-2 text-sm">
+                <li key={i.id} className="flex items-center justify-between px-4 py-2 gap-3">
                   <div className="min-w-0">
-                    <div className="text-fg truncate">{i.toEmail ?? i.toUserId}</div>
-                    <div className="text-xs text-muted">role: {i.role}</div>
+                    <div className="text-base text-fg truncate">{i.toEmail ?? i.toUserId}</div>
+                    <div className="text-sm text-muted">As {i.role}</div>
                   </div>
-                  <button onClick={() => removeInvitation(i.id)} className="text-xs text-muted hover:text-red tracking-widest">CANCEL INVITE</button>
-                </div>
+                  <Button size="sm" variant="quiet" onClick={() => removeInvitation(i.id)}>Cancel invite</Button>
+                </li>
               ))}
-            </div>
-          </section>
+            </ul>
+          </Section>
         )}
 
         {canManage && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">How people join</h2>
-            <div className="flex gap-2 mb-3">
-              {(['invite_only', 'request', 'open'] as const).map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setJoinPolicy(p)}
-                  className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
-                    joinPolicy === p
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted hover:border-primary hover:text-primary'
-                  }`}
-                >
-                  {p === 'invite_only' ? 'INVITE ONLY' : p.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-muted mb-4">
+          <Section title="How people join">
+            <Segmented
+              label="How people join"
+              value={joinPolicy}
+              onChange={setJoinPolicy}
+              options={[
+                { value: 'invite_only', label: 'Invite only' },
+                { value: 'request', label: 'Ask to join' },
+                { value: 'open', label: 'Open' },
+              ]}
+            />
+            <p className="text-sm text-muted">
               {joinPolicy === 'invite_only'
                 ? 'Only people you invite can join.'
                 : joinPolicy === 'request'
-                  ? 'Anyone can request to join; you approve each request.'
-                  : 'Anyone with the group link can join instantly.'}
+                  ? 'Anyone can ask to join; you approve each one.'
+                  : 'Anyone with the group link can join straight away.'}
             </p>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs text-muted tracking-widest">SHAREABLE JOIN LINK</label>
+            <div className="flex flex-col gap-1.5 mt-2">
+              <span className="text-sm font-medium text-fg">Join link</span>
               {joinLink ? (
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <input readOnly value={joinLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-xs`} />
-                  <button type="button" onClick={() => navigator.clipboard?.writeText(joinLink)} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">COPY</button>
-                  <button type="button" onClick={() => patchLink({ joinLinkToken: null })} className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red transition-colors">TURN OFF LINK</button>
+                  <label htmlFor="join-link" className="sr-only">Join link</label>
+                  <input id="join-link" readOnly value={joinLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1 text-sm`} />
+                  <div className="flex gap-2">
+                    <Button onClick={() => navigator.clipboard?.writeText(joinLink)}>Copy</Button>
+                    <Button variant="quiet" onClick={() => patchLink({ joinLinkToken: null })}>Turn off link</Button>
+                  </div>
                 </div>
               ) : (
-                <button type="button" onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-primary hover:text-primary transition-colors">
-                  CREATE JOIN LINK
-                </button>
+                <Button onClick={() => patchLink({ regenerateJoinLink: true })} className="self-start">
+                  Create join link
+                </Button>
               )}
-              <p className="text-xs text-muted">Anyone signed in who opens this link joins instantly, whatever the policy above. Revoke to disable it.</p>
+              <p className="text-sm text-muted">Anyone signed in who opens this link joins straight away, whatever you chose above. Turn it off any time.</p>
             </div>
-          </section>
+          </Section>
+        )}
+
+        {/* Leaving or deleting: quiet, red, at the end. */}
+        {role !== 'owner' && (
+          <div className="border-t border-border pt-6">
+            <Button variant="danger" onClick={leaveGroup}>Leave group</Button>
+          </div>
         )}
 
         {role === 'owner' && (
-          <section className="border-t border-border pt-8">
-            <h2 className="text-xs text-red tracking-[0.2em] uppercase mb-3">Delete group</h2>
-            <p className="text-sm text-muted mb-3">
+          <section className="border-t border-border pt-6 flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-fg">Delete group</h2>
+            <p className="text-sm text-muted">
               Deletes the group and its invitations, and removes all its members.
-              Courses and trials scoped to this group fall back to private (you can re-scope them later).
+              Courses and trials shared with this group become private. You can share them again later.
             </p>
-            <button onClick={deleteGroup} className="px-4 py-2 border border-red text-red text-xs font-bold tracking-widest hover:bg-red hover:text-white transition-colors">
-              DELETE GROUP
-            </button>
+            <Button variant="danger" onClick={deleteGroup} className="self-start">Delete group</Button>
           </section>
         )}
-      </div>
+      </Page>
     </main>
   )
 }
@@ -450,15 +439,16 @@ function MemberRow({
   canKick: boolean
   onKick: () => void
 }) {
+  // Only owner and admins get a mark; a badge on every member says nothing.
   return (
-    <div className="flex items-center justify-between border border-border px-3 py-2 text-sm">
+    <li className="flex items-center justify-between gap-3 px-4 py-2 min-h-11">
       <div className="min-w-0 flex items-center gap-2">
-        <span className="text-xs px-2 py-0.5 border border-muted text-muted uppercase tracking-widest">{role}</span>
-        <span className="text-fg truncate">{name ?? 'A paddler'}</span>
+        <span className="text-base text-fg truncate">{name ?? 'A paddler'}</span>
+        {role !== 'member' && <Badge tone={role === 'owner' ? 'primary' : 'neutral'}>{role === 'owner' ? 'Owner' : 'Admin'}</Badge>}
       </div>
       {canKick && (
-        <button onClick={onKick} className="text-xs text-muted hover:text-red tracking-widest">REMOVE</button>
+        <Button size="sm" variant="quiet" onClick={onKick}>Remove</Button>
       )}
-    </div>
+    </li>
   )
 }

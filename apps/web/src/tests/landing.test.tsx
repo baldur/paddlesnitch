@@ -1,7 +1,5 @@
-// Regression tests for #210 — the landing page was too verbose on
-// mobile, so both products didn't fit above the fold on a phone. The
-// fix keeps the full marketing copy from `sm:` up but hides it on
-// mobile, leaving a compact name + one-line summary + CTA per product.
+// The signed-out front door (design-system.md, decision 5): a real paddle
+// first, then the sections as a short list.
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -19,35 +17,36 @@ const { LandingContent } = await import('@/app/page')
 
 const html = renderToStaticMarkup(<LandingContent />)
 
-describe('#210 — landing page is compact on mobile', () => {
-  it('lists both products with their CTAs and links', () => {
-    expect(html).toContain('Time trials')
-    expect(html).toContain('OPEN TRIALS')
-    expect(html).toContain('href="/att"')
+describe('front door leads with a real paddle', () => {
+  it('shows the sample paddle: route, numbers and the templated summary', () => {
+    expect(html).toContain('aria-label="A sample paddle"')
+    expect(html).toContain('aria-label="Route of the sample paddle"')
+    expect(html).toContain('9.5 km')
+    expect(html).toContain('1:08:23')
+    expect(html).toContain('2:39')
+    expect(html).toContain('22 spm')
+    expect(html).toContain('A 1 hr 8 min paddle')
+  })
 
-    expect(html).toContain('Paddles')
-    expect(html).toContain('OPEN PADDLES')
-    expect(html).toContain('href="/paddles"')
+  it('has one primary action, to add a first paddle, and a way to the trials', () => {
+    expect(html).toContain('Add your first paddle')
+    expect(html).toContain('href="/signin?next=/paddles/new"')
+    expect(html).toContain('See time trials')
+    expect(html.match(/bg-primary text-white/g)?.length).toBe(1)
+  })
+
+  it('lists the sections with their links, and the tracker guide', () => {
+    for (const [name, href] of [['Paddles', '/paddles'], ['Trials', '/att'], ['Plan', '/plan']]) {
+      expect(html).toContain(`>${name}<`)
+      expect(html).toContain(`href="${href}"`)
+    }
     // The tracker has a way in from the front door: the setup guide was
     // linked only from Devices, which a new tester can't find.
-    expect(html).toContain('SET UP A TRACKER')
     expect(html).toContain('href="/guide"')
-    // Everything listed is available, so the badge said nothing.
-    expect(html).not.toContain('AVAILABLE NOW')
   })
 
-  it('hides the long marketing paragraphs on mobile (details only from sm: up)', () => {
-    // The two product `details` paragraphs and the hero subtitle carry
-    // `hidden sm:block` so a phone sees the compact cards; three in all.
-    const hidden = html.match(/hidden sm:block/g) ?? []
-    expect(hidden.length).toBe(4)
-  })
-
-  it('drops the oversized hero padding that pushed Analyse below the fold', () => {
-    // The old hero was `py-16` with no responsive step-down; the tightened
-    // hero starts at py-8 on mobile.
-    expect(html).not.toContain('py-16')
-    expect(html).toContain('py-8')
+  it('writes in sentence case', () => {
+    expect(html).not.toMatch(/OPEN TRIALS|OPEN PADDLES|SET UP A TRACKER|tracking-widest/)
   })
 })
 
@@ -61,7 +60,7 @@ describe('campaign landing variant', () => {
     expect(variantHtml).toContain('data-campaign="example1"')
     expect(variantHtml).not.toContain('campaign: example1')
     // Same product content as the default — it's the default landing + a marker.
-    expect(variantHtml).toContain('Time trials')
+    expect(variantHtml).toContain('See time trials')
     expect(variantHtml).toContain('Paddles')
   })
 

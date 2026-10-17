@@ -21,17 +21,16 @@ export async function signUpFlow(
   const password = opts.password ?? 'Password123'
 
   await page.goto('/signin')
-  // The auth page renders three tab <button> elements (SIGN IN /
-  // SIGN UP / EMAIL CODE) above whichever form is active. The form's
-  // submit button reads "CREATE ACCOUNT", which keeps tab and submit
-  // distinguishable. Pick the SIGN UP tab first.
-  await page.getByRole('button', { name: 'SIGN UP', exact: true }).click()
+  // The sign-in page has a Sign in / Create account switch (role "tab"); the
+  // form's submit button is also "Create account" but a button, which keeps
+  // the two distinguishable. Pick the Create account tab first.
+  await page.getByRole('tab', { name: 'Create account', exact: true }).click()
   await page.locator('input[type="email"]').first().fill(email)
   await page.locator('input[autocomplete="name"]').fill(displayName)
   await page.locator('input[type="password"]').fill(password)
   await page.getByLabel(/I have read and agree/i).check()
 
-  await page.getByRole('button', { name: 'CREATE ACCOUNT', exact: true }).click()
+  await page.getByRole('button', { name: 'Create account', exact: true }).click()
   // Signed in, / redirects to /paddles (the signed-in home). Wait for where we
   // end up: checking '/' raced the redirect and flaked.
   await expect(page).toHaveURL('/paddles', { timeout: 10_000 })

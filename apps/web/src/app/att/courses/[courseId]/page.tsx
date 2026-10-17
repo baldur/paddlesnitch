@@ -3,6 +3,9 @@ import { fmtDay, sportLabel } from '@paddlesnitch/core/format'
 import { notFound } from 'next/navigation'
 import { getJson } from '@/lib/storage'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader, Section, eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Badge, Chevron, EmptyState, cardLinkClass } from '@paddlesnitch/ui/Card'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
 import { canViewCourse, canManageCourse, isListedForViewer } from '@/lib/permissions'
@@ -13,6 +16,8 @@ import { formatTime } from '@/lib/geo'
 import { listTrials } from '@/lib/catalogue'
 
 export const dynamic = 'force-dynamic'
+
+const sportName = sportLabel
 
 export default async function CourseDetailPage({
   params,
@@ -50,112 +55,109 @@ export default async function CourseDetailPage({
   const adminGroupIds = user ? await getUserAdminGroupIds(user.id) : undefined
   const canManage = canManageCourse(course, user, adminGroupIds)
 
+  // The main action: enter the newest open trial on this course.
+  const openTrial = sortedTrials.find(t => t.status === 'open')
+
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att/courses" className="tt-nav-link text-sm shrink-0">
-              ← COURSES
-            </Link>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm truncate">{course.name.toUpperCase()}</span>
-          </>
-        }
-      >
-        {canManage && (
-          <Link href={`/att/admin/courses/${course.id}`} className="tt-nav-link">
-            EDIT
-          </Link>
-        )}
-      </AppHeader>
+        breadcrumb={<Link href="/att/courses" className="tt-nav-link">← Courses</Link>}
+      />
 
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
-        <section>
-          <h1 className="text-lg font-bold text-fg tracking-widest mb-1">
-            {course.name.toUpperCase()}
-          </h1>
-          <p className="text-xs text-muted mb-4">
-            {sportLabel(course.sport)} · {course.distanceMetres.toLocaleString()} m
-            {course.type === 'loop' && ' · LOOP'}
-          </p>
-          <CourseMapClient course={course} />
-        </section>
+      <Page>
+        <PageHeader
+          title={course.name}
+          description={
+            <>
+              {sportName(course.sport)} · <span className="tabular">{course.distanceMetres.toLocaleString()} m</span>
+              {course.type === 'loop' && ' · loop'}
+            </>
+          }
+          actions={
+            <>
+              {openTrial && (
+                <a href={`/att/trials/${openTrial.id}/upload`} className={buttonClass('primary')}>
+                  Enter this trial
+                </a>
+              )}
+              {canManage && (
+                <Link href={`/att/admin/courses/${course.id}`} className={buttonClass('secondary')}>
+                  Edit course
+                </Link>
+              )}
+            </>
+          }
+        />
+
+        <CourseMapClient course={course} />
+
+        <Section
+          title="Trials"
+          actions={canManage ? (
+            <Link href={`/att/admin/trials/new?courseId=${course.id}`} className={buttonClass('secondary', 'sm')}>
+              New trial
+            </Link>
+          ) : undefined}
+        >
+          {sortedTrials.length === 0 ? (
+            <EmptyState
+              title="No trials on this course yet"
+              action={canManage ? (
+                <Link href={`/att/admin/trials/new?courseId=${course.id}`} className={buttonClass('primary')}>
+                  Open the first one
+                </Link>
+              ) : undefined}
+            />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {sortedTrials.map(t => (
+                <li key={t.id}>
+                  <Link
+                    href={`/att/trials/${t.id}`}
+                    className={`${cardLinkClass} flex items-center gap-3 px-4 py-3 min-h-11`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-medium text-fg">{t.name}</div>
+                      <div className="text-sm text-muted mt-0.5">{fmtDay(t.date)}</div>
+                    </div>
+                    <Badge tone={t.status === 'open' ? 'green' : 'neutral'}>
+                      {t.status === 'open' ? 'Open' : 'Closed'}
+                    </Badge>
+                    <Chevron />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
 
         {records.length > 0 && (
-          <section aria-label="Course records">
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Course records</h2>
-            <table className="w-full text-sm tabular">
-              <tbody>
-                {records.map(r => (
-                  <tr key={r.boatClass} className="border-t border-border">
-                    <td className="py-2 pr-3 text-muted w-12">{r.boatClass}</td>
-                    <td className="py-2 pr-3"><Link href={`/att/entries/${r.entryId}`} className="text-primary font-bold">{formatTime(r.seconds)}</Link></td>
-                    <td className="py-2 pr-3 text-fg break-words">{r.displayName}</td>
-                    <td className="py-2 text-muted text-right whitespace-nowrap">{fmtDay(r.raceDate)}</td>
+          <Section title="Course records">
+            <div className="overflow-x-auto" aria-label="Course records">
+              <table className="w-full text-sm tabular">
+                <thead>
+                  <tr className={eyebrowClass}>
+                    <th className="text-left font-normal py-2 pr-3">Class</th>
+                    <th className="text-left font-normal py-2 pr-3">Time</th>
+                    <th className="text-left font-normal py-2 pr-3">Paddler</th>
+                    <th className="text-right font-normal py-2">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+                </thead>
+                <tbody>
+                  {records.map(r => (
+                    <tr key={r.boatClass} className="border-t border-border">
+                      <td className="py-2 pr-3 text-muted w-12">{r.boatClass}</td>
+                      <td className="py-2 pr-3"><Link href={`/att/entries/${r.entryId}`} className="text-primary-text font-semibold hover:underline">{formatTime(r.seconds)}</Link></td>
+                      <td className="py-2 pr-3 text-fg break-words font-sans">{r.displayName}</td>
+                      <td className="py-2 text-muted text-right whitespace-nowrap">{fmtDay(r.raceDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
         )}
-
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase">
-              Time trials
-            </h2>
-            {canManage && (
-              <Link
-                href={`/att/admin/trials/new?courseId=${course.id}`}
-                className="text-xs tt-link tracking-widest"
-              >
-                + NEW TRIAL
-              </Link>
-            )}
-          </div>
-          {sortedTrials.length === 0 ? (
-            <div className="border border-border p-6 text-center text-muted text-sm">
-              No trials on this course yet.
-              {canManage && (
-                <>
-                  {' '}
-                  <Link href={`/att/admin/trials/new?courseId=${course.id}`} className="tt-link">
-                    Open the first one
-                  </Link>
-                  .
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {sortedTrials.map(t => (
-                <Link
-                  key={t.id}
-                  href={`/att/trials/${t.id}`}
-                  className="border border-border px-4 py-3 flex items-center justify-between hover:border-primary transition-colors group"
-                >
-                  <div>
-                    <div className="text-fg text-sm group-hover:text-primary transition-colors">
-                      {t.name}
-                    </div>
-                    <div className="text-xs text-muted mt-0.5">{fmtDay(t.date)}</div>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 border ${
-                      t.status === 'open'
-                        ? 'border-green text-green'
-                        : 'border-muted text-muted'
-                    }`}
-                  >
-                    {t.status.toUpperCase()}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+      </Page>
     </main>
   )
 }

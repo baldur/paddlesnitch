@@ -122,7 +122,7 @@ describe('DEVICES page', () => {
   it('offers Bluetooth sync from Devices, with the guide for turning it on (it was linked from nowhere)', async () => {
     stubFetch({ [DEVICES]: { devices: [{ deviceId: '5A43CA48', name: 't', model: 'm' }] }, [SESSIONS]: { sessions: [] } })
     await mount()
-    expect(container.querySelector('section[aria-label="Bluetooth"] a[href="/devices/bluetooth"]')?.textContent).toBe('SYNC OVER BLUETOOTH')
+    expect(container.querySelector('section[aria-label="Bluetooth"] a[href="/devices/bluetooth"]')?.textContent).toBe('Sync over Bluetooth')
     expect(container.querySelector('a[href="/guide/bluetooth"]')).not.toBeNull()
   })
 
