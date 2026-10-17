@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature } from '@paddlesnitch/waterways/types'
-import { crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import { daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -142,5 +142,26 @@ describe('the printed sheets', () => {
     expect(isCrewStop(stop(feature({})))).toBe(false)                                      // a lock we can't direct anyone to
     expect(isCrewStop(stop(feature({ kind: 'slipway', name: 'Slipway' })))).toBe(true)
     expect(isCrewStop(stop(feature({ kind: 'crew_point', name: 'Towpath access' })))).toBe(false)
+  })
+})
+
+describe('daylight', () => {
+  const lock = feature({ at: [51.5, -0.9] })
+  it('marks a stop reached before sunrise or after sunset; without a start time, nothing', () => {
+    expect(isDarkStop(stop(lock, { eta: '2027-04-17T02:00:00.000Z' }))).toBe(true)
+    expect(isDarkStop(stop(lock, { eta: '2027-04-17T12:00:00.000Z' }))).toBe(false)
+    expect(isDarkStop(stop(lock))).toBe(false)
+  })
+
+  it('gives sunrise and sunset on the start day, and counts the stops in the dark', () => {
+    const plan = {
+      start: { at: [51.5, -0.9] as [number, number], waterway: 'River Thames' }, finish: { at: [51.5, -0.9] as [number, number], waterway: 'River Thames' },
+      line: [], lengthM: 0, portages: 0, movingS: 0, totalS: 0, waterways: [],
+      stops: [stop(lock, { eta: '2027-04-17T02:00:00.000Z' }), stop(lock, { eta: '2027-04-17T12:00:00.000Z' })],
+    }
+    const d = daylightSummary(plan, '2027-04-17T02:00:00.000Z')!
+    expect(d.darkStops).toBe(1)
+    expect(Date.parse(d.sunrise!)).toBeLessThan(Date.parse(d.sunset!))
+    expect(daylightSummary(plan, undefined)).toBeNull()
   })
 })

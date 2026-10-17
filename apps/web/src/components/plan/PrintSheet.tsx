@@ -6,9 +6,10 @@ import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import LoadingState from '@/components/LoadingState'
+import Conditions from '@/components/plan/Conditions'
 import { trpc } from '@/lib/trpc'
 import {
-  crewLines, draftParams, groupOf, isCrewStop, km, portageLines, printHref, shownGroups, stopLines, type PlanDraft,
+  crewLines, draftParams, groupOf, isCrewStop, isDarkStop, km, portageLines, printHref, shownGroups, stopLines, type PlanDraft,
 } from '@/lib/plan-ui'
 
 // The paper copy of a plan (docs/features/river-planner.md, "Print"): black on
@@ -32,6 +33,10 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
     { enabled: !!draft.start && !!draft.finish, staleTime: Infinity },
   )
   const result = routed.data?.plan
+  const conditions = trpc.plan.conditions.useQuery(
+    { start: draft.start ?? [0, 0], finish: draft.finish ?? [0, 0] },
+    { enabled: !!draft.start && !!draft.finish, staleTime: 10 * 60_000, retry: false },
+  )
   if (!draft.start || !draft.finish) return <Message>Plan a route first: this page prints the one on screen.</Message>
   if (routed.isError || typeof result === 'string') return <Message>Couldn&apos;t work out the route. Please try again.</Message>
   if (!result || (id && me.isLoading) || (id && me.data?.user && mine.isLoading) || (share && shared.isLoading)) return <LoadingState label="Preparing the sheet…" />
@@ -76,6 +81,8 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
             <p className="whitespace-pre-line">{notes}</p>
           </section>
         )}
+
+        <Conditions plan={plan} startAt={draft.startAt} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} print />
 
         {crew
           ? <CrewTable plan={plan} stops={stops} startAt={draft.startAt} notes={stopNotes} />
@@ -124,7 +131,7 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
         {stops.map((s, i) => (
           <tr key={`${s.leg}-${s.feature.id}-${i}`} className={`border-b border-gray-400 align-top ${i === turn ? 'border-t-2 border-t-black' : ''}`}>
             <td className="py-1.5 pr-2 font-mono">{km(s.chainageM).replace(' km', '')}</td>
-            <td className="py-1.5 pr-2 font-mono font-semibold">{when(s, startAt)}</td>
+            <td className="py-1.5 pr-2 font-mono font-semibold">{when(s, startAt)}{isDarkStop(s) && <span className="block text-[11px] font-normal">dark</span>}</td>
             <td className="py-1.5">
               {i === turn && <p className="font-mono text-[11px] uppercase tracking-[0.1em]">Turn at {km(plan.turnM!)}</p>}
               <p className="font-semibold">{s.feature.name ?? KIND[s.feature.kind]}<span className="font-normal"> · {KIND[s.feature.kind]}</span></p>
