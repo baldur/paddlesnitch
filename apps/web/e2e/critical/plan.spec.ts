@@ -115,6 +115,17 @@ test('conditions: a dawn start shows sunrise and sunset and the stops reached in
   await expect(page.getByTestId('tide')).toContainText('Not for navigation')
 })
 
+test('portage nudges: a plan says which locks lack landing details, and a lock link opens the add panel', async ({ page }) => {
+  await page.goto('/plan?from=51.5395,-0.9010&to=51.5470,-0.8740')
+  await expect(page.getByTestId('missing-sides')).toContainText('1 lock on this route has no landing details yet', { timeout: 15_000 })
+  await expect(page.getByTestId('missing-sides')).toContainText('Sign in to add what you know')
+
+  await page.goto('/plan?lock=ea-lock%3Ahambleden&lockAt=51.560400,-0.868700&lockName=Hambleden+Lock&view=51.560400,-0.868700,18')
+  const panel = page.getByTestId('add-portage')
+  await expect(panel).toContainText('Portage details: Hambleden Lock')
+  await expect(panel.getByRole('link', { name: 'Sign in' })).toBeVisible()
+})
+
 test('the places search moves the map to a lock', async ({ page }) => {
   await page.goto('/plan')
   const box = page.getByLabel('Go to a place')

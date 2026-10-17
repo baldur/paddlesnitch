@@ -273,6 +273,11 @@ Built 2026-10-17. No paid API, no sign-up.
   - **Thames stream warnings**: the GOV.UK "current river conditions" page (updated daily by 11am), reach by reach between named locks; a route gets the reaches whose end lock it passes or that it starts or finishes between. Red boards (strong stream) and yellow (caution) are called out; otherwise "No stream warnings on your reaches".
   - **No position leaves us**: the server reads whole national lists (station lists cached a day, readings 15 minutes, the boards 30 minutes) and matches them to the route itself. tRPC `plan.conditions({ start, finish })`, public.
   - **Honest failures**: a source that can't be read is named ("Couldn't read SEPA just now: conditions from it unknown"); a failed board read is never "no warning". Every view says the readings' time and that it's not for safety-critical use.
+- **Getting portage sides filled (2026-10-18):**
+  - **The nudge:** under a plan's stops, "N locks on this route have no landing details yet. Paddled it?" with **Start with {first lock}** (or sign in).
+  - **Most needed** on `/plan/gaps`: locks and portages with no paddler's details, ranked by how many saved plans pass them (`loadNeeded` in `national.ts`; `/plan/data/{v}/needed`), each with **Add details**.
+  - **Demand:** saving a plan records which locks and portages it passes at `plans/demand/{planId}.json` (`recordPlanDemand`, best-effort, never fails a save); deleted with the plan and on account deletion (`erasePlanDemand`); only counts are ever shown. The privacy page says so. Counts are read across all records and cached an hour.
+  - **Add details from a link:** `/plan?lock={id}&lockAt=lat,lng&lockName=…` (`addPortageHref`, `lockFromParams`) opens the planner on satellite at the lock with the add panel open; signed out, the panel asks you to sign in.
 - **Not yet:** "nearest named place" for a click.
 
 ## The planner (UX)

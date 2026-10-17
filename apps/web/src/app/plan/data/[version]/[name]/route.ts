@@ -1,11 +1,12 @@
 // What the planner's map draws, from the live national dataset
 // (docs/features/waterways-uk-ireland.md): `overview` (the whole network,
 // coarsely), `area-{y}_{x}` (one 0.5° area in detail), `places` (the places
-// search index), `openportage` (paddlers' portage details, CC0), and coverage by waterway: `coverage` (the scores, for
+// search index), `openportage` (paddlers' portage details, CC0), `needed`
+// (locks with no portage details, most-planned first), and coverage by waterway: `coverage` (the scores, for
 // /plan/gaps) and `coverage-lines` (the scored water by level, for the map). The version is in the URL, so a response for the live version
 // never changes and can be cached for good.
 import { areaLines, overviewLines } from '@paddlesnitch/waterways/display'
-import { loadCoverage, loadNational } from '@paddlesnitch/waterways/national'
+import { loadCoverage, loadNational, loadNeeded } from '@paddlesnitch/waterways/national'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { coverageLines } from '@paddlesnitch/waterways/waterway-coverage'
 
@@ -31,6 +32,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
     body = overview.lines
   } else if (name === 'places') {
     body = ds.places
+  } else if (name === 'needed') {
+    body = await loadNeeded()
   } else if (name === 'coverage') {
     body = (await loadCoverage()).rows
   } else if (name === 'coverage-lines') {
