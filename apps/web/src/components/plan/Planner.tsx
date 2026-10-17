@@ -21,8 +21,8 @@ import { TIDES } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
-  type PlanDraft, type StopGroup, type View,
+  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
+  type LockLink, type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
 // PLAN (docs/features/river-planner.md): click the water for a start and a
@@ -55,15 +55,18 @@ const CREDITED = (Object.keys(SOURCES) as (keyof typeof SOURCES)[]).filter(id =>
 // The live dataset's version: the map's network and places URLs carry it.
 const VERSION = manifest.version ?? 'none'
 
-export default function Planner({ initial, view, saved, shared }: { initial: PlanDraft; view?: View; saved?: SavedPlan; shared?: SharedView }) {
+export default function Planner({ initial, view, saved, shared, lock }: {
+  initial: PlanDraft; view?: View; saved?: SavedPlan; shared?: SharedView
+  lock?: LockLink   // opened from /plan/gaps: add portage details here
+}) {
   const router = useRouter()
   const [draft, setDraft] = useState<PlanDraft>(initial)
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
   const [focus, setFocus] = useState<MapFocus | null>(null)
-  const [satellite, setSatellite] = useState(false)
+  const [satellite, setSatellite] = useState(!!lock)
   const [coverage, setCoverage] = useState(false)
   // Adding portage details at a stop: the landings clicked so far (OpenPortage).
-  const [adding, setAdding] = useState<{ stop: Stop; landings: LatLng[] } | null>(null)
+  const [adding, setAdding] = useState<{ stop: Stop; landings: LatLng[] } | null>(() => (lock ? { stop: stopAt(lock), landings: [] } : null))
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
   const me = trpc.me.useQuery(undefined, { retry: false })
   const signedIn = !!me.data?.user
@@ -160,7 +163,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
       </div>
 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
-        {adding && <AddPortage stop={adding.stop} landings={adding.landings} onCancel={() => setAdding(null)}
+        {adding && <AddPortage stop={adding.stop} landings={adding.landings} signedIn={signedIn} here={lock ? addPortageHref(lock) : `/plan?${draftParams(draft)}`} onCancel={() => setAdding(null)}
           onSaved={() => { setAdding(null); refreshPortages() }} />}
         <section>
           <h1 className="text-2xl font-semibold text-fg mb-1 text-balance">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
@@ -253,6 +256,7 @@ export default function Planner({ initial, view, saved, shared }: { initial: Pla
               Portage sides and landing points are missing for most locks. An unknown side is shown as unknown, never guessed.
             </p>
             {!saved && !shared && signedIn && <p className="mt-1 text-sm text-muted">Save the plan to add your own notes to it and its stops.</p>}
+            <MissingSides stops={plan.stops} signedIn={signedIn} here={saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`} onStart={startAdding} />
           </section>
         )}
 
@@ -397,6 +401,31 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
   )
 }
 
+/** A lock opened from a link: enough of a stop for the add-details panel. */
+const stopAt = (l: LockLink): Stop => ({
+  feature: { id: l.id, kind: 'lock', name: l.name, at: l.at, source: { source: 'curated', fetchedAt: '' } },
+  leg: 'out', chainageM: 0, fromPrevM: 0, portage: true, portagesBefore: 0, elapsedS: 0,
+})
+
+/** The nudge: locks on this route with no landing details yet. */
+function MissingSides({ stops, signedIn, here, onStart }: { stops: Stop[]; signedIn: boolean; here: string; onStart: (s: Stop) => void }) {
+  const seen = new Set<string>()
+  const missing = stops.filter(s => s.leg === 'out' && s.portage && !s.portages?.length && !s.feature.portage?.side && !seen.has(s.feature.id) && seen.add(s.feature.id))
+  if (!missing.length) return null
+  const first = missing[0]
+  return (
+    <div className="mt-4 rounded-control border border-border bg-surface p-3 text-sm space-y-2" data-testid="missing-sides">
+      <p className="text-fg">
+        {missing.length === 1 ? '1 lock' : `${missing.length} locks`} on this route {missing.length === 1 ? 'has' : 'have'} no landing details yet.
+        Paddled it? Which bank you got out on helps the next paddler.
+      </p>
+      {signedIn
+        ? <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => onStart(first)}>Start with {first.feature.name ?? KIND[first.feature.kind]}</button>
+        : <a className="tt-link" href={`/signin?next=${encodeURIComponent(here)}`}>Sign in to add what you know</a>}
+    </div>
+  )
+}
+
 /** A small private-note editor: a stop's note, inline in the list. */
 function NoteEditor({ initial, label, onSave, onCancel }: { initial: string; label: string; onSave: (text: string) => Promise<void>; onCancel: () => void }) {
   const [text, setText] = useState(initial)
@@ -436,13 +465,22 @@ function PlanNotes({ text, saving, failed, onSave }: { text: string; saving: boo
 
 /** Adding portage details at a lock or weir: two clicks for the landings on
  *  the (satellite) map, notes, rollers, and an explicit CC0 release. */
-function AddPortage({ stop, landings, onCancel, onSaved }: { stop: Stop; landings: LatLng[]; onCancel: () => void; onSaved: () => void }) {
+function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
+  stop: Stop; landings: LatLng[]; signedIn: boolean; here: string; onCancel: () => void; onSaved: () => void
+}) {
   const [notes, setNotes] = useState('')
   const [rollers, setRollers] = useState(false)
   const [cc0, setCc0] = useState(false)
   const add = trpc.portage.add.useMutation({ onSuccess: onSaved })
   const ready = landings.length === 2 && cc0
   const name = stop.feature.name ?? KIND[stop.feature.kind]
+  if (!signedIn) return (
+    <section className="rounded-control border border-primary p-4 space-y-2" data-testid="add-portage">
+      <h2 className={H2}>Portage details: {name}</h2>
+      <p className="text-sm text-muted"><a className="tt-link" href={`/signin?next=${encodeURIComponent(here)}`}>Sign in</a> to add where you get out and back in.</p>
+      <button type="button" className={buttonClass('quiet', 'sm')} onClick={onCancel}>Not now</button>
+    </section>
+  )
   return (
     <section className="rounded-control border border-primary p-4 space-y-3" data-testid="add-portage">
       <h2 className={H2}>Portage details: {name}</h2>

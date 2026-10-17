@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature } from '@paddlesnitch/waterways/types'
-import { daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, lockFromParams, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -163,5 +163,16 @@ describe('daylight', () => {
     expect(d.darkStops).toBe(1)
     expect(Date.parse(d.sunrise!)).toBeLessThan(Date.parse(d.sunset!))
     expect(daylightSummary(plan, undefined)).toBeNull()
+  })
+})
+
+describe('adding portage details from a link', () => {
+  it('round-trips a lock through the address, and refuses junk', () => {
+    const href = addPortageHref({ id: 'ea-lock:hambleden', name: 'Hambleden Lock', at: [51.5604, -0.8687] })
+    expect(href).toBe('/plan?lock=ea-lock:hambleden&lockAt=51.560400,-0.868700&lockName=Hambleden+Lock&view=51.560400,-0.868700,18')
+    const params = Object.fromEntries(new URLSearchParams(href.split('?')[1]))
+    expect(lockFromParams(params)).toEqual({ id: 'ea-lock:hambleden', name: 'Hambleden Lock', at: [51.5604, -0.8687] })
+    expect(lockFromParams({ lock: 'x', lockAt: 'nowhere' })).toBeUndefined()
+    expect(lockFromParams({ lockAt: '51,0' })).toBeUndefined()
   })
 })

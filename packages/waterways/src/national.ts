@@ -9,6 +9,7 @@ import manifestJson from '../data/manifest.json'
 import type { Place } from './places'
 import { portagesAt, type PublicPortage } from './portage'
 import { listPublicPortages } from './portage-store'
+import { planDemand } from './plan-store'
 import { waterwayCoverage, type WaterwayCoverage } from './waterway-coverage'
 import type { Feature, NetLink, RegionDataset } from './types'
 
@@ -43,6 +44,22 @@ export async function loadCoverage(): Promise<{ version: string; rows: WaterwayC
     coverage = { ds, portages, rows: waterwayCoverage(ds.links, ds.features, f => portagesAt(f, visible).length > 0) }
   }
   return { version: ds.version, rows: coverage.rows, ds }
+}
+
+export type NeededLock = { id: string; name?: string; kind: Feature['kind']; at: [number, number]; plans: number }
+
+/** Locks and portages with no paddler's portage details yet, most-planned
+ *  first: where an hour of someone's knowledge helps most people. */
+export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
+  const [ds, portages, demand] = await Promise.all([loadNational(), listPublicPortages(), planDemand()])
+  const visible = portages.filter(p => !p.hidden)
+  const out: NeededLock[] = []
+  for (const f of ds.features) {
+    const plans = demand.get(f.id) ?? 0
+    if (!plans || (f.kind !== 'lock' && f.kind !== 'portage') || f.portage?.side || portagesAt(f, visible).length) continue
+    out.push({ id: f.id, name: f.name, kind: f.kind, at: f.at, plans })
+  }
+  return out.sort((a, b) => b.plans - a.plans || (a.name ?? '').localeCompare(b.name ?? '')).slice(0, limit)
 }
 
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`

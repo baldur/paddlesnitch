@@ -64,6 +64,24 @@ export function portageLines(p: PortageOnRoute): string[] {
   return out
 }
 
+// --- Adding portage details from a link (the gaps page) ------------------------------
+
+export type LockLink = { id: string; name?: string; at: LatLng }
+
+/** /plan opened straight into adding portage details at one lock. */
+export function addPortageHref(l: LockLink): string {
+  const q = new URLSearchParams({ lock: l.id, lockAt: `${l.at[0].toFixed(6)},${l.at[1].toFixed(6)}` })
+  if (l.name) q.set('lockName', l.name)
+  return `/plan?${q.toString().replace(/%2C/g, ',').replace(/%3A/g, ':')}&view=${l.at[0].toFixed(6)},${l.at[1].toFixed(6)},18`
+}
+
+export function lockFromParams(p: Record<string, string | string[] | undefined>): LockLink | undefined {
+  const one = (k: string) => { const v = p[k]; return Array.isArray(v) ? v[0] : v }
+  const id = one('lock'), at = latLng(one('lockAt'))
+  if (!id || !at || id.length > 200) return undefined
+  return { id, name: one('lockName')?.slice(0, 120), at }
+}
+
 // --- Daylight and conditions ---------------------------------------------------------
 
 /** Reached in the dark: needs a start time to know. */
