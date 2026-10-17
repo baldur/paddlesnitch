@@ -6,7 +6,7 @@ import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
-import { featuresFromAmber, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
+import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
@@ -270,6 +270,15 @@ describe('weirs and waterfalls from the barrier inventories', () => {
       ['amber:EN_12722_EA', undefined, undefined],
     ])
     expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toContain('About 0.5 m high.')
+  })
+
+  it('IFI: weirs and sluices as weirs, rock waterfalls as hazards; counted on a route only on the water', () => {
+    const out = featuresFromIfi(read('ifi-barriers-sample.json'), AT)
+    expect(out.map(f => [f.kind, f.name])).toEqual([['weir', undefined], ['weir', undefined], ['hazard', 'Waterfall']])
+    expect(out[0].source.source).toBe('ifi')
+    const line: LatLng[] = [[53.4, -8], [53.4, -7.99]]
+    const near = (dLat: number): Feature => ({ id: `w${dLat}`, kind: 'weir', at: [53.4 + dLat, -7.995], source: { source: 'ifi', fetchedAt: AT } })
+    expect(featuresAlong(line, [near(0.0003), near(0.0015)]).map(a => a.item.id)).toEqual(['w0.0003'])   // ~33 m in, ~170 m out
   })
 
   it('one weir where two sources map it, keeping the one with a name or height', () => {

@@ -81,7 +81,7 @@ function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => 
  *  on a side cut, a brook or a marina entrance, not on the way. The navigation
  *  authorities put locks and weirs beside the channel, hence NEAR_M's wider net. */
 export const ON_WATER_NEAR_M = 60
-const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims'])
+const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims', 'ifi'])
 
 /** How far from the water a feature may sit and still be on it. */
 export const nearOf = (f: Feature) => (ON_WATER_SOURCES.has(f.source.source) ? Math.min(ON_WATER_NEAR_M, NEAR_M[f.kind]) : NEAR_M[f.kind])

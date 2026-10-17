@@ -13,7 +13,7 @@ import path from 'path'
 import { lockKey } from '@paddlesnitch/waterways/build'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
-import { AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromSepa, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
+import { AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
@@ -139,12 +139,12 @@ JOBS['ea-umap'] = async () => {
 
 /** Every page of an ArcGIS layer (2,000 records a page). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- GeoJSON straight from the service; each parser checks its fields
-async function arcgisAll(source: string, layer: string): Promise<{ features: any[]; fetchedAt: string }> {
+async function arcgisAll(source: string, layer: string, where?: string): Promise<{ features: any[]; fetchedAt: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const features: any[] = []
   let fetchedAt = now
   for (let page = 0, offset = 0; ; page++) {
-    const res = await cached(source, `page-${page}.geojson`, arcgisPageUrl(layer, offset))
+    const res = await cached(source, `page-${page}.geojson`, arcgisPageUrl(layer, offset, where))
     const json = JSON.parse(res.body)
     features.push(...(json.features ?? []))
     fetchedAt = res.fetchedAt
@@ -165,6 +165,12 @@ JOBS.sepa = async () => {
 JOBS.amber = async () => {
   const { features, fetchedAt } = await arcgisAll('amber', AMBER_GB)
   return featuresFromAmber(features, fetchedAt)
+}
+
+// Inland Fisheries Ireland: the Republic's weirs, sluices, dams and waterfalls (CC BY 4.0).
+JOBS.ifi = async () => {
+  const { features, fetchedAt } = await arcgisAll('ifi', IFI_BARRIERS, IFI_WHERE)
+  return featuresFromIfi(features, fetchedAt)
 }
 
 async function main() {
