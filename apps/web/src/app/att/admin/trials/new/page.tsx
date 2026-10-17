@@ -3,6 +3,14 @@ import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import { participationLabel } from '@paddlesnitch/core/format'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { Button } from '@paddlesnitch/ui/Button'
+import { Field, Segmented, inputClass, selectClass } from '@paddlesnitch/ui/Form'
+import { cardClass } from '@paddlesnitch/ui/Card'
+
+const whoCanEnterLabel = participationLabel
+const WHO_CAN_SEE: Record<'public' | 'private' | 'group', string> = { public: 'Anyone', private: 'Only you', group: 'Group' }
 import type { CourseMetadata } from '@/lib/types'
 
 function NewTrialForm() {
@@ -60,69 +68,65 @@ function NewTrialForm() {
     }
   }
 
-  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
-
   const selectedCourse = courses?.find(c => c.id === courseId)
+  // The trial's scope can't exceed its course's: group courses force group;
+  // private courses force private. The server clamps anyway.
+  const courseLocksTo =
+    selectedCourse?.visibility === 'private' ? 'private'
+    : selectedCourse?.visibility === 'group' ? 'group'
+    : null
 
   return (
-    <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-      <h1 className="text-lg font-bold text-fg tracking-widest mb-8">CREATE TIME TRIAL</h1>
+    <Page width="narrow">
+      <PageHeader title="New trial" />
 
       <form onSubmit={submit} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-muted tracking-widest">COURSE</label>
-          {courses === null ? (
-            <div className="text-xs text-muted py-2">Loading courses…</div>
-          ) : courses.length === 0 ? (
-            <div className="border border-border bg-surface px-3 py-3 text-xs text-muted">
+        {courses === null ? (
+          <Field label="Course"><p className="text-sm text-muted">Loading courses…</p></Field>
+        ) : courses.length === 0 ? (
+          <Field label="Course">
+            <div className={`${cardClass} px-4 py-3 text-sm text-muted`}>
               No courses yet.{' '}
-              <Link href="/att/admin/courses/new" className="tt-link">
-                Create one
-              </Link>{' '}
-              to get started.
+              <Link href="/att/admin/courses/new" className="tt-link">Draw one</Link> first.
             </div>
-          ) : (
-            <>
-              <select
-                required
-                value={courseId}
-                onChange={e => setCourseId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">— Select a course —</option>
-                {courses.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.sport}, {c.distanceMetres.toLocaleString()} m)
-                  </option>
-                ))}
-              </select>
-              {selectedCourse && (
-                <p className="text-xs text-muted">
-                  <Link href={`/att/courses/${selectedCourse.id}`} className="tt-link">
-                    View course details
-                  </Link>{' '}
-                  · or{' '}
-                  <Link href="/att/admin/courses/new" className="tt-link">
-                    create a new course
-                  </Link>
-                </p>
-              )}
-              {!selectedCourse && (
-                <p className="text-xs text-muted">
-                  Or{' '}
-                  <Link href="/att/admin/courses/new" className="tt-link">
-                    create a new course
-                  </Link>{' '}
-                  if yours isn&apos;t listed.
-                </p>
-              )}
-            </>
-          )}
-        </div>
+          </Field>
+        ) : (
+          <Field
+            label="Course"
+            htmlFor="trial-course"
+            help={selectedCourse ? (
+              <>
+                <Link href={`/att/courses/${selectedCourse.id}`} className="tt-link">View the course</Link>
+                {' '}or{' '}
+                <Link href="/att/admin/courses/new" className="tt-link">draw a new one</Link>.
+              </>
+            ) : (
+              <>
+                Not listed?{' '}
+                <Link href="/att/admin/courses/new" className="tt-link">Draw a new course</Link>.
+              </>
+            )}
+          >
+            <select
+              id="trial-course"
+              required
+              value={courseId}
+              onChange={e => setCourseId(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">Choose a course</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.sport}, {c.distanceMetres.toLocaleString()} m)
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted tracking-widest">TRIAL NAME</label>
+        <Field label="Trial name" htmlFor="trial-name">
           <input
+            id="trial-name"
             type="text"
             required
             placeholder="e.g. Spring Sprint 2025"
@@ -130,125 +134,81 @@ function NewTrialForm() {
             onChange={e => setName(e.target.value)}
             className={inputClass}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted tracking-widest">DATE</label>
+        <Field label="Date" htmlFor="trial-date" help="When the trial takes place.">
           <input
+            id="trial-date"
             type="date"
             required
             value={date}
             onChange={e => setDate(e.target.value)}
             className={`${inputClass} cursor-pointer`}
           />
-          <p className="text-xs text-muted">When the trial takes place. Defaults to today.</p>
-        </div>
+        </Field>
 
-        {/* Visibility. The trial's scope can't exceed its course's: group
-            courses force group; private courses force private. The server
-            clamps anyway, but we visually disable to make it obvious. */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-muted tracking-widest">VISIBILITY</label>
-          <div className="flex gap-2">
-            {(['public', 'private', 'group'] as const).map(v => {
-              const courseLocksTo =
-                selectedCourse?.visibility === 'private' ? 'private'
-                : selectedCourse?.visibility === 'group' ? 'group'
-                : null
-              const disabled = !!courseLocksTo && v !== courseLocksTo
-              const active = (courseLocksTo ?? visibility) === v
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => { if (!disabled) setVisibility(v) }}
-                  className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
-                    active
-                      ? 'border-primary text-primary-text bg-primary/10'
-                      : 'border-border text-muted hover:border-muted'
-                  } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
-                >
-                  {v === 'group' ? 'GROUP' : v.toUpperCase()}
-                </button>
-              )
-            })}
-          </div>
-          <p className="text-xs text-muted">
-            {selectedCourse?.visibility === 'private'
-              ? 'This course is private, so any trial on it must be private too.'
-              : selectedCourse?.visibility === 'group'
-                ? 'This course is for its group only, so the trial is too.'
-                : visibility === 'public'
-                  ? 'The leaderboard will be visible to anyone.'
-                  : visibility === 'group'
-                    ? 'Only the course’s group members can see the trial.'
-                    : 'Only you can see this trial and its leaderboard.'}
-          </p>
-        </div>
+        <Field
+          label="Who can see it"
+          help={selectedCourse?.visibility === 'private'
+            ? 'The course is private, so any trial on it is private too.'
+            : selectedCourse?.visibility === 'group'
+              ? 'The course is for its group only, so the trial is too.'
+              : visibility === 'public'
+                ? 'Anyone can see the trial and its leaderboard.'
+                : visibility === 'group'
+                  ? 'Only the course’s group members can see the trial.'
+                  : 'Only you can see this trial and its leaderboard.'}
+        >
+          {courseLocksTo ? (
+            <p className="text-base text-fg">{WHO_CAN_SEE[courseLocksTo]}</p>
+          ) : (
+            <Segmented
+              label="Who can see it"
+              value={visibility}
+              onChange={setVisibility}
+              options={(['public', 'private', 'group'] as const).map(v => ({ value: v, label: WHO_CAN_SEE[v] }))}
+            />
+          )}
+        </Field>
 
-        {/* Participation (phase 3). Members = anyone in the course's group;
-            invitational = only users you invite; public = anyone who can view.
-            The organiser can always submit. */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-muted tracking-widest">WHO CAN SUBMIT</label>
-          <div className="flex gap-2">
-            {(['members', 'invitational', 'public'] as const).map(v => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setParticipation(v)}
-                className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
-                  participation === v
-                    ? 'border-primary text-primary-text bg-primary/10'
-                    : 'border-border text-muted hover:border-muted'
-                }`}
-              >
-                {v.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted">
-            {participation === 'members'
-              ? 'Members of this course’s group can submit a trace.'
-              : participation === 'invitational'
-                ? 'You will choose who can submit after the trial is created.'
-                : 'Anyone who can see the trial can submit a trace.'}
-          </p>
-        </div>
+        {/* Participation (phase 3). The organiser can always enter. */}
+        <Field
+          label="Who can enter"
+          help={participation === 'members'
+            ? 'Members of the course’s group can enter.'
+            : participation === 'invitational'
+              ? 'You choose who can enter after the trial is created.'
+              : 'Anyone who can see the trial can enter.'}
+        >
+          <Segmented
+            label="Who can enter"
+            value={participation}
+            onChange={setParticipation}
+            options={(['members', 'invitational', 'public'] as const).map(v => ({ value: v, label: whoCanEnterLabel(v) }))}
+          />
+        </Field>
 
         {error && (
-          <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-            {error}
-          </div>
+          <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-red text-sm">{error}</p>
         )}
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
           disabled={creating || !courses || courses.length === 0}
-          className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start"
+          className="self-start"
         >
-          {creating ? 'CREATING…' : 'CREATE TRIAL'}
-        </button>
+          {creating ? 'Creating…' : 'Create trial'}
+        </Button>
       </form>
-    </div>
+    </Page>
   )
 }
 
 export default function NewTrialPage() {
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att" className="tt-nav-link text-sm">
-              ← TRIALS
-            </Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">NEW TRIAL</span>
-          </>
-        }
-      />
+      <AppHeader breadcrumb={<Link href="/att" className="tt-nav-link">← Trials</Link>} />
       <Suspense fallback={null}>
         <NewTrialForm />
       </Suspense>

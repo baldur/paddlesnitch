@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 
 export const metadata = {
   title: 'Privacy policy',
@@ -12,17 +13,15 @@ export default function PrivacyPolicy() {
         breadcrumb={
           <>
             <Link href="/" className="tt-nav-link text-sm">
-              ← HOME
+              ← Home
             </Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">PRIVACY</span>
           </>
         }
       />
 
-      <article className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full text-sm text-fg leading-relaxed">
-        <h1 className="text-lg font-bold tracking-widest mb-2">PRIVACY POLICY</h1>
-        <p className="text-xs text-muted mb-8">Last updated: 28 September 2026</p>
+      <Page>
+        <PageHeader title="Privacy policy" description="Last updated: 28 September 2026" />
+        <article className="max-w-[65ch] text-base text-fg leading-relaxed flex flex-col gap-8 [&_code]:font-mono [&_code]:text-sm">
 
         <Section title="Who runs paddlesnitch.com">
           <p>
@@ -37,7 +36,7 @@ export default function PrivacyPolicy() {
 
         <Section title="What we collect">
           <p>Only what you give us, or what your GPS files and tracker record:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
+          <ul className="list-disc pl-5 mt-2 space-y-2">
             <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. If you sign in with Strava, which doesn&apos;t share your email, you can add a contact email.</li>
             <li><strong>Public profile</strong>: off unless you turn it on, plus the profile handle if you pick one.</li>
             <li><strong>Time-trial results</strong>: the track from the GPS file you upload (times, positions and stroke rate; we don&apos;t keep the file itself), and your time, 500 m splits, average stroke rate, boat class and crew names.</li>
@@ -86,7 +85,7 @@ export default function PrivacyPolicy() {
 
         <Section title="Your rights">
           <p>Under UK GDPR you can:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
+          <ul className="list-disc pl-5 mt-2 space-y-2">
             <li><strong>Access</strong> a copy of your data: use &quot;Download my data&quot; on your account page.</li>
             <li><strong>Erase</strong> your data: use &quot;Delete my account&quot; on your account page.</li>
             <li><strong>Correct</strong> wrong data: email us.</li>
@@ -100,7 +99,7 @@ export default function PrivacyPolicy() {
 
         <Section title="Cookies and browser storage">
           <p>We set these cookies, all needed for the site to work:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
+          <ul className="list-disc pl-5 mt-2 space-y-2">
             <li><code>tt_id</code>: your sign-in token. Lasts 24 hours.</li>
             <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
             <li><code>strava_state</code>, <code>strava_signin_state</code> and <code>strava_signin_next</code>: only while you connect or sign in with Strava, to check the reply really came from Strava and to bring you back to the right page. Last 10 minutes.</li>
@@ -115,7 +114,7 @@ export default function PrivacyPolicy() {
 
         <Section title="Who else sees data">
           <p>We use these services to run the site:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
+          <ul className="list-disc pl-5 mt-2 space-y-2">
             <li><strong>Amazon Web Services</strong> (eu-west-1, Ireland): hosting, sign-in (Cognito), storage (S3), email (SES, from <code>noreply@paddlesnitch.com</code>) and the AI model that writes paddle summaries (Bedrock). Bedrock doesn&apos;t use your data to train models.</li>
             <li><strong>Strava</strong> (USA): only if you connect it. We read your activities; we never post.</li>
             <li><strong>Open-Meteo</strong> and the <strong>Environment Agency</strong>: we send them a location and a time to look up the wind and river flow for a paddle. Nothing that identifies you.</li>
@@ -143,16 +142,17 @@ export default function PrivacyPolicy() {
             </a>
           </p>
         </Section>
-      </article>
+        </article>
+      </Page>
     </main>
   )
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-8">
-      <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">{title}</h2>
-      <div className="space-y-2">{children}</div>
+    <section>
+      <h2 className="text-lg font-semibold text-fg mb-3 text-balance">{title}</h2>
+      <div className="space-y-3">{children}</div>
     </section>
   )
 }

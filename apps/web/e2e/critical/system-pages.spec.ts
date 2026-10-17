@@ -18,3 +18,15 @@ test('the Terms page shows formatted text, not Markdown', async ({ page }) => {
   await expect(page.locator('main')).not.toContainText('## ')
   await expect(page.locator('main')).not.toContainText('**')
 })
+
+test('help and troubleshooting fold each answer under its question; a link opens the one it points at', async ({ page }) => {
+  await page.goto('/help')
+  const first = page.locator('details').first()
+  await expect(first).not.toHaveAttribute('open', '')
+  await first.locator('summary').click()
+  await expect(first).toHaveAttribute('open', '')
+
+  await page.goto('/guide/troubleshooting#wifi')
+  await expect(page.locator('details#wifi')).toHaveAttribute('open', '')
+  await expect(page.locator('details#screen')).not.toHaveAttribute('open', '')
+})

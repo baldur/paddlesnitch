@@ -4,6 +4,11 @@ import { useEffect, useRef } from 'react'
 import AnalysisView from '@/components/analysis/AnalysisView'
 import { trpc } from '@/lib/trpc'
 import { PREFILLED_FRESH_MS } from '@/lib/fresh'
+import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
+import { Page } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { EmptyState } from '@paddlesnitch/ui/Card'
 
 export default function SavedPaddle({ id }: { id: string }) {
   const q = trpc.paddles.get.useQuery({ id }, { retry: false, staleTime: PREFILLED_FRESH_MS })
@@ -21,11 +26,14 @@ export default function SavedPaddle({ id }: { id: string }) {
     if (pending && !asked.current) { asked.current = true; write.mutate({ id }) }
   }, [pending, id, write])
 
-  if (q.isPending) return <main className="flex-1 flex items-center justify-center text-sm text-muted">Loading…</main>
+  if (q.isPending) return <main className="flex-1 flex"><LoadingState label="Loading" /></main>
   if (q.isError || !q.data) return (
-    <main className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
-      <p className="text-sm text-muted">We can&apos;t find this paddle.</p>
-      <Link href="/paddles" className="text-xs tracking-widest text-primary-text">← PADDLES</Link>
+    <main className="flex-1 flex flex-col">
+      <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← Paddles</Link>} />
+      <Page width="narrow">
+        <EmptyState title="We can't find this paddle" body="It may have been deleted."
+          action={<Link href="/paddles" className={buttonClass('secondary')}>Back to Paddles</Link>} />
+      </Page>
     </main>
   )
 

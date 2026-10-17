@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 
 export const metadata = { title: 'Page not found' }
 
@@ -10,19 +12,18 @@ export default function NotFound() {
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader />
-      <div className="flex-1 px-4 py-16 max-w-xl mx-auto w-full flex flex-col gap-4">
-        <p className="text-xs text-muted tracking-widest">404</p>
-        <h1 className="text-lg font-bold text-balance">We can&apos;t find that page</h1>
-        <p className="text-sm text-muted leading-relaxed">
-          The link may be old, or the page may be private. If someone shared it with you, check
-          you&apos;re signed in with the right account.
-        </p>
-        <div className="flex flex-wrap gap-3 mt-2">
-          <Link href="/" className="px-4 py-3 bg-primary text-white text-sm font-bold">Go to the home page</Link>
-          <Link href="/paddles" className="px-4 py-3 border border-border text-fg text-sm">Your paddles</Link>
-          <Link href="/att" className="px-4 py-3 border border-border text-fg text-sm">Trials</Link>
+      <Page width="narrow">
+        <PageHeader
+          eyebrow="404"
+          title="We can't find that page"
+          description={<>The link may be old, or the page may be private. If someone shared it with you, check you&apos;re signed in with the right account.</>}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Link href="/" className={buttonClass('primary')}>Go to the home page</Link>
+          <Link href="/paddles" className={buttonClass('secondary')}>Paddles</Link>
+          <Link href="/att" className={buttonClass('secondary')}>Trials</Link>
         </div>
-      </div>
+      </Page>
     </main>
   )
 }

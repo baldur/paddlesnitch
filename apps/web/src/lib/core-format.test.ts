@@ -22,10 +22,11 @@ describe('shared wording for stored values', () => {
     expect(fmtTime('nope')).toBe('nope')
   })
   it('says what "both" means', () => {
-    expect(sportLabel('both')).toBe('KAYAK AND ROWING')
-    expect(sportLabel('kayak')).toBe('KAYAK')
+    expect(sportLabel('both')).toBe('Kayak and rowing')
+    expect(sportLabel('kayak')).toBe('Kayak')
+    expect(sportLabel(undefined)).toBe('')   // a course with no sport stored didn't crash the page
   })
   it('says who may enter a trial in words', () => {
-    expect(['members', 'invitational', 'public'].map(participationLabel)).toEqual(['GROUP MEMBERS', 'INVITED ONLY', 'ANYONE'])
+    expect(['members', 'invitational', 'public'].map(participationLabel)).toEqual(['Group members', 'Invited only', 'Anyone'])
   })
 })

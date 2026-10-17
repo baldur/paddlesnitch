@@ -48,6 +48,10 @@ describe('Paddles list, a paddle without a map', () => {
     expect(motion.textContent).not.toMatch(/km|\/500/)
     expect(motion.querySelector('svg[aria-label="paddle route"]')).toBeNull()
     expect(withMap.querySelector('svg[aria-label="paddle route"]')).not.toBeNull()
+    // Compare is a mode: its tick boxes show once it's on, and only on paddles with a map.
+    expect(container.querySelectorAll('input[aria-label="Compare"]').length).toBe(0)
+    const compare = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Compare')!
+    await act(async () => { compare.click() })
     expect(container.querySelectorAll('input[aria-label="Compare"]').length).toBe(1)
     // Counted, with its time; its km is nothing.
     expect(container.textContent).toContain('In all: 2 paddles, 8.5 km, 2:41:00 on the water')

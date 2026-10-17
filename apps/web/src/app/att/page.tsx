@@ -8,6 +8,9 @@ import { getRecentSubmissions } from '@/lib/recent'
 import { getPublicProfileLinks } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Chevron, EmptyState, cardClass } from '@paddlesnitch/ui/Card'
 import type { CourseMetadata, AuthUser } from '@/lib/types'
 import { listTrials } from '@/lib/catalogue'
 
@@ -54,157 +57,106 @@ export default async function Home() {
 
   return (
     <main className="flex-1 flex flex-col">
+      {/* Section nav: calm, sentence case. Creating things lives on the page
+          that owns it (New trial here for organisers, New group on Groups). */}
       <AppHeader>
-        <Link href="/att/courses" className="tt-nav-link">
-          COURSES
-        </Link>
-        <Link href="/att/groups" className="tt-nav-link">
-          GROUPS
-        </Link>
-        {canOrganise ? (
-          <Link href="/att/admin/trials/new" className="tt-nav-link">
-            + NEW TRIAL
-          </Link>
-        ) : (
-          <Link href="/att/groups" className="tt-nav-link">
-            + NEW GROUP
-          </Link>
-        )}
+        <Link href="/att/courses" className="tt-nav-link text-sm">Courses</Link>
+        <Link href="/att/groups" className="tt-nav-link text-sm">Groups</Link>
       </AppHeader>
 
-      <section className="border-b border-border px-4 py-12 text-center bg-surface">
-        <p className="text-muted text-xs tracking-[0.3em] uppercase mb-3">
-          Timed from your GPS file
-        </p>
-        <h1 className="text-4xl md:text-5xl font-bold text-fg mb-2">
-          Time trials
-        </h1>
-        <p className="text-muted text-sm">Upload your trace. See your splits.</p>
-      </section>
+      <Page>
+        <PageHeader
+          title="Time trials"
+          description="Upload your GPS file from a trial and we time it between the lines, with 500 m splits."
+          actions={canOrganise ? (
+            <Link href="/att/admin/trials/new" className={buttonClass('primary')}>New trial</Link>
+          ) : undefined}
+        />
 
-      <section className="flex-1 px-4 py-8 max-w-5xl mx-auto w-full">
-        {/* Two columns side-by-side on desktop; stacked on portrait / phones. */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Open trials */}
-          <div>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
-              Open time trials
-            </h2>
-            {openTrials.length === 0 ? (
-              <div className="border border-border p-8 text-center text-muted text-sm">
-                {canOrganise ? (
-                  <>
-                    No open trials yet.{' '}
-                    <Link href="/att/admin/trials/new" className="tt-link">
-                      Open a trial
-                    </Link>{' '}
-                    to get started.
-                  </>
-                ) : (
-                  <>
-                    No open trials yet.{' '}
-                    <Link href="/att/groups" className="tt-link">
-                      Create a group
-                    </Link>{' '}
-                    to run your own.
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {openTrials.map(({ trial, course }) => (
-                  // The card itself links to the public trial page. Owners get
-                  // a separate "manage" link to the admin page so they can
-                  // close the trial — the close control lives there and was
-                  // otherwise unreachable from this listing (#87). Nested
-                  // anchors are invalid, so the manage link sits outside the
-                  // card anchor rather than inside it.
-                  <div
-                    key={trial.id}
-                    className="border border-border hover:border-primary transition-colors"
+        <Section title="Open trials">
+          {openTrials.length === 0 ? (
+            <EmptyState
+              title="No open trials yet"
+              body={canOrganise ? 'Open one on a course your group runs.' : 'Groups run trials for their members. Start one for your club or squad.'}
+              action={canOrganise ? (
+                <Link href="/att/admin/trials/new" className={buttonClass('primary')}>Open a trial</Link>
+              ) : (
+                <Link href="/att/groups" className={buttonClass('secondary')}>Create a group</Link>
+              )}
+            />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {openTrials.map(({ trial, course }) => (
+                // The card links to the public trial page. Owners get a
+                // separate "Manage" link to the admin page so they can close
+                // the trial (#87). Nested anchors are invalid, so the manage
+                // link sits outside the card anchor.
+                <li key={trial.id} className={`${cardClass} overflow-hidden`}>
+                  <a
+                    href={`/att/trials/${trial.id}`}
+                    className="flex items-center gap-3 px-4 py-4 min-h-11 hover:bg-surface-2 transition-colors"
                   >
-                    <a
-                      href={`/att/trials/${trial.id}`}
-                      className="px-4 py-4 flex items-center justify-between group"
-                    >
-                      <div>
-                        <div className="text-fg font-bold group-hover:text-primary-text transition-colors">
-                          {trial.name}
-                        </div>
-                        <div className="text-xs text-muted mt-0.5">
-                          {course?.name ?? 'Unknown course'} · {fmtDay(trial.date)}
-                          {course && ` · ${sportLabel(course.sport).toLowerCase()}`}
-                        </div>
-                      </div>
-                      <span className="text-xs border border-green text-green px-2 py-0.5">
-                        OPEN
-                      </span>
-                    </a>
-                    {canManageTrial(trial, viewer, adminGroupIds) && (
-                      <div className="border-t border-border px-4 py-2 flex justify-end">
-                        <Link
-                          href={`/att/admin/trials/${trial.id}`}
-                          className="text-xs text-muted hover:text-primary-text tracking-widest transition-colors"
-                        >
-                          MANAGE / CLOSE →
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Recent submissions */}
-          <div>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-6">
-              Recent results
-            </h2>
-            {recent.length === 0 ? (
-              <div className="border border-border p-8 text-center text-muted text-sm">
-                No submissions yet.
-              </div>
-            ) : (
-              <ul className="border border-border divide-y divide-surface-2">
-                {recent.map(r => (
-                  <li key={r.entryId} className="px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm text-fg font-medium truncate">
-                        {profileLinks[r.userId] ? (
-                          <Link href={`/profile/${profileLinks[r.userId]}`} className="hover:text-primary-text hover:underline transition-colors">
-                            {r.displayName}
-                          </Link>
-                        ) : (
-                          r.displayName
-                        )}
-                      </div>
-                      <div className="text-xs text-muted mt-0.5 truncate">
-                        <Link href={`/att/trials/${r.trialId}`} className="hover:text-primary-text transition-colors">
-                          {r.courseName}
-                        </Link>{' '}
-                        · {fmtDay(r.raceDate)} · {r.boatClass}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold text-fg">{trial.name}</div>
+                      <div className="text-sm text-muted mt-0.5">
+                        {course?.name ?? 'Unknown course'} · {fmtDay(trial.date)}
+                        {course && ` · ${sportLabel(course.sport).toLowerCase()}`}
                       </div>
                     </div>
-                    <span className="text-sm tabular font-bold text-primary-text shrink-0">
-                      {formatTime(r.totalElapsedSeconds)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+                    <Chevron />
+                  </a>
+                  {canManageTrial(trial, viewer, adminGroupIds) && (
+                    <div className="border-t border-border px-2 py-1 flex justify-end">
+                      <Link href={`/att/admin/trials/${trial.id}`} className={buttonClass('quiet', 'sm')}>
+                        Manage or close
+                      </Link>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
 
-        <div className="mt-10 flex items-center justify-center gap-6">
-          <Link href="/att/courses" className="tt-nav-link text-xs tracking-widest">
-            BROWSE ALL COURSES →
-          </Link>
-          <Link href="/help" className="tt-nav-link text-xs tracking-widest">
-            HELP
-          </Link>
-        </div>
-      </section>
+        <Section title="Recent results">
+          {recent.length === 0 ? (
+            <p className="text-sm text-muted">No results yet. They show here as people enter.</p>
+          ) : (
+            <ul className={`${cardClass} divide-y divide-border`}>
+              {recent.map(r => (
+                <li key={r.entryId} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-base text-fg font-medium truncate">
+                      {profileLinks[r.userId] ? (
+                        <Link href={`/profile/${profileLinks[r.userId]}`} className="hover:text-primary-text hover:underline transition-colors">
+                          {r.displayName}
+                        </Link>
+                      ) : (
+                        r.displayName
+                      )}
+                    </div>
+                    <div className="text-sm text-muted mt-0.5 truncate">
+                      <Link href={`/att/trials/${r.trialId}`} className="hover:text-primary-text transition-colors">
+                        {r.courseName}
+                      </Link>{' '}
+                      · {fmtDay(r.raceDate)} · {r.boatClass}
+                    </div>
+                  </div>
+                  <span className="text-base tabular font-semibold text-primary-text shrink-0">
+                    {formatTime(r.totalElapsedSeconds)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <nav aria-label="More in Trials" className="flex flex-wrap gap-2 border-t border-border pt-6">
+          <Link href="/att/courses" className={buttonClass('quiet')}>Browse all courses</Link>
+          <Link href="/att/groups" className={buttonClass('quiet')}>Groups</Link>
+          <Link href="/help" className={buttonClass('quiet')}>Help</Link>
+        </nav>
+      </Page>
     </main>
   )
 }

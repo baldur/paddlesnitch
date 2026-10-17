@@ -7,6 +7,9 @@ import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { termsAcceptPath } from '@/lib/terms-path'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { Field, Segmented, inputClass } from '@paddlesnitch/ui/Form'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 import { useMountedAt } from '@/lib/use-mounted-at'
 
 // Signed in: load the next page in full, so its header shows the new user (the
@@ -82,7 +85,7 @@ function AuthForm() {
         setLoading(false)
       }
     } catch {
-      setError('Network error')
+      setError('Couldn’t reach the server. Check your connection and try again.')
       setLoading(false)
     }
   }
@@ -109,7 +112,7 @@ function AuthForm() {
         setLoading(false)
       }
     } catch {
-      setError('Network error')
+      setError('Couldn’t reach the server. Check your connection and try again.')
       setLoading(false)
     }
   }
@@ -158,254 +161,42 @@ function AuthForm() {
     }
   }
 
-  const inputClass =
-    'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
-
-  const tabClass = (t: typeof tab) =>
-    `px-4 py-2 text-sm tracking-widest transition-colors ${
-      tab === t
-        ? 'border-b-2 border-primary text-primary-text -mb-px'
-        : 'text-muted hover:text-fg'
-    }`
-
   // Sign in / sign up via Strava goes through a server-driven OAuth round
   // trip; the button is a plain <a> rather than a form submit because the
   // /init endpoint sets a CSRF state cookie and 302s to Strava.
   const stravaHref = `/att/api/auth/strava/init?next=${encodeURIComponent(next)}`
 
+  const switchTab = (t: typeof tab) => {
+    setTab(t)
+    setError('')
+    if (t === 'code') { setOtpSession(''); setOtpCode('') }
+  }
+
+  const errorBox = error && (
+    <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-sm text-red">{error}</p>
+  )
+
   return (
-    <div className="w-full max-w-sm">
-      <div className="flex justify-center mb-2">
-        <StravaButton href={stravaHref} />
-      </div>
-      <p className="text-xs text-muted mb-6 text-center leading-relaxed">
-        Strava doesn&apos;t share your email, so we&apos;ll ask for one. Already have an account? Sign in
-        below first, then connect Strava in your account, so you don&apos;t end up with two.
-      </p>
-      <div className="flex items-center gap-3 mb-6 text-xs text-muted tracking-widest">
-        <span className="flex-1 h-px bg-border" />
-        OR
-        <span className="flex-1 h-px bg-border" />
-      </div>
+    <Page width="narrow" className="max-w-md">
+      <PageHeader title={tab === 'signup' ? 'Create account' : 'Sign in'} />
 
-      <div className="flex border-b border-border mb-8">
-        <button type="button" onClick={() => { setTab('signin'); setError('') }} className={tabClass('signin')}>
-          SIGN IN
-        </button>
-        <button type="button" onClick={() => { setTab('signup'); setError('') }} className={tabClass('signup')}>
-          SIGN UP
-        </button>
-{EMAIL_DELIVERY && (
-        <button type="button" onClick={() => { setTab('code'); setError(''); setOtpSession(''); setOtpCode('') }} className={tabClass('code')}>
-          EMAIL CODE
-        </button>
-        )}
-      </div>
+      <div className="flex flex-col gap-6">
+        <Segmented
+          label="Sign in or create an account"
+          value={tab}
+          onChange={switchTab}
+          options={[
+            { value: 'signin', label: 'Sign in' },
+            { value: 'signup', label: 'Create account' },
+            ...(EMAIL_DELIVERY ? [{ value: 'code' as const, label: 'Email code' }] : []),
+          ]}
+        />
 
-      {tab === 'signin' && (
-        <form onSubmit={handleSignIn} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">EMAIL</label>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">PASSWORD</label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          {error && (
-            <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-              {error}
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'SIGNING IN…' : 'SIGN IN'}
-          </button>
-          <p className="text-xs text-muted text-center">
-            No account?{' '}
-            <button
-              type="button"
-              onClick={() => { setTab('signup'); setError('') }}
-              className="tt-link"
-            >
-              Sign up
-            </button>
-            {' · '}
-            <Link href="/signin/forgot" className="tt-link">
-              Forgot password?
-            </Link>
-          </p>
-        </form>
-      )}
-
-      {tab === 'signup' && (
-        <form onSubmit={handleSignUp} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">EMAIL</label>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">DISPLAY NAME</label>
-            <input
-              type="text"
-              required
-              autoComplete="name"
-              placeholder="e.g. John Smith"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted tracking-widest">PASSWORD</label>
-            <input
-              type="password"
-              required
-              autoComplete="new-password"
-              minLength={8}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className={inputClass}
-            />
-            <p className="text-xs text-muted">Minimum 8 characters</p>
-          </div>
-          {/* ToS acceptance — required for account creation. The checkbox
-              has to be ticked AND the server side checks the version on
-              POST, so a stale rendering won't accept a future version. */}
-          <label className="flex items-start gap-2 text-xs text-muted">
-            <input
-              type="checkbox"
-              checked={tosAccepted}
-              onChange={e => setTosAccepted(e.target.checked)}
-              className="mt-0.5 accent-primary"
-            />
-            <span>
-              I have read and agree to the{' '}
-              <Link href="/terms" target="_blank" className="tt-link">
-                Terms of Service
-              </Link>
-              {' '}and{' '}
-              <Link href="/privacy" target="_blank" className="tt-link">
-                Privacy Policy
-              </Link>.
-            </span>
-          </label>
-          {error && (
-            <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-              {error}
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'CREATING ACCOUNT…' : 'CREATE ACCOUNT'}
-          </button>
-          <p className="text-xs text-muted text-center">
-            Already have an account?{' '}
-            <button
-              type="button"
-              onClick={() => { setTab('signin'); setError('') }}
-              className="tt-link"
-            >
-              Sign in
-            </button>
-          </p>
-        </form>
-      )}
-
-      {EMAIL_DELIVERY && tab === 'code' && (
-        otpSession ? (
-          <form onSubmit={handleOtpVerify} className="flex flex-col gap-4">
-            <p className="text-xs text-muted">
-              We&apos;ve emailed a 6-digit code to <strong>{email}</strong>. Paste it below.
-            </p>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted tracking-widest">CODE</label>
+        {tab === 'signin' && (
+          <form onSubmit={handleSignIn} className="flex flex-col gap-4">
+            <Field label="Email" htmlFor="signin-email">
               <input
-                type="text"
-                required
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                value={otpCode}
-                onChange={e => setOtpCode(e.target.value)}
-                className={`${inputClass} tracking-widest`}
-                placeholder="000000"
-                autoFocus
-              />
-            </div>
-            {error && (
-              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'VERIFYING…' : 'SIGN IN'}
-            </button>
-            <p className="text-xs text-muted text-center">
-              Didn&apos;t arrive?{' '}
-              <button
-                type="button"
-                onClick={() => { setOtpSession(''); setOtpCode(''); setError('') }}
-                className="tt-link"
-              >
-                Try a different email
-              </button>
-            </p>
-          </form>
-        ) : (
-          <form onSubmit={handleOtpRequest} className="flex flex-col gap-4">
-            {/* Honeypot — visually hidden, skipped by keyboard + screen readers.
-                Real users never see or fill this; bots scraping inputs will. */}
-            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
-              <label>
-                Website
-                <input
-                  type="text"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  value={website}
-                  onChange={e => setWebsite(e.target.value)}
-                />
-              </label>
-            </div>
-            <p className="text-xs text-muted">
-              Enter your email and we&apos;ll send you a one-time code. No password needed.
-            </p>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted tracking-widest">EMAIL</label>
-              <input
+                id="signin-email"
                 type="email"
                 required
                 autoComplete="email"
@@ -413,41 +204,185 @@ function AuthForm() {
                 onChange={e => setEmail(e.target.value)}
                 className={inputClass}
               />
-            </div>
-            {error && (
-              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'SENDING…' : 'SEND CODE'}
+            </Field>
+            <Field label="Password" htmlFor="signin-password">
+              <input
+                id="signin-password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            {errorBox}
+            <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+            <p className="text-sm text-center">
+              <Link href="/signin/forgot" className="tt-link">Forgot password?</Link>
+            </p>
+          </form>
+        )}
+
+        {tab === 'signup' && (
+          <form onSubmit={handleSignUp} className="flex flex-col gap-4">
+            <Field label="Email" htmlFor="signup-email">
+              <input
+                id="signup-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Display name" htmlFor="signup-name" help="Shown on leaderboards. You can change it later.">
+              <input
+                id="signup-name"
+                type="text"
+                required
+                autoComplete="name"
+                placeholder="e.g. John Smith"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Password" htmlFor="signup-password" help="At least 8 characters.">
+              <input
+                id="signup-password"
+                type="password"
+                required
+                autoComplete="new-password"
+                minLength={8}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            {/* ToS acceptance — required for account creation. The checkbox
+                has to be ticked AND the server side checks the version on
+                POST, so a stale rendering won't accept a future version. */}
+            <label className="flex items-start gap-3 text-sm text-muted min-h-11 py-1">
+              <input
+                type="checkbox"
+                checked={tosAccepted}
+                onChange={e => setTosAccepted(e.target.checked)}
+                className="mt-0.5 w-5 h-5 shrink-0 accent-primary"
+              />
+              <span>
+                I have read and agree to the{' '}
+                <Link href="/terms" target="_blank" className="tt-link">
+                  Terms of Service
+                </Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" className="tt-link">
+                  Privacy Policy
+                </Link>.
+              </span>
+            </label>
+            {errorBox}
+            <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
+              {loading ? 'Creating account…' : 'Create account'}
             </button>
           </form>
-        )
-      )}
+        )}
 
-    </div>
+        {EMAIL_DELIVERY && tab === 'code' && (
+          otpSession ? (
+            <form onSubmit={handleOtpVerify} className="flex flex-col gap-4">
+              <p className="text-base text-muted">
+                We&apos;ve emailed a 6-digit code to <strong className="text-fg">{email}</strong>. Paste it below.
+              </p>
+              <Field label="Code" htmlFor="otp-code">
+                <input
+                  id="otp-code"
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value)}
+                  className={`${inputClass} tabular`}
+                  placeholder="000000"
+                  autoFocus
+                />
+              </Field>
+              {errorBox}
+              <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
+                {loading ? 'Checking…' : 'Sign in'}
+              </button>
+              <p className="text-sm text-muted text-center">
+                Didn&apos;t arrive?{' '}
+                <button
+                  type="button"
+                  onClick={() => { setOtpSession(''); setOtpCode(''); setError('') }}
+                  className="tt-link"
+                >
+                  Try a different email
+                </button>
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleOtpRequest} className="flex flex-col gap-4">
+              {/* Honeypot — visually hidden, skipped by keyboard + screen readers.
+                  Real users never see or fill this; bots scraping inputs will. */}
+              <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+                <label>
+                  Website
+                  <input
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={e => setWebsite(e.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="text-base text-muted">
+                We&apos;ll email you a one-time code. No password needed.
+              </p>
+              <Field label="Email" htmlFor="otp-email">
+                <input
+                  id="otp-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              {errorBox}
+              <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
+                {loading ? 'Sending…' : 'Send code'}
+              </button>
+            </form>
+          )
+        )}
+      </div>
+
+      {/* Strava is the secondary way in, below the email form. */}
+      <div className="flex flex-col items-center gap-3 border-t border-border pt-6">
+        <p className="text-sm text-muted">Or use your Strava account</p>
+        <StravaButton href={stravaHref} />
+        <p className="text-sm text-muted text-center">
+          Already have an account? Sign in first, then connect Strava in Account.
+        </p>
+      </div>
+    </Page>
   )
 }
 
 export default function AuthPage() {
   return (
-    <main className="flex-1 flex flex-col">
-      <header className="border-b border-border px-4 py-3">
-        {/* Sign-in is for the whole site, not only Trials. */}
-        <Link href="/">
-          <span className="text-fg font-bold text-lg tracking-widest">paddlesnitch</span>
-        </Link>
-      </header>
-      <div className="flex-1 flex items-start justify-center pt-16 px-4">
-        <Suspense>
-          <AuthForm />
-        </Suspense>
-      </div>
-    </main>
+    <Suspense>
+      <AuthForm />
+    </Suspense>
   )
 }

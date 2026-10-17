@@ -13,7 +13,7 @@ export default async function SharedPlanPage({ params }: { params: Promise<{ sha
   await pre.query('plan.shared', { shareId }, c => c.plan.shared({ shareId }))
   return (
     <HydrationBoundary state={pre.state()}>
-      <AppHeader breadcrumb={<Link href="/plan" className="hover:text-fg">PLAN</Link>} />
+      <AppHeader breadcrumb={<Link href="/plan" className="tt-nav-link text-sm">← Plan</Link>} />
       <SharedPlanView shareId={shareId} />
     </HydrationBoundary>
   )

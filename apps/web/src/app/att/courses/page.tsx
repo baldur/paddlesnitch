@@ -4,6 +4,9 @@ import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Badge, Chevron, EmptyState, cardLinkClass } from '@paddlesnitch/ui/Card'
 import type { CourseMetadata, AuthUser } from '@/lib/types'
 import { listTrials, listCourses } from '@/lib/catalogue'
 
@@ -44,6 +47,8 @@ function courseTypeLabel(course: CourseMetadata): string {
   return 'Point-to-point'
 }
 
+const sportName = sportLabel
+
 export default async function CoursesCataloguePage() {
   const viewer = await getAuthUser()
   const canOrganise = viewer ? (await getUserAdminGroupIds(viewer.id)).size > 0 : false
@@ -52,82 +57,55 @@ export default async function CoursesCataloguePage() {
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att" className="tt-nav-link text-sm">
-              ← TRIALS
-            </Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">COURSES</span>
-          </>
-        }
-      >
-        {canOrganise ? (
-          <Link href="/att/admin/courses/new" className="tt-nav-link">
-            + NEW COURSE
-          </Link>
-        ) : (
-          <Link href="/att/groups" className="tt-nav-link">
-            + NEW GROUP
-          </Link>
-        )}
-      </AppHeader>
+        breadcrumb={<Link href="/att" className="tt-nav-link">← Trials</Link>}
+      />
 
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
-        <h1 className="text-lg font-bold text-fg tracking-widest mb-2">COURSE CATALOGUE</h1>
-        <p className="text-sm text-muted mb-8">
-          All courses. To run your own trials, create a group.
-        </p>
+      <Page>
+        <PageHeader
+          title="Courses"
+          description="Every course you can see. Groups draw courses and run trials on them."
+          actions={canOrganise ? (
+            <Link href="/att/admin/courses/new" className={buttonClass('primary')}>New course</Link>
+          ) : undefined}
+        />
 
         {courses.length === 0 ? (
-          <div className="border border-border p-8 text-center text-muted text-sm">
-            {canOrganise ? (
-              <>
-                No courses yet.{' '}
-                <Link href="/att/admin/courses/new" className="tt-link">Create the first one</Link>.
-              </>
-            ) : (
-              <>
-                No courses yet.{' '}
-                <Link href="/att/groups" className="tt-link">Create a group</Link> to add one.
-              </>
-            )}
-          </div>
+          <EmptyState
+            title="No courses yet"
+            body={canOrganise ? undefined : 'Courses belong to groups. Create a group to draw one.'}
+            action={canOrganise ? (
+              <Link href="/att/admin/courses/new" className={buttonClass('primary')}>New course</Link>
+            ) : viewer ? (
+              <Link href="/att/groups" className={buttonClass('secondary')}>Create a group</Link>
+            ) : undefined}
+          />
         ) : (
-          <div className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-2">
             {courses.map(({ course, trialCount, openCount }) => (
-              <Link
-                key={course.id}
-                href={`/att/courses/${course.id}`}
-                className="border border-border px-4 py-4 hover:border-primary transition-colors group"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="text-fg font-bold group-hover:text-primary-text transition-colors">
-                      {course.name}
-                    </div>
-                    <div className="text-xs text-muted mt-0.5 tabular">
-                      {sportLabel(course.sport)} ·{' '}
-                      {course.distanceMetres > 0 ? `${course.distanceMetres.toLocaleString()} m` : '—'} ·{' '}
+              <li key={course.id}>
+                <Link
+                  href={`/att/courses/${course.id}`}
+                  className={`${cardLinkClass} flex items-center gap-3 px-4 py-4`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-semibold text-fg">{course.name}</div>
+                    <div className="text-sm text-muted mt-0.5">
+                      {sportName(course.sport)} ·{' '}
+                      <span className="tabular">{course.distanceMetres > 0 ? `${course.distanceMetres.toLocaleString()} m` : '—'}</span> ·{' '}
                       {courseTypeLabel(course)}
                     </div>
-                  </div>
-                  <div className="text-right text-xs shrink-0">
-                    {openCount > 0 && (
-                      <div className="border border-green text-green px-2 py-0.5 mb-1 inline-block">
-                        {openCount} OPEN
-                      </div>
-                    )}
-                    <div className="text-muted">
+                    <div className="text-sm text-muted mt-0.5 tabular">
                       {trialCount} trial{trialCount === 1 ? '' : 's'}
                     </div>
                   </div>
-                </div>
-              </Link>
+                  {openCount > 0 && <Badge tone="green">{openCount} open</Badge>}
+                  <Chevron />
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

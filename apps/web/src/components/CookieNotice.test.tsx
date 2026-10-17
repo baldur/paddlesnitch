@@ -34,7 +34,7 @@ async function mount(node: React.ReactNode) {
 const zOf = (el: Element) => Number(/z-\[?(\d+)\]?/.exec(el.className)?.[1] ?? 0)
 
 describe('cookie notice vs the floating report button', () => {
-  it('sits above the REPORT AN ISSUE button on desktop, not underneath it', async () => {
+  it('sits above the Report button on desktop and the tab bar on phones', async () => {
     await mount(<><CookieNotice /><FeedbackWidget /></>)
     const notice = [...container.querySelectorAll('div')].find(d => d.textContent?.includes('We use cookies'))!
     const report = container.querySelector('button[aria-label="Report an issue"]')!
@@ -42,9 +42,9 @@ describe('cookie notice vs the floating report button', () => {
     expect(report.className).toContain('bottom-4')
     expect(report.className).toContain('sm:block') // the button only shows from sm up…
     // …so from sm up the notice is raised clear of it (2rem tall at bottom-4);
-    // on phones, with no button, it sits at the bottom.
+    // on phones it sits just above the bottom tab bar (3.5rem + safe area).
     expect(notice.className).toMatch(/(^|\s)sm:bottom-16(\s|$)/)
-    expect(notice.className).toMatch(/(^|\s)bottom-4(\s|$)/)
+    expect(notice.className).toMatch(/(^|\s)bottom-\[calc\(4\.5rem\+env\(safe-area-inset-bottom,0px\)\)\](\s|$)/)
   })
 
   it('stays above Leaflet maps (panes go up to z-800)', async () => {

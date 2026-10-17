@@ -9,6 +9,20 @@ import { StravaFirstImport, StravaMoreImport } from '@/components/strava/StravaH
 import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Field, inputClass } from '@paddlesnitch/ui/Form'
+import { Badge, Chevron, EmptyState, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
+
+// The page's sections, in order, for the in-page jump list (sm and up).
+const SECTIONS: [string, string][] = [
+  ['details', 'Your details'],
+  ['profile', 'Public profile'],
+  ['strava', 'Strava'],
+  ['devices', 'Devices'],
+  ['data', 'Your data'],
+  ['delete', 'Delete account'],
+]
 
 type StravaStatus =
   | { connected: false }
@@ -250,150 +264,203 @@ function AccountPageInner() {
     }
   }
 
+  const msgClass = 'text-sm text-muted'
+
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/" className="tt-nav-link text-sm">
-              ← HOME
-            </Link>
-            <span className="text-muted">/</span>
-            <span className="text-fg text-sm">ACCOUNT</span>
-          </>
-        }
-      />
+      <AppHeader />
 
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-10">
+      <Page>
         {user === undefined && <LoadingState className="py-16" />}
 
         {user === null && (
-          <div className="flex flex-col gap-4 text-center pt-16">
-            <h1 className="text-lg font-bold text-fg tracking-widest">SIGN IN REQUIRED</h1>
-            <p className="text-sm text-muted">
-              Sign in to view or manage your account data.
-            </p>
-            <Link
-              href="/signin?next=/account"
-              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary transition-colors self-center"
-            >
-              SIGN IN
-            </Link>
-          </div>
+          <>
+            <PageHeader title="Account" />
+            <EmptyState
+              title="Sign in to see your account"
+              body="Sign in to view or manage your account data."
+              action={<Link href="/signin?next=/account" className={buttonClass('primary')}>Sign in</Link>}
+            />
+          </>
         )}
 
         {user && (
           <>
-            <section>
-              <h1 className="text-lg font-bold text-fg tracking-widest mb-6">ACCOUNT</h1>
-              <dl className="grid grid-cols-3 gap-4 text-sm">
-                <dt className="text-muted tracking-widest text-xs uppercase">Email</dt>
-                <dd className="col-span-2 text-fg tabular">{user.email}</dd>
-                <dt className="text-muted tracking-widest text-xs uppercase">Display name</dt>
-                <dd className="col-span-2 text-fg">{user.displayName}</dd>
-                {/* For support: the one id we can look an account up by. */}
-                <dt className="text-muted tracking-widest text-xs uppercase">Support ID</dt>
-                <dd className="col-span-2 text-muted tabular text-xs break-all">{user.id}</dd>
-              </dl>
-            </section>
+            <PageHeader title="Account" />
 
-            {/* Contact email — only shown to Strava-only accounts (those
-                with a synthesised email). Email-and-password users already
-                have a real email and don't need this. */}
-            {isSyntheticStravaEmail(user.email) && (
-              <section>
-                <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
-                  Contact email
-                </h2>
-                <p className="text-sm text-muted mb-4 leading-relaxed">
-                  You signed in with Strava, which doesn&apos;t share your email, so we can&apos;t reach
-                  you. Add an email so we can tell you about your account, group invitations and
-                  changes to our Terms. We never share it.
-                </p>
-                <form onSubmit={saveContactEmail} className="flex flex-col sm:flex-row gap-2 mb-3">
-                  <input
-                    type="email"
-                    value={contactEmail}
-                    onChange={e => setContactEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors flex-1"
-                  />
-                  <button
-                    type="submit"
-                    disabled={working === 'contact' || !contactEmail.trim()}
-                    className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {working === 'contact' ? 'SAVING…' : (contactSaved ? 'UPDATE' : 'SAVE')}
-                  </button>
-                  {contactSaved && (
-                    <button
-                      type="button"
-                      onClick={clearContactEmail}
-                      disabled={working === 'contact'}
-                      className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
-                    >
-                      REMOVE
-                    </button>
-                  )}
-                </form>
-                {contactMsg && (
-                  <p className="text-xs text-muted">{contactMsg}</p>
-                )}
-              </section>
+            {/* In-page jump list, from sm up: the page is long. */}
+            <nav aria-label="On this page" className="hidden sm:flex flex-wrap gap-x-5 gap-y-1 text-sm -mt-4">
+              {SECTIONS.map(([id, label]) => (
+                <a key={id} href={`#${id}`} className="text-muted hover:text-fg">{label}</a>
+              ))}
+            </nav>
+
+            {error && (
+              <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-sm text-red">
+                {error}
+              </p>
             )}
 
-            <section>
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
-                Strava
-              </h2>
-              <p className="text-sm text-muted mb-4 leading-relaxed">
+            <section id="details" className="flex flex-col gap-3 scroll-mt-4">
+              <h2 className="text-lg font-semibold text-fg">Your details</h2>
+              <dl className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 sm:gap-y-3 text-base">
+                <dt className="text-sm text-muted">Email</dt>
+                <dd className="text-fg tabular break-all mb-2 sm:mb-0">{user.email}</dd>
+                <dt className="text-sm text-muted">Display name</dt>
+                <dd className="text-fg mb-2 sm:mb-0">{user.displayName}</dd>
+                {/* For support: the one id we can look an account up by. */}
+                <dt className="text-sm text-muted">Support ID</dt>
+                <dd className="text-sm text-muted tabular break-all">{user.id}</dd>
+              </dl>
+
+              {/* Contact email — only shown to Strava-only accounts (those
+                  with a synthesised email). Email-and-password users already
+                  have a real email and don't need this. */}
+              {isSyntheticStravaEmail(user.email) && (
+                <form onSubmit={saveContactEmail} className="flex flex-col gap-3 pt-2">
+                  <Field
+                    label="Contact email"
+                    htmlFor="contact-email"
+                    help="You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it."
+                  >
+                    <input
+                      id="contact-email"
+                      type="email"
+                      value={contactEmail}
+                      onChange={e => setContactEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className={`${inputClass} sm:max-w-sm`}
+                    />
+                  </Field>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={working === 'contact' || !contactEmail.trim()}
+                      className={buttonClass('secondary')}
+                    >
+                      {working === 'contact' ? 'Saving…' : (contactSaved ? 'Update' : 'Save')}
+                    </button>
+                    {contactSaved && (
+                      <button type="button" onClick={clearContactEmail} disabled={working === 'contact'} className={buttonClass('quiet')}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {contactMsg && <p className={msgClass}>{contactMsg}</p>}
+                </form>
+              )}
+            </section>
+
+            <section id="profile" className="flex flex-col gap-3 scroll-mt-4">
+              <h2 className="text-lg font-semibold text-fg">Public profile</h2>
+              <p className="text-base text-muted">
+                Show your race results and personal bests on a public page. Private and group-only
+                results stay hidden. Off until you turn it on.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => toggleProfilePublic(!profilePublic)}
+                  disabled={profilePublic === undefined || profileSaving}
+                  className={buttonClass('secondary')}
+                >
+                  {profileSaving
+                    ? 'Saving…'
+                    : profilePublic
+                      ? 'Make profile private'
+                      : 'Make profile public'}
+                </button>
+                <Link href={`/profile/${handle ?? user.id}`} className="tt-link text-sm">
+                  {profilePublic ? 'View my profile →' : 'Preview my profile →'}
+                </Link>
+              </div>
+
+              {/* Vanity handle */}
+              <div className="flex flex-col gap-3 pt-2">
+                <Field
+                  label="Profile handle"
+                  htmlFor="profile-handle"
+                  help={<>A short link like <span className="text-fg tabular">/profile/{handle || 'your-handle'}</span>. Lowercase letters, numbers and hyphens, 3–30 characters.</>}
+                >
+                  <input
+                    id="profile-handle"
+                    type="text"
+                    value={handleInput}
+                    onChange={e => setHandleInput(e.target.value)}
+                    placeholder="your-handle"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    className={`${inputClass} sm:max-w-sm`}
+                  />
+                </Field>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={saveHandle}
+                    disabled={handleSaving || !handleInput.trim() || handleInput.trim() === handle}
+                    className={buttonClass('secondary')}
+                  >
+                    {handleSaving ? 'Saving…' : handle ? 'Change' : 'Save'}
+                  </button>
+                  {handle && (
+                    <button type="button" onClick={releaseHandle} disabled={handleSaving} className={buttonClass('quiet')}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+                {handleMsg && <p className={msgClass}>{handleMsg}</p>}
+              </div>
+            </section>
+
+            <section id="strava" className="flex flex-col gap-3 scroll-mt-4">
+              <h2 className="text-lg font-semibold text-fg">Strava</h2>
+              <p className="text-base text-muted">
                 Connect Strava to bring in your paddles and trial results without exporting files,
                 and to sign in with Strava. We only read your activities; we never post.
               </p>
 
               {stravaFlash && (
-                <div
-                  className={`mb-4 border px-3 py-2 text-xs ${
+                <p
+                  role={stravaFlash.tone === 'err' ? 'alert' : 'status'}
+                  className={`rounded-control border px-3 py-2 text-sm ${
                     stravaFlash.tone === 'ok'
-                      ? 'border-green bg-green/10 text-green'
-                      : 'border-red bg-red/10 text-red'
+                      ? 'border-green/50 bg-green/10 text-green'
+                      : 'border-red/50 bg-red/10 text-red'
                   }`}
                 >
                   {stravaFlash.text}
-                </div>
+                </p>
               )}
 
-              {strava === undefined && (
-                <p className="text-xs text-muted">Checking…</p>
-              )}
+              {strava === undefined && <p className={msgClass}>Checking…</p>}
 
               {strava && !strava.connected && (
-                <StravaButton href="/att/api/strava/connect" />
+                <div><StravaButton href="/att/api/strava/connect" /></div>
               )}
 
               {strava && strava.connected && (
                 <>
-                  <div className="flex items-center justify-between gap-4 border border-border px-4 py-3">
-                    <div className="text-sm">
-                      <span className="text-green tracking-widest text-xs mr-2">CONNECTED</span>
-                      <span className="text-fg">{strava.athlete.name}</span>
+                  <div className={`${cardClass} flex items-center justify-between gap-4 px-4 py-2`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Badge tone="green">Connected</Badge>
+                      <span className="text-base text-fg truncate">{strava.athlete.name}</span>
                     </div>
                     <button
                       type="button"
                       onClick={disconnectStrava}
                       disabled={working === 'strava'}
-                      className="px-4 py-2 border border-muted text-muted text-xs tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
+                      className={buttonClass('quiet')}
                     >
-                      {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
+                      {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
                     </button>
                   </div>
                   {/* Auto-import toggle (default on). New water-sport activities
                       flow into Paddles automatically via the Strava webhook. */}
-                  <label className="flex items-center justify-between gap-4 border border-border px-4 py-3 mt-2 cursor-pointer">
-                    <span className="text-sm">
-                      <span className="text-fg">Auto-import new paddles</span>
-                      <span className="block text-xs text-muted mt-0.5">
-                        New kayak / canoe / rowing / SUP activities on Strava appear in Paddles automatically.
+                  <label className={`${cardClass} flex items-center justify-between gap-4 px-4 py-3 cursor-pointer`}>
+                    <span>
+                      <span className="block text-base text-fg">Auto-import new paddles</span>
+                      <span className="block text-sm text-muted">
+                        New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.
                       </span>
                     </span>
                     <input
@@ -404,185 +471,106 @@ function AccountPageInner() {
                     />
                   </label>
                   {/* Older paddles (#415): the last month by itself, then further back on request. */}
-                  <div className="mt-3"><StravaFirstImport /></div>
+                  <StravaFirstImport />
                   <StravaMoreImport />
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
-                  <PoweredByStrava className="mt-2" />
-                  <p className="text-xs text-muted mt-2">
-                    You can now sign in with Strava. Disconnecting stops both importing and signing in
+                  <PoweredByStrava />
+                  <p className={msgClass}>
+                    You can also sign in with Strava. Disconnecting stops both importing and signing in
                     with Strava.
                   </p>
                 </>
               )}
             </section>
 
-            <section>
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Devices</h2>
-              <p className="text-sm text-muted leading-relaxed">
-                Add, remove and see your paddlesnitch trackers on the{' '}
-                <Link href="/devices" className="text-primary-text">Devices</Link> page.
-              </p>
+            <section id="devices" className="flex flex-col gap-3 scroll-mt-4">
+              <h2 className="text-lg font-semibold text-fg">Devices</h2>
+              <Link href="/devices" className={`${cardLinkClass} flex items-center justify-between gap-4 px-4 py-3`}>
+                <span>
+                  <span className="block text-base text-fg">Your trackers</span>
+                  <span className="block text-sm text-muted">Add, remove and see your paddlesnitch trackers.</span>
+                </span>
+                <Chevron />
+              </Link>
             </section>
 
-            <section id="profile">
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
-                Public profile
-              </h2>
-              <p className="text-sm text-muted mb-4 leading-relaxed">
-                Show your race results and personal bests on a public page. Private and group-only
-                results stay hidden. Off until you turn it on.
+            <section id="data" className="flex flex-col gap-3 scroll-mt-4">
+              <h2 className="text-lg font-semibold text-fg">Your data</h2>
+              <p className="text-base text-muted">
+                Download everything we hold about you as a JSON file: your account, paddles and diary
+                notes, trials, courses and results, groups, and trackers. This is your right of access
+                (UK GDPR Art. 15) and to data portability (Art. 20).
               </p>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div>
                 <button
                   type="button"
-                  onClick={() => toggleProfilePublic(!profilePublic)}
-                  disabled={profilePublic === undefined || profileSaving}
-                  className="px-6 py-2.5 border border-primary text-primary-text font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                  onClick={downloadExport}
+                  disabled={working === 'export'}
+                  className={buttonClass('secondary')}
                 >
-                  {profileSaving
-                    ? 'SAVING…'
-                    : profilePublic
-                      ? 'MAKE PROFILE PRIVATE'
-                      : 'MAKE PROFILE PUBLIC'}
+                  {working === 'export' ? 'Preparing…' : 'Download my data'}
                 </button>
-                {user && (
-                  <Link href={`/profile/${handle ?? user.id}`} className="tt-link text-sm">
-                    {profilePublic ? 'View my profile →' : 'Preview my profile →'}
-                  </Link>
-                )}
               </div>
-
-              {/* Vanity handle */}
-              <div className="mt-5 flex flex-col gap-2">
-                <label className="text-xs text-muted tracking-widest">PROFILE HANDLE</label>
-                <p className="text-xs text-muted">
-                  Claim a handle for a memorable link like{' '}
-                  <span className="text-fg">/profile/{handle || 'your-handle'}</span>.
-                  Lowercase letters, numbers and hyphens, 3–30 characters.
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-muted">/profile/</span>
-                  <input
-                    type="text"
-                    value={handleInput}
-                    onChange={e => setHandleInput(e.target.value)}
-                    placeholder="your-handle"
-                    className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={saveHandle}
-                    disabled={handleSaving || !handleInput.trim() || handleInput.trim() === handle}
-                    className="px-4 py-2 border border-primary text-primary-text text-xs tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
-                  >
-                    {handleSaving ? 'SAVING…' : handle ? 'CHANGE' : 'SAVE'}
-                  </button>
-                  {handle && (
-                    <button
-                      type="button"
-                      onClick={releaseHandle}
-                      disabled={handleSaving}
-                      className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:border-red hover:text-red disabled:opacity-50 transition-colors"
-                    >
-                      REMOVE
-                    </button>
-                  )}
-                </div>
-                {handleMsg && <p className="text-xs text-muted">{handleMsg}</p>}
-              </div>
-            </section>
-
-            <section>
-              <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">
-                Download my data
-              </h2>
-              <p className="text-sm text-muted mb-4 leading-relaxed">
-                Download everything we hold about you as a JSON file: your account, paddles and diary
-                notes, trials, courses and results, groups, and trackers. Backs your right of access
-                (UK GDPR Art. 15) and data portability (Art. 20).
+              <p className={msgClass}>
+                See the <Link href="/privacy" className="tt-link">privacy policy</Link> for what we hold
+                and why. For anything else, email{' '}
+                <a href="mailto:privacy@paddlesnitch.com" className="tt-link">privacy@paddlesnitch.com</a>.
               </p>
-              <button
-                type="button"
-                onClick={downloadExport}
-                disabled={working === 'export'}
-                className="px-6 py-2.5 border border-primary text-primary-text font-bold text-sm tracking-widest hover:bg-primary/10 disabled:opacity-50 transition-colors"
-              >
-                {working === 'export' ? 'PREPARING…' : 'DOWNLOAD MY DATA (.json)'}
-              </button>
             </section>
 
-            <section className="border-t border-border pt-8">
-              <h2 className="text-xs text-red tracking-[0.2em] uppercase mb-3">
-                Delete my account
-              </h2>
-              <p className="text-sm text-muted mb-4 leading-relaxed">
+            <section id="delete" className="flex flex-col gap-3 border-t border-border pt-8 scroll-mt-4">
+              <h2 className="text-lg font-semibold text-fg">Delete account</h2>
+              <p className="text-sm text-muted">
                 Deletes your account, your paddles and diary notes, your results (leaderboards update
                 without you), your shared links and your tracker recordings. Courses and trials you created
                 go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes
-                to one of its admins or members. <strong className="text-red">This happens at once and can&apos;t be undone.</strong> Backs
-                your right to erasure (UK GDPR Art. 17).
+                to one of its admins or members. <strong className="text-fg">This happens at once and can&apos;t be undone.</strong> This
+                is your right to erasure (UK GDPR Art. 17).
               </p>
 
               {!confirmDelete ? (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(true)}
-                  className="px-6 py-2.5 border border-red text-red font-bold text-sm tracking-widest hover:bg-red/10 transition-colors"
-                >
-                  DELETE MY ACCOUNT
-                </button>
+                <div>
+                  <button type="button" onClick={() => setConfirmDelete(true)} className={buttonClass('danger')}>
+                    Delete my account
+                  </button>
+                </div>
               ) : (
-                <div className="border border-red bg-red/10 p-4 flex flex-col gap-3">
-                  <p className="text-sm text-fg">
-                    Type <strong>DELETE</strong> to confirm. There is no undo.
-                  </p>
-                  <input
-                    type="text"
-                    value={confirmText}
-                    onChange={e => setConfirmText(e.target.value)}
-                    className="bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-red"
-                    autoFocus
-                  />
-                  <div className="flex gap-3 flex-wrap">
+                <div className="rounded-control border border-red/50 bg-red/5 p-4 flex flex-col gap-3">
+                  <Field label={<>Type <strong>DELETE</strong> to confirm. There is no undo.</>} htmlFor="confirm-delete">
+                    <input
+                      id="confirm-delete"
+                      type="text"
+                      value={confirmText}
+                      onChange={e => setConfirmText(e.target.value)}
+                      className={inputClass}
+                      autoComplete="off"
+                      autoFocus
+                    />
+                  </Field>
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={deleteAccount}
                       disabled={confirmText !== 'DELETE' || working === 'delete'}
-                      className="px-6 py-2.5 bg-red text-white font-bold text-sm tracking-widest hover:bg-red disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className={buttonClass('danger', 'md', 'bg-red/10')}
                     >
-                      {working === 'delete' ? 'DELETING…' : 'CONFIRM DELETION'}
+                      {working === 'delete' ? 'Deleting…' : 'Delete for good'}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setConfirmDelete(false); setConfirmText('') }}
                       disabled={working === 'delete'}
-                      className="px-6 py-2.5 border border-muted text-muted text-sm tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
+                      className={buttonClass('secondary')}
                     >
-                      CANCEL
+                      Cancel
                     </button>
                   </div>
                 </div>
               )}
             </section>
-
-            {error && (
-              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-                {error}
-              </div>
-            )}
-
-            <section className="text-xs text-muted border-t border-border pt-6">
-              See the{' '}
-              <Link href="/privacy" className="tt-link">privacy policy</Link>{' '}
-              for what we hold and why. For anything else, email{' '}
-              <a href="mailto:privacy@paddlesnitch.com" className="tt-link">
-                privacy@paddlesnitch.com
-              </a>
-              .
-            </section>
           </>
         )}
-      </div>
+      </Page>
     </main>
   )
 }

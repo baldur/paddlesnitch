@@ -36,13 +36,13 @@ test('a new user can sign up and lands on their paddles, signed in', async ({ pa
 
 test('signup is blocked when the ToS checkbox is not ticked', async ({ page }) => {
   await page.goto('/signin')
-  await page.getByRole('button', { name: 'SIGN UP', exact: true }).click()
+  await page.getByRole('tab', { name: 'Create account', exact: true }).click()
   await page.locator('input[type="email"]').first().fill(freshEmail())
   await page.locator('input[autocomplete="name"]').fill('Unconsented')
   await page.locator('input[type="password"]').fill('Password123')
   // Deliberately skip the ToS checkbox.
 
-  await page.getByRole('button', { name: 'CREATE ACCOUNT', exact: true }).click()
+  await page.getByRole('button', { name: 'Create account', exact: true }).click()
   // The "You must agree to the Terms of Service…" error banner appears.
   // Scope to the error styling so we don't double-match the checkbox
   // label which also mentions "Terms of Service".

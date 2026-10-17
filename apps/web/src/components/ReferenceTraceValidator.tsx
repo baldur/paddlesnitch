@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useState } from 'react'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 import { formatTime } from '@/lib/geo'
 import type { Line, CourseType } from '@/lib/types'
 import { prepareTraceUpload, uploadErrorMessage } from '@/lib/trace-upload'
@@ -44,41 +45,43 @@ export default function ReferenceTraceValidator({ geometry }: { geometry: Geomet
   }
 
   return (
-    <div className="flex flex-col gap-2 border border-border bg-surface p-4">
-      <label className="text-xs text-muted tracking-widest">VALIDATE WITH A REFERENCE TRACE (OPTIONAL)</label>
-      <p className="text-xs text-muted">
-        Upload a GPS trace of the course paddled correctly. We&apos;ll check it crosses
-        every gate in the right order and direction — a quick way to catch a gate
-        pointing the wrong way before anyone races. Nothing is saved.
+    <div className="flex flex-col gap-3 rounded-control border border-border bg-surface p-4">
+      <h3 className="text-sm font-medium text-fg">Check with a reference trace (optional)</h3>
+      <p className="text-sm text-muted">
+        Upload a GPS trace of the course paddled correctly. We check it crosses every
+        gate in order and the right way, so a gate pointing the wrong way shows up
+        before anyone races. Nothing is saved.
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <label htmlFor="reference-trace" className="sr-only">Reference trace</label>
         <input
+          id="reference-trace"
           ref={fileRef}
           type="file"
           accept=".gpx,.fit,.csv"
-          className="bg-bg border border-border px-3 py-2 text-fg text-sm file:bg-surface-2 file:text-fg file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer cursor-pointer flex-1"
+          className="min-h-11 rounded-control bg-bg border border-border-strong px-3 py-2 text-fg text-sm file:rounded-control file:bg-surface-2 file:text-fg file:border-0 file:px-3 file:py-1 file:mr-3 file:text-sm file:cursor-pointer cursor-pointer flex-1 min-w-0"
         />
         <button
           type="button"
           onClick={validate}
           disabled={status === 'validating'}
-          className="px-4 py-2 bg-primary text-white text-xs tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+          className={buttonClass('secondary', 'md', 'shrink-0')}
         >
-          {status === 'validating' ? 'CHECKING…' : 'VALIDATE'}
+          {status === 'validating' ? 'Checking…' : 'Check trace'}
         </button>
       </div>
       {error && (
-        <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">{error}</div>
+        <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-red text-sm">{error}</p>
       )}
       {result?.matched && (
-        <div className="border border-green bg-green/10 px-3 py-2 text-green text-xs">
+        <p className="rounded-control border border-green/50 bg-green/10 px-3 py-2 text-green text-sm">
           ✓ This trace passes every gate correctly{result.totalElapsedSeconds != null ? ` (${formatTime(result.totalElapsedSeconds)})` : ''}. Your gates and directions look right.
-        </div>
+        </p>
       )}
       {result && !result.matched && (
-        <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
+        <p className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-red text-sm">
           ✗ {result.message ?? 'This trace did not pass through the course as drawn.'}
-        </div>
+        </p>
       )}
     </div>
   )

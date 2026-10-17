@@ -29,10 +29,10 @@ describe('sign-in while the site cannot send email', () => {
   it('is switched off until SES production access is granted', () => {
     expect(EMAIL_DELIVERY).toBe(false)
   })
-  it('offers no EMAIL CODE tab', async () => {
+  it('offers no Email code tab', async () => {
     await mount(<AuthPage />)
-    expect(container.textContent).toContain('SIGN UP')
-    expect(container.textContent).not.toContain('EMAIL CODE')
+    expect(container.textContent).toContain('Create account')
+    expect(container.textContent).not.toContain('Email code')
   })
   it('explains how to get a password reset instead of sending a code', async () => {
     await mount(<ForgotPasswordPage />)

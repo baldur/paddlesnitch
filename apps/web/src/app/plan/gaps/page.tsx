@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import type { Metadata } from 'next'
 import AppHeader from '@/components/AppHeader'
 import Gaps from '@/components/plan/Gaps'
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export default function GapsPage() {
   return (
     <>
-      <AppHeader />
+      <AppHeader breadcrumb={<Link href="/plan" className="tt-nav-link text-sm">← Plan</Link>} />
       <Gaps />
     </>
   )

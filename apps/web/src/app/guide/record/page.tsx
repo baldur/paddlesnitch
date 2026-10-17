@@ -34,7 +34,7 @@ export default function RecordStep() {
           from the boat’s movement after you upload.</li>
       </ul>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">Stopping</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Stopping</h2>
       <Steps>
         <li>Hold the BOOT button. The screen asks <strong>Stop?</strong></li>
         <li>Hold it again. The recording ends and you’re back on the menu.</li>

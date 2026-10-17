@@ -8,6 +8,10 @@ import RouteThumb from '@paddlesnitch/ui/RouteThumb'
 import NoGpsTag from '@/components/paddles/NoGpsTag'
 import { isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
+import LoadingState from '@/components/LoadingState'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Chevron, EmptyState, cardLinkClass } from '@paddlesnitch/ui/Card'
 
 // A buddy's paddles (docs/features/buddies-and-compare.md): the ones they let
 // buddies see. Not a buddy (or they've stopped sharing): we say we can't find it.
@@ -17,34 +21,37 @@ export default function BuddyPaddlesPage({ params }: { params: Promise<{ userId:
 
   return (
     <main className="flex-1 flex flex-col">
-      <AppHeader breadcrumb={<Link href="/buddies" className="tt-nav-link text-sm shrink-0">← BUDDIES</Link>} />
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
-        {q.isPending ? <p className="text-sm text-muted">Loading…</p>
+      <AppHeader breadcrumb={<Link href="/buddies" className="tt-nav-link text-sm shrink-0">← Buddies</Link>} />
+      <Page>
+        {q.isPending ? <LoadingState label="Loading" className="py-10" />
           : q.isError || !q.data ? (
-            <p className="text-sm text-muted">We can&apos;t find these paddles. You may not be buddies, or they&apos;ve stopped sharing.</p>
+            <EmptyState title="We can't find these paddles" body="You may not be buddies, or they've stopped sharing."
+              action={<Link href="/buddies" className={buttonClass('secondary')}>Back to Buddies</Link>} />
           ) : (
             <>
-              <h1 className="text-lg font-bold tracking-widest">{q.data.name.toUpperCase()}&apos;S PADDLES</h1>
-              <p className="text-sm text-muted mt-1 mb-6">Open one to see it, or to compare it with one of yours.</p>
-              {q.data.paddles.length === 0 ? <p className="border border-border px-4 py-6 text-sm text-muted">Nothing to see yet.</p> : (
-                <div className="flex flex-col gap-2">
+              <PageHeader title={`${q.data.name}'s paddles`} description="Open one to see it, or to compare it with one of yours." />
+              {q.data.paddles.length === 0 ? <EmptyState title="Nothing to see yet" body={`When ${q.data.name} adds a paddle, it shows here.`} /> : (
+                <ul className="flex flex-col gap-2">
                   {q.data.paddles.map(p => (
-                    <Link key={p.id} href={`/buddies/${userId}/${p.id}`} className="border border-border px-4 py-3 flex gap-3 items-center hover:border-primary">
-                      {isMotionOnly(p) ? <NoGpsTag /> : p.route && p.route.length > 1 && <RouteThumb route={p.route} />}
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-[10px] text-muted tracking-widest uppercase">{fmtWeekday(p.paddledAt)}</span>
-                        <span className="block text-sm tabular">
-                          {paddleKm(p)} · {fmtClock(p.durationS)}{isMotionOnly(p) ? '' : ` · ${split500(p.cruiseSpeed)}/500`}{p.avgSR != null ? ` · ${Math.round(p.avgSR)} spm` : ''}
+                    <li key={p.id}>
+                      <Link href={`/buddies/${userId}/${p.id}`} className={`${cardLinkClass} p-3 flex gap-3 items-center`}>
+                        {isMotionOnly(p) ? <NoGpsTag /> : p.route && p.route.length > 1 && <RouteThumb route={p.route} size={64} />}
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm text-muted">{fmtWeekday(p.paddledAt)}{p.boatClass && <span className="text-split"> · {p.boatClass}</span>}</span>
+                          <span className="block text-lg font-semibold tabular text-fg">{paddleKm(p)} · {fmtClock(p.durationS)}</span>
+                          <span className="block text-sm text-muted tabular">
+                            {isMotionOnly(p) ? '' : `${split500(p.cruiseSpeed)} /500`}{p.avgSR != null ? `${isMotionOnly(p) ? '' : ' · '}${Math.round(p.avgSR)} spm` : ''}
+                          </span>
                         </span>
-                      </span>
-                      {p.boatClass && <span className="text-xs text-muted">{p.boatClass}</span>}
-                    </Link>
+                        <Chevron />
+                      </Link>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </>
           )}
-      </div>
+      </Page>
     </main>
   )
 }

@@ -95,14 +95,14 @@ export default function AppShell({
           from the root layout. */}
       <nav
         aria-label="Sections"
-        className="sm:hidden fixed inset-x-0 bottom-0 z-[1000] border-t border-border bg-bg/95 backdrop-blur grid grid-cols-4 pb-[env(safe-area-inset-bottom,0px)]"
+        className="sm:hidden fixed inset-x-0 bottom-0 z-[1050] border-t border-border bg-bg/95 backdrop-blur grid grid-cols-4 pb-[env(safe-area-inset-bottom,0px)]"
       >
         {sections.map(t => (
           <a
             key={t.id}
             href={t.href}
             aria-current={active === t.id ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-0.5 min-h-14 text-[11px] font-medium ${
+            className={`flex flex-col items-center justify-center gap-0.5 min-h-14 text-xs font-medium ${
               active === t.id ? 'text-primary-text' : 'text-muted hover:text-fg'
             }`}
           >

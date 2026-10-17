@@ -10,10 +10,15 @@ import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import { resultMarks } from '@/lib/course-records'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import AppHeader from '@/components/AppHeader'
+import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Badge } from '@paddlesnitch/ui/Card'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult } from '@/lib/types'
 import { listTrials } from '@/lib/catalogue'
 
 type StoredEntry = { result: ProcessedResult }
+
+const sportName = sportLabel
 
 export default async function TrialPage({
   params,
@@ -57,90 +62,66 @@ export default async function TrialPage({
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att" className="tt-nav-link text-sm shrink-0">
-              ← TRIALS
-            </Link>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm truncate">{trial.name.toUpperCase()}</span>
-          </>
-        }
-      >
-        {trial.status === 'open' && (
-          <a
-            href={`/att/trials/${trialId}/upload`}
-            className="text-xs bg-primary text-white font-bold px-4 py-1.5 tracking-widest hover:bg-primary transition-colors"
-          >
-            SUBMIT YOUR ENTRY
-          </a>
-        )}
-      </AppHeader>
+        breadcrumb={<Link href="/att" className="tt-nav-link">← Trials</Link>}
+      />
 
-      <section className="border-b border-border px-4 py-8 bg-surface">
-        <p className="text-muted text-xs tracking-[0.2em] uppercase mb-1">
-          {course?.name ?? ''}
-        </p>
-        <h1 className="text-3xl md:text-4xl font-bold text-fg tracking-widest mb-1">
-          {trial.name.toUpperCase()}
-        </h1>
-        <div className="flex items-center gap-4 text-xs text-muted">
-          <span>{fmtDay(trial.date)}</span>
-          {course && (
-            <span>
-              {sportLabel(course.sport)} · {course.distanceMetres.toLocaleString()} m
+      <Page>
+        <PageHeader
+          eyebrow={course ? <Link href={`/att/courses/${course.id}`} className="hover:text-primary-text">{course.name}</Link> : undefined}
+          title={trial.name}
+          description={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>{fmtDay(trial.date)}</span>
+              {course && (
+                <span>
+                  {sportName(course.sport)} · <span className="tabular">{course.distanceMetres.toLocaleString()} m</span>
+                </span>
+              )}
+              <Badge tone={trial.status === 'open' ? 'green' : 'neutral'}>
+                {trial.status === 'open' ? 'Open' : 'Closed'}
+              </Badge>
             </span>
-          )}
-          <span
-            className={`px-2 py-0.5 border ${
-              trial.status === 'open'
-                ? 'border-green text-green'
-                : 'border-muted text-muted'
-            }`}
-          >
-            {trial.status.toUpperCase()}
-          </span>
-        </div>
-      </section>
+          }
+          actions={trial.status === 'open' ? (
+            <a href={`/att/trials/${trialId}/upload`} className={buttonClass('primary')}>
+              Submit your entry
+            </a>
+          ) : undefined}
+        />
 
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-8">
-        {course && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Course</h2>
-            <CourseMapClient course={course} track={winnerTrack} />
-            <div className="flex gap-4 mt-2 text-xs text-muted">
-              <span className="flex items-center gap-1">
-                <span className="inline-block w-3 h-0.5 bg-green" />
-                {course.finishLine ? 'Start' : 'Crossing line'}
-              </span>
-              {course.finishLine && (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-0.5 bg-red" />
-                  Finish
-                </span>
-              )}
-              {winnerTrack && (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-0.5 bg-primary" />
-                  Leader&apos;s track
-                </span>
-              )}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-            Leaderboard
-          </h2>
+        <Section title="Leaderboard">
           <LeaderboardTable
             entries={leaderboard ?? []}
             uploadHref={trial.status === 'open' ? `/att/trials/${trialId}/upload` : undefined}
             profileLinks={profileLinks}
             marks={marks}
           />
-        </section>
-      </div>
+        </Section>
+
+        {course && (
+          <Section title="Course">
+            <CourseMapClient course={course} track={winnerTrack} />
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-0.5 bg-green" />
+                {course.finishLine ? 'Start' : 'Crossing line'}
+              </span>
+              {course.finishLine && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-0.5 bg-red" />
+                  Finish
+                </span>
+              )}
+              {winnerTrack && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-0.5 bg-primary" />
+                  Leader&apos;s track
+                </span>
+              )}
+            </div>
+          </Section>
+        )}
+      </Page>
     </main>
   )
 }

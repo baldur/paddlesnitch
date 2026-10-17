@@ -34,7 +34,7 @@ test('a group-scoped course returns 404 to an unauthenticated visitor', async ({
 
   // Sanity: the owner can see the detail page right now.
   await page.goto(`/att/courses/${course.id}`)
-  await expect(page.getByRole('heading', { name: new RegExp(course.name.toUpperCase()) })).toBeVisible()
+  await expect(page.getByRole('heading', { name: new RegExp(course.name) })).toBeVisible()
 
   // Now drop the session. The detail page should 404 — same response
   // as a missing course, so existence isn't leaked.

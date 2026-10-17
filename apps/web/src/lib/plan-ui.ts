@@ -9,11 +9,11 @@ import type { Facility, FeatureKind, LatLng } from '@paddlesnitch/waterways/type
 export type StopGroup = 'portage' | 'weir' | 'access' | 'facility' | 'crew'
 
 export const STOP_GROUPS: { id: StopGroup; label: string; on: boolean; colour: string }[] = [
-  { id: 'portage', label: 'PORTAGES', on: true, colour: '#f59e0b' },
-  { id: 'weir', label: 'WEIRS', on: true, colour: '#f87171' },
-  { id: 'access', label: 'GET IN / OUT', on: true, colour: '#22c55e' },
-  { id: 'facility', label: 'WATER AND TOILETS', on: true, colour: '#38bdf8' },
-  { id: 'crew', label: 'TOWPATH ACCESS', on: false, colour: '#94a3b8' },
+  { id: 'portage', label: 'Portages', on: true, colour: '#f59e0b' },
+  { id: 'weir', label: 'Weirs', on: true, colour: '#f87171' },
+  { id: 'access', label: 'Get in / out', on: true, colour: '#22c55e' },
+  { id: 'facility', label: 'Water and toilets', on: true, colour: '#38bdf8' },
+  { id: 'crew', label: 'Towpath access', on: false, colour: '#94a3b8' },
 ]
 
 export function groupOf(kind: FeatureKind): StopGroup {
@@ -73,9 +73,9 @@ export const km = (m: number) => `${(m / 1000).toFixed(1)} km`
 
 /** How well we know a waterway (see waterwayCoverage), as the map and /plan/gaps show it. */
 export const COVERAGE_LEVELS = [
-  { id: 'good', label: 'GOOD', colour: '#22c55e', says: 'Places to get in and out, crew access, and every portage side known.' },
-  { id: 'some', label: 'SOME', colour: '#f59e0b', says: 'Some locks, weirs, access or facilities; gaps remain (most often portage sides).' },
-  { id: 'thin', label: 'THIN', colour: '#f87171', says: 'Only the line of the water so far.' },
+  { id: 'good', label: 'Good', colour: '#22c55e', says: 'Places to get in and out, crew access, and every portage side known.' },
+  { id: 'some', label: 'Some', colour: '#f59e0b', says: 'Some locks, weirs, access or facilities; gaps remain (most often portage sides).' },
+  { id: 'thin', label: 'Thin', colour: '#f87171', says: 'Only the line of the water so far.' },
 ] as const
 
 // --- The map's tiles -----------------------------------------------------------

@@ -6,6 +6,10 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import LoadingState from '@/components/LoadingState'
+import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
+import { Button } from '@paddlesnitch/ui/Button'
+import { Field, inputClass, selectClass } from '@paddlesnitch/ui/Form'
+import { Badge, Chevron, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
 import { haversine } from '@/lib/geo'
 import type { CourseMetadata, TrialMetadata, Line, LatLng } from '@/lib/types'
 
@@ -23,6 +27,8 @@ type MapState = {
 // from the line midpoints; loops are user-supplied because there's no
 // straight-line span to measure. Mirrors the create-course form.
 const midpoint = (line: Line): LatLng => [(line[0][0] + line[1][0]) / 2, (line[0][1] + line[1][1]) / 2]
+
+const sportName = sportLabel
 
 export default function CourseAdminPage({
   params,
@@ -188,8 +194,6 @@ export default function CourseAdminPage({
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
-  const inputClass = 'bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors'
-
   // For the DrawingMap default center we use the midpoint of the existing
   // start line so the map opens already showing the course geometry.
   const editCenter: LatLng = course.startLine
@@ -198,223 +202,158 @@ export default function CourseAdminPage({
       ? midpoint(course.gates[0].line)
       : [51.45, -0.98]
 
+  const typeLabel = course.type === 'loop' ? 'loop' : course.type === 'gate' ? 'gates' : 'point to point'
+
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href="/att" className="tt-nav-link text-sm shrink-0">
-              ← TRIALS
-            </Link>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm truncate">{course.name.toUpperCase()}</span>
-          </>
-        }
+        breadcrumb={<Link href={`/att/courses/${course.id}`} className="tt-nav-link">← Course page</Link>}
       />
 
-      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
-        {/* Course details — read-only by default. Click "Edit details" to
-            mutate name / sport / geometry. Visibility flip stays accessible
-            at all times because it's a common one-click operation. */}
-        <section>
-          <div className="flex items-start justify-between gap-4 mb-1">
-            <h1 className="text-lg font-bold text-fg tracking-widest">
-              {course.name.toUpperCase()}
-            </h1>
-            <div className="flex flex-col items-end gap-2">
-              <span
-                className={`text-xs px-2 py-0.5 border ${
-                  course.visibility === 'public'
-                    ? 'border-green text-green'
-                    : 'border-muted text-muted'
-                }`}
+      <Page>
+        {/* Read-only by default; Edit details opens the form. Visibility flip
+            stays one click away because it's a common operation. */}
+        <PageHeader
+          title={course.name}
+          description={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>{sportName(course.sport)} · <span className="tabular">{course.distanceMetres.toLocaleString()} m</span> · {typeLabel}</span>
+              <Badge tone={course.visibility === 'public' ? 'green' : 'neutral'}>
+                {course.visibility === 'public' ? 'Public' : course.visibility === 'group' ? 'Group only' : 'Private'}
+              </Badge>
+            </span>
+          }
+          actions={
+            <>
+              {!editing && <Button onClick={startEdit}>Edit details</Button>}
+              <Button variant="quiet" onClick={toggleVisibility}>
+                {course.visibility === 'public' ? 'Make private' : 'Make public'}
+              </Button>
+            </>
+          }
+        />
+
+        {editing ? (
+          <div className={`${cardClass} flex flex-col gap-5 p-4`}>
+            <Field label="Course name" htmlFor="edit-name">
+              <input
+                id="edit-name"
+                type="text"
+                required
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Sport" htmlFor="edit-sport">
+              <select
+                id="edit-sport"
+                value={editSport}
+                onChange={e => setEditSport(e.target.value as CourseMetadata['sport'])}
+                className={selectClass}
               >
-                {course.visibility.toUpperCase()}
-              </span>
-              <button
-                type="button"
-                onClick={toggleVisibility}
-                className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
-              >
-                {course.visibility === 'public' ? '→ MAKE PRIVATE' : '→ MAKE PUBLIC'}
-              </button>
-              {!editing && (
-                <button
-                  type="button"
-                  onClick={startEdit}
-                  className="px-3 py-1 text-xs font-bold tracking-widest border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
-                >
-                  EDIT DETAILS
-                </button>
-              )}
+                <option value="kayak">Kayak</option>
+                <option value="rowing">Rowing</option>
+                <option value="both">Both</option>
+              </select>
+            </Field>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-fg">Course lines ({typeLabel})</span>
+              <p className="text-sm text-muted">
+                Tap a line&apos;s button to draw it again; the distance updates as you draw.
+                To change the course type, draw a new course.
+              </p>
+              <DrawingMap
+                onChange={onMapChange}
+                courseType={course.type === 'point_to_point' || course.type === 'loop' || course.type === 'gate' ? course.type : 'point_to_point'}
+                defaultCenter={editCenter}
+                initialStartLine={course.startLine}
+                initialFinishLine={course.finishLine}
+                initialGates={course.gates}
+              />
+            </div>
+
+            {course.type === 'loop' && (
+              <Field label="Distance in metres" htmlFor="edit-distance">
+                <input
+                  id="edit-distance"
+                  type="number"
+                  min={0}
+                  value={editDistance ?? ''}
+                  onChange={e => setEditDistance(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  className={inputClass}
+                />
+              </Field>
+            )}
+
+            {course.type === 'loop' && (
+              <Field label="Minimum time in seconds (optional)" htmlFor="edit-min-time" help="Results shorter than this are ignored, so warm-up crossings don't count.">
+                <input
+                  id="edit-min-time"
+                  type="number"
+                  min={0}
+                  value={editMinValid}
+                  onChange={e => setEditMinValid(e.target.value)}
+                  placeholder="e.g. 300"
+                  className={inputClass}
+                />
+              </Field>
+            )}
+
+            {trials.length > 0 && (
+              <p className="rounded-control border border-border bg-surface-2 px-3 py-2 text-fg text-sm">
+                Once a course has results its lines can&apos;t change, so past results stay valid.
+                You can still change its name, sport and who can see it.
+              </p>
+            )}
+
+            {editError && (
+              <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-red text-sm">{editError}</p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" onClick={saveEdit} disabled={saving}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </Button>
+              <Button variant="quiet" onClick={cancelEdit} disabled={saving}>Cancel</Button>
             </div>
           </div>
-          <p className="text-xs text-muted mb-4">
-            {sportLabel(course.sport)} · {course.distanceMetres.toLocaleString()} m
-            {course.type === 'loop' && ' · LOOP'}
-            {course.type === 'gate' && ' · GATE'}
-          </p>
+        ) : (
+          <CourseMap course={course} />
+        )}
 
-          {editing ? (
-            <div className="flex flex-col gap-4 border border-border p-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted tracking-widest">COURSE NAME</label>
-                <input
-                  type="text"
-                  required
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted tracking-widest">SPORT</label>
-                <select
-                  value={editSport}
-                  onChange={e => setEditSport(e.target.value as CourseMetadata['sport'])}
-                  className={inputClass}
-                >
-                  <option value="kayak">Kayak</option>
-                  <option value="rowing">Rowing</option>
-                  <option value="both">Both</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted tracking-widest">
-                  COURSE LINES ({course.type.replaceAll('_', ' ')})
-                </label>
-                <p className="text-xs text-muted">
-                  Existing lines are highlighted. Click on the map to re-draw any
-                  segment; the previous segment will reset. Distance updates as you
-                  draw. The course type can&apos;t be changed here — create a new
-                  course if you need a different shape.
-                </p>
-                <DrawingMap
-                  onChange={onMapChange}
-                  courseType={course.type === 'point_to_point' || course.type === 'loop' || course.type === 'gate' ? course.type : 'point_to_point'}
-                  defaultCenter={editCenter}
-                  initialStartLine={course.startLine}
-                  initialFinishLine={course.finishLine}
-                  initialGates={course.gates}
-                />
-              </div>
-
-              {course.type === 'loop' && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted tracking-widest">DISTANCE (M)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editDistance ?? ''}
-                    onChange={e => setEditDistance(e.target.value ? parseInt(e.target.value, 10) : null)}
-                    className={inputClass}
-                  />
-                </div>
-              )}
-
-              {course.type === 'loop' && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted tracking-widest">MINIMUM VALID TIME (SECONDS) — OPTIONAL</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editMinValid}
-                    onChange={e => setEditMinValid(e.target.value)}
-                    placeholder="e.g. 300"
-                    className={inputClass}
-                  />
-                  <p className="text-xs text-muted">
-                    Ignore results shorter than this. Useful for loops where warmup crossings could be mistaken for a race.
-                  </p>
-                </div>
-              )}
-
-              {trials.length > 0 && (
-                <div className="border border-border bg-surface-2 px-3 py-2 text-fg text-xs">
-                  If this course has results, its lines can&apos;t be changed, so past
-                  results stay valid. You can still change its name, sport and
-                  visibility.
-                </div>
-              )}
-
-              {editError && (
-                <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-                  {editError}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  disabled={saving}
-                  className="px-4 py-2 bg-primary text-white font-bold text-xs tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? 'SAVING…' : 'SAVE CHANGES'}
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  disabled={saving}
-                  className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 disabled:opacity-50 transition-colors"
-                >
-                  CANCEL
-                </button>
-              </div>
-            </div>
-          ) : (
-            <CourseMap course={course} />
-          )}
-        </section>
-
-        <section>
-          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-            Time Trials
-          </h2>
+        <Section title="Trials">
           {sortedTrials.length === 0 ? (
-            <div className="border border-border p-6 text-center text-muted text-sm">
-              No trials yet.
-            </div>
+            <p className="text-sm text-muted">No trials yet. Open the first one below.</p>
           ) : (
-            <div className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-2">
               {sortedTrials.map(t => (
-                <a
-                  key={t.id}
-                  href={`/att/admin/trials/${t.id}`}
-                  className="border border-border px-4 py-3 flex items-center justify-between hover:border-primary transition-colors group"
-                >
-                  <div>
-                    <div className="text-fg text-sm group-hover:text-primary-text transition-colors">
-                      {t.name}
-                    </div>
-                    <div className="text-xs text-muted mt-0.5">{fmtDay(t.date)}</div>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 border ${
-                      t.status === 'open'
-                        ? 'border-green text-green'
-                        : 'border-muted text-muted'
-                    }`}
+                <li key={t.id}>
+                  <a
+                    href={`/att/admin/trials/${t.id}`}
+                    className={`${cardLinkClass} flex items-center gap-3 px-4 py-3 min-h-11`}
                   >
-                    {t.status.toUpperCase()}
-                  </span>
-                </a>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-medium text-fg">{t.name}</div>
+                      <div className="text-sm text-muted mt-0.5">{fmtDay(t.date)}</div>
+                    </div>
+                    <Badge tone={t.status === 'open' ? 'green' : 'neutral'}>{t.status === 'open' ? 'Open' : 'Closed'}</Badge>
+                    <Chevron />
+                  </a>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </section>
+        </Section>
 
-        <section>
-          <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-4">
-            New time trial
-          </h2>
+        <Section title="Open a trial">
           <form onSubmit={createTrial} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted tracking-widest">TRIAL NAME</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Trial name" htmlFor="new-trial-name">
                 <input
+                  id="new-trial-name"
                   type="text"
                   required
                   value={trialName}
@@ -422,34 +361,27 @@ export default function CourseAdminPage({
                   placeholder="e.g. Spring 2025"
                   className={inputClass}
                 />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted tracking-widest">DATE</label>
+              </Field>
+              <Field label="Date" htmlFor="new-trial-date">
                 <input
+                  id="new-trial-date"
                   type="date"
                   required
                   value={trialDate}
                   onChange={e => setTrialDate(e.target.value)}
                   className={`${inputClass} cursor-pointer`}
                 />
-                <p className="text-xs text-muted">Click to open calendar</p>
-              </div>
+              </Field>
             </div>
             {error && (
-              <div className="border border-red bg-red/10 px-3 py-2 text-red text-xs">
-                {error}
-              </div>
+              <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-red text-sm">{error}</p>
             )}
-            <button
-              type="submit"
-              disabled={creating}
-              className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start"
-            >
-              {creating ? 'CREATING…' : 'CREATE TRIAL'}
-            </button>
+            <Button type="submit" variant={editing ? 'secondary' : 'primary'} disabled={creating} className="self-start">
+              {creating ? 'Creating…' : 'Create trial'}
+            </Button>
           </form>
-        </section>
-      </div>
+        </Section>
+      </Page>
     </main>
   )
 }

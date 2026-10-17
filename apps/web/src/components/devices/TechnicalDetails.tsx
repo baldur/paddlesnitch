@@ -1,3 +1,4 @@
+import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
@@ -10,9 +11,9 @@ export default function TechnicalDetails({ report, cadence, attitude }: {
 }) {
   const sampleRateHz = report.timeSpanS && report.timeSpanS > 0 ? report.rows / report.timeSpanS : null
   return (
-    <details className="border border-border bg-surface px-3 py-2">
-      <summary className="cursor-pointer text-[10px] text-muted tracking-widest uppercase">Technical details</summary>
-      <div className="flex flex-col gap-3 mt-3">
+    <details className="rounded-control border border-border bg-surface px-3 py-2 text-sm">
+      <summary className="cursor-pointer min-h-11 flex items-center text-sm text-muted hover:text-fg">Technical details</summary>
+      <div className="flex flex-col gap-3 mt-2 mb-1">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <Stat label="Rows" value={String(report.rows)} />
           <Stat label="With GPS fix" value={`${report.fixedRows} / ${report.rows}`} />
@@ -46,7 +47,7 @@ export default function TechnicalDetails({ report, cadence, attitude }: {
           </p>
         )}
         <div>
-          <div className="text-[10px] text-muted tracking-widest uppercase mb-1">Columns ({report.columns.length})</div>
+          <div className={`${eyebrowClass} mb-1`}>Columns ({report.columns.length})</div>
           <div className="flex flex-wrap gap-1">
             {report.columns.map(c => {
               const dead = report.deadColumns.find(d => d.name === c)
@@ -54,7 +55,7 @@ export default function TechnicalDetails({ report, cadence, attitude }: {
                 <span
                   key={c}
                   title={dead ? `Present in every row but ${dead.kind === 'zero' ? 'always 0' : 'always empty'}` : undefined}
-                  className={`border px-2 py-0.5 tabular text-[11px] ${dead ? 'border-red/40 bg-surface text-red' : 'border-border bg-surface'}`}
+                  className={`border px-2 py-0.5 tabular text-xs ${dead ? 'border-red/40 bg-surface text-red' : 'border-border bg-surface'}`}
                 >{c}</span>
               )
             })}
@@ -62,8 +63,8 @@ export default function TechnicalDetails({ report, cadence, attitude }: {
         </div>
         {report.sampleRows.length > 0 && (
           <div className="overflow-x-auto">
-            <div className="text-[10px] text-muted tracking-widest uppercase mb-1">First rows</div>
-            <table className="text-[11px] tabular border border-border">
+            <div className={`${eyebrowClass} mb-1`}>First rows</div>
+            <table className="text-xs tabular border border-border">
               <thead><tr>{report.columns.map(c => <th key={c} className="border-b border-border px-2 py-1 text-left text-muted font-normal whitespace-nowrap">{c}</th>)}</tr></thead>
               <tbody>
                 {report.sampleRows.map((row, i) => (
@@ -79,6 +80,6 @@ export default function TechnicalDetails({ report, cadence, attitude }: {
 }
 
 export function Stat({ label, value }: { label: string; value: string }) {
-  return <div className="border border-border bg-surface px-2 py-1"><div className="text-[9px] text-muted tracking-widest uppercase">{label}</div><div className="text-fg tabular">{value}</div></div>
+  return <div className="rounded-control border border-border bg-bg px-3 py-2 min-w-0"><div className={eyebrowClass}>{label}</div><div className="text-base text-fg tabular">{value}</div></div>
 }
 

@@ -3,7 +3,7 @@
 export default function NoGpsTag({ size = 64 }: { size?: number }) {
   return (
     <span style={{ width: size, height: size }}
-      className="shrink-0 rounded bg-bg border border-border flex items-center justify-center text-[9px] tracking-widest text-muted">
+      className="shrink-0 rounded-control bg-bg border border-border flex items-center justify-center font-mono text-xs text-muted">
       NO GPS
     </span>
   )

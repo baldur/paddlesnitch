@@ -66,21 +66,22 @@ export function fmtTime(value: string): string {
 }
 
 /** A course's sport for a label: 'both' is meaningless on its own. */
-export function sportLabel(sport: string): string {
+export function sportLabel(sport: string | undefined): string {
   switch (sport) {
-    case 'kayak': return 'KAYAK'
-    case 'rowing': return 'ROWING'
-    case 'both': return 'KAYAK AND ROWING'
-    default: return sport.toUpperCase()
+    case 'kayak': return 'Kayak'
+    case 'rowing': return 'Rowing'
+    case 'both': return 'Kayak and rowing'
+    // older courses may have no sport stored
+    default: return sport ? sport.charAt(0).toUpperCase() + sport.slice(1) : ''
   }
 }
 
 /** Who may enter a trial, in words (the stored values are members / invitational / public). */
 export function participationLabel(p: string): string {
   switch (p) {
-    case 'members': return 'GROUP MEMBERS'
-    case 'invitational': return 'INVITED ONLY'
-    case 'public': return 'ANYONE'
-    default: return p.toUpperCase()
+    case 'members': return 'Group members'
+    case 'invitational': return 'Invited only'
+    case 'public': return 'Anyone'
+    default: return p
   }
 }

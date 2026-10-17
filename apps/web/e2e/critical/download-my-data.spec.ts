@@ -10,7 +10,7 @@ import { signUpFlow } from '../helpers'
 test('Download my data saves a file with your account in it', async ({ page }) => {
   const { email } = await signUpFlow(page)
   await page.goto('/account')
-  const button = page.getByRole('button', { name: /DOWNLOAD MY DATA/ })
+  const button = page.getByRole('button', { name: 'Download my data' })
   await expect(button).toBeVisible()
   const [download] = await Promise.all([page.waitForEvent('download', { timeout: 20_000 }), button.click()])
   expect(download.suggestedFilename()).toMatch(/^paddlesnitch-data-.+\.json$/)

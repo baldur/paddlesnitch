@@ -30,8 +30,8 @@ describe('two paddles on one map', () => {
   it('compares the whole paddles when they went the same way, and says who was faster', async () => {
     await mount(north(3), north(3.3))
     expect(container.textContent).toMatch(/15 Jul was \d+ s faster/)
-    expect(container.textContent).toContain('WHOLE PADDLES')
-    expect(container.textContent).toContain('REPLAY')
+    expect(container.textContent).toContain('Whole paddles')
+    expect(container.textContent).toContain('Replay')
     expect((map.props!.a as unknown[]).length).toBeGreaterThan(100)
   })
 
@@ -41,16 +41,16 @@ describe('two paddles on one map', () => {
     const down = Array.from({ length: 300 }, (_, k) => pt(top.length + k, 0, 1200 - k * 4))
     const bottom = north(3.5, 0, 600).map(p => ({ ...p, t: p.t + top.length + 300 }))
     await mount(north(3), [...top, ...down, ...bottom])
-    expect(container.textContent).toContain('THE LONGEST STRETCH YOU BOTH PADDLED THE SAME WAY (0.6 KM)')
+    expect(container.textContent).toContain('The longest stretch you both paddled the same way (0.6 km)')
     await tap(0, 100)
     expect(container.textContent).toContain('Now tap where the stretch ends.')
     await tap(0, 500)
-    expect(container.textContent).toContain('THE STRETCH YOU PICKED')
+    expect(container.textContent).toContain('The stretch you picked')
     expect(container.textContent).toMatch(/15 Jul was \d+ s faster/)      // 3.5 vs 3 m/s on that stretch
     expect((map.props!.gates as unknown[]).length).toBe(2)
-    const whole = [...container.querySelectorAll('button')].find(b => b.textContent === 'WHOLE PADDLES')!
+    const whole = [...container.querySelectorAll('button')].find(b => b.textContent === 'Whole paddles')!
     await act(async () => whole.click())
-    expect(container.textContent).toContain('THE LONGEST STRETCH')
+    expect(container.textContent).toContain('The longest stretch')
   })
 
   it('on different water: says so and asks for a stretch', async () => {

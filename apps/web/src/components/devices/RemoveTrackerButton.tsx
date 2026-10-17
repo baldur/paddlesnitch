@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 
 // Remove (unlink) a tracker from the account, from its own page. Asks once
 // before doing it. The tracker is signed out and stops uploading until it is
@@ -27,26 +28,23 @@ export default function RemoveTrackerButton({ deviceId }: { deviceId: string }) 
 
   if (!confirming) {
     return (
-      <button type="button" onClick={() => setConfirming(true)}
-        className="self-start px-4 py-2 border border-muted text-muted text-xs tracking-widest hover:bg-surface-2 hover:text-red transition-colors">
-        REMOVE TRACKER
+      <button type="button" onClick={() => setConfirming(true)} className={buttonClass('danger', 'md', 'self-start')}>
+        Remove tracker
       </button>
     )
   }
   return (
-    <div className="border border-red/60 bg-red/5 px-4 py-3 flex flex-col gap-3 text-sm">
-      <p className="text-fg">
+    <div className="rounded-control border border-red/50 bg-red/5 p-4 flex flex-col gap-3">
+      <p className="text-base text-fg">
         Remove this tracker? It stops uploading until you add it again. Its recordings stay yours.
       </p>
-      {err && <p role="alert" className="text-red text-xs">{err}</p>}
-      <div className="flex gap-2">
-        <button type="button" onClick={remove} disabled={busy}
-          className="px-4 py-2 bg-red text-white text-xs tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">
-          {busy ? 'REMOVING…' : 'REMOVE'}
+      {err && <p role="alert" className="text-sm text-red">{err}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={remove} disabled={busy} className={buttonClass('danger', 'md', 'bg-red/10')}>
+          {busy ? 'Removing…' : 'Remove'}
         </button>
-        <button type="button" onClick={() => setConfirming(false)} disabled={busy}
-          className="px-4 py-2 border border-border text-muted text-xs tracking-widest hover:bg-surface-2 transition-colors">
-          CANCEL
+        <button type="button" onClick={() => setConfirming(false)} disabled={busy} className={buttonClass('secondary')}>
+          Cancel
         </button>
       </div>
     </div>

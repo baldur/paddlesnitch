@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
+import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 
 // Accept the current Terms, then carry on. Reached after signing in when the
 // account hasn't accepted them: an email-code or Strava sign-up (only the
@@ -41,28 +43,31 @@ function Accept() {
     else setError('Couldn’t save that. Please try again.')
   }
 
-  if (!ready) return <p className="text-sm text-muted">Loading…</p>
+  if (!ready) return <p className="text-base text-muted">Loading…</p>
   return (
-    <form onSubmit={accept} className="border border-border bg-surface p-6 flex flex-col gap-4 max-w-md w-full">
-      <h1 className="text-lg font-bold text-fg tracking-widest">TERMS OF SERVICE</h1>
-      <p className="text-sm text-muted leading-relaxed">
-        Before you carry on, please read and agree to our Terms of Service and Privacy Policy. They
-        say what we do with your paddles and results, and what you agree to when you use the site.
-      </p>
-      <label className="flex items-start gap-2 text-sm text-muted">
-        <input type="checkbox" checked={ticked} onChange={e => setTicked(e.target.checked)} className="mt-0.5 accent-primary" />
-        <span>
-          I have read and agree to the{' '}
-          <Link href="/terms" target="_blank" className="tt-link">Terms of Service</Link>
-          {' '}and{' '}
-          <Link href="/privacy" target="_blank" className="tt-link">Privacy Policy</Link>.
-        </span>
-      </label>
-      {error && <p className="border border-red bg-red/10 px-3 py-2 text-red text-xs" role="alert">{error}</p>}
-      <button type="submit" disabled={!ticked} className="px-6 py-2.5 bg-primary text-white font-bold text-sm tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">
-        CONTINUE
-      </button>
-    </form>
+    <>
+      <PageHeader
+        title="Terms of Service"
+        description="Before you carry on, please read and agree to our Terms of Service and Privacy Policy. They say what we do with your paddles and results, and what you agree to when you use the site."
+      />
+      <form onSubmit={accept} className="flex flex-col gap-4">
+        <label className="flex items-start gap-3 text-base text-muted min-h-11 py-1">
+          <input type="checkbox" checked={ticked} onChange={e => setTicked(e.target.checked)} className="mt-1 w-5 h-5 shrink-0 accent-primary" />
+          <span>
+            I have read and agree to the{' '}
+            <Link href="/terms" target="_blank" className="tt-link">Terms of Service</Link>
+            {' '}and{' '}
+            <Link href="/privacy" target="_blank" className="tt-link">Privacy Policy</Link>.
+          </span>
+        </label>
+        {error && <p className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-sm text-red" role="alert">{error}</p>}
+        <div>
+          <button type="submit" disabled={!ticked} className={buttonClass('primary')}>
+            Continue
+          </button>
+        </div>
+      </form>
+    </>
   )
 }
 
@@ -70,11 +75,11 @@ export default function AcceptTermsPage() {
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader />
-      <div className="flex-1 flex items-start justify-center pt-16 px-4">
+      <Page width="narrow">
         <Suspense>
           <Accept />
         </Suspense>
-      </div>
+      </Page>
     </main>
   )
 }

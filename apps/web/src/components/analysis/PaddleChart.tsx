@@ -11,7 +11,7 @@ import { split500, fmtClock } from '@paddlesnitch/analysis/analysis'
 // design tokens by CSS variable with literal fallbacks, since SVG presentation
 // attributes can't take Tailwind classes.
 
-const SPEED = 'var(--color-primary, #0369a1)'
+const SPEED = 'var(--color-primary-text, #38bdf8)'
 const RATE = 'var(--color-split, #a78bfa)'
 const GRID = 'var(--color-border, #1e293b)'
 const MUTED = 'var(--color-muted, #94a3b8)'
@@ -97,10 +97,10 @@ export default function PaddleChart({ points, surges, stops, cursor, onSeek }: {
 
   return (
     <figure className="flex flex-col gap-1" aria-label="Pace and stroke rate">
-      <div className="flex gap-4 text-[10px] tracking-widest">
-        <span style={{ color: SPEED }}>━ PACE /500</span>
-        {rr && <span style={{ color: RATE }}>━ STROKE RATE</span>}
-        <span className="text-muted">▮ EFFORTS ▮ <span className="opacity-60">RESTS</span></span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs uppercase tracking-wider">
+        <span style={{ color: SPEED }}>━ Pace /500</span>
+        {rr && <span style={{ color: RATE }}>━ Stroke rate</span>}
+        <span className="text-muted">▮ Efforts ▮ <span className="opacity-60">Rests</span></span>
       </div>
       <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto touch-none cursor-crosshair select-none border border-border bg-surface"
         onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); seek(e.clientX) }}
@@ -120,7 +120,7 @@ export default function PaddleChart({ points, surges, stops, cursor, onSeek }: {
         )}
         {cur && <line x1={x(cur.t)} x2={x(cur.t)} y1={PAD_T} y2={H - PAD_B} stroke="var(--color-fg, #e2e8f0)" strokeWidth="1" />}
       </svg>
-      <div className="flex justify-between gap-3 text-[11px] text-muted tabular flex-wrap">
+      <div className="flex justify-between gap-3 text-xs text-muted tabular flex-wrap">
         <span>0:00</span>
         <span>
           {sr && <span style={{ color: SPEED }}>pace {split500(sr[1])}–{split500(sr[0])} /500</span>}
@@ -128,7 +128,7 @@ export default function PaddleChart({ points, surges, stops, cursor, onSeek }: {
         </span>
         <span>{fmtClock(t1 - t0)}</span>
       </div>
-      <figcaption className="text-[11px] text-muted">Tap or drag on the chart to move along the paddle on the map.</figcaption>
+      <figcaption className="text-sm text-muted">Tap or drag on the chart to move along the paddle on the map.</figcaption>
     </figure>
   )
 }

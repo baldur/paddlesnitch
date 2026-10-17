@@ -28,7 +28,7 @@ describe('shared FeedbackWidget ↔ header trigger', () => {
     await mount(<FeedbackWidget />)
     // Closed: the floating trigger shows, the form does not.
     expect(container.querySelector('textarea')).toBeNull()
-    expect(container.textContent).toContain('REPORT AN ISSUE')
+    expect(container.textContent).toContain('Report an issue')
 
     await act(async () => {
       window.dispatchEvent(new CustomEvent('paddlesnitch:open-feedback'))

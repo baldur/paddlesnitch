@@ -1,6 +1,9 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { trpc } from '@/lib/trpc'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { selectClass } from '@paddlesnitch/ui/Form'
+import { cardClass } from '@paddlesnitch/ui/Card'
 
 // Older Strava paddles (#415). Strava only tells us about paddles recorded
 // after it was connected, so:
@@ -75,13 +78,13 @@ export function StravaFirstImport() {
   if (!data || data.status !== 'ok' || data.firstImportDone || data.toImport.length === 0) return null
   const p = progress ?? { done: 0, total: data.toImport.length, added: 0 }
   return (
-    <p role="status" className="text-xs text-muted border-l-2 border-primary pl-3 mb-4">
+    <p role="status" className="text-sm text-muted border-l-2 border-primary pl-3">
       <Status p={p} what="your last month" />
     </p>
   )
 }
 
-/** IMPORT OLDER PADDLES: as far back as the paddler picks. */
+/** Bring in older paddles: as far back as the paddler picks. */
 export function StravaMoreImport() {
   const utils = trpc.useUtils()
   const { progress, setProgress, run } = useImporter()
@@ -100,22 +103,21 @@ export function StravaMoreImport() {
   }
 
   return (
-    <div className="border border-border px-4 py-3 mt-2 flex flex-col gap-2">
-      <span className="text-sm text-fg">Older paddles</span>
-      <span className="text-xs text-muted">Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.</span>
+    <div className={`${cardClass} p-4 mt-2 flex flex-col gap-2`}>
+      <span className="text-base font-medium text-fg">Older paddles</span>
+      <span className="text-sm text-muted">Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.</span>
       <div className="flex gap-2 items-center flex-wrap">
         <select value={span} onChange={e => setSpan(e.target.value as Span)} disabled={busy} aria-label="How far back"
-          className="bg-surface border border-border text-sm px-2 py-1.5">
+          className={`${selectClass} sm:max-w-xs`}>
           <option value="months3">Last 3 months</option>
           <option value="year">Last year</option>
           <option value="all">Everything</option>
         </select>
-        <button type="button" onClick={start} disabled={busy}
-          className="px-4 py-2 border border-primary text-fg text-xs tracking-widest disabled:opacity-50">
-          {busy ? 'IMPORTING…' : 'IMPORT OLDER PADDLES'}
+        <button type="button" onClick={start} disabled={busy} className={buttonClass('secondary')}>
+          {busy ? 'Bringing in…' : 'Bring in older paddles'}
         </button>
       </div>
-      {progress && <p role="status" className="text-xs text-muted"><Status p={progress} what="your paddles" /></p>}
+      {progress && <p role="status" className="text-sm text-muted"><Status p={progress} what="your paddles" /></p>}
     </div>
   )
 }

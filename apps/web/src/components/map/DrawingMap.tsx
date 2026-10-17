@@ -268,16 +268,16 @@ export default function DrawingMap({
             const isFinish = i === total - 1
             const color = gateColor(i, total)
             const done = gate.pts.length === 2
-            const label = isStart ? 'START' : isFinish ? 'FINISH' : `GATE ${i}`
+            const label = isStart ? 'Start' : isFinish ? 'Finish' : `Gate ${i}`
             return (
               <div key={i} className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] tracking-widest font-bold w-14 shrink-0" style={{ color }}>
+                <span className="text-sm font-semibold w-14 shrink-0" style={{ color }}>
                   {label}
                 </span>
                 <button
                   type="button"
                   onClick={() => done ? resetGate(i) : setMode(mode === i ? null : i)}
-                  className={`px-3 py-1 text-xs border transition-colors ${
+                  className={`min-h-11 sm:min-h-9 px-3 rounded-control text-sm border transition-colors ${
                     mode === i
                       ? 'border-primary text-primary-text'
                       : done
@@ -286,25 +286,26 @@ export default function DrawingMap({
                   }`}
                 >
                   {done
-                    ? '✓ LINE (reset)'
+                    ? '✓ Line set (redraw)'
                     : mode === i
-                    ? `POINT ${gate.pts.length + 1}/2`
-                    : 'SET LINE'}
+                    ? `Point ${gate.pts.length + 1} of 2`
+                    : 'Draw line'}
                 </button>
                 {done && (
                   <button
                     type="button"
                     onClick={() => flipGate(i)}
-                    className="px-3 py-1 text-xs border border-primary text-primary-text hover:bg-primary/10 transition-colors"
+                    className="min-h-11 sm:min-h-9 px-3 rounded-control text-sm border border-primary text-primary-text hover:bg-primary/10 transition-colors"
                   >
-                    FLIP ⇄ {directionLabel(gate.pts as Line, gate.direction)}
+                    Flip ⇄ {directionLabel(gate.pts as Line, gate.direction)}
                   </button>
                 )}
                 {!isStart && !isFinish && (
                   <button
                     type="button"
                     onClick={() => removeGate(i)}
-                    className="px-2 py-1 text-xs border border-border text-muted hover:border-red hover:text-red transition-colors"
+                    aria-label={`Remove gate ${i}`}
+                    className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 rounded-control text-sm border border-border text-muted hover:border-red hover:text-red transition-colors"
                   >
                     ✕
                   </button>
@@ -315,9 +316,9 @@ export default function DrawingMap({
           <button
             type="button"
             onClick={addGate}
-            className="self-start px-3 py-1 text-xs border border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
+            className="self-start min-h-11 sm:min-h-9 px-3 rounded-control text-sm border border-border-strong text-fg hover:bg-surface-2 transition-colors"
           >
-            + ADD GATE
+            + Add gate
           </button>
         </div>
       )}
@@ -328,7 +329,7 @@ export default function DrawingMap({
           <button
             type="button"
             onClick={() => startDone ? resetStart() : setMode(mode === 'start' ? null : 'start')}
-            className={`px-3 py-1.5 text-xs border transition-colors ${
+            className={`min-h-11 px-3 rounded-control text-sm border transition-colors ${
               mode === 'start'
                 ? (isTwoLine ? 'border-green text-green' : 'border-split text-split')
                 : startDone
@@ -339,21 +340,21 @@ export default function DrawingMap({
             }`}
           >
             {startDone
-              ? `✓ ${isTwoLine ? 'START LINE' : 'CROSSING LINE'} (click to reset)`
-              : mode === 'start' ? `PLACE POINT ${startPts.length + 1}/2`
-              : `SET ${isTwoLine ? 'START LINE' : 'CROSSING LINE'}`}
+              ? `✓ ${isTwoLine ? 'Start line' : 'Crossing line'} (redraw)`
+              : mode === 'start' ? `Point ${startPts.length + 1} of 2`
+              : `Draw ${isTwoLine ? 'start line' : 'crossing line'}`}
           </button>
           {isTwoLine && (
             <button
               type="button"
               onClick={() => finishDone ? resetFinish() : setMode(mode === 'finish' ? null : 'finish')}
-              className={`px-3 py-1.5 text-xs border transition-colors ${
+              className={`min-h-11 px-3 rounded-control text-sm border transition-colors ${
                 mode === 'finish' ? 'border-red text-red'
                   : finishDone ? 'border-red text-red opacity-70'
                   : 'border-border text-muted hover:border-red hover:text-red'
               }`}
             >
-              {finishDone ? '✓ FINISH LINE (click to reset)' : mode === 'finish' ? `PLACE POINT ${finishPts.length + 1}/2` : 'SET FINISH LINE'}
+              {finishDone ? '✓ Finish line (redraw)' : mode === 'finish' ? `Point ${finishPts.length + 1} of 2` : 'Draw finish line'}
             </button>
           )}
         </div>
@@ -363,9 +364,11 @@ export default function DrawingMap({
       <div className="relative" style={{ cursor: cursorStyle }}>
         <button
           onClick={() => setDark(d => !d)}
-          className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-bg border-border text-muted hover:border-primary hover:text-primary-text transition-colors"
+          type="button"
+          className="absolute top-2 right-2 z-[1001] min-h-9 px-3 rounded-control text-sm font-medium border border-border-strong bg-surface text-fg shadow hover:bg-surface-2 transition-colors"
+          title="Switch map style"
         >
-          {dark ? 'LIGHT MAP' : 'DARK MAP'}
+          {dark ? 'Light map' : 'Dark map'}
         </button>
         <MapContainer center={defaultCenter} zoom={14} style={{ height: 400, width: '100%' }}>
           <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxNativeZoom={16} maxZoom={19} />
@@ -423,16 +426,16 @@ export default function DrawingMap({
       </div>
 
       {mode !== null && !isGate && (
-        <p className="text-xs text-muted">
-          Click 2 points on the map to set the{' '}
+        <p className="text-sm text-muted">
+          Tap 2 points on the map to set the{' '}
           <span className={mode === 'start' ? (isTwoLine ? 'text-green' : 'text-split') : 'text-red'}>
             {mode === 'start' ? (isTwoLine ? 'start line' : 'crossing line') : 'finish line'}
           </span>. Pan/zoom with scroll and drag.
         </p>
       )}
       {isGate && typeof mode === 'number' && (
-        <p className="text-xs text-muted">
-          Click 2 points on the map to draw{' '}
+        <p className="text-sm text-muted">
+          Tap 2 points on the map to draw{' '}
           <span className="text-primary-text">
             {mode === 0 ? 'the start gate' : mode === gateEntries.length - 1 ? 'the finish gate' : `gate ${mode}`}
           </span>. Pan/zoom with scroll and drag.

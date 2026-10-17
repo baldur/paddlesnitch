@@ -1,5 +1,8 @@
 'use client'
-import { useState, useSyncExternalStore } from 'react'
+import { useId, useState, useSyncExternalStore } from 'react'
+import { Field, inputClass } from '@paddlesnitch/ui/Form'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { cardClass } from '@paddlesnitch/ui/Card'
 
 // Add a paddlesnitch tracker to the signed-in account with the 6-character
 // code the tracker shows on its screen. Lives on /devices (it used to be a
@@ -32,6 +35,7 @@ export default function AddTrackerForm({ onAdded }: { onAdded?: () => void }) {
   const [name, setName] = useState('')
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const id = useId()
 
   async function add(e: React.FormEvent) {
     e.preventDefault()
@@ -55,34 +59,39 @@ export default function AddTrackerForm({ onAdded }: { onAdded?: () => void }) {
   }
 
   return (
-    <section id="add">
-      <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-3">Add a tracker</h2>
-      <p className="text-sm text-muted mb-4 leading-relaxed">
-        Enter the 6-character code shown on the tracker’s screen, or scan its QR code.
-      </p>
+    <section id="add" aria-labelledby={`${id}-h`} className={`${cardClass} p-4 sm:p-5 flex flex-col gap-4`}>
+      <div className="flex flex-col gap-1">
+        <h2 id={`${id}-h`} className="text-lg font-semibold text-fg">Add a tracker</h2>
+        <p className="text-sm text-muted">
+          Enter the 6-character code on the tracker’s screen, or scan its QR code.
+        </p>
+      </div>
 
-      <form onSubmit={add} className="flex flex-wrap items-center gap-2 mb-3">
-        <input
-          value={code} onChange={e => setCode(e.target.value.toUpperCase())}
-          placeholder="CODE e.g. K7P2QM" maxLength={6} autoCapitalize="characters" autoCorrect="off"
-          aria-label="Code"
-          className="bg-surface border border-border px-3 py-2 text-fg text-sm tracking-[0.3em] w-40 focus:outline-none focus:border-primary"
-        />
-        <input
-          value={name} onChange={e => setName(e.target.value)} placeholder="Name (optional)" maxLength={64}
-          aria-label="Name"
-          className="bg-surface border border-border px-3 py-2 text-fg text-sm flex-1 min-w-[8rem] focus:outline-none focus:border-primary"
-        />
-        <button type="submit" disabled={busy || code.trim().length < 6}
-          className="px-4 py-2 bg-primary text-white text-xs tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">
-          ADD
+      <form onSubmit={add} className="grid gap-3 sm:grid-cols-[11rem_1fr_auto] sm:items-end">
+        <Field label="Code" htmlFor={`${id}-code`}>
+          <input
+            id={`${id}-code`}
+            value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+            placeholder="K7P2QM" maxLength={6} autoCapitalize="characters" autoCorrect="off" autoComplete="off"
+            className={`${inputClass} tabular`}
+          />
+        </Field>
+        <Field label="Name (optional)" htmlFor={`${id}-name`}>
+          <input
+            id={`${id}-name`}
+            value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Club K1" maxLength={64}
+            className={inputClass}
+          />
+        </Field>
+        <button type="submit" disabled={busy || code.trim().length < 6} className={buttonClass('primary')}>
+          {busy ? 'Adding…' : 'Add tracker'}
         </button>
       </form>
 
       {msg && (
-        <div role={msg.tone === 'err' ? 'alert' : 'status'} className={`border px-3 py-2 text-xs ${msg.tone === 'ok' ? 'border-green bg-green/10 text-green' : 'border-red bg-red/10 text-red'}`}>
+        <p role={msg.tone === 'err' ? 'alert' : 'status'} className={`rounded-control border px-3 py-2 text-sm ${msg.tone === 'ok' ? 'border-green/50 bg-green/10 text-green' : 'border-red/50 bg-red/10 text-red'}`}>
           {msg.text}
-        </div>
+        </p>
       )}
     </section>
   )

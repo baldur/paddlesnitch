@@ -1,5 +1,7 @@
 'use client'
 import { trpc } from '@/lib/trpc'
+import { eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { Stat, cardClass } from '@paddlesnitch/ui/Card'
 import type { AnalysisPoint } from '@paddlesnitch/analysis/analysis'
 
 // One outing recorded by two sources, side by side (docs/features/one-paddle.md,
@@ -9,7 +11,7 @@ import type { AnalysisPoint } from '@paddlesnitch/analysis/analysis'
 
 // SVG presentation attributes can't take Tailwind classes: design tokens by
 // CSS variable, with literal fallbacks.
-const A_COLOUR = 'var(--color-primary, #0369a1)'
+const A_COLOUR = 'var(--color-primary-text, #38bdf8)'
 const B_COLOUR = 'var(--color-split, #a78bfa)'
 const GRID = 'var(--color-border, #1e293b)'
 const MUTED = 'var(--color-muted, #94a3b8)'
@@ -17,10 +19,10 @@ const MUTED = 'var(--color-muted, #94a3b8)'
 /** What a paddle's source is called on this page. */
 export function sourceName(type?: string): string {
   switch (type) {
-    case 'device': return 'TRACKER'
-    case 'strava': return 'STRAVA'
-    case 'trial': return 'TIME TRIAL'
-    default: return 'FILE'
+    case 'device': return 'Tracker'
+    case 'strava': return 'Strava'
+    case 'trial': return 'Time trial'
+    default: return 'File'
   }
 }
 
@@ -36,8 +38,8 @@ export default function SameOuting({ a, b }: {
   return (
     <section className="mt-6 flex flex-col gap-3" aria-label="Same outing">
       <div>
-        <h2 className="text-xs tracking-widest text-fg">SAME OUTING, TWO RECORDINGS</h2>
-        <p className="text-xs text-muted mt-1">
+        <h2 className="text-lg font-semibold text-fg">Same outing, two recordings</h2>
+        <p className="text-sm text-muted mt-1">
           These overlap in time and place, so they&apos;re one outing recorded twice. The differences are
           between the two recordings, not between two paddles.
         </p>
@@ -55,9 +57,9 @@ export default function SameOuting({ a, b }: {
 
       {strokeRate.length >= 2 && (
         <div>
-          <h3 className="text-[10px] tracking-widest text-muted mb-1">STROKE RATE, MINUTE BY MINUTE</h3>
+          <h3 className={`${eyebrowClass} mb-1`}>Stroke rate, minute by minute</h3>
           <StrokeRateChart rows={strokeRate} />
-          <p className="text-[11px] text-muted mt-1">
+          <p className="text-sm text-muted mt-1">
             Where both recorded stroke rate. If one reads about half the other, it is counting one side only.
           </p>
         </div>
@@ -68,7 +70,7 @@ export default function SameOuting({ a, b }: {
 
 function Legend({ nameA, nameB }: { nameA: string; nameB: string }) {
   return (
-    <div className="flex gap-4 text-[10px] tracking-widest">
+    <div className="flex gap-4 text-sm">
       <span style={{ color: A_COLOUR }}>━ {nameA}</span>
       <span style={{ color: B_COLOUR }}>━ {nameB}</span>
     </div>
@@ -76,13 +78,7 @@ function Legend({ nameA, nameB }: { nameA: string; nameB: string }) {
 }
 
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="border border-border bg-surface px-3 py-2">
-      <div className="text-[9px] text-muted tracking-widest uppercase">{label}</div>
-      <div className="text-fg text-lg">{value}</div>
-      {note && <div className="text-[10px] text-muted">{note}</div>}
-    </div>
-  )
+  return <div className={`${cardClass} p-3`}><Stat label={label} value={value} sub={note} /></div>
 }
 
 // Both tracks in one box, projected together so they line up (equirectangular

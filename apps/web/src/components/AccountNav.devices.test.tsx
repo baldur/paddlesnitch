@@ -39,25 +39,47 @@ const nav = (extra: Record<string, unknown> = {}) => (
   />
 )
 
-describe('AccountNav — DEVICES', () => {
-  it('shows a DEVICES link when devicesHref is given', async () => {
+describe('AccountNav — Devices', () => {
+  it('shows a Devices link when devicesHref is given', async () => {
     const menu = await openMenu(nav({ devicesHref: '/devices' }))
-    const link = [...menu.querySelectorAll('a')].find(a => a.textContent === 'DEVICES')
+    const link = [...menu.querySelectorAll('a')].find(a => a.textContent === 'Devices')
     expect(link).toBeTruthy()
     expect(link?.getAttribute('href')).toBe('/devices')
   })
 
   it('omits it when the host passes no devicesHref', async () => {
     const menu = await openMenu(nav())
-    expect(menu.textContent).not.toContain('DEVICES')
+    expect(menu.textContent).not.toContain('Devices')
     // the rest of the menu is unaffected
-    expect(menu.textContent).toContain('PROFILE')
-    expect(menu.textContent).toContain('SIGN OUT')
+    expect(menu.textContent).toContain('Profile')
+    expect(menu.textContent).toContain('Sign out')
   })
 
-  it('lists PADDLES, DEVICES, PROFILE, ACCOUNT in that order', async () => {
+  it('lists Paddles, Devices, Profile, Account in that order, in sentence case', async () => {
     const menu = await openMenu(nav({ paddlesHref: '/paddles', devicesHref: '/devices' }))
     const labels = [...menu.querySelectorAll('a,button')].map(el => el.textContent)
-    expect(labels).toEqual(['PADDLES', 'DEVICES', 'PROFILE', 'ACCOUNT', 'REPORT AN ISSUE', 'SIGN OUT'])
+    expect(labels).toEqual(['Paddles', 'Devices', 'Profile', 'Account', 'Report an issue', 'Sign out'])
+  })
+})
+
+// On phones the account menu is the bottom bar's fourth tab, "You", and opens
+// the same items as a bottom sheet.
+describe('AccountNav — the phone "You" tab', () => {
+  it('opens the same menu as a sheet', async () => {
+    const menu = await openMenu(nav({ paddlesHref: '/paddles', devicesHref: '/devices', variant: 'tab' }))
+    expect(container.querySelector('button[aria-haspopup="menu"]')?.textContent).toBe('You')
+    expect(menu.className).toContain('bottom-0')
+    const labels = [...menu.querySelectorAll('a,button')].map(el => el.textContent)
+    expect(labels).toEqual(['Paddles', 'Devices', 'Profile', 'Account', 'Report an issue', 'Sign out'])
+  })
+
+  it('signed out, the tab is a Sign in link', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => { root.render(nav({ user: null, variant: 'tab' })) })
+    const link = container.querySelector('a')
+    expect(link?.textContent).toBe('Sign in')
+    expect(link?.getAttribute('href')).toBe('/signin')
   })
 })

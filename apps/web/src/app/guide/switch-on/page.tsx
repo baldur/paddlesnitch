@@ -7,13 +7,13 @@ export const metadata: Metadata = { title: 'Charge it and switch it on' }
 export default function SwitchOnStep() {
   return (
     <GuidePage slug="switch-on" title="Charge it and switch it on">
-      <h2 className="text-xs text-fg tracking-widest uppercase">Charging</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Charging</h2>
       <p>
         Plug a USB-C charger into the tracker. The battery gauge is in the top right corner of the
         screen, with a lightning bolt while it charges. Charge it before your first paddle.
       </p>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">The buttons</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">The buttons</h2>
       <p>
         <strong>The power button</strong> switches the tracker on (one press) and off (hold it for
         about 6 seconds, until the screen goes dark).
@@ -28,7 +28,7 @@ export default function SwitchOnStep() {
       </ul>
       <p>The tracker teaches you this with a short lesson once it’s on your account (step 4).</p>
 
-      <h2 className="text-xs text-fg tracking-widest uppercase">Switch it on</h2>
+      <h2 className="text-lg font-semibold text-fg -mb-2">Switch it on</h2>
       <p>
         Press the power button. The tracker shows its name for a moment, then, because it doesn’t
         know your WiFi yet, it starts setup:

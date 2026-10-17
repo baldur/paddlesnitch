@@ -70,7 +70,7 @@ export default function AccountNav({
   }, [open])
 
   const tab = variant === 'tab'
-  const tabClass = 'flex flex-col items-center justify-center gap-0.5 min-h-14 w-full text-[11px] font-medium text-muted hover:text-fg'
+  const tabClass = 'flex flex-col items-center justify-center gap-0.5 min-h-14 w-full text-xs font-medium text-muted hover:text-fg'
 
   if (user === undefined) {
     // loading — don't flash the wrong state (but keep the tab's slot)

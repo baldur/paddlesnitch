@@ -3,6 +3,12 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, use } from 'react'
 import AppHeader from '@/components/AppHeader'
+import { fmtDay } from '@paddlesnitch/core/format'
+import { Page, PageHeader, Section, eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
+import { Stat, cardClass } from '@paddlesnitch/ui/Card'
+import { inputClass } from '@paddlesnitch/ui/Form'
+import { paceFor500m } from '@/lib/format'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import LoadingState from '@/components/LoadingState'
 import ViewOnStrava from '@/components/strava/ViewOnStrava'
@@ -94,50 +100,90 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
   if (data === undefined) return <main className="flex-1"><LoadingState className="py-16" /></main>
   if (!data) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-sm text-muted">We can&apos;t find this result.</p>
-        <Link href="/att" className="tt-nav-link text-xs tracking-widest">← TRIALS</Link>
+      <main className="flex-1 flex flex-col">
+        <AppHeader />
+        <Page width="narrow">
+          <PageHeader title="We can't find this result" />
+          <Link href="/att" className={buttonClass('secondary', 'md', 'self-start')}>Back to Trials</Link>
+        </Page>
       </main>
     )
   }
 
   const { entry, isOwner, trial, course } = data
   const hasCox = !!entry.crew.find(c => c.seat === 'C')
+  const leaderboardHref = `/att/trials/${trial.id}`
 
   return (
     <main className="flex-1 flex flex-col">
       <AppHeader
-        breadcrumb={
-          <>
-            <Link href={`/att/trials/${trial.id}`} className="tt-nav-link text-sm shrink-0">← {trial.name.toUpperCase()}</Link>
-            <span className="text-muted shrink-0">/</span>
-            <span className="text-fg text-sm truncate">ENTRY</span>
-          </>
-        }
+        breadcrumb={<Link href={leaderboardHref} className="tt-nav-link">← {trial.name}</Link>}
       />
 
-      <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-8">
-        <section>
-          <div className="text-xs text-muted tracking-widest mb-1">
-            <Link href={`/att/trials/${trial.id}`} className="tt-link">{trial.name}</Link> · {entry.raceDate}
-          </div>
-          <h1 className="text-lg font-bold text-fg tracking-widest">{entry.displayName.toUpperCase()}</h1>
-          <div className="mt-2 flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-primary-text tabular">{formatTime(entry.totalElapsedSeconds)}</span>
-            <span className="text-xs text-muted tabular">{entry.boatClass}{course ? ` · ${course.distanceMetres.toLocaleString()} m` : ''}{entry.avgStrokeRate != null ? ` · ${entry.avgStrokeRate} spm avg` : ''}</span>
-          </div>
-          {entry.runCount && entry.runCount > 1 && (
-            <p className="text-xs text-muted mt-1">Best of {entry.runCount} runs in this upload.</p>
+      <Page>
+        <PageHeader
+          eyebrow={<>{trial.name} · {fmtDay(entry.raceDate)}</>}
+          title={entry.displayName}
+          description={
+            <>
+              {entry.runCount && entry.runCount > 1 && <>Best of {entry.runCount} runs in this upload. </>}
+              {entry.stravaActivityId != null && (
+                <>Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" /></>
+              )}
+            </>
+          }
+        />
+
+        <div className={`${cardClass} p-4 grid grid-cols-2 sm:grid-cols-4 gap-4`}>
+          <Stat label="Time" value={formatTime(entry.totalElapsedSeconds)} tone="primary" />
+          <Stat label="Class" value={entry.boatClass} />
+          {course && course.distanceMetres > 0 && (
+            <Stat label="Distance" value={`${course.distanceMetres.toLocaleString()} m`} />
           )}
-          {entry.stravaActivityId != null && (
-            <p className="text-xs text-muted mt-1">Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" /></p>
-          )}
-        </section>
+          {entry.avgStrokeRate != null && <Stat label="Avg rate" value={`${entry.avgStrokeRate} spm`} tone="split" />}
+        </div>
+
+        {entry.splits.length > 0 && (
+          <Section title="500 m splits">
+            <div className="overflow-x-auto">
+              <table className="w-full text-base border-collapse tabular">
+                <thead>
+                  <tr className={eyebrowClass}>
+                    <th className="text-left pr-4 py-2 font-normal">Mark</th>
+                    <th className="text-right pr-4 py-2 font-normal">Elapsed</th>
+                    <th className="text-right pr-4 py-2 font-normal">Split</th>
+                    <th className="text-right py-2 font-normal whitespace-nowrap">Pace /500</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entry.splits.map((s, i) => {
+                    const prev = i === 0 ? null : entry.splits[i - 1]
+                    const segSecs = s.elapsedSeconds - (prev?.elapsedSeconds ?? 0)
+                    const segDist = s.distance - (prev?.distance ?? 0)
+                    return (
+                      <tr key={s.distance} className="border-t border-border">
+                        <td className="pr-4 py-2 text-muted whitespace-nowrap">{s.distance.toLocaleString()} m</td>
+                        <td className="pr-4 py-2 text-right text-fg">{formatTime(s.elapsedSeconds)}</td>
+                        <td className="pr-4 py-2 text-right text-split">{formatTime(segSecs)}</td>
+                        <td className="py-2 text-right text-primary-text">{paceFor500m(segDist, segSecs)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
+
+        {course && entry.trackSegment && entry.trackSegment.length > 0 && (
+          <Section title="Track">
+            <CourseMapClient course={course} track={entry.trackSegment} />
+          </Section>
+        )}
 
         {entry.crew.length > 1 && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Crew</h2>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+          <Section title="Crew">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-base">
               {entry.crew.map(m => (
                 <span key={String(m.seat)}>
                   <span className="text-muted mr-1 tabular">{m.seat === 'C' ? 'Cox' : m.seat}</span>
@@ -146,13 +192,12 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
               ))}
             </div>
             <span className="sr-only">{hasCox ? 'includes cox' : ''}</span>
-          </section>
+          </Section>
         )}
 
         {entry.conditions && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Conditions at finish</h2>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-fg tabular">
+          <Section title="Conditions at finish">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-base text-fg tabular">
               {entry.conditions.weather?.temperatureC != null && <span><span className="text-muted mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>}
               {entry.conditions.weather?.windSpeedKmh != null && (
                 <span><span className="text-muted mr-1">wind</span>{entry.conditions.weather.windSpeedKmh.toFixed(0)} km/h{entry.conditions.weather.windDirectionDeg != null && ` ${compass(entry.conditions.weather.windDirectionDeg)}`}</span>
@@ -162,80 +207,50 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
                 <span><span className="text-muted mr-1">flow</span>{entry.conditions.flow.valueM3s.toFixed(1)} m³/s{entry.conditions.flow.stationLabel && <span className="text-muted"> · {entry.conditions.flow.stationLabel}</span>}</span>
               )}
             </div>
-          </section>
-        )}
-
-        {course && entry.trackSegment && entry.trackSegment.length > 0 && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">Track</h2>
-            <CourseMapClient course={course} track={entry.trackSegment} />
-          </section>
-        )}
-
-        {entry.splits.length > 0 && (
-          <section>
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-2">500 m splits</h2>
-            <table className="text-sm border-collapse tabular">
-              <thead>
-                <tr className="text-muted tracking-wider text-xs">
-                  <th className="text-left pr-8 py-1 font-normal">MARK</th>
-                  <th className="text-right py-1 font-normal">ELAPSED</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entry.splits.map(s => (
-                  <tr key={s.distance} className="border-t border-surface-2">
-                    <td className="pr-8 py-1.5 text-fg">{s.distance.toLocaleString()} m</td>
-                    <td className="py-1.5 text-right text-split">{formatTime(s.elapsedSeconds)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )}
-
-        {/* Your own result as a paddle: the full analysis (efforts, stroke
-            rate, the chart) of the same run. Analysed on first open; after
-            that the duplicate check opens the paddle you already have. */}
-        {isOwner && (
-          <section className="border-t border-border pt-6 flex flex-col gap-2">
-            <button type="button" onClick={openAsPaddle} disabled={opening}
-              className="self-start px-4 py-2 border border-border text-xs tracking-widest text-muted hover:border-primary hover:text-fg disabled:opacity-50">
-              {opening ? 'OPENING…' : 'OPEN AS A PADDLE →'}
-            </button>
-            {openErr && <p className="text-xs text-red">{openErr}</p>}
-          </section>
+          </Section>
         )}
 
         {/* Private note — owner only. */}
         {isOwner && (
-          <section className="border-t border-border pt-6">
-            <h2 className="text-xs text-muted tracking-[0.2em] uppercase mb-1">Your note</h2>
-            <p className="text-xs text-muted mb-3">
-              Only you can see this. Jot down how the race felt, kit, tactics: anything.
+          <Section title="Your note">
+            <p className="text-sm text-muted -mt-1">
+              Only you can see this. How the race felt, kit, tactics: anything.
             </p>
+            <label htmlFor="entry-note" className="sr-only">Your note</label>
             <textarea
+              id="entry-note"
               value={note}
               onChange={e => { setNote(e.target.value); setNoteMsg('') }}
               maxLength={2000}
               rows={4}
               placeholder="Add a private note about this race…"
-              className="w-full bg-bg border border-border px-3 py-2 text-fg text-sm focus:outline-none focus:border-primary transition-colors resize-y"
+              className={`${inputClass} py-2 resize-y`}
             />
-            <div className="flex items-center gap-3 mt-2">
-              <button
-                type="button"
-                onClick={saveNote}
-                disabled={noteSaving}
-                className="px-4 py-2 bg-primary text-white text-xs font-bold tracking-widest hover:bg-primary disabled:opacity-50 transition-colors"
-              >
-                {noteSaving ? 'SAVING…' : 'SAVE NOTE'}
-              </button>
-              {noteMsg && <span className="text-xs text-muted">{noteMsg}</span>}
+            <div className="flex items-center gap-3">
+              <Button onClick={saveNote} disabled={noteSaving}>
+                {noteSaving ? 'Saving…' : 'Save note'}
+              </Button>
+              {noteMsg && <span className="text-sm text-muted">{noteMsg}</span>}
             </div>
-          </section>
+          </Section>
         )}
-      </div>
+
+        {/* Next steps. Your own result opens as a paddle: the full analysis
+            (efforts, stroke rate, the chart) of the same run. Analysed on
+            first open; after that the duplicate check opens the paddle you
+            already have. */}
+        <nav aria-label="Next steps" className="flex flex-col gap-2 border-t border-border pt-6">
+          <div className="flex flex-wrap gap-2">
+            <Link href={leaderboardHref} className={buttonClass('secondary')}>Back to the leaderboard</Link>
+            {isOwner && (
+              <Button onClick={openAsPaddle} disabled={opening}>
+                {opening ? 'Opening…' : 'Open as a paddle'}
+              </Button>
+            )}
+          </div>
+          {openErr && <p className="text-sm text-red" role="alert">{openErr}</p>}
+        </nav>
+      </Page>
     </main>
   )
 }

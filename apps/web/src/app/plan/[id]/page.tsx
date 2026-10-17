@@ -13,7 +13,7 @@ export default async function SavedPlanPage({ params }: { params: Promise<{ id: 
   if (pre.user) await pre.query('plan.get', { id }, c => c.plan.get({ id }))
   return (
     <HydrationBoundary state={pre.state()}>
-      <AppHeader breadcrumb={<Link href="/plan" className="hover:text-fg">PLAN</Link>} />
+      <AppHeader breadcrumb={<Link href="/plan" className="tt-nav-link text-sm">← Plan</Link>} />
       <SavedPlanView id={id} />
     </HydrationBoundary>
   )
