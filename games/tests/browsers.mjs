@@ -67,6 +67,40 @@ const CASES = [
   { name: 'firefox, features missing', engine: firefox, ctx: desktop, strip: true, expect: 'webgl2' },
 ];
 
+// Plays one case in a fresh page. Returns a line describing what it saw;
+// anything wrong goes into `errors`.
+async function play(c, page, errors) {
+  await page.goto(`${base}/kayak/${c.query ?? ''}#debug`);
+  // A machine with no graphics at all (CI's Firefox) can't run the game;
+  // there the fallback is the menu's message, so check that instead.
+  if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
+    const msg = page.locator('#nogpu');
+    await msg.waitFor({ state: 'visible', timeout: 30_000 });
+    if (!(await page.locator('#menu button[value="practice"]').isDisabled())) errors.push('no WebGL 2, but the race buttons are enabled');
+    return `no WebGL 2 on this machine, so it says: "${(await msg.textContent()).slice(0, 50)}…"`;
+  }
+  await page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
+  const backend = await page.evaluate(() => window.kayak.gpu.backend);
+  if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
+  // The practice time trial: on your own, so the horn doesn't wait for a pack.
+  const practice = page.locator('#menu button[value="practice"]');
+  await (c.touch ? practice.tap() : practice.click());
+  await page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 60_000 });
+  // Paddle at about a racing rate: alternate sides, a stroke every 0.7 s of
+  // race time. Race time, not real time: with software graphics (CI) a frame
+  // can take a second, and the game slows its clock to match.
+  const { width, height } = page.viewportSize();
+  for (let i = 0; i < 12; i++) {
+    if (c.touch) await page.touchscreen.tap(i % 2 ? width * 0.8 : width * 0.2, height * 0.6);
+    else await page.keyboard.press(i % 2 ? 'ArrowRight' : 'ArrowLeft');
+    const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
+    await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
+  }
+  const { speed, ms } = await page.evaluate(() => ({ speed: window.kayak.boat.speed, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs }));
+  if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
+  return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
+}
+
 let failed = 0;
 for (const c of CASES) {
   if (c.gpuOnly && !process.argv.includes('--gpu')) continue;
@@ -79,26 +113,12 @@ for (const c of CASES) {
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-    await page.goto(`${base}/kayak/${c.query ?? ''}#debug`);
-    await page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
-    const backend = await page.evaluate(() => window.kayak.gpu.backend);
-    if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
-    // The practice time trial: on your own, so the horn doesn't wait for a pack.
-    const practice = page.locator('#menu button[value="practice"]');
-    await (c.touch ? practice.tap() : practice.click());
-    await page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 60_000 });
-    // Paddle at about a racing rate: alternate sides, a stroke every 0.7 s.
-    const { width, height } = page.viewportSize();
-    for (let i = 0; i < 16; i++) {
-      if (c.touch) await page.touchscreen.tap(i % 2 ? width * 0.8 : width * 0.2, height * 0.6);
-      else await page.keyboard.press(i % 2 ? 'ArrowRight' : 'ArrowLeft');
-      await page.waitForTimeout(700);
+    try {
+      line = await play(c, page, errors);
+    } catch (e) {
+      errors.push(e.message.split('\n')[0]);
+      line = await page.evaluate(() => `${window.kayak?.gpu?.backend ?? 'no renderer'}, ${Math.round(window.kayak?.gpu?.frameMs ?? 0)} ms frames, state ${window.kayak?.state}, message: ${document.getElementById('nogpu')?.textContent || 'none'}`).catch(() => '');
     }
-    const speed = await page.evaluate(() => window.kayak.boat.speed);
-    if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
-    line = `${backend}, ${speed.toFixed(1)} m/s`;
-  } catch (e) {
-    errors.push(e.message.split('\n')[0]);
   } finally {
     await browser.close();
   }
