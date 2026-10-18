@@ -25,6 +25,7 @@ export type SourceId =
   | 'opw-levels'             // OPW waterlevel.ie (live, CC BY 4.0)
   | 'thames-conditions'      // GOV.UK River Thames current conditions (live, OGL)
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
+  | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
   | 'scottish-canals'        // Scottish Canals open data (OGL)
   | 'waterways-ireland'      // Waterways Ireland ArcGIS layers (non-commercial)
   | 'osm'                    // OpenStreetMap (kept in its own table — ODbL)
