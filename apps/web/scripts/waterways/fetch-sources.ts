@@ -2,14 +2,21 @@
 // Fetch every national source and write its features, in our schema, to
 // .cache/waterways/normalised/{source}.json for build-national.ts.
 //
-//   pnpm --filter web waterways:sources [--refresh] [source…]
+//   pnpm --filter web waterways:sources [--refresh] [--stage] [source…]
 //
 // Raw responses are cached under .cache/waterways/raw/{source}/ so a rerun
 // doesn't hammer anyone (--refresh refetches; CI always starts empty).
+// With --stage (the weekly refresh), each good copy is also kept in storage,
+// and a source that fails or shrinks falls back to its last good copy rather
+// than dropping out; .cache/waterways/health.json and waterways/health.json
+// record which (@paddlesnitch/waterways/health).
 // Parsers are pure, in @paddlesnitch/waterways/ingest/*, and tested there.
 // See docs/features/waterways-uk-ireland.md.
 import fs from 'fs/promises'
 import path from 'path'
+import { gunzipSync, gzipSync } from 'zlib'
+import { getObject, putObject } from '@paddlesnitch/core/storage'
+import { assess, HEALTH_KEY, healthLines, stagedKey, type HealthFile } from '@paddlesnitch/waterways/health'
 import { lockKey } from '@paddlesnitch/waterways/build'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
@@ -25,6 +32,7 @@ import type { CrewDetail, Feature } from '@paddlesnitch/waterways/types'
 const UA = 'paddlesnitch-river-planner/0.2 (+https://paddlesnitch.com/plan/sources)'
 const args = process.argv.slice(2)
 const refresh = args.includes('--refresh')
+const stage = args.includes('--stage')
 const only = args.filter(a => !a.startsWith('--'))
 const CACHE = path.join(process.cwd(), '.cache/waterways')
 const now = new Date().toISOString()
@@ -175,12 +183,40 @@ JOBS.ifi = async () => {
 
 async function main() {
   await fs.mkdir(path.join(CACHE, 'normalised'), { recursive: true })
+  // The waterways role can't list the bucket, so a key that isn't there yet
+  // (the first run) reads as access denied rather than not found: treat any
+  // read error as "nothing staged".
+  const prev = stage ? JSON.parse((await getObject(HEALTH_KEY).catch(() => null))?.toString() ?? 'null') as HealthFile | null : null
+  const health: HealthFile = { checkedAt: now, sources: { ...prev?.sources } }
   for (const [name, job] of Object.entries(JOBS)) {
     if (only.length && !only.includes(name)) continue
-    const features = await job()
-    await fs.writeFile(path.join(CACHE, 'normalised', `${name}.json`), JSON.stringify(features))
-    const kinds = Object.entries(features.reduce<Record<string, number>>((m, f) => ({ ...m, [f.kind]: (m[f.kind] ?? 0) + 1 }), {}))
-    console.log(`  ${name}: ${features.length} features (${kinds.map(([k, n]) => `${n} ${k}`).join(', ')})`)
+    const out = path.join(CACHE, 'normalised', `${name}.json`)
+    if (!stage) {
+      const features = await job()
+      await fs.writeFile(out, JSON.stringify(features))
+      const kinds = Object.entries(features.reduce<Record<string, number>>((m, f) => ({ ...m, [f.kind]: (m[f.kind] ?? 0) + 1 }), {}))
+      console.log(`  ${name}: ${features.length} features (${kinds.map(([k, n]) => `${n} ${k}`).join(', ')})`)
+      continue
+    }
+    let features: Feature[] | undefined, error: string | undefined
+    try { features = await job() } catch (e) { error = (e as Error).message.slice(0, 300) }
+    const staged = await getObject(stagedKey(name)).then(b => b && gunzipSync(b).toString()).catch(() => null)
+    const stagedCount = staged ? (JSON.parse(staged) as Feature[]).length : null
+    const { use, health: h } = assess(features ? { features: features.length } : { error: error! }, prev?.sources[name], stagedCount, now)
+    health.sources[name] = h
+    if (use === 'fresh') {
+      const body = JSON.stringify(features)
+      await fs.writeFile(out, body)
+      await putObject(stagedKey(name), gzipSync(body))
+    } else if (use === 'staged') {
+      await fs.writeFile(out, staged!)
+    }
+    console.log(`  ${healthLines({ checkedAt: now, sources: { [name]: h } })[0]}`)
+  }
+  if (stage) {
+    const body = JSON.stringify(health, null, 2)
+    await fs.writeFile(path.join(CACHE, 'health.json'), body)
+    await putObject(HEALTH_KEY, body)
   }
 }
 
