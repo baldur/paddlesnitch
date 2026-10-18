@@ -1,12 +1,12 @@
 {
-  "version": "20261016-3599eaab",
-  "builtAt": "2026-10-16T19:40:33.801Z",
+  "version": "20261018-5ee22470",
+  "builtAt": "2026-10-18T06:23:19.054Z",
   "counts": {
-    "links": 80552,
+    "links": 80556,
     "km": 63296,
-    "features": 30674,
+    "features": 33137,
     "osmLocks": 284,
-    "osm": 203494,
+    "osm": 203569,
     "places": 30194
   },
   "sources": {
@@ -15,6 +15,7 @@
     "ea-aims": 2425,
     "ea-thames": 45,
     "ea-umap": 201,
+    "ifi": 2463,
     "scottish-canals": 213,
     "sepa": 2847,
     "waterways-ireland": 750
