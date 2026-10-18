@@ -70,7 +70,7 @@ export class Input {
 
   // Call once per animation frame. Returns the gamepad buttons that went down this frame.
   poll() {
-    this.#pads = [...navigator.getGamepads()].filter(Boolean);
+    this.#pads = [...(navigator.getGamepads?.() ?? [])].filter(Boolean); // Firefox on Android has none
     const pressed = new Set();
     for (const pad of this.#pads) {
       const prev = this.#prevButtons.get(pad.index) ?? [];

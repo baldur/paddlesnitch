@@ -1,5 +1,8 @@
 // Hand-written WebGPU renderer: a sky pass, the water surface and any number
 // of lit low-poly meshes, each drawn with per-instance model matrices.
+// Browsers without WebGPU (or where it fails to start) get the same scene in
+// WebGL 2 (render-gl.js), loaded only then. Add ?webgl to the URL to force
+// that, for testing.
 import { SKY, MESH, WATER } from './shaders.js';
 import { waterGrid } from './meshes.js';
 
@@ -12,6 +15,18 @@ const BUDGET_MS = 11;
 const MAX_DPR = matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
 
 export async function createRenderer(canvas) {
+  if (!new URLSearchParams(location.search).has('webgl')) {
+    try {
+      return await createRendererGPU(canvas);
+    } catch (err) {
+      console.info(`Kayak: drawing with WebGL 2 (${err.message})`);
+    }
+  }
+  const { createRendererGL } = await import('./render-gl.js');
+  return createRendererGL(canvas);
+}
+
+async function createRendererGPU(canvas) {
   if (!navigator.gpu) throw new Error('WebGPU is not available in this browser.');
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('No WebGPU graphics adapter was found.');
@@ -96,6 +111,7 @@ export async function createRenderer(canvas) {
 
   return {
     device,
+    backend: 'webgpu',
 
     // A mesh from meshes.js, drawn with up to `maxInstances` model matrices.
     createMesh({ vertices, count }, maxInstances = 1) {
@@ -158,7 +174,7 @@ export async function createRenderer(canvas) {
 
     // For the debug hook: how the adaptive resolution is doing.
     get stats() {
-      return { scale, gpuMs, width: canvas.width, height: canvas.height };
+      return { backend: 'webgpu', scale, gpuMs, width: canvas.width, height: canvas.height };
     },
 
     get aspect() {
