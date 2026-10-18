@@ -64,6 +64,13 @@ test('keeps full resolution at 60 fps with uneven frame timing', () => {
   assert.equal(p.scale, 1);
 });
 
+test('drops resolution on a device managing 3 frames a second', () => {
+  // Frames this slow used to be ignored as stalls, so the weakest phones
+  // never got the lower resolution they needed most.
+  const p = createPacer();
+  assert.equal(run(p, 330, 30), 0.5);
+});
+
 test('ignores the gap after a hidden tab or a stall', () => {
   const p = createPacer();
   run(p, 1000 / 60, 2);

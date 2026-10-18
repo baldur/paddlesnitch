@@ -29,7 +29,9 @@ export function createPacer() {
 
     // ms: time since the previous frame.
     tick(ms) {
-      if (!(ms > 0) || ms > 250) return scale; // a hidden tab or a stall, not the GPU
+      // Over a second is a hidden tab or a stall, not the GPU. (A weak phone at
+      // 3 frames a second still counts: it needs the lower resolution most.)
+      if (!(ms > 0) || ms > 1000) return scale;
       clock += ms;
       settled += ms;
       smooth = smooth === null ? ms : smooth + (ms - smooth) * 0.1;

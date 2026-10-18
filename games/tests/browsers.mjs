@@ -85,7 +85,8 @@ async function play(c, page, errors) {
   // The practice time trial: on your own, so the horn doesn't wait for a pack.
   const practice = page.locator('#menu button[value="practice"]');
   await (c.touch ? practice.tap() : practice.click());
-  await page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 60_000 });
+  // The horn comes after a few seconds of race time: minutes, on CI's software graphics.
+  await page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 240_000 });
   // Paddle at about a racing rate: alternate sides, a stroke every 0.7 s of
   // race time. Race time, not real time: with software graphics (CI) a frame
   // can take a second, and the game slows its clock to match.
