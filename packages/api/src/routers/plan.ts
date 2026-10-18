@@ -14,7 +14,7 @@ import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { conditionsAlong } from '@paddlesnitch/waterways/live-store'
 import { NATIONAL, REGIONS } from '@paddlesnitch/waterways/regions'
 import {
-  savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, setPlanNotes,
+  savePlan, getPlan, listPlans, deletePlan, sharePlan, unsharePlan, getSharedPlan, setPlanNotes, recordPlanDemand,
   MAX_PLAN_NOTES, MAX_STOP_NOTE, MAX_TITLE,
 } from '@paddlesnitch/waterways/plan-store'
 
@@ -65,6 +65,12 @@ export const planRouter = router({
     const saved = await savePlan(ctx.user.id, rest, planId)
     if (saved === 'too_many') throw new TRPCError({ code: 'BAD_REQUEST', message: 'too_many_plans' })
     if (!saved) throw new TRPCError({ code: 'NOT_FOUND' })
+    // Which locks it passes, for ranking the gaps that matter (best-effort:
+    // a failure here mustn't fail the save).
+    try {
+      const routed = routePlan(await loadNational(), saved)
+      if (typeof routed !== 'string') await recordPlanDemand(ctx.user.id, saved.id, routed.stops.filter(s => s.portage).map(s => s.feature.id))
+    } catch { /* the ranking is a nicety */ }
     return saved
   }),
 

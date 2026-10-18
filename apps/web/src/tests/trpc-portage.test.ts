@@ -14,6 +14,7 @@ import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as mapData } from '@/app/plan/data/[version]/[name]/route'
 import { listKeys } from '@/lib/storage'
 import { clearPortageCache } from '@paddlesnitch/waterways/portage-store'
+import { clearDemandCache } from '@paddlesnitch/waterways/plan-store'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const anon = createCaller({ user: null })
@@ -35,7 +36,7 @@ const mapGet = async (name: string) =>
   (await mapData(new Request(`http://x/plan/data/none/${name}`), { params: Promise.resolve({ version: 'none', name }) })).json()
 
 let dataDir: string
-beforeEach(async () => { dataDir = await makeDataDir(); clearPortageCache() })
+beforeEach(async () => { dataDir = await makeDataDir(); clearPortageCache(); clearDemandCache() })
 afterEach(async () => { await cleanDataDir(dataDir); delete process.env.ADMIN_USER_IDS })
 
 describe('adding portage details', () => {
@@ -129,5 +130,44 @@ describe('portage details and your account', () => {
     expect(await listKeys('portages/public/')).toEqual([])
     expect(await listKeys(`users/${me.id}/portages/`)).toEqual([])
     expect((await marshStop()).portages).toBeUndefined()
+  })
+})
+
+describe('the most needed locks', () => {
+  // Short plans, so the list's top 50 isn't a cut-off: one past Marsh Lock
+  // (up to Henley), one from Henley past Hambleden Lock.
+  const base = { title: 'Plan', region: 'gbie', shape: 'one_way' as const, paceKmh: 8, portageMinutes: 3 }
+  const PAST_MARSH = { ...base, start: [51.5205, -0.8930] as [number, number], finish: [51.5395, -0.9010] as [number, number] }
+  const PAST_HAMBLEDEN = { ...base, start: [51.5395, -0.9010] as [number, number], finish: [51.5470, -0.8740] as [number, number] }
+  const needed = async (): Promise<{ id: string; name?: string; plans: number }[]> => mapGet('needed')
+
+  it("ranks locks with no portage details by how many saved plans pass them", async () => {
+    expect(await needed()).toEqual([])
+    const ann = await makeUser('Ann'), bob = await makeUser('Bob')
+    await as(ann).plan.save(PAST_HAMBLEDEN)
+    await as(bob).plan.save(PAST_HAMBLEDEN)
+    await as(bob).plan.save(PAST_MARSH)
+    const list = await needed()
+    expect(list.map(l => [l.name, l.plans])).toEqual([['Hambleden Lock', 2], ['Marsh Lock', 1]])
+    expect(JSON.stringify(list)).not.toContain(ann.id)
+  })
+
+  it('a lock drops off once someone adds its details', async () => {
+    const ann = await makeUser('Ann')
+    await as(ann).plan.save(PAST_MARSH)
+    expect((await needed()).map(l => l.name)).toEqual(['Marsh Lock'])
+    await as(ann).portage.add(PORTAGE)
+    expect(await needed()).toEqual([])
+  })
+
+  it("a deleted plan stops counting, and so do a deleted account's plans", async () => {
+    const ann = await makeUser('Ann'), me = await makeUser('Me')
+    const p = await as(ann).plan.save(PAST_MARSH)
+    await as(me).plan.save(PAST_MARSH)
+    await as(ann).plan.delete({ id: p.id })
+    expect((await needed()).map(l => l.plans)).toEqual([1])
+    signInAs(me.idToken)
+    expect((await deleteAccount()).status).toBe(200)
+    expect(await listKeys('plans/demand/')).toEqual([])
   })
 })

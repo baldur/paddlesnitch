@@ -2,12 +2,13 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import manifest from '@paddlesnitch/waterways/data/manifest.json'
+import type { NeededLock } from '@paddlesnitch/waterways/national'
 import type { CoverageLevel, WaterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
 import LoadingState from '@/components/LoadingState'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { inputClass } from '@paddlesnitch/ui/Form'
 import { PageHeader, eyebrowClass } from '@paddlesnitch/ui/Layout'
-import { COVERAGE_LEVELS } from '@/lib/plan-ui'
+import { addPortageHref, COVERAGE_LEVELS } from '@/lib/plan-ui'
 
 // The gaps table: every scored waterway with what we know, filterable. The
 // scores come from /plan/data/{version}/coverage (computed from the live data).
@@ -49,7 +50,7 @@ export default function Gaps() {
         description={<>
           Every canal, navigation and river over 10 km we cover in the UK and Ireland, and what we know about it, worked out from the data.
           We&apos;d rather show a gap than guess. The biggest one: we know which bank to land on at {totals.sides} of {totals.locks.toLocaleString()} locks.
-          No open source records portage sides; paddlers will be able to add them.
+          No open source records portage sides, so paddlers add them: start with the locks below, or any lock on a route you plan.
         </>}
       />
       <section className="flex flex-col gap-3">
@@ -65,6 +66,8 @@ export default function Gaps() {
           {COVERAGE_LEVELS.map(l => <li key={l.id}><span className="font-medium" style={{ color: l.colour }}>{l.label}</span>: {l.says}</li>)}
         </ul>
       </section>
+
+      <MostNeeded />
 
       <section className="flex flex-wrap gap-2 items-center">
         {COVERAGE_LEVELS.map(l => (
@@ -114,5 +117,31 @@ export default function Gaps() {
       {shown < filtered.length && <button type="button" className={`${BTN} self-start`} onClick={() => setShown(n => n + PAGE)}>Show more</button>}
       <p className="text-sm text-muted">Click a waterway to open it in the planner. Counts are from the data we hold; a lock&apos;s own weir is counted as a weir here.</p>
     </main>
+  )
+}
+
+/** Locks with no landing details yet that people's saved plans pass most. */
+function MostNeeded() {
+  const [locks, setLocks] = useState<NeededLock[] | null>(null)
+  useEffect(() => {
+    fetch(`/plan/data/${VERSION}/needed`).then(r => (r.ok ? r.json() : Promise.reject())).then(setLocks, () => setLocks([]))
+  }, [])
+  if (!locks?.length) return null
+  return (
+    <section className="flex flex-col gap-3" data-testid="most-needed">
+      <h2 className="text-lg font-semibold text-fg">Most needed</h2>
+      <p className="text-sm text-muted">Locks with no landing details yet, most-planned first. Know one? It takes a minute: two clicks on the satellite map.</p>
+      <ul className="divide-y divide-border border-y border-border">
+        {locks.slice(0, 15).map(l => (
+          <li key={l.id} className="flex items-center justify-between gap-3 py-2">
+            <span className="min-w-0">
+              <span className="text-fg">{l.name ?? 'Lock'}</span>
+              <span className="text-sm text-muted tabular"> · in {l.plans} plan{l.plans === 1 ? '' : 's'}</span>
+            </span>
+            <Link className={buttonClass('secondary', 'sm')} href={addPortageHref(l)}>Add details</Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

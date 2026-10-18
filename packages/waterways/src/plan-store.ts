@@ -31,6 +31,11 @@ export const MAX_STOP_NOTES = 300
 
 const key = (userId: string, id: string) => `users/${userId}/plans/${id}.json`
 const sharedKey = (shareId: string) => `plans/shared/${shareId}.json`
+// Which locks and portages a saved plan passes, for ranking the gaps that
+// matter most (/plan/gaps). Only counts are ever shown; deleted with the plan
+// and the account.
+const demandKey = (planId: string) => `plans/demand/${planId}.json`
+type Demand = { userId: string; ids: string[] }
 const validId = (id: string) => /^[\w-]{1,64}$/.test(id)
 type ShareIndex = { userId: string; planId: string }
 
@@ -71,8 +76,38 @@ export async function deletePlan(userId: string, id: string): Promise<boolean> {
   const plan = await getPlan(userId, id)
   if (!plan) return false
   if (plan.shareId) await deleteObject(sharedKey(plan.shareId))
+  await deleteObject(demandKey(id))
   await deleteObject(key(userId, id))
   return true
+}
+
+/** Record the locks and portages a saved plan passes (feature ids). */
+export async function recordPlanDemand(userId: string, planId: string, ids: string[]): Promise<void> {
+  await putJson(demandKey(planId), { userId, ids: [...new Set(ids)] } satisfies Demand)
+  demandCache = null
+}
+
+let demandCache: { at: number; counts: Map<string, number> } | null = null
+/** Tests start each case on empty storage; the cache mustn't outlive that. */
+export const clearDemandCache = () => { demandCache = null }
+
+/** How many saved plans pass each lock or portage (feature id → plans).
+ *  Read across every plan's record and kept an hour per server instance. */
+export async function planDemand(): Promise<Map<string, number>> {
+  if (demandCache && Date.now() - demandCache.at < 3_600_000) return demandCache.counts
+  const counts = new Map<string, number>()
+  for (const k of await listKeys('plans/demand/')) {
+    const d = await getJson<Demand>(k)
+    for (const id of d?.ids ?? []) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  demandCache = { at: Date.now(), counts }
+  return counts
+}
+
+/** Account deletion: their plans' demand records (the plans go with users/{id}/). */
+export async function erasePlanDemand(userId: string): Promise<void> {
+  for (const p of await listPlans(userId)) await deleteObject(demandKey(p.id))
+  demandCache = null
 }
 
 /** Set the plan's own note, and/or one stop's (empty text removes it). Null
