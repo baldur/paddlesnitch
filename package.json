@@ -11,6 +11,7 @@
     "test": "pnpm --filter web test",
     "test:watch": "pnpm --filter web test:watch",
     "test:games": "node --test games/tests/*.test.js",
+    "test:games:browsers": "node games/tests/browsers.mjs",
     "games": "python3 -m http.server 8000 -d games",
     "typecheck": "pnpm --filter web exec tsc --noEmit -p .",
     "perf": "pnpm --filter web perf",

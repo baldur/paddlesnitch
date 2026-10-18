@@ -185,6 +185,13 @@ const phone = matchMedia('(pointer: coarse)');
 menu.querySelector('form').addEventListener('click', (e) => {
   if (!e.target.closest('button') || !phone.matches) return;
   controls.enableTilt();
+  // iOS only lets a page speak once it has spoken in response to a tap, so the
+  // starter's voice needs a silent word now.
+  if (window.speechSynthesis && !speechSynthesis.speaking) {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  }
   if (document.fullscreenEnabled && !document.fullscreenElement) {
     document.documentElement.requestFullscreen({ navigationUI: 'hide' })
       .then(() => screen.orientation?.lock?.('landscape'))
@@ -724,6 +731,6 @@ try {
   requestAnimationFrame(frame);
 } catch (err) {
   els.nogpu.hidden = false;
-  els.nogpu.textContent = `${err.message} Kayak needs WebGPU: try a current version of Chrome, Edge, Safari or Firefox.`;
+  els.nogpu.textContent = `${err.message} Kayak needs WebGPU or WebGL 2: try a current version of Chrome, Edge, Safari or Firefox.`;
   for (const b of menu.querySelectorAll('form button')) b.disabled = true;
 }

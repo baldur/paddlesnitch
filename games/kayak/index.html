@@ -110,5 +110,15 @@
       <button value="menu">Menu</button>
     </form>
   </dialog>
+  <script>
+    // Browsers too old for the game (no <dialog>: iOS before 15.4) would
+    // otherwise show an empty screen. A classic script, so it runs everywhere.
+    if (!window.HTMLDialogElement) {
+      var p = document.createElement('p');
+      p.textContent = 'This browser is too old for Kayak. Please update it, or try a current version of Chrome, Edge, Safari or Firefox.';
+      p.style.cssText = 'position:fixed;inset:auto 16px 40%;margin:0;padding:1rem;background:#fff;color:#141414;font:1rem/1.4 system-ui,sans-serif;border-radius:8px;';
+      document.body.appendChild(p);
+    }
+  </script>
 </body>
 </html>

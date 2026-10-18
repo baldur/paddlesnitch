@@ -183,7 +183,7 @@ export class Controls {
   // Once per animation frame: reads gamepads. Returns buttons newly pressed, for menus.
   poll(dt) {
     const pressed = new Set();
-    this.#pad = [...navigator.getGamepads()].find(Boolean) ?? null;
+    this.#pad = [...(navigator.getGamepads?.() ?? [])].find(Boolean) ?? null; // Firefox on Android has none
     if (this.#pad) {
       const prev = this.#prev.get(this.#pad.index) ?? [];
       const now = this.#pad.buttons.map((b) => b.value > 0.5 || b.pressed);

@@ -1147,7 +1147,8 @@ Browser paddling games live in **`games/`** at the repo root. Like `firmware/` i
 
 - **Index page:** `/games` (Next, `src/app/games/page.tsx`) lists `GAMES` from `src/lib/games.ts`; `games.test.ts` fails if a `games/<slug>/` folder isn't listed or doesn't load `../shared/analytics.js`. `/game` 307s to `/games/kayak/` (next.config).
 - **Serving:** CloudFront `/games/*` → the assets bucket at key prefix `games/` (separate from OpenNext's `_assets/`; no lifecycle rule matches it). A CloudFront Function (`infra/functions/games-router.js`, tested in `src/tests/games-router.test.ts`) serves `index.html` for folder URLs, adds the slash a bare folder URL lacks (games import `../shared/` relatively), and sends `/games/` to `/games`.
-- **Shipping:** merging to `main`. The `DeployGames` BucketDeployment uploads `games/` (minus `tests/`, `*.md`) with `max-age=300`, prunes removed files and invalidates `/games/*`. CI runs `pnpm test:games` (`node --test`) in checks + deploy.
+- **Shipping:** merging to `main`. The `DeployGames` BucketDeployment uploads `games/` (minus `tests/`, `*.md`) with `max-age=300`, prunes removed files and invalidates `/games/*`. CI runs `pnpm test:games` (`node --test`) in checks + deploy, and on PRs touching `games/` the "games in browsers" check (`pnpm test:games:browsers`: Chromium/WebKit/Firefox, desktop + phone, features stripped).
+- **Every browser:** kayak draws with WebGPU, else WebGL 2 (`?webgl` forces it); each optional feature has a fallback — table in `games/CLAUDE.md`.
 - **Visits:** `games/shared/analytics.js` sends one `pageview` to `/att/api/track` (same session id as the site), so games show in "pageviews by path".
 - **Locally:** `pnpm games` serves `games/` on :8000; `pnpm dev` serves the `/games` page but not the games.
 

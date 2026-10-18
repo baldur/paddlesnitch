@@ -17,6 +17,7 @@ The kayak game came from `baldur/games.snitchmedia.com` on 2026-10-17, with its 
 ```sh
 pnpm games        # serve games/ on http://localhost:8000 (open /kayak/); ES modules don't load over file://
 pnpm test:games   # node --test games/tests/*.test.js (Node's built-in runner); CI runs it on every PR and deploy
+pnpm test:games:browsers   # plays each game in Chromium, WebKit and Firefox, desktop + phone, with features removed; add --gpu for real Chrome's GPU
 node --test --test-name-pattern="false start" games/tests/*.test.js   # one test by name
 ```
 
@@ -25,6 +26,24 @@ node --test --test-name-pattern="false start" games/tests/*.test.js   # one test
 ## How it ships
 
 Merging to `main` ships it. The CDK stack (`DeployGames` in `infra/lib/att-stack.ts`) uploads `games/` (minus `tests/` and `*.md`) to `games/` in the assets bucket, deletes files that were removed, and clears the CDN cache for `/games/*`. Browsers re-check after 5 minutes. A CloudFront Function (`infra/functions/games-router.js`) serves `index.html` for a folder URL, adds the trailing slash a bare folder URL lacks, and sends `/games/` to the `/games` page. `/game` redirects to `/games/kayak/`.
+
+## Every browser, with a fallback for each feature
+
+A game must run in current Chrome, Edge, Safari and Firefox, desktop and phone (iOS 15.4+, the first Safari with `<dialog>`), and anything optional must degrade, never throw. `tests/browsers.mjs` plays each game in all three engines with phone profiles and with features stripped; CI runs it on PRs that touch `games/` (the "games in browsers" check). Phones are emulated there, not real devices.
+
+| Feature | Where it's missing | Fallback |
+| --- | --- | --- |
+| WebGPU | Firefox, iOS before 26, many Android phones; or it fails to start | WebGL 2 renderer (`kayak/render-gl.js`, loaded only then). `?webgl` forces it |
+| WebGL 2 as well | very old browsers | the menu says so and disables the race buttons |
+| `<dialog>` | iOS before 15.4 | a plain "too old" message (classic inline script) |
+| Gamepad API | Firefox on Android | `navigator.getGamepads?.() ?? []` — never call it bare |
+| Motion sensors | desktops; iOS without HTTPS or permission | touch play gets the balance assist |
+| Speech | some browsers have none; iOS needs a first word in a tap | on-screen captions for every call; a silent word on the race button |
+| Audio start | phones only count the end of a touch as a gesture | `shared/audio.js` unlocks on pointerup/touchend too, and resumes iOS's 'interrupted' state |
+| Vibration, full screen, orientation lock | iOS | optional calls (`?.`, `.catch`) |
+| Storage | private modes | every read and write in `try` |
+
+The WebGL renderer must look the same as the WebGPU one: `shaders-gl.js` is a line-for-line port of `shaders.js` (keep them in step), with the same 4× MSAA and 24-bit depth, and WebGPU's 0..1 depth stretched to WebGL's -1..1. Without a GPU timer it sizes the resolution from frame times (`pacing.js`, tested): under ~45 fps it drops, a steady ~57+ it creeps back. A lost WebGL context (phones under memory pressure) reloads the page when it comes back.
 
 ## Layout
 
@@ -57,6 +76,6 @@ Split each game so the simulation can be tested without a browser:
 
 ### Kayak
 
-A full-screen WebGPU view with its own renderer (`render.js`, `shaders.js`, `mat4.js`) and procedurally built meshes (`meshes.js`, `world.js`). Its physics (`sim.js`), course geometry (`course.js`) and pack racing (`race.js`: the starter and false starts, rival AI, wash drafting, hull collisions, standings) are DOM-free and tested; a whole race can be simulated headlessly in Node.
+A full-screen WebGPU view with its own renderer (`render.js`, `shaders.js`, `mat4.js`; WebGL 2 fallback in `render-gl.js`, `shaders-gl.js`, `pacing.js`) and procedurally built meshes (`meshes.js`, `world.js`). Its physics (`sim.js`), course geometry (`course.js`) and pack racing (`race.js`: the starter and false starts, rival AI, wash drafting, hull collisions, standings) are DOM-free and tested; a whole race can be simulated headlessly in Node.
 
 Race courses have a `warp`: the HUD shows distances and times 4× longer than what is actually paddled, so a 6 km race (shown as about 28 minutes) plays in about 7, while speeds and stroke rates stay real. Courses vary in width along the way (`widthAt`), and moored narrowboats count as bank. Speed comes from rhythm (a steady alternating beat) as much as stroke rate; hull types (`HULLS` in `sim.js`) trade speed for stability. Session form (stronger, fitter, steadier on the beat after each race) lives in `sessionStorage`. On phones, turning the phone shifts your weight (`controls.js`, DeviceMotion; iOS only allows it over HTTPS, and without it touch play gets a balance assist). The renderer lowers its resolution when the GPU falls behind. Open `kayak/#debug` to expose `window.kayak` (race, boat, location, course, state, GPU stats) for scripted playtests.

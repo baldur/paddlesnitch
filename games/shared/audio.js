@@ -1,6 +1,8 @@
 // Tiny Web Audio synth: every sound is generated, so there are no audio files to load.
 // Browsers only allow audio after a user gesture, so the context is created lazily
-// on the first pointer or key press.
+// on the first pointer or key press. On phones the gesture is the END of a touch
+// (pointerup/touchend), and iOS leaves the context 'interrupted' after a call or
+// another app, so any later tap restarts it.
 
 const STORAGE_KEY = 'snitchmedia:muted';
 
@@ -10,9 +12,9 @@ try { muted = localStorage.getItem(STORAGE_KEY) === '1'; } catch {}
 
 function unlock() {
   ctx ??= new AudioContext();
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
 }
-for (const type of ['pointerdown', 'keydown']) {
+for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) {
   addEventListener(type, unlock, { capture: true });
 }
 
