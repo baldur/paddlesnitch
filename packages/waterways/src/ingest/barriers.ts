@@ -61,7 +61,8 @@ export function featuresFromAmber(features: Point[], fetchedAt: string): Feature
     out.push({
       id: `amber:${id}`,
       kind: 'weir',
-      name: typeof p.barrier_name === 'string' && p.barrier_name.trim() ? p.barrier_name.trim() : undefined,
+      // 1,130 Scottish records carry the literal string "Null".
+      name: typeof p.barrier_name === 'string' && p.barrier_name.trim() && !/^null$/i.test(p.barrier_name.trim()) ? p.barrier_name.trim() : undefined,
       at: round6([lat, lng]),
       source: { source: 'amber', sourceId: id, fetchedAt },
       ...(height > 0 ? { weir: { heightM: height } } : {}),

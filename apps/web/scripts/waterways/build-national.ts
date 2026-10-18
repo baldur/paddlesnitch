@@ -21,7 +21,7 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
-import { linksFromWays, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromWays, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
@@ -58,6 +58,7 @@ async function main() {
   const osm: OsmElement[] = []
   for await (const p of lines(path.join(EXTRACT, 'points.jsonl'))) if (snap(links, p.at, OSM_NEAR_M)) osm.push(p)
   lap(`OSM points near the water: ${osm.length}`)
+  osmLockList.push(...osmGateLocks(osm, osmLockList, new Date().toISOString()))
 
   const all: Feature[] = []
   const sources: Record<string, number> = {}

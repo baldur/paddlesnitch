@@ -10,7 +10,7 @@ import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesni
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
-import { linksFromWays, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromWays, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
@@ -246,6 +246,22 @@ describe('OSM lock chambers (filling gaps)', () => {
     ], AT)).toEqual([])
   })
 
+  it('makes a lock from a pair of lock gates when no chamber is drawn (the Medway)', () => {
+    const gate = (id: number, at: LatLng, tags: Record<string, string> = {}) => ({ id: `node/${id}`, at, tags: { waterway: 'lock_gate', ...tags } })
+    const chambers = osmLocks([chamber(9, [51.2508, 0.4466], { name: 'Teston Lock' })], AT)
+    const locks = osmGateLocks([
+      gate(32336165, [51.194813, 0.278963]), gate(10064659379, [51.194683, 0.279384], { name: 'Town Lock' }),   // Tonbridge: ~33 m apart
+      gate(472528923, [51.250738, 0.446575]), gate(472528924, [51.25103, 0.446725]),                           // Teston: chamber already drawn
+      gate(1, [51.3, 0.6]),                                                                                       // a lone gate
+      { id: 'way/951522045', at: [51.5063, -0.0722], tags: { waterway: 'lock_gate' } },                             // St Katharine Docks,
+      { id: 'way/951522046', at: [51.5064, -0.0723], tags: { waterway: 'lock_gate' } },                             // drawn as lines
+    ], chambers, AT)
+    expect(locks).toEqual([{
+      id: 'osm:lock:node/32336165', kind: 'lock', name: 'Town Lock', at: [51.194748, 0.279174],
+      source: { source: 'osm', sourceId: 'node/32336165', fetchedAt: AT },
+    }])
+  })
+
   it('counts on a route only when the chamber is on the water travelled, not a side cut', () => {
     const line: LatLng[] = [[52, -1], [52, -0.99]]
     const at = (dLat: number): Feature => ({ id: `osm:${dLat}`, kind: 'lock', at: [52 + dLat, -0.995], source: { source: 'osm', fetchedAt: AT } })
@@ -267,7 +283,7 @@ describe('weirs and waterfalls from the barrier inventories', () => {
     expect(out.map(f => [f.id, f.name, f.weir?.heightM])).toEqual([
       ['amber:EN_13361_EA', 'Abingdon', 0.5],
       ['amber:EN_1679_EA', undefined, undefined],
-      ['amber:EN_12722_EA', undefined, undefined],
+      ['amber:EN_12722_EA', undefined, undefined],     // named "Null" in the source
     ])
     expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toContain('About 0.5 m high.')
   })

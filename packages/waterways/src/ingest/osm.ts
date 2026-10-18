@@ -150,3 +150,31 @@ export function osmLocks(ways: OsmWay[], fetchedAt: string, mergeM = 50): Featur
     source: { source: 'osm' as const, sourceId: `way/${Math.min(...c.ids)}`, fetchedAt },
   }))
 }
+
+/** Locks mapped only as their gates: two or more waterway=lock_gate nodes
+ *  within pairM of each other, with no chamber way within gapM (most of the
+ *  Medway's locks are drawn like this). One gate alone is left out: it could
+ *  be a flood or tide gate. Gates drawn as lines are left out too: on the
+ *  tidal Thames they're dock and marina entrances (St Katharine, Surrey Docks,
+ *  Chelsea Harbour), not locks on anyone's way. Same licence and gap rule as
+ *  osmLocks. */
+export function osmGateLocks(points: OsmElement[], chambers: Feature[], fetchedAt: string, pairM = 60, gapM = 120): Feature[] {
+  const gates = points.filter(p => p.id.startsWith('node/') && p.tags.waterway === 'lock_gate' && p.tags.access !== 'private')
+  const group = gates.map((_, i) => i)
+  const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])))
+  for (let i = 0; i < gates.length; i++) {
+    for (let j = i + 1; j < gates.length; j++) {
+      if (Math.abs(gates[i].at[0] - gates[j].at[0]) < 0.001 && haversine(gates[i].at, gates[j].at) <= pairM) group[root(i)] = root(j)
+    }
+  }
+  const clusters = new Map<number, OsmElement[]>()
+  gates.forEach((g, i) => clusters.set(root(i), [...(clusters.get(root(i)) ?? []), g]))
+  return [...clusters.values()].flatMap(c => {
+    if (c.length < 2) return []
+    const at = round6([c.reduce((n, g) => n + g.at[0], 0) / c.length, c.reduce((n, g) => n + g.at[1], 0) / c.length])
+    if (chambers.some(ch => haversine(ch.at, at) <= gapM)) return []
+    const id = c.map(g => g.id).sort((a, b) => Number(a.split('/')[1]) - Number(b.split('/')[1]))[0]
+    const name = c.map(g => g.tags.lock_name ?? (/\block\b/i.test(g.tags.name ?? '') ? g.tags.name : undefined)).find(Boolean)
+    return [{ id: `osm:lock:${id}`, kind: 'lock' as const, name, at, source: { source: 'osm' as const, sourceId: id, fetchedAt } }]
+  })
+}
