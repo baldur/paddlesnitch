@@ -9,9 +9,9 @@ import manifestJson from '../data/manifest.json'
 import type { Place } from './places'
 import { portagesAt, type PublicPortage } from './portage'
 import { listPublicPortages } from './portage-store'
-import { planDemand } from './plan-store'
+import { planDemand, planLines } from './plan-store'
 import { waterwayCoverage, type WaterwayCoverage } from './waterway-coverage'
-import type { Feature, NetLink, RegionDataset } from './types'
+import type { Feature, LatLng, NetLink, RegionDataset } from './types'
 
 export type Manifest = {
   version: string | null
@@ -32,16 +32,16 @@ export type NationalDataset = {
   places: Place[]
 }
 
-let coverage: { ds: NationalDataset; portages: PublicPortage[]; rows: WaterwayCoverage[] } | null = null
+let coverage: { ds: NationalDataset; portages: PublicPortage[]; lines: LatLng[][]; rows: WaterwayCoverage[] } | null = null
 
 /** Coverage by waterway for the live dataset and paddlers' contributions:
  *  worked out on first ask (about half a second nationally) and kept until
  *  either changes, so nothing extra is published. */
 export async function loadCoverage(): Promise<{ version: string; rows: WaterwayCoverage[]; ds: NationalDataset }> {
-  const [ds, portages] = await Promise.all([loadNational(), listPublicPortages()])
-  if (coverage?.ds !== ds || coverage.portages !== portages) {
+  const [ds, portages, lines] = await Promise.all([loadNational(), listPublicPortages(), planLines()])
+  if (coverage?.ds !== ds || coverage.portages !== portages || coverage.lines !== lines) {
     const visible = portages.filter(p => !p.hidden)
-    coverage = { ds, portages, rows: waterwayCoverage(ds.links, ds.features, f => portagesAt(f, visible).length > 0) }
+    coverage = { ds, portages, lines, rows: waterwayCoverage(ds.links, ds.features, f => portagesAt(f, visible).length > 0, lines) }
   }
   return { version: ds.version, rows: coverage.rows, ds }
 }

@@ -8,7 +8,9 @@
 // link to the plan, so the owner's id never appears in the URL.
 import { nanoid } from 'nanoid'
 import { deleteObject, getJson, listKeys, putJson } from '@paddlesnitch/core/storage'
+import { haversine } from '@paddlesnitch/timing/geo'
 import type { PlanInput } from './plan'
+import type { LatLng } from './types'
 
 export type SavedPlan = PlanInput & {
   id: string
@@ -35,7 +37,7 @@ const sharedKey = (shareId: string) => `plans/shared/${shareId}.json`
 // matter most (/plan/gaps). Only counts are ever shown; deleted with the plan
 // and the account.
 const demandKey = (planId: string) => `plans/demand/${planId}.json`
-type Demand = { userId: string; ids: string[] }
+type Demand = { userId: string; ids: string[]; line?: LatLng[] }
 const validId = (id: string) => /^[\w-]{1,64}$/.test(id)
 type ShareIndex = { userId: string; planId: string }
 
@@ -81,27 +83,56 @@ export async function deletePlan(userId: string, id: string): Promise<boolean> {
   return true
 }
 
-/** Record the locks and portages a saved plan passes (feature ids). */
-export async function recordPlanDemand(userId: string, planId: string, ids: string[]): Promise<void> {
-  await putJson(demandKey(planId), { userId, ids: [...new Set(ids)] } satisfies Demand)
+/** A point about every stepM along a line, ends included, at most `max`: enough
+ *  to tell which waterways a route travels without keeping the route. */
+export function sampleLine(line: LatLng[], stepM = 1000, max = 400): LatLng[] {
+  if (line.length < 2) return line.slice()
+  const out: LatLng[] = [line[0]]
+  let run = 0
+  for (let i = 1; i < line.length; i++) {
+    run += haversine(line[i - 1], line[i])
+    if (run >= stepM) { out.push(line[i]); run = 0 }
+  }
+  if (out[out.length - 1] !== line[line.length - 1]) out.push(line[line.length - 1])
+  const every = Math.ceil(out.length / max)
+  return (every > 1 ? out.filter((_, i) => i % every === 0 || i === out.length - 1) : out)
+    .map(([a, b]) => [Math.round(a * 1e4) / 1e4, Math.round(b * 1e4) / 1e4] as LatLng)
+}
+
+/** Record the locks and portages a saved plan passes (feature ids), and a
+ *  coarse sample of its route for ranking waterways by how often they're planned. */
+export async function recordPlanDemand(userId: string, planId: string, ids: string[], line: LatLng[] = []): Promise<void> {
+  await putJson(demandKey(planId), { userId, ids: [...new Set(ids)], line: sampleLine(line) } satisfies Demand)
   demandCache = null
 }
 
-let demandCache: { at: number; counts: Map<string, number> } | null = null
+let demandCache: { at: number; counts: Map<string, number>; lines: LatLng[][] } | null = null
 /** Tests start each case on empty storage; the cache mustn't outlive that. */
 export const clearDemandCache = () => { demandCache = null }
 
 /** How many saved plans pass each lock or portage (feature id → plans).
  *  Read across every plan's record and kept an hour per server instance. */
 export async function planDemand(): Promise<Map<string, number>> {
-  if (demandCache && Date.now() - demandCache.at < 3_600_000) return demandCache.counts
+  return (await readDemand()).counts
+}
+
+/** Every saved plan's sampled route (same cache). The same array until the
+ *  cache refreshes, so callers can tell when to recompute. */
+export async function planLines(): Promise<LatLng[][]> {
+  return (await readDemand()).lines
+}
+
+async function readDemand() {
+  if (demandCache && Date.now() - demandCache.at < 3_600_000) return demandCache
   const counts = new Map<string, number>()
+  const lines: LatLng[][] = []
   for (const k of await listKeys('plans/demand/')) {
     const d = await getJson<Demand>(k)
     for (const id of d?.ids ?? []) counts.set(id, (counts.get(id) ?? 0) + 1)
+    if (d?.line?.length) lines.push(d.line)
   }
-  demandCache = { at: Date.now(), counts }
-  return counts
+  demandCache = { at: Date.now(), counts, lines }
+  return demandCache
 }
 
 /** Account deletion: their plans' demand records (the plans go with users/{id}/). */

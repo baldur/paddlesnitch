@@ -152,6 +152,16 @@ describe('the most needed locks', () => {
     expect(JSON.stringify(list)).not.toContain(ann.id)
   })
 
+  it('ranks waterways on the gaps page by how many saved plans travel them, without saying whose', async () => {
+    const ann = await makeUser('Ann'), bob = await makeUser('Bob')
+    await as(ann).plan.save(PAST_MARSH)
+    await as(bob).plan.save(PAST_HAMBLEDEN)
+    const rows: { name: string; plans: number }[] = await mapGet('coverage')
+    expect(rows[0]).toMatchObject({ name: 'River Thames', plans: 2 })
+    expect(rows.filter(r => r.plans).length).toBe(1)
+    expect(JSON.stringify(rows)).not.toContain(ann.id)
+  })
+
   it('a lock drops off once someone adds its details', async () => {
     const ann = await makeUser('Ann')
     await as(ann).plan.save(PAST_MARSH)
