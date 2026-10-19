@@ -93,7 +93,9 @@ async function main() {
   }
   if (failed) throw new Error(`${failed} check route(s) failed; not publishing`)
 
-  const files = { network: links, features, 'osm-features': osmFeatures, osm, places }
+  // Portage paths with their ends, loaded by the server as landings (osmPortages).
+  const osmPortageList = osm.filter(p => p.ends && 'portage' in p.tags)
+  const files = { network: links, features, 'osm-features': osmFeatures, osm, places, 'osm-portages': osmPortageList }
   const bodies = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(JSON.stringify(v))]))
   const hash = createHash('sha256')
   for (const b of Object.values(bodies)) hash.update(b)
@@ -105,7 +107,7 @@ async function main() {
   const manifest: Manifest = {
     version,
     builtAt: new Date().toISOString(),
-    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.length, osm: osm.length, places: places.length },
+    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
     sources,
   }
   await fsp.writeFile(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')

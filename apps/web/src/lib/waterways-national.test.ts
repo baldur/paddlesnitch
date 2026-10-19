@@ -16,7 +16,7 @@ import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces, searchPlaces, type Place } from '@paddlesnitch/waterways/places'
 import { computePlan, routePlan, timePlan } from '@paddlesnitch/waterways/plan'
-import { portageOnRoute, portagesAt, type PublicPortage } from '@paddlesnitch/waterways/portage'
+import { osmPortages, portageOnRoute, portagesAt, type PublicPortage } from '@paddlesnitch/waterways/portage'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
@@ -381,6 +381,39 @@ describe('coverage by waterway', () => {
     const lines = coverageLines(nav, rows)
     expect(lines.thin.length).toBe(3)    // all three links of River Test, the lock chamber included
     expect(lines.good).toEqual([])
+  })
+})
+
+describe('portage paths mapped in OpenStreetMap', () => {
+  const way = (id: number, ends: [LatLng, LatLng], tags: Record<string, string> = {}) =>
+    ({ id: `way/${id}`, at: ends[0], tags: { highway: 'path', portage: 'yes', ...tags }, ends })
+
+  it('joins pieces that meet end to end; the outer ends are the landings', () => {
+    // Steps, a path, more steps: about 140 m in all.
+    const [p] = osmPortages([
+      way(3, [[57.0, -4.0], [57.0001, -4.0]], { highway: 'steps' }),
+      way(1, [[57.0001, -4.0], [57.0012, -4.0]]),
+      way(2, [[57.0012, -4.0], [57.0013, -4.0]], { highway: 'steps' }),
+    ])
+    expect(p).toMatchObject({ id: 'osm:way/1', name: 'OpenStreetMap', licence: 'ODbL-1.0' })
+    expect(p.landings).toEqual([[57.0, -4.0], [57.0013, -4.0]])
+  })
+
+  it('drops steps down to a landing stage (under 40 m), and private or closed paths', () => {
+    expect(osmPortages([
+      way(1, [[51.503326, -0.639691], [51.503412, -0.639692]], { highway: 'steps' }),   // ~10 m
+      way(2, [[52, -1], [52.001, -1]], { access: 'private' }),
+      way(3, [[53, -1], [53.001, -1]], { portage: 'no' }),
+    ])).toEqual([])
+  })
+
+  it("a carry round a lock flight belongs to every lock in it, a paddler's only to their lock", () => {
+    const [flight] = osmPortages([way(1, [[57.140, -4.68], [57.144, -4.68]])])   // ~445 m, Fort Augustus-like
+    const lock = (n: number, lat: number): Feature => ({ id: `l${n}`, kind: 'lock', at: [lat, -4.68], source: { source: 'scottish-canals', fetchedAt: AT } })
+    expect([lock(8, 57.1405), lock(10, 57.142), lock(12, 57.1435), lock(13, 57.150)].map(l => portagesAt(l, [flight]).length)).toEqual([1, 1, 1, 0])
+    const theirs: PublicPortage = { ...flight, id: 'p', name: 'Ann', licence: 'CC0-1.0' }
+    expect(portagesAt(lock(8, 57.1405), [theirs])).toEqual([])
+    expect(portageOnRoute([[57.13, -4.68], [57.16, -4.68]], flight)).toMatchObject({ by: 'OpenStreetMap', osm: true, carryM: 445 })
   })
 })
 

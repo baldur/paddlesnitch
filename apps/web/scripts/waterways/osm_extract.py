@@ -75,7 +75,11 @@ def main(src, out):
                 elif wanted_point(tags) and coords:
                     lat = sum(c[0] for c in coords) / len(coords)
                     lng = sum(c[1] for c in coords) / len(coords)
-                    points.write(json.dumps({'id': f'way/{o.id}', 'at': [r6(lat), r6(lng)], 'tags': tags}) + '\n')
+                    point = {'id': f'way/{o.id}', 'at': [r6(lat), r6(lng)], 'tags': tags}
+                    # A portage path's two ends are where you get out and back in.
+                    if 'portage' in tags and len(coords) > 1:
+                        point['ends'] = [coords[0], coords[-1]]
+                    points.write(json.dumps(point) + '\n')
                     counts['points'] += 1
     print(json.dumps(counts))
 

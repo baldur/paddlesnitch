@@ -380,8 +380,10 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
                 {s.portages?.map(p => (
                   <div key={p.id}>
                     {portageLines(p).map((l, j) => <span key={j} className="block text-fg">{l}</span>)}
-                    <span className="text-muted">Added by {p.by} · CC0 · </span>
-                    {actions.mine.has(p.id)
+                    {p.osm
+                      ? <span className="text-muted">Mapped in OpenStreetMap · ODbL</span>
+                      : <span className="text-muted">Added by {p.by} · CC0 · </span>}
+                    {p.osm ? null : actions.mine.has(p.id)
                       ? <button type="button" className="underline text-muted hover:text-red" onClick={() => actions.onDelete(p.id)}>delete</button>
                       : actions.signedIn && (actions.flagged.has(p.id)
                         ? <span className="text-muted">flagged, thanks</span>
