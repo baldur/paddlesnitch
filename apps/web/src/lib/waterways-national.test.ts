@@ -10,7 +10,7 @@ import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesni
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
-import { linksFromWays, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromWays, osmAccess, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
@@ -381,6 +381,28 @@ describe('coverage by waterway', () => {
     const lines = coverageLines(nav, rows)
     expect(lines.thin.length).toBe(3)    // all three links of River Test, the lock chamber included
     expect(lines.good).toEqual([])
+  })
+})
+
+describe('slipways and put-ins mapped in OpenStreetMap', () => {
+  const pt = (id: number, tags: Record<string, string>) => ({ id: `node/${id}`, at: [52.05, -2.7] as LatLng, tags })
+
+  it('public slipways and canoe put-ins become places to get in; private, customers-only and closed ones do not', () => {
+    const got = osmAccess([
+      pt(1, { leisure: 'slipway', name: 'Hereford Rowing Club slip' }),
+      pt(2, { canoe: 'put_in' }),
+      pt(3, { waterway: 'access_point', canoe: 'permit' }),
+      pt(4, { leisure: 'slipway', access: 'private' }),
+      pt(5, { leisure: 'slipway', access: 'customers' }),
+      pt(6, { waterway: 'access_point', canoe: 'no' }),
+      pt(7, { waterway: 'weir' }),
+    ], AT)
+    expect(got.map(f => [f.id, f.kind, f.name])).toEqual([
+      ['osm:access:node/1', 'slipway', 'Hereford Rowing Club slip'],
+      ['osm:access:node/2', 'access', undefined],
+      ['osm:access:node/3', 'access', undefined],
+    ])
+    expect(got[0].source).toEqual({ source: 'osm', sourceId: 'node/1', fetchedAt: AT })
   })
 })
 
