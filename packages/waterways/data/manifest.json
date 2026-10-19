@@ -1,12 +1,13 @@
 {
-  "version": "20261018-b99f75d6",
-  "builtAt": "2026-10-18T19:58:38.258Z",
+  "version": "20261019-2028779c",
+  "builtAt": "2026-10-19T06:26:41.277Z",
   "counts": {
-    "links": 80556,
+    "links": 80558,
     "km": 63296,
     "features": 33137,
     "osmLocks": 409,
-    "osm": 203569,
+    "osm": 203588,
+    "osmPortages": 131,
     "places": 29296
   },
   "sources": {
