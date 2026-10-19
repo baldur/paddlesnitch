@@ -69,7 +69,7 @@ export const planRouter = router({
     // a failure here mustn't fail the save).
     try {
       const routed = routePlan(await loadNational(), saved)
-      if (typeof routed !== 'string') await recordPlanDemand(ctx.user.id, saved.id, routed.stops.filter(s => s.portage).map(s => s.feature.id))
+      if (typeof routed !== 'string') await recordPlanDemand(ctx.user.id, saved.id, routed.stops.filter(s => s.portage).map(s => s.feature.id), routed.line)
     } catch { /* the ranking is a nicety */ }
     return saved
   }),

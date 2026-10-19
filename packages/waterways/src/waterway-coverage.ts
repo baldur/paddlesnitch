@@ -29,6 +29,7 @@ export type WaterwayCoverage = {
   facilities: number
   sources: string[]
   level: CoverageLevel
+  plans: number              // saved plans that travel some of it
 }
 
 /** A link shorter than this between two of one name doesn't split them. */
@@ -37,9 +38,13 @@ const BRIDGE_M = 600
 /** Per 10 km of water, this many access points makes "good" possible. */
 const GOOD_ACCESS_PER_10KM = 1
 
+/** A sampled route point this close to a waterway travels it. */
+const ROUTE_NEAR_M = 50
+
 /** Group links into waterways (the same name, touching), assign each feature
- *  to the nearest one it's on, and score them. */
-export function waterwayCoverage(links: NetLink[], features: Feature[], hasPortage: (f: Feature) => boolean = () => false): WaterwayCoverage[] {
+ *  to the nearest one it's on, score them, and count the saved plans (their
+ *  sampled routes) that travel each. */
+export function waterwayCoverage(links: NetLink[], features: Feature[], hasPortage: (f: Feature) => boolean = () => false, routes: LatLng[][] = []): WaterwayCoverage[] {
   const groups = new Map<string, NetLink[]>()
   const groupOf = groupLinks(links)
   for (const l of links) {
@@ -60,7 +65,7 @@ export function waterwayCoverage(links: NetLink[], features: Feature[], hasPorta
     const mid = ls[Math.floor(ls.length / 2)].line
     rows.set(root, {
       id: root, name: ls[0].name, kind, km: Math.round(km * 10) / 10, at: mid[Math.floor(mid.length / 2)],
-      locks: 0, locksWithSide: 0, weirs: 0, access: 0, crew: 0, facilities: 0, sources: [], level: 'thin',
+      locks: 0, locksWithSide: 0, weirs: 0, access: 0, crew: 0, facilities: 0, sources: [], level: 'thin', plans: 0,
     })
     for (const l of ls) linkGroup.set(l.id, root)
   }
@@ -83,11 +88,20 @@ export function waterwayCoverage(links: NetLink[], features: Feature[], hasPorta
     if (!set) sources.set(row.id, (set = new Set()))
     set.add(f.source.source)
   }
+  for (const line of routes) {
+    const on = new Set<string>()
+    for (const p of line) {
+      const s = snap(scored, p, ROUTE_NEAR_M)
+      const root = s && linkGroup.get(s.link.id)
+      if (root) on.add(root)
+    }
+    for (const root of on) rows.get(root)!.plans++
+  }
   for (const row of rows.values()) {
     row.sources = [...(sources.get(row.id) ?? [])].sort()
     row.level = levelOf(row)
   }
-  return [...rows.values()].sort((a, b) => b.km - a.km)
+  return [...rows.values()].sort((a, b) => b.plans - a.plans || b.km - a.km)
 }
 
 /** good: places to get in and out, a way for a crew to reach it, and every

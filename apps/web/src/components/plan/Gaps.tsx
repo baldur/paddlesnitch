@@ -10,8 +10,9 @@ import { inputClass } from '@paddlesnitch/ui/Form'
 import { PageHeader, eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { addPortageHref, COVERAGE_LEVELS } from '@/lib/plan-ui'
 
-// The gaps table: every scored waterway with what we know, filterable. The
-// scores come from /plan/data/{version}/coverage (computed from the live data).
+// The gaps table: every scored waterway with what we know, filterable, the
+// most-planned first. The scores come from /plan/data/{version}/coverage
+// (computed from the live data and people's saved plans).
 
 const VERSION = manifest.version ?? 'none'
 const PAGE = 100
@@ -88,7 +89,7 @@ export default function Gaps() {
           <thead className={`${eyebrowClass} text-left`}>
             <tr className="border-b border-border whitespace-nowrap">
               <th className="py-2 pr-3 font-normal">Waterway</th><th className="pr-3 font-normal">km</th><th className="pr-3 font-normal">Locks</th><th className="pr-3 font-normal">Side known</th>
-              <th className="pr-3 font-normal">Weirs</th><th className="pr-3 font-normal">Get in / out</th><th className="pr-3 font-normal">Crew access</th><th className="pr-3 font-normal">Facilities</th><th className="font-normal">Coverage</th>
+              <th className="pr-3 font-normal">Weirs</th><th className="pr-3 font-normal">Get in / out</th><th className="pr-3 font-normal">Crew access</th><th className="pr-3 font-normal">Facilities</th><th className="pr-3 font-normal">Coverage</th><th className="font-normal">Plans</th>
             </tr>
           </thead>
           <tbody>
@@ -107,7 +108,8 @@ export default function Gaps() {
                   <td className={`pr-3 ${r.access ? '' : 'text-red'}`}>{r.access}</td>
                   <td className="pr-3">{r.crew}</td>
                   <td className="pr-3">{r.facilities}</td>
-                  <td style={{ color: level.colour }}>{level.label}</td>
+                  <td className="pr-3" style={{ color: level.colour }}>{level.label}</td>
+                  <td>{r.plans || '—'}</td>
                 </tr>
               )
             })}
@@ -115,7 +117,7 @@ export default function Gaps() {
         </table>
       </div>
       {shown < filtered.length && <button type="button" className={`${BTN} self-start`} onClick={() => setShown(n => n + PAGE)}>Show more</button>}
-      <p className="text-sm text-muted">Click a waterway to open it in the planner. Counts are from the data we hold; a lock&apos;s own weir is counted as a weir here.</p>
+      <p className="text-sm text-muted">Click a waterway to open it in the planner. Counts are from the data we hold; a lock&apos;s own weir is counted as a weir here. Plans: how many saved plans travel some of it; the most-planned come first.</p>
     </main>
   )
 }

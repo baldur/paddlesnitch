@@ -21,6 +21,7 @@ import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
 import { coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
+import { sampleLine } from '@paddlesnitch/waterways/plan-store'
 import { portageLines, stopLines } from './plan-ui'
 
 const ds: RegionDataset = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data/dw.json'), 'utf8'))
@@ -352,6 +353,27 @@ describe('coverage by waterway', () => {
     expect(levelOf({ ...base, access: 2, crew: 1 })).toBe('good')
     expect(levelOf({ ...base, access: 2, crew: 1, locks: 4, locksWithSide: 3 })).toBe('some')
     expect(levelOf({ ...base, access: 1, crew: 1 })).toBe('some')   // 20 km needs 2 places to get in and out
+  })
+
+  it('counts the saved plans that travel each waterway, and puts the most planned first', () => {
+    const other = [link('e', 'Kennet', 'm1', 'm2', [[52, 0], [52, 0.3]], { boat: 'yes' })]    // longer than River Test
+    const routes: LatLng[][] = [
+      [[51, 0.05], [51, 0.15]],                         // along River Test
+      [[51.0001, 0.12], [51.0002, 0.18]],                // River Test again
+      [[51.01, 0.05]],                                   // ~1.1 km off: travels nothing
+    ]
+    expect(waterwayCoverage([...nav, ...other], [], undefined, routes).map(r => [r.name, r.plans])).toEqual([['River Test', 2], ['Kennet', 0]])
+    expect(waterwayCoverage([...nav, ...other], []).map(r => r.name)).toEqual(['Kennet', 'River Test'])   // no plans: longest first
+  })
+
+  it('samples a route about every kilometre, ends kept, rounded, capped', () => {
+    const line: LatLng[] = Array.from({ length: 101 }, (_, i) => [51, i * 0.0015])   // ~105 m apart, ~10.5 km
+    const s = sampleLine(line)
+    expect(s[0]).toEqual([51, 0])
+    expect(s.at(-1)).toEqual([51, 0.15])
+    expect(s.length).toBeGreaterThanOrEqual(10)
+    expect(s.length).toBeLessThanOrEqual(12)
+    expect(sampleLine(line, 100, 20).length).toBeLessThanOrEqual(21)
   })
 
   it('colours the scored water on the map by level', () => {
