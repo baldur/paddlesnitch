@@ -21,7 +21,7 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
-import { linksFromWays, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromWays, osmAccess, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
@@ -39,6 +39,10 @@ const MANIFEST = path.resolve(process.cwd(), '../../packages/waterways/data/mani
 const OSM_NEAR_M = 400
 /** An OSM lock this close to an authority's lock is the same lock. */
 const GAP_LOCK_M = 120
+/** An OSM slipway or put-in this close to an authority's access point is the same place. */
+const GAP_ACCESS_M = 100
+/** A slipway or put-in further from the water than this is on another pond or the coast. */
+const ACCESS_ON_WATER_M = 60
 
 async function* lines(file: string) {
   for await (const l of readline.createInterface({ input: fs.createReadStream(file) })) if (l) yield JSON.parse(l)
@@ -78,6 +82,22 @@ async function main() {
   const coreLocks = features.filter(f => f.kind === 'lock')
   const osmFeatures = osmLockList.filter(l => snap(links, l.at, OSM_NEAR_M) && !coreLocks.some(c => haversine(c.at, l.at) <= GAP_LOCK_M))
   lap(`OSM locks filling gaps: ${osmFeatures.length} of ${osmLockList.length}`)
+  const ACCESS_KINDS = new Set(['access', 'slipway', 'portage'])
+  const coreAccess = features.filter(f => ACCESS_KINDS.has(f.kind))
+  const accessGrid = new Map<string, Feature[]>()
+  const cellOf = (p: LatLng) => `${Math.floor(p[0] * 100)}:${Math.floor(p[1] * 60)}`   // ~1.1 km cells
+  for (const f of coreAccess) { const k = cellOf(f.at); accessGrid.set(k, [...(accessGrid.get(k) ?? []), f]) }
+  const nearCore = (p: LatLng) => {
+    const [y, x] = cellOf(p).split(':').map(Number)
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if ((accessGrid.get(`${y + dy}:${x + dx}`) ?? []).some(f => haversine(f.at, p) <= GAP_ACCESS_M)) return true
+    }
+    return false
+  }
+  const osmAccessList = osmAccess(osm, new Date().toISOString())
+  const osmAccessFill = osmAccessList.filter(a => snap(links, a.at, ACCESS_ON_WATER_M) && !nearCore(a.at))
+  osmFeatures.push(...osmAccessFill)
+  lap(`OSM slipways and put-ins filling gaps: ${osmAccessFill.length} of ${osmAccessList.length}`)
 
   const osmPlaces: { at: LatLng; tags: Record<string, string> }[] = []
   for await (const p of lines(path.join(EXTRACT, 'places.jsonl'))) osmPlaces.push(p)
@@ -107,7 +127,7 @@ async function main() {
   const manifest: Manifest = {
     version,
     builtAt: new Date().toISOString(),
-    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
+    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.filter(f => f.kind === 'lock').length, osmAccess: osmAccessFill.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
     sources,
   }
   await fsp.writeFile(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')
