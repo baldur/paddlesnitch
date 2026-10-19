@@ -200,3 +200,17 @@ export function osmAccess(points: OsmElement[], fetchedAt: string): Feature[] {
     }]
   })
 }
+
+/** Public toilets and drinking water mapped in OpenStreetMap, as facilities
+ *  (the build keeps those beside the water with none of ours nearby). Car parks
+ *  are left out: there are hundreds of thousands, and a supermarket's says
+ *  nothing about reaching the bank. ODbL, published in osm-features. */
+export function osmFacilities(points: OsmElement[], fetchedAt: string): Feature[] {
+  const closed = new Set(['private', 'no', 'customers', 'members', 'permit'])
+  return points.flatMap(p => {
+    const t = p.tags
+    const kind = t.amenity === 'toilets' ? 'toilet' as const : t.amenity === 'drinking_water' || t.amenity === 'water_point' ? 'drinking_water' as const : null
+    if (!kind || closed.has(t.access ?? '') || t.drinking_water === 'no') return []
+    return [{ id: `osm:facility:${p.id}`, kind: 'facility' as const, name: t.name, at: p.at, facilities: [kind], source: { source: 'osm' as const, sourceId: p.id, fetchedAt } }]
+  })
+}
