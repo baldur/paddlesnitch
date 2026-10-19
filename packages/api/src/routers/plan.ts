@@ -47,7 +47,7 @@ export const planRouter = router({
     const s = snapClick(ds, input.start)
     const start = s ? { at: s.at, waterway: s.link.name } : null
     if (!input.finish) return { start, plan: null }
-    const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: input.shape }, await listPublicPortages())
+    const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: input.shape }, [...await listPublicPortages(), ...ds.portages])
     return { start, plan: typeof plan === 'string' ? plan : { ...plan, line: simplify(plan.line, 8) } }
   }),
 

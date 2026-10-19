@@ -105,6 +105,7 @@ export type OsmElement = {
   id: string                 // 'node/123', 'way/456'
   at: LatLng                 // a node's position, a way's centre
   tags: Record<string, string>
+  ends?: [LatLng, LatLng]    // a portage path's two ends
 }
 
 /** A built region: the navigable network plus everything we know along it. */

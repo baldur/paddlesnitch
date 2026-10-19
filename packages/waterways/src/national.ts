@@ -7,11 +7,11 @@ import { gunzipSync } from 'zlib'
 import { getObject, usesLocalStorage } from '@paddlesnitch/core/storage'
 import manifestJson from '../data/manifest.json'
 import type { Place } from './places'
-import { portagesAt, type PublicPortage } from './portage'
+import { osmPortages, portagesAt, type PublicPortage } from './portage'
 import { listPublicPortages } from './portage-store'
 import { planDemand, planLines } from './plan-store'
 import { waterwayCoverage, type WaterwayCoverage } from './waterway-coverage'
-import type { Feature, LatLng, NetLink, RegionDataset } from './types'
+import type { Feature, LatLng, NetLink, OsmElement, RegionDataset } from './types'
 
 export type Manifest = {
   version: string | null
@@ -24,12 +24,14 @@ export const manifest = manifestJson as Manifest
 
 /** What the server keeps in memory. `features` is every source's features plus
  *  the OSM lock chambers that fill gaps (published apart, as osm-features.json).
- *  The OSM points layer (osm.json) isn't needed to route, so it isn't loaded. */
+ *  The OSM points layer (osm.json) isn't needed to route, so it isn't loaded;
+ *  its portage paths are (osm-portages.json), as landings. */
 export type NationalDataset = {
   version: string
   links: NetLink[]
   features: Feature[]
   places: Place[]
+  portages: PublicPortage[]      // OpenStreetMap portage paths (ODbL), beside paddlers' contributions
 }
 
 let coverage: { ds: NationalDataset; portages: PublicPortage[]; lines: LatLng[][]; rows: WaterwayCoverage[] } | null = null
@@ -40,7 +42,7 @@ let coverage: { ds: NationalDataset; portages: PublicPortage[]; lines: LatLng[][
 export async function loadCoverage(): Promise<{ version: string; rows: WaterwayCoverage[]; ds: NationalDataset }> {
   const [ds, portages, lines] = await Promise.all([loadNational(), listPublicPortages(), planLines()])
   if (coverage?.ds !== ds || coverage.portages !== portages || coverage.lines !== lines) {
-    const visible = portages.filter(p => !p.hidden)
+    const visible = [...portages.filter(p => !p.hidden), ...ds.portages]
     coverage = { ds, portages, lines, rows: waterwayCoverage(ds.links, ds.features, f => portagesAt(f, visible).length > 0, lines) }
   }
   return { version: ds.version, rows: coverage.rows, ds }
@@ -52,7 +54,7 @@ export type NeededLock = { id: string; name?: string; kind: Feature['kind']; at:
  *  first: where an hour of someone's knowledge helps most people. */
 export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
   const [ds, portages, demand] = await Promise.all([loadNational(), listPublicPortages(), planDemand()])
-  const visible = portages.filter(p => !p.hidden)
+  const visible = [...portages.filter(p => !p.hidden), ...ds.portages]
   const out: NeededLock[] = []
   for (const f of ds.features) {
     const plans = demand.get(f.id) ?? 0
@@ -87,13 +89,15 @@ async function load(): Promise<NationalDataset> {
     if (v && !usesLocalStorage()) throw new Error(`waterways: published version ${v} not found`)
     return fixture()
   }
-  const [features, osmFeatures, places] = await Promise.all([read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Place[]>('places')])
+  const [features, osmFeatures, places, portages] = await Promise.all([
+    read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Place[]>('places'), read<OsmElement[]>('osm-portages'),
+  ])
   // Routing sees one list; the files stay apart (licence layers: OSM is ODbL).
-  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? [])], places: places ?? [] }
+  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
 }
 
 async function fixture(): Promise<NationalDataset> {
   const { buildPlaces } = await import('./places')
   const dw = (await import('../data/dw.json')).default as unknown as RegionDataset
-  return { version: 'dw-fixture', links: dw.links, features: dw.features, places: buildPlaces([], dw.features, dw.links) }
+  return { version: 'dw-fixture', links: dw.links, features: dw.features, places: buildPlaces([], dw.features, dw.links), portages: [] }
 }
