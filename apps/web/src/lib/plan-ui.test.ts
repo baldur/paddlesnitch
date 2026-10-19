@@ -1,8 +1,10 @@
 // The planner page's wording and address-bar state (plan-ui.ts).
 import { describe, expect, it } from 'vitest'
 import type { Stop } from '@paddlesnitch/waterways/plan'
-import type { Feature } from '@paddlesnitch/waterways/types'
-import { addPortageHref, lockFromParams, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
+import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
+import { lineLength } from '@paddlesnitch/waterways/line'
+import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -174,5 +176,41 @@ describe('adding portage details from a link', () => {
     expect(lockFromParams(params)).toEqual({ id: 'ea-lock:hambleden', name: 'Hambleden Lock', at: [51.5604, -0.8687] })
     expect(lockFromParams({ lock: 'x', lockAt: 'nowhere' })).toBeUndefined()
     expect(lockFromParams({ lockAt: '51,0' })).toBeUndefined()
+  })
+})
+
+describe('portage maps for the printed sheet', () => {
+  // A straight route heading east through a lock at [51.5, -0.995], landings on the north bank.
+  const line: LatLng[] = [[51.5, -1.01], [51.5, -0.98]]
+  const lock = { id: 'l', kind: 'lock' as const, at: [51.5, -0.995] as LatLng, source: { source: 'crt' as const, fetchedAt: '2026-10-19T00:00:00Z' } }
+  const portage: PortageOnRoute = {
+    id: 'p', by: 'Ann', carryM: 70,
+    takeOut: { at: [51.5002, -0.9955], bank: 'left' }, putIn: { at: [51.5002, -0.9945], bank: 'left' },
+  }
+  const len = lineLength(line)
+  const chainage = len / 2   // the lock is halfway
+
+  it('centres on the lock, north up: the bank to your left heading east is above the line', () => {
+    const map = portageMap(line, { chainageM: chainage, leg: 'out', feature: lock }, portage)
+    expect(map.lock).toEqual([110, 110])
+    expect(map.takeOut[1]).toBeLessThan(110)
+    expect(map.takeOut[0]).toBeLessThan(map.putIn[0])
+    expect(map.route.startsWith('M')).toBe(true)
+  })
+
+  it('points the arrow the way you go, upstream of the lock, and on the way back reverses it', () => {
+    const out = portageMap(line, { chainageM: chainage, leg: 'out', feature: lock }, portage)
+    expect(out.arrow.deg).toBe(90)
+    expect(out.arrow.x).toBeLessThan(110)
+    const back = portageMap(line, { chainageM: 2 * len - chainage, leg: 'back', feature: lock }, portage)
+    expect(back.arrow.deg).toBe(270)
+    expect(back.arrow.x).toBeGreaterThan(110)
+  })
+
+  it('a round-number scale bar about a quarter of the width', () => {
+    const { scale, size } = portageMap(line, { chainageM: chainage, leg: 'out', feature: lock }, portage)
+    expect([10, 20, 25, 50, 100]).toContain(scale.m)
+    expect(scale.px).toBeGreaterThan(size / 8)
+    expect(scale.px).toBeLessThanOrEqual(size / 4)
   })
 })
