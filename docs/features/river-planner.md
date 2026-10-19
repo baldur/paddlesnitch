@@ -266,6 +266,7 @@ Built 2026-10-17. No paid API, no sign-up.
 - **Your own notes and print (2026-10-17, P2 and the first of P3):**
   - **Notes** on a saved plan: one for the whole plan (2,000 characters: kit, phone numbers, who drives) and one per stop (500, by feature id: "crew meets here with food"), stored on the plan (`notes`, `stopNotes` in `plan-store.ts`; tRPC `plan.setNotes`, owner only; an empty note removes it; re-saving the plan keeps them). A shared plan's link shows them, and the planner says so. Unsaved plans get "Save the plan to add your own notes".
   - **Print** at `/plan/print` (`components/plan/PrintSheet.tsx`): **Print route sheet** and **Crew sheet** under the summary. The route and timing travel in the address as on `/plan`; `?id=` (your plan) or `?share=` adds its title and notes; `?show=` prints the stop kinds switched on in the planner. The route sheet: summary (distance, portages, times, pace), your notes, then one row per stop with km, arrival time, portage details (paddlers' and "side not known"), crew detail, facilities and your note. The crew sheet: only places a crew can drive to and reach the bank (wharves, slipways, locks we have directions or a postcode for; not towpath access points), with postcode, parking and directions, in route order. Black on white on screen and paper; `@media print` in `globals.css` prints only the sheet, A4 with 12 mm margins.
+  - **Portage drawings** (2026-10-19): a stop with paddlers' landing details gets a 38 mm north-up drawing beside it, drawn as SVG from our own data, no tiles: the route near it, an arrow the way you're going (upstream of the lock; reversed on the way back), the lock, take-out T and put-in P joined by the carry, a north mark and a round-number scale bar. Geometry in `portageMap` (`lib/plan-ui.ts`, tested); scaled to fit the landings (80–400 m from centre to edge). Locks without landing details get no drawing: there'd be nothing to show but the line. The network line is the route as routed, so in a lock cut it can run a few tens of metres from the lock square.
   - Not yet: small printed maps per portage (needs self-hosted printable tiles; Esri imagery may not be printed, and OSM's tile servers aren't for bulk use).
 - **Live conditions (2026-10-17, P5 without tides):** a **Conditions now** section under the summary, and on the printed sheet.
   - **Daylight** (`packages/waterways/src/sun.ts`, NOAA's solar position, within a few minutes): sunrise and sunset on your start day where you start, how many stops you reach in the dark, and "after dark" on each of them (each stop at its own place and arrival time). Needs a start time; worked out in the browser.
@@ -296,7 +297,7 @@ Built 2026-10-17. No paid API, no sign-up.
 - **Contents:**
   - a summary page: route, distance, portages, start time, tide window, emergency numbers
   - then one block per stop: name, chainage, ETA, portage side and carry, crew parking with postcode and walk, facilities
-  - a small static map per portage from **printable** tiles (OS Zoomstack or OSM-rendered, never Esri)
+  - a small static map per portage from **printable** tiles (OS Zoomstack or OSM-rendered, never Esri). *As built: a tile-free SVG drawing where landings are known (see "P1 as built").*
   - the user's own notes, photos and drawings
   - an attribution footer
 - A crew sheet variant: crew points only, with drive order and postcodes, like the prototype.
@@ -312,7 +313,7 @@ Every view and print says the planner is not a navigation authority. Check strea
 |---|---|---|
 | **P0 Data: DW stretch** ✅ | `@paddlesnitch/waterways` (OS grid conversion, routing, features along a route, coverage), ingest for OSM, CRT and GOV.UK Thames, the DW dataset and coverage report | Done 2026-10-11: route 201.3 km, 77 locks; tests cover parsers, routing and the built dataset (see "P0 result") |
 | **P1 Planner** ✅ | `/plan` map, click start and finish, one-way or return, computed stop list with ETAs; save plans (signed-in) | Done 2026-10-11 (see "P1 as built") |
-| **P2 Print** ✅ (maps to come) | Print page and crew sheet; printable static maps still to do | Built 2026-10-17: route and crew sheets, tested by E2E |
+| **P2 Print** ✅ | Print page and crew sheet; per-portage drawings | Built 2026-10-17: route and crew sheets, tested by E2E; portage drawings 2026-10-19 |
 | **P3 Your own information** | Private notes, photos (EXIF stripped), drawings, map snippets on a plan or feature; in print; GDPR export and erasure | Tests for ownership, privacy, export and erasure |
 | **P4 Sharing and gaps** | Make-public with a CC0 release (live immediately; flag and hide), `/plan/gaps`, coverage shading, corrections | Permission story tests (private never leaks); gaps page lists the real holes |
 | **P5 Live conditions** ✅ | Stream warnings, river levels (EA, SEPA, OPW), daylight, tides (our own fit of EA gauge data, backtested); in plan and print | Best-effort: a failed fetch shows "unknown", tested; tides shown only past the backtest bar |

@@ -10,7 +10,7 @@ import Conditions from '@/components/plan/Conditions'
 import { TIDES } from '@/lib/tides'
 import { trpc } from '@/lib/trpc'
 import {
-  crewLines, draftParams, groupOf, isCrewStop, isDarkStop, km, portageLines, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
+  crewLines, draftParams, groupOf, isCrewStop, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
 } from '@/lib/plan-ui'
 
 // The paper copy of a plan (docs/features/river-planner.md, "Print"): black on
@@ -134,6 +134,7 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
             <td className="py-1.5 pr-2 font-mono">{km(s.chainageM).replace(' km', '')}</td>
             <td className="py-1.5 pr-2 font-mono font-semibold">{when(s, startAt)}{isDarkStop(s) && <span className="block text-[11px] font-normal">dark</span>}</td>
             <td className="py-1.5">
+              {s.portages?.[0] && <PortageDrawing line={plan.line} stop={s} />}
               {i === turn && <p className="font-mono text-[11px] uppercase tracking-[0.1em]">Turn at {km(plan.turnM!)}</p>}
               <p className="font-semibold">{s.feature.name ?? KIND[s.feature.kind]}<span className="font-normal"> · {KIND[s.feature.kind]}</span></p>
               {s.portages?.flatMap(p => portageLines(p).map((l, j) => <p key={`${p.id}-${j}`}>{l} <span className="text-gray-600">({p.by})</span></p>))}
@@ -145,6 +146,32 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
         {stops.length === 0 && <tr><td colSpan={3} className="py-2">No stops on this stretch.</td></tr>}
       </tbody>
     </table>
+  )
+}
+
+/** Where to land at a portage, drawn from our data (the satellite imagery
+ *  may not be printed): route, direction, take-out (T), put-in (P), carry. */
+function PortageDrawing({ line, stop }: { line: ComputedPlan['line']; stop: Stop }) {
+  const d = portageMap(line, stop, stop.portages![0])
+  const clip = `clip-${stop.leg}-${stop.feature.id.replace(/[^\w-]/g, '_')}`
+  return (
+    <svg viewBox={`0 0 ${d.size} ${d.size}`} className="avoid-break float-right ml-3 mb-1 w-[38mm] h-[38mm] border border-black bg-white"
+      role="img" aria-label={`Map of ${stop.feature.name ?? 'the portage'}: take out at T, put in at P`} data-testid="portage-drawing">
+      <clipPath id={clip}><rect width={d.size} height={d.size} /></clipPath>
+      <g clipPath={`url(#${clip})`}>
+        <path d={d.route} fill="none" stroke="#9ca3af" strokeWidth={10} strokeLinecap="round" strokeLinejoin="round" />
+        <line x1={d.takeOut[0]} y1={d.takeOut[1]} x2={d.putIn[0]} y2={d.putIn[1]} stroke="black" strokeWidth={2} strokeDasharray="5 4" />
+        <rect x={d.lock[0] - 5} y={d.lock[1] - 5} width={10} height={10} fill="white" stroke="black" strokeWidth={2} />
+        <g transform={`translate(${d.arrow.x} ${d.arrow.y}) rotate(${d.arrow.deg})`}><path d="M0 -9 L6 6 L0 2 L-6 6 Z" fill="black" /></g>
+        {([['T', d.takeOut], ['P', d.putIn]] as const).map(([t, [x, y]]) => (
+          <g key={t}><circle cx={x} cy={y} r={9} fill="black" /><text x={x} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill="white">{t}</text></g>
+        ))}
+      </g>
+      <text x={d.size - 12} y={18} textAnchor="middle" fontSize={12} fontWeight={700}>N</text>
+      <path d={`M${d.size - 12} 22 l4 10 h-8 Z`} fill="black" />
+      <line x1={8} y1={d.size - 10} x2={8 + d.scale.px} y2={d.size - 10} stroke="black" strokeWidth={3} />
+      <text x={8} y={d.size - 15} fontSize={11}>{d.scale.m} m</text>
+    </svg>
   )
 }
 

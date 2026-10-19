@@ -196,4 +196,9 @@ test('OpenPortage: a paddler adds portage details at a lock and sees them on the
   await expect(lock).toContainText('Added by Lock Keeper', { timeout: 15_000 })
   await expect(lock).toContainText('Steps by the lock cottage')
   await expect(lock).not.toContainText('Portage side not known yet.')
+
+  // The printed route sheet draws where to land.
+  await page.goto('/plan/print?from=51.5395,-0.9010&to=51.5470,-0.8740')
+  const row = page.getByTestId('print-stops').locator('tr', { hasText: 'Hambleden Lock' })
+  await expect(row.getByTestId('portage-drawing')).toBeVisible({ timeout: 15_000 })
 })

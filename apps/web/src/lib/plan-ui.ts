@@ -5,6 +5,7 @@ import type { ComputedPlan, PlanError, PlanInput, PlanShape, Stop } from '@paddl
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import { showable, tideExtremes, type TideExtreme, type TidesFile } from '@paddlesnitch/waterways/tide'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
+import { cumulative, slice } from '@paddlesnitch/waterways/line'
 import { DEFAULT_PACE_KMH, DEFAULT_PORTAGE_MINUTES } from '@paddlesnitch/waterways/plan'
 import type { Facility, FeatureKind, LatLng } from '@paddlesnitch/waterways/types'
 
@@ -292,4 +293,50 @@ export function localInput(iso: string | undefined): string {
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** A north-up drawing of one portage for the printed sheet, from our own
+ *  data (no map tiles: the satellite imagery may not be printed): the route
+ *  near it, which way you're going, the take-out and put-in, and a scale.
+ *  SVG coordinates, `size` pixels square, centred on the lock. */
+export type PortageMap = {
+  size: number
+  route: string                                 // SVG path
+  lock: [number, number]
+  takeOut: [number, number]
+  putIn: [number, number]
+  arrow: { x: number; y: number; deg: number }  // deg clockwise from north
+  scale: { px: number; m: number }
+}
+
+const NICE_M = [10, 20, 25, 50, 100, 200, 250, 500]
+
+export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' | 'feature'>, p: PortageOnRoute, size = 220): PortageMap {
+  const c = stop.feature.at
+  const kx = Math.cos((c[0] * Math.PI) / 180) * 111_320, ky = 110_540
+  const m = (q: LatLng): [number, number] => [(q[1] - c[1]) * kx, (q[0] - c[0]) * ky]   // metres east, north
+  const reach = Math.max(...[p.takeOut.at, p.putIn.at].map(q => Math.hypot(...m(q))))
+  const r = Math.min(400, Math.max(80, reach * 1.4))                                    // metres from centre to edge
+  const k = size / (2 * r)
+  const xy = (q: LatLng): [number, number] => { const [e, n] = m(q); return [Math.round((size / 2 + e * k) * 10) / 10, Math.round((size / 2 - n * k) * 10) / 10] }
+
+  // Where the stop is on the drawn line: the back leg runs it in reverse.
+  const cum = cumulative(line), len = cum[cum.length - 1]
+  const pos = stop.leg === 'back' ? 2 * len - stop.chainageM : stop.chainageM
+  const dir = stop.leg === 'back' ? -1 : 1
+  const route = slice(line, pos - 2 * r, pos + 2 * r, cum).map(xy)
+  // The arrow sits upstream of the stop, pointing the way you're going.
+  const a = Math.min(len - 1, Math.max(1, pos - dir * 0.6 * r))
+  const [p0, p1] = [slice(line, a - 10, a - 9, cum)[0], slice(line, a + 9, a + 10, cum)[0]].map(m)
+  const deg = (Math.atan2((p1[0] - p0[0]) * dir, (p1[1] - p0[1]) * dir) * 180) / Math.PI
+  const [ax, ay] = xy(slice(line, a, a + 1, cum)[0])
+  const want = r / 2
+  const scaleM = [...NICE_M].reverse().find(n => n <= want) ?? NICE_M[0]
+  return {
+    size,
+    route: route.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(''),
+    lock: xy(c), takeOut: xy(p.takeOut.at), putIn: xy(p.putIn.at),
+    arrow: { x: ax, y: ay, deg: Math.round((deg + 360) % 360) },
+    scale: { px: Math.round(scaleM * k), m: scaleM },
+  }
 }
