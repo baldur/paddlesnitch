@@ -26,6 +26,7 @@ import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/
 import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
 import { featuresFromScottishCanals, SCOTTISH_CANALS_LAYERS, type ScottishCanalsLayer } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
+import { FIS_LOCKS, FIS_SLIPWAYS, featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
 import { featuresFromWi, WI_LAYERS, wiQueryUrl, type WiLayer } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import type { CrewDetail, Feature } from '@paddlesnitch/waterways/types'
 
@@ -179,6 +180,13 @@ JOBS.amber = async () => {
 JOBS.ifi = async () => {
   const { features, fetchedAt } = await arcgisAll('ifi', IFI_BARRIERS, IFI_WHERE)
   return featuresFromIfi(features, fetchedAt)
+}
+
+// Rijkswaterstaat FIS/VNDS: every lock on the Dutch fairway network and the trailer slipways (CC0).
+JOBS['rws-fis'] = async () => {
+  const locks = await cached('rws-fis', 'locks.geojson', FIS_LOCKS)
+  const slips = await arcgisAll('rws-fis/slipways', FIS_SLIPWAYS)
+  return [...featuresFromFisLocks(JSON.parse(locks.body).features ?? [], locks.fetchedAt), ...featuresFromFisSlipways(slips.features, slips.fetchedAt)]
 }
 
 async function main() {

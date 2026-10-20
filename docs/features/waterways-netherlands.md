@@ -37,7 +37,7 @@
 | **N0** Decide | Owner answers the questions below | — |
 | **N1** Network ✅ | Geofabrik Netherlands extract into the same dataset (the build reads every extract under `.cache/waterways/osm/`; elements in two are kept once), same network tags (no ditches), check routes Amsterdam → Utrecht (45.5 km), Rotterdam → Dordrecht (22.1 km), De Rotte (15 km, 1 lock); Dutch places in the search; map's first view widened | Check routes pass ✅ |
 | **N2** Canoe routes | Extractor reads `route=canoe` relations and portages; routing prefers them; portages as landings like the UK OSM portages | A route along a mapped canoe network follows it and lists its carries |
-| **N3** Structures | RWS locks (CC0), water-board weirs/pumping stations (CC BY-SA, own file), gap rules as in the UK | Coverage map for the Netherlands |
+| **N3** Structures 🚧 | RWS locks (CC0) ✅ 2026-10-20: `rws-fis` job, the WFS lock outlines (`sluis_v`, 383, 373 in the Netherlands, placed at each outline's middle; the map service's point layer is mostly German/Belgian EuRIS locks and lacks Weurt or IJmuiden) plus the 494 trailer slipways (CC0); OSM chambers fill gaps under the UK gap rule. Amsterdam → Utrecht now lists its 10 locks (canal ring, Driemond, Nigtevecht, Breukelen, Vechtsluis, Weerdsluis), De Rotte its 2 *verlaten*. To do: water-board weirs/pumping stations (CC BY-SA, own file; owner's answer pending) | Coverage map for the Netherlands |
 | **N4** Live | Water levels and tides from Rijkswaterstaat | Conditions panel works on a Dutch plan |
 | **N5** Imagery | PDOK 8 cm aerial photos on screen and in print, replacing Esri inside the Netherlands | Printed sheet has a photo map per carry |
 
