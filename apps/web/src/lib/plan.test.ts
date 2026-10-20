@@ -76,6 +76,23 @@ describe('a one-way plan', () => {
     expect(p.turnM).toBeUndefined()
   })
 
+  // On a canal, the Trust's weirs are bywashes and overflows beside the
+  // channel; on the river they're across it (#509). Where the Kennet
+  // Navigation leaves the river for a cut, the river's weir is beside you.
+  it('marks a weir beside a canal, not one across the river you paddle', () => {
+    const weir = (name: string) => p.stops.find(s => s.feature.name === name)!
+    expect(weir('Weir 24, Bishops Cannings Weir').beside).toBe(true)
+    expect(weir('Weir 2, Fobney Weir').beside).toBeUndefined()
+    expect(p.stops.filter(s => s.beside).every(s => s.feature.kind === 'weir' && !s.portage)).toBe(true)
+  })
+
+  it('marks the same weirs beside you on the way back', () => {
+    const r = plan({ shape: 'return' })
+    const ids = (leg: 'out' | 'back') => r.stops.filter(s => s.leg === leg && s.beside).map(s => s.feature.id).sort()
+    expect(ids('back')).toEqual(ids('out'))
+    expect(ids('out').length).toBeGreaterThan(10)
+  })
+
   it('lists stops in travel order with the distance from the one before', () => {
     const ch = p.stops.map(s => s.chainageM)
     expect(ch).toEqual([...ch].sort((a, b) => a - b))

@@ -44,6 +44,7 @@ export function stopLines(stop: Stop): string[] {
   }
   if (f.lock?.notice) out.push(`Notice: ${f.lock.notice}`)
   if (f.weir?.heightM) out.push(`About ${f.weir.heightM} m high.`)
+  if (stop.beside) out.push('Beside the canal, not across it: nothing to portage.')
   if (f.kind === 'crew_point' && stop.bank) out.push(`On the ${stop.bank} bank.`)
   const crew = f.crew
   if (crew?.directions) out.push(crew.directions)
