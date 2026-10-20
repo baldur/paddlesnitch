@@ -47,6 +47,7 @@ const SERVICES: Record<string, string> = {
 const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org',
   'evil.example.com', 'example.invalid',
   'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk',   // links to a gauge's own page
+  'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
 ])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
 // machine or the weekly refresh job, so no visitor's data ever reaches these hosts.
