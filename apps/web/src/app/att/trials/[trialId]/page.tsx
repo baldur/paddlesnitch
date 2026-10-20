@@ -15,6 +15,7 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Badge } from '@paddlesnitch/ui/Card'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult } from '@/lib/types'
 import { listTrials } from '@/lib/catalogue'
+import { trialJsonLd } from '@/lib/discovery'
 
 type StoredEntry = { result: ProcessedResult }
 
@@ -59,8 +60,12 @@ export default async function TrialPage({
     await getPublicProfileLinks((leaderboard ?? []).map(e => e.userId)),
   )
 
+  const jsonLd = trialJsonLd(trial, course)
+
   return (
     <main className="flex-1 flex flex-col">
+      {/* What, when and where, for search engines and assistants (#513). Escaped so a name can't close the script. */}
+      {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />}
       <AppHeader
         breadcrumb={<Link href="/att" className="tt-nav-link">← Trials</Link>}
       />
