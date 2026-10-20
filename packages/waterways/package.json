@@ -24,6 +24,7 @@
     "./plan-store": "./src/plan-store.ts",
     "./national": "./src/national.ts",
     "./places": "./src/places.ts",
+    "./find": "./src/find.ts",
     "./checks": "./src/checks.ts",
     "./display": "./src/display.ts",
     "./ingest/dbf": "./src/ingest/dbf.ts",

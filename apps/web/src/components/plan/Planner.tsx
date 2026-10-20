@@ -17,6 +17,7 @@ import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { Stat } from '@paddlesnitch/ui/Card'
 import PlanMapClient from '@/components/map/PlanMapClient'
 import Conditions from '@/components/plan/Conditions'
+import EndSearch from '@/components/plan/EndSearch'
 import { TIDES } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
@@ -200,14 +201,25 @@ export default function Planner({ initial, view, saved, shared, lock }: {
               {!draft.finish && ' Zoomed out, a click zooms in first.'}
             </p>
           )}
+          {shared ? (
+            <dl className="mt-4 grid grid-cols-[5rem_1fr] gap-y-1 text-base">
+              <dt className={`${eyebrowClass} pt-1`}>Start</dt>
+              <dd>{!draft.start ? 'not set' : current?.start ? current.start.waterway || 'unnamed water' : '—'}</dd>
+              <dt className={`${eyebrowClass} pt-1`}>Finish</dt>
+              <dd>{!draft.finish ? 'not set' : current?.finish ? current.finish.waterway || 'unnamed water' : '—'}</dd>
+            </dl>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              {(['start', 'finish'] as const).map(end => (
+                <EndSearch key={end} label={end === 'start' ? 'Start' : 'Finish'} at={draft[end]}
+                  waterway={!draft[end] ? null : current ? current[end]?.waterway ?? null : null}
+                  near={draft.start ?? draft.finish ?? undefined}
+                  onPick={h => { setChoosing(null); setDraft(d => ({ ...d, [end]: h.at })); setFocus({ at: h.at, zoom: 15 }) }} />
+              ))}
+            </div>
+          )}
           <PlaceSearch version={VERSION} near={draft.start ?? undefined}
             onPick={p => setFocus({ at: p.at, zoom: p.kind === 'lock' || p.kind === 'weir' ? 16 : 14 })} />
-          <dl className="mt-4 grid grid-cols-[5rem_1fr] gap-y-1 text-base">
-            <dt className={`${eyebrowClass} pt-1`}>Start</dt>
-            <dd>{!draft.start ? 'not set' : current?.start ? current.start.waterway || 'unnamed water' : '—'}</dd>
-            <dt className={`${eyebrowClass} pt-1`}>Finish</dt>
-            <dd>{!draft.finish ? 'not set' : current?.finish ? current.finish.waterway || 'unnamed water' : '—'}</dd>
-          </dl>
           {error && <p className="mt-2 text-sm text-red">{PLAN_ERROR_TEXT[error]}</p>}
           {routed.isError && <p className="mt-2 text-sm text-red">Couldn&apos;t work out the route. Please try again.</p>}
           {draft.finish && routed.isFetching && <p className="mt-2 text-sm text-muted">Finding the route…</p>}
