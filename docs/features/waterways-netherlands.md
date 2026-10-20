@@ -43,6 +43,22 @@
 
 Cost: the same weekly workflow and bucket. The extra network adds to the server's in-memory `network.json`; measure it at N1 against the server Lambda's memory before deciding question 1.
 
+## Measured (2026-10-20, Geofabrik extract of that day)
+
+A local experiment, nothing published.
+
+| | UK and Ireland (live) | Netherlands |
+|---|---|---|
+| Network ways (river, canal, flowline, fairway) | 69,940 | 23,585 |
+| Links / km of water | 80,557 / 63,196 km | 31,808 / 16,782 km |
+| `network.json` raw / gzipped | 36.3 / 10.2 MB | 7.1 / 1.7 MB |
+| Server memory for the links (heap growth) | ~264 MB | ~28 MB |
+
+- **Canoe routes:** 335 `route=canoe` relations with 1,426 member ways. By length they run on canals (701 km), rivers (123 km) and fairways (19 km). Ditches, drains and streams come to about **4 km**, so the existing network (no ditches) already carries over 99% of the mapped Dutch canoe routes. Their 163 portage members are short marked carry segments.
+- **Memory:** adding the Netherlands to the in-memory network costs about a tenth of what the UK and Ireland already use; the server Lambda has 1,024 MB. (Live peak use wasn't checked: the AWS sign-in had expired.)
+
+So, on the numbers: **one dataset** that grows country by country is fine for the Netherlands, and **no ditches** loses almost nothing. Both are recommendations for questions 1 and 2 below; the owner decides.
+
 ## Questions for the owner
 
 1. **One dataset or one per country?** One "Europe" network keeps routing simple but grows memory with every country; per-country datasets keep each small and would need a country pick (or a guess from the map view).
