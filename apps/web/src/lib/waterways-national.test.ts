@@ -10,7 +10,7 @@ import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesni
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
-import { linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
@@ -29,6 +29,13 @@ const AT = '2026-10-12T00:00:00.000Z'
 
 const way = (id: number, nodes: number[], coords: LatLng[], tags: Record<string, string> = {}): OsmWay =>
   ({ id, nodes, coords, tags: { waterway: 'river', ...tags } })
+
+describe('the network is Britain and Ireland only', () => {
+  it("drops water wholly east of Lowestoft (the Maasgeul off Rotterdam), keeps the Waveney", () => {
+    expect(isOurs(way(1, [1, 2], [[52.03, 3.88], [52.0, 3.2]], { name: 'Maasgeul', waterway: 'fairway' }))).toBe(false)
+    expect(isOurs(way(2, [3, 4], [[52.47, 1.75], [52.48, 1.70]], { name: 'River Waveney' }))).toBe(true)
+  })
+})
 
 describe('paddle access from OSM tags', () => {
   it('reads canoe=* first, then boat=*, and marks culverts', () => {
