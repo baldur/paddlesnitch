@@ -214,3 +214,9 @@ export function osmFacilities(points: OsmElement[], fetchedAt: string): Feature[
     return [{ id: `osm:facility:${p.id}`, kind: 'facility' as const, name: t.name, at: p.at, facilities: [kind], source: { source: 'osm' as const, sourceId: p.id, fetchedAt } }]
   })
 }
+
+/** Britain and Ireland's most easterly water is at Lowestoft (1.76° E). The
+ *  Geofabrik extract clips in a little of the North Sea; a way lying wholly
+ *  east of this (the Maasgeul, Rotterdam's shipping channel) isn't ours. */
+export const EAST_LIMIT = 1.8
+export const isOurs = (w: OsmWay) => w.coords.some(c => c[1] <= EAST_LIMIT)

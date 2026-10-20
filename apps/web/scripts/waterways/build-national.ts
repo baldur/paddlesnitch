@@ -21,7 +21,7 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
-import { linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
@@ -55,7 +55,7 @@ async function main() {
   const lap = (what: string) => console.log(`  ${what} (${((Date.now() - t0) / 1000).toFixed(1)} s)`)
 
   const ways: OsmWay[] = []
-  for await (const w of lines(path.join(EXTRACT, 'ways.jsonl'))) ways.push(w)
+  for await (const w of lines(path.join(EXTRACT, 'ways.jsonl'))) if (isOurs(w)) ways.push(w)
   const links = linksFromWays(ways, 3)
   const osmLockList = osmLocks(ways, new Date().toISOString())
   ways.length = 0
