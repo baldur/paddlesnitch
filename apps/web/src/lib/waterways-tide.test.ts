@@ -69,7 +69,7 @@ describe('the tide window on a plan', () => {
   const file: TidesFile = { fittedAt: '', credit: '', gauges: { richmond: gauge(false, 12), towerPier: gauge(true, 15), poor: { ...gauge(true, 90), label: 'Poor fit' } } }
   const plan = {
     start: { at: [51.4, -0.4] as [number, number], waterway: 'River Thames' }, finish: { at: [51.5, -0.1] as [number, number], waterway: 'River Thames' },
-    line: [], lengthM: 20_000, portages: 1, movingS: 0, totalS: 0, tidalFromM: 8_000,
+    line: [[51.4, -0.4], [51.5, -0.1]] as [number, number][], lengthM: 20_000, portages: 1, movingS: 0, totalS: 0, tidalFromM: 8_000,
     stops: [{ feature: { id: 'l', kind: 'lock' as const, at: [51.43, -0.32] as [number, number], source: { source: 'ea-thames-locks' as const, fetchedAt: '' } }, leg: 'out' as const, chainageM: 7_900, fromPrevM: 0, portage: true, portagesBefore: 0, elapsedS: 0 }],
   }
 
@@ -80,6 +80,11 @@ describe('the tide window on a plan', () => {
     expect(w.gauges[0].extremes.every(e => e.type === 'high')).toBe(true)   // Richmond: high waters only
     expect(w.afterHigh?.gauge).toBe('Richmond')
     expect(Math.abs(w.afterHigh!.minutes)).toBeLessThan(7 * 60)
+  })
+
+  it("shows no tide where the route meets tidal water far from any gauge (the Severn isn't the Thames)", () => {
+    const severn = { ...plan, line: [[51.85, -2.25], [51.70, -2.45]] as [number, number][], finish: { at: [51.70, -2.45] as [number, number], waterway: 'River Severn' } }
+    expect(tideWindow(severn, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, file)).toBeNull()
   })
 
   it('needs a start time and a route that reaches tidal water', () => {

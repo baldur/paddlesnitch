@@ -6,6 +6,7 @@ import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import { showable, tideExtremes, type TideExtreme, type TidesFile } from '@paddlesnitch/waterways/tide'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { cumulative, slice } from '@paddlesnitch/waterways/line'
+import { haversine } from '@paddlesnitch/timing/geo'
 import { DEFAULT_PACE_KMH, DEFAULT_PORTAGE_MINUTES } from '@paddlesnitch/waterways/plan'
 import type { Facility, FeatureKind, LatLng } from '@paddlesnitch/waterways/types'
 
@@ -123,7 +124,10 @@ export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageM
   const portagesBefore = plan.stops.filter(s => s.leg === 'out' && s.portage && s.chainageM < plan.tidalFromM!).length
   const elapsedS = plan.tidalFromM / ((pace.paceKmh * 1000) / 3600) + portagesBefore * pace.portageMinutes * 60
   const reach = Date.parse(pace.startAt) + elapsedS * 1000
-  const gauges = Object.entries(file.gauges).filter(([, g]) => showable(g)).map(([id, g]) => ({
+  // Only gauges near where this route meets tidal water: the Thames gauges say
+  // nothing about the Severn (or Zeeland).
+  const meets = (plan.line.length > 1 ? slice(plan.line, plan.tidalFromM, plan.tidalFromM + 1)[0] : undefined) ?? plan.finish.at
+  const gauges = Object.entries(file.gauges).filter(([, g]) => showable(g) && haversine(g.at, meets) <= TIDE_GAUGE_NEAR_M).map(([id, g]) => ({
     id, label: g.label, medianMin: g.backtest.medianMin, p95Min: g.backtest.p95Min,
     extremes: tideExtremes(g.model, reach - 6 * 3_600_000, reach + 9 * 3_600_000).filter(e => g.lows || e.type === 'high'),
   }))
@@ -135,8 +139,12 @@ export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageM
     afterHigh = { gauge: g.label, minutes: Math.round((reach - Date.parse(near.at)) / 60_000), at: near.at }
     break
   }
+  if (!gauges.length) return null
   return { reachAt: new Date(reach).toISOString(), gauges, afterHigh }
 }
+
+/** A tide gauge further than this from where a route meets tidal water isn't its tide. */
+export const TIDE_GAUGE_NEAR_M = 25_000
 
 export const TIDE_CAVEAT = 'Predicted astronomical tide only. Surge, wind, pressure and the flow over Teddington weir can move times by tens of minutes, and low water above Westminster is unreliable. Not for navigation: check the PLA and Thames VTS on the day.'
 
