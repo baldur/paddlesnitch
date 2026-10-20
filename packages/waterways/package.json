@@ -46,6 +46,6 @@
   "dependencies": {
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
-    "nanoid": "^6.0.1"
+    "nanoid": "^6.0.2"
   }
 }
