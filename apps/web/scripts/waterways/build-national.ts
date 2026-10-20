@@ -21,7 +21,7 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
-import { linksFromWays, osmAccess, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
@@ -43,6 +43,8 @@ const GAP_LOCK_M = 120
 const GAP_ACCESS_M = 100
 /** A slipway or put-in further from the water than this is on another pond or the coast. */
 const ACCESS_ON_WATER_M = 60
+/** A toilet or tap further than this from the water isn't one you'd paddle to. */
+const FACILITY_ON_WATER_M = 100
 
 async function* lines(file: string) {
   for await (const l of readline.createInterface({ input: fs.createReadStream(file) })) if (l) yield JSON.parse(l)
@@ -98,6 +100,21 @@ async function main() {
   const osmAccessFill = osmAccessList.filter(a => snap(links, a.at, ACCESS_ON_WATER_M) && !nearCore(a.at))
   osmFeatures.push(...osmAccessFill)
   lap(`OSM slipways and put-ins filling gaps: ${osmAccessFill.length} of ${osmAccessList.length}`)
+  // Toilets and water where none of ours (CRT's facilities, Waterways Ireland's…) offer the same within 100 m.
+  const coreFacilities = features.filter(f => f.kind === 'facility')
+  const facGrid = new Map<string, Feature[]>()
+  for (const f of coreFacilities) { const k = cellOf(f.at); facGrid.set(k, [...(facGrid.get(k) ?? []), f]) }
+  const sameNearby = (f: Feature) => {
+    const [y, x] = cellOf(f.at).split(':').map(Number)
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if ((facGrid.get(`${y + dy}:${x + dx}`) ?? []).some(c => haversine(c.at, f.at) <= GAP_ACCESS_M && c.facilities?.some(k => f.facilities?.includes(k)))) return true
+    }
+    return false
+  }
+  const osmFacilityList = osmFacilities(osm, new Date().toISOString())
+  const osmFacilityFill = osmFacilityList.filter(f => snap(links, f.at, FACILITY_ON_WATER_M) && !sameNearby(f))
+  osmFeatures.push(...osmFacilityFill)
+  lap(`OSM toilets and drinking water filling gaps: ${osmFacilityFill.length} of ${osmFacilityList.length}`)
 
   const osmPlaces: { at: LatLng; tags: Record<string, string> }[] = []
   for await (const p of lines(path.join(EXTRACT, 'places.jsonl'))) osmPlaces.push(p)
@@ -127,7 +144,7 @@ async function main() {
   const manifest: Manifest = {
     version,
     builtAt: new Date().toISOString(),
-    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.filter(f => f.kind === 'lock').length, osmAccess: osmAccessFill.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
+    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.filter(f => f.kind === 'lock').length, osmAccess: osmAccessFill.length, osmFacilities: osmFacilityFill.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
     sources,
   }
   await fsp.writeFile(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')

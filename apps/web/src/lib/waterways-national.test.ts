@@ -10,7 +10,7 @@ import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesni
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
-import { linksFromWays, osmAccess, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { featuresFromWi } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import { paddleCost, route, snap } from '@paddlesnitch/waterways/network'
@@ -403,6 +403,26 @@ describe('slipways and put-ins mapped in OpenStreetMap', () => {
       ['osm:access:node/3', 'access', undefined],
     ])
     expect(got[0].source).toEqual({ source: 'osm', sourceId: 'node/1', fetchedAt: AT })
+  })
+})
+
+describe('toilets and drinking water mapped in OpenStreetMap', () => {
+  const pt = (id: number, tags: Record<string, string>) => ({ id: `node/${id}`, at: [51.5, -1] as LatLng, tags })
+
+  it('public toilets and taps become facilities; customers-only, private and non-drinking ones, and car parks, do not', () => {
+    const got = osmFacilities([
+      pt(1, { amenity: 'toilets', name: 'Riverside toilets' }),
+      pt(2, { amenity: 'drinking_water' }),
+      pt(3, { amenity: 'water_point' }),
+      pt(4, { amenity: 'toilets', access: 'customers' }),
+      pt(5, { amenity: 'water_point', drinking_water: 'no' }),
+      pt(6, { amenity: 'parking' }),
+    ], AT)
+    expect(got.map(f => [f.id, f.kind, f.facilities, f.name])).toEqual([
+      ['osm:facility:node/1', 'facility', ['toilet'], 'Riverside toilets'],
+      ['osm:facility:node/2', 'facility', ['drinking_water'], undefined],
+      ['osm:facility:node/3', 'facility', ['drinking_water'], undefined],
+    ])
   })
 })
 
