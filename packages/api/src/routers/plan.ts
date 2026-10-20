@@ -8,6 +8,7 @@ import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listBuddies } from '@paddlesnitch/core/buddies'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { simplify } from '@paddlesnitch/waterways/line'
+import { findOnWater } from '@paddlesnitch/waterways/find'
 import { loadNational } from '@paddlesnitch/waterways/national'
 import { clickChoices, routePlan, snapClick } from '@paddlesnitch/waterways/plan'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
@@ -57,6 +58,11 @@ export const planRouter = router({
   // used as the click, so it snaps to that waterway.
   choices: publicProcedure.input(z.object({ at: latLng, radiusM: z.number().min(1).max(1000) }))
     .query(async ({ input }) => clickChoices(await loadNational(), input.at, input.radiusM)),
+
+  // Ends by name (#506): locks, wharves, slipways and towns, each on the water
+  // with its waterway, nearest to `near` first among equals.
+  find: publicProcedure.input(z.object({ q: z.string().max(100), near: latLng.optional(), waterway: z.string().max(100).optional() }))
+    .query(async ({ input }) => findOnWater(await loadNational(), input.q, { near: input.near, waterway: input.waterway })),
 
   list: protectedProcedure.query(({ ctx }) => listPlans(ctx.user.id)),
 

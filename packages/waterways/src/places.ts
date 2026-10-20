@@ -4,13 +4,13 @@
 import { snap } from './network'
 import type { Feature, LatLng, NetLink } from './types'
 
-export type PlaceKind = 'city' | 'town' | 'village' | 'hamlet' | 'lock' | 'weir'
+export type PlaceKind = 'city' | 'town' | 'village' | 'hamlet' | 'lock' | 'weir' | 'wharf' | 'slipway' | 'portage'
 export type Place = { name: string; kind: PlaceKind; at: LatLng }
 
 /** A town further than this from any river or canal isn't a place to paddle from. */
 export const PLACE_NEAR_M = 2000
 
-const KIND_RANK: Record<PlaceKind, number> = { city: 0, town: 1, lock: 2, village: 3, weir: 4, hamlet: 5 }
+const KIND_RANK: Record<PlaceKind, number> = { city: 0, town: 1, lock: 2, wharf: 2, village: 3, portage: 3, weir: 4, slipway: 4, hamlet: 5 }
 
 type OsmPlace = { at: LatLng; tags: Record<string, string> }
 
