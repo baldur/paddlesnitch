@@ -60,3 +60,9 @@ it louder.
 - **Numbers** in `.tabular` (mono). Dates through `@paddlesnitch/core/format`.
 - **Phones first:** check at 390 px. Nothing runs off the right edge; tables
   that can't fit scroll inside their own container.
+- **Accessibility is tested:** `e2e/critical/accessibility.spec.ts` runs axe on
+  every public page and fails on unlabelled buttons, links or fields, a missing
+  `<main>`, or anything serious (#510). Add a new public page to its list.
+- **Machine-readable values** next to display strings: `<time dateTime>` for
+  clock times, `data-*` for distances. Plan stops carry `id="stop-{leg}-{feature}"`,
+  `data-feature-id`, `data-km`, `data-eta`.

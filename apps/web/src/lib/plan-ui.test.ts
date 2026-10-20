@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, pixelsToMetres, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -13,6 +13,13 @@ const feature = (over: Partial<Feature>): Feature => ({
 const stop = (f: Feature, over: Partial<Stop> = {}): Stop => ({
   feature: f, leg: 'out', chainageM: 1000, fromPrevM: 1000, portage: f.kind === 'lock',
   portagesBefore: 0, elapsedS: 450, ...over,
+})
+
+describe("a stop's id in the page (#510)", () => {
+  it('is its leg and feature id, safe to use as an HTML id', () => {
+    expect(stopId(stop(feature({ id: 'crt:locks:OX-076-001' })))).toBe('stop-out-crt-locks-OX-076-001')
+    expect(stopId(stop(feature({ id: 'crt:locks:OX-076-001' }), { leg: 'back' }))).toBe('stop-back-crt-locks-OX-076-001')
+  })
 })
 
 describe('what a stop says', () => {

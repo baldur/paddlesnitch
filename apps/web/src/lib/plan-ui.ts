@@ -34,6 +34,10 @@ const FACILITY: Record<Facility, string> = {
   refuse: 'rubbish', card_payment: 'card payment', electric_charging: 'electric charging', pump_out: 'pump-out',
 }
 
+/** A stop's id in the page, stable across loads: its leg and feature id
+ *  (e.g. stop-out-crt-locks-OX-076-001), for links and tools (#510). */
+export const stopId = (s: Pick<Stop, 'leg' | 'feature'>) => `stop-${s.leg}-${s.feature.id.replace(/[^A-Za-z0-9_-]+/g, '-')}`
+
 /** The lines shown under a stop's name. Unknowns are said, never guessed. */
 export function stopLines(stop: Stop): string[] {
   const f = stop.feature

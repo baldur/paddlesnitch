@@ -22,7 +22,7 @@ import { TIDES } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
+  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
   type LockLink, type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -116,8 +116,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   )
 
   return (
-    <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-57px)]">
-      <div className="h-[50vh] lg:h-auto lg:flex-1 relative">
+    <main className="flex flex-col lg:flex-row lg:h-[calc(100vh-57px)]">
+      <div className="h-[50vh] lg:h-auto lg:flex-1 relative" role="region" aria-label="Map. Every stop on it is also in the list of stops.">
         <PlanMapClient
             version={VERSION}
             route={plan?.line ?? []}
@@ -324,7 +324,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
           </details>
         </section>
       </aside>
-    </div>
+    </main>
   )
 }
 
@@ -380,13 +380,14 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
       {stops.map((s, i) => {
         const turn = i === turnAt
         return (
-          <li key={`${s.leg}-${s.feature.id}-${i}`}>
+          <li key={`${s.leg}-${s.feature.id}-${i}`} id={stopId(s)} data-feature-id={s.feature.id} data-kind={s.feature.kind}
+            data-km={(s.chainageM / 1000).toFixed(2)} data-eta={s.eta}>
             {turn && <div className={`py-2 border-b border-border ${eyebrowClass} text-primary-text!`}>Turn at {km(plan.turnM!)}</div>}
             <button type="button" onClick={() => onFocus(s.feature.at)}
               className="w-full text-left grid grid-cols-[4.5rem_1fr] gap-3 py-2 min-h-11 border-b border-border hover:bg-surface-2">
               <span className="tabular text-sm">
                 <span className="block text-fg">{km(s.chainageM)}</span>
-                <span className="block text-primary-text">{when(s)}</span>
+                {s.eta ? <time className="block text-primary-text" dateTime={s.eta}>{when(s)}</time> : <span className="block text-primary-text">{when(s)}</span>}
                 {isDarkStop(s) && <span className="block text-xs text-red">after dark</span>}
               </span>
               <span className="min-w-0">

@@ -971,6 +971,7 @@ CI: **every pull request** runs `checks.yml` (vitest, `pnpm typecheck` over the 
 #### Discipline
 
 - **Permission rules belong in vitest, not Playwright.** Every "X can/cannot do Y" check is cheaper, more deterministic, and more readable as a story-style unit test. E2E is for flows that span multiple pages or rely on real browser behaviour (cookies, redirects, client-side navigation).
+- **Accessibility:** `e2e/critical/accessibility.spec.ts` runs axe (from the `axe-core` dev dependency) on every public page; a new public page goes in its list. Rules in [`design-system.md`](docs/features/design-system.md).
 - **One critical path per spec file.** Keep specs focused so a failure points directly at one broken flow.
 - **No shared state between specs.** Each test creates its own user via `signUpFlow()` (in `e2e/helpers.ts`) with a unique email. Don't seed shared data across runs.
 - **When a vitest story would suffice, write the vitest story.** Reserve Playwright for things vitest physically can't reach.
