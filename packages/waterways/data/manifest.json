@@ -1,16 +1,16 @@
 {
-  "version": "20261020-daec5cd6",
-  "builtAt": "2026-10-20T05:24:39.857Z",
+  "version": "20261020-b3b106e8",
+  "builtAt": "2026-10-20T19:06:09.903Z",
   "counts": {
-    "links": 80557,
-    "km": 63196,
+    "links": 112374,
+    "km": 79979,
     "features": 33133,
-    "osmLocks": 409,
-    "osmAccess": 2191,
-    "osmFacilities": 8625,
-    "osm": 203588,
-    "osmPortages": 131,
-    "places": 29296
+    "osmLocks": 927,
+    "osmAccess": 3255,
+    "osmFacilities": 12332,
+    "osm": 388475,
+    "osmPortages": 253,
+    "places": 34402
   },
   "sources": {
     "amber": 14791,
