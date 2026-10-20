@@ -79,13 +79,9 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => ({}))) as FeedbackBody
 
-  // Anti-bot gate. If the honeypot field came back populated, or the form
-  // was submitted faster than any human could, drop silently and return a
-  // success-looking response so the bot has no signal to retry differently.
-  if (looksLikeBot(body)) {
-    return NextResponse.json({ ok: true })
-  }
-
+  // The description is checked before the anti-bot gate: an empty report from a
+  // quick submit used to be "dropped silently" with a 200, so the widget told a
+  // person it was sent when nothing was filed (#507).
   const description = asString(body.description, MAX_DESCRIPTION_CHARS)
   if (description.length < MIN_DESCRIPTION_CHARS) {
     return NextResponse.json(
@@ -93,6 +89,14 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
+
+  // Anti-bot gate. If the honeypot field came back populated, or the form
+  // was submitted faster than any human could, drop silently and return a
+  // success-looking response so the bot has no signal to retry differently.
+  if (looksLikeBot(body)) {
+    return NextResponse.json({ ok: true })
+  }
+
   const submitterEmail = asString(body.email, 200)
   const url = asString(body.url, 500)
   const userAgent = asString(body.userAgent, 500)
