@@ -159,6 +159,23 @@ describe('POST /att/api/feedback', () => {
     expect(res.status).toBe(400)
   })
 
+  // #507: a quick submit with an empty description used to hit the anti-bot
+  // drop first and come back 200, so the widget said "sent" and nothing was filed.
+  it('refuses an empty description with 400 even when it arrives faster than the bot floor', async () => {
+    mockAnonymous()
+    const res = await feedback(jsonReq({ description: '', elapsedMs: 100 }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/describ/i)
+    expect(githubCalls).toHaveLength(0)
+  })
+
+  it('refuses a whitespace-only description with 400', async () => {
+    mockAnonymous()
+    const res = await feedback(jsonReq({ description: '   \n\t  ', elapsedMs: 100 }))
+    expect(res.status).toBe(400)
+    expect(githubCalls).toHaveLength(0)
+  })
+
   it('returns 503 when the GitHub token is not configured', async () => {
     delete process.env.GITHUB_ISSUES_TOKEN
     mockAnonymous()

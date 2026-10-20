@@ -55,9 +55,15 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
 
   const reset = () => { setDescription(''); setEmail(''); setStatus('idle'); setError(''); setIssueUrl(''); setWebsite('') }
 
-  const submit = async (e: React.FormEvent) => {
+  // Read the fields from the form itself, not only React state: autofill and
+  // automation can fill a field without React's onChange firing (#507).
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (status === 'sending') return
+    const form = new FormData(e.currentTarget)
+    const description = String(form.get('description') ?? '').trim()
+    const email = String(form.get('email') ?? '').trim()
+    if (!description) { setError('Please describe what went wrong.'); setStatus('error'); return }
     setStatus('sending'); setError('')
     try {
       const res = await fetch(endpoint, {
@@ -73,7 +79,10 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error ?? 'Couldn’t send your report. Please try again.')
-      setIssueUrl(data?.url ?? ''); setStatus('done')
+      // Only a filed issue counts as sent. A 200 without one (the anti-bot
+      // drop) means nothing reached us.
+      if (typeof data?.url !== 'string' || !data.url) throw new Error('Your report wasn’t sent. Please try again.')
+      setIssueUrl(data.url); setStatus('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t send your report. Please try again.'); setStatus('error')
     }
@@ -117,12 +126,12 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
               <label>Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
             </div>
             <Field label="What went wrong?" htmlFor="feedback-description">
-              <textarea id="feedback-description" required minLength={10} maxLength={5000} value={description} onChange={e => setDescription(e.target.value)} rows={5} autoFocus
+              <textarea id="feedback-description" name="description" required minLength={10} maxLength={5000} onInput={e => setDescription(e.currentTarget.value)} rows={5} autoFocus
                 placeholder="What were you doing when it happened?"
                 className={`${inputClass} py-2 resize-y`} />
             </Field>
             <Field label="Email (optional)" htmlFor="feedback-email" help="So we can follow up.">
-              <input id="feedback-email" type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} />
+              <input id="feedback-email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} />
             </Field>
             {error && <p role="alert" className="rounded-control border border-red/50 bg-red/10 px-3 py-2 text-sm text-red">{error}</p>}
             <p className="text-sm text-muted">Reports are posted publicly on GitHub, so don&apos;t include personal details. We add the page and your browser. Your name and email stay private.</p>
