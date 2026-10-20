@@ -3,7 +3,7 @@
 import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
-import { computePlan, fmtDuration, snapClick, type ComputedPlan, type PlanInput } from '@paddlesnitch/waterways/plan'
+import { clickChoices, computePlan, fmtDuration, snapClick, type ComputedPlan, type PlanInput } from '@paddlesnitch/waterways/plan'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
 
@@ -36,6 +36,30 @@ describe('clicks snap to the water', () => {
 
   it("the same click twice isn't a trip", () => {
     expect(computePlan(ds, { start: DEVIZES, finish: DEVIZES, shape: 'one_way', paceKmh: 8, portageMinutes: 3 })).toBe('too_short')
+  })
+})
+
+// Near Thatcham the River Kennet and the Kennet and Avon Canal run side by
+// side, tens of metres apart (#505: the same at Banbury, canal and Cherwell).
+describe('a click between two waterways', () => {
+  const THATCHAM: LatLng = [51.392849, -1.243611]
+  const [a, b] = clickChoices(ds, THATCHAM, 200)
+  const between: LatLng = [(a.at[0] + b.at[0]) / 2, (a.at[1] + b.at[1]) / 2]
+  const R = 60   // about ten pixels at zoom 14
+
+  it('asks which one, nearest first, with a point on each', () => {
+    const c = clickChoices(ds, between, R)
+    expect(c.map(x => x.waterway).sort()).toEqual(['Kennet and Avon Canal', 'River Kennet'])
+    for (const x of c) expect(snapClick(ds, x.at)?.link.name).toBe(x.waterway)
+  })
+
+  it('a click on one line picks that line, even with the other a few pixels off', () => {
+    for (const x of [a, b]) expect(clickChoices(ds, x.at, R).map(y => y.waterway)).toEqual([x.waterway])
+  })
+
+  it('one waterway in reach is no choice, and none is off the water', () => {
+    expect(clickChoices(ds, DEVIZES, R)).toHaveLength(1)
+    expect(clickChoices(ds, [51.32, -1.20], R)).toEqual([])
   })
 })
 

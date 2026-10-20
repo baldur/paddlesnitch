@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { fmtDay, fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import manifest from '@paddlesnitch/waterways/data/manifest.json'
 import { searchPlaces, type Place } from '@paddlesnitch/waterways/places'
-import { fmtDuration, timePlan, type ComputedPlan, type Stop } from '@paddlesnitch/waterways/plan'
+import { fmtDuration, timePlan, type ComputedPlan, type Spot, type Stop } from '@paddlesnitch/waterways/plan'
 import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
 import { NATIONAL } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
@@ -21,7 +21,7 @@ import { TIDES } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
+  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
   type LockLink, type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -68,6 +68,8 @@ export default function Planner({ initial, view, saved, shared, lock }: {
   // Adding portage details at a stop: the landings clicked so far (OpenPortage).
   const [adding, setAdding] = useState<{ stop: Stop; landings: LatLng[] } | null>(() => (lock ? { stop: stopAt(lock), landings: [] } : null))
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
+  // A click about as near to two waterways: which one did you mean? (#505)
+  const [choosing, setChoosing] = useState<{ choices: Spot[]; offWater: 'start' | 'finish' | null } | null>(null)
   const me = trpc.me.useQuery(undefined, { retry: false })
   const signedIn = !!me.data?.user
   const mine = trpc.portage.mine.useQuery(undefined, { enabled: signedIn, retry: false })
@@ -128,11 +130,17 @@ export default function Planner({ initial, view, saved, shared, lock }: {
             satellite={satellite}
             coverage={coverage}
             marks={adding?.landings}
+            choices={choosing?.choices.map(c => ({ at: c.at, label: c.waterway || 'Unnamed water' }))}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
               // While adding portage details, clicks place the two landings (a third moves the second).
               if (adding) { setAdding(a => a && ({ ...a, landings: a.landings.length < 2 ? [...a.landings, p] : [a.landings[0], p] })); return }
-              if (!shared) setDraft(d => placeClick(d, p, error === 'start_off_water' ? 'start' : error === 'finish_off_water' ? 'finish' : null))
+              if (shared) return
+              const offWater = error === 'start_off_water' ? 'start' : error === 'finish_off_water' ? 'finish' : null
+              const place = (q: LatLng) => setDraft(d => placeClick(d, q, offWater))
+              setChoosing(null)
+              utils.plan.choices.fetch({ at: p, radiusM: Math.round(pixelsToMetres(p[0], zoom)) })
+                .then(c => (c.length > 1 ? setChoosing({ choices: c, offWater }) : place(p)), () => place(p))
             }}
           />
         {/* Aerial imagery, to see which bank you can land on. */}
@@ -146,6 +154,20 @@ export default function Planner({ initial, view, saved, shared, lock }: {
             Coverage
           </button>
         </div>
+        {choosing && (
+          <div role="dialog" aria-labelledby="which-water" className="absolute bottom-8 left-2 right-2 sm:right-auto z-[600] sm:max-w-[20rem] rounded-control bg-bg/95 border border-border-strong px-3 py-2 space-y-2" data-testid="which-water">
+            <p id="which-water" className="text-base text-fg">Which water did you mean?</p>
+            <div className="flex flex-wrap gap-2">
+              {choosing.choices.map(c => (
+                <button key={`${c.at}`} type="button" className={BTN}
+                  onClick={() => { const { offWater } = choosing; setChoosing(null); setDraft(d => placeClick(d, c.at, offWater)) }}>
+                  {c.waterway || 'Unnamed water'}
+                </button>
+              ))}
+              <button type="button" className={buttonClass('quiet', 'sm')} onClick={() => setChoosing(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
         {coverage && (
           <div className="absolute bottom-8 left-2 right-2 sm:right-auto z-[500] sm:max-w-[20rem] rounded-control bg-bg/95 border border-border px-3 py-2 text-sm space-y-1" data-testid="coverage-legend">
             <p className="text-muted">How well we know each waterway:</p>
@@ -184,7 +206,7 @@ export default function Planner({ initial, view, saved, shared, lock }: {
             <dt className={`${eyebrowClass} pt-1`}>Start</dt>
             <dd>{!draft.start ? 'not set' : current?.start ? current.start.waterway || 'unnamed water' : '—'}</dd>
             <dt className={`${eyebrowClass} pt-1`}>Finish</dt>
-            <dd>{!draft.finish ? 'not set' : plan ? plan.finish.waterway || 'unnamed water' : '—'}</dd>
+            <dd>{!draft.finish ? 'not set' : current?.finish ? current.finish.waterway || 'unnamed water' : '—'}</dd>
           </dl>
           {error && <p className="mt-2 text-sm text-red">{PLAN_ERROR_TEXT[error]}</p>}
           {routed.isError && <p className="mt-2 text-sm text-red">Couldn&apos;t work out the route. Please try again.</p>}
