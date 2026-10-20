@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, placeClick, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, pixelsToMetres, placeClick, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -80,6 +80,12 @@ describe('an unsaved plan in the address bar', () => {
 })
 
 describe('clicks', () => {
+  it('ten pixels on the map is tens of metres at zoom 14, less closer in and further north', () => {
+    expect(pixelsToMetres(0, 14)).toBeCloseTo(95.5, 0)
+    expect(pixelsToMetres(52, 14)).toBeCloseTo(58.8, 0)
+    expect(pixelsToMetres(52, 16)).toBeCloseTo(pixelsToMetres(52, 14) / 4, 6)
+  })
+
   const empty: PlanDraft = { start: null, finish: null, shape: 'one_way', paceKmh: 8, portageMinutes: 3 }
   it('set the start, then the finish, then move whichever end is nearer', () => {
     const a = placeClick(empty, [51.0, -1.0])

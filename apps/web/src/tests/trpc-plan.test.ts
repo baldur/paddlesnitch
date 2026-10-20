@@ -223,7 +223,18 @@ describe('routing on the server (plan.route)', () => {
   it('snaps the start alone, and says when a click is off the water', async () => {
     expect((await anon.plan.route({ start: DW.start, finish: null, shape: 'one_way' }))).toMatchObject({ start: { waterway: 'Kennet and Avon Canal' }, plan: null })
     expect((await anon.plan.route({ start: [51.32, -1.2], finish: null, shape: 'one_way' })).start).toBeNull()
-    expect((await anon.plan.route({ start: DW.start, finish: [51.32, -1.2], shape: 'one_way' })).plan).toBe('finish_off_water')
+    expect((await anon.plan.route({ start: DW.start, finish: [51.32, -1.2], shape: 'one_way' }))).toMatchObject({ finish: null, plan: 'finish_off_water' })
+  })
+
+  it("names the finish's waterway even when there's no route to it", async () => {
+    const r = await anon.plan.route({ start: DW.start, finish: DW.start, shape: 'one_way' })
+    expect(r).toMatchObject({ finish: { waterway: 'Kennet and Avon Canal' }, plan: 'too_short' })
+  })
+
+  it('lists the waterways a click could have meant (#505)', async () => {
+    expect((await anon.plan.choices({ at: DW.start, radiusM: 60 })).map(c => c.waterway)).toEqual(['Kennet and Avon Canal'])
+    expect(await anon.plan.choices({ at: [51.32, -1.2], radiusM: 60 })).toEqual([])
+    await expect(anon.plan.choices({ at: DW.start, radiusM: 5000 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
   it('saves plans made on the national network', async () => {

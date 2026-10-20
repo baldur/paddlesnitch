@@ -7,7 +7,7 @@
 import { featuresAlong } from './along'
 import { cumulative } from './line'
 import { portageOnRoute, portagesAt, type PortageOnRoute, type PublicPortage } from './portage'
-import { linkById, reverseRoute, route, snap, type Snap } from './network'
+import { linkById, reverseRoute, route, snap, snapChoices, type Snap } from './network'
 import type { Feature, FeatureKind, LatLng, NetLink, RegionDataset } from './types'
 
 export type PlanShape = 'one_way' | 'return'
@@ -79,6 +79,17 @@ export type Pace = Pick<PlanInput, 'paceKmh' | 'portageMinutes' | 'startAt'>
 
 export function snapClick(dataset: Pick<RegionDataset, 'links'>, p: LatLng): Snap | null {
   return snap(dataset.links, p, SNAP_MAX_M)
+}
+
+/** The waterways a click could have meant, nearest first, within `radiusM`
+ *  (about ten pixels at the map's zoom). A click on one line, with another a
+ *  few pixels off, meant the one it's on; only a click about as near to two
+ *  (within half the radius) gets more than one choice. Each choice's point is
+ *  on that waterway, so using it as the click snaps there for certain. */
+export function clickChoices(dataset: Pick<RegionDataset, 'links'>, p: LatLng, radiusM: number): Spot[] {
+  const r = Math.min(radiusM, SNAP_MAX_M)
+  const near = snapChoices(dataset.links, p, r)
+  return near.filter(s => s.dist <= near[0].dist + r / 2).map(s => ({ at: s.at, waterway: s.link.name }))
 }
 
 export function computePlan(dataset: RegionDataset, input: PlanInput): ComputedPlan | PlanError {

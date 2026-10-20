@@ -276,6 +276,12 @@ export function asInput(d: PlanDraft): PlanInput | null {
  *  can't be "on the water": it zooms in on the spot instead of placing an end. */
 export const PICK_MIN_ZOOM = 11
 
+/** `px` screen pixels as metres on the ground, at this zoom and latitude
+ *  (Web Mercator): how near a click is "on" a line. */
+export function pixelsToMetres(lat: number, zoom: number, px = 10): number {
+  return (px * 156_543.03 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom
+}
+
 /** Where a new click goes: to an end that missed the water, so a bad click
  *  can be fixed by clicking again; else start first, then finish, then
  *  whichever is nearer. */

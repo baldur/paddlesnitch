@@ -2,6 +2,7 @@
 // the shortest way between them along connected watercourse links.
 // Paddlers go both ways, so links are undirected; a return trip is the same
 // route reversed.
+import { haversine } from '@paddlesnitch/timing/geo'
 import { project, slice } from './line'
 import type { LatLng, NetLink } from './types'
 
@@ -34,6 +35,39 @@ export function snap(links: NetLink[], p: LatLng, maxM = Infinity): Snap | null 
   }
   for (const link of links) consider(link)
   return best && (best as Snap).dist <= maxM ? best : null
+}
+
+/** Two waterways' nearest points closer than this are one place (a junction),
+ *  not a choice: either way the route starts there. */
+export const SAME_SPOT_M = 25
+
+/** Every different waterway within `radiusM` of a click, nearest first: the
+ *  nearest point on each (by name; unnamed water by link). More than one means
+ *  the click could have meant either, and the paddler should say which. */
+export function snapChoices(links: NetLink[], p: LatLng, radiusM: number): Snap[] {
+  const { cells } = indexOf(links)
+  const [cy, cx] = cellOf(p)
+  const r = Math.ceil(radiusM / CELL_MIN_M)
+  const best = new Map<string, Snap>()
+  const seen = new Set<NetLink>()
+  for (let y = cy - r; y <= cy + r; y++) {
+    for (let x = cx - r; x <= cx + r; x++) {
+      for (const link of cells.get(`${y}:${x}`) ?? []) {
+        if (seen.has(link)) continue
+        seen.add(link)
+        const pr = project(link.line, p)
+        if (pr.dist > radiusM) continue
+        const key = link.name || `#${link.id}`
+        const had = best.get(key)
+        if (!had || pr.dist < had.dist) best.set(key, { link, along: pr.along, dist: pr.dist, at: pr.at })
+      }
+    }
+  }
+  const out: Snap[] = []
+  for (const s of [...best.values()].sort((a, b) => a.dist - b.dist)) {
+    if (!out.some(o => haversine(o.at, s.at) < SAME_SPOT_M)) out.push(s)
+  }
+  return out
 }
 
 // --- Index: a grid for snapping and the adjacency for routing, built once per

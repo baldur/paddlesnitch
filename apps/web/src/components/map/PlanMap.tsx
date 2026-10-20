@@ -99,7 +99,7 @@ function Focus({ focus }: { focus: MapFocus | null }) {
 }
 
 export default function PlanMap({
-  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], onPick,
+  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], choices = [], onPick,
 }: {
   version: string                          // the dataset's version, for the network's URLs
   route: LatLng[]
@@ -111,6 +111,7 @@ export default function PlanMap({
   satellite?: boolean
   coverage?: boolean                       // colour the water by how well we know it
   marks?: LatLng[]                         // landings being placed for a portage
+  choices?: { at: LatLng; label: string }[] // the waterways an unclear click could have meant
   onPick: (p: LatLng, zoom: number) => void
 }) {
   const tiles = mapTiles(satellite)
@@ -135,6 +136,12 @@ export default function PlanMap({
       {marks.map((m, i) => (
         <CircleMarker key={i} center={m} radius={7} pathOptions={{ color: '#0b1220', fillColor: '#facc15', fillOpacity: 1, weight: 2 }}>
           <Tooltip permanent direction="top">{i === 0 ? 'Landing 1' : 'Landing 2'}</Tooltip>
+        </CircleMarker>
+      ))}
+      {choices.map(c => (
+        <CircleMarker key={`${c.at}`} center={c.at} radius={7} interactive={false} pathOptions={{ color: '#facc15', fillOpacity: 0, weight: 3 }}>
+          {/* The northernmost label above its point, the others below, so they don't overlap. */}
+          <Tooltip permanent direction={c.at[0] >= Math.max(...choices.map(o => o.at[0])) ? 'top' : 'bottom'}>{c.label}</Tooltip>
         </CircleMarker>
       ))}
       <Clicks onPick={onPick} />

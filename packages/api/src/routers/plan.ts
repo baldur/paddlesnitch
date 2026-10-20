@@ -9,7 +9,7 @@ import { listBuddies } from '@paddlesnitch/core/buddies'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { simplify } from '@paddlesnitch/waterways/line'
 import { loadNational } from '@paddlesnitch/waterways/national'
-import { routePlan, snapClick } from '@paddlesnitch/waterways/plan'
+import { clickChoices, routePlan, snapClick } from '@paddlesnitch/waterways/plan'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { conditionsAlong } from '@paddlesnitch/waterways/live-store'
 import { NATIONAL, REGIONS } from '@paddlesnitch/waterways/regions'
@@ -44,12 +44,19 @@ export const planRouter = router({
     shape: z.enum(['one_way', 'return']),
   })).query(async ({ input }) => {
     const ds = await loadNational()
-    const s = snapClick(ds, input.start)
-    const start = s ? { at: s.at, waterway: s.link.name } : null
-    if (!input.finish) return { start, plan: null }
+    const spot = (p: [number, number]) => { const s = snapClick(ds, p); return s ? { at: s.at, waterway: s.link.name } : null }
+    const start = spot(input.start)
+    if (!input.finish) return { start, finish: null, plan: null }
+    const finish = spot(input.finish)
     const plan = routePlan(ds, { start: input.start, finish: input.finish, shape: input.shape }, [...await listPublicPortages(), ...ds.portages])
-    return { start, plan: typeof plan === 'string' ? plan : { ...plan, line: simplify(plan.line, 8) } }
+    return { start, finish, plan: typeof plan === 'string' ? plan : { ...plan, line: simplify(plan.line, 8) } }
   }),
+
+  // Which waterways a click could have meant (radiusM: about ten pixels at
+  // the map's zoom). More than one: the paddler picks, and the picked point is
+  // used as the click, so it snaps to that waterway.
+  choices: publicProcedure.input(z.object({ at: latLng, radiusM: z.number().min(1).max(1000) }))
+    .query(async ({ input }) => clickChoices(await loadNational(), input.at, input.radiusM)),
 
   list: protectedProcedure.query(({ ctx }) => listPlans(ctx.user.id)),
 
