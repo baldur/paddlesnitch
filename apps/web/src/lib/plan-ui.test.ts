@@ -23,6 +23,12 @@ describe('what a stop says', () => {
     )
   })
 
+  it("says a canal's bywash weir is beside the way, with nothing to portage (#509)", () => {
+    const weir = feature({ kind: 'weir', name: 'Weir 21' })
+    expect(stopLines(stop(weir, { beside: true }))).toContain('Beside the canal, not across it: nothing to portage.')
+    expect(stopLines(stop(weir))).not.toContain('Beside the canal, not across it: nothing to portage.')
+  })
+
   it('gives a crew how to get there, where to park, the postcode and facilities', () => {
     const lines = stopLines(stop(feature({
       lock: { postcode: 'SL6 9SR', facilities: ['toilet', 'drinking_water'] },

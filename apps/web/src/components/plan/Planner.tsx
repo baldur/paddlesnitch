@@ -333,8 +333,9 @@ function dayOffset(from: string, to: string): number {
   return Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()) / 86_400_000)
 }
 
-/** Stops where portage details can be added: locks, portages and weirs. */
-const canAddPortage = (s: Stop) => s.portage || s.feature.kind === 'weir'
+/** Stops where portage details can be added: locks, portages and weirs
+ *  across the way (not a canal's bywash beside it, #509). */
+const canAddPortage = (s: Stop) => s.portage || (s.feature.kind === 'weir' && !s.beside)
 
 type PortageActions = {
   signedIn: boolean

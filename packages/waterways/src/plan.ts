@@ -41,6 +41,9 @@ export type Stop = {
   fromPrevM: number        // metres from the previous stop (or the start)
   bank?: 'left' | 'right'  // looking downstream of the paddler, i.e. in the direction of travel
   portage: boolean
+  /** A weir beside a canal (a bywash or overflow), not across the way: worth
+   *  knowing about, nothing to portage (#509). */
+  beside?: true
   portagesBefore: number   // portages already done when you get here
   elapsedS: number         // from the start, moving time plus portages so far
   eta?: string             // ISO, when startAt is set
@@ -113,6 +116,7 @@ export function routePlan(
   const legs: { leg: Stop['leg']; line: LatLng[]; offsetM: number }[] = [{ leg: 'out', line: out.line, offsetM: 0 }]
   if (input.shape === 'return') legs.push({ leg: 'back', line: reverseRoute(out).line, offsetM: out.lengthM })
 
+  const onCanal = canalAt(dataset.links, out.legs)
   const stops: RoutedStop[] = []
   let prevM = 0
   for (const { leg, line, offsetM } of legs) {
@@ -124,8 +128,10 @@ export function routePlan(
       if (a.item.kind === 'weir' && lockAt.some(m => Math.abs(m - a.chainageM) <= WEIR_AT_LOCK_M)) continue
       const chainageM = offsetM + a.chainageM
       const theirs = (PORTAGE_KINDS.has(a.item.kind) || a.item.kind === 'weir') && contributions.length ? portagesAt(a.item, contributions) : []
+      const beside = a.item.kind === 'weir' && onCanal(leg === 'out' ? a.chainageM : out.lengthM - a.chainageM)
       stops.push({
         feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind),
+        ...(beside ? { beside: true as const } : {}),
         ...(theirs.length ? { portages: theirs.map(c => portageOnRoute(line, c, cum)) } : {}),
       })
       prevM = chainageM
@@ -141,6 +147,17 @@ export function routePlan(
     tidalFromM: tidalFrom(dataset.links, out.legs),
     stops,
   }
+}
+
+/** Whether the route is on a canal this many metres along it. */
+function canalAt(links: NetLink[], legs: { linkId: string; from: number; to: number }[]): (m: number) => boolean {
+  const ends: { m: number; canal: boolean }[] = []
+  let m = 0
+  for (const leg of legs) {
+    m += Math.abs(leg.to - leg.from)
+    ends.push({ m, canal: linkById(links, leg.linkId)?.form === 'canal' })
+  }
+  return at => (ends.find(e => at <= e.m) ?? ends[ends.length - 1])?.canal ?? false
 }
 
 /** Metres along the route to the first tidal link, if any. */
