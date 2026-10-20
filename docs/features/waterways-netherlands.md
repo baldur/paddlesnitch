@@ -1,0 +1,51 @@
+# Feature spec: River planner data for the Netherlands
+
+**Status:** 📝 proposal, 2026-10-20. Nothing built. The first step into Europe after the UK and Ireland ([`waterways-uk-ireland.md`](waterways-uk-ireland.md)), using the same pipeline, network and planner. Sources were checked by desk research on 2026-10-20. Each still needs its endpoint and licence confirmed when its job is written, as was done for the UK.
+
+## Why the Netherlands first
+
+- **Dense, well-mapped water.** OpenStreetMap's Dutch network is among the most complete anywhere, and canoe routes are mapped as `route=canoe` relations with portages as members ([OSM wiki: route=canoe](https://wiki.openstreetmap.org/wiki/Tag:route=canoe); the [recreational waterway project](https://wiki.openstreetmap.org/wiki/WikiProject_Europe/E-waterway_network/Recreational) lists networks such as Kanonetwerk De Rotte and Midden-Delfland).
+- **Open government data, often CC0.** The national register ([data.overheid.nl](https://data.overheid.nl)) and PDOK serve national layers with clear licences, mostly keyless.
+- **Printable aerial photos.** The Kadaster's 8 cm aerial photography is CC BY 4.0 ([2026 RGB](https://data.overheid.nl/dataset/77581-luchtfoto-beeldmateriaal-2026-5cm---8cm-rgb-open-data)). Unlike Esri, it can be stored and printed, which solves the printed-map problem the UK still has.
+
+## What's different from the UK
+
+- **Locks matter less to a canoe, and carries matter more.** Most Dutch paddling is on polder water, where the obstacles are weirs (*stuwen*), pumping stations (*gemalen*), dams and low culverts. Paddle routes use *overdraagplaatsen* (carry points) and *kanohellingen* (canoe ramps), not big-ship locks.
+- **Bridges** are mostly irrelevant to a canoe. Lock and bridge opening times (EuRIS) matter to motor boats, not us, so they're skipped.
+- **Tides:** the Wadden Sea and Zeeland are tidal. Rijkswaterstaat publishes astronomical predictions itself, so no harmonic fit of our own is needed.
+- **Language:** the interface stays English. Names stay Dutch (Sluis Weurt, not "Weurt Lock"), and the places search needs Dutch diacritics and articles ('s-Hertogenbosch).
+
+## Sources (to confirm per job)
+
+| What | Source | Licence | Notes |
+|---|---|---|---|
+| Network | OSM via Geofabrik `netherlands-latest.osm.pbf` (~1.4 GB), same `osm_extract.py` | ODbL | Ditches (`waterway=ditch/drain`) are everywhere: keep the network to rivers, canals and anything in a `route=canoe` relation, or the router will send people down field drains |
+| Canoe routes and portages | OSM `route=canoe` relations, `canoe=portage` segments, portage ways | ODbL | The core of the Dutch planner. Needs the extractor to read relations, which it doesn't today |
+| National locks | Rijkswaterstaat FIS/VNDS lock layer (`geo.rijkswaterstaat.nl`, fis_vnds) ([register](https://data.overheid.nl/en/dataset/49337-vaarweginformatie-sluizen)) | CC0 | Big-ship waterways only. Provincial and water-board locks come from OSM |
+| Weirs, pumping stations, dams | "Waterschappen Kunstwerken IMWA", all water boards in one GeoPackage via PDOK ([register](https://data.overheid.nl/en/dataset/54478-waterschappen-keringen-imwa) family) | **CC BY-SA 4.0** | Share-alike: keep it in its own published file like the OSM layer, and never in the CC0 contributions. Not every board delivers yet. Some boards also publish CC0 copies (e.g. [Drents Overijsselse Delta "Stuw"](https://data.overheid.nl/en/dataset/stuw-)) |
+| Recreational network | Rijkswaterstaat BRTN ([register](https://data.overheid.nl/en/dataset/40881-nwp-basisrecreatietoervaartnetwerk)) | CC0 | Which water is a recreational route. "Indicative, no legal status" |
+| Provincial canoe routes | e.g. Provincie Utrecht *Kanoroutes* ([georegister](https://nationaalgeoregister.nl/geonetwork/srv/metadata/adc07713-1cf8-44f2-a8a7-5f084aada9a2)) | Public domain | Province by province; check where OSM is thinner |
+| Water levels | Rijkswaterstaat Waterinfo / DDL web services ([open data](https://www.rijkswaterstaat.nl/zakelijk/open-data)) | Open, attribution usually not required | Keyless per third-party clients; confirm endpoints and rate limits. Live, like the UK gauges |
+| Tide predictions | Rijkswaterstaat DDL (astronomical tide) | Open | Wadden and Zeeland only |
+| Aerial photos | Kadaster/PDOK *Luchtfoto Beeldmateriaal* WMTS, 8 cm | CC BY 4.0 (check each year's layer; 2014 was non-commercial) | On screen **and** printable. Credit "Beeldmateriaal.nl / Kadaster" |
+| Places | OSM `place=*` | ODbL | As for the UK |
+
+## Plan
+
+| Phase | What | Done when |
+|---|---|---|
+| **N0** Decide | Owner answers the questions below | — |
+| **N1** Network | Geofabrik Netherlands extract, ditch filter, a second dataset beside `gbie` (or one Europe dataset: see questions), check routes for 3 known canoe routes (e.g. Biesbosch, De Rotte, a Frisian route) | Check routes pass |
+| **N2** Canoe routes | Extractor reads `route=canoe` relations and portages; routing prefers them; portages as landings like the UK OSM portages | A route along a mapped canoe network follows it and lists its carries |
+| **N3** Structures | RWS locks (CC0), water-board weirs/pumping stations (CC BY-SA, own file), gap rules as in the UK | Coverage map for the Netherlands |
+| **N4** Live | Water levels and tides from Rijkswaterstaat | Conditions panel works on a Dutch plan |
+| **N5** Imagery | PDOK 8 cm aerial photos on screen and in print, replacing Esri inside the Netherlands | Printed sheet has a photo map per carry |
+
+Cost: the same weekly workflow and bucket. The extra network adds to the server's in-memory `network.json`; measure it at N1 against the server Lambda's memory before deciding question 1.
+
+## Questions for the owner
+
+1. **One dataset or one per country?** One "Europe" network keeps routing simple but grows memory with every country; per-country datasets keep each small and would need a country pick (or a guess from the map view).
+2. **Ditches:** route only on mapped canoe routes plus rivers and canals (safe, misses some polder paddling), or on all small water (finds more, but routes through field drains)? I'd start safe.
+3. **CC BY-SA** water-board data is fine under the same licence-layer rules as OSM. Agreed?
+4. **Partners:** Watersportverbond (the Dutch paddling federation) keeps canoe-route information. Approach them, as with Paddle UK, or stay with open data only?
