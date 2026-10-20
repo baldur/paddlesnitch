@@ -66,3 +66,18 @@ export function onWaterway(links: NetLink[], p: LatLng, waterway: string, maxM =
   const want = fold(waterway)
   return snapChoices(links, p, maxM).find(s => fold(s.link.name).includes(want))?.at ?? null
 }
+
+/** One end of a plan from a link (#508): `lat,lng`, or a place's name or slug
+ *  ("cropredy-lock", "Castle Quay, Banbury"). `waterway` keeps it on that
+ *  waterway, for a place by two or a point between two. Null when it can't be
+ *  found on the water. */
+export function resolveEnd(ds: Searchable, value: string, opts: { waterway?: string; near?: LatLng } = {}): LatLng | null {
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(value)
+  if (m) {
+    const p: LatLng = [Number(m[1]), Number(m[2])]
+    if (Math.abs(p[0]) > 90 || Math.abs(p[1]) > 180) return null
+    return opts.waterway ? onWaterway(ds.links, p, opts.waterway) : p
+  }
+  const name = /[\s,]/.test(value) ? value : value.replace(/-/g, ' ')
+  return findOnWater(ds, name, { waterway: opts.waterway, near: opts.near, limit: 1 })[0]?.at ?? null
+}

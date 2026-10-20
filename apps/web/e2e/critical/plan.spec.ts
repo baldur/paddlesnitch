@@ -39,6 +39,19 @@ test('a whole plan from the keyboard: start and finish by name (#506)', async ({
   await expect(page).toHaveURL(/from=.*&to=/)
 })
 
+test('a hand-written link names its ends, and the address becomes coordinates (#508)', async ({ page }) => {
+  await page.goto('/plan?from=guyers-lock&to=Aldermaston%20Wharf')
+  await expect(page.getByTestId('plan-summary')).toContainText('Distance', { timeout: 15_000 })
+  await expect(page).toHaveURL(/from=-?\d+\.\d+,-?\d+\.\d+&to=-?\d+\.\d+,-?\d+\.\d+/)
+
+  await page.goto('/plan?from=atlantis')
+  await expect(page.getByText(/We couldn.t find .atlantis. on the water/)).toBeVisible({ timeout: 15_000 })
+
+  // The parameters are written down for anyone making links.
+  await page.goto('/help')
+  await expect(page.getByTestId('plan-params')).toContainText('waterway')
+})
+
 test('zoomed out, a click zooms in; a start off the water is moved by the next click', async ({ page }) => {
   // Zoomed out over the UK and Ireland: a click there is kilometres wide.
   // (/plan itself opens on Reading, close enough to click the water.)

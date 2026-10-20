@@ -56,8 +56,9 @@ const CREDITED = (Object.keys(SOURCES) as (keyof typeof SOURCES)[]).filter(id =>
 // The live dataset's version: the map's network and places URLs carry it.
 const VERSION = manifest.version ?? 'none'
 
-export default function Planner({ initial, view, saved, shared, lock }: {
+export default function Planner({ initial, view, saved, shared, lock, unfound = [] }: {
   initial: PlanDraft; view?: View; saved?: SavedPlan; shared?: SharedView
+  unfound?: { end: 'start' | 'finish'; name: string }[]   // place names in the link we couldn't find on the water
   lock?: LockLink   // opened from /plan/gaps: add portage details here
 }) {
   const router = useRouter()
@@ -220,6 +221,9 @@ export default function Planner({ initial, view, saved, shared, lock }: {
           )}
           <PlaceSearch version={VERSION} near={draft.start ?? undefined}
             onPick={p => setFocus({ at: p.at, zoom: p.kind === 'lock' || p.kind === 'weir' ? 16 : 14 })} />
+          {unfound.filter(u => !draft[u.end]).map(u => (
+            <p key={u.end} className="mt-2 text-sm text-red">We couldn&apos;t find &ldquo;{u.name}&rdquo; on the water. Type the {u.end} in its box above, or click the map.</p>
+          ))}
           {error && <p className="mt-2 text-sm text-red">{PLAN_ERROR_TEXT[error]}</p>}
           {routed.isError && <p className="mt-2 text-sm text-red">Couldn&apos;t work out the route. Please try again.</p>}
           {draft.finish && routed.isFetching && <p className="mt-2 text-sm text-muted">Finding the route…</p>}

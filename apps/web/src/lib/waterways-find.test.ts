@@ -2,7 +2,7 @@
 import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
-import { findOnWater, onWaterway } from '@paddlesnitch/waterways/find'
+import { findOnWater, onWaterway, resolveEnd } from '@paddlesnitch/waterways/find'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
 import { snapClick } from '@paddlesnitch/waterways/plan'
 import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
@@ -52,5 +52,24 @@ describe('a point put onto a named waterway', () => {
     const p = onWaterway(ds.links, READING, 'River Kennet')!
     expect(snapClick(ds, p)?.link.name).toBe('River Kennet')
     expect(onWaterway(ds.links, READING, 'Grand Union Canal')).toBeNull()
+  })
+})
+
+describe('an end from a link (#508)', () => {
+  it('takes lat,lng as it is, or puts it on the waterway asked for', () => {
+    expect(resolveEnd(ds, '51.4545,-0.9731')).toEqual(READING)
+    expect(snapClick(ds, resolveEnd(ds, '51.4545,-0.9731', { waterway: 'kennet' })!)?.link.name).toBe('River Kennet')
+    expect(resolveEnd(ds, '95,0')).toBeNull()
+  })
+
+  it('takes a name or a slug, landing where picking it would', () => {
+    const picked = findOnWater(ds, 'Aldermaston Wharf')[0].at
+    expect(resolveEnd(ds, 'Aldermaston Wharf')).toEqual(picked)
+    expect(resolveEnd(ds, 'aldermaston-wharf')).toEqual(picked)
+    expect(resolveEnd(ds, 'Reading', { waterway: 'River Kennet' })).toEqual(findOnWater(ds, 'Reading, River Kennet')[0].at)
+  })
+
+  it("says so when it can't be found", () => {
+    expect(resolveEnd(ds, 'atlantis')).toBeNull()
   })
 })
