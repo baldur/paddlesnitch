@@ -29,7 +29,7 @@ export function sitemap(trials: TrialMetadata[], courses: CourseMetadata[]): Met
 
 export const LLMS_TXT = `# paddlesnitch
 
-> Tools for paddlers (kayak, canoe, SUP, rowing) in the UK and Ireland: plan a trip on the rivers and canals, race GPS-timed time trials, and look back at your own paddles.
+> Tools for paddlers (kayak, canoe, SUP, rowing) in the UK and Ireland: plan a trip on the rivers and canals (and in the Netherlands), race GPS-timed time trials, and look back at your own paddles.
 
 paddlesnitch is not a navigation authority. Check stream warnings, lock notices and, below Teddington, the tide before you go.
 

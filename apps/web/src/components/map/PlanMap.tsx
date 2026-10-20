@@ -6,12 +6,12 @@ import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
 import { COVERAGE_LEVELS, mapTiles } from '@/lib/plan-ui'
 
-// The planner's map: the rivers and canals of the UK and Ireland, the planned
+// The planner's map: the rivers and canals of the UK, Ireland and the Netherlands, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
 // it's the start or the finish.
 
-/** The UK and Ireland, for a first look with nothing planned. */
-const HOME: [[number, number], [number, number]] = [[49.9, -10.6], [60.9, 1.8]]
+/** The UK, Ireland and the Netherlands, for a first look with nothing planned. */
+const HOME: [[number, number], [number, number]] = [[49.9, -10.6], [60.9, 7.3]]
 
 // Network pieces already fetched, shared across map instances; keyed by URL.
 const loaded = new Map<string, Promise<LatLng[][]>>()
@@ -72,7 +72,7 @@ function Clicks({ onPick }: { onPick: (p: LatLng, zoom: number) => void }) {
 }
 
 // Fit the route when it changes, never on other re-renders (which would undo
-// the paddler's zoom); with no route, the asked-for view or the UK and Ireland.
+// the paddler's zoom); with no route, the asked-for view or HOME.
 function Frame({ route, view }: { route: LatLng[]; view?: { at: LatLng; zoom: number } }) {
   const map = useMap()
   const first = route[0], last = route.at(-1)
