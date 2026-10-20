@@ -1,6 +1,6 @@
 # Feature spec: River planner data for the Netherlands
 
-**Status:** 📝 proposal, 2026-10-20. Nothing built. The first step into Europe after the UK and Ireland ([`waterways-uk-ireland.md`](waterways-uk-ireland.md)), using the same pipeline, network and planner. Sources were checked by desk research on 2026-10-20. Each still needs its endpoint and licence confirmed when its job is written, as was done for the UK.
+**Status:** 🚧 N1 built 2026-10-20 (network, places and check routes, from OSM only), on the defaults recommended below while the owner's answers are pending: one dataset growing country by country, no ditches, OSM and CC0 only (no CC BY-SA, no outreach yet). The first step into Europe after the UK and Ireland ([`waterways-uk-ireland.md`](waterways-uk-ireland.md)), using the same pipeline, network and planner. Sources were checked by desk research on 2026-10-20. Each still needs its endpoint and licence confirmed when its job is written, as was done for the UK.
 
 ## Why the Netherlands first
 
@@ -35,7 +35,7 @@
 | Phase | What | Done when |
 |---|---|---|
 | **N0** Decide | Owner answers the questions below | — |
-| **N1** Network | Geofabrik Netherlands extract, ditch filter, a second dataset beside `gbie` (or one Europe dataset: see questions), check routes for 3 known canoe routes (e.g. Biesbosch, De Rotte, a Frisian route) | Check routes pass |
+| **N1** Network ✅ | Geofabrik Netherlands extract into the same dataset (the build reads every extract under `.cache/waterways/osm/`; elements in two are kept once), same network tags (no ditches), check routes Amsterdam → Utrecht (45.5 km), Rotterdam → Dordrecht (22.1 km), De Rotte (15 km, 1 lock); Dutch places in the search; map's first view widened | Check routes pass ✅ |
 | **N2** Canoe routes | Extractor reads `route=canoe` relations and portages; routing prefers them; portages as landings like the UK OSM portages | A route along a mapped canoe network follows it and lists its carries |
 | **N3** Structures | RWS locks (CC0), water-board weirs/pumping stations (CC BY-SA, own file), gap rules as in the UK | Coverage map for the Netherlands |
 | **N4** Live | Water levels and tides from Rijkswaterstaat | Conditions panel works on a Dutch plan |

@@ -23,4 +23,8 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'Lanesborough → Athlone (Shannon, across Lough Ree)', start: [53.6735, -7.9895], finish: [53.4235, -7.9415], source: 'Waterways Ireland' },
   { name: 'Athlone → Banagher (Shannon)', start: [53.4235, -7.9415], finish: [53.1905, -7.9905], source: 'Waterways Ireland' },
   { name: 'Dublin → Shannon Harbour (Grand Canal)', start: [53.3335, -6.2390], finish: [53.2205, -7.9420], source: 'Waterways Ireland: 131 km; locks 1–36 plus the Circular Line locks in Dublin' },
+  // The Netherlands (docs/features/waterways-netherlands.md): routes found, no counts pinned yet.
+  { name: 'Amsterdam → Utrecht (Amsterdam-Rijnkanaal, Vecht)', start: [52.3795, 4.9000], finish: [52.0890, 5.1150], source: 'OSM; a route must exist' },
+  { name: 'Rotterdam → Dordrecht (Nieuwe Maas, Oude Maas)', start: [51.9050, 4.4850], finish: [51.8150, 4.6700], source: 'OSM; a route must exist' },
+  { name: 'Rotterdam → Zevenhuizen (De Rotte canoe route)', start: [51.9289, 4.4854], finish: [52.0288, 4.5583], source: 'OSM route=canoe "Kanonetwerk De Rotte"; a route must exist' },
 ]

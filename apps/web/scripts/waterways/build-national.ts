@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Build the national river-planner dataset for the UK and Ireland.
+// Build the national river-planner dataset for the UK, Ireland and the Netherlands.
 //
-//   pnpm --filter web waterways:national [--extract <dir>] [--publish]
+//   pnpm --filter web waterways:national [--extract <dir>[,<dir>…]] [--publish]
 //
 // Reads the OSM extract written by osm_extract.py (rivers and canals, points,
 // places) and every normalised source under .cache/waterways/normalised/, then
@@ -31,7 +31,10 @@ import type { Feature, LatLng, NetLink, OsmElement } from '@paddlesnitch/waterwa
 const args = process.argv.slice(2)
 const arg = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const CACHE = path.join(process.cwd(), '.cache/waterways')
-const EXTRACT = arg('--extract') ?? path.join(CACHE, 'osm/gbie')
+/** One OSM extract per country group (osm_extract.py output): Britain and
+ *  Ireland, the Netherlands. Each is read if present; elements in two (the
+ *  North Sea between them) are kept once. */
+const EXTRACTS = (arg('--extract')?.split(',') ?? ['gbie', 'nl'].map(n => path.join(CACHE, 'osm', n))).filter(d => fs.existsSync(d))
 const NORMALISED = path.join(CACHE, 'normalised')
 const MANIFEST = path.resolve(process.cwd(), '../../packages/waterways/data/manifest.json')
 
@@ -54,15 +57,21 @@ async function main() {
   const t0 = Date.now()
   const lap = (what: string) => console.log(`  ${what} (${((Date.now() - t0) / 1000).toFixed(1)} s)`)
 
+  if (!EXTRACTS.length) throw new Error('no OSM extract: run osm_extract.py first')
+  const seen = new Set<string>()
+  const once = (id: string | number) => (seen.has(String(id)) ? false : (seen.add(String(id)), true))
   const ways: OsmWay[] = []
-  for await (const w of lines(path.join(EXTRACT, 'ways.jsonl'))) if (isOurs(w)) ways.push(w)
+  for (const dir of EXTRACTS) {
+    // The Britain and Ireland extract clips in a little of the Dutch coast (isOurs).
+    for await (const w of lines(path.join(dir, 'ways.jsonl'))) if ((path.basename(dir) !== 'gbie' || isOurs(w)) && once(`w${w.id}`)) ways.push(w)
+  }
   const links = linksFromWays(ways, 3)
   const osmLockList = osmLocks(ways, new Date().toISOString())
   ways.length = 0
   lap(`network: ${links.length} links, ${Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000)} km`)
 
   const osm: OsmElement[] = []
-  for await (const p of lines(path.join(EXTRACT, 'points.jsonl'))) if (snap(links, p.at, OSM_NEAR_M)) osm.push(p)
+  for (const dir of EXTRACTS) for await (const p of lines(path.join(dir, 'points.jsonl'))) if (once(p.id) && snap(links, p.at, OSM_NEAR_M)) osm.push(p)
   lap(`OSM points near the water: ${osm.length}`)
   osmLockList.push(...osmGateLocks(osm, osmLockList, new Date().toISOString()))
 
@@ -117,7 +126,7 @@ async function main() {
   lap(`OSM toilets and drinking water filling gaps: ${osmFacilityFill.length} of ${osmFacilityList.length}`)
 
   const osmPlaces: { at: LatLng; tags: Record<string, string> }[] = []
-  for await (const p of lines(path.join(EXTRACT, 'places.jsonl'))) osmPlaces.push(p)
+  for (const dir of EXTRACTS) for await (const p of lines(path.join(dir, 'places.jsonl'))) if (once(`p${p.id}`)) osmPlaces.push(p)
   const places = buildPlaces(osmPlaces, [...features, ...osmFeatures], links)
   lap(`places: ${places.length}`)
 
