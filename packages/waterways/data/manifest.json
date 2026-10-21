@@ -1,10 +1,10 @@
 {
-  "version": "20261021-5abffc9d",
-  "builtAt": "2026-10-21T14:38:17.035Z",
+  "version": "20261021-9279f6b6",
+  "builtAt": "2026-10-21T15:33:29.963Z",
   "counts": {
     "links": 118168,
     "km": 85317,
-    "features": 30136,
+    "features": 31242,
     "osmLocks": 761,
     "osmAccess": 1858,
     "osmFacilities": 3374,
@@ -14,11 +14,12 @@
     "places": 37329
   },
   "sources": {
+    "amber-eu": 1104,
     "amber": 12266,
     "crt": 11638,
     "ea-aims": 2177,
     "ea-thames": 45,
-    "ea-umap": 194,
+    "ea-umap": 196,
     "ifi": 2064,
     "nl-waterboards": 49977,
     "rws-fis": 863,
