@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, sepaGauges, stateOf, thamesReachesOnRoute, type Gauge,
+  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, type Gauge,
 } from '@paddlesnitch/waterways/live'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
@@ -45,6 +45,19 @@ describe('gauges', () => {
 
   it('OPW: level sensors only, and only stations OPW lets us republish', () => {
     expect(opwGauges(fixture('opw-latest-sample.json')).map(g => g.id)).toEqual(['0000001041', '0000001043'])
+  })
+
+  it('Rijkswaterstaat: locations that measure water height, on NAP', () => {
+    const g = rwsGauges(fixture('rws-catalogue-sample.json'))
+    expect(g.map(x => x.id).sort()).toEqual(['dronten.roggebotsluis.vossemeer', 'genemuiden', 'groenevaart.boven'])   // not the location measuring something else
+    expect(g.find(x => x.id === 'genemuiden')).toMatchObject({ source: 'rws', name: 'Genemuiden', datum: 'nap', at: [52.633395, 6.033154] })
+  })
+
+  it("Rijkswaterstaat: the newest fresh reading per location, in metres; the 1980s archives it mixes in don't count", () => {
+    const latest = rwsLatest(fixture('rws-latest-sample.json'), Date.parse('2026-10-21T05:00:00Z'))
+    expect([...latest.keys()]).toEqual(['genemuiden'])                                   // Roggebotsluis's newest is from 2023
+    expect(latest.get('genemuiden')).toEqual({ value: -0.5, at: '2026-10-21T03:20:00.000Z' })
+    expect(rwsLatest(fixture('rws-latest-sample.json'), Date.parse('2026-10-22T05:00:00Z')).size).toBe(0)   // a day old: not now
   })
 
   it('SEPA: the station list with positions', () => {
