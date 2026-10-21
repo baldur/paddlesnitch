@@ -661,6 +661,20 @@ export class AttStack extends cdk.Stack {
       code: cloudfront.FunctionCode.fromFile({ filePath: path.join(__dirname, '../functions/games-router.js') }),
     })
 
+    // Honour the origin's Cache-Control, with nothing from the viewer in the
+    // key: the planner's map data is the same for everyone (see /plan/data/* below).
+    const planDataCache = new cloudfront.CachePolicy(this, 'PlanDataCache', {
+      cachePolicyName: 'paddlesnitch-plan-data',
+      minTtl: cdk.Duration.seconds(0),
+      defaultTtl: cdk.Duration.seconds(0),
+      maxTtl: cdk.Duration.days(365),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+    })
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       domainNames: ['paddlesnitch.com', 'www.paddlesnitch.com'],
       certificate,
@@ -706,6 +720,19 @@ export class AttStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
+        // The river planner's map data (/plan/data/{version}/{name}): the
+        // server marks the live version's network immutable and coverage
+        // five minutes, so CloudFront keeps what it says. Saves the Lambda
+        // recomputing megabytes (and ~8 s the first time per instance) for
+        // each visitor. Not the managed UseOriginCacheControlHeaders policy:
+        // it keys on (so forwards) the viewer's Host, and a function URL
+        // answers 403 to any Host but its own.
+        '/plan/data/*': {
+          origin: serverOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
+          cachePolicy: planDataCache,
         },
         '/data/*': {
           origin: assetsOrigin,
