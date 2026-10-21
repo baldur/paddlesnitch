@@ -170,6 +170,14 @@ describe('routing on the server, timing in the browser', () => {
     expect(routed.canoeRoutes).toEqual(['Kanoroute A'])
   })
 
+  it("junction-network legs ('4-5; canoe') are paddleable but not named on the plan", () => {
+    const links = linksFromWays([way(1, [1, 2], [[52, 4.6], [52, 4.62]], { canoe_route: '4-5; canoe', name: 'Rotte' })])
+    expect(links[0].boat).toBe('yes')
+    const routed = routePlan({ links, features: [] }, { start: [52, 4.6], finish: [52, 4.619], shape: 'one_way' })
+    if (typeof routed === 'string') throw new Error(routed)
+    expect(routed.canoeRoutes).toBeUndefined()
+  })
+
   it('a routed plan carries no times, so pace changes need no new route', () => {
     const routed = routePlan(ds, { start, finish, shape: 'one_way' })
     if (typeof routed === 'string') throw new Error(routed)

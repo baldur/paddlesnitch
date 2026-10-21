@@ -164,6 +164,10 @@ function canalAt(links: NetLink[], legs: { linkId: string; from: number; to: num
 }
 
 /** Metres along the route to the first tidal link, if any. */
+/** A name worth showing. Dutch junction networks number their legs ("4-5;
+ *  canoe", "12-39"): still paddleable water, but not a route anyone knows by name. */
+export const isRouteName = (r: string) => /[a-z]{3}/i.test(r) && !/^\d/.test(r.trim()) && r !== 'canoe route'
+
 /** A marked canoe route counts as followed after this much of it. */
 export const CANOE_ROUTE_MIN_M = 500
 
@@ -171,7 +175,7 @@ function canoeRoutesOf(links: NetLink[], legs: { linkId: string; from: number; t
   const metres = new Map<string, number>()
   for (const leg of legs) {
     const r = linkById(links, leg.linkId)?.canoeRoute
-    if (r) metres.set(r, (metres.get(r) ?? 0) + Math.abs(leg.to - leg.from))
+    if (r && isRouteName(r)) metres.set(r, (metres.get(r) ?? 0) + Math.abs(leg.to - leg.from))
   }
   const routes = [...metres].filter(([, m]) => m >= CANOE_ROUTE_MIN_M).map(([r]) => r)
   return routes.length ? { canoeRoutes: routes } : {}
