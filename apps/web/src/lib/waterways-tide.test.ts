@@ -2,7 +2,7 @@
 // finds its high and low waters, and backtests honestly.
 import { describe, expect, it } from 'vitest'
 import { backtest, CONSTITUENTS, fitTide, observedHighs, tideAt, tideExtremes, type TideSample, type TidesFile } from '@paddlesnitch/waterways/tide'
-import { tideWindow } from './plan-ui'
+import { tideNote, tideWindow } from './plan-ui'
 
 const RAD = Math.PI / 180
 const START = Date.parse('2026-01-01T00:00:00Z')
@@ -85,6 +85,17 @@ describe('the tide window on a plan', () => {
   it("shows no tide where the route meets tidal water far from any gauge (the Severn isn't the Thames)", () => {
     const severn = { ...plan, line: [[51.85, -2.25], [51.70, -2.45]] as [number, number][], finish: { at: [51.70, -2.45] as [number, number], waterway: 'River Severn' } }
     expect(tideWindow(severn, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, file)).toBeNull()
+  })
+
+  it('in Zeeland: the Dutch gauges near where the route meets the tide, nearest first, on NAP', () => {
+    const nl = (label: string, at: [number, number]) => ({ ...gauge(true, 15), label, at, datum: 'NAP' as const })
+    const dutch: TidesFile = { ...file, gauges: { ...file.gauges, vlissingen: nl('Vlissingen', [51.442, 3.6]), terneuzen: nl('Terneuzen', [51.336, 3.82]) } }
+    const zeeland = { ...plan, line: [[51.50, 3.70], [51.40, 3.70]] as [number, number][], finish: { at: [51.40, 3.70] as [number, number], waterway: 'Westerschelde' }, tidalFromM: 2_000 }
+    const w = tideWindow(zeeland, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, dutch)!
+    expect(w.gauges.map(g => g.label)).toEqual(['Vlissingen', 'Terneuzen'])   // no Thames gauge, the nearer first
+    expect(w.afterHigh?.gauge).toBe('Vlissingen')
+    expect(tideNote(w)).toContain('heights above NAP')
+    expect(tideNote(tideWindow(plan, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, dutch)!)).toContain('Ordnance Datum')
   })
 
   it('needs a start time and a route that reaches tidal water', () => {

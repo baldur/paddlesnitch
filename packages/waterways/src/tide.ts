@@ -184,6 +184,7 @@ export type TidesFile = {
   gauges: Record<string, {
     label: string
     at: [number, number]
+    datum?: 'NAP'                 // heights above NAP (Dutch gauges); otherwise Ordnance Datum
     lows: boolean                 // false: high waters only (Richmond's half-tide lock holds the low water up)
     from: string; to: string      // the readings fitted
     backtest: { n: number; faults: number; medianMin: number; p95Min: number; medianHeightM: number }
@@ -197,5 +198,28 @@ export type TidesFile = {
  *  is mostly neaps. Every view shows the real figure next to the prediction. */
 export const SHOW_MEDIAN_MIN = 15
 export const SHOW_P95_MIN = 45
-export const showable = (g: TidesFile['gauges'][string]) =>
+export const showable = (g: Pick<TidesFile['gauges'][string], 'backtest'>) =>
   g.backtest.n >= 20 && g.backtest.medianMin <= SHOW_MEDIAN_MIN && g.backtest.p95Min <= SHOW_P95_MIN
+
+/** Dutch tide gauges fitted from Rijkswaterstaat's measured water heights
+ *  (scripts/waterways/download-rws-tides.ts, then fit-tides.ts): the
+ *  Westerschelde, Oosterschelde, the Maas mouth up to Dordrecht, the North Sea
+ *  coast and the Wadden Sea. Rijkswaterstaat location codes. */
+export const RWS_TIDE_GAUGES: Record<string, { code: string; label: string; at: [number, number] }> = {
+  vlissingen: { code: 'vlissingen', label: 'Vlissingen', at: [51.442, 3.6] },
+  terneuzen: { code: 'terneuzen', label: 'Terneuzen', at: [51.3362, 3.8198] },
+  hansweert: { code: 'hansweert', label: 'Hansweert', at: [51.4457, 3.9974] },
+  bath: { code: 'rilland.bath', label: 'Bath', at: [51.3988, 4.2101] },
+  stavenisse: { code: 'stavenisse', label: 'Stavenisse', at: [51.598, 4.004] },
+  hoekVanHolland: { code: 'hoekvanholland', label: 'Hoek van Holland', at: [51.9769, 4.1198] },
+  maassluis: { code: 'maassluis', label: 'Maassluis', at: [51.9175, 4.2498] },
+  rotterdam: { code: 'rotterdam.nieuwemaas.boerengat', label: 'Rotterdam (Boerengat)', at: [51.9184, 4.5003] },   // Boompjes has no measured series
+  dordrecht: { code: 'dordrecht.oudemaas.benedenmerwede', label: 'Dordrecht', at: [51.82, 4.671] },
+  scheveningen: { code: 'scheveningen', label: 'Scheveningen', at: [52.099, 4.2636] },
+  ijmuiden: { code: 'ijmuiden.buitenhaven', label: 'IJmuiden', at: [52.463, 4.555] },
+  denHelder: { code: 'denhelder.marsdiep', label: 'Den Helder', at: [52.9644, 4.745] },
+  harlingen: { code: 'harlingen.waddenzee', label: 'Harlingen', at: [53.1756, 5.4093] },
+  terschelling: { code: 'terschelling.west', label: 'West-Terschelling', at: [53.363, 5.22] },
+  lauwersoog: { code: 'lauwersoog.waddenzee', label: 'Lauwersoog', at: [53.4083, 6.196] },
+  delfzijl: { code: 'delfzijl', label: 'Delfzijl', at: [53.328, 6.931] },
+}

@@ -111,7 +111,7 @@ export const BOARD_TEXT = { none: 'No stream warnings', caution: 'Caution (yello
 
 export type TideWindow = {
   reachAt: string                // when you reach tidal water (Teddington on the Thames)
-  gauges: { id: string; label: string; extremes: TideExtreme[]; medianMin: number; p95Min: number }[]
+  gauges: { id: string; label: string; datum?: 'NAP'; extremes: TideExtreme[]; medianMin: number; p95Min: number }[]   // nearest first
   /** How your reaching tidal water sits against the nearest high water at the
    *  first gauge with highs (Richmond on the Thames): minutes after (+) or before (−). */
   afterHigh?: { gauge: string; minutes: number; at: string }
@@ -127,8 +127,11 @@ export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageM
   // Only gauges near where this route meets tidal water: the Thames gauges say
   // nothing about the Severn (or Zeeland).
   const meets = (plan.line.length > 1 ? slice(plan.line, plan.tidalFromM, plan.tidalFromM + 1)[0] : undefined) ?? plan.finish.at
-  const gauges = Object.entries(file.gauges).filter(([, g]) => showable(g) && haversine(g.at, meets) <= TIDE_GAUGE_NEAR_M).map(([id, g]) => ({
-    id, label: g.label, medianMin: g.backtest.medianMin, p95Min: g.backtest.p95Min,
+  // Nearest first (coming down the Thames to Teddington: Richmond, Westminster, Tower Pier).
+  const near = Object.entries(file.gauges).filter(([, g]) => showable(g) && haversine(g.at, meets) <= TIDE_GAUGE_NEAR_M)
+    .sort(([, a], [, b]) => haversine(a.at, meets) - haversine(b.at, meets))
+  const gauges = near.map(([id, g]) => ({
+    id, label: g.label, datum: g.datum, medianMin: g.backtest.medianMin, p95Min: g.backtest.p95Min,
     extremes: tideExtremes(g.model, reach - 6 * 3_600_000, reach + 9 * 3_600_000).filter(e => g.lows || e.type === 'high'),
   }))
   let afterHigh: TideWindow['afterHigh']
@@ -145,6 +148,13 @@ export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageM
 
 /** A tide gauge further than this from where a route meets tidal water isn't its tide. */
 export const TIDE_GAUGE_NEAR_M = 25_000
+
+/** What the tide prediction is and isn't, and whose readings it's fitted to. */
+export function tideNote(w: TideWindow): string {
+  return w.gauges.some(g => g.datum === 'NAP')
+    ? 'Predicted astronomical tide only. Wind and storm surge can move times by tens of minutes and heights by a metre or more on the Dutch coast. Not for navigation: check Rijkswaterstaat (waterinfo.rws.nl) on the day. Our own fit of Rijkswaterstaat gauge readings; heights above NAP.'
+    : `${TIDE_CAVEAT} Our own fit of Environment Agency gauge readings (OGL); heights above Ordnance Datum.`
+}
 
 export const TIDE_CAVEAT = 'Predicted astronomical tide only. Surge, wind, pressure and the flow over Teddington weir can move times by tens of minutes, and low water above Westminster is unreliable. Not for navigation: check the PLA and Thames VTS on the day.'
 

@@ -3,7 +3,7 @@ import { fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import type { ComputedPlan } from '@paddlesnitch/waterways/plan'
 import type { RouteConditions } from '@paddlesnitch/waterways/live-store'
 import { fmtDuration } from '@paddlesnitch/waterways/plan'
-import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, TIDE_CAVEAT, type TideWindow } from '@/lib/plan-ui'
+import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, tideNote, type TideWindow } from '@/lib/plan-ui'
 
 // "Conditions now" for a plan (docs/features/river-planner.md, P5): daylight
 // at the finish, the Thames boards on your reaches, and the river gauges along
@@ -53,7 +53,7 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
               </li>
             ))}
           </ul>
-          <p className={`text-sm ${muted}`}>{TIDE_CAVEAT} Our own fit of Environment Agency gauge readings (OGL); heights above Ordnance Datum.</p>
+          <p className={`text-sm ${muted}`}>{tideNote(tide)}</p>
         </div>
       )}
       {plan.tidalFromM !== undefined && startAt && !tide?.gauges.length && <p className={muted}>Tide predictions aren&apos;t ready yet for this stretch.</p>}

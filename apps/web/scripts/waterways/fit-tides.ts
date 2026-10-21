@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Fit tide models for the tidal Thames from the EA's archived tide-gauge
-// readings (OGL), and backtest them before anyone sees a prediction.
+// readings (OGL), and for the Dutch coast and estuaries from Rijkswaterstaat's
+// measured water heights (download-rws-tides.ts), and backtest them before
+// anyone sees a prediction.
 //
 //   pnpm --filter web waterways:tides
 //
@@ -10,9 +12,10 @@
 // then refits on everything and writes packages/waterways/data/tides.json.
 import fs from 'fs'
 import path from 'path'
-import { backtest, fitTide, type TideSample } from '@paddlesnitch/waterways/tide'
+import { backtest, fitTide, RWS_TIDE_GAUGES, showable, SHOW_MEDIAN_MIN, SHOW_P95_MIN, type TideSample } from '@paddlesnitch/waterways/tide'
 
 const RAW = path.join(process.cwd(), '.cache/waterways/tides/raw')
+const RWS = path.join(process.cwd(), '.cache/waterways/tides/rws')
 const OUT = path.resolve(process.cwd(), '../../packages/waterways/data/tides.json')
 
 /** The gauges, upstream first: Richmond for highs only (its half-tide lock
@@ -48,15 +51,25 @@ function clean(s: TideSample[]): TideSample[] {
 }
 
 const out: Record<string, unknown> = {}
-for (const [id, g] of Object.entries(GAUGES)) {
-  const all = clean(series(g.measure))
+const rws = (code: string): TideSample[] => {
+  try { return JSON.parse(fs.readFileSync(path.join(RWS, `${code}.json`), 'utf8')) } catch { return [] }
+}
+const every = [
+  ...Object.entries(GAUGES).map(([id, g]) => ({ id, label: g.label, at: g.at, lows: g.lows, datum: undefined, raw: () => series(g.measure) })),
+  ...Object.entries(RWS_TIDE_GAUGES).map(([id, g]) => ({ id, label: g.label, at: g.at, lows: true, datum: 'NAP' as const, raw: () => rws(g.code) })),
+]
+for (const g of every) {
+  const id = g.id
+  const all = clean(g.raw())
   if (all.length < 1000) { console.log(`  ${g.label}: only ${all.length} readings, skipped`); continue }
   const end = all.at(-1)!.t
   const train = all.filter(s => s.t < end - TEST_DAYS * DAY), test = all.filter(s => s.t >= end - TEST_DAYS * DAY)
   const check = backtest(fitTide(train), test)
   const model = fitTide(all)
   console.log(`  ${g.label}: ${all.length} readings ${new Date(all[0].t).toISOString().slice(0, 10)}–${new Date(end).toISOString().slice(0, 10)}; held-out ${TEST_DAYS} days: ${check.n} high waters (${check.faults} gauge faults left out), median ${check.medianMin} min, 95% within ${check.p95Min} min, height ${check.medianHeightM} m`)
-  out[id] = { label: g.label, at: g.at, lows: g.lows, from: new Date(all[0].t).toISOString(), to: new Date(end).toISOString(), backtest: check, model }
+  // The file ships in the planner's bundle: a gauge that wouldn't be shown stays out.
+  if (!showable({ backtest: check })) { console.log(`    not shown (needs median ≤ ${SHOW_MEDIAN_MIN} min and 95% within ${SHOW_P95_MIN} min), left out`); continue }
+  out[id] = { label: g.label, at: g.at, ...(g.datum ? { datum: g.datum } : {}), lows: g.lows, from: new Date(all[0].t).toISOString(), to: new Date(end).toISOString(), backtest: check, model }
 }
-fs.writeFileSync(OUT, JSON.stringify({ fittedAt: new Date().toISOString(), credit: 'Contains Environment Agency data, OGL v3', gauges: out }, null, 1) + '\n')
+fs.writeFileSync(OUT, JSON.stringify({ fittedAt: new Date().toISOString(), credit: 'Contains Environment Agency data, OGL v3; water heights from Rijkswaterstaat (open data)', gauges: out }, null, 1) + '\n')
 console.log(`wrote ${path.relative(process.cwd(), OUT)}`)

@@ -43,6 +43,15 @@
 
 Cost: the same weekly workflow and bucket. The extra network adds to the server's in-memory `network.json`; measure it at N1 against the server Lambda's memory before deciding question 1.
 
+## Tides (2026-10-21)
+
+16 Dutch gauges (`RWS_TIDE_GAUGES` in `tide.ts`) are fitted with our own harmonic model, the same one as the Thames, from a year of Rijkswaterstaat's measured heights (`download-rws-tides.ts`, then `pnpm waterways:tides`). They're held to the same display gate (median ≤ 15 min, 95% within 45 min, against measured high waters).
+
+- **Five pass** and ship in `tides.json`: Hansweert, Bath, Stavenisse, Maassluis, West-Terschelling.
+- **Eleven don't** (Vlissingen, Terneuzen, Hoek van Holland, Rotterdam, Dordrecht, Scheveningen, IJmuiden, Den Helder, Harlingen, Lauwersoog, Delfzijl). They're left out of the file, and plans there say predictions aren't ready.
+- **Why:** our curve is within about 10 cm rms of Rijkswaterstaat's own astronomical prediction, but the Dutch tide's flat or double high water makes the *time* of high water sensitive to small height errors. We're 13–30 min off RWS's own timings, and fitting to RWS's clean astronomical series instead of measurements doesn't fix it, so it's the model, not noise.
+- **Better next step:** ship Rijkswaterstaat's official predicted high and low waters for the year ahead, fetched yearly at build time so no route is ever sent, and loaded only when a plan needs them rather than in the bundle.
+
 ## Measured (2026-10-20, Geofabrik extract of that day)
 
 A local experiment, nothing published.
