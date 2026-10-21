@@ -5,7 +5,7 @@
 // workflow posts one digest issue a week.
 
 export type Candidate = {
-  catalogue: 'data.gov.ie' | 'OpenDataNI' | 'ArcGIS Online'
+  catalogue: 'data.gov.ie' | 'OpenDataNI' | 'ArcGIS Online' | 'data.overheid.nl'
   id: string
   title: string
   url: string
@@ -15,7 +15,7 @@ export type Candidate = {
 }
 
 /** Titles worth a look: what a paddler meets on the water. */
-export const KEYWORDS = /\b(locks?|weirs?|sluices?|slipways?|portages?|canoe(ing)?|kayak(ing)?|paddl\w*|blueways?|towpaths?|launch(es|ing)?|access points?|canals?|river levels?|barriers?)\b/i
+export const KEYWORDS = /\b(locks?|weirs?|sluices?|slipways?|portages?|canoe(ing)?|kayak(ing)?|paddl\w*|blueways?|towpaths?|launch(es|ing)?|access points?|canals?|river levels?|barriers?|sluis(zen)?|stuw(en)?|kano\w*|trailerhelling\w*|overdraag\w*|aanlegplaats\w*)\b/i
 
 /** Sources we use or have looked at and turned down, by id or a URL fragment,
  *  so the digest never suggests them again. */
@@ -28,9 +28,12 @@ export const KNOWN: { match: string; status: 'used' | 'rejected'; note: string }
   { match: 'water-recreation', status: 'rejected', note: 'EA water recreation zones: centroids, part CC BY-NC-SA' },
   { match: 'national-barriers-programme', status: 'used', note: 'IFI barriers (the dashboard and its data)' },
   { match: 'Marine Institute', status: 'rejected', note: 'Ocean and coastal monitoring, not inland water' },
+  // The Netherlands. The register re-harvests datasets, so they look new each time.
+  { match: 'FIS_VNDS', status: 'used', note: 'Rijkswaterstaat fairway information: locks and trailer slipways (rws-fis)' },
+  { match: 'Waterschappen Kunstwerken', status: 'used', note: 'The water boards\' structures via PDOK (nl-waterboards)' },
 ]
 
-export const isKnown = (c: Candidate) => KNOWN.some(k => c.id.includes(k.match) || c.url.includes(k.match) || (c.publisher ?? '').includes(k.match))
+export const isKnown = (c: Candidate) => KNOWN.some(k => c.id.includes(k.match) || c.url.includes(k.match) || (c.publisher ?? '').includes(k.match) || c.title.includes(k.match))
 
 /** A CKAN package_search result (data.gov.ie, OpenDataNI). */
 export function fromCkan(catalogue: Candidate['catalogue'], base: string, results: unknown[]): Candidate[] {
@@ -84,7 +87,7 @@ export function newCandidates(all: Candidate[], since: Date): Candidate[] {
 /** The weekly digest, as an issue body. */
 export function digest(candidates: Candidate[], since: Date): string {
   const lines = [
-    `New datasets about the water since ${since.toISOString().slice(0, 10)}, from data.gov.ie, OpenDataNI and ArcGIS Online (UK and Ireland). Each might improve the river planner; none is used until it's added to \`fetch-sources.ts\` with its licence checked.`,
+    `New datasets about the water since ${since.toISOString().slice(0, 10)}, from data.gov.ie, OpenDataNI, ArcGIS Online (UK and Ireland) and data.overheid.nl (the Netherlands). Each might improve the river planner; none is used until it's added to \`fetch-sources.ts\` with its licence checked.`,
     '',
     'To stop one coming back, add it to `KNOWN` in `packages/waterways/src/discovery.ts` as used or rejected.',
     '',
