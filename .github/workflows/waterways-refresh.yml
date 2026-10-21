@@ -130,7 +130,14 @@ jobs:
           branch="waterways/refresh-$version"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
+          # Branch from main as it is now, not the commit this run started on:
+          # if main moved meanwhile (a workflow file among the changes), a branch
+          # cut from the old commit is refused ("refusing to allow a GitHub App
+          # to create or update workflow … without workflows permission").
+          cp packages/waterways/data/manifest.json "$RUNNER_TEMP/manifest.json"
+          git fetch --quiet origin main
+          git switch -c "$branch" origin/main
+          cp "$RUNNER_TEMP/manifest.json" packages/waterways/data/manifest.json
           git add packages/waterways/data/manifest.json
           git commit -m "data(waterways): publish $version"
           git push -u origin "$branch"
