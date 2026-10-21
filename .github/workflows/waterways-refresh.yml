@@ -107,7 +107,8 @@ jobs:
       # version as tides-nl. Without them the planner falls back to our own fits.
       - name: Fetch Dutch tide predictions
         working-directory: apps/web
-        run: pnpm exec tsx scripts/waterways/fetch-rws-tide-extremes.ts || echo "::warning::Dutch tide predictions not fetched; this version has none"
+        # Capped: 80 requests at up to 2 minutes each could outlast the job if RWS hung.
+        run: timeout 600 pnpm exec tsx scripts/waterways/fetch-rws-tide-extremes.ts || echo "::warning::Dutch tide predictions not fetched; this version has none"
 
       - name: Build and check (no upload)
         working-directory: apps/web
