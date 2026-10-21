@@ -7,6 +7,7 @@ import { gunzipSync } from 'zlib'
 import { getObject, usesLocalStorage } from '@paddlesnitch/core/storage'
 import manifestJson from '../data/manifest.json'
 import type { Place } from './places'
+import type { OfficialTides } from './tide'
 import { osmPortages, portagesAt, type PublicPortage } from './portage'
 import { listPublicPortages } from './portage-store'
 import { planDemand, planLines } from './plan-store'
@@ -65,6 +66,21 @@ export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
 }
 
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`
+
+let official: { version: string; value: Promise<OfficialTides | null> } | null = null
+/** Rijkswaterstaat's predicted Dutch high and low waters published with the
+ *  live version (`tides-nl`), or null when that version has none. */
+export function loadOfficialTides(): Promise<OfficialTides | null> {
+  const v = manifest.version
+  if (!v) return Promise.resolve(null)
+  if (official?.version !== v) {
+    const value = getObject(publishedKey(v, 'tides-nl'))
+      .then(buf => (buf ? JSON.parse(gunzipSync(buf).toString('utf8')) as OfficialTides : null))
+      .catch(() => null)
+    official = { version: v, value }
+  }
+  return official.value
+}
 
 let loading: Promise<NationalDataset> | null = null
 

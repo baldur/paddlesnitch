@@ -223,3 +223,34 @@ export const RWS_TIDE_GAUGES: Record<string, { code: string; label: string; at: 
   lauwersoog: { code: 'lauwersoog.waddenzee', label: 'Lauwersoog', at: [53.4083, 6.196] },
   delfzijl: { code: 'delfzijl', label: 'Delfzijl', at: [53.328, 6.931] },
 }
+
+/** Rijkswaterstaat's own predicted high and low waters ("getijextreem
+ *  berekend", GETETBRKD2) for the Dutch gauges, fetched at build time and
+ *  published with each data version as `tides-nl`, so a plan never sends its
+ *  whereabouts anywhere. Compact: per gauge a base time (ms) and
+ *  [minutes after base, cm above NAP] pairs. */
+export type OfficialTides = {
+  fetchedAt: string
+  credit: string
+  gauges: Record<string, { label: string; at: [number, number]; base: number; ext: [number, number][] }>
+}
+
+export function compactExtremes(list: { t: number; h: number }[]): { base: number; ext: [number, number][] } {
+  const sorted = [...list].sort((a, b) => a.t - b.t)
+  const base = sorted[0]?.t ?? 0
+  return { base, ext: sorted.map(e => [Math.round((e.t - base) / 60_000), Math.round(e.h * 100)]) }
+}
+
+/** The predicted extremes between two times. Highs and lows are told apart by
+ *  their neighbours (Hoek van Holland's double low water is two lows). */
+export function officialExtremes(g: OfficialTides['gauges'][string], from: number, to: number): TideExtreme[] {
+  const out: TideExtreme[] = []
+  g.ext.forEach(([m, cm], i) => {
+    const t = g.base + m * 60_000
+    if (t < from || t > to) return
+    const prev = g.ext[i - 1]?.[1], next = g.ext[i + 1]?.[1]
+    const high = (prev === undefined || cm > prev) && (next === undefined || cm > next)
+    out.push({ type: high ? 'high' : 'low', at: new Date(t).toISOString(), height: cm / 100 })
+  })
+  return out
+}

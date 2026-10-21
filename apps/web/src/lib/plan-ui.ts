@@ -3,7 +3,7 @@
 // sign-in round trip or a pasted link keeps it). Pure; tested in plan-ui.test.ts.
 import type { ComputedPlan, PlanError, PlanInput, PlanShape, Stop } from '@paddlesnitch/waterways/plan'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
-import { showable, tideExtremes, type TideExtreme, type TidesFile } from '@paddlesnitch/waterways/tide'
+import { officialExtremes, showable, tideExtremes, type OfficialTides, type TideExtreme, type TidesFile } from '@paddlesnitch/waterways/tide'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { cumulative, slice } from '@paddlesnitch/waterways/line'
 import { haversine } from '@paddlesnitch/timing/geo'
@@ -111,29 +111,38 @@ export const BOARD_TEXT = { none: 'No stream warnings', caution: 'Caution (yello
 
 export type TideWindow = {
   reachAt: string                // when you reach tidal water (Teddington on the Thames)
-  gauges: { id: string; label: string; datum?: 'NAP'; extremes: TideExtreme[]; medianMin: number; p95Min: number }[]   // nearest first
+  /** Nearest first. `official`: Rijkswaterstaat's own prediction (no backtest
+   *  of ours to show); otherwise our fit, with its backtest. */
+  gauges: { id: string; label: string; datum?: 'NAP'; official?: true; extremes: TideExtreme[]; medianMin?: number; p95Min?: number }[]
   /** How your reaching tidal water sits against the nearest high water at the
    *  first gauge with highs (Richmond on the Thames): minutes after (+) or before (−). */
   afterHigh?: { gauge: string; minutes: number; at: string }
 }
 
-/** The tide around when a plan reaches tidal water, from our own fits. Null
+/** The tide around when a plan reaches tidal water: Rijkswaterstaat's own
+ *  predictions where they're loaded (Dutch water), else our own fits. Null
  *  when the route stays in fresh water or there's no start time. */
-export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageMinutes: number; startAt?: string }, file: TidesFile): TideWindow | null {
+export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageMinutes: number; startAt?: string }, file: TidesFile, official?: OfficialTides | null): TideWindow | null {
   if (plan.tidalFromM === undefined || !pace.startAt) return null
   const portagesBefore = plan.stops.filter(s => s.leg === 'out' && s.portage && s.chainageM < plan.tidalFromM!).length
   const elapsedS = plan.tidalFromM / ((pace.paceKmh * 1000) / 3600) + portagesBefore * pace.portageMinutes * 60
   const reach = Date.parse(pace.startAt) + elapsedS * 1000
   // Only gauges near where this route meets tidal water: the Thames gauges say
   // nothing about the Severn (or Zeeland).
-  const meets = (plan.line.length > 1 ? slice(plan.line, plan.tidalFromM, plan.tidalFromM + 1)[0] : undefined) ?? plan.finish.at
+  const meets = tidalEntry(plan)!
   // Nearest first (coming down the Thames to Teddington: Richmond, Westminster, Tower Pier).
-  const near = Object.entries(file.gauges).filter(([, g]) => showable(g) && haversine(g.at, meets) <= TIDE_GAUGE_NEAR_M)
-    .sort(([, a], [, b]) => haversine(a.at, meets) - haversine(b.at, meets))
-  const gauges = near.map(([id, g]) => ({
-    id, label: g.label, datum: g.datum, medianMin: g.backtest.medianMin, p95Min: g.backtest.p95Min,
-    extremes: tideExtremes(g.model, reach - 6 * 3_600_000, reach + 9 * 3_600_000).filter(e => g.lows || e.type === 'high'),
-  }))
+  const from = reach - 6 * 3_600_000, to = reach + 9 * 3_600_000
+  const isNear = (at: LatLng) => haversine(at, meets) <= TIDE_GAUGE_NEAR_M
+  const theirs = Object.entries(official?.gauges ?? {}).filter(([, g]) => isNear(g.at))
+    .map(([id, g]) => ({ id, label: g.label, at: g.at, datum: 'NAP' as const, official: true as const, extremes: officialExtremes(g, from, to) }))
+    .filter(g => g.extremes.length)
+  // Where Rijkswaterstaat's own predictions are here, our Dutch fits step aside.
+  const ours = Object.entries(file.gauges).filter(([, g]) => showable(g) && isNear(g.at) && !(theirs.length && g.datum === 'NAP'))
+    .map(([id, g]) => ({
+      id, label: g.label, at: g.at, datum: g.datum, medianMin: g.backtest.medianMin, p95Min: g.backtest.p95Min,
+      extremes: tideExtremes(g.model, from, to).filter(e => g.lows || e.type === 'high'),
+    }))
+  const gauges = [...theirs, ...ours].sort((a, b) => haversine(a.at, meets) - haversine(b.at, meets)).map(({ at: _, ...g }) => g)
   let afterHigh: TideWindow['afterHigh']
   for (const g of gauges) {
     const highs = g.extremes.filter(e => e.type === 'high')
@@ -146,11 +155,23 @@ export function tideWindow(plan: ComputedPlan, pace: { paceKmh: number; portageM
   return { reachAt: new Date(reach).toISOString(), gauges, afterHigh }
 }
 
+/** Where a plan first meets tidal water, or null if it doesn't. */
+export const tidalEntry = (plan: Pick<ComputedPlan, 'tidalFromM' | 'line' | 'finish'>): LatLng | null =>
+  plan.tidalFromM === undefined ? null : (plan.line.length > 1 ? slice(plan.line, plan.tidalFromM, plan.tidalFromM + 1)[0] : undefined) ?? plan.finish.at
+
+/** Whether a plan meets tidal water on the Dutch coast or estuaries, where
+ *  Rijkswaterstaat's predictions apply (a box round the Netherlands). */
+export function reachesDutchTide(plan: Pick<ComputedPlan, 'tidalFromM' | 'line' | 'finish'>): boolean {
+  const p = tidalEntry(plan)
+  return !!p && p[0] >= 50.7 && p[0] <= 53.8 && p[1] >= 3.2 && p[1] <= 7.3
+}
+
 /** A tide gauge further than this from where a route meets tidal water isn't its tide. */
 export const TIDE_GAUGE_NEAR_M = 25_000
 
 /** What the tide prediction is and isn't, and whose readings it's fitted to. */
 export function tideNote(w: TideWindow): string {
+  if (w.gauges.some(g => g.official)) return 'Rijkswaterstaat\'s predicted astronomical tide. Wind and storm surge can move times by tens of minutes and heights by a metre or more on the Dutch coast. Not for navigation: check waterinfo.rws.nl on the day. Heights above NAP.'
   return w.gauges.some(g => g.datum === 'NAP')
     ? 'Predicted astronomical tide only. Wind and storm surge can move times by tens of minutes and heights by a metre or more on the Dutch coast. Not for navigation: check Rijkswaterstaat (waterinfo.rws.nl) on the day. Our own fit of Rijkswaterstaat gauge readings; heights above NAP.'
     : `${TIDE_CAVEAT} Our own fit of Environment Agency gauge readings (OGL); heights above Ordnance Datum.`

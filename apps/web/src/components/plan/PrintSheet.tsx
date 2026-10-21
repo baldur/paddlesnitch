@@ -7,7 +7,7 @@ import { SOURCES } from '@paddlesnitch/waterways/sources'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import LoadingState from '@/components/LoadingState'
 import Conditions from '@/components/plan/Conditions'
-import { TIDES } from '@/lib/tides'
+import { TIDES, useOfficialTides } from '@/lib/tides'
 import { trpc } from '@/lib/trpc'
 import {
   crewLines, draftParams, groupOf, isCrewStop, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
@@ -34,6 +34,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
     { enabled: !!draft.start && !!draft.finish, staleTime: Infinity },
   )
   const result = routed.data?.plan
+  const officialTides = useOfficialTides(typeof result === 'string' ? null : result)
   const conditions = trpc.plan.conditions.useQuery(
     { start: draft.start ?? [0, 0], finish: draft.finish ?? [0, 0] },
     { enabled: !!draft.start && !!draft.finish, staleTime: 10 * 60_000, retry: false },
@@ -83,7 +84,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
           </section>
         )}
 
-        <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} print />
+        <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES, officialTides)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} print />
 
         {crew
           ? <CrewTable plan={plan} stops={stops} startAt={draft.startAt} notes={stopNotes} />

@@ -103,6 +103,12 @@ jobs:
             fi
           done
 
+      # Rijkswaterstaat's predicted Dutch high and low waters, published with the
+      # version as tides-nl. Without them the planner falls back to our own fits.
+      - name: Fetch Dutch tide predictions
+        working-directory: apps/web
+        run: pnpm exec tsx scripts/waterways/fetch-rws-tide-extremes.ts || echo "::warning::Dutch tide predictions not fetched; this version has none"
+
       - name: Build and check (no upload)
         working-directory: apps/web
         run: pnpm waterways:national | tee "$RUNNER_TEMP/build.log"

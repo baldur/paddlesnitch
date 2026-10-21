@@ -141,7 +141,9 @@ async function main() {
 
   // Portage paths with their ends, loaded by the server as landings (osmPortages).
   const osmPortageList = osm.filter(p => p.ends && 'portage' in p.tags)
-  const files = { network: links, features, 'osm-features': osmFeatures, osm, places, 'osm-portages': osmPortageList }
+  // Rijkswaterstaat's predicted high and low waters (fetch-rws-tide-extremes.ts), when fetched.
+  const tidesNl: unknown = JSON.parse(await fsp.readFile(path.join(CACHE, 'tides-nl.json'), 'utf8').catch(() => 'null'))
+  const files = { network: links, features, 'osm-features': osmFeatures, osm, places, 'osm-portages': osmPortageList, ...(tidesNl ? { 'tides-nl': tidesNl } : {}) }
   const bodies = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(JSON.stringify(v))]))
   const hash = createHash('sha256')
   for (const b of Object.values(bodies)) hash.update(b)

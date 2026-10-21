@@ -18,7 +18,7 @@ import { Stat } from '@paddlesnitch/ui/Card'
 import PlanMapClient from '@/components/map/PlanMapClient'
 import Conditions from '@/components/plan/Conditions'
 import EndSearch from '@/components/plan/EndSearch'
-import { TIDES } from '@/lib/tides'
+import { TIDES, useOfficialTides } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
@@ -109,6 +109,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
     () => (current?.plan && typeof current.plan !== 'string' && draft.finish ? timePlan(current.plan, draft) : null),
     [current, draft],
   )
+  const officialTides = useOfficialTides(plan)
   const visible = plan?.stops.filter(s => shown.has(groupOf(s.feature.kind))) ?? []
   const conditions = trpc.plan.conditions.useQuery(
     { start: draft.start ?? [0, 0], finish: draft.finish ?? [0, 0] },
@@ -264,7 +265,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
           </div>
         )}
 
-        {plan && <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
+        {plan && <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES, officialTides)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
 
         {plan && (
           <section>

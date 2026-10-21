@@ -49,7 +49,7 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
               <li key={g.id}>
                 <span className="font-medium">{g.label}</span>:{' '}
                 {g.extremes.map((e, i) => <span key={i} className="tabular">{i > 0 && ', '}{e.type === 'high' ? 'HW' : 'LW'} {fmtTime(e.at)} ({e.height.toFixed(1)} m)</span>)}
-                <span className={muted}> · within {g.p95Min} min in 95% of last month&apos;s highs</span>
+                <span className={muted}>{g.official ? ' · Rijkswaterstaat' : ` · within ${g.p95Min} min in 95% of last month's highs`}</span>
               </li>
             ))}
           </ul>
