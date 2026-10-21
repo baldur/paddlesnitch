@@ -5,7 +5,8 @@
 // (locks with no portage details, most-planned first), `tides-nl` (Rijkswaterstaat's predicted Dutch high and
 // low waters, fetched at build time), and coverage by waterway: `coverage` (the scores, for
 // /plan/gaps) and `coverage-lines` (the scored water by level, for the map). The version is in the URL, so a response for the live version
-// never changes and can be cached for good.
+// never changes and can be cached for good (by CloudFront too: /plan/data/* honours these headers), except
+// coverage and `needed`, which move as paddlers add portages and plans.
 import { areaLines, overviewLines } from '@paddlesnitch/waterways/display'
 import { loadCoverage, loadNational, loadNeeded, loadOfficialTides } from '@paddlesnitch/waterways/national'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
@@ -14,7 +15,7 @@ import { coverageLines } from '@paddlesnitch/waterways/waterway-coverage'
 export const dynamic = 'force-dynamic'
 
 let overview: { version: string; lines: unknown } | null = null
-let covLines: { version: string; lines: unknown } | null = null
+let covLines: { rows: unknown; lines: unknown } | null = null
 
 export async function GET(_req: Request, { params }: { params: Promise<{ version: string; name: string }> }) {
   const { version, name } = await params
@@ -41,7 +42,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
   } else if (name === 'coverage') {
     body = (await loadCoverage()).rows
   } else if (name === 'coverage-lines') {
-    if (covLines?.version !== ds.version) covLines = { version: ds.version, lines: coverageLines(ds.links, (await loadCoverage()).rows) }
+    const { rows } = await loadCoverage()
+    if (covLines?.rows !== rows) covLines = { rows, lines: coverageLines(ds.links, rows) }
     body = covLines.lines
   } else if (area) {
     body = areaLines(ds.links, area)
@@ -49,6 +51,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
     return new Response('Not found', { status: 404 })
   }
   // An old version's URL gets today's data, briefly cached, rather than a 404.
-  const cache = version === ds.version ? 'public, max-age=31536000, immutable' : 'public, max-age=300'
+  const live = name === 'coverage' || name === 'coverage-lines' || name === 'needed'
+  const cache = version === ds.version && !live ? 'public, max-age=31536000, immutable' : 'public, max-age=300'
   return Response.json(body, { headers: { 'Cache-Control': cache } })
 }
