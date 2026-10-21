@@ -42,7 +42,8 @@ const SERVICES: Record<string, string> = {
   'github.com': 'GitHub',
   'server.arcgisonline.com': 'Esri',
   'www.esri.com': 'Esri',
-  'service.pdok.nl': 'PDOK',   // aerial photo tiles in the browser (and the water boards' data at build time)
+  'service.pdok.nl': 'PDOK',
+  'geo.api.vlaanderen.be': 'Digitaal Vlaanderen',   // Flemish aerial photo tiles in the browser   // aerial photo tiles in the browser (and the water boards' data at build time)
   'unpkg.com': 'unpkg',
 }
 // Our own site, legal links and test-only values -- not processors.

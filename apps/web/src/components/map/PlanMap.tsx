@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap,
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { COVERAGE_LEVELS, inNetherlands, mapTiles } from '@/lib/plan-ui'
+import { COVERAGE_LEVELS, FLANDERS_PHOTOS, inNetherlands, mapTiles, nearFlanders } from '@/lib/plan-ui'
 
 // The planner's map: the rivers and canals of the UK, Ireland, the Netherlands and Belgium, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
@@ -121,12 +121,16 @@ export default function PlanMap({
 }) {
   // Only whether the view is over the Netherlands matters (which photos to use).
   const [overNl, setOverNl] = useState(false)
+  const [overVl, setOverVl] = useState(false)
   const tiles = mapTiles(satellite, overNl)
   return (
     <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
-      <WatchCentre onChange={c => setOverNl(inNetherlands(c))} />
+      <WatchCentre onChange={c => { setOverNl(inNetherlands(c)); setOverVl(nearFlanders(c)) }} />
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
+      {satellite && !overNl && overVl && (
+        <TileLayer key="flanders" url={FLANDERS_PHOTOS.url} attribution={FLANDERS_PHOTOS.attribution} maxNativeZoom={FLANDERS_PHOTOS.nativeZoom} maxZoom={19} />
+      )}
       {coverage ? <Coverage version={version} /> : <Network version={version} />}
       {/* Esri's place names, above the rivers but below the markers and clicks. */}
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
