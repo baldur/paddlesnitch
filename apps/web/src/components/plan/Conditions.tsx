@@ -3,7 +3,7 @@ import { fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import type { ComputedPlan } from '@paddlesnitch/waterways/plan'
 import type { RouteConditions } from '@paddlesnitch/waterways/live-store'
 import { fmtDuration } from '@paddlesnitch/waterways/plan'
-import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, tideNote, type TideWindow } from '@/lib/plan-ui'
+import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, tideNote, type TideWindow, regulatedKayakRivers, WALLOON_KAYAK_STATUS } from '@/lib/plan-ui'
 
 // "Conditions now" for a plan (docs/features/river-planner.md, P5): daylight
 // at the finish, the Thames boards on your reaches, and the river gauges along
@@ -24,6 +24,7 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
   const muted = print ? 'text-gray-700' : 'text-muted'
   const warn = print ? 'font-semibold' : 'text-red'
   const raised = data?.thames?.reaches.filter(r => r.level !== 'none') ?? []
+  const regulated = regulatedKayakRivers(plan.waterways ?? [])
   return (
     <section className={print ? 'avoid-break mb-4 text-sm space-y-2' : 'space-y-3'} data-testid="conditions">
       <h2 className={h2}>Conditions now</h2>
@@ -35,6 +36,13 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
         </p>
       )}
       {!day && <p className={muted}>Set a start time to see where you&apos;ll be at sunset.</p>}
+
+      {regulated.length > 0 && (
+        <p data-testid="kayak-regulated">
+          <span className={warn}>Kayaking on {regulated.join(' and ')} is allowed only at suitable river flows.</span>{' '}
+          Check today&apos;s status with the Walloon public service before you go: {print ? 'kayak.spw.wallonie.be' : <a className="underline" href={WALLOON_KAYAK_STATUS} target="_blank" rel="noreferrer">kayak.spw.wallonie.be</a>}.
+        </p>
+      )}
 
       {plan.tidalFromM !== undefined && !startAt && <p className={muted}>Your route reaches tidal water: set a start time to see the tide when you get there.</p>}
       {tide && (
