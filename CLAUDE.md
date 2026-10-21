@@ -1105,8 +1105,6 @@ API responses are **gzipped on the wire** (origin/Next; CloudFront only compress
 
 **A binary protocol is the wrong tool here** — measured on a real 856-point trace, a Float32 blob is *larger* after gzip (12.4 KB) than rounded JSON (10.2 KB), because full-precision float bits are ~incompressible while rounded decimals compress beautifully. The lever is **numeric precision, not encoding**: rounding at the source (`roundPoint` in `analysis.ts`; `round6` in `geo.ts`) + the existing gzip cut the analyse payload ~3× (31→10 KB) and trackSegment ~2.8× (12.5→4.5 KB), staying plain JSON (curl/devtools-inspectable, no codec, no schema). Reserve any binary/columnar work for a specific endpoint only if a future measurement proves it matters.
 
-**River planner map data is cached at CloudFront** (`/plan/data/*` behaviour, `USE_ORIGIN_CACHE_CONTROL_HEADERS`): the route marks the live version's network data (`overview`, `area-*`, `places`, `tides-nl`) immutable and `coverage`, `coverage-lines`, `needed` (which move with contributions and plans) 5 minutes, and CloudFront keeps what it says. Never set a cookie on that route: a cached response is shared.
-
 ### Devices (hardware trackers)
 
 A LilyGO T-Beam S3 Supreme uploads paddle sessions itself (no phone, no card copy). See [`device-uplink.md`](docs/features/device-uplink.md) (how the file arrives) + [`device-data.md`](docs/features/device-data.md) (what's in it).
