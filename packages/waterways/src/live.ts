@@ -8,18 +8,18 @@ import { lockKey } from './build'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { Feature, LatLng } from './types'
 
-export type GaugeSource = 'ea' | 'sepa' | 'opw'
+export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws'
 
 export type Gauge = {
   source: GaugeSource
-  id: string                   // EA station reference, SEPA ts_id, OPW station ref
+  id: string                   // EA station reference, SEPA ts_id, OPW station ref, Rijkswaterstaat location code
   name: string
   river?: string
   at: LatLng
   measure?: string             // EA: the stage measure's id, for its latest reading
   /** The reading is on the gauge's own scale (EA mASD/m, SEPA, OPW), which
    *  the typical range uses; 'aod' is metres above sea level, not comparable. */
-  datum?: 'stage' | 'aod'
+  datum?: 'stage' | 'aod' | 'nap'   // nap: metres above NAP, the Dutch datum (Rijkswaterstaat)
 }
 
 export type GaugeReading = Gauge & {
@@ -61,7 +61,8 @@ export function stateOf(value: number | undefined, typical: GaugeReading['typica
 export const gaugeUrl = (g: Gauge): string =>
   g.source === 'ea' ? `https://check-for-flooding.service.gov.uk/station/${encodeURIComponent(g.id)}`
     : g.source === 'sepa' ? 'https://waterlevels.sepa.org.uk/'
-      : `https://waterlevel.ie/${g.id}/0001/`
+      : g.source === 'rws' ? 'https://waterinfo.rws.nl/'
+        : `https://waterlevel.ie/${g.id}/0001/`
 
 // --- Parsing each source's station list ----------------------------------------
 
@@ -108,6 +109,39 @@ export function opwGauges(fc: { features?: unknown[] }): (Gauge & { valueM?: num
     const [lng, lat] = f.geometry.coordinates
     const v = Number(p.value)
     out.push({ source: 'opw', id: ref, name: String(p.station_name ?? ref), at: [lat, lng], datum: 'stage', valueM: Number.isFinite(v) ? v : undefined, readAt: typeof p.datetime === 'string' ? p.datetime : undefined })
+  }
+  return out
+}
+
+/** Rijkswaterstaat (the Netherlands): every location measuring water height
+ *  (WATHTE, cm above NAP) in the DDL catalogue. */
+export function rwsGauges(cat: { AquoMetadataLijst?: unknown[]; AquoMetadataLocatieLijst?: unknown[]; LocatieLijst?: unknown[] }): Gauge[] {
+  type Md = { AquoMetadata_MessageID: number; Grootheid?: { Code?: string } }
+  type Link = { AquoMetaData_MessageID: number; Locatie_MessageID: number }
+  type Loc = { Locatie_MessageID: number; Code: string; Naam?: string; Lat?: number; Lon?: number }
+  const level = new Set((cat.AquoMetadataLijst as Md[] ?? []).filter(m => m.Grootheid?.Code === 'WATHTE').map(m => m.AquoMetadata_MessageID))
+  const at = new Set((cat.AquoMetadataLocatieLijst as Link[] ?? []).filter(l => level.has(l.AquoMetaData_MessageID)).map(l => l.Locatie_MessageID))
+  return (cat.LocatieLijst as Loc[] ?? []).flatMap(l => (at.has(l.Locatie_MessageID) && typeof l.Lat === 'number' && typeof l.Lon === 'number'
+    ? [{ source: 'rws' as const, id: l.Code, name: l.Naam ?? l.Code, at: [l.Lat, l.Lon] as LatLng, datum: 'nap' as const }] : []))
+}
+
+/** A reading this old isn't "now". */
+export const RWS_FRESH_MS = 6 * 3_600_000
+
+/** The latest reading per location from OphalenLaatsteWaarnemingen, in metres.
+ *  The service returns every series a location ever had, archives from the
+ *  1980s included, so only the newest reading counts, and only if it's fresh. */
+export function rwsLatest(body: { WaarnemingenLijst?: unknown[] }, now: number): Map<string, { value: number; at: string }> {
+  type W = { Locatie?: { Code?: string }; MetingenLijst?: { Tijdstip?: string; Meetwaarde?: { Waarde_Numeriek?: number } }[] }
+  const out = new Map<string, { value: number; at: string }>()
+  for (const w of body.WaarnemingenLijst as W[] ?? []) {
+    const code = w.Locatie?.Code
+    for (const m of w.MetingenLijst ?? []) {
+      const t = Date.parse(m.Tijdstip ?? ''), v = m.Meetwaarde?.Waarde_Numeriek
+      if (!code || !Number.isFinite(t) || typeof v !== 'number' || Math.abs(v) > 5000 || now - t > RWS_FRESH_MS) continue
+      const at = new Date(t).toISOString()
+      if (!out.has(code) || out.get(code)!.at < at) out.set(code, { value: v / 100, at })
+    }
   }
   return out
 }

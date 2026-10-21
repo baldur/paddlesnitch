@@ -1,0 +1,93 @@
+{
+ "Succesvol": true,
+ "AquoMetadataLijst": [
+  {
+   "AquoMetadata_MessageID": 191,
+   "Compartiment": {
+    "Code": "OW",
+    "Omschrijving": "Oppervlaktewater"
+   },
+   "Eenheid": {
+    "Code": "cm",
+    "Omschrijving": "centimeter"
+   },
+   "Grootheid": {
+    "Code": "WATHTE",
+    "Omschrijving": "Waterhoogte"
+   },
+   "Parameter_Wat_Omschrijving": "Waterhoogte in Oppervlaktewater t.o.v. Mean Sea Level in cm"
+  },
+  {
+   "AquoMetadata_MessageID": 1,
+   "Compartiment": {
+    "Code": "OW",
+    "Omschrijving": "Oppervlaktewater"
+   },
+   "Eenheid": {
+    "Code": "cm2",
+    "Omschrijving": "vierkante centimeter"
+   },
+   "Grootheid": {
+    "Code": "50%_L",
+    "Omschrijving": "50 percentiel van de levendigheid"
+   },
+   "Parameter_Wat_Omschrijving": "Percentielen per etmaal Levendigheid 50 percentiel van de levendigheid in Oppervlaktewater in cm2"
+  }
+ ],
+ "AquoMetadataLocatieLijst": [
+  {
+   "AquoMetaData_MessageID": 191,
+   "Locatie_MessageID": 41
+  },
+  {
+   "AquoMetaData_MessageID": 191,
+   "Locatie_MessageID": 68
+  },
+  {
+   "AquoMetaData_MessageID": 191,
+   "Locatie_MessageID": 70
+  },
+  {
+   "AquoMetaData_MessageID": 1,
+   "Locatie_MessageID": 129
+  }
+ ],
+ "LocatieLijst": [
+  {
+   "Locatie_MessageID": 41,
+   "Code": "dronten.roggebotsluis.vossemeer",
+   "Coordinatenstelsel": "ETRS89",
+   "Lat": 52.546009,
+   "Lon": 5.855365,
+   "Naam": "Dronten, Roggebotsluis, Vossemeer",
+   "Omschrijving": "voorheen noord"
+  },
+  {
+   "Locatie_MessageID": 68,
+   "Code": "genemuiden",
+   "Coordinatenstelsel": "ETRS89",
+   "Lat": 52.633395,
+   "Lon": 6.033154,
+   "Naam": "Genemuiden",
+   "Omschrijving": "de ketting"
+  },
+  {
+   "Locatie_MessageID": 70,
+   "Code": "groenevaart.boven",
+   "Coordinatenstelsel": "ETRS89",
+   "Lat": 52.158552,
+   "Lon": 6.232991,
+   "Naam": "Groene vaart, boven",
+   "Omschrijving": "Groene vaart, boven"
+  },
+  {
+   "Locatie_MessageID": 129,
+   "Code": "kornwerderzand.waddenzee.buitenhaven",
+   "Coordinatenstelsel": "ETRS89",
+   "Lat": 53.07459,
+   "Lon": 5.334757,
+   "Naam": "Kornwerderzand Waddenzee buitenhaven",
+   "Omschrijving": "Kornwerderzand Waddenzee buitenhaven"
+  }
+ ]
+}

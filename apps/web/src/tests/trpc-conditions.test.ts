@@ -10,7 +10,7 @@ import { makeDataDir, cleanDataDir } from './helpers'
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
 import { createCaller } from '@paddlesnitch/api'
-import { clearLiveCaches } from '@paddlesnitch/waterways/live-store'
+import { clearLiveCaches, conditionsAlong } from '@paddlesnitch/waterways/live-store'
 
 const anon = createCaller({ user: null })
 const FX = path.join(__dirname, 'fixtures/waterways')
@@ -29,6 +29,8 @@ function stubNetwork(fail: string[] = []) {
     if (url.includes('river-thames-current-river-conditions')) return respond(fixture('thames-conditions-sample.json'))
     if (url.includes('waterlevel.ie')) return respond(fixture('opw-latest-sample.json'))
     if (url.includes('sepa.org.uk')) return respond([['ts_id', 'station_name', 'station_latitude', 'station_longitude']])
+    if (url.includes('OphalenCatalogus')) return respond(fixture('rws-catalogue-sample.json'))
+    if (url.includes('OphalenLaatsteWaarnemingen')) return respond(fixture('rws-latest-sample.json'))
     return new Response('not stubbed', { status: 404 })
   }))
 }
@@ -55,6 +57,19 @@ describe('live conditions along a route', () => {
     expect(c.unavailable).toEqual(expect.arrayContaining(['GOV.UK river conditions', 'Environment Agency']))
     expect(c.thames).toBeNull()
     expect(c.gauges.find(g => g.id === '2495TH')?.valueM).toBeUndefined()
+  })
+
+  it('a Dutch gauge on the route, its level on NAP; stations with no fresh reading are left out', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-21T05:00:00Z'))   // the fixture's Genemuiden reading is from 03:20 UTC
+    try {
+      stubNetwork()
+      // Along the Zwarte Water at Genemuiden; Roggebotsluis's newest reading is from 2023.
+      const c = await conditionsAlong([[52.6300, 6.0300], [52.6370, 6.0360]], [], [])
+      expect(c.unavailable).toEqual([])
+      expect(c.gauges.map(g => [g.id, g.valueM, g.datum])).toEqual([['genemuiden', -0.5, 'nap']])
+      expect(c.gauges[0].state).toBeUndefined()   // no usual range on NAP
+    } finally { vi.useRealTimers() }
   })
 
   it('nothing for a route that isn’t on the water', async () => {

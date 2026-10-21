@@ -84,7 +84,7 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
                 {g.river ? <span className={muted}> · {g.river}</span> : null}
                 {': '}
                 {g.valueM === undefined ? <span className={muted}>no recent reading</span> : <>
-                  <span className="tabular">{g.valueM.toFixed(2)} m</span>
+                  <span className="tabular">{g.valueM.toFixed(2)} m{g.datum === 'nap' ? ' NAP' : ''}</span>
                   {g.state && <span className={g.state === 'normal' ? muted : warn}> {GAUGE_STATE_TEXT[g.state]}</span>}
                   {g.readAt && <span className={muted}> at {fmtTime(g.readAt)}</span>}
                 </>}

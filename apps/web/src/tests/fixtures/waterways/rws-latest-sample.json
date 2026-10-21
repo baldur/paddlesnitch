@@ -1,0 +1,265 @@
+{
+ "Succesvol": true,
+ "WaarnemingenLijst": [
+  {
+   "Locatie": {
+    "Code": "genemuiden",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.633395,
+    "Lon": 6.033154,
+    "Naam": "Genemuiden",
+    "Omschrijving": "de ketting"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-50",
+      "Waarde_Numeriek": -50.0
+     },
+     "Tijdstip": "2026-10-21T04:20:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "0",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "ONXXREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-6",
+      "Waarde_Numeriek": -6.0
+     },
+     "Tijdstip": "1985-01-31T18:00:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-6",
+      "Waarde_Numeriek": -6.0
+     },
+     "Tijdstip": "1985-01-31T18:00:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-18",
+      "Waarde_Numeriek": -18.0
+     },
+     "Tijdstip": "2023-05-04T00:50:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "25",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Gecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-19",
+      "Waarde_Numeriek": -19.0
+     },
+     "Tijdstip": "1983-12-31T22:00:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "26",
+      "Waarde_Numeriek": 26.0
+     },
+     "Tijdstip": "1993-12-31T23:50:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-41",
+      "Waarde_Numeriek": -41.0
+     },
+     "Tijdstip": "1993-01-06T06:00:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "13",
+      "Waarde_Numeriek": 13.0
+     },
+     "Tijdstip": "1995-02-28T23:50:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "dronten.roggebotsluis.vossemeer",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.546009,
+    "Lon": 5.855365,
+    "Naam": "Dronten, Roggebotsluis, Vossemeer",
+    "Omschrijving": "voorheen noord"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "26",
+      "Waarde_Numeriek": 26.0
+     },
+     "Tijdstip": "1993-12-31T23:50:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "RDIJREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  },
+  {
+   "Locatie": {
+    "Code": "genemuiden",
+    "Coordinatenstelsel": "ETRS89",
+    "Lat": 52.633395,
+    "Lon": 6.033154,
+    "Naam": "Genemuiden",
+    "Omschrijving": "de ketting"
+   },
+   "MetingenLijst": [
+    {
+     "Meetwaarde": {
+      "Waarde_Alfanumeriek": "-30",
+      "Waarde_Numeriek": -30.0
+     },
+     "Tijdstip": "2025-11-27T00:50:00.000+01:00",
+     "WaarnemingMetadata": {
+      "Bemonsteringshoogte": "-999999999",
+      "Kwaliteitswaardecode": "00",
+      "OpdrachtgevendeInstantie": "ONXXREG_WAT",
+      "Referentievlak": "NVT",
+      "Statuswaarde": "Ongecontroleerd"
+     }
+    }
+   ]
+  }
+ ]
+}
