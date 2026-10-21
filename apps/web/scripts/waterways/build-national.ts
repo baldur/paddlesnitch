@@ -16,7 +16,9 @@ import fsp from 'fs/promises'
 import path from 'path'
 import readline from 'readline'
 import { gzipSync } from 'zlib'
-import { putObject } from '@paddlesnitch/core/storage'
+import { getObject, putObject } from '@paddlesnitch/core/storage'
+import { gunzipSync } from 'zlib'
+import { reachesAhead, type OfficialTides } from '@paddlesnitch/waterways/tide'
 import { featuresAlong, NEAR_M, WATERBOARD_NEAR_M } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
@@ -166,7 +168,16 @@ async function main() {
   // Portage paths with their ends, loaded by the server as landings (osmPortages).
   const osmPortageList = osm.filter(p => p.ends && 'portage' in p.tags)
   // Rijkswaterstaat's predicted high and low waters (fetch-rws-tide-extremes.ts), when fetched.
-  const tidesNl: unknown = JSON.parse(await fsp.readFile(path.join(CACHE, 'tides-nl.json'), 'utf8').catch(() => 'null'))
+  let tidesNl = JSON.parse(await fsp.readFile(path.join(CACHE, 'tides-nl.json'), 'utf8').catch(() => 'null')) as OfficialTides | null
+  // Not fetched this week (Rijkswaterstaat slow or down): carry the live
+  // version's forward while it still reaches a month ahead, rather than ship none.
+  if (!tidesNl) {
+    const live = (JSON.parse(await fsp.readFile(MANIFEST, 'utf8')) as Manifest).version
+    const prev = live ? await getObject(publishedKey(live, 'tides-nl')).catch(() => null) : null
+    const carried = prev ? JSON.parse(gunzipSync(prev).toString('utf8')) as OfficialTides : null
+    if (carried && reachesAhead(carried, Date.now())) { tidesNl = carried; lap(`Dutch tide predictions carried forward from ${live}`) }
+    else lap('no Dutch tide predictions this version')
+  }
   const files = { network: links, features, 'osm-features': osmFeatures, 'sa-features': saFeatures, osm, places, 'osm-portages': osmPortageList, ...(tidesNl ? { 'tides-nl': tidesNl } : {}) }
   const bodies = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(JSON.stringify(v))]))
   const hash = createHash('sha256')

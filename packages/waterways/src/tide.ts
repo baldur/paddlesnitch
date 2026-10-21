@@ -254,3 +254,10 @@ export function officialExtremes(g: OfficialTides['gauges'][string], from: numbe
   })
   return out
 }
+
+/** Whether a published set of predictions still reaches this many days ahead,
+ *  so a week whose fetch failed can carry it forward instead of shipping none. */
+export function reachesAhead(t: OfficialTides, now: number, days = 30): boolean {
+  const ends = Object.values(t.gauges).map(g => g.base + (g.ext.at(-1)?.[0] ?? 0) * 60_000)
+  return ends.length > 0 && Math.min(...ends) >= now + days * 86_400_000
+}
