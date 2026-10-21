@@ -65,6 +65,15 @@ describe('paddle access from OSM tags', () => {
     expect(links.map(l => [l.boat, l.culvert])).toEqual([['yes', undefined], ['yes', undefined], ['no', undefined], [undefined, true], [undefined, undefined]])
   })
 
+  it('water on a mapped canoe route is paddleable unless it says canoe=no', () => {
+    const links = linksFromWays([
+      way(1, [1, 2], [[52.2, 4.6], [52.2, 4.61]], { canoe_route: 'Kanoroute Kaag-Braassem' }),
+      way(2, [3, 4], [[52.3, 4.6], [52.3, 4.61]], { canoe_route: 'Kanoroute Kaag-Braassem', boat: 'no' }),
+      way(3, [5, 6], [[52.4, 4.6], [52.4, 4.61]], { canoe_route: 'Twiskeroute', canoe: 'no' }),
+    ])
+    expect(links.map(l => l.boat)).toEqual(['yes', 'yes', 'no'])
+  })
+
   it('keeps to the navigation rather than a shorter channel nobody may paddle', () => {
     // A navigation looping round (boat=yes, ~2.2 km) and a straight flood
     // channel between the same two junctions (untagged, ~1.4 km).

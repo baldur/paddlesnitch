@@ -103,9 +103,11 @@ export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
   return out
 }
 
-/** canoe=* says it for paddlers; failing that, boat=* (yes on navigations). */
+/** canoe=* says it for paddlers; failing that, being on a mapped canoe route
+ *  (canoe_route, set by osm_extract.py from route=canoe relations); failing
+ *  that, boat=* (yes on navigations). */
 function paddleable(tags: Record<string, string>): NetLink['boat'] {
-  const v = tags.canoe ?? tags.boat
+  const v = tags.canoe ?? (tags.canoe_route ? 'yes' : undefined) ?? tags.boat
   if (v === 'yes' || v === 'designated' || v === 'permissive') return 'yes'
   if (v === 'no' || v === 'private') return 'no'
   return undefined
