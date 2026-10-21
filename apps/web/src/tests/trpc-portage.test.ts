@@ -15,6 +15,8 @@ import { GET as mapData } from '@/app/plan/data/[version]/[name]/route'
 import { listKeys } from '@/lib/storage'
 import { clearPortageCache } from '@paddlesnitch/waterways/portage-store'
 import { clearDemandCache } from '@paddlesnitch/waterways/plan-store'
+import { saveSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
+const AT_ISO = '2026-10-01T09:00:00.000Z'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const anon = createCaller({ user: null })
@@ -179,5 +181,40 @@ describe('the most needed locks', () => {
     signInAs(me.idToken)
     expect((await deleteAccount()).status).toBe(200)
     expect(await listKeys('plans/demand/')).toEqual([])
+  })
+})
+
+describe('carries on your own paddles', () => {
+  // A paddle west to east past Marsh Lock: out ~60 m before it, 130 m along the bank, back in.
+  const M = 1 / (111_320 * Math.cos((MARSH[0] * Math.PI) / 180))
+  const points = (() => {
+    const out: { t: number; lat: number; lng: number; speed: number; sr: null; dps: null }[] = []
+    let x = -1500, t = 0
+    for (const [dist, north, speed] of [[1440, 0, 2.5], [130, 15, 0.9], [1500, 0, 2.5]] as const) {
+      for (let d = 0; d < dist; d += speed * 5) { out.push({ t, lat: MARSH[0] + north / 111_000, lng: MARSH[1] + (x + d) * M, speed, sr: null, dps: null }); t += 5 }
+      x += dist
+    }
+    return out
+  })()
+  const paddle = (userId: string, id: string): AnalysisSession => ({
+    id, userId, createdAt: AT_ISO, paddledAt: AT_ISO, source: { type: 'file' }, doubleStrokeRate: false, note: '', insight: '',
+    result: { points, surges: [], stops: [], distanceKm: 3, durationS: points.at(-1)!.t, cruiseSpeed: 2.5, avgSR: null, avgDps: null, insight: '' },
+  }) as unknown as AnalysisSession
+
+  it('suggests the carry round a lock on your paddle; once published it stops suggesting it', async () => {
+    const me = await makeUser('Me')
+    await saveSession(paddle(me.id, 'p1'))
+    const [s] = await as(me).portage.fromPaddle({ sessionId: 'p1' })
+    expect(s).toMatchObject({ featureId: 'ea-lock:marsh', name: 'Marsh Lock' })
+    expect(s.carryM).toBeGreaterThan(100)
+    await as(me).portage.add({ featureId: s.featureId, at: s.at, landings: s.landings, cc0: true })
+    expect(await as(me).portage.fromPaddle({ sessionId: 'p1' })).toEqual([])
+  })
+
+  it("only from your own paddles: someone else's is nothing", async () => {
+    const me = await makeUser('Me'), them = await makeUser('Them')
+    await saveSession(paddle(me.id, 'p1'))
+    expect(await as(them).portage.fromPaddle({ sessionId: 'p1' })).toEqual([])
+    await expect(anon.portage.fromPaddle({ sessionId: 'p1' })).rejects.toThrow()
   })
 })

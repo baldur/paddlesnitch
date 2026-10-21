@@ -157,6 +157,12 @@ For the tideway it also carries the tide state at Teddington and at the finish. 
 
 Routing across waterways uses the `joins` graph. It's a tiny graph, so a simple BFS is enough, not a routing engine.
 
+### Carries from your own paddles (2026-10-21)
+
+The fastest way to fill portage sides is the GPS tracks people already upload. Where a saved paddle passes a lock (within 80 m), `portagesFromTrack` (`packages/waterways/src/portage-detect.ts`) takes the slow stretch around the closest approach as the carry. Slow means under 1.3 m/s, and bursts up to 20 s don't end it. Its ends are the landings. It has to look like a carry: 15–500 m, 1–30 minutes, both landings within 300 m of the lock, and the lock between them along the track.
+
+The paddle page shows these under "Carries on this paddle", to the paddle's owner only. Each comes with the north-up drawing and a CC0 tick, and is published only when they press Publish. Going through a lock in the boat (a long wait in the chamber) can look like a short carry, so the copy says to skip those. Tested on synthetic tracks only: the two real reference paddles pass no lock. Watch the first real suggestions before trusting the thresholds.
+
 ### Contributions (your own information)
 
 ```ts
