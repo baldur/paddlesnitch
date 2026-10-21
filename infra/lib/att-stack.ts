@@ -707,17 +707,6 @@ export class AttStack extends cdk.Stack {
           responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-        // The river planner's map data (/plan/data/{version}/{name}): the
-        // server marks the live version's network immutable and coverage
-        // five minutes, so CloudFront keeps what it says. No cookies or query
-        // in the key: it's the same for everyone. Saves the Lambda recomputing
-        // megabytes (and ~8 s the first time per instance) for each visitor.
-        '/plan/data/*': {
-          origin: serverOrigin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          responseHeadersPolicy: securityHeaders,
-          cachePolicy: cloudfront.CachePolicy.USE_ORIGIN_CACHE_CONTROL_HEADERS,
-        },
         '/data/*': {
           origin: assetsOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
