@@ -67,6 +67,7 @@ export type ComputedPlan = {
    *  start), for the tide window; unset when it never does. */
   tidalFromM?: number
   canoeRoutes?: string[]   // marked canoe routes it follows for at least CANOE_ROUTE_MIN_M, in order
+  waterways?: string[]     // the named waterways it paddles, in order (always set by routePlan)
 }
 
 export type PlanError = 'start_off_water' | 'finish_off_water' | 'too_short' | 'not_connected'

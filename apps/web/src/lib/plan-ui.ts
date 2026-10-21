@@ -465,3 +465,22 @@ export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' 
 }
 
 export const PHOTO_CREDIT = { nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie' } as const
+
+// --- Wallonia's regulated kayak rivers ---------------------------------------------
+
+/** The rivers whose kayak stretches the Walloon public service (SPW) opens and
+ *  closes by flow (kayak.spw.wallonie.be). We link to their live status rather
+ *  than show it: its reuse terms aren't published (docs/features/waterways-belgium.md). */
+const WALLOON_KAYAK_RIVERS = ['aisne', 'ambleve', 'houille', 'lesse', 'our', 'ourthe', 'ourthe occidentale', 'ourthe orientale', 'salm', 'semois', 'sure', 'vierre', 'viroin']
+export const WALLOON_KAYAK_STATUS = 'https://kayak.spw.wallonie.be/'
+
+/** "La Lesse", "L'Ourthe" → "lesse", "ourthe"; accents and case dropped. */
+const riverKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/^(la|le|les)\s+|^l['’]\s*/, '').trim()
+
+/** The regulated Walloon rivers a plan paddles, for a sentence: "the Lesse", "the Ourthe orientale". */
+export function regulatedKayakRivers(waterways: string[]): string[] {
+  const names = waterways.filter(w => WALLOON_KAYAK_RIVERS.includes(riverKey(w)))
+    .map(w => `the ${w.replace(/^(la|le|les)\s+|^l['’]\s*/i, '')}`)
+  return [...new Set(names)]
+}

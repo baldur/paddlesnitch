@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, nearFlanders, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, nearFlanders, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -268,5 +268,13 @@ describe('portage maps for the printed sheet', () => {
     expect([10, 20, 25, 50, 100]).toContain(scale.m)
     expect(scale.px).toBeGreaterThan(size / 8)
     expect(scale.px).toBeLessThanOrEqual(size / 4)
+  })
+})
+
+describe("Wallonia's regulated kayak rivers", () => {
+  it('names the regulated rivers a plan paddles, whatever the article or accents; canals and side streams aren\'t', () => {
+    expect(regulatedKayakRivers(['La Lesse', "L'Ourthe", 'Amblève', 'Meuse', 'Lesse'])).toEqual(['the Lesse', 'the Ourthe', 'the Amblève'])
+    expect(regulatedKayakRivers(["Canal de l'Ourthe", 'La Houillette', 'Lesse souterraine', 'River Thames'])).toEqual([])
+    expect(regulatedKayakRivers(["L'Ourthe orientale", 'la Semois', 'La Sûre'])).toEqual(['the Ourthe orientale', 'the Semois', 'the Sûre'])
   })
 })
