@@ -1,11 +1,11 @@
 'use client'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { keepPreviousData } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtDay, fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import manifest from '@paddlesnitch/waterways/data/manifest.json'
-import { searchPlaces, type Place } from '@paddlesnitch/waterways/places'
+import type { Place } from '@paddlesnitch/waterways/places'
 import { fmtDuration, timePlan, type ComputedPlan, type Spot, type Stop } from '@paddlesnitch/waterways/plan'
 import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
 import { NATIONAL } from '@paddlesnitch/waterways/regions'
@@ -220,7 +220,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
               ))}
             </div>
           )}
-          <PlaceSearch version={VERSION} near={draft.start ?? undefined}
+          <PlaceSearch near={draft.start ?? undefined}
             onPick={p => setFocus({ at: p.at, zoom: p.kind === 'lock' || p.kind === 'weir' ? 16 : 14 })} />
           {unfound.filter(u => !draft[u.end]).map(u => (
             <p key={u.end} className="mt-2 text-sm text-red">We couldn&apos;t find &ldquo;{u.name}&rdquo; on the water. Type the {u.end} in its box above, or click the map.</p>
@@ -563,19 +563,15 @@ function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
   )
 }
 
-/** Type a town, village, lock or weir; pick one to move the map there. The
- *  index loads the first time the box gets focus. */
-function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng; onPick: (p: Place) => void }) {
-  const [places, setPlaces] = useState<Place[] | null>(null)
+/** Type a town, village, lock or weir; pick one to move the map there.
+ *  Searched on the server (plan.places) as you type. */
+function PlaceSearch({ near, onPick }: { near?: LatLng; onPick: (p: Place) => void }) {
   const [q, setQ] = useState('')
+  const [debounced, setDebounced] = useState('')
   const [open, setOpen] = useState(false)
-  const asked = useRef(false)
-  const load = () => {
-    if (asked.current) return
-    asked.current = true
-    fetch(`/plan/data/${version}/places`).then(r => (r.ok ? r.json() : Promise.reject())).then(setPlaces, () => { asked.current = false })
-  }
-  const hits = places ? searchPlaces(places, q, near) : []
+  useEffect(() => { const t = setTimeout(() => setDebounced(q.trim()), 200); return () => clearTimeout(t) }, [q])
+  const found = trpc.plan.places.useQuery({ q: debounced, near }, { enabled: debounced.length >= 2, staleTime: Infinity })
+  const hits = debounced.length >= 2 ? found.data ?? [] : []
   const pick = (p: Place) => { onPick(p); setQ(p.name); setOpen(false) }
   return (
     <div className="mt-3 relative">
@@ -583,7 +579,7 @@ function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng
         <span className="text-sm font-medium text-fg">Go to</span>
         <input className={INPUT} value={q} placeholder="Town, village or lock" aria-label="Go to a place"
           role="combobox" aria-expanded={open && hits.length > 0} aria-controls="place-results" autoComplete="off"
-          onFocus={() => { load(); setOpen(true) }}
+          onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onChange={e => { setQ(e.target.value); setOpen(true) }}
           onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); pick(hits[0]) } if (e.key === 'Escape') setOpen(false) }} />
