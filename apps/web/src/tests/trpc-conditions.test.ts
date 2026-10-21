@@ -30,6 +30,7 @@ function stubNetwork(fail: string[] = []) {
     if (url.includes('waterlevel.ie')) return respond(fixture('opw-latest-sample.json'))
     if (url.includes('sepa.org.uk')) return respond([['ts_id', 'station_name', 'station_latitude', 'station_longitude']])
     if (url.includes('OphalenCatalogus')) return respond(fixture('rws-catalogue-sample.json'))
+    if (url.includes('download.waterinfo.be')) return respond(fixture('waterinfo-layer-sample.json'))
     if (url.includes('OphalenLaatsteWaarnemingen')) return respond(fixture('rws-latest-sample.json'))
     return new Response('not stubbed', { status: 404 })
   }))
@@ -69,6 +70,16 @@ describe('live conditions along a route', () => {
       expect(c.unavailable).toEqual([])
       expect(c.gauges.map(g => [g.id, g.valueM, g.datum])).toEqual([['genemuiden', -0.5, 'nap']])
       expect(c.gauges[0].state).toBeUndefined()   // no usual range on NAP
+    } finally { vi.useRealTimers() }
+  })
+
+  it('a Flemish gauge on the route, matched by river name (waterinfo.be)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-21T15:00:00Z'))
+    try {
+      stubNetwork()
+      const c = await conditionsAlong([[51.069695, 5.265089], [51.075695, 5.265089]], ['Zwarte beek'], [])
+      expect(c.gauges.find(g => g.source === 'waterinfo')).toMatchObject({ name: 'Koersel', river: 'Zwarte beek', valueM: 38.222 })
     } finally { vi.useRealTimers() }
   })
 

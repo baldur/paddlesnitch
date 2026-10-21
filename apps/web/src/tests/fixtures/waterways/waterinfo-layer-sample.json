@@ -1,0 +1,67 @@
+[
+ {
+  "ts_id": 92956042,
+  "timestamp": "2026-10-21T16:15:00.000+02:00",
+  "req_timestamp": null,
+  "ts_value": 0.829,
+  "station_latitude": 51.2783508840818,
+  "station_longitude": 4.18976506644282,
+  "station_name": "Kieldrecht/Noordzuidverbinding",
+  "parametertype_name": "H",
+  "ts_name": "Pv.15",
+  "ts_unitsymbol": "m",
+  "station_no": "L04_00H"
+ },
+ {
+  "ts_id": 3242042,
+  "timestamp": "2026-10-21T16:00:00.000+02:00",
+  "req_timestamp": null,
+  "ts_value": 6.621,
+  "station_latitude": 51.0325643546372,
+  "station_longitude": 4.26339104742961,
+  "station_name": "Malderen/Grote Molenbeek",
+  "parametertype_name": "H",
+  "ts_name": "Pv.15",
+  "ts_unitsymbol": "m",
+  "station_no": "L04_037"
+ },
+ {
+  "ts_id": 234051042,
+  "timestamp": "2026-10-21T16:00:00.000+02:00",
+  "req_timestamp": null,
+  "ts_value": 38.222,
+  "station_latitude": 51.0726947353773,
+  "station_longitude": 5.26508884630874,
+  "station_name": "Koersel/Zwarte beek",
+  "parametertype_name": "H",
+  "ts_name": "Pv.15",
+  "ts_unitsymbol": "m",
+  "station_no": "S09_14G"
+ },
+ {
+  "ts_id": 273023042,
+  "timestamp": "2026-10-21T15:45:00.000+02:00",
+  "req_timestamp": null,
+  "ts_value": null,
+  "station_latitude": 50.9008277350731,
+  "station_longitude": 5.22609559065146,
+  "station_name": "Wijer/Wijerbeek/Oppenstraat",
+  "parametertype_name": "H",
+  "ts_name": "Pv.15",
+  "ts_unitsymbol": "m",
+  "station_no": "S09_16W"
+ },
+ {
+  "ts_id": 3242042,
+  "timestamp": "2025-01-01T00:00:00.000+01:00",
+  "req_timestamp": null,
+  "ts_value": 6.621,
+  "station_latitude": 51.0325643546372,
+  "station_longitude": 4.26339104742961,
+  "station_name": "Malderen/Grote Molenbeek",
+  "parametertype_name": "H",
+  "ts_name": "Pv.15",
+  "ts_unitsymbol": "m",
+  "station_no": "L04_037"
+ }
+]

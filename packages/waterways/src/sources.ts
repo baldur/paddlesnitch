@@ -109,6 +109,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'Open data',
     attribution: 'Water levels: Rijkswaterstaat',
   },
+  'waterinfo-levels': {
+    name: 'waterinfo.be (VMM, De Vlaamse Waterweg)',
+    url: 'https://www.waterinfo.be/',
+    licence: 'CC BY 4.0',
+    attribution: 'Water levels: waterinfo.be (VMM, De Vlaamse Waterweg), CC BY 4.0',
+  },
   'thames-conditions': {
     name: 'GOV.UK — River Thames: current river conditions',
     url: 'https://www.gov.uk/guidance/river-thames-current-river-conditions',

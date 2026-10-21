@@ -24,6 +24,7 @@ export type SourceId =
   | 'sepa-levels'            // SEPA river levels (live, OGL)
   | 'opw-levels'             // OPW waterlevel.ie (live, CC BY 4.0)
   | 'rws-levels'             // Rijkswaterstaat water heights (live, open data)
+  | 'waterinfo-levels'       // Flemish water levels, waterinfo.be (live, CC BY 4.0)
   | 'thames-conditions'      // GOV.UK River Thames current conditions (live, OGL)
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
