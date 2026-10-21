@@ -27,6 +27,7 @@ import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type E
 import { featuresFromScottishCanals, SCOTTISH_CANALS_LAYERS, type ScottishCanalsLayer } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
 import { FIS_LOCKS, FIS_SLIPWAYS, featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
+import { featuresFromWaterboards, hitsOf, NL_QUADRANTS, WATERBOARD_LAYERS, waterboardHitsUrl, waterboardPageUrl, WFS_PAGE } from '@paddlesnitch/waterways/ingest/waterboards'
 import { featuresFromWi, WI_LAYERS, wiQueryUrl, type WiLayer } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import type { CrewDetail, Feature } from '@paddlesnitch/waterways/types'
 
@@ -180,6 +181,22 @@ JOBS.amber = async () => {
 JOBS.ifi = async () => {
   const { features, fetchedAt } = await arcgisAll('ifi', IFI_BARRIERS, IFI_WHERE)
   return featuresFromIfi(features, fetchedAt)
+}
+
+// The Dutch water boards' weirs, dams, pumping stations and small locks (CC BY-SA 4.0, PDOK WFS, 1,000 a page).
+JOBS['nl-waterboards'] = async () => {
+  const out = new Map<string, Feature>()   // by id: a structure on a quadrant's edge comes twice
+  for (const layer of Object.keys(WATERBOARD_LAYERS)) {
+    for (const [q, bbox] of NL_QUADRANTS.entries()) {
+      const hits = hitsOf((await cached('nl-waterboards', `${layer}-q${q}-hits.xml`, waterboardHitsUrl(layer, bbox))).body)
+      if (!Number.isFinite(hits)) throw new Error(`no count for ${layer} quadrant ${q}`)
+      for (let page = 0; page * WFS_PAGE < hits; page++) {
+        const { body, fetchedAt } = await cached('nl-waterboards', `${layer}-q${q}-${page}.json`, waterboardPageUrl(layer, bbox, page * WFS_PAGE))
+        for (const f of featuresFromWaterboards(layer, JSON.parse(body).features ?? [], fetchedAt)) out.set(f.id, f)
+      }
+    }
+  }
+  return [...out.values()]
 }
 
 // Rijkswaterstaat FIS/VNDS: every lock on the Dutch fairway network and the trailer slipways (CC0).

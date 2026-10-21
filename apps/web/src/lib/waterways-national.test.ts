@@ -10,6 +10,7 @@ import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesni
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
+import { featuresFromWaterboards, hitsOf } from '@paddlesnitch/waterways/ingest/waterboards'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
 import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
@@ -43,6 +44,35 @@ describe('Rijkswaterstaat FIS: Dutch locks and slipways (CC0)', () => {
     const [slip] = featuresFromFisSlipways([{ geometry: { type: 'Point', coordinates: [4.641075, 52.347937] }, properties: { id: 1552, name: 'Trailerhelling Zuid-Schalkwijk' } }], AT)
     expect(slip).toMatchObject({ id: 'rws-fis:slipway:1552', kind: 'slipway', at: [52.347937, 4.641075] })
     expect(featuresFromFisLocks([{ geometry: null, properties: { id: 1 } }], AT)).toEqual([])
+  })
+})
+
+describe('Dutch water boards: weirs, dams, pumping stations and locks (CC BY-SA, own file)', () => {
+  it('reads each layer as what a paddler meets, named where the board names it', () => {
+    const pt = (id: string, props: Record<string, unknown> = {}) => ({ geometry: { type: 'Point', coordinates: [4.44, 51.74] }, properties: { nen3610id: id, statusobject: 'gerealiseerd', ...props } })
+    expect(featuresFromWaterboards('stuw', [pt('a', { naam: 'Stuw Burgemeester Henrylaan' })], AT)[0])
+      .toMatchObject({ id: 'nl-waterboards:stuw:a', kind: 'weir', name: 'Stuw Burgemeester Henrylaan', at: [51.74, 4.44], source: { source: 'nl-waterboards' } })
+    expect(featuresFromWaterboards('vastedam', [pt('b')], AT)[0]).toMatchObject({ kind: 'hazard', name: 'Dam' })
+    expect(featuresFromWaterboards('gemaal', [pt('c', { naam: '' })], AT)[0]).toMatchObject({ kind: 'hazard', name: 'Pumping station' })
+    expect(featuresFromWaterboards('sluis', [pt('d')], AT)[0].kind).toBe('lock')
+    expect(featuresFromWaterboards('duiker', [pt('e')], AT)).toEqual([])                                   // culverts aren't read
+    expect(featuresFromWaterboards('stuw', [pt('f', { statusobject: 'gesloopt' })], AT)).toEqual([])       // demolished
+  })
+
+  it('a structure drawn as a line or an area sits at its middle', () => {
+    const [f] = featuresFromWaterboards('sluis', [{ geometry: { type: 'Polygon', coordinates: [[[4.0, 52.0], [4.002, 52.0], [4.002, 52.002], [4.0, 52.002]]] }, properties: { nen3610id: 'g' } }], AT)
+    expect(f.at).toEqual([52.001, 4.001])
+  })
+
+  it("reads the quadrant's count, which drives the paging (pages can come back short)", () => {
+    expect(hitsOf('<wfs:FeatureCollection numberMatched="13976" numberReturned="0"/>')).toBe(13976)
+    expect(hitsOf('<ows:ExceptionReport/>')).toBeNaN()
+  })
+
+  it("counts on a route only within 10 m: a dam at a side ditch's mouth isn't on the way", () => {
+    const line: LatLng[] = [[52, 4.6], [52, 4.61]]
+    const wb = (id: string, dLat: number): Feature => ({ id, kind: 'hazard', name: 'Dam', at: [52 + dLat, 4.605], source: { source: 'nl-waterboards', fetchedAt: AT } })
+    expect(featuresAlong(line, [wb('on', 0.00005), wb('side', 0.0003)]).map(a => a.item.id)).toEqual(['on'])   // ~6 m, ~33 m
   })
 })
 

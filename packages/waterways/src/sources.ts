@@ -11,6 +11,10 @@ export type SourceInfo = {
   /** Licensed for non-commercial use only: fine while paddlesnitch is free
    *  (owner, 2026-10-12); must never feed the CC0 contribution layer. */
   nonCommercial?: true
+  /** Share-alike (CC BY-SA): published in its own file (sa-features), like the
+   *  OSM layer, never merged into the core features or the CC0 contributions
+   *  (owner, 2026-10-21). */
+  shareAlike?: true
 }
 
 export const SOURCES: Record<SourceId, SourceInfo> = {
@@ -67,6 +71,13 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     url: 'https://www.fisheriesireland.ie/what-we-do/research/national-barriers-programme',
     licence: 'CC BY 4.0',
     attribution: 'Barrier data © Inland Fisheries Ireland, CC BY 4.0',
+  },
+  'nl-waterboards': {
+    name: 'Dutch water boards — Waterschappen Kunstwerken IMWA (via PDOK)',
+    url: 'https://data.overheid.nl/en/dataset/waterschappen-kunstwerken-imwa',
+    licence: 'CC BY-SA 4.0',
+    attribution: 'Weirs, dams and pumping stations: Dutch water boards (Het Waterschapshuis), CC BY-SA 4.0',
+    shareAlike: true,
   },
   'rws-fis': {
     name: 'Rijkswaterstaat — Vaarweginformatie (FIS/VNDS)',

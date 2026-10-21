@@ -55,7 +55,7 @@ const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.o
 // The rest are credit links to a source. If the app ever calls one of these
 // at runtime, move it to SERVICES and name it on the privacy page.
 const BUILD_TIME_SOURCES = new Set([
-  'services.arcgis.com', 'www.arcgis.com', 'geo.rijkswaterstaat.nl', 'data.overheid.nl', 'overpass-api.de', 'overpass.kumi.systems',
+  'services.arcgis.com', 'www.arcgis.com', 'geo.rijkswaterstaat.nl', 'data.overheid.nl', 'service.pdok.nl', 'overpass-api.de', 'overpass.kumi.systems',
   'www.openstreetmap.org', 'data-canalrivertrust.opendata.arcgis.com', 'www.dwrace.co.uk',
   'd1hxd0sho1wxko.cloudfront.net', 'www.scottishcanals.co.uk', 'www.waterwaysireland.org', 'download.geofabrik.de',
   'environment.data.gov.uk', 'umap.openstreetmap.fr', 'www.data.gov.uk',

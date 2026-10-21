@@ -105,11 +105,11 @@ async function load(): Promise<NationalDataset> {
     if (v && !usesLocalStorage()) throw new Error(`waterways: published version ${v} not found`)
     return fixture()
   }
-  const [features, osmFeatures, places, portages] = await Promise.all([
-    read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Place[]>('places'), read<OsmElement[]>('osm-portages'),
+  const [features, osmFeatures, saFeatures, places, portages] = await Promise.all([
+    read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Feature[]>('sa-features'), read<Place[]>('places'), read<OsmElement[]>('osm-portages'),
   ])
-  // Routing sees one list; the files stay apart (licence layers: OSM is ODbL).
-  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
+  // Routing sees one list; the files stay apart (licence layers: OSM is ODbL, sa-features CC BY-SA).
+  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? []), ...(saFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
 }
 
 async function fixture(): Promise<NationalDataset> {
