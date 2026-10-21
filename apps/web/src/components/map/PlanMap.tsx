@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap,
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { COVERAGE_LEVELS, FLANDERS_PHOTOS, inNetherlands, mapTiles, nearFlanders } from '@/lib/plan-ui'
+import { COVERAGE_LEVELS, FLANDERS_PHOTOS, inFrance, inNetherlands, mapTiles, nearFlanders } from '@/lib/plan-ui'
 
 // The planner's map: the rivers and canals of the UK, Ireland, the Netherlands, Belgium and France, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
@@ -119,13 +119,14 @@ export default function PlanMap({
   choices?: { at: LatLng; label: string }[] // the waterways an unclear click could have meant
   onPick: (p: LatLng, zoom: number) => void
 }) {
-  // Only whether the view is over the Netherlands matters (which photos to use).
-  const [overNl, setOverNl] = useState(false)
+  // Only whether the view is over the Netherlands, Flanders or France matters (which photos to use).
+  const [over, setOver] = useState<'nl' | 'fr' | undefined>()
   const [overVl, setOverVl] = useState(false)
-  const tiles = mapTiles(satellite, overNl)
+  const overNl = over === 'nl'
+  const tiles = mapTiles(satellite, over)
   return (
     <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
-      <WatchCentre onChange={c => { setOverNl(inNetherlands(c)); setOverVl(nearFlanders(c)) }} />
+      <WatchCentre onChange={c => { setOver(inNetherlands(c) ? 'nl' : inFrance(c) ? 'fr' : undefined); setOverVl(nearFlanders(c)) }} />
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
       {satellite && !overNl && overVl && (

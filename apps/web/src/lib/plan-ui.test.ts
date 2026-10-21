@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, nearFlanders, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inFrance, inNetherlands, nearFlanders, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -136,10 +136,30 @@ describe('the map tiles', () => {
   })
 
   it("over the Netherlands, the Kadaster's 8 cm aerial photos (printable, CC BY 4.0), credited", () => {
-    const nl = mapTiles(true, true)
+    const nl = mapTiles(true, 'nl')
     expect(nl.base).toContain('service.pdok.nl/hwh/luchtfotorgb')
     expect(nl.attribution).toContain('Beeldmateriaal.nl (Kadaster), CC BY 4.0')
-    expect(mapTiles(false, true).base).toContain('/World_Dark_Gray_Base/')   // only the satellite view changes
+    expect(mapTiles(false, 'nl').base).toContain('/World_Dark_Gray_Base/')   // only the satellite view changes
+  })
+
+  it("over France, IGN's BD ORTHO aerial photos (printable, Licence Ouverte 2.0), credited", () => {
+    const fr = mapTiles(true, 'fr')
+    expect(fr.base).toContain('data.geopf.fr/wmts')
+    expect(fr.base).toContain('LAYER=ORTHOIMAGERY.ORTHOPHOTOS')
+    expect(fr.base).toContain('TILEMATRIXSET=PM')
+    expect(fr.base).toContain('FORMAT=image/jpeg')   // the only format it serves
+    expect(fr.baseNativeZoom).toBe(19)
+    expect(fr.attribution).toContain('IGN, BD ORTHO, Licence Ouverte 2.0')
+    expect(mapTiles(false, 'fr').base).toContain('/World_Dark_Gray_Base/')
+  })
+
+  it('knows France from its neighbours, Corsica included', () => {
+    const inside = { Paris: [48.857, 2.352], Lille: [50.63, 3.06], Strasbourg: [48.58, 7.75], Lyon: [45.76, 4.84], Marseille: [43.30, 5.37], Toulouse: [43.60, 1.44],
+      Bordeaux: [44.84, -0.58], Brest: [48.39, -4.49], 'Vallon-Pont-d’Arc': [44.40, 4.39], Chamonix: [45.92, 6.87], Ajaccio: [41.93, 8.74] }
+    const outside = { Brussels: [50.85, 4.35], Namur: [50.47, 4.87], Luxembourg: [49.61, 6.13], Saarbrücken: [49.23, 7.0], Geneva: [46.20, 6.14], Lausanne: [46.52, 6.63],
+      Turin: [45.07, 7.69], 'San Sebastián': [43.32, -1.98], Andorra: [42.51, 1.52], 'St Helier': [49.19, -2.11], Dover: [51.13, 1.31], London: [51.5, -0.12], Sardinia: [40.9, 9.1] }
+    expect(Object.entries(inside).filter(([, p]) => !inFrance(p as [number, number])).map(([n]) => n)).toEqual([])
+    expect(Object.entries(outside).filter(([, p]) => inFrance(p as [number, number])).map(([n]) => n)).toEqual([])
   })
 
   it('knows the Netherlands from its neighbours', () => {
@@ -154,9 +174,9 @@ describe('the map tiles', () => {
     expect(FLANDERS_PHOTOS.attribution).toContain('Vlaamse Open Data licentie')
   })
 
-  it('printable photos: the Kadaster in the Netherlands, Digitaal Vlaanderen in Flanders, none in Wallonia or the UK', () => {
-    expect([[52.37, 4.90], [51.054, 3.717], [51.21, 4.40], [50.847, 4.353], [50.467, 4.868], [50.19, 5.0], [51.5, -0.12]]
-      .map(p => printablePhotos(p as [number, number]))).toEqual(['nl', 'vl', 'vl', 'vl', undefined, undefined, undefined])   // Amsterdam, Ghent, Antwerp, Brussels, Namur, the Lesse, London
+  it('printable photos: the Kadaster in the Netherlands, Digitaal Vlaanderen in Flanders, IGN in France, none in Wallonia or the UK', () => {
+    expect([[52.37, 4.90], [51.054, 3.717], [51.21, 4.40], [50.847, 4.353], [50.467, 4.868], [50.19, 5.0], [51.5, -0.12], [48.857, 2.352], [50.63, 3.06]]
+      .map(p => printablePhotos(p as [number, number]))).toEqual(['nl', 'vl', 'vl', 'vl', undefined, undefined, undefined, 'fr', 'fr'])   // Amsterdam, Ghent, Antwerp, Brussels, Namur, the Lesse, London, Paris, Lille
   })
 
   it('is the dark map by default', () => {
@@ -257,6 +277,8 @@ describe('portage maps for the printed sheet', () => {
     expect((n - s) * 110_540 / 2).toBeCloseTo(120, 0)                                   // 120 m from the lock to the edge
     expect((e - w) * Math.cos((51.5 * Math.PI) / 180) * 111_320 / 2).toBeCloseTo(120, 0)  // and square on the ground
     expect(new URL(aerialPhotoUrl(map, 'vl')).searchParams.get('LAYERS')).toBe('Ortho')
+    const fr = new URL(aerialPhotoUrl(map, 'fr'))
+    expect([fr.hostname, fr.searchParams.get('LAYERS')]).toEqual(['data.geopf.fr', 'ORTHOIMAGERY.ORTHOPHOTOS'])
     const url = new URL(aerialPhotoUrl(map))
     expect(url.hostname).toBe('service.pdok.nl')
     expect(url.searchParams.get('CRS')).toBe('EPSG:4326')
