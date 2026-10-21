@@ -82,6 +82,7 @@ export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
     const form: NetLink['form'] = w.tags?.waterway === 'canal' ? 'canal' : w.tags?.tidal === 'yes' ? 'tidalRiver' : 'inlandRiver'
     const boat = paddleable(w.tags ?? {})
     const culvert = w.tags?.tunnel === 'culvert'
+    const canoeRoute = w.tags?.canoe_route
     let start = 0
     for (let i = 1; i < w.nodes.length; i++) {
       if (i < w.nodes.length - 1 && (uses.get(w.nodes[i]) ?? 0) < 2) continue
@@ -96,6 +97,7 @@ export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
         lengthM: Math.round(lineLength(line)),
         ...(boat ? { boat } : {}),
         ...(culvert ? { culvert: true as const } : {}),
+        ...(canoeRoute ? { canoeRoute } : {}),
       })
       start = i
     }

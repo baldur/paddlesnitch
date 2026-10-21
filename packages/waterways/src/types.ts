@@ -48,6 +48,7 @@ export type NetLink = {
    *  untagged. Routing prefers 'yes' (the navigation) and avoids 'no'. */
   boat?: 'yes' | 'no'
   culvert?: true             // underground: never route through one
+  canoeRoute?: string        // the marked canoe route it's part of (OSM route=canoe)
 }
 
 export type FeatureKind =

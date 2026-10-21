@@ -329,6 +329,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   )
 }
 
+const listOf = (xs: string[]) => (xs.length < 2 ? xs[0] : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`)
+
 function Summary({ plan }: { plan: ComputedPlan }) {
   return (
     <section>
@@ -340,6 +342,7 @@ function Summary({ plan }: { plan: ComputedPlan }) {
         <Stat label="With portages" value={fmtDuration(plan.totalS)} />
         {plan.finishAt && <Stat label="Finish at" value={fmtDayTime(plan.finishAt)} tone="primary" />}
       </div>
+      {plan.canoeRoutes?.length ? <p className="mt-3 text-sm text-muted" data-testid="canoe-routes">On {listOf(plan.canoeRoutes)}, a marked canoe route.</p> : null}
     </section>
   )
 }
