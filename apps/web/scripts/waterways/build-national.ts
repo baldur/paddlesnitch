@@ -17,12 +17,13 @@ import path from 'path'
 import readline from 'readline'
 import { gzipSync } from 'zlib'
 import { putObject } from '@paddlesnitch/core/storage'
-import { featuresAlong, NEAR_M } from '@paddlesnitch/waterways/along'
+import { featuresAlong, NEAR_M, WATERBOARD_NEAR_M } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
+import { SOURCES } from '@paddlesnitch/waterways/sources'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
 import { SNAP_MAX_M } from '@paddlesnitch/waterways/plan'
@@ -48,6 +49,9 @@ const GAP_ACCESS_M = 100
  *  pond, the coast or in town: the same bank-side reach as an authority's (NEAR_M). */
 const ACCESS_ON_WATER_M = NEAR_M.slipway
 const FACILITY_ON_WATER_M = NEAR_M.facility
+/** Share-alike points (the Dutch water boards) further than this from the water aren't kept:
+ *  they'd be in side ditches (WATERBOARD_NEAR_M), and there are 133,000. */
+const SA_NEAR_M = WATERBOARD_NEAR_M
 
 async function* lines(file: string) {
   for await (const l of readline.createInterface({ input: fs.createReadStream(file) })) if (l) yield JSON.parse(l)
@@ -75,13 +79,15 @@ async function main() {
   lap(`OSM points near the water: ${osm.length}`)
   osmLockList.push(...osmGateLocks(osm, osmLockList, new Date().toISOString()))
 
-  const all: Feature[] = []
+  const all: Feature[] = [], shareAlike: Feature[] = []
   const sources: Record<string, number> = {}
   for (const f of await fsp.readdir(NORMALISED).catch(() => [] as string[])) {
     if (!f.endsWith('.json')) continue
     const list: Feature[] = JSON.parse(await fsp.readFile(path.join(NORMALISED, f), 'utf8'))
     const near = list.filter(x => snap(links, x.at, OSM_NEAR_M))
-    all.push(...near)
+    // Share-alike sources (CC BY-SA) never join the core features.
+    const id = f.replace(/\.json$/, '') as keyof typeof SOURCES
+    ;(SOURCES[id]?.shareAlike ? shareAlike : all).push(...near)
     sources[f.replace(/\.json$/, '')] = near.length
   }
   // One record per lock where sources overlap (CRT and EA on the Kennet in Reading).
@@ -93,6 +99,24 @@ async function main() {
   const coreLocks = features.filter(f => f.kind === 'lock')
   const osmFeatures = osmLockList.filter(l => snap(links, l.at, OSM_NEAR_M) && !coreLocks.some(c => haversine(c.at, l.at) <= GAP_LOCK_M))
   lap(`OSM locks filling gaps: ${osmFeatures.length} of ${osmLockList.length}`)
+
+  // Share-alike sources (the Dutch water boards, CC BY-SA 4.0) in their own
+  // file, sa-features: a lock or weir one of ours already lists nearby is the same one.
+  const nearAny = (list: Feature[], maxM: number) => {
+    const grid = new Map<string, Feature[]>()
+    const cell = (p: LatLng) => `${Math.floor(p[0] * 100)}:${Math.floor(p[1] * 60)}`   // ~1.1 km
+    for (const f of list) { const k = cell(f.at); grid.set(k, [...(grid.get(k) ?? []), f]) }
+    return (p: LatLng) => {
+      const [y, x] = cell(p).split(':').map(Number)
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((grid.get(`${y + dy}:${x + dx}`) ?? []).some(f => haversine(f.at, p) <= maxM)) return true
+      return false
+    }
+  }
+  const hasLock = nearAny([...coreLocks, ...osmFeatures], GAP_LOCK_M), hasWeir = nearAny(features.filter(f => f.kind === 'weir'), 40)
+  // Only those on our water: most of the 133,000 are on ditches we don't route on.
+  const saFeatures = mergeFeatures(shareAlike.filter(f => snap(links, f.at, SA_NEAR_M)))
+    .filter(f => !(f.kind === 'lock' && hasLock(f.at)) && !(f.kind === 'weir' && hasWeir(f.at)))
+  lap(`share-alike features: ${saFeatures.length} of ${shareAlike.length}`)
   const ACCESS_KINDS = new Set(['access', 'slipway', 'portage'])
   const coreAccess = features.filter(f => ACCESS_KINDS.has(f.kind))
   const accessGrid = new Map<string, Feature[]>()
@@ -127,10 +151,10 @@ async function main() {
 
   const osmPlaces: { at: LatLng; tags: Record<string, string> }[] = []
   for (const dir of EXTRACTS) for await (const p of lines(path.join(dir, 'places.jsonl'))) if (once(`p${p.id}`)) osmPlaces.push(p)
-  const places = buildPlaces(osmPlaces, [...features, ...osmFeatures], links)
+  const places = buildPlaces(osmPlaces, [...features, ...osmFeatures, ...saFeatures], links)
   lap(`places: ${places.length}`)
 
-  const failed = checkRoutes(links, [...features, ...osmFeatures])
+  const failed = checkRoutes(links, [...features, ...osmFeatures, ...saFeatures])
   lap('check routes')
 
   if (!args.includes('--publish')) {
@@ -143,7 +167,7 @@ async function main() {
   const osmPortageList = osm.filter(p => p.ends && 'portage' in p.tags)
   // Rijkswaterstaat's predicted high and low waters (fetch-rws-tide-extremes.ts), when fetched.
   const tidesNl: unknown = JSON.parse(await fsp.readFile(path.join(CACHE, 'tides-nl.json'), 'utf8').catch(() => 'null'))
-  const files = { network: links, features, 'osm-features': osmFeatures, osm, places, 'osm-portages': osmPortageList, ...(tidesNl ? { 'tides-nl': tidesNl } : {}) }
+  const files = { network: links, features, 'osm-features': osmFeatures, 'sa-features': saFeatures, osm, places, 'osm-portages': osmPortageList, ...(tidesNl ? { 'tides-nl': tidesNl } : {}) }
   const bodies = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(JSON.stringify(v))]))
   const hash = createHash('sha256')
   for (const b of Object.values(bodies)) hash.update(b)
@@ -155,7 +179,7 @@ async function main() {
   const manifest: Manifest = {
     version,
     builtAt: new Date().toISOString(),
-    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.filter(f => f.kind === 'lock').length, osmAccess: osmAccessFill.length, osmFacilities: osmFacilityFill.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
+    counts: { links: links.length, km: Math.round(links.reduce((n, l) => n + l.lengthM, 0) / 1000), features: features.length, osmLocks: osmFeatures.filter(f => f.kind === 'lock').length, osmAccess: osmAccessFill.length, osmFacilities: osmFacilityFill.length, shareAlike: saFeatures.length, osm: osm.length, osmPortages: osmPortageList.length, places: places.length },
     sources,
   }
   await fsp.writeFile(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')

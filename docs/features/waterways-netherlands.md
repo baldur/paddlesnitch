@@ -68,7 +68,22 @@ A local experiment, nothing published.
 
 So, on the numbers: **one dataset** that grows country by country is fine for the Netherlands, and **no ditches** loses almost nothing. Both are recommendations for questions 1 and 2 below; the owner decides.
 
-## Questions for the owner
+## Owner decisions (2026-10-21)
+
+- **CC BY-SA water-board data: yes**, under the licence-layer rules (own published file, never in the CC0 contributions). Built: see "Water boards" below.
+- **Watersportverbond: not yet.**
+- **Questions 1 and 2:** no answer given. Building continued on the recommended defaults (one dataset, no ditches).
+- **OpenPortage public repo** (UK question): later. First get contributions flowing in the app.
+
+## Water boards (2026-10-21)
+
+The national "Waterschappen Kunstwerken IMWA" set via PDOK WFS (CC BY-SA 4.0), source `nl-waterboards`. It covers weirs (`stuw`), bed drops (`bodemval`), fixed dams (`vastedam`, as hazards), pumping stations (`gemaal`, as hazards) and the boards' own small locks (`sluis`): 133,478 in all. Culverts, bridges and siphons aren't read.
+- **Reading it:** PDOK serves 1,000 a page and no page past 50,000, so it's read in four quadrants. Pages can come back short with more to come, so paging runs to each quadrant's `numberMatched`.
+- **Side ditches:** most structures are on ditches beside our water (a dam at a ditch's mouth, a pumping station's outfall). They count only **within 10 m** of our network (`WATERBOARD_NEAR_M`): the boards' own locks sit within 5 m, while side-ditch dams sit 10–60 m off. That keeps 3,858.
+- **Licence layer:** published as `sa-features.json` (~0.9 MB raw), never merged into the core features. A board lock or weir that one of ours already lists nearby is dropped as the same one.
+- **Found on the way:** `snap` ignored a small `maxM`, fixed in #542, which this builds on.
+
+## Questions for the owner (2026-10-20, as asked)
 
 1. **One dataset or one per country?** One "Europe" network keeps routing simple but grows memory with every country; per-country datasets keep each small and would need a country pick (or a guess from the map view).
 2. **Ditches:** route only on mapped canoe routes plus rivers and canals (safe, misses some polder paddling), or on all small water (finds more, but routes through field drains)? I'd start safe.

@@ -34,6 +34,7 @@
     "./ingest/ea-umap": "./src/ingest/ea-umap.ts",
     "./ingest/barriers": "./src/ingest/barriers.ts",
     "./ingest/rws-fis": "./src/ingest/rws-fis.ts",
+    "./ingest/waterboards": "./src/ingest/waterboards.ts",
     "./waterway-coverage": "./src/waterway-coverage.ts",
     "./portage": "./src/portage.ts",
     "./portage-store": "./src/portage-store.ts",
