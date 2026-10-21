@@ -16,6 +16,8 @@ const args = process.argv.slice(2)
 const arg = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined }
 const since = new Date(Date.now() - Number(arg('--days') ?? 8) * 86_400_000)
 const TERMS = ['lock', 'weir', 'slipway', 'portage', 'canoe', 'kayak', 'blueway', 'towpath', 'river access']
+/** The same things in Dutch, for data.overheid.nl. */
+const TERMS_NL = ['sluis', 'stuw', 'kano', 'trailerhelling', 'overdraagplaats', 'aanlegplaats']
 
 async function json(url: string): Promise<unknown> {
   const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30_000) })
@@ -23,9 +25,9 @@ async function json(url: string): Promise<unknown> {
   return res.json()
 }
 
-async function ckan(catalogue: Candidate['catalogue'], base: string, api: string): Promise<Candidate[]> {
+async function ckan(catalogue: Candidate['catalogue'], base: string, api: string, terms = TERMS): Promise<Candidate[]> {
   const out: Candidate[] = []
-  for (const t of TERMS) {
+  for (const t of terms) {
     const d = await json(`${api}/package_search?q=${encodeURIComponent(t)}&rows=50&sort=metadata_created%20desc`) as { result?: { results?: unknown[] } }
     out.push(...fromCkan(catalogue, base, d.result?.results ?? []))
   }
@@ -51,6 +53,7 @@ async function main() {
     safe('data.gov.ie', ckan('data.gov.ie', 'https://data.gov.ie', 'https://data.gov.ie/api/3/action')),
     safe('OpenDataNI', ckan('OpenDataNI', 'https://www.opendatani.gov.uk', 'https://admin.opendatani.gov.uk/api/3/action')),
     safe('ArcGIS Online', arcgis()),
+    safe('data.overheid.nl', ckan('data.overheid.nl', 'https://data.overheid.nl', 'https://data.overheid.nl/data/api/3/action', TERMS_NL)),
   ])).flat()
   const found = newCandidates(all, since)
   let body = found.length ? digest(found, since) : ''
