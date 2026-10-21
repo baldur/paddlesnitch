@@ -79,6 +79,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     attribution: 'Weirs, dams and pumping stations: Dutch water boards (Het Waterschapshuis), CC BY-SA 4.0',
     shareAlike: true,
   },
+  'amber-eu': {
+    name: 'AMBER Atlas of Instream Barriers in Europe',
+    url: 'https://doi.org/10.6084/m9.figshare.12629051.v5',
+    licence: 'CC BY 4.0',
+    attribution: 'Barriers in Belgium: AMBER Consortium, Belletti et al. (2020) Nature 588, CC BY 4.0',
+  },
   'rws-fis': {
     name: 'Rijkswaterstaat — Vaarweginformatie (FIS/VNDS)',
     url: 'https://data.overheid.nl/en/dataset/49337-vaarweginformatie-sluizen',

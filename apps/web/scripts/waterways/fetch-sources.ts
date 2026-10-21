@@ -20,7 +20,7 @@ import { assess, HEALTH_KEY, healthLines, stagedKey, type HealthFile } from '@pa
 import { lockKey } from '@paddlesnitch/waterways/build'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
-import { AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
+import { AMBER_EU, AMBER_EU_WHERE, featuresFromAmberEu, AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
@@ -175,6 +175,12 @@ JOBS.sepa = async () => {
 JOBS.amber = async () => {
   const { features, fetchedAt } = await arcgisAll('amber', AMBER_GB)
   return featuresFromAmber(features, fetchedAt)
+}
+
+// AMBER Europe, Belgium only: weirs, dams, sluices and bed sills (CC BY 4.0).
+JOBS['amber-eu'] = async () => {
+  const { features, fetchedAt } = await arcgisAll('amber-eu', AMBER_EU, AMBER_EU_WHERE)
+  return featuresFromAmberEu(features, fetchedAt)
 }
 
 // Inland Fisheries Ireland: the Republic's weirs, sluices, dams and waterfalls (CC BY 4.0).
