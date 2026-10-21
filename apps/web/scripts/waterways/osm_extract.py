@@ -27,8 +27,11 @@ import osmium
 NETWORK = {'river', 'canal', 'flowline', 'fairway', 'boat_lift'}
 WAY_TAGS = ('name', 'waterway', 'tidal', 'lock', 'lock_name', 'lock_ref', 'boat', 'canoe', 'access', 'tunnel', 'intermittent')
 POINT_WATERWAY = {'lock_gate', 'weir', 'dam'}
-# Small water joins the network only where a canoe route uses it.
+# Small water joins the network only where a canoe route uses it, or where it's
+# tagged open to boats or canoes: a mistag of a navigation (1.6 km of the Canal
+# du Midi at the Seuil de Naurouze is waterway=stream, boat=yes).
 ROUTE_ONLY = {'stream', 'ditch', 'drain'}
+OPEN = {'yes', 'designated', 'permissive'}
 POINT_AMENITY = {'drinking_water', 'water_point', 'toilets', 'parking'}
 PLACES = {'city', 'town', 'village', 'hamlet'}
 
@@ -87,7 +90,8 @@ def main(src, out):
                 except osmium.InvalidLocationError:
                     continue   # a node outside the extract
                 on_route = routes.get(o.id)
-                if tags.get('waterway') in NETWORK or (on_route and tags.get('waterway') in ROUTE_ONLY):
+                navigable = tags.get('boat') in OPEN or tags.get('canoe') in OPEN
+                if tags.get('waterway') in NETWORK or ((on_route or navigable) and tags.get('waterway') in ROUTE_ONLY):
                     keep = {k: tags[k] for k in WAY_TAGS if k in tags}
                     if on_route:
                         keep['canoe_route'] = on_route

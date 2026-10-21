@@ -31,4 +31,8 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'Houyet → Anseremme (Lesse kayak run)', start: [50.1907, 5.0074], finish: [50.2357, 4.9041], source: 'The classic 21 km Lesse descent; a route must exist' },
   { name: 'Ghent → Bruges (Kanaal Gent-Brugge)', start: [51.0870, 3.6591], finish: [51.2028, 3.2352], source: 'OSM; a route must exist' },
   { name: 'Brussels → Charleroi (canal)', start: [50.8489, 4.3327], finish: [50.4130, 4.4244], source: 'OSM; a route must exist' },
+  // France (docs/features/waterways-france.md): routes found, no counts pinned yet.
+  { name: 'Toulouse → Castelnaudary (Canal du Midi)', start: [43.6151, 1.4339], finish: [43.3158, 1.9507], source: 'OSM; a route must exist' },
+  { name: 'La Roque-Gageac → Beynac (Dordogne)', start: [44.8242, 1.2189], finish: [44.8367, 1.1296], source: 'The Dordogne canoe descent; a route must exist' },
+  { name: 'Paris: Pont d’Iéna → Pont d’Austerlitz (Seine)', start: [48.8600, 2.2918], finish: [48.8437, 2.3679], source: 'OSM; a route must exist' },
 ]

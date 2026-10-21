@@ -49,7 +49,7 @@ export default function Gaps() {
       <PageHeader
         title="Gaps"
         description={<>
-          Every canal, navigation and river over 10 km we cover in the UK, Ireland, the Netherlands and Belgium, and what we know about it, worked out from the data.
+          Every canal, navigation and river over 10 km we cover in the UK, Ireland, the Netherlands, Belgium and France, and what we know about it, worked out from the data.
           We&apos;d rather show a gap than guess. The biggest one: we know which bank to land on at {totals.sides} of {totals.locks.toLocaleString()} locks.
           Hardly any open data records portage sides (OpenStreetMap has a few, mostly on the Caledonian Canal), so paddlers add them: start with the locks below, or any lock on a route you plan.
         </>}
