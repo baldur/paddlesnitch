@@ -81,7 +81,7 @@ function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => 
  *  on a side cut, a brook or a marina entrance, not on the way. The navigation
  *  authorities put locks and weirs beside the channel, hence NEAR_M's wider net. */
 export const ON_WATER_NEAR_M = 60
-const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims', 'ifi'])
+const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims', 'ifi', 'amber-eu'])
 
 /** Things in the water itself. Slipways, put-ins and toilets stand on the bank,
  *  which on a wide river or estuary is well over 60 m from the line. */

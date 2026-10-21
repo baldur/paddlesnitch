@@ -28,6 +28,7 @@ export type SourceId =
   | 'thames-conditions'      // GOV.UK River Thames current conditions (live, OGL)
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
+  | 'amber-eu'               // AMBER Atlas of Instream Barriers in Europe, Belgium (CC BY 4.0)
   | 'rws-fis'                // Rijkswaterstaat FIS/VNDS: Dutch locks and slipways (CC0)
   | 'nl-waterboards'         // Dutch water boards' weirs, dams, pumping stations, locks (CC BY-SA 4.0, own file)
   | 'scottish-canals'        // Scottish Canals open data (OGL)

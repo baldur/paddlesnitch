@@ -6,7 +6,7 @@ import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
-import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
+import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
@@ -378,6 +378,13 @@ describe('weirs and waterfalls from the barrier inventories', () => {
       ['amber:EN_12722_EA', undefined, undefined],     // named "Null" in the source
     ])
     expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toContain('About 0.5 m high.')
+  })
+
+  it('AMBER Europe (Belgium): weirs, dams, sluices and bed sills as weirs, a height where one was measured; culverts left out', () => {
+    const pt = (id: number, label: string, height: string) => ({ geometry: { type: 'Point' as const, coordinates: [4.95, 50.20] as [number, number] }, properties: { OBJECTID: id, Country: 'BELGIUM', LabelAtlas: label, Height: height } })
+    const out = featuresFromAmberEu([pt(1, 'WEIR', '1.8'), pt(2, 'DAM', 'NA'), pt(3, 'CULVERT', 'NA'), pt(4, 'RAMP/BED SILL', '0.4')], AT)
+    expect(out.map(f => [f.id, f.kind, f.weir?.heightM])).toEqual([['amber-eu:1', 'weir', 1.8], ['amber-eu:2', 'weir', undefined], ['amber-eu:4', 'weir', 0.4]])
+    expect(out[0]).toMatchObject({ at: [50.2, 4.95], source: { source: 'amber-eu' } })
   })
 
   it('IFI: weirs and sluices as weirs, rock waterfalls as hazards; counted on a route only on the water', () => {
