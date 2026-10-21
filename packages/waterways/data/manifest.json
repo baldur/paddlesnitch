@@ -1,16 +1,16 @@
 {
-  "version": "20261020-b3b106e8",
-  "builtAt": "2026-10-20T19:06:09.903Z",
+  "version": "20261021-77573f15",
+  "builtAt": "2026-10-21T03:55:56.728Z",
   "counts": {
-    "links": 112374,
-    "km": 79979,
-    "features": 33133,
-    "osmLocks": 927,
-    "osmAccess": 3255,
-    "osmFacilities": 12332,
-    "osm": 388475,
+    "links": 112383,
+    "km": 79980,
+    "features": 34010,
+    "osmLocks": 552,
+    "osmAccess": 2991,
+    "osmFacilities": 12331,
+    "osm": 388665,
     "osmPortages": 253,
-    "places": 34402
+    "places": 34447
   },
   "sources": {
     "amber": 14791,
@@ -19,6 +19,7 @@
     "ea-thames": 45,
     "ea-umap": 197,
     "ifi": 2463,
+    "rws-fis": 877,
     "scottish-canals": 213,
     "sepa": 2847,
     "waterways-ireland": 750
