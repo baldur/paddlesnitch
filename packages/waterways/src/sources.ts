@@ -85,6 +85,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'CC BY 4.0',
     attribution: 'Barriers in Belgium: AMBER Consortium, Belletti et al. (2020) Nature 588, CC BY 4.0',
   },
+  roe: {
+    name: 'Référentiel des obstacles à l’écoulement (ROE), France',
+    url: 'https://www.data.gouv.fr/datasets/obstacles-a-lecoulement-metropole',
+    licence: 'Licence Ouverte 2.0',
+    attribution: 'Weirs and dams in France: ROE, Office français de la biodiversité (OFB) / Sandre, Licence Ouverte 2.0',
+  },
   'rws-fis': {
     name: 'Rijkswaterstaat — Vaarweginformatie (FIS/VNDS)',
     url: 'https://data.overheid.nl/en/dataset/49337-vaarweginformatie-sluizen',

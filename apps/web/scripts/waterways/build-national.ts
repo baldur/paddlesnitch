@@ -211,6 +211,7 @@ function checkRoutes(links: NetLink[], features: Feature[]): number {
     if (!r) problems.push(!s ? 'start off the water' : !f ? 'finish off the water' : 'not connected')
     if (r && c.expectKm && Math.abs(km - c.expectKm) / c.expectKm > 0.03) problems.push(`expected ${c.expectKm} km`)
     if (r && c.expectLocks !== undefined && locks !== c.expectLocks) problems.push(`expected ${c.expectLocks} locks`)
+    if (r && c.expectWeirs !== undefined && weirs !== c.expectWeirs) problems.push(`expected ${c.expectWeirs} weirs`)
     if (problems.length) failed++
     const via = r ? [...new Set(r.legs.map(l => l.name || '(unnamed)'))].join(' > ') : ''
     console.log(`  ${problems.length ? '✗' : '✓'} ${c.name}: ${r ? `${km.toFixed(1)} km, ${locks} locks, ${weirs} weirs` : '—'}${problems.length ? `  [${problems.join('; ')}]` : ''}${via ? `\n      via ${via.length > 200 ? via.slice(0, 200) + '…' : via}` : ''}`)

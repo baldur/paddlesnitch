@@ -10,6 +10,8 @@ export type CheckRoute = {
   expectKm?: number
   /** Expected locks along it, once that nation's lock sources are in. */
   expectLocks?: number
+  /** Expected weirs along it, where a register lists them all. */
+  expectWeirs?: number
   source: string
 }
 
@@ -34,5 +36,6 @@ export const CHECK_ROUTES: CheckRoute[] = [
   // France (docs/features/waterways-france.md): routes found, no counts pinned yet.
   { name: 'Toulouse → Castelnaudary (Canal du Midi)', start: [43.6151, 1.4339], finish: [43.3158, 1.9507], source: 'OSM; a route must exist' },
   { name: 'La Roque-Gageac → Beynac (Dordogne)', start: [44.8242, 1.2189], finish: [44.8367, 1.1296], source: 'The Dordogne canoe descent; a route must exist' },
+  { name: 'Ruoms → Vallon-Pont-d’Arc (Ardèche)', start: [44.4440, 4.3480], finish: [44.3975, 4.3935], expectWeirs: 5, source: 'ROE: Sous Roche, Moulin de Sampzon, Mas Neuf, Gos and Vallon Salavas, each with a canoe pass' },
   { name: 'Paris: Pont d’Iéna → Pont d’Austerlitz (Seine)', start: [48.8600, 2.2918], finish: [48.8437, 2.3679], source: 'OSM; a route must exist' },
 ]
