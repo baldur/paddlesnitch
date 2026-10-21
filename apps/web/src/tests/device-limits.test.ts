@@ -141,11 +141,17 @@ describe('POST /api/devices/token rate limit', () => {
   })
 
   it(`refuses past ${TOKEN_PER_DEVICE} polls per hour`, async () => {
-    const { claimSecret } = await createClaim(DEVICE, 'm', 'f')
-    for (let i = 0; i < TOKEN_PER_DEVICE; i++) {
-      expect((await token(tokenReq(claimSecret))).status).toBe(202)
-    }
-    expect((await token(tokenReq(claimSecret))).status).toBe(429)
+    // Mid-hour on a frozen clock: the loop takes a couple of seconds, and a run
+    // that crossed the hour (CI at 11:00:01) reset the window and failed.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-27T10:30:00Z'))
+    try {
+      const { claimSecret } = await createClaim(DEVICE, 'm', 'f')
+      for (let i = 0; i < TOKEN_PER_DEVICE; i++) {
+        expect((await token(tokenReq(claimSecret))).status).toBe(202)
+      }
+      expect((await token(tokenReq(claimSecret))).status).toBe(429)
+    } finally { vi.useRealTimers() }
   })
 
   it('allows several full claim rounds before refusing', async () => {
