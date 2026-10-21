@@ -252,14 +252,28 @@ const NL_OUTLINE: LatLng[] = [
   [51.25, 5.25], [51.45, 4.9], [51.38, 4.25], [51.27, 3.8],
 ]
 
-export function inNetherlands([lat, lng]: LatLng): boolean {
+function inOutline(outline: LatLng[], [lat, lng]: LatLng): boolean {
   let inside = false
-  for (let i = 0, j = NL_OUTLINE.length - 1; i < NL_OUTLINE.length; j = i++) {
-    const [ay, ax] = NL_OUTLINE[i], [by, bx] = NL_OUTLINE[j]
+  for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+    const [ay, ax] = outline[i], [by, bx] = outline[j]
     if ((ay > lat) !== (by > lat) && lng < ((bx - ax) * (lat - ay)) / (by - ay) + ax) inside = !inside
   }
   return inside
 }
+
+export const inNetherlands = (p: LatLng) => inOutline(NL_OUTLINE, p)
+
+/** Flanders with Brussels, roughly: the Dutch border, the coast, France, and the
+ *  language border with Wallonia (a few km's accuracy; Voeren left out). */
+const FLANDERS_OUTLINE: LatLng[] = [
+  [51.09, 2.54], [51.37, 3.36], [51.27, 3.80], [51.48, 4.30], [51.45, 4.90], [51.25, 5.25], [51.18, 5.84], [50.76, 5.70],
+  [50.77, 4.90], [50.70, 4.40], [50.73, 4.00], [50.78, 3.50], [50.73, 2.92], [50.95, 2.60],
+]
+export const inFlanders = (p: LatLng) => !inNetherlands(p) && inOutline(FLANDERS_OUTLINE, p)
+
+/** Whose aerial photos may be printed here: the Kadaster's (CC BY 4.0) or
+ *  Digitaal Vlaanderen's (Flemish Open Data licence). Elsewhere none: Esri may not be printed. */
+export const printablePhotos = (p: LatLng): 'nl' | 'vl' | undefined => (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : undefined)
 
 /** The map's tiles. On satellite, over the Netherlands (inNetherlands of the map's centre): the Kadaster's
  *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). They're
@@ -436,12 +450,18 @@ export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' 
   }
 }
 
-/** The Kadaster's aerial photo (PDOK WMS, CC BY 4.0, printable) for a drawing
- *  in the Netherlands, exactly its extent, so the drawing lines up on top. */
-export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, px = 440): string {
+/** A printable aerial photo for a drawing, exactly its extent so the drawing
+ *  lines up on top: the Kadaster's (PDOK WMS) in the Netherlands, Digitaal
+ *  Vlaanderen's in Flanders. */
+export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' = 'nl', px = 440): string {
+  const [base, layer] = region === 'vl'
+    ? ['https://geo.api.vlaanderen.be/OMWRGBMRVL/wms', 'Ortho']
+    : ['https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0', 'Actueel_orthoHR']
   const q = new URLSearchParams({
-    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: 'Actueel_orthoHR', STYLES: '', CRS: 'EPSG:4326',
+    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: layer, STYLES: '', CRS: 'EPSG:4326',
     BBOX: d.bbox.map(v => v.toFixed(6)).join(','), WIDTH: String(px), HEIGHT: String(px), FORMAT: 'image/jpeg',
   })
-  return `https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0?${q}`
+  return `${base}?${q}`
 }
+
+export const PHOTO_CREDIT = { nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie' } as const

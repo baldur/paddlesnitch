@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, nearFlanders, FLANDERS_PHOTOS, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, nearFlanders, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -154,6 +154,11 @@ describe('the map tiles', () => {
     expect(FLANDERS_PHOTOS.attribution).toContain('Vlaamse Open Data licentie')
   })
 
+  it('printable photos: the Kadaster in the Netherlands, Digitaal Vlaanderen in Flanders, none in Wallonia or the UK', () => {
+    expect([[52.37, 4.90], [51.054, 3.717], [51.21, 4.40], [50.847, 4.353], [50.467, 4.868], [50.19, 5.0], [51.5, -0.12]]
+      .map(p => printablePhotos(p as [number, number]))).toEqual(['nl', 'vl', 'vl', 'vl', undefined, undefined, undefined])   // Amsterdam, Ghent, Antwerp, Brussels, Namur, the Lesse, London
+  })
+
   it('is the dark map by default', () => {
     expect(mapTiles(false).base).toContain('/World_Dark_Gray_Base/')
   })
@@ -251,6 +256,7 @@ describe('portage maps for the printed sheet', () => {
     const [s, w, n, e] = map.bbox
     expect((n - s) * 110_540 / 2).toBeCloseTo(120, 0)                                   // 120 m from the lock to the edge
     expect((e - w) * Math.cos((51.5 * Math.PI) / 180) * 111_320 / 2).toBeCloseTo(120, 0)  // and square on the ground
+    expect(new URL(aerialPhotoUrl(map, 'vl')).searchParams.get('LAYERS')).toBe('Ortho')
     const url = new URL(aerialPhotoUrl(map))
     expect(url.hostname).toBe('service.pdok.nl')
     expect(url.searchParams.get('CRS')).toBe('EPSG:4326')
