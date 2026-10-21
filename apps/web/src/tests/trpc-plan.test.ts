@@ -237,6 +237,14 @@ describe('routing on the server (plan.route)', () => {
     await expect(anon.plan.choices({ at: DW.start, radiusM: 5000 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
+  it('searches places on the server for the map\'s Go to box: the whole index is too big to send (France made it 15 MB)', async () => {
+    const hits = await anon.plan.places({ q: 'marsh', near: DW.start })
+    expect(hits.some(p => /Marsh Lock/.test(p.name))).toBe(true)
+    expect(hits.length).toBeLessThanOrEqual(8)
+    expect(await anon.plan.places({ q: '  ' })).toEqual([])
+    await expect(anon.plan.places({ q: 'x'.repeat(101) })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
   it('saves plans made on the national network', async () => {
     const ann = await makeUser('Ann')
     expect((await as(ann).plan.save({ ...DW, region: 'gbie' })).region).toBe('gbie')
