@@ -100,6 +100,7 @@ export type Feature = {
   lock?: LockDetail
   portage?: PortageDetail
   crew?: CrewDetail
+  hire?: true               // canoe, kayak or paddleboard hire here (OSM)
   weir?: { heightM?: number; canoePass?: boolean }  // measured height, where the source has one; a canoe pass beside it (ROE)
   facilities?: Facility[]
   photos?: string[]          // URLs published by the source

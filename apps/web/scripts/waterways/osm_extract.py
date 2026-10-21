@@ -32,7 +32,7 @@ POINT_WATERWAY = {'lock_gate', 'weir', 'dam'}
 # du Midi at the Seuil de Naurouze is waterway=stream, boat=yes).
 ROUTE_ONLY = {'stream', 'ditch', 'drain'}
 OPEN = {'yes', 'designated', 'permissive'}
-POINT_AMENITY = {'drinking_water', 'water_point', 'toilets', 'parking'}
+POINT_AMENITY = {'drinking_water', 'water_point', 'toilets', 'parking', 'boat_rental'}
 PLACES = {'city', 'town', 'village', 'hamlet'}
 
 

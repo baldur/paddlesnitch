@@ -132,9 +132,10 @@ async function main() {
     return false
   }
   const osmAccessList = osmAccess(osm, new Date().toISOString())
-  const osmAccessFill = osmAccessList.filter(a => snap(links, a.at, ACCESS_ON_WATER_M) && !nearCore(a.at))
+  // Canoe hire stays even beside a slipway we list: that it's there is the news.
+  const osmAccessFill = osmAccessList.filter(a => snap(links, a.at, ACCESS_ON_WATER_M) && (a.hire || !nearCore(a.at)))
   osmFeatures.push(...osmAccessFill)
-  lap(`OSM slipways and put-ins filling gaps: ${osmAccessFill.length} of ${osmAccessList.length}`)
+  lap(`OSM slipways, put-ins and canoe hire filling gaps: ${osmAccessFill.length} of ${osmAccessList.length} (${osmAccessFill.filter(a => a.hire).length} hire)`)
   // Toilets and water where none of ours (CRT's facilities, Waterways Ireland's…) offer the same within 100 m.
   const coreFacilities = features.filter(f => f.kind === 'facility')
   const facGrid = new Map<string, Feature[]>()

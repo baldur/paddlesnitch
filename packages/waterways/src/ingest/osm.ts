@@ -189,24 +189,37 @@ export function osmGateLocks(points: OsmElement[], chambers: Feature[], fetchedA
   })
 }
 
-/** Public slipways and canoe put-ins mapped in OpenStreetMap: places to get on
- *  and off the water where no authority lists one (the build applies the gap
- *  rule). Private, customers-only and closed ones are left out. ODbL, published
- *  with the OSM locks in osm-features. */
+/** Hire of something you paddle (OSM amenity=boat_rental): a canoe base is
+ *  where a descent starts. Pedalos and motorboats aren't. */
+function paddleHire(t: Record<string, string>): boolean {
+  if (t.amenity !== 'boat_rental') return false
+  const kinds = ['canoe_rental', 'kayak_rental', 'standup_paddleboard_rental']
+  if (kinds.some(k => t[k] === 'yes')) return true
+  if (kinds.some(k => t[k] === 'no')) return false
+  return t.sport === 'canoe' || /cano|kayak|paddle|\bsup\b/i.test(t.name ?? '')
+}
+
+/** Public slipways, canoe put-ins and canoe hire mapped in OpenStreetMap:
+ *  places to get on and off the water where no authority lists one (the build
+ *  applies the gap rule). Private, customers-only and closed ones are left out,
+ *  except that hire is for customers by nature. ODbL, published with the OSM
+ *  locks in osm-features. */
 export function osmAccess(points: OsmElement[], fetchedAt: string): Feature[] {
   const closed = new Set(['private', 'no', 'customers', 'members', 'customers;private', 'emergency'])
   return points.flatMap(p => {
     const t = p.tags
-    if (closed.has(t.access ?? '') || closed.has(t.canoe ?? '')) return []
+    const hire = paddleHire(t)
+    if ((hire ? ['private', 'no'].includes(t.access ?? '') : closed.has(t.access ?? '')) || closed.has(t.canoe ?? '')) return []
     const slipway = t.leisure === 'slipway'
     const putIn = t.canoe === 'put_in' || (t.waterway === 'access_point' && ['yes', 'designated', 'permissive', 'permit'].includes(t.canoe ?? 'yes'))
-    if (!slipway && !putIn) return []
+    if (!slipway && !putIn && !hire) return []
     return [{
       id: `osm:access:${p.id}`,
       kind: slipway ? 'slipway' as const : 'access' as const,
       name: t.name,
       at: p.at,
       source: { source: 'osm' as const, sourceId: p.id, fetchedAt },
+      ...(hire ? { hire: true as const } : {}),
     }]
   })
 }
