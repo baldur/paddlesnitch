@@ -6,7 +6,7 @@ import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
-import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
+import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
@@ -393,6 +393,33 @@ describe('weirs and waterfalls from the barrier inventories', () => {
     const out = featuresFromAmberEu([pt(1, 'WEIR', '1.8'), pt(2, 'DAM', 'NA'), pt(3, 'CULVERT', 'NA'), pt(4, 'RAMP/BED SILL', '0.4')], AT)
     expect(out.map(f => [f.id, f.kind, f.weir?.heightM])).toEqual([['amber-eu:1', 'weir', 1.8], ['amber-eu:2', 'weir', undefined], ['amber-eu:4', 'weir', 0.4]])
     expect(out[0]).toMatchObject({ at: [50.2, 4.95], source: { source: 'amber-eu' } })
+  })
+
+  it('ROE (France): dams and weirs that stand, a drop where measured and a canoe pass where there is one; culverts, bridges, fords and demolished weirs left out', () => {
+    const pt = (id: string, type: string, p: Record<string, string> = {}) => ({ geometry: { type: 'Point' as const, coordinates: [1.2189, 44.8242] as [number, number] },
+      properties: { CdObstEcoul: id, CdTypeOuvrage: type, LbEtOuvrage: 'Existant', NomPrincipalObstEcoul: '', HautChutEtObstEcoul: '', LbTypeDispFranchNavig1: '', LbTypeDispFranchNavig2: '', LbTypeDispFranchNavig3: '', ...p } })
+    const out = featuresFromRoe([
+      pt('ROE1', '1.2.1', { NomPrincipalObstEcoul: 'Moulin de Brais ', HautChutEtObstEcoul: '1.5', LbTypeDispFranchNavig2: 'Passe à canoë' }),
+      pt('ROE2', '1.1.3', { NomPrincipalObstEcoul: 'Seuil en rivière', LbEtOuvrage: 'Détruit partiellement', HautChutEtObstEcoul: '0' }),
+      pt('ROE3', '1.2', { LbEtOuvrage: 'Détruit entièrement' }),
+      pt('ROE4', '1.2', { LbEtOuvrage: 'En projet' }),
+      pt('ROE5', '1.4.1'),                       // a culvert (buse)
+      pt('ROE6', '1.3'),                         // a dyke along the bank
+      pt('ROE7', ''),                            // type unknown
+    ], AT)
+    expect(out.map(f => [f.id, f.kind, f.name, f.weir])).toEqual([
+      ['roe:ROE1', 'weir', 'Moulin de Brais', { heightM: 1.5, canoePass: true }],
+      ['roe:ROE2', 'weir', undefined, undefined],
+    ])
+    expect(out[0]).toMatchObject({ at: [44.8242, 1.2189], source: { source: 'roe' } })
+    expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toEqual(['About 1.5 m high.', 'Canoe pass beside it.'])
+  })
+
+  it('ROE pages: GeoJSON in WGS84, in a stable order, only the fields we read', () => {
+    const u = new URL(roePageUrl(20000))
+    expect(Object.fromEntries(['TYPENAMES', 'STARTINDEX', 'COUNT', 'SORTBY', 'SRSNAME'].map(k => [k, u.searchParams.get(k)])))
+      .toEqual({ TYPENAMES: 'ObstEcoul_FXX', STARTINDEX: '20000', COUNT: '10000', SORTBY: 'gid', SRSNAME: 'EPSG:4326' })
+    expect(u.searchParams.get('PROPERTYNAME')).toContain('LbTypeDispFranchNavig1')
   })
 
   it('IFI: weirs and sluices as weirs, rock waterfalls as hazards; counted on a route only on the water', () => {

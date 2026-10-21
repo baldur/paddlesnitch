@@ -20,7 +20,7 @@ import { assess, HEALTH_KEY, healthLines, stagedKey, type HealthFile } from '@pa
 import { lockKey } from '@paddlesnitch/waterways/build'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
-import { AMBER_EU, AMBER_EU_WHERE, featuresFromAmberEu, AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
+import { AMBER_EU, AMBER_EU_WHERE, featuresFromAmberEu, featuresFromRoe, ROE_PAGE, roePageUrl, AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
@@ -181,6 +181,18 @@ JOBS.amber = async () => {
 JOBS['amber-eu'] = async () => {
   const { features, fetchedAt } = await arcgisAll('amber-eu', AMBER_EU, AMBER_EU_WHERE)
   return featuresFromAmberEu(features, fetchedAt)
+}
+
+// ROE: France's weirs and dams, with the drop and any canoe pass (Licence Ouverte 2.0, Sandre WFS).
+JOBS.roe = async () => {
+  const out: Feature[] = []
+  for (let page = 0; ; page++) {
+    const { body, fetchedAt } = await cached('roe', `page-${page}.geojson`, roePageUrl(page * ROE_PAGE))
+    const features = JSON.parse(body).features ?? []
+    out.push(...featuresFromRoe(features, fetchedAt))
+    if (features.length < ROE_PAGE) break
+  }
+  return out
 }
 
 // Inland Fisheries Ireland: the Republic's weirs, sluices, dams and waterfalls (CC BY 4.0).

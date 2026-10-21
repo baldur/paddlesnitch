@@ -5,7 +5,9 @@
 //   - AMBER-GB barrier atlas (Great Britain, CC BY 4.0, cite Jones et al. 2019):
 //     weirs, sluices and dams with a height where one was measured;
 //   - Inland Fisheries Ireland's National Barriers Programme (Republic of
-//     Ireland, CC BY 4.0): weirs, sluices, dams and rock waterfalls.
+//     Ireland, CC BY 4.0): weirs, sluices, dams and rock waterfalls;
+//   - ROE, France's register of river obstacles (OFB/Sandre, Licence Ouverte
+//     2.0): dams and weirs, with the drop and any canoe pass.
 // Both put points on the watercourse itself (see ON_WATER_SOURCES in along.ts).
 import { round6 } from '../line'
 import type { Feature } from '../types'
@@ -25,6 +27,20 @@ export const IFI_WHERE = "BarrType IN ('Weir','Sluice','Dam','Rock/Bedrock Water
 export function arcgisPageUrl(layer: string, offset = 0, where = '1=1'): string {
   const q = new URLSearchParams({ where, outFields: '*', outSR: '4326', resultOffset: String(offset), f: 'geojson' })
   return `${layer}/query?${q}`
+}
+
+/** ROE, mainland France (Sandre WFS). 119,000 records, 10,000 a page. */
+export const ROE_WFS = 'https://services.sandre.eaufrance.fr/geo/obs'
+export const ROE_PAGE = 10000
+const ROE_FIELDS = ['CdObstEcoul', 'LbEtOuvrage', 'NomPrincipalObstEcoul', 'CdTypeOuvrage', 'HautChutEtObstEcoul',
+  'LbTypeDispFranchNavig1', 'LbTypeDispFranchNavig2', 'LbTypeDispFranchNavig3', 'msGeometry']
+
+/** One page of ROE as GeoJSON in WGS84, sorted so pages don't overlap. */
+export function roePageUrl(start: number): string {
+  const q = new URLSearchParams({ SERVICE: 'WFS', VERSION: '2.0.0', REQUEST: 'GetFeature', TYPENAMES: 'ObstEcoul_FXX',
+    COUNT: String(ROE_PAGE), STARTINDEX: String(start), SORTBY: 'gid', SRSNAME: 'EPSG:4326',
+    PROPERTYNAME: ROE_FIELDS.join(','), OUTPUTFORMAT: 'application/json; subtype=geojson' })
+  return `${ROE_WFS}?${q}`
 }
 
 type Point = {
@@ -92,6 +108,40 @@ export function featuresFromAmberEu(features: Point[], fetchedAt: string): Featu
       at: round6([lat, lng]),
       source: { source: 'amber-eu', sourceId: id, fetchedAt },
       ...(height > 0 ? { weir: { heightM: height } } : {}),
+    })
+  }
+  return out
+}
+
+/** Gone or not built yet: nothing in the water. A partly demolished weir stays. */
+const ROE_ABSENT = new Set(['Détruit entièrement', 'En projet', 'En construction'])
+/** Names made only of these words say what it is, not which one ("Seuil en rivière", "Barrage", "Inconnu"). */
+const ROE_GENERIC = new Set(['seuil', 'seuils', 'en', 'rivière', 'riviere', 'barrage', 'barage', 'radier', 'déversoir', 'deversoir',
+  'rtm', 'inconnu', 'etang', 'étang', 'plan', "d'eau", 'enrochement', 'enrochements', 'sans', 'nom'])
+
+/** ROE: dams (type 1.1) and weirs (1.2) as weirs. Culverts and bridge aprons
+ *  (1.4), dykes along the bank (1.3), groynes and fish-farm grilles are left out. */
+export function featuresFromRoe(features: Point[], fetchedAt: string): Feature[] {
+  const out: Feature[] = []
+  for (const f of features) {
+    if (f.geometry?.type !== 'Point') continue
+    const p = f.properties
+    const type = String(p.CdTypeOuvrage ?? '')
+    if (!/^1\.[12](\.|$)/.test(type) || ROE_ABSENT.has(String(p.LbEtOuvrage))) continue
+    const [lng, lat] = f.geometry.coordinates
+    const id = String(p.CdObstEcoul)
+    const name = String(p.NomPrincipalObstEcoul ?? '').trim()
+    const generic = name.toLowerCase().split(/\s+/).every(w => ROE_GENERIC.has(w))
+    const height = Math.round(Number(p.HautChutEtObstEcoul) * 10) / 10   // the drop; '' and 0 read as unknown
+    const canoePass = [1, 2, 3].some(k => p[`LbTypeDispFranchNavig${k}`] === 'Passe à canoë')
+    const weir = { ...(height > 0 ? { heightM: height } : {}), ...(canoePass ? { canoePass } : {}) }
+    out.push({
+      id: `roe:${id}`,
+      kind: 'weir',
+      name: generic ? undefined : name,
+      at: round6([lat, lng]),
+      source: { source: 'roe', sourceId: id, fetchedAt },
+      ...(Object.keys(weir).length ? { weir } : {}),
     })
   }
   return out

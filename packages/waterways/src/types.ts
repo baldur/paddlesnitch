@@ -29,6 +29,7 @@ export type SourceId =
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
   | 'amber-eu'               // AMBER Atlas of Instream Barriers in Europe, Belgium (CC BY 4.0)
+  | 'roe'                    // France's register of river obstacles, OFB/Sandre (Licence Ouverte 2.0)
   | 'rws-fis'                // Rijkswaterstaat FIS/VNDS: Dutch locks and slipways (CC0)
   | 'nl-waterboards'         // Dutch water boards' weirs, dams, pumping stations, locks (CC BY-SA 4.0, own file)
   | 'scottish-canals'        // Scottish Canals open data (OGL)
@@ -99,7 +100,7 @@ export type Feature = {
   lock?: LockDetail
   portage?: PortageDetail
   crew?: CrewDetail
-  weir?: { heightM?: number }  // measured height, where the source has one
+  weir?: { heightM?: number; canoePass?: boolean }  // measured height, where the source has one; a canoe pass beside it (ROE)
   facilities?: Facility[]
   photos?: string[]          // URLs published by the source
 }
