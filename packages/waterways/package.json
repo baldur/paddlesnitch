@@ -38,6 +38,7 @@
     "./waterway-coverage": "./src/waterway-coverage.ts",
     "./portage": "./src/portage.ts",
     "./portage-store": "./src/portage-store.ts",
+    "./portage-detect": "./src/portage-detect.ts",
     "./sun": "./src/sun.ts",
     "./live": "./src/live.ts",
     "./live-store": "./src/live-store.ts",

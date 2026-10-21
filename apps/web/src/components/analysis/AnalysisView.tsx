@@ -20,6 +20,7 @@ import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import { sourceName } from './SameOuting'
+import PortageSuggestions from './PortageSuggestions'
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const compass = (d?: number) => (d == null ? '' : COMPASS[Math.round(d / 45) % 8])
@@ -592,6 +593,8 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
               ))}
             </div>
           )}
+
+          {owner && !motionOnly && <PortageSuggestions sessionId={sessionId!} points={data.points} />}
 
           {(data.surges.length > 0 || data.stops.length > 0) && (
             <section aria-label="Efforts and rests" className="flex flex-col gap-3">
