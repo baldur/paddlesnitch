@@ -49,12 +49,14 @@ export function areaLines(links: NetLink[], key: string): LatLng[][] {
 }
 
 /** Canals, navigations and longer rivers, coarsely: enough to see where the
- *  water is from a zoomed-out view of the UK and Ireland. */
+ *  water is below AREA_MIN_ZOOM, where a pixel is ~400 m. Simplified to 500 m
+ *  and rounded to 3 dp (~110 m): with France in, that's 0.84 MB gzipped
+ *  rather than 1.34 (250 m, 4 dp), every first visit to /plan. */
 export function overviewLines(links: NetLink[]): LatLng[][] {
   return links
     .filter(l => l.form === 'canal' || l.boat === 'yes' || l.lengthM > 2000)
-    .map(l => simplify(l.line, 250).map(round4))
+    .map(l => simplify(l.line, 500).map(round3))
 }
 
 const round5 = (p: LatLng): LatLng => [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]
-const round4 = (p: LatLng): LatLng => [Math.round(p[0] * 1e4) / 1e4, Math.round(p[1] * 1e4) / 1e4]
+const round3 = (p: LatLng): LatLng => [Math.round(p[0] * 1e3) / 1e3, Math.round(p[1] * 1e3) / 1e3]
