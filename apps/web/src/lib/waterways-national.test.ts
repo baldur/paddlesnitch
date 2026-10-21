@@ -557,6 +557,25 @@ describe('toilets and drinking water mapped in OpenStreetMap', () => {
       ['osm:facility:node/3', 'facility', ['drinking_water'], undefined],
     ])
   })
+
+  it('canoe, kayak and paddleboard hire become access points that say so; pedalo and motorboat hire, and closed ones, do not', () => {
+    const got = osmAccess([
+      pt(1, { amenity: 'boat_rental', canoe_rental: 'yes', kayak_rental: 'yes', name: 'Kayak Vert' }),
+      pt(2, { amenity: 'boat_rental', name: 'Canoë 2000' }),
+      pt(3, { amenity: 'boat_rental', standup_paddleboard_rental: 'yes', access: 'customers' }),   // you're the customer
+      pt(4, { amenity: 'boat_rental', sport: 'canoe' }),
+      pt(5, { amenity: 'boat_rental', pedalboat_rental: 'yes', motorboat_rental: 'yes', name: 'Pédalos du lac' }),
+      pt(6, { amenity: 'boat_rental', canoe_rental: 'yes', access: 'private' }),
+      pt(7, { amenity: 'boat_rental', canoe_rental: 'no', name: 'Canoe Club' }),
+    ], AT)
+    expect(got.map(f => [f.id, f.kind, f.name, f.hire])).toEqual([
+      ['osm:access:node/1', 'access', 'Kayak Vert', true],
+      ['osm:access:node/2', 'access', 'Canoë 2000', true],
+      ['osm:access:node/3', 'access', undefined, true],
+      ['osm:access:node/4', 'access', undefined, true],
+    ])
+    expect(stopLines({ feature: got[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toEqual(['Canoe and kayak hire.'])
+  })
 })
 
 describe('portage paths mapped in OpenStreetMap', () => {
