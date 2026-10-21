@@ -27,4 +27,8 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'Amsterdam → Utrecht (Amsterdam-Rijnkanaal, Vecht)', start: [52.3795, 4.9000], finish: [52.0890, 5.1150], source: 'OSM; a route must exist' },
   { name: 'Rotterdam → Dordrecht (Nieuwe Maas, Oude Maas)', start: [51.9050, 4.4850], finish: [51.8150, 4.6700], source: 'OSM; a route must exist' },
   { name: 'Rotterdam → Zevenhuizen (De Rotte canoe route)', start: [51.9289, 4.4854], finish: [52.0288, 4.5583], source: 'OSM route=canoe "Kanonetwerk De Rotte"; a route must exist' },
+  // Belgium (docs/features/waterways-belgium.md): routes found, no counts pinned yet.
+  { name: 'Houyet → Anseremme (Lesse kayak run)', start: [50.1907, 5.0074], finish: [50.2357, 4.9041], source: 'The classic 21 km Lesse descent; a route must exist' },
+  { name: 'Ghent → Bruges (Kanaal Gent-Brugge)', start: [51.0870, 3.6591], finish: [51.2028, 3.2352], source: 'OSM; a route must exist' },
+  { name: 'Brussels → Charleroi (canal)', start: [50.8489, 4.3327], finish: [50.4130, 4.4244], source: 'OSM; a route must exist' },
 ]
