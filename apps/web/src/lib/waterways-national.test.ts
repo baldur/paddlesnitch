@@ -319,6 +319,12 @@ describe('OSM lock chambers (filling gaps)', () => {
     expect(locks[0]).toMatchObject({ kind: 'lock', source: { source: 'osm', sourceId: 'way/1' } })
   })
 
+  it('a boat lift or inclined plane (Ronquières, two lanes) is one lock to carry round, named', () => {
+    const lane = (id: number, lng: number): OsmWay => way(id, [id * 10, id * 10 + 1], [[50.590, lng], [50.604, lng + 0.003]], { waterway: 'boat_lift', name: 'Plan Incliné de Ronquières', boat: 'yes' })
+    const locks = osmLocks([lane(31770308, 4.2210), lane(31770310, 4.2222)], AT)   // lanes ~90 m apart
+    expect(locks.map(l => [l.kind, l.name])).toEqual([['lock', 'Plan Incliné de Ronquières']])
+  })
+
   it('skips boat rollers and private marina locks', () => {
     expect(osmLocks([
       chamber(1, [51.43, -0.32], { lock_name: 'Teddington Lock Boat Rollers' }),

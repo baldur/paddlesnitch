@@ -133,16 +133,22 @@ export function osmElementsFromOverpass(elements: OverpassElement[]): OsmElement
  *  drawn as several ways is merged), at the chamber's middle. These are OSM
  *  data (ODbL): the national build publishes them in their own file and they
  *  only fill gaps where no authority lists the lock. */
+/** A boat lift's lanes this close together are one lift. */
+const LIFT_LANES_M = 250
+
 export function osmLocks(ways: OsmWay[], fetchedAt: string, mergeM = 50): Feature[] {
   const chambers: { ids: number[]; at: LatLng; name?: string }[] = []
   for (const w of ways) {
+    // A boat lift or inclined plane is a lock to a paddler: you carry round it.
+    // Its lanes (Ronquières has two, ~100 m apart) are one.
+    const lift = w.tags?.waterway === 'boat_lift'
     // Boat rollers are tagged as chambers (Teddington, Richmond): a portage aid,
     // not a lock. Private locks are marina entrances, not on anyone's way.
-    if (w.tags?.lock !== 'yes' || !w.coords.length || /roller/i.test(w.tags.lock_name ?? '')) continue
-    if (w.tags.access === 'private' || w.tags.access === 'no') continue
+    if ((!lift && w.tags?.lock !== 'yes') || !w.coords.length || /roller/i.test(w.tags?.lock_name ?? '')) continue
+    if (w.tags?.access === 'private' || w.tags?.access === 'no') continue
     const at = w.coords[Math.floor(w.coords.length / 2)]
-    const name = w.tags.lock_name ?? (/\block\b/i.test(w.tags.name ?? '') ? w.tags.name : undefined)
-    const same = chambers.find(c => haversine(c.at, at) <= mergeM)
+    const name = lift ? w.tags?.name : w.tags?.lock_name ?? (/\block\b/i.test(w.tags?.name ?? '') ? w.tags?.name : undefined)
+    const same = chambers.find(c => haversine(c.at, at) <= (lift ? LIFT_LANES_M : mergeM))
     if (same) { same.ids.push(w.id); same.name ??= name; continue }
     chambers.push({ ids: [w.id], at, name })
   }

@@ -22,7 +22,9 @@ from pathlib import Path
 import osmium
 
 # flowline and fairway carry the water across lakes (Loch Ness on the Caledonian).
-NETWORK = {'river', 'canal', 'flowline', 'fairway'}
+# boat_lift: inclined planes and boat lifts (Ronquières, Strépy-Thieu, the Falkirk
+# Wheel, Anderton) carry the canal between its two ends; without them it breaks.
+NETWORK = {'river', 'canal', 'flowline', 'fairway', 'boat_lift'}
 WAY_TAGS = ('name', 'waterway', 'tidal', 'lock', 'lock_name', 'lock_ref', 'boat', 'canoe', 'access', 'tunnel', 'intermittent')
 POINT_WATERWAY = {'lock_gate', 'weir', 'dam'}
 # Small water joins the network only where a canoe route uses it.
