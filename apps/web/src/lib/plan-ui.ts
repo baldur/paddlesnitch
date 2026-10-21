@@ -265,6 +265,18 @@ export function inNetherlands([lat, lng]: LatLng): boolean {
  *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). They're
  *  white outside the Netherlands, so they replace Esri there rather than
  *  sitting on top of it. */
+/** Flanders and Brussels, roughly: a box round them, where the Flemish
+ *  orthophotos are added over Esri (they're transparent outside Flanders). */
+export const nearFlanders = ([lat, lng]: LatLng) => lat >= 50.65 && lat <= 51.52 && lng >= 2.5 && lng <= 5.95
+
+/** Digitaal Vlaanderen's orthophoto mosaic (Flemish Open Data licence),
+ *  over Esri on the satellite view near Flanders. */
+export const FLANDERS_PHOTOS = {
+  url: 'https://geo.api.vlaanderen.be/OMWRGBMRVL/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=omwrgbmrvl&STYLE=&FORMAT=image/png&TILEMATRIXSET=GoogleMapsVL&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+  nativeZoom: 21,
+  attribution: 'Aerial photo (Flanders): Digitaal Vlaanderen, Vlaamse Open Data licentie',
+}
+
 export function mapTiles(satellite: boolean, overNetherlands = false) {
   if (satellite && overNetherlands) return {
     base: 'https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg',

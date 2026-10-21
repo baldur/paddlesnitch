@@ -25,7 +25,7 @@
 |---|---|---|
 | **B1** Network ✅ | Belgium extract in the one dataset; boat lifts in the network; check routes Houyet → Anseremme (Lesse, 17.1 km), Ghent → Bruges (36.6 km), Brussels → Charleroi (66.4 km, 11 locks including Ronquières) | Check routes pass ✅ |
 | **B2** Walloon kayak status | Decode and show each stretch's open/closed status on plans that use it, with its gauge and limits, *if* the reuse terms allow | A Lesse plan says whether the Lesse is open today |
-| **B3** Flanders | DVW waterways, Flemish aerial photos on screen and in print (if the licence allows print), waterinfo levels (if keyless) | — |
+| **B3** Flanders 🚧 | Flemish aerial photos on screen ✅ 2026-10-21: Digitaal Vlaanderen's orthophoto mosaic (WMTS `omwrgbmrvl`, `GoogleMapsVL`, to zoom 21) goes **over** Esri on the satellite view when the map is centred near Flanders (`nearFlanders`). Unlike PDOK's tiles, they're transparent outside Flanders (a 400 beyond the grid's limits), so an overlay works and Wallonia keeps Esri. Privacy page names Digitaal Vlaanderen. To do: the same photos in print (the licence is attribution-only, like CC BY), DVW waterways, waterinfo levels (if keyless) | — |
 
 ## Questions for the owner
 
