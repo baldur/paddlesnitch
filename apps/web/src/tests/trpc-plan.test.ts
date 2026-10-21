@@ -270,6 +270,12 @@ describe("the map's network and places", () => {
     expect((await get('overview', 'old-version')).headers.get('Cache-Control')).toBe('public, max-age=300')
   })
 
+  it("coverage and the most-needed list change as paddlers add portages and plans: never cached for good, even for the live version", async () => {
+    for (const name of ['coverage', 'coverage-lines', 'needed']) {
+      expect([name, (await get(name, 'dw-fixture')).headers.get('Cache-Control')]).toEqual([name, 'public, max-age=300'])
+    }
+  })
+
   it('serves coverage by waterway, and the scored water by level for the map', async () => {
     const rows = await (await get('coverage')).json()
     expect(rows.find((r: { name: string }) => r.name === 'Kennet and Avon Canal')).toMatchObject({ kind: 'canal', locksWithSide: 0 })
