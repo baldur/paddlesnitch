@@ -11,7 +11,7 @@ import PortageDrawing from '@/components/plan/PortageDrawing'
 import { TIDES, useOfficialTides } from '@/lib/tides'
 import { trpc } from '@/lib/trpc'
 import {
-  aerialPhotoUrl, crewLines, draftParams, groupOf, inNetherlands, isCrewStop, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
+  aerialPhotoUrl, crewLines, draftParams, groupOf, isCrewStop, PHOTO_CREDIT, printablePhotos, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
 } from '@/lib/plan-ui'
 
 // The paper copy of a plan (docs/features/river-planner.md, "Print"): black on
@@ -94,7 +94,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
 
         <footer className="mt-6 pt-3 border-t border-black text-xs space-y-1">
           <p><strong>Not a navigation authority.</strong> Check stream warnings, lock notices and, below Teddington, the tide before you go. Portage sides marked unknown are unknown: look before you land.</p>
-          <p>Data: {CREDITED.map(c => SOURCES[c].attribution).join(' · ')}. Portage details from paddlers, CC0.{stops.some(drawn) && stops.some(s => inNetherlands(s.feature.at)) ? ' Aerial photos: Beeldmateriaal.nl (Kadaster), CC BY 4.0.' : ''}</p>
+          <p>Data: {CREDITED.map(c => SOURCES[c].attribution).join(' · ')}. Portage details from paddlers, CC0.{photoCredits(stops)}</p>
           <p>Printed from paddlesnitch.com/plan.</p>
         </footer>
       </article>
@@ -156,14 +156,20 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
  *  may not be printed): route, direction, take-out (T), put-in (P), carry. */
 function PrintedPortage({ line, stop }: { line: ComputedPlan['line']; stop: Stop }) {
   const map = portageMap(line, stop, stop.portages?.[0])
+  const region = printablePhotos(stop.feature.at)
   return <PortageDrawing map={map} id={`${stop.leg}-${stop.feature.id}`} name={stop.feature.name}
-    photo={inNetherlands(stop.feature.at) ? aerialPhotoUrl(map) : undefined}
+    photo={region ? aerialPhotoUrl(map, region) : undefined}
     className="avoid-break float-right ml-3 mb-1 w-[38mm] h-[38mm]" />
 }
 
-/** A drawing beside a stop: where paddlers described the landings, and in the
- *  Netherlands at every lock (the aerial photo is worth having on its own). */
-const drawn = (s: Stop) => !!s.portages?.[0] || (s.portage && inNetherlands(s.feature.at))
+/** A drawing beside a stop: where paddlers described the landings, and where
+ *  there's a printable aerial photo (the Netherlands, Flanders) at every lock. */
+const photoCredits = (stops: Stop[]) => {
+  const regions = [...new Set(stops.filter(drawn).map(s => printablePhotos(s.feature.at)).filter((r): r is 'nl' | 'vl' => !!r))]
+  return regions.length ? ` Aerial photos: ${regions.map(r => PHOTO_CREDIT[r]).join('; ')}.` : ''
+}
+
+const drawn = (s: Stop) => !!s.portages?.[0] || (s.portage && !!printablePhotos(s.feature.at))
 
 function CrewTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops: Stop[]; startAt?: string; notes: Record<string, string> }) {
   const turn = turnIndex(plan, stops)
