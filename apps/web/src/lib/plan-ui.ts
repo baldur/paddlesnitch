@@ -244,7 +244,35 @@ const DATA_ATTR = 'Waterways &copy; OpenStreetMap contributors, Canal &amp; Rive
 /** The dark map, or aerial imagery for seeing where you can land. Esri's terms
  *  allow viewing and tracing over the imagery, never storing it, never printing
  *  it, never training on it (docs/features/river-planner.md). */
-export function mapTiles(satellite: boolean) {
+/** The Netherlands, roughly (border and coast to a few km): inside it the
+ *  satellite view uses the Kadaster's 8 cm aerial photos. */
+const NL_OUTLINE: LatLng[] = [
+  [51.37, 3.36], [52.0, 4.0], [52.5, 4.5], [53.0, 4.65], [53.45, 5.0], [53.5, 6.3], [53.45, 7.2], [53.2, 7.2], [52.65, 7.05],
+  [52.4, 7.0], [52.2, 6.75], [51.95, 6.8], [51.85, 6.0], [51.65, 6.1], [51.2, 6.07], [50.76, 6.02], [50.75, 5.63], [51.15, 5.8],
+  [51.25, 5.25], [51.45, 4.9], [51.38, 4.25], [51.27, 3.8],
+]
+
+export function inNetherlands([lat, lng]: LatLng): boolean {
+  let inside = false
+  for (let i = 0, j = NL_OUTLINE.length - 1; i < NL_OUTLINE.length; j = i++) {
+    const [ay, ax] = NL_OUTLINE[i], [by, bx] = NL_OUTLINE[j]
+    if ((ay > lat) !== (by > lat) && lng < ((bx - ax) * (lat - ay)) / (by - ay) + ax) inside = !inside
+  }
+  return inside
+}
+
+/** The map's tiles. On satellite, over the Netherlands (inNetherlands of the map's centre): the Kadaster's
+ *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). They're
+ *  white outside the Netherlands, so they replace Esri there rather than
+ *  sitting on top of it. */
+export function mapTiles(satellite: boolean, overNetherlands = false) {
+  if (satellite && overNetherlands) return {
+    base: 'https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg',
+    baseNativeZoom: 21,
+    labels: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
+    labelsNativeZoom: 19,
+    attribution: `Aerial photo: Beeldmateriaal.nl (Kadaster), CC BY 4.0 · ${DATA_ATTR}`,
+  }
   return satellite ? {
     base: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
     baseNativeZoom: 19,

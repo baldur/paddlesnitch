@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -133,6 +133,18 @@ describe('the map tiles', () => {
     expect(sat.labels).toContain('/World_Boundaries_and_Places/')
     expect(sat.attribution).toContain('Esri, Vantor, Earthstar Geographics')
     expect(sat.baseNativeZoom).toBe(19)   // close enough to see a landing stage
+  })
+
+  it("over the Netherlands, the Kadaster's 8 cm aerial photos (printable, CC BY 4.0), credited", () => {
+    const nl = mapTiles(true, true)
+    expect(nl.base).toContain('service.pdok.nl/hwh/luchtfotorgb')
+    expect(nl.attribution).toContain('Beeldmateriaal.nl (Kadaster), CC BY 4.0')
+    expect(mapTiles(false, true).base).toContain('/World_Dark_Gray_Base/')   // only the satellite view changes
+  })
+
+  it('knows the Netherlands from its neighbours', () => {
+    expect([[52.37, 4.90], [51.92, 4.48], [53.22, 6.57], [50.85, 5.69]].map(p => inNetherlands(p as [number, number]))).toEqual([true, true, true, true])   // Amsterdam, Rotterdam, Groningen, Maastricht
+    expect([[51.22, 4.40], [51.45, 7.0], [51.5, -0.12], [52.6, 3.0]].map(p => inNetherlands(p as [number, number]))).toEqual([false, false, false, false])   // Antwerp, Essen, London, North Sea
   })
 
   it('is the dark map by default', () => {
