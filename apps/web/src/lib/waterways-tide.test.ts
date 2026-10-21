@@ -1,7 +1,7 @@
 // Our own tide fit (packages/waterways/src/tide.ts): recovers a known tide,
 // finds its high and low waters, and backtests honestly.
 import { describe, expect, it } from 'vitest'
-import { backtest, compactExtremes, CONSTITUENTS, fitTide, observedHighs, officialExtremes, tideAt, tideExtremes, type OfficialTides, type TideSample, type TidesFile } from '@paddlesnitch/waterways/tide'
+import { backtest, compactExtremes, CONSTITUENTS, reachesAhead, fitTide, observedHighs, officialExtremes, tideAt, tideExtremes, type OfficialTides, type TideSample, type TidesFile } from '@paddlesnitch/waterways/tide'
 import { reachesDutchTide, tideNote, tideWindow } from './plan-ui'
 
 const RAD = Math.PI / 180
@@ -116,6 +116,14 @@ describe('the tide window on a plan', () => {
     expect(tideNote(w)).toContain("Rijkswaterstaat's predicted")
     // Not loaded (offline, or an old version without them): our fit is used.
     expect(tideWindow(zeeland, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, ours, null)!.gauges.map(g => g.label)).toEqual(['Hansweert'])
+  })
+
+  it('carries last week\'s predictions forward only while every gauge still reaches a month ahead', () => {
+    const now = Date.parse('2026-10-21T00:00:00Z'), day = 86_400_000
+    const gauge = (endDays: number) => ({ label: 'x', at: [51, 4] as [number, number], ...compactExtremes([{ t: now, h: 1 }, { t: now + endDays * day, h: -1 }]) })
+    expect(reachesAhead({ fetchedAt: '', credit: '', gauges: { a: gauge(400), b: gauge(60) } }, now)).toBe(true)
+    expect(reachesAhead({ fetchedAt: '', credit: '', gauges: { a: gauge(400), b: gauge(20) } }, now)).toBe(false)
+    expect(reachesAhead({ fetchedAt: '', credit: '', gauges: {} }, now)).toBe(false)
   })
 
   it('reads the compact predictions back: highs and lows by their neighbours, a double low as two lows', () => {
