@@ -11,7 +11,7 @@ import PortageDrawing from '@/components/plan/PortageDrawing'
 import { TIDES, useOfficialTides } from '@/lib/tides'
 import { trpc } from '@/lib/trpc'
 import {
-  crewLines, draftParams, groupOf, isCrewStop, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
+  aerialPhotoUrl, crewLines, draftParams, groupOf, inNetherlands, isCrewStop, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
 } from '@/lib/plan-ui'
 
 // The paper copy of a plan (docs/features/river-planner.md, "Print"): black on
@@ -94,7 +94,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
 
         <footer className="mt-6 pt-3 border-t border-black text-xs space-y-1">
           <p><strong>Not a navigation authority.</strong> Check stream warnings, lock notices and, below Teddington, the tide before you go. Portage sides marked unknown are unknown: look before you land.</p>
-          <p>Data: {CREDITED.map(c => SOURCES[c].attribution).join(' · ')}. Portage details from paddlers, CC0.</p>
+          <p>Data: {CREDITED.map(c => SOURCES[c].attribution).join(' · ')}. Portage details from paddlers, CC0.{stops.some(drawn) && stops.some(s => inNetherlands(s.feature.at)) ? ' Aerial photos: Beeldmateriaal.nl (Kadaster), CC BY 4.0.' : ''}</p>
           <p>Printed from paddlesnitch.com/plan.</p>
         </footer>
       </article>
@@ -137,7 +137,7 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
             <td className="py-1.5 pr-2 font-mono">{km(s.chainageM).replace(' km', '')}</td>
             <td className="py-1.5 pr-2 font-mono font-semibold">{when(s, startAt)}{isDarkStop(s) && <span className="block text-[11px] font-normal">dark</span>}</td>
             <td className="py-1.5">
-              {s.portages?.[0] && <PrintedPortage line={plan.line} stop={s} />}
+              {drawn(s) && <PrintedPortage line={plan.line} stop={s} />}
               {i === turn && <p className="font-mono text-[11px] uppercase tracking-[0.1em]">Turn at {km(plan.turnM!)}</p>}
               <p className="font-semibold">{s.feature.name ?? KIND[s.feature.kind]}<span className="font-normal"> · {KIND[s.feature.kind]}</span></p>
               {s.portages?.flatMap(p => portageLines(p).map((l, j) => <p key={`${p.id}-${j}`}>{l} <span className="text-gray-600">({p.by})</span></p>))}
@@ -155,9 +155,15 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
 /** Where to land at a portage, drawn from our data (the satellite imagery
  *  may not be printed): route, direction, take-out (T), put-in (P), carry. */
 function PrintedPortage({ line, stop }: { line: ComputedPlan['line']; stop: Stop }) {
-  return <PortageDrawing map={portageMap(line, stop, stop.portages![0])} id={`${stop.leg}-${stop.feature.id}`} name={stop.feature.name}
+  const map = portageMap(line, stop, stop.portages?.[0])
+  return <PortageDrawing map={map} id={`${stop.leg}-${stop.feature.id}`} name={stop.feature.name}
+    photo={inNetherlands(stop.feature.at) ? aerialPhotoUrl(map) : undefined}
     className="avoid-break float-right ml-3 mb-1 w-[38mm] h-[38mm]" />
 }
+
+/** A drawing beside a stop: where paddlers described the landings, and in the
+ *  Netherlands at every lock (the aerial photo is worth having on its own). */
+const drawn = (s: Stop) => !!s.portages?.[0] || (s.portage && inNetherlands(s.feature.at))
 
 function CrewTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops: Stop[]; startAt?: string; notes: Record<string, string> }) {
   const turn = turnIndex(plan, stops)
