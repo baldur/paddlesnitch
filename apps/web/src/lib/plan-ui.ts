@@ -381,19 +381,23 @@ export type PortageMap = {
   size: number
   route: string                                 // SVG path
   lock: [number, number]
-  takeOut: [number, number]
-  putIn: [number, number]
+  takeOut?: [number, number]                    // unset when no one has described the landings
+  putIn?: [number, number]
   arrow: { x: number; y: number; deg: number }  // deg clockwise from north
   scale: { px: number; m: number }
+  bbox: [number, number, number, number]        // [south, west, north, east] of the drawing, for an aerial photo behind it
 }
+
+/** Drawn this far round a lock when there are no landings to fit. */
+const LOCK_ONLY_M = 120
 
 const NICE_M = [10, 20, 25, 50, 100, 200, 250, 500]
 
-export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' | 'feature'>, p: PortageOnRoute, size = 220): PortageMap {
+export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' | 'feature'>, p?: PortageOnRoute, size = 220): PortageMap {
   const c = stop.feature.at
   const kx = Math.cos((c[0] * Math.PI) / 180) * 111_320, ky = 110_540
   const m = (q: LatLng): [number, number] => [(q[1] - c[1]) * kx, (q[0] - c[0]) * ky]   // metres east, north
-  const reach = Math.max(...[p.takeOut.at, p.putIn.at].map(q => Math.hypot(...m(q))))
+  const reach = p ? Math.max(...[p.takeOut.at, p.putIn.at].map(q => Math.hypot(...m(q)))) : LOCK_ONLY_M / 1.4
   const r = Math.min(400, Math.max(80, reach * 1.4))                                    // metres from centre to edge
   const k = size / (2 * r)
   const xy = (q: LatLng): [number, number] => { const [e, n] = m(q); return [Math.round((size / 2 + e * k) * 10) / 10, Math.round((size / 2 - n * k) * 10) / 10] }
@@ -413,8 +417,19 @@ export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' 
   return {
     size,
     route: route.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(''),
-    lock: xy(c), takeOut: xy(p.takeOut.at), putIn: xy(p.putIn.at),
+    lock: xy(c), ...(p ? { takeOut: xy(p.takeOut.at), putIn: xy(p.putIn.at) } : {}),
     arrow: { x: ax, y: ay, deg: Math.round((deg + 360) % 360) },
     scale: { px: Math.round(scaleM * k), m: scaleM },
+    bbox: [c[0] - r / ky, c[1] - r / kx, c[0] + r / ky, c[1] + r / kx],
   }
+}
+
+/** The Kadaster's aerial photo (PDOK WMS, CC BY 4.0, printable) for a drawing
+ *  in the Netherlands, exactly its extent, so the drawing lines up on top. */
+export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, px = 440): string {
+  const q = new URLSearchParams({
+    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: 'Actueel_orthoHR', STYLES: '', CRS: 'EPSG:4326',
+    BBOX: d.bbox.map(v => v.toFixed(6)).join(','), WIDTH: String(px), HEIGHT: String(px), FORMAT: 'image/jpeg',
+  })
+  return `https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0?${q}`
 }

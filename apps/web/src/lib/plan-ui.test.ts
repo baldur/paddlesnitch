@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inNetherlands, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -224,8 +224,8 @@ describe('portage maps for the printed sheet', () => {
   it('centres on the lock, north up: the bank to your left heading east is above the line', () => {
     const map = portageMap(line, { chainageM: chainage, leg: 'out', feature: lock }, portage)
     expect(map.lock).toEqual([110, 110])
-    expect(map.takeOut[1]).toBeLessThan(110)
-    expect(map.takeOut[0]).toBeLessThan(map.putIn[0])
+    expect(map.takeOut![1]).toBeLessThan(110)
+    expect(map.takeOut![0]).toBeLessThan(map.putIn![0])
     expect(map.route.startsWith('M')).toBe(true)
   })
 
@@ -236,6 +236,18 @@ describe('portage maps for the printed sheet', () => {
     const back = portageMap(line, { chainageM: 2 * len - chainage, leg: 'back', feature: lock }, portage)
     expect(back.arrow.deg).toBe(270)
     expect(back.arrow.x).toBeGreaterThan(110)
+  })
+
+  it("a lock with no landings yet is drawn 120 m round, ready for the Kadaster's photo behind it, exactly its extent", () => {
+    const map = portageMap(line, { chainageM: chainage, leg: 'out', feature: lock })
+    expect(map.takeOut).toBeUndefined()
+    const [s, w, n, e] = map.bbox
+    expect((n - s) * 110_540 / 2).toBeCloseTo(120, 0)                                   // 120 m from the lock to the edge
+    expect((e - w) * Math.cos((51.5 * Math.PI) / 180) * 111_320 / 2).toBeCloseTo(120, 0)  // and square on the ground
+    const url = new URL(aerialPhotoUrl(map))
+    expect(url.hostname).toBe('service.pdok.nl')
+    expect(url.searchParams.get('CRS')).toBe('EPSG:4326')
+    expect(url.searchParams.get('BBOX')).toBe(map.bbox.map(v => v.toFixed(6)).join(','))   // WMS 1.3 with EPSG:4326: latitude first
   })
 
   it('a round-number scale bar about a quarter of the width', () => {
