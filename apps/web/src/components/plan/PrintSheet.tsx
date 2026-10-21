@@ -66,6 +66,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
           <p className="mt-1">
             {plan.start.waterway || 'unnamed water'} to {plan.finish.waterway || 'unnamed water'} · {draft.shape === 'return' ? 'return' : 'one-way'}
             {draft.startAt && <> · {fmtDay(draft.startAt)}</>}
+            {plan.canoeRoutes?.length ? <> · on {plan.canoeRoutes.join(', ')}</> : null}
           </p>
           <dl className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-3 font-mono">
             <Fact label="Distance" value={km(plan.lengthM)} />

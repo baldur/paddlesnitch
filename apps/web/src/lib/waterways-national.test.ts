@@ -159,6 +159,17 @@ describe('routing on the server, timing in the browser', () => {
     expect(timePlan(routed, input)).toEqual(computePlan(ds, input))
   })
 
+  it('names the marked canoe routes a plan follows, not one it only touches', () => {
+    // 1.4 km along Kanoroute A, then 300 m along Kanoroute B.
+    const links = linksFromWays([
+      way(1, [1, 2], [[52, 4.6], [52, 4.62]], { canoe_route: 'Kanoroute A', name: 'Vaart' }),
+      way(2, [2, 3], [[52, 4.62], [52, 4.6244]], { canoe_route: 'Kanoroute B', name: 'Sloot' }),
+    ])
+    const routed = routePlan({ links, features: [] }, { start: [52, 4.6], finish: [52, 4.6243], shape: 'one_way' })
+    if (typeof routed === 'string') throw new Error(routed)
+    expect(routed.canoeRoutes).toEqual(['Kanoroute A'])
+  })
+
   it('a routed plan carries no times, so pace changes need no new route', () => {
     const routed = routePlan(ds, { start, finish, shape: 'one_way' })
     if (typeof routed === 'string') throw new Error(routed)
