@@ -9,6 +9,7 @@ import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
+import { featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
 import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
@@ -29,6 +30,21 @@ const AT = '2026-10-12T00:00:00.000Z'
 
 const way = (id: number, nodes: number[], coords: LatLng[], tags: Record<string, string> = {}): OsmWay =>
   ({ id, nodes, coords, tags: { waterway: 'river', ...tags } })
+
+describe('Rijkswaterstaat FIS: Dutch locks and slipways (CC0)', () => {
+  it('a lock outline becomes a lock at its middle, with its name; a slipway point stays a point', () => {
+    const [lock] = featuresFromFisLocks([{
+      geometry: { type: 'Polygon', coordinates: [[[5.1140, 52.0975], [5.1150, 52.0975], [5.1150, 52.0983], [5.1140, 52.0983], [5.1140, 52.0975]]] },
+      properties: { id: 12345, name: 'Weerdsluis' },
+    }], AT)
+    expect(lock).toMatchObject({ id: 'rws-fis:lock:12345', kind: 'lock', name: 'Weerdsluis', source: { source: 'rws-fis', sourceId: '12345' } })
+    expect(lock.at[0]).toBeCloseTo(52.0978, 3)
+    expect(lock.at[1]).toBeCloseTo(5.1144, 3)
+    const [slip] = featuresFromFisSlipways([{ geometry: { type: 'Point', coordinates: [4.641075, 52.347937] }, properties: { id: 1552, name: 'Trailerhelling Zuid-Schalkwijk' } }], AT)
+    expect(slip).toMatchObject({ id: 'rws-fis:slipway:1552', kind: 'slipway', at: [52.347937, 4.641075] })
+    expect(featuresFromFisLocks([{ geometry: null, properties: { id: 1 } }], AT)).toEqual([])
+  })
+})
 
 describe('the network is Britain and Ireland only', () => {
   it("drops water wholly east of Lowestoft (the Maasgeul off Rotterdam), keeps the Waveney", () => {

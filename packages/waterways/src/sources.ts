@@ -68,6 +68,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'CC BY 4.0',
     attribution: 'Barrier data © Inland Fisheries Ireland, CC BY 4.0',
   },
+  'rws-fis': {
+    name: 'Rijkswaterstaat — Vaarweginformatie (FIS/VNDS)',
+    url: 'https://data.overheid.nl/en/dataset/49337-vaarweginformatie-sluizen',
+    licence: 'CC0',
+    attribution: 'Locks and slipways: Rijkswaterstaat, CC0',
+  },
   'ea-levels': {
     name: 'Environment Agency real-time flood-monitoring API',
     url: 'https://environment.data.gov.uk/flood-monitoring/doc/reference',
