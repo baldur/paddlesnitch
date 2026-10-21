@@ -7,7 +7,7 @@ import Gaps from '@/components/plan/Gaps'
 // navigation and sizeable river, what we know about it, and what's missing.
 export const metadata: Metadata = {
   title: 'Gaps',
-  description: 'Every river and canal we cover in the UK, Ireland, the Netherlands and Belgium, what we know about it, and what paddlers could add.',
+  description: 'Every river and canal we cover in the UK, Ireland, the Netherlands, Belgium and France, what we know about it, and what paddlers could add.',
 }
 
 export default function GapsPage() {

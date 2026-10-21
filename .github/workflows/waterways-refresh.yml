@@ -1,6 +1,6 @@
 name: Waterways refresh
 
-# Weekly rebuild of the river planner's UK, Ireland, Netherlands and Belgium data
+# Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium and France data
 # (docs/features/waterways-uk-ireland.md): OSM from Geofabrik plus every
 # source's normalised features, the check routes, then a new version uploaded
 # to S3 and a PR pointing packages/waterways/data/manifest.json at it. Nothing
@@ -25,7 +25,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     # The AWS role (att-github-waterways) trusts only this environment, and can
     # only touch waterways/* in the data bucket (infra/lib/att-stack.ts).
     environment: waterways-data
@@ -51,20 +51,18 @@ jobs:
       - name: Install pyosmium
         run: pip install osmium
 
-      # One extract per country group; the build reads each (build-national.ts, EXTRACTS).
-      - name: Download the OSM extracts (Britain and Ireland, the Netherlands, Belgium)
-        run: |
-          curl -sSfL -o "$RUNNER_TEMP/gbie.osm.pbf" https://download.geofabrik.de/europe/britain-and-ireland-latest.osm.pbf
-          curl -sSfL -o "$RUNNER_TEMP/nl.osm.pbf" https://download.geofabrik.de/europe/netherlands-latest.osm.pbf
-          curl -sSfL -o "$RUNNER_TEMP/be.osm.pbf" https://download.geofabrik.de/europe/belgium-latest.osm.pbf
-
-      - name: Extract rivers, canals, points and places
+      # One extract per country group; the build reads each (build-national.ts,
+      # EXTRACTS). Downloaded, extracted and deleted one at a time: together
+      # they're ~9 GB, most of the runner's free disk.
+      - name: Download and extract the OSM extracts (Britain and Ireland, the Netherlands, Belgium, France)
         working-directory: apps/web
         run: |
-          python scripts/waterways/osm_extract.py "$RUNNER_TEMP/gbie.osm.pbf" .cache/waterways/osm/gbie
-          python scripts/waterways/osm_extract.py "$RUNNER_TEMP/nl.osm.pbf" .cache/waterways/osm/nl
-          python scripts/waterways/osm_extract.py "$RUNNER_TEMP/be.osm.pbf" .cache/waterways/osm/be
-          rm "$RUNNER_TEMP"/*.osm.pbf   # ~3 GB the runner's disk can do without
+          for x in gbie:britain-and-ireland nl:netherlands be:belgium fr:france; do
+            id="${x%%:*}"; name="${x#*:}"
+            curl -sSfL -o "$RUNNER_TEMP/$id.osm.pbf" "https://download.geofabrik.de/europe/$name-latest.osm.pbf"
+            python scripts/waterways/osm_extract.py "$RUNNER_TEMP/$id.osm.pbf" ".cache/waterways/osm/$id"
+            rm "$RUNNER_TEMP/$id.osm.pbf"
+          done
 
       # The waterways role sits beside the deploy role in the same account.
       - name: Work out the waterways role
@@ -114,13 +112,15 @@ jobs:
 
       - name: Build and check (no upload)
         working-directory: apps/web
+        env:
+          NODE_OPTIONS: --max-old-space-size=8000   # the four countries' network in one build
         run: pnpm waterways:national | tee "$RUNNER_TEMP/build.log"
 
       - name: Publish a new version
         working-directory: apps/web
         env:
           DATA_BUCKET: paddlesnitch-data-prod
-        run: pnpm waterways:national --publish | tee -a "$RUNNER_TEMP/build.log"
+        run: NODE_OPTIONS=--max-old-space-size=8000 pnpm waterways:national --publish | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Open a PR to make it live
         env:
@@ -142,7 +142,7 @@ jobs:
           git commit -m "data(waterways): publish $version"
           git push -u origin "$branch"
           {
-            echo "Weekly rebuild of the river planner's UK, Ireland, Netherlands and Belgium data. Merging makes version \`$version\` live."
+            echo "Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium and France data. Merging makes version \`$version\` live."
             echo
             echo '```'
             grep -E '^\s+(network|OSM|features|places|✓|✗|wrote)' "$RUNNER_TEMP/build.log" | head -60

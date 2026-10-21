@@ -6,12 +6,12 @@ import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
 import { COVERAGE_LEVELS, FLANDERS_PHOTOS, inNetherlands, mapTiles, nearFlanders } from '@/lib/plan-ui'
 
-// The planner's map: the rivers and canals of the UK, Ireland, the Netherlands and Belgium, the planned
+// The planner's map: the rivers and canals of the UK, Ireland, the Netherlands, Belgium and France, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
 // it's the start or the finish.
 
-/** The UK, Ireland, the Netherlands and Belgium, for a first look with nothing planned. */
-const HOME: [[number, number], [number, number]] = [[49.4, -10.6], [60.9, 7.3]]
+/** The UK, Ireland, the Netherlands, Belgium and France, for a first look with nothing planned. */
+const HOME: [[number, number], [number, number]] = [[42.3, -10.6], [60.9, 8.3]]
 
 // Network pieces already fetched, shared across map instances; keyed by URL.
 const loaded = new Map<string, Promise<LatLng[][]>>()

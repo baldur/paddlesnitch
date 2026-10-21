@@ -386,7 +386,10 @@ export class AttStack extends cdk.Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../apps/web/.open-next/server-functions/default')
       ),
-      memorySize: 1024,
+      // The river planner keeps its whole network in memory: ~670 MB at peak for
+      // the UK, Ireland, the Netherlands and Belgium, ~960 MB with France
+      // (docs/features/waterways-france.md). More memory also means more CPU.
+      memorySize: 2048,
       timeout: cdk.Duration.seconds(30),
       environment: {
         DATA_BUCKET: dataBucket.bucketName,
