@@ -44,6 +44,7 @@ const SERVICES: Record<string, string> = {
   'server.arcgisonline.com': 'Esri',
   'www.esri.com': 'Esri',
   'service.pdok.nl': 'PDOK',
+  'data.geopf.fr': 'IGN',   // French aerial photo tiles in the browser, and in print
   'geo.api.vlaanderen.be': 'Digitaal Vlaanderen',   // Flemish aerial photo tiles in the browser   // aerial photo tiles in the browser (and the water boards' data at build time)
   'unpkg.com': 'unpkg',
 }

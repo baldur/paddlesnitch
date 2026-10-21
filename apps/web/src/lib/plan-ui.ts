@@ -272,14 +272,30 @@ const FLANDERS_OUTLINE: LatLng[] = [
 ]
 export const inFlanders = (p: LatLng) => !inNetherlands(p) && inOutline(FLANDERS_OUTLINE, p)
 
-/** Whose aerial photos may be printed here: the Kadaster's (CC BY 4.0) or
- *  Digitaal Vlaanderen's (Flemish Open Data licence). Elsewhere none: Esri may not be printed. */
-export const printablePhotos = (p: LatLng): 'nl' | 'vl' | undefined => (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : undefined)
+/** Mainland France and Corsica, roughly (borders and coast to a few km). */
+const FRANCE_OUTLINES: LatLng[][] = [[
+  [51.09, 2.54], [50.95, 2.60], [50.73, 2.90], [50.79, 3.15], [50.50, 3.62], [50.30, 4.10], [50.03, 4.20], [50.13, 4.82], [49.80, 4.86], [49.75, 5.10],
+  [49.55, 5.80], [49.47, 6.37], [49.15, 6.75], [49.10, 7.10], [49.05, 7.95], [48.97, 8.23], [48.58, 7.80], [48.00, 7.57], [47.59, 7.55], [47.50, 7.00],
+  [47.07, 6.65], [46.60, 6.10], [46.27, 5.97], [46.15, 6.12], [46.43, 6.50], [46.40, 6.80], [46.00, 7.00], [45.80, 6.95], [45.45, 7.10], [45.15, 6.90],
+  [45.10, 6.62], [44.93, 6.75], [44.42, 6.90], [44.15, 7.70], [43.78, 7.53], [43.60, 7.60], [42.95, 6.20], [43.10, 4.50], [43.25, 3.50], [42.80, 3.10],
+  [42.43, 3.17], [42.45, 2.65], [42.40, 1.95], [42.66, 1.75], [42.66, 1.40], [42.85, 0.70], [42.70, 0.00], [42.85, -0.50], [43.00, -1.00], [43.15, -1.45],
+  [43.37, -1.79], [43.50, -1.60], [44.60, -1.35], [45.60, -1.30], [46.30, -1.60], [47.00, -2.50], [47.40, -3.20], [47.75, -4.50], [48.30, -4.90], [48.75, -4.00],
+  [48.85, -3.00], [48.75, -2.00], [48.85, -1.65], [49.20, -1.70], [49.75, -1.90], [49.75, -1.20], [49.45, -0.50], [49.75, 0.20], [50.10, 1.40], [50.90, 1.55],
+], [
+  [43.05, 9.45], [42.95, 9.60], [42.40, 9.60], [41.85, 9.45], [41.35, 9.25], [41.35, 9.05], [41.65, 8.60], [42.10, 8.50], [42.45, 8.50], [42.75, 9.00],
+]]
+export const inFrance = (p: LatLng) => FRANCE_OUTLINES.some(o => inOutline(o, p))
+
+/** Whose aerial photos may be printed here: the Kadaster's (CC BY 4.0),
+ *  Digitaal Vlaanderen's (Flemish Open Data licence) or IGN's (Licence Ouverte 2.0).
+ *  Elsewhere none: Esri may not be printed. */
+export const printablePhotos = (p: LatLng): 'nl' | 'vl' | 'fr' | undefined =>
+  (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : inFrance(p) ? 'fr' : undefined)
 
 /** The map's tiles. On satellite, over the Netherlands (inNetherlands of the map's centre): the Kadaster's
- *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). They're
- *  white outside the Netherlands, so they replace Esri there rather than
- *  sitting on top of it. */
+ *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). Over France
+ *  (inFrance): IGN's BD ORTHO (Licence Ouverte 2.0). Both are white or sea-blue
+ *  beyond their borders, so they replace Esri there rather than sitting on top of it. */
 /** Flanders and Brussels, roughly: a box round them, where the Flemish
  *  orthophotos are added over Esri (they're transparent outside Flanders). */
 export const nearFlanders = ([lat, lng]: LatLng) => lat >= 50.65 && lat <= 51.52 && lng >= 2.5 && lng <= 5.95
@@ -292,8 +308,15 @@ export const FLANDERS_PHOTOS = {
   attribution: 'Aerial photo (Flanders): Digitaal Vlaanderen, Vlaamse Open Data licentie',
 }
 
-export function mapTiles(satellite: boolean, overNetherlands = false) {
-  if (satellite && overNetherlands) return {
+export function mapTiles(satellite: boolean, over?: 'nl' | 'fr') {
+  if (satellite && over === 'fr') return {
+    base: 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+    baseNativeZoom: 19,
+    labels: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
+    labelsNativeZoom: 19,
+    attribution: `Aerial photo: IGN, BD ORTHO, Licence Ouverte 2.0 · ${DATA_ATTR}`,
+  }
+  if (satellite && over === 'nl') return {
     base: 'https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg',
     baseNativeZoom: 21,
     labels: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
@@ -453,11 +476,13 @@ export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' 
 
 /** A printable aerial photo for a drawing, exactly its extent so the drawing
  *  lines up on top: the Kadaster's (PDOK WMS) in the Netherlands, Digitaal
- *  Vlaanderen's in Flanders. */
-export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' = 'nl', px = 440): string {
+ *  Vlaanderen's in Flanders, IGN's (Géoplateforme WMS) in France. */
+export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' | 'fr' = 'nl', px = 440): string {
   const [base, layer] = region === 'vl'
     ? ['https://geo.api.vlaanderen.be/OMWRGBMRVL/wms', 'Ortho']
-    : ['https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0', 'Actueel_orthoHR']
+    : region === 'fr'
+      ? ['https://data.geopf.fr/wms-r/wms', 'ORTHOIMAGERY.ORTHOPHOTOS']
+      : ['https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0', 'Actueel_orthoHR']
   const q = new URLSearchParams({
     SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: layer, STYLES: '', CRS: 'EPSG:4326',
     BBOX: d.bbox.map(v => v.toFixed(6)).join(','), WIDTH: String(px), HEIGHT: String(px), FORMAT: 'image/jpeg',
@@ -465,7 +490,7 @@ export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' 
   return `${base}?${q}`
 }
 
-export const PHOTO_CREDIT = { nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie' } as const
+export const PHOTO_CREDIT = { nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0' } as const
 
 // --- Wallonia's regulated kayak rivers ---------------------------------------------
 
