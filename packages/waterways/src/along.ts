@@ -83,8 +83,13 @@ function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => 
 export const ON_WATER_NEAR_M = 60
 const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims', 'ifi'])
 
+/** Things in the water itself. Slipways, put-ins and toilets stand on the bank,
+ *  which on a wide river or estuary is well over 60 m from the line. */
+const IN_WATER = new Set<Feature['kind']>(['lock', 'weir', 'hazard', 'portage'])
+
 /** How far from the water a feature may sit and still be on it. */
-export const nearOf = (f: Feature) => (ON_WATER_SOURCES.has(f.source.source) ? Math.min(ON_WATER_NEAR_M, NEAR_M[f.kind]) : NEAR_M[f.kind])
+export const nearOf = (f: Feature) =>
+  (ON_WATER_SOURCES.has(f.source.source) && IN_WATER.has(f.kind) ? Math.min(ON_WATER_NEAR_M, NEAR_M[f.kind]) : NEAR_M[f.kind])
 
 export const featuresAlong = (line: LatLng[], features: Feature[]) => along(line, features, f => f.at, nearOf)
 

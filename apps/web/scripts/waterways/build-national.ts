@@ -17,7 +17,7 @@ import path from 'path'
 import readline from 'readline'
 import { gzipSync } from 'zlib'
 import { putObject } from '@paddlesnitch/core/storage'
-import { featuresAlong } from '@paddlesnitch/waterways/along'
+import { featuresAlong, NEAR_M } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
@@ -44,10 +44,10 @@ const OSM_NEAR_M = 400
 const GAP_LOCK_M = 120
 /** An OSM slipway or put-in this close to an authority's access point is the same place. */
 const GAP_ACCESS_M = 100
-/** A slipway or put-in further from the water than this is on another pond or the coast. */
-const ACCESS_ON_WATER_M = 60
-/** A toilet or tap further than this from the water isn't one you'd paddle to. */
-const FACILITY_ON_WATER_M = 100
+/** A slipway, put-in, toilet or tap further from our water than this is on another
+ *  pond, the coast or in town: the same bank-side reach as an authority's (NEAR_M). */
+const ACCESS_ON_WATER_M = NEAR_M.slipway
+const FACILITY_ON_WATER_M = NEAR_M.facility
 
 async function* lines(file: string) {
   for await (const l of readline.createInterface({ input: fs.createReadStream(file) })) if (l) yield JSON.parse(l)

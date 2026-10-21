@@ -30,7 +30,8 @@ export function snap(links: NetLink[], p: LatLng, maxM = Infinity): Snap | null 
       }
     }
     // Everything within r cells is searched, so a hit that close is the nearest.
-    if (best && (best as Snap).dist <= r * CELL_MIN_M) return best
+    // Nothing outside can be nearer, so this is the nearest: still too far is none.
+    if (best && (best as Snap).dist <= r * CELL_MIN_M) return (best as Snap).dist <= maxM ? best : null
     if (r * CELL_MIN_M >= maxM) return best && (best as Snap).dist <= maxM ? best : null
   }
   for (const link of links) consider(link)

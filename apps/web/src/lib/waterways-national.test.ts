@@ -107,6 +107,12 @@ describe('grid index', () => {
     expect(snap(links, [51.6, 0.005])!.dist).toBeGreaterThan(10_000)
   })
 
+  it('a small maxM is honoured even when the nearest link is in the next grid cell (it used to return one up to ~1 km away)', () => {
+    const links = linksFromWays([way(1, [1, 2], [[51.5, 0], [51.5, 0.01]])])
+    expect(snap(links, [51.5045, 0.005], 60)).toBeNull()            // ~500 m off
+    expect(snap(links, [51.5003, 0.005], 60)!.dist).toBeLessThan(60)   // ~33 m off
+  })
+
   it('finds features along a route whose vertices are far apart', () => {
     const line: LatLng[] = [[51.5, -0.3], [51.5, 0.13]]
     const lock: Feature = { id: 'mid', kind: 'lock', name: 'Middle Lock', at: [51.5005, -0.08], source: { source: 'curated', fetchedAt: AT } }
@@ -293,6 +299,12 @@ describe('OSM lock chambers (filling gaps)', () => {
       id: 'osm:lock:node/32336165', kind: 'lock', name: 'Town Lock', at: [51.194748, 0.279174],
       source: { source: 'osm', sourceId: 'node/32336165', fetchedAt: AT },
     }])
+  })
+
+  it('an OSM slipway on the bank of a wide river counts at 100 m; an OSM lock that far off is on a side cut', () => {
+    const line: LatLng[] = [[52, -1], [52, -0.99]]
+    const off = (kind: Feature['kind']): Feature => ({ id: kind, kind, at: [52.0009, -0.995], source: { source: 'osm', fetchedAt: AT } })   // ~100 m north
+    expect(featuresAlong(line, [off('slipway'), off('lock')]).map(a => a.item.id)).toEqual(['slipway'])
   })
 
   it('counts on a route only when the chamber is on the water travelled, not a side cut', () => {
