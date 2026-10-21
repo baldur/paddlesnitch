@@ -8,7 +8,7 @@ import { lockKey } from './build'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { Feature, LatLng } from './types'
 
-export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws'
+export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo'
 
 export type Gauge = {
   source: GaugeSource
@@ -62,6 +62,7 @@ export const gaugeUrl = (g: Gauge): string =>
   g.source === 'ea' ? `https://check-for-flooding.service.gov.uk/station/${encodeURIComponent(g.id)}`
     : g.source === 'sepa' ? 'https://waterlevels.sepa.org.uk/'
       : g.source === 'rws' ? 'https://waterinfo.rws.nl/'
+      : g.source === 'waterinfo' ? 'https://www.waterinfo.be/'
         : `https://waterlevel.ie/${g.id}/0001/`
 
 // --- Parsing each source's station list ----------------------------------------
@@ -142,6 +143,22 @@ export function rwsLatest(body: { WaarnemingenLijst?: unknown[] }, now: number):
       const at = new Date(t).toISOString()
       if (!out.has(code) || out.get(code)!.at < at) out.set(code, { value: v / 100, at })
     }
+  }
+  return out
+}
+
+/** Flanders (waterinfo.be, VMM and De Vlaamse Waterweg): every station's latest
+ *  water level in one KiWIS value layer. "Place/River" names give the river, so
+ *  gauges match a route by name. Only fresh readings count (RWS_FRESH_MS). */
+export function waterinfoGauges(rows: unknown[], now: number): (Gauge & { valueM: number; readAt: string })[] {
+  type Row = { ts_id?: number; station_name?: string; station_latitude?: number; station_longitude?: number; ts_value?: number | null; timestamp?: string; ts_unitsymbol?: string }
+  const out: (Gauge & { valueM: number; readAt: string })[] = []
+  for (const r of rows as Row[]) {
+    const t = Date.parse(r.timestamp ?? '')
+    if (typeof r.ts_value !== 'number' || r.ts_unitsymbol !== 'm' || !Number.isFinite(t) || now - t > RWS_FRESH_MS) continue
+    if (typeof r.station_latitude !== 'number' || typeof r.station_longitude !== 'number') continue
+    const [place, river] = (r.station_name ?? '').split('/')
+    out.push({ source: 'waterinfo', id: String(r.ts_id), name: place || String(r.ts_id), ...(river ? { river } : {}), at: [r.station_latitude, r.station_longitude], valueM: r.ts_value, readAt: new Date(t).toISOString() })
   }
   return out
 }

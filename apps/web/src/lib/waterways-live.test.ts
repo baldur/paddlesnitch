@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, type Gauge,
+  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, type Gauge,
 } from '@paddlesnitch/waterways/live'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
@@ -58,6 +58,14 @@ describe('gauges', () => {
     expect([...latest.keys()]).toEqual(['genemuiden'])                                   // Roggebotsluis's newest is from 2023
     expect(latest.get('genemuiden')).toEqual({ value: -0.5, at: '2026-10-21T03:20:00.000Z' })
     expect(rwsLatest(fixture('rws-latest-sample.json'), Date.parse('2026-10-22T05:00:00Z')).size).toBe(0)   // a day old: not now
+  })
+
+  it('Flanders (waterinfo.be): fresh levels in metres, the river from "Place/River"; empty and stale readings left out', () => {
+    const g = waterinfoGauges(fixture('waterinfo-layer-sample.json'), Date.parse('2026-10-21T15:00:00Z'))
+    expect(g.map(x => [x.name, x.river, x.valueM])).toEqual([
+      ['Kieldrecht', 'Noordzuidverbinding', 0.829], ['Malderen', 'Grote Molenbeek', 6.621], ['Koersel', 'Zwarte beek', 38.222],
+    ])
+    expect(g[0]).toMatchObject({ source: 'waterinfo', readAt: '2026-10-21T14:15:00.000Z' })
   })
 
   it('SEPA: the station list with positions', () => {

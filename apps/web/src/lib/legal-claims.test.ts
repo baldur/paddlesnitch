@@ -37,6 +37,7 @@ const SERVICES: Record<string, string> = {
   'timeseries.sepa.org.uk': 'SEPA',
   'waterlevel.ie': 'OPW',
   'ddapi20-waterwebservices.rijkswaterstaat.nl': 'Rijkswaterstaat',
+  'download.waterinfo.be': 'waterinfo.be',
   'www.gov.uk': 'GOV.UK',
   'api.github.com': 'GitHub',
   'github.com': 'GitHub',
@@ -49,7 +50,7 @@ const SERVICES: Record<string, string> = {
 // Our own site, legal links and test-only values -- not processors.
 const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org',
   'evil.example.com', 'example.invalid',
-  'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk', 'waterinfo.rws.nl',   // links to a gauge's own page
+  'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk', 'waterinfo.rws.nl', 'www.waterinfo.be',   // links to a gauge's own page
   'kayak.spw.wallonie.be',   // a link to Wallonia's kayak status; nothing is fetched from it
   'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
 ])
