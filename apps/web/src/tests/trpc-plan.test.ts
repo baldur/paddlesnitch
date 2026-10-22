@@ -255,14 +255,12 @@ describe("the map's network and places", () => {
   const get = async (name: string, version = 'none') =>
     mapData(new Request(`http://x/plan/data/${version}/${name}`), { params: Promise.resolve({ version, name }) })
 
-  it('serves the overview, an area in detail, and the places index', async () => {
+  it('serves the overview and an area in detail', async () => {
     const overview = await (await get('overview')).json()
     expect(overview.length).toBeGreaterThan(10)
     const reading = await (await get('area-102_-2')).json()   // 51.0–51.5 N, 1.0–0.5 W: Reading
     expect(reading.length).toBeGreaterThan(10)
     expect(await (await get('area-0_0')).json()).toEqual([])   // the Gulf of Guinea
-    const places = await (await get('places')).json()
-    expect(places.some((p: { name: string }) => /Marsh Lock/.test(p.name))).toBe(true)
   })
 
   it('caches the live version for good and anything else briefly', async () => {
@@ -284,7 +282,8 @@ describe("the map's network and places", () => {
     expect(lines.some.length).toBeGreaterThan(10)
   })
 
-  it('404s anything else', async () => {
+  it('404s anything else, including the old places index (searched on the server now: 15 MB with France)', async () => {
     expect((await get('secrets')).status).toBe(404)
+    expect((await get('places')).status).toBe(404)
   })
 })

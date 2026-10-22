@@ -1,7 +1,6 @@
 // What the planner's map draws, from the live national dataset
 // (docs/features/waterways-uk-ireland.md): `overview` (the whole network,
-// coarsely), `area-{y}_{x}` (one 0.5° area in detail), `places` (the places
-// search index), `openportage` (paddlers' portage details, CC0), `needed`
+// coarsely), `area-{y}_{x}` (one 0.5° area in detail), `openportage` (paddlers' portage details, CC0), `needed`
 // (locks with no portage details, most-planned first), `tides-nl` (Rijkswaterstaat's predicted Dutch high and
 // low waters, fetched at build time), and coverage by waterway: `coverage` (the scores, for
 // /plan/gaps) and `coverage-lines` (the scored water by level, for the map). The version is in the URL, so a response for the live version
@@ -32,8 +31,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
   if (name === 'overview') {
     if (overview?.version !== ds.version) overview = { version: ds.version, lines: overviewLines(ds.links) }
     body = overview.lines
-  } else if (name === 'places') {
-    body = ds.places
   } else if (name === 'tides-nl') {
     body = await loadOfficialTides()
     if (!body) return new Response('Not found', { status: 404 })
