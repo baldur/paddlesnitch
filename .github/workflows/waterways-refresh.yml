@@ -1,6 +1,6 @@
 name: Waterways refresh
 
-# Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium and France data
+# Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium, France and Germany data
 # (docs/features/waterways-uk-ireland.md): OSM from Geofabrik plus every
 # source's normalised features, the check routes, then a new version uploaded
 # to S3 and a PR pointing packages/waterways/data/manifest.json at it. Nothing
@@ -25,7 +25,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     # The AWS role (att-github-waterways) trusts only this environment, and can
     # only touch waterways/* in the data bucket (infra/lib/att-stack.ts).
     environment: waterways-data
@@ -54,10 +54,10 @@ jobs:
       # One extract per country group; the build reads each (build-national.ts,
       # EXTRACTS). Downloaded, extracted and deleted one at a time: together
       # they're ~9 GB, most of the runner's free disk.
-      - name: Download and extract the OSM extracts (Britain and Ireland, the Netherlands, Belgium, France)
+      - name: Download and extract the OSM extracts (Britain and Ireland, the Netherlands, Belgium, France, Germany)
         working-directory: apps/web
         run: |
-          for x in gbie:britain-and-ireland nl:netherlands be:belgium fr:france; do
+          for x in gbie:britain-and-ireland nl:netherlands be:belgium fr:france de:germany; do
             id="${x%%:*}"; name="${x#*:}"
             curl -sSfL -o "$RUNNER_TEMP/$id.osm.pbf" "https://download.geofabrik.de/europe/$name-latest.osm.pbf"
             python scripts/waterways/osm_extract.py "$RUNNER_TEMP/$id.osm.pbf" ".cache/waterways/osm/$id"
@@ -142,7 +142,7 @@ jobs:
           git commit -m "data(waterways): publish $version"
           git push -u origin "$branch"
           {
-            echo "Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium and France data. Merging makes version \`$version\` live."
+            echo "Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium, France and Germany data. Merging makes version \`$version\` live."
             echo
             echo '```'
             grep -E '^\s+(network|OSM|features|places|✓|✗|wrote)' "$RUNNER_TEMP/build.log" | head -60

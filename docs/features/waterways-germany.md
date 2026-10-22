@@ -1,6 +1,6 @@
 # Feature spec: River planner data for Germany
 
-**Status:** 🚧 started 2026-10-22 (owner: "start on Germany"). Same defaults as the Netherlands, Belgium and France: one dataset, no ditches, open data only.
+**Status:** 🚧 started 2026-10-22 (owner: "start on Germany"); G2 levels merged (#587), G1 network built and measured. Same defaults as the Netherlands, Belgium and France: one dataset, no ditches, open data only.
 
 ## What's different
 
@@ -23,6 +23,6 @@
 
 | Phase | What | Done when |
 |---|---|---|
-| **G1** Network | Geofabrik Germany extract; measure links, km and server memory; check routes on a federal canal, a canoe river and a city | Check routes pass, memory fits |
+| **G1** Network ✅ | Geofabrik Germany extract. Check routes: Minden → Hannover (Mittellandkanal, 57.9 km, no locks), Weilburg → Limburg (Lahn, 35.8 km, 5 locks, 5 weirs), Berlin Oberbaumbrücke → Museumsinsel (Spree, 3.8 km). **Measured:** Germany adds 63,371 links and ~57,300 km (dataset 288,433 links, 242,410 km; `network.json` 121 MB raw); 260,464 places. Server peak memory with France and Germany: 1.62 GB with the old loader, **1.23 GB** with the network streamed one link per line (#588), about what France alone peaks at today, so the 2 GB Lambda stays. The refresh's time limit goes to 120 min. Needs #588 merged first | Check routes pass ✅, memory fits ✅ (with #588) |
 | **G2** Live levels ✅ | PEGELONLINE gauges on a route, with the WSV's state | A plan on the Havel shows its gauge |
 | **G3** Weirs | AMBER Europe for Germany | A canoe-river plan lists its weirs |
