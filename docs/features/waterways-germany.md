@@ -25,4 +25,4 @@
 |---|---|---|
 | **G1** Network | Geofabrik Germany extract; measure links, km and server memory; check routes on a federal canal, a canoe river and a city | Check routes pass, memory fits |
 | **G2** Live levels ✅ | PEGELONLINE gauges on a route, with the WSV's state | A plan on the Havel shows its gauge |
-| **G3** Weirs | AMBER Europe for Germany | A canoe-river plan lists its weirs |
+| **G3** Weirs ✅ | AMBER Europe (`amber-eu`) now reads Belgium and Germany: 104,061 barriers fetched (100,911 German weirs, dams, sluices and bed sills), counted only on the water (60 m); with the German network, core features rose from 74,757 to 110,714. The Lahn run (Weilburg → Limburg) lists its 5 weirs | A canoe-river plan lists its weirs ✅ |

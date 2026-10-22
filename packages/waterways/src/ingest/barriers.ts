@@ -15,10 +15,10 @@ import type { Feature } from '../types'
 export const SEPA_OBSTACLES = 'https://map.sepa.org.uk/server/rest/services/Open/Hydrography/MapServer/5'
 export const AMBER_GB = 'https://services3.arcgis.com/Bb8lfThdhugyc4G3/ArcGIS/rest/services/AMBER_Barrier_Atlas_GB/FeatureServer/3'
 /** The pan-European AMBER atlas (Belletti et al. 2020, CC BY 4.0 on figshare,
- *  doi:10.6084/m9.figshare.12629051.v5), read for Belgium only: Britain has its
- *  own AMBER-GB layer above, and the Netherlands its water boards. */
+ *  doi:10.6084/m9.figshare.12629051.v5), read for Belgium and Germany: Britain
+ *  has its own AMBER-GB layer above, the Netherlands its water boards, France ROE. */
 export const AMBER_EU = 'https://services9.arcgis.com/OV5QimbIezDDb8bd/arcgis/rest/services/AMBERbarrieratlas/FeatureServer/0'
-export const AMBER_EU_WHERE = "Country='BELGIUM' AND LabelAtlas IN ('WEIR','DAM','SLUICE','RAMP/BED SILL')"
+export const AMBER_EU_WHERE = "Country IN ('BELGIUM','GERMANY') AND LabelAtlas IN ('WEIR','DAM','SLUICE','RAMP/BED SILL')"
 export const IFI_BARRIERS = 'https://services-eu1.arcgis.com/tnPmSZbB6GEKJjh8/arcgis/rest/services/NBP_Copy_view/FeatureServer/0'
 /** Only what a paddler meets: most of IFI's 42,000 records are culverts. */
 export const IFI_WHERE = "BarrType IN ('Weir','Sluice','Dam','Rock/Bedrock Waterfall')"
