@@ -5,6 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
+import { overviewLines } from '@paddlesnitch/waterways/display'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
@@ -73,6 +74,24 @@ describe('Dutch water boards: weirs, dams, pumping stations and locks (CC BY-SA,
     const line: LatLng[] = [[52, 4.6], [52, 4.61]]
     const wb = (id: string, dLat: number): Feature => ({ id, kind: 'hazard', name: 'Dam', at: [52 + dLat, 4.605], source: { source: 'nl-waterboards', fetchedAt: AT } })
     expect(featuresAlong(line, [wb('on', 0.00005), wb('side', 0.0003)]).map(a => a.item.id)).toEqual(['on'])   // ~6 m, ~33 m
+  })
+})
+
+describe("the zoomed-out map's overview", () => {
+  // A straight-ish 5 km line, wiggling ±40 m every 100 m: nothing a zoom-8 pixel (~400 m) can show.
+  const wiggly = (lat0: number): LatLng[] => Array.from({ length: 51 }, (_, i) => [lat0 + 0.00012 + (i % 2 ? 0.00036 : 0), -1.00007 + i * 0.0014] as LatLng)
+  const link = (line: LatLng[], extra: Partial<NetLink>) => ({ line, lengthM: 5000, ...extra }) as NetLink
+
+  it('canals, navigations and rivers over 2 km, coarse enough to stay small with France in it', () => {
+    const out = overviewLines([
+      link(wiggly(51), { form: 'canal' }),
+      link(wiggly(52), { boat: 'yes', lengthM: 900 }),
+      link(wiggly(53), { lengthM: 3000 }),
+      link(wiggly(54), { lengthM: 1500 }),     // a short stream: not at this zoom
+    ])
+    expect(out).toHaveLength(3)
+    expect(out[0].length).toBeLessThanOrEqual(3)   // the wiggle is under the 500 m tolerance
+    expect(out.flat(2).every(v => Math.round(v * 1000) / 1000 === v)).toBe(true)   // 3 dp, ~110 m
   })
 })
 
