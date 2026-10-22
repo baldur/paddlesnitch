@@ -31,6 +31,7 @@ function stubNetwork(fail: string[] = []) {
     if (url.includes('sepa.org.uk')) return respond([['ts_id', 'station_name', 'station_latitude', 'station_longitude']])
     if (url.includes('OphalenCatalogus')) return respond(fixture('rws-catalogue-sample.json'))
     if (url.includes('download.waterinfo.be')) return respond(fixture('waterinfo-layer-sample.json'))
+    if (url.includes('pegelonline.wsv.de')) return respond(fixture('pegelonline-stations-sample.json'))
     if (url.includes('OphalenLaatsteWaarnemingen')) return respond(fixture('rws-latest-sample.json'))
     return new Response('not stubbed', { status: 404 })
   }))
@@ -80,6 +81,16 @@ describe('live conditions along a route', () => {
       stubNetwork()
       const c = await conditionsAlong([[51.069695, 5.265089], [51.075695, 5.265089]], ['Zwarte beek'], [])
       expect(c.gauges.find(g => g.source === 'waterinfo')).toMatchObject({ name: 'Koersel', river: 'Zwarte beek', valueM: 38.222 })
+    } finally { vi.useRealTimers() }
+  })
+
+  it('a German gauge on the route, its river matched with ß as ss, with the WSV\'s own state (PEGELONLINE)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-22T17:30:00Z'))
+    try {
+      stubNetwork()
+      const c = await conditionsAlong([[52.457153, 12.856784], [52.469153, 12.856784]], ['Untere Havel-Wasserstraße'], [])
+      expect(c.gauges.find(g => g.source === 'pegelonline')).toMatchObject({ name: 'Ketzin', valueM: 2.45, state: 'normal', url: expect.stringContaining('pegelonline.wsv.de') })
     } finally { vi.useRealTimers() }
   })
 

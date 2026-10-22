@@ -8,7 +8,7 @@ import { lockKey } from './build'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { Feature, LatLng } from './types'
 
-export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo'
+export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo' | 'pegelonline'
 
 export type Gauge = {
   source: GaugeSource
@@ -39,7 +39,8 @@ export const MAX_GAUGES = 12
 /** A gauge with no river named must be this close to count. */
 export const GAUGE_UNNAMED_NEAR_M = 300
 
-const riverKey = (s: string) => s.toLowerCase().replace(/^(river|the)\s+/, '').replace(/\s+/g, ' ').trim()
+// ß as ss: PEGELONLINE writes WASSERSTRASSE, OSM Wasserstraße.
+const riverKey = (s: string) => s.toLowerCase().replace(/ß/g, 'ss').replace(/^(river|the)\s+/, '').replace(/\s+/g, ' ').trim()
 
 /** The gauges on a route, in travel order, thinned evenly to MAX_GAUGES. A
  *  gauge that names its river counts only on a river the route paddles (not a
@@ -63,6 +64,7 @@ export const gaugeUrl = (g: Gauge): string =>
     : g.source === 'sepa' ? 'https://waterlevels.sepa.org.uk/'
       : g.source === 'rws' ? 'https://waterinfo.rws.nl/'
       : g.source === 'waterinfo' ? 'https://www.waterinfo.be/'
+      : g.source === 'pegelonline' ? `https://www.pegelonline.wsv.de/gast/stammdaten?pegelnr=${encodeURIComponent(g.id)}`
         : `https://waterlevel.ie/${g.id}/0001/`
 
 // --- Parsing each source's station list ----------------------------------------
@@ -159,6 +161,32 @@ export function waterinfoGauges(rows: unknown[], now: number): (Gauge & { valueM
     if (typeof r.station_latitude !== 'number' || typeof r.station_longitude !== 'number') continue
     const [place, river] = (r.station_name ?? '').split('/')
     out.push({ source: 'waterinfo', id: String(r.ts_id), name: place || String(r.ts_id), ...(river ? { river } : {}), at: [r.station_latitude, r.station_longitude], valueM: r.ts_value, readAt: new Date(t).toISOString() })
+  }
+  return out
+}
+
+/** "UNTERE HAVEL-WASSERSTRASSE" → "Untere Havel-Wasserstrasse". */
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase())
+
+/** Germany (PEGELONLINE, the federal waterways' gauges): every station's
+ *  current water level ("W", cm on the gauge's own scale) in one call, with the
+ *  WSV's own verdict against mean low and high water (stateMnwMhw), so no
+ *  typical range is needed. Only fresh readings count (RWS_FRESH_MS). */
+export function pegelonlineGauges(stations: unknown[], now: number): (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] {
+  type Ts = { shortname?: string; unit?: string; currentMeasurement?: { timestamp?: string; value?: number; stateMnwMhw?: string } }
+  type St = { uuid?: string; number?: string; longname?: string; latitude?: number; longitude?: number; water?: { longname?: string }; timeseries?: Ts[] }
+  const STATE: Record<string, GaugeReading['state']> = { low: 'low', normal: 'normal', high: 'high' }
+  const out: (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] = []
+  for (const s of stations as St[]) {
+    const w = s.timeseries?.find(t => t.shortname === 'W' && t.unit === 'cm')?.currentMeasurement
+    const t = Date.parse(w?.timestamp ?? '')
+    if (typeof w?.value !== 'number' || !Number.isFinite(t) || now - t > RWS_FRESH_MS) continue
+    if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number' || !s.uuid) continue
+    const state = STATE[w.stateMnwMhw ?? '']
+    out.push({
+      source: 'pegelonline', id: s.number ?? s.uuid, name: titleCase(s.longname ?? s.uuid), ...(s.water?.longname ? { river: titleCase(s.water.longname) } : {}),
+      at: [s.latitude, s.longitude], datum: 'stage', valueM: Math.round(w.value) / 100, readAt: new Date(t).toISOString(), ...(state ? { state } : {}),
+    })
   }
   return out
 }

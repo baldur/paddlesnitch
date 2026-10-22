@@ -127,6 +127,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'CC BY 4.0',
     attribution: 'Water levels: waterinfo.be (VMM, De Vlaamse Waterweg), CC BY 4.0',
   },
+  'pegelonline-levels': {
+    name: 'PEGELONLINE (Wasserstraßen- und Schifffahrtsverwaltung des Bundes)',
+    url: 'https://www.pegelonline.wsv.de/',
+    licence: 'Datenlizenz Deutschland – Zero – 2.0',
+    attribution: 'Water levels: PEGELONLINE, WSV',
+  },
   'thames-conditions': {
     name: 'GOV.UK — River Thames: current river conditions',
     url: 'https://www.gov.uk/guidance/river-thames-current-river-conditions',

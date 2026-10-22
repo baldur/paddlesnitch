@@ -25,6 +25,7 @@ export type SourceId =
   | 'opw-levels'             // OPW waterlevel.ie (live, CC BY 4.0)
   | 'rws-levels'             // Rijkswaterstaat water heights (live, open data)
   | 'waterinfo-levels'       // Flemish water levels, waterinfo.be (live, CC BY 4.0)
+  | 'pegelonline-levels'     // German federal water levels, PEGELONLINE (live, DL-DE Zero 2.0)
   | 'thames-conditions'      // GOV.UK River Thames current conditions (live, OGL)
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
