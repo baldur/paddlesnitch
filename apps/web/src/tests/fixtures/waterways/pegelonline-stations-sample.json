@@ -1,0 +1,125 @@
+[
+ {
+  "uuid": "d2d025a2-e691-4986-b9c4-923e7f1a47c3",
+  "number": "580430",
+  "shortname": "KETZIN",
+  "longname": "KETZIN",
+  "km": 34.053,
+  "agency": "STANDORT BRANDENBURG",
+  "longitude": 12.856784,
+  "latitude": 52.463153,
+  "water": {
+   "shortname": "UHW",
+   "longname": "UNTERE HAVEL-WASSERSTRASSE"
+  },
+  "timeseries": [
+   {
+    "shortname": "W",
+    "longname": "WASSERSTAND ROHDATEN",
+    "unit": "cm",
+    "equidistance": 15,
+    "currentMeasurement": {
+     "timestamp": "2026-10-22T19:15:00+02:00",
+     "value": 245.0,
+     "stateMnwMhw": "normal",
+     "stateNswHsw": "normal"
+    },
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "value": 28.386,
+     "validFrom": "2019-11-01"
+    }
+   }
+  ]
+ },
+ {
+  "uuid": "7cb7461b-3530-4c01-8978-7f676b8f71ed",
+  "number": "501010",
+  "shortname": "SCHÖNA",
+  "longname": "SCHÖNA",
+  "km": 2.05,
+  "agency": "STANDORT DRESDEN",
+  "longitude": 14.235229,
+  "latitude": 50.875762,
+  "water": {
+   "shortname": "ELBE",
+   "longname": "ELBE"
+  },
+  "timeseries": [
+   {
+    "shortname": "W",
+    "longname": "WASSERSTAND ROHDATEN",
+    "unit": "cm",
+    "equidistance": 15,
+    "currentMeasurement": {
+     "timestamp": "2026-10-22T19:15:00+02:00",
+     "value": 312.0,
+     "stateMnwMhw": "high",
+     "stateNswHsw": "normal"
+    },
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "value": 116.2,
+     "validFrom": "2019-11-01"
+    }
+   }
+  ]
+ },
+ {
+  "uuid": "e020e651-e422-46d3-ae28-34887c5a4a8e",
+  "number": "3329",
+  "shortname": "KONSTANZ-RHEIN",
+  "longname": "KONSTANZ-RHEIN",
+  "km": 0.5,
+  "agency": "REGIERUNGSPRÄSIDIUM FREIBURG",
+  "longitude": 9.172858,
+  "latitude": 47.667889,
+  "water": {
+   "shortname": "RHEIN",
+   "longname": "RHEIN"
+  },
+  "timeseries": [
+   {
+    "shortname": "Q",
+    "longname": "ABFLUSS",
+    "unit": "m3/s",
+    "currentMeasurement": {
+     "timestamp": "2026-10-22T19:15:00+02:00",
+     "value": 1500.0
+    }
+   }
+  ]
+ },
+ {
+  "uuid": "stale-0000",
+  "number": "501010",
+  "shortname": "ALT",
+  "longname": "ALT",
+  "km": 2.05,
+  "agency": "STANDORT DRESDEN",
+  "longitude": 14.235229,
+  "latitude": 50.875762,
+  "water": {
+   "shortname": "ELBE",
+   "longname": "ELBE"
+  },
+  "timeseries": [
+   {
+    "shortname": "W",
+    "longname": "WASSERSTAND ROHDATEN",
+    "unit": "cm",
+    "equidistance": 15,
+    "currentMeasurement": {
+     "timestamp": "2026-10-21T08:00:00+02:00",
+     "value": 100.0,
+     "stateMnwMhw": "normal"
+    },
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "value": 116.2,
+     "validFrom": "2019-11-01"
+    }
+   }
+  ]
+ }
+]

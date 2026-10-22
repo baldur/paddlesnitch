@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, type Gauge,
+  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, pegelonlineGauges, type Gauge,
 } from '@paddlesnitch/waterways/live'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
@@ -66,6 +66,14 @@ describe('gauges', () => {
       ['Kieldrecht', 'Noordzuidverbinding', 0.829], ['Malderen', 'Grote Molenbeek', 6.621], ['Koersel', 'Zwarte beek', 38.222],
     ])
     expect(g[0]).toMatchObject({ source: 'waterinfo', readAt: '2026-10-21T14:15:00.000Z' })
+  })
+
+  it('Germany (PEGELONLINE): fresh levels in metres with the WSV\'s own state, names in title case; no level series, or stale, left out', () => {
+    const g = pegelonlineGauges(fixture('pegelonline-stations-sample.json'), Date.parse('2026-10-22T17:30:00Z'))
+    expect(g.map(x => [x.name, x.river, x.valueM, x.state])).toEqual([
+      ['Ketzin', 'Untere Havel-Wasserstrasse', 2.45, 'normal'], ['Schöna', 'Elbe', 3.12, 'high'],
+    ])
+    expect(g[0]).toMatchObject({ source: 'pegelonline', id: '580430', at: [52.463153, 12.856784], readAt: '2026-10-22T17:15:00.000Z', datum: 'stage' })
   })
 
   it('SEPA: the station list with positions', () => {
