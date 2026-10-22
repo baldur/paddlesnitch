@@ -10,6 +10,7 @@
     "./types": "./src/types.ts",
     "./osgb": "./src/osgb.ts",
     "./line": "./src/line.ts",
+    "./fetch-retry": "./src/fetch-retry.ts",
     "./network": "./src/network.ts",
     "./along": "./src/along.ts",
     "./coverage": "./src/coverage.ts",

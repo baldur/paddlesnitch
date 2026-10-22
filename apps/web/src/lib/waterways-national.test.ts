@@ -6,6 +6,7 @@ import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { overviewLines } from '@paddlesnitch/waterways/display'
+import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
@@ -74,6 +75,32 @@ describe('Dutch water boards: weirs, dams, pumping stations and locks (CC BY-SA,
     const line: LatLng[] = [[52, 4.6], [52, 4.61]]
     const wb = (id: string, dLat: number): Feature => ({ id, kind: 'hazard', name: 'Dam', at: [52 + dLat, 4.605], source: { source: 'nl-waterboards', fetchedAt: AT } })
     expect(featuresAlong(line, [wb('on', 0.00005), wb('side', 0.0003)]).map(a => a.item.id)).toEqual(['on'])   // ~6 m, ~33 m
+  })
+})
+
+describe('fetching sources (#559: rws-fis "fetch failed" six runs running)', () => {
+  const ok = () => new Response('fine', { status: 200 })
+  const netErr = () => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ETIMEDOUT 131.237.78.226:443'), { code: 'ETIMEDOUT' }) })
+
+  it('retries a network error or a 5xx, then succeeds', async () => {
+    const answers: (() => Promise<Response>)[] = [() => Promise.reject(netErr()), () => Promise.resolve(new Response('busy', { status: 503 })), () => Promise.resolve(ok())]
+    let n = 0
+    const res = await fetchWithRetry('https://x', {}, { delayMs: 0, fetchImpl: () => answers[n++]() })
+    expect([res.status, n]).toEqual([200, 3])
+  })
+
+  it("doesn't retry a 4xx: that's an answer", async () => {
+    let n = 0
+    const res = await fetchWithRetry('https://x', {}, { delayMs: 0, fetchImpl: async () => { n++; return new Response('no', { status: 404 }) } })
+    expect([res.status, n]).toEqual([404, 1])
+  })
+
+  it('gives up after the last try and says why, not just "fetch failed"', async () => {
+    let n = 0
+    const err = await fetchWithRetry('https://geo.example/x', {}, { tries: 3, delayMs: 0, fetchImpl: async () => { n++; throw netErr() } }).catch(e => e)
+    expect(n).toBe(3)
+    expect(fetchError(err)).toBe('fetch failed (ETIMEDOUT: connect ETIMEDOUT 131.237.78.226:443)')
+    expect(fetchError(new Error('404 https://x'))).toBe('404 https://x')
   })
 })
 

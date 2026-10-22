@@ -18,6 +18,7 @@ import { gunzipSync, gzipSync } from 'zlib'
 import { getObject, putObject } from '@paddlesnitch/core/storage'
 import { assess, HEALTH_KEY, healthLines, stagedKey, type HealthFile } from '@paddlesnitch/waterways/health'
 import { lockKey } from '@paddlesnitch/waterways/build'
+import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
 import { AMBER_EU, AMBER_EU_WHERE, featuresFromAmberEu, featuresFromRoe, ROE_PAGE, roePageUrl, AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
@@ -50,7 +51,7 @@ async function cachedBytes(source: string, name: string, url: string): Promise<{
       return { bytes, fetchedAt: stat.mtime.toISOString() }
     } catch { /* not cached yet */ }
   }
-  const res = await fetch(url, { headers: { 'User-Agent': UA } })
+  const res = await fetchWithRetry(url, { headers: { 'User-Agent': UA } })
   if (!res.ok) throw new Error(`${res.status} ${url}`)
   const bytes = Buffer.from(await res.arrayBuffer())
   await fs.mkdir(path.dirname(file), { recursive: true })
@@ -242,7 +243,7 @@ async function main() {
       continue
     }
     let features: Feature[] | undefined, error: string | undefined
-    try { features = await job() } catch (e) { error = (e as Error).message.slice(0, 300) }
+    try { features = await job() } catch (e) { error = fetchError(e).slice(0, 300) }
     const staged = await getObject(stagedKey(name)).then(b => b && gunzipSync(b).toString()).catch(() => null)
     const stagedCount = staged ? (JSON.parse(staged) as Feature[]).length : null
     const { use, health: h } = assess(features ? { features: features.length } : { error: error! }, prev?.sources[name], stagedCount, now)
