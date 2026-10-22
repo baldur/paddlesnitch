@@ -24,7 +24,8 @@ import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
-import { publishedKey, type Manifest } from '@paddlesnitch/waterways/national'
+import { publishedKey, publishedNdjsonKey, type Manifest } from '@paddlesnitch/waterways/national'
+import { toNdjson } from '@paddlesnitch/waterways/ndjson'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
@@ -188,6 +189,10 @@ async function main() {
     await putObject(publishedKey(version, name), gzipSync(body))
     console.log(`  wrote ${publishedKey(version, name)} (${(body.length / 1e6).toFixed(1)} MB raw)`)
   }
+  // The network again, one link per line, which the server streams (ndjson.ts):
+  // parsed as one string it peaks near 1 GB. The JSON copy stays for older code.
+  await putObject(publishedNdjsonKey(version, 'network'), gzipSync(toNdjson(links)))
+  console.log(`  wrote ${publishedNdjsonKey(version, 'network')}`)
   const manifest: Manifest = {
     version,
     builtAt: new Date().toISOString(),

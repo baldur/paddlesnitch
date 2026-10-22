@@ -2,10 +2,13 @@
 // keeps to the navigation, snapping and "what's along" on a grid index, the
 // route/time split the server and browser share, and the places search.
 import fs from 'fs'
+import { gzipSync } from 'zlib'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { overviewLines } from '@paddlesnitch/waterways/display'
+import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
+import { publishedKey, publishedNdjsonKey, readNetwork } from '@paddlesnitch/waterways/national'
 import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
@@ -101,6 +104,25 @@ describe('fetching sources (#559: rws-fis "fetch failed" six runs running)', () 
     expect(n).toBe(3)
     expect(fetchError(err)).toBe('fetch failed (ETIMEDOUT: connect ETIMEDOUT 131.237.78.226:443)')
     expect(fetchError(new Error('404 https://x'))).toBe('404 https://x')
+  })
+})
+
+describe('the network, published one link per line and read as a stream (peak memory ~1 GB → ~0.35 GB with Germany)', () => {
+  const links = Array.from({ length: 3000 }, (_, i) => ({ id: `l${i}`, name: i % 2 ? 'Untere Havel-Wasserstraße' : '', form: 'canal', from: `n${i}`, to: `n${i + 1}`,
+    line: Array.from({ length: 40 }, (_, k) => [52 + i / 1e4 + k / 1e5, 13 + k / 1e5]), lengthM: 123.4 })) as unknown as NetLink[]
+
+  it('round-trips every link exactly, across stream chunk boundaries and non-ASCII names', async () => {
+    const gz = gzipSync(toNdjson(links))
+    expect(await readNdjsonGz(gz)).toEqual(links)
+  })
+
+  it('reads the NDJSON copy when there is one, else the JSON one (older versions)', async () => {
+    const store = new Map<string, Buffer>([[publishedKey('v1', 'network'), gzipSync(JSON.stringify(links.slice(0, 2)))]])
+    const get = async (k: string) => store.get(k) ?? null
+    expect((await readNetwork(get, 'v1'))?.map(l => l.id)).toEqual(['l0', 'l1'])
+    store.set(publishedNdjsonKey('v1', 'network'), gzipSync(toNdjson(links.slice(5, 7))))
+    expect((await readNetwork(get, 'v1'))?.map(l => l.id)).toEqual(['l5', 'l6'])
+    expect(await readNetwork(get, 'missing')).toBeNull()
   })
 })
 

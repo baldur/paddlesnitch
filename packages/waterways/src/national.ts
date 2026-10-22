@@ -6,6 +6,7 @@
 import { gunzipSync } from 'zlib'
 import { getObject, usesLocalStorage } from '@paddlesnitch/core/storage'
 import manifestJson from '../data/manifest.json'
+import { readNdjsonGz } from './ndjson'
 import type { Place } from './places'
 import type { OfficialTides } from './tide'
 import { osmPortages, portagesAt, type PublicPortage } from './portage'
@@ -66,6 +67,16 @@ export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
 }
 
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`
+export const publishedNdjsonKey = (version: string, name: string) => `waterways/published/${version}/${name}.ndjson.gz`
+
+/** The network, streamed from its NDJSON copy when the version has one (from
+ *  2026-10-22), else parsed from the JSON (older versions). */
+export async function readNetwork(get: (key: string) => Promise<Buffer | null>, version: string): Promise<NetLink[] | null> {
+  const nd = await get(publishedNdjsonKey(version, 'network')).catch(() => null)
+  if (nd) return readNdjsonGz<NetLink>(nd)
+  const buf = await get(publishedKey(version, 'network')).catch(() => null)
+  return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as NetLink[]) : null
+}
 
 let official: { version: string; value: Promise<OfficialTides | null> } | null = null
 /** Rijkswaterstaat's predicted Dutch high and low waters published with the
@@ -98,7 +109,7 @@ async function load(): Promise<NationalDataset> {
     const buf = v ? await getObject(publishedKey(v, name)) : null
     return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as T) : null
   }
-  const links = await read<NetLink[]>('network')
+  const links = v ? await readNetwork(getObject, v) : null
   if (!links) {
     // Nothing published yet (no version) runs on the fixture everywhere; a named
     // version missing from S3 is a broken deploy and must say so.
