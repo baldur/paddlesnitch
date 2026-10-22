@@ -860,6 +860,8 @@ Run the manual steps only for flows affected by your change. The automated tests
 git push origin main   # triggers GitHub Actions: test → build → cdk deploy
 ```
 
+The deploy job guards itself twice. After the build it **refuses an incomplete server bundle**: if OpenNext's arm64 `npm install` logged "Could not install dependencies", or `@swc/helpers`, `styled-jsx` or `@next/env` is missing from the top of the bundle's `node_modules` (2026-10-21: that shipped and every request 502'd). After the deploy its smoke test asks for `/`, `/att`, `/guide`, `/api/trpc/me` and **one planner route** (Devizes → Westminster): that proves the published river dataset loads in production and loads it on the warm instance, so the first paddler after a deploy doesn't wait ~9 s for it.
+
 **Manual deploy** (use if CI is broken or you need to deploy from your machine):
 ```bash
 pnpm build:open-next                  # production bundle (includes OpenNext v4)
