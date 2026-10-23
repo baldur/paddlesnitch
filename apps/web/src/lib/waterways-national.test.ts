@@ -11,7 +11,7 @@ import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
 import { publishedKey, publishedNdjsonKey, readNetwork } from '@paddlesnitch/waterways/national'
 import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
-import { featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
+import { AMBER_EU_WHERE, featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
@@ -460,6 +460,8 @@ describe('weirs and waterfalls from the barrier inventories', () => {
     const pt = (id: number, label: string, height: string) => ({ geometry: { type: 'Point' as const, coordinates: [4.95, 50.20] as [number, number] }, properties: { OBJECTID: id, Country: 'BELGIUM', LabelAtlas: label, Height: height } })
     const out = featuresFromAmberEu([pt(1, 'WEIR', '1.8'), pt(2, 'DAM', 'NA'), pt(3, 'CULVERT', 'NA'), pt(4, 'RAMP/BED SILL', '0.4')], AT)
     expect(out.map(f => [f.id, f.kind, f.weir?.heightM])).toEqual([['amber-eu:1', 'weir', 1.8], ['amber-eu:2', 'weir', undefined], ['amber-eu:4', 'weir', 0.4]])
+    // Belgium and Germany: Britain has AMBER-GB, the Netherlands its water boards, France ROE.
+    expect(AMBER_EU_WHERE).toContain("Country IN ('BELGIUM','GERMANY')")
     expect(out[0]).toMatchObject({ at: [50.2, 4.95], source: { source: 'amber-eu' } })
   })
 
