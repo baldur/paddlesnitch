@@ -178,7 +178,7 @@ JOBS.amber = async () => {
   return featuresFromAmber(features, fetchedAt)
 }
 
-// AMBER Europe, Belgium and Germany: weirs, dams, sluices and bed sills (CC BY 4.0).
+// AMBER Europe, Belgium, Germany, Austria and Switzerland: weirs, dams, sluices and bed sills (CC BY 4.0).
 JOBS['amber-eu'] = async () => {
   const { features, fetchedAt } = await arcgisAll('amber-eu', AMBER_EU, AMBER_EU_WHERE)
   return featuresFromAmberEu(features, fetchedAt)
