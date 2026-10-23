@@ -105,22 +105,33 @@ export function loadNational(): Promise<NationalDataset> {
 
 async function load(): Promise<NationalDataset> {
   const v = manifest.version
-  const read = async <T>(name: string): Promise<T | null> => {
-    const buf = v ? await getObject(publishedKey(v, name)) : null
-    return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as T) : null
-  }
-  const links = v ? await readNetwork(getObject, v) : null
-  if (!links) {
+  const ds = v ? await readDataset(getObject, v) : null
+  if (!ds) {
     // Nothing published yet (no version) runs on the fixture everywhere; a named
     // version missing from S3 is a broken deploy and must say so.
     if (v && !usesLocalStorage()) throw new Error(`waterways: published version ${v} not found`)
     return fixture()
   }
-  const [features, osmFeatures, saFeatures, places, portages] = await Promise.all([
+  return ds
+}
+
+/** A published version, every file fetched at once: on a cold start the
+ *  downloads overlap rather than wait for the 34 MB network first. Null when
+ *  the version has no network. */
+export async function readDataset(get: (key: string) => Promise<Buffer | null>, v: string): Promise<NationalDataset | null> {
+  const read = async <T>(name: string): Promise<T | null> => {
+    const buf = await get(publishedKey(v, name))
+    return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as T) : null
+  }
+  const rest = Promise.all([
     read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Feature[]>('sa-features'), read<Place[]>('places'), read<OsmElement[]>('osm-portages'),
   ])
+  rest.catch(() => {})   // no network: the caller falls back, and these don't matter
+  const links = await readNetwork(get, v)
+  if (!links) return null
+  const [features, osmFeatures, saFeatures, places, portages] = await rest
   // Routing sees one list; the files stay apart (licence layers: OSM is ODbL, sa-features CC BY-SA).
-  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? []), ...(saFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
+  return { version: v, links, features: [...(features ?? []), ...(osmFeatures ?? []), ...(saFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
 }
 
 async function fixture(): Promise<NationalDataset> {

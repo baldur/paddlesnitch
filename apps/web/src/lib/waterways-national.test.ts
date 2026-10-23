@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { MAX_RESPONSE_BYTES, overviewLines, tooBigToServe } from '@paddlesnitch/waterways/display'
 import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
-import { publishedKey, publishedNdjsonKey, readNetwork } from '@paddlesnitch/waterways/national'
+import { publishedKey, publishedNdjsonKey, readDataset, readNetwork } from '@paddlesnitch/waterways/national'
 import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { AMBER_EU_WHERE, featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
@@ -123,6 +123,25 @@ describe('the network, published one link per line and read as a stream (peak me
     store.set(publishedNdjsonKey('v1', 'network'), gzipSync(toNdjson(links.slice(5, 7))))
     expect((await readNetwork(get, 'v1'))?.map(l => l.id)).toEqual(['l5', 'l6'])
     expect(await readNetwork(get, 'missing')).toBeNull()
+  })
+
+  it('asks for every file at once on a cold start, not the other files after the network', async () => {
+    const asked: string[] = []
+    let releaseNetwork!: () => void
+    const networkDone = new Promise<void>(r => { releaseNetwork = r })
+    const store = new Map<string, Buffer>([
+      [publishedNdjsonKey('v1', 'network'), gzipSync(toNdjson(links.slice(0, 2)))],
+      [publishedKey('v1', 'features'), gzipSync(JSON.stringify([]))],
+      [publishedKey('v1', 'places'), gzipSync(JSON.stringify([{ name: 'Weilburg', kind: 'town', at: [50.48, 8.26] }]))],
+    ])
+    const get = async (k: string) => { asked.push(k.split('/').pop()!); if (k.includes('network')) await networkDone; return store.get(k) ?? null }
+    const loading = readDataset(get, 'v1')
+    await new Promise(r => setTimeout(r, 0))
+    expect(asked.sort()).toEqual(['features.json.gz', 'network.ndjson.gz', 'osm-features.json.gz', 'osm-portages.json.gz', 'places.json.gz', 'sa-features.json.gz'])
+    releaseNetwork()
+    const ds = await loading
+    expect([ds?.links.length, ds?.places.map(p => p.name)]).toEqual([2, ['Weilburg']])
+    expect(await readDataset(async () => null, 'missing')).toBeNull()
   })
 })
 
