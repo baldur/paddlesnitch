@@ -186,7 +186,9 @@ describe('the map tiles', () => {
     expect(where({ Alexanderplatz: [52.52, 13.41], Spandau: [52.535, 13.2], Köpenick: [52.445, 13.575] })).toEqual({ Alexanderplatz: 'be', Spandau: 'be', Köpenick: 'be' })
     expect(where({ Osnabrück: [52.27, 8.05], Koblenz: [50.36, 7.59], Kassel: [51.31, 9.49], Maastricht: [50.85, 5.69] }))
       .toEqual({ Osnabrück: null, Koblenz: null, Kassel: 'he', Maastricht: 'nl' })   // Kassel is in Hessen
-    expect(printablePhotos([51.37, 6.17])).not.toBe('nw')   // Venlo, just over the Dutch border
+    expect(printablePhotos([51.37, 6.17])).toBe('nl')   // Venlo: the Dutch outline used to stop ~7 km short of it
+    expect(printablePhotos([51.34, 6.14])).toBe('nl')   // Tegelen
+    expect(printablePhotos([51.32, 6.20])).not.toBe('nl')   // Kaldenkirchen, just over the border in Germany
     expect(germanPhotosNear([50.94, 6.96]).map(g => g.id)).toEqual(['nw'])
     expect(germanPhotosNear([52.52, 13.41]).map(g => g.id)).toEqual(['be', 'bb'])   // Berlin's own first, then Brandenburg's
     expect(germanPhotosNear([51.5, 10.5])).toEqual([])   // the Harz: none yet
