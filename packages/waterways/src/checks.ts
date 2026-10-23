@@ -38,4 +38,8 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'La Roque-Gageac → Beynac (Dordogne)', start: [44.8242, 1.2189], finish: [44.8367, 1.1296], source: 'The Dordogne canoe descent; a route must exist' },
   { name: 'Ruoms → Vallon-Pont-d’Arc (Ardèche)', start: [44.4440, 4.3480], finish: [44.3975, 4.3935], expectWeirs: 5, source: 'ROE: Sous Roche, Moulin de Sampzon, Mas Neuf, Gos and Vallon Salavas, each with a canoe pass' },
   { name: 'Paris: Pont d’Iéna → Pont d’Austerlitz (Seine)', start: [48.8600, 2.2918], finish: [48.8437, 2.3679], source: 'OSM; a route must exist' },
+  // Germany (docs/features/waterways-germany.md): routes found, no counts pinned yet.
+  { name: 'Minden → Hannover (Mittellandkanal)', start: [52.3010, 8.9180], finish: [52.4230, 9.6938], source: 'OSM; a route must exist' },
+  { name: 'Weilburg → Limburg (Lahn)', start: [50.4860, 8.2620], finish: [50.3890, 8.0660], source: 'The Lahn canoe run, with its locks; a route must exist' },
+  { name: 'Berlin: Oberbaumbrücke → Museumsinsel (Spree)', start: [52.5019, 13.4458], finish: [52.5190, 13.4000], source: 'OSM; a route must exist' },
 ]
