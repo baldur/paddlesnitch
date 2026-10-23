@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build the national river-planner dataset for the UK, Ireland, the Netherlands, Belgium, France and Germany.
+// Build the national river-planner dataset for the UK, Ireland, the Netherlands, Belgium, France, Germany, Austria and Switzerland.
 //
 //   pnpm --filter web waterways:national [--extract <dir>[,<dir>…]] [--publish]
 //
@@ -39,7 +39,7 @@ const CACHE = path.join(process.cwd(), '.cache/waterways')
 /** One OSM extract per country group (osm_extract.py output): Britain and
  *  Ireland, the Netherlands. Each is read if present; elements in two (the
  *  North Sea between them) are kept once. */
-const EXTRACTS = (arg('--extract')?.split(',') ?? ['gbie', 'nl', 'be', 'fr', 'de'].map(n => path.join(CACHE, 'osm', n))).filter(d => fs.existsSync(d))
+const EXTRACTS = (arg('--extract')?.split(',') ?? ['gbie', 'nl', 'be', 'fr', 'de', 'at', 'ch'].map(n => path.join(CACHE, 'osm', n))).filter(d => fs.existsSync(d))
 const NORMALISED = path.join(CACHE, 'normalised')
 const MANIFEST = path.resolve(process.cwd(), '../../packages/waterways/data/manifest.json')
 

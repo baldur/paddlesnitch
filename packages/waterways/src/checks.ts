@@ -42,4 +42,8 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'Minden → Hannover (Mittellandkanal)', start: [52.3010, 8.9180], finish: [52.4230, 9.6938], source: 'OSM; a route must exist' },
   { name: 'Weilburg → Limburg (Lahn)', start: [50.4860, 8.2620], finish: [50.3890, 8.0660], source: 'The Lahn canoe run, with its locks; a route must exist' },
   { name: 'Berlin: Oberbaumbrücke → Museumsinsel (Spree)', start: [52.5019, 13.4458], finish: [52.5190, 13.4000], source: 'OSM; a route must exist' },
+  // Austria and Switzerland (docs/features/waterways-austria-switzerland.md): routes found, no counts pinned yet.
+  { name: 'Melk → Krems (Danube, the Wachau)', start: [48.2310, 15.3340], finish: [48.4060, 15.6010], source: 'OSM; a route must exist' },
+  { name: 'Bern: Eichholz → Altenberg (Aare)', start: [46.9320, 7.4560], finish: [46.9540, 7.4500], source: 'The Aare swim and paddle run through Bern; a route must exist' },
+  { name: 'Zürich: Bellevue → Rapperswil (Lake Zurich)', start: [47.3650, 8.5450], finish: [47.2260, 8.8150], source: 'OSM; a route must exist' },
 ]

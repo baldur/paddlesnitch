@@ -182,7 +182,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
         )}
         <p className="hidden sm:block absolute top-2 right-2 z-[500] max-w-[16rem] rounded-control bg-bg/90 border border-border px-2 py-1 text-sm text-muted pointer-events-none">
           {manifest.version
-            ? 'Rivers and canals of the UK, Ireland, the Netherlands, Belgium, France and Germany. Switch on Coverage to see how well we know each.'
+            ? 'Rivers and canals of the UK, Ireland, the Netherlands, Belgium, France, Germany, Austria and Switzerland. Switch on Coverage to see how well we know each.'
             : 'River data so far: Devizes to Westminster.'}
         </p>
       </div>
