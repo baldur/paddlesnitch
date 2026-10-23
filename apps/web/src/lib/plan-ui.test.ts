@@ -190,7 +190,8 @@ describe('the map tiles', () => {
     expect(germanPhotosNear([50.94, 6.96]).map(g => g.id)).toEqual(['nw'])
     expect(germanPhotosNear([52.52, 13.41]).map(g => g.id)).toEqual(['be', 'bb'])   // Berlin's own first, then Brandenburg's
     expect(germanPhotosNear([51.5, 10.5])).toEqual([])   // the Harz: none yet
-    expect(GERMAN_PHOTOS.filter(g => !/Datenlizenz Deutschland|dl-de\/|CC BY/.test(g.attribution)).map(g => g.id)).toEqual([])   // every one credits an open licence
+    // Every one credits an open licence, or (M-V: "no conditions" but a credit) the credit its service requires.
+    expect(GERMAN_PHOTOS.filter(g => !/Datenlizenz Deutschland|dl-de\/|CC BY|© GeoBasis-DE\//.test(g.attribution)).map(g => g.id)).toEqual([])
   })
 
   it('Brandenburg (DL-DE BY 2.0) round Berlin, and Bavaria (CC BY 4.0), the same way; Berlin keeps its own sharper photos', () => {
@@ -199,9 +200,8 @@ describe('the map tiles', () => {
       .toEqual({ Potsdam: 'bb', Bernau: 'bb', 'Frankfurt (Oder)': 'bb', Cottbus: 'bb', Brandenburg: 'bb', Alexanderplatz: 'be' })
     expect(where({ Munich: [48.14, 11.58], Nuremberg: [49.45, 11.08], Passau: [48.57, 13.46], Würzburg: [49.79, 9.93], Regensburg: [49.01, 12.10], Bamberg: [49.89, 10.89] }))
       .toEqual({ Munich: 'by', Nuremberg: 'by', Passau: 'by', Würzburg: 'by', Regensburg: 'by', Bamberg: 'by' })
-    expect(where({ Magdeburg: [52.13, 11.63], Dresden: [51.05, 13.74], Rostock: [54.09, 12.1], Szczecin: [53.43, 14.55], Stuttgart: [48.78, 9.18],
-      Heilbronn: [49.14, 9.22], Salzburg: [47.8, 13.04], Innsbruck: [47.27, 11.39], Pilsen: [49.74, 13.38], Erfurt: [50.98, 11.03], Frankfurt: [50.11, 8.68] }))
-      .toEqual({ Magdeburg: null, Dresden: null, Rostock: null, Szczecin: null, Stuttgart: null, Heilbronn: null, Salzburg: null, Innsbruck: null, Pilsen: null, Erfurt: null, Frankfurt: 'he' })
+    expect(where({ Magdeburg: [52.13, 11.63], Dresden: [51.05, 13.74], Szczecin: [53.43, 14.55], Salzburg: [47.8, 13.04], Innsbruck: [47.27, 11.39], Pilsen: [49.74, 13.38], Erfurt: [50.98, 11.03], Frankfurt: [50.11, 8.68] }))
+      .toEqual({ Magdeburg: null, Dresden: null, Szczecin: null, Salzburg: null, Innsbruck: null, Pilsen: null, Erfurt: null, Frankfurt: 'he' })
     expect(new URL(aerialPhotoUrl({ bbox: [48, 11, 48.01, 11.01] }, 'by')).searchParams.get('LAYERS')).toBe('by_dop40c')
     expect(GERMAN_PHOTOS.find(g => g.id === 'bb')!.attribution).toContain('GeoBasis-DE/LGB, dl-de/by-2-0')
   })
@@ -214,6 +214,19 @@ describe('the map tiles', () => {
       .toEqual({ Mannheim: null, Siegen: 'nw', Göttingen: null, Koblenz: null, Erfurt: null })
     expect(printablePhotos([49.79, 9.93])).toBe('by')   // Würzburg
     expect(GERMAN_PHOTOS.find(g => g.id === 'he')!.layers).toBe('he_dop_rgb')   // he_dop20_rgb is blank when zoomed out
+  })
+
+  it('Mecklenburg-Western Pomerania (credit © GeoBasis-DE/M-V) and Baden-Württemberg (DL-DE BY 2.0) the same way', () => {
+    const where = (pts: Record<string, number[]>) => Object.fromEntries(Object.entries(pts).map(([n, p]) => [n, printablePhotos(p as [number, number]) ?? null]))
+    expect(where({ Schwerin: [53.63, 11.41], Rostock: [54.09, 12.1], 'Waren (Müritz)': [53.52, 12.68], Neubrandenburg: [53.56, 13.26], Stralsund: [54.31, 13.09], Greifswald: [54.09, 13.38] }))
+      .toEqual({ Schwerin: 'mv', Rostock: 'mv', 'Waren (Müritz)': 'mv', Neubrandenburg: 'mv', Stralsund: 'mv', Greifswald: 'mv' })
+    expect(where({ Stuttgart: [48.78, 9.18], Heilbronn: [49.14, 9.22], Freiburg: [47.99, 7.85], Karlsruhe: [49.01, 8.40], Heidelberg: [49.40, 8.69], Tübingen: [48.52, 9.06] }))
+      .toEqual({ Stuttgart: 'bw', Heilbronn: 'bw', Freiburg: 'bw', Karlsruhe: 'bw', Heidelberg: 'bw', Tübingen: 'bw' })
+    expect(where({ Lübeck: [53.87, 10.69], Hamburg: [53.55, 9.99], Neuruppin: [52.93, 12.8], Prenzlau: [53.32, 13.86], Strasbourg: [48.58, 7.75], Zürich: [47.37, 8.54], Speyer: [49.32, 8.43] }))
+      .toEqual({ Lübeck: null, Hamburg: null, Neuruppin: 'bb', Prenzlau: 'bb', Strasbourg: 'fr', Zürich: null, Speyer: null })
+    expect(GERMAN_PHOTOS.find(g => g.id === 'mv')!.attribution).toContain('© GeoBasis-DE/M-V')
+    expect(GERMAN_PHOTOS.find(g => g.id === 'mv')).toMatchObject({ tileSize: 512 })   // its watermark, a quarter as often
+    expect(GERMAN_PHOTOS.find(g => g.id === 'bw')!.attribution).toContain('LGL-BW')
   })
 
   it('is the dark map by default', () => {

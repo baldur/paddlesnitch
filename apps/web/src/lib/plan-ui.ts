@@ -334,6 +334,23 @@ export const GERMAN_PHOTOS = [
       [49.98, 7.88], [50.1, 7.78], [50.3, 7.95], [50.55, 8.1], [50.7, 8.12], [50.85, 8.2], [51.0, 8.5], [51.1, 8.55], [51.25, 8.75], [51.45, 8.9], [51.55, 9.15]] as LatLng[],
     attribution: 'Aerial photo (Hessen): HVBG, Datenlizenz Deutschland – Zero 2.0',
   },
+  {
+    // The Mecklenburg lakes. Free with this credit, "year of the last data delivery".
+    // Every image carries a "© GeoBasis-DE/M-V" watermark: 512 px tiles show a quarter as many.
+    id: 'mv' as const, wms: 'https://www.geodaten-mv.de/dienste/adv_dop', layers: 'mv_dop', tileSize: 512,
+    near: [53.05, 10.5, 54.8, 14.5] as const,
+    outline: [[53.95, 10.85], [54.3, 11.0], [54.6, 12.3], [54.75, 13.4], [54.4, 14.5], [53.9, 14.3], [53.5, 14.4], [53.45, 14.25], [53.56, 13.6],
+      [53.45, 13.2], [53.4, 12.6], [53.25, 12.1], [53.35, 11.6], [53.1, 11.3], [53.2, 11.05], [53.38, 10.6], [53.55, 10.75], [53.75, 10.85]] as LatLng[],
+    attribution: 'Aerial photo (Mecklenburg-Vorpommern): © GeoBasis-DE/M-V 2026',
+  },
+  {
+    id: 'bw' as const, wms: 'https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C', layers: 'IMAGES_DOP_20_RGB',
+    near: [47.5, 7.45, 49.85, 10.55] as const,
+    outline: [[49.79, 9.55], [49.6, 9.9], [49.5, 10.0], [49.1, 10.2], [48.9, 10.4], [48.4, 10.02], [47.8, 10.1], [47.55, 9.6], [47.68, 9.3],
+      [47.66, 9.0], [47.62, 8.8], [47.55, 8.2], [47.58, 7.6], [47.8, 7.53], [48.3, 7.75], [48.6, 7.82], [48.97, 8.23], [49.1, 8.4], [49.35, 8.5],
+      [49.55, 8.55], [49.5, 8.95], [49.6, 9.1], [49.75, 9.3]] as LatLng[],
+    attribution: 'Aerial photo (Baden-Württemberg): LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de',
+  },
 ]
 export type GermanPhotoId = (typeof GERMAN_PHOTOS)[number]['id']
 export const germanPhotosNear = ([lat, lng]: LatLng) => GERMAN_PHOTOS.filter(g => lat >= g.near[0] && lat <= g.near[2] && lng >= g.near[1] && lng <= g.near[3])
@@ -547,6 +564,7 @@ export const PHOTO_CREDIT = {
   nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0',
   nw: 'Geobasis NRW, Datenlizenz Deutschland – Zero 2.0', be: 'Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0',
   bb: '© GeoBasis-DE/LGB, dl-de/by-2-0', by: 'Bayerische Vermessungsverwaltung, CC BY 4.0', he: 'HVBG, Datenlizenz Deutschland – Zero 2.0',
+  mv: '© GeoBasis-DE/M-V 2026', bw: 'LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de',
 } as const
 
 // --- Wallonia's regulated kayak rivers ---------------------------------------------

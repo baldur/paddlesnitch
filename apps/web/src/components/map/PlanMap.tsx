@@ -141,7 +141,8 @@ export default function PlanMap({
       {/* German states' photos: transparent outside the state, so over Esri. Added
           last is drawn on top, so in reverse: Berlin's own over Brandenburg's. */}
       {satellite && GERMAN_PHOTOS.filter(g => overDe.includes(g.id)).reverse().map(g => (
-        <WMSTileLayer key={g.id} url={g.wms} params={{ layers: g.layers, format: 'image/png', transparent: true }} attribution={g.attribution} maxZoom={19} />
+        <WMSTileLayer key={g.id} url={g.wms} params={{ layers: g.layers, format: 'image/png', transparent: true }} attribution={g.attribution} maxZoom={19}
+          tileSize={'tileSize' in g ? g.tileSize : 256} />
       ))}
       {coverage ? <Coverage version={version} /> : <Network version={version} />}
       {/* Esri's place names, above the rivers but below the markers and clicks. */}
