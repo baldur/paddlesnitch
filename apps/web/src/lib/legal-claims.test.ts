@@ -38,7 +38,8 @@ const SERVICES: Record<string, string> = {
   'waterlevel.ie': 'OPW',
   'ddapi20-waterwebservices.rijkswaterstaat.nl': 'Rijkswaterstaat',
   'download.waterinfo.be': 'waterinfo.be',
-  'www.pegelonline.wsv.de': 'PEGELONLINE',   // German water levels, read by our server (and a gauge's own page)
+  'www.pegelonline.wsv.de': 'PEGELONLINE',
+  'www.hydrodaten.admin.ch': 'BAFU',   // Swiss water levels, read by our server (and a station's own page)   // German water levels, read by our server (and a gauge's own page)
   'www.gov.uk': 'GOV.UK',
   'api.github.com': 'GitHub',
   'github.com': 'GitHub',
