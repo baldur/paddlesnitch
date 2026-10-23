@@ -9,14 +9,15 @@ export function toNdjson(items: unknown[]): Buffer {
   return Buffer.from(items.map(x => JSON.stringify(x)).join('\n'))
 }
 
-export async function readNdjsonGz<T>(gz: Buffer): Promise<T[]> {
+/** Each value parsed, then passed through `map` (to pack it as it arrives). */
+export async function readNdjsonGz<T>(gz: Buffer, map: (x: unknown) => T = x => x as T): Promise<T[]> {
   const out: T[] = []
   let rest = ''
   for await (const chunk of Readable.from([gz]).pipe(createGunzip({ chunkSize: 1 << 20 }))) {
     const lines = (rest + (chunk as Buffer).toString('utf8')).split('\n')
     rest = lines.pop()!
-    for (const line of lines) if (line) out.push(JSON.parse(line) as T)
+    for (const line of lines) if (line) out.push(map(JSON.parse(line)))
   }
-  if (rest) out.push(JSON.parse(rest) as T)
+  if (rest) out.push(map(JSON.parse(rest)))
   return out
 }

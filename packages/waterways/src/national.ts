@@ -69,13 +69,66 @@ export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`
 export const publishedNdjsonKey = (version: string, name: string) => `waterways/published/${version}/${name}.ndjson.gz`
 
+/** Every link's points in one Float64Array (lat, lng, lat, lng, …): ~4 million
+ *  points as [lat, lng] arrays cost ~94 bytes each, here 16. */
+class LinePool {
+  buf = new Float64Array(1 << 20)
+  used = 0
+  add(line: LatLng[]): number {
+    const off = this.used
+    if (off + line.length * 2 > this.buf.length) {
+      const bigger = new Float64Array(Math.max(this.buf.length * 2, off + line.length * 2))
+      bigger.set(this.buf.subarray(0, off))
+      this.buf = bigger
+    }
+    for (let i = 0; i < line.length; i++) { this.buf[off + 2 * i] = line[i][0]; this.buf[off + 2 * i + 1] = line[i][1] }
+    this.used = off + line.length * 2
+    return off
+  }
+  finish() { this.buf = this.buf.slice(0, this.used) }
+}
+
+/** A link whose line lives in the pool: `line` is unpacked when read (one link
+ *  at a time: a snap, a route leg, a map area), so callers see a NetLink. */
+class PackedLink implements NetLink {
+  id!: string
+  name!: string
+  form!: NetLink['form']
+  from!: string
+  to!: string
+  lengthM!: number
+  boat?: NetLink['boat']
+  culvert?: true
+  canoeRoute?: string
+  readonly #pool: LinePool
+  readonly #off: number
+  readonly #n: number
+  constructor(l: NetLink, pool: LinePool) {
+    const { line, ...rest } = l
+    Object.assign(this, rest)
+    this.#pool = pool
+    this.#off = pool.add(line)
+    this.#n = line.length
+  }
+  get line(): LatLng[] {
+    const b = this.#pool.buf, out = new Array<LatLng>(this.#n)
+    for (let i = 0; i < this.#n; i++) out[i] = [b[this.#off + 2 * i], b[this.#off + 2 * i + 1]]
+    return out
+  }
+}
+
 /** The network, streamed from its NDJSON copy when the version has one (from
- *  2026-10-22), else parsed from the JSON (older versions). */
+ *  2026-10-22), else parsed from the JSON (older versions); lines packed. */
 export async function readNetwork(get: (key: string) => Promise<Buffer | null>, version: string): Promise<NetLink[] | null> {
+  const pool = new LinePool()
   const nd = await get(publishedNdjsonKey(version, 'network')).catch(() => null)
-  if (nd) return readNdjsonGz<NetLink>(nd)
-  const buf = await get(publishedKey(version, 'network')).catch(() => null)
-  return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as NetLink[]) : null
+  const buf = nd ? null : await get(publishedKey(version, 'network')).catch(() => null)
+  if (!nd && !buf) return null
+  const links = nd
+    ? await readNdjsonGz<NetLink>(nd, l => new PackedLink(l as NetLink, pool))
+    : (JSON.parse(gunzipSync(buf!).toString('utf8')) as NetLink[]).map(l => new PackedLink(l, pool))
+  pool.finish()
+  return links
 }
 
 let official: { version: string; value: Promise<OfficialTides | null> } | null = null

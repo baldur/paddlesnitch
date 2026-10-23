@@ -125,6 +125,17 @@ describe('the network, published one link per line and read as a stream (peak me
     expect(await readNetwork(get, 'missing')).toBeNull()
   })
 
+  it('keeps every point in one shared array (~250 MB less memory), and each link still reads its line as [lat, lng] pairs', async () => {
+    const some = links.slice(0, 50).map((l, i) => ({ ...l, boat: i % 2 ? 'yes' as const : undefined, canoeRoute: i === 3 ? 'Lahn' : undefined }))
+    for (const gz of [gzipSync(toNdjson(some)), null]) {
+      const store = new Map<string, Buffer>(gz ? [[publishedNdjsonKey('v1', 'network'), gz]] : [[publishedKey('v1', 'network'), gzipSync(JSON.stringify(some))]])
+      const got = (await readNetwork(async k => store.get(k) ?? null, 'v1'))!
+      expect(got.map(l => l.line)).toEqual(some.map(l => l.line))
+      expect(got.map(l => [l.id, l.name, l.form, l.from, l.to, l.lengthM, l.boat, l.canoeRoute])).toEqual(some.map(l => [l.id, l.name, l.form, l.from, l.to, l.lengthM, l.boat, l.canoeRoute]))
+      expect(Object.keys(got[0])).not.toContain('line')   // not a stored array
+    }
+  })
+
   it('asks for every file at once on a cold start, not the other files after the network', async () => {
     const asked: string[] = []
     let releaseNetwork!: () => void

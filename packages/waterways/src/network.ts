@@ -97,8 +97,9 @@ function indexOf(links: NetLink[]): Index {
   for (const link of links) {
     const keys = new Set<number>()
     let py = 0, px = 0
-    for (let i = 0; i < link.line.length; i++) {
-      const p = link.line[i]
+    const line = link.line   // once: on the server it's unpacked on each read
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i]
       const y = Math.floor(p[0] / CELL), x = Math.floor(p[1] / CELL)
       if (i === 0) keys.add(cellKey(y, x))
       else if (y !== py || x !== px) {
