@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inFrance, inNetherlands, nearFlanders, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inFrance, inNetherlands, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -179,6 +179,20 @@ describe('the map tiles', () => {
       .map(p => printablePhotos(p as [number, number]))).toEqual(['nl', 'vl', 'vl', 'vl', undefined, undefined, undefined, 'fr', 'fr'])   // Amsterdam, Ghent, Antwerp, Brussels, Namur, the Lesse, London, Paris, Lille
   })
 
+  it('German states publish their own aerial photos: NRW and Berlin (both DL-DE Zero), over Esri near them, printed inside them', () => {
+    const where = (pts: Record<string, number[]>) => Object.fromEntries(Object.entries(pts).map(([n, p]) => [n, printablePhotos(p as [number, number]) ?? null]))
+    expect(where({ Cologne: [50.94, 6.96], Dortmund: [51.51, 7.47], Münster: [51.96, 7.63], Bielefeld: [52.02, 8.53], Siegen: [50.87, 8.02] }))
+      .toEqual({ Cologne: 'nw', Dortmund: 'nw', Münster: 'nw', Bielefeld: 'nw', Siegen: 'nw' })
+    expect(where({ Alexanderplatz: [52.52, 13.41], Spandau: [52.535, 13.2], Köpenick: [52.445, 13.575] })).toEqual({ Alexanderplatz: 'be', Spandau: 'be', Köpenick: 'be' })
+    expect(where({ Osnabrück: [52.27, 8.05], Koblenz: [50.36, 7.59], Kassel: [51.31, 9.49], Potsdam: [52.39, 13.06], Bernau: [52.68, 13.59], Maastricht: [50.85, 5.69] }))
+      .toEqual({ Osnabrück: null, Koblenz: null, Kassel: null, Potsdam: null, Bernau: null, Maastricht: 'nl' })
+    expect(printablePhotos([51.37, 6.17])).not.toBe('nw')   // Venlo, just over the Dutch border
+    expect(germanPhotosNear([50.94, 6.96]).map(g => g.id)).toEqual(['nw'])
+    expect(germanPhotosNear([52.52, 13.41]).map(g => g.id)).toEqual(['be'])
+    expect(germanPhotosNear([48.14, 11.58])).toEqual([])   // Munich: none yet
+    expect(GERMAN_PHOTOS.every(g => /Datenlizenz Deutschland/.test(g.attribution))).toBe(true)
+  })
+
   it('is the dark map by default', () => {
     expect(mapTiles(false).base).toContain('/World_Dark_Gray_Base/')
   })
@@ -277,6 +291,8 @@ describe('portage maps for the printed sheet', () => {
     expect((n - s) * 110_540 / 2).toBeCloseTo(120, 0)                                   // 120 m from the lock to the edge
     expect((e - w) * Math.cos((51.5 * Math.PI) / 180) * 111_320 / 2).toBeCloseTo(120, 0)  // and square on the ground
     expect(new URL(aerialPhotoUrl(map, 'vl')).searchParams.get('LAYERS')).toBe('Ortho')
+    expect(new URL(aerialPhotoUrl(map, 'nw')).searchParams.get('LAYERS')).toBe('nw_dop_rgb')
+    expect(new URL(aerialPhotoUrl(map, 'be')).hostname).toBe('gdi.berlin.de')
     const fr = new URL(aerialPhotoUrl(map, 'fr'))
     expect([fr.hostname, fr.searchParams.get('LAYERS')]).toEqual(['data.geopf.fr', 'ORTHOIMAGERY.ORTHOPHOTOS'])
     const url = new URL(aerialPhotoUrl(map))

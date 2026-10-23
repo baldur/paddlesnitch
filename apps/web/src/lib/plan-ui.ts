@@ -287,11 +287,35 @@ const FRANCE_OUTLINES: LatLng[][] = [[
 ]]
 export const inFrance = (p: LatLng) => FRANCE_OUTLINES.some(o => inOutline(o, p))
 
+/** German states publish their own aerial photos (there's no national open
+ *  set). Each one's WMS is transparent outside the state, so it goes over Esri
+ *  when the map is centred `near` it, and its rough `outline` (a few km) says
+ *  where a printed drawing gets it. Datenlizenz Deutschland – Zero 2.0 for both. */
+export const GERMAN_PHOTOS = [
+  {
+    id: 'nw' as const, wms: 'https://www.wms.nrw.de/geobasis/wms_nw_dop', layers: 'nw_dop_rgb',
+    near: [50.25, 5.8, 52.6, 9.5] as const,
+    outline: [[52.08, 6.75], [52.25, 7.05], [52.35, 7.55], [52.24, 8.0], [52.10, 8.3], [52.30, 8.55], [52.53, 8.7], [52.45, 9.0], [52.2, 9.15],
+      [51.85, 9.45], [51.6, 9.45], [51.35, 9.1], [51.2, 8.75], [50.9, 8.3], [50.75, 8.15], [50.75, 7.6], [50.6, 7.3], [50.35, 6.9],
+      [50.32, 6.4], [50.6, 6.1], [50.77, 5.98], [51.05, 6.08], [51.25, 6.2], [51.38, 6.23], [51.55, 6.1], [51.85, 5.95], [51.83, 6.4]] as LatLng[],
+    attribution: 'Aerial photo (NRW): Geobasis NRW, Datenlizenz Deutschland – Zero 2.0',
+  },
+  {
+    id: 'be' as const, wms: 'https://gdi.berlin.de/services/wms/truedop_2024', layers: 'truedop_2024',
+    near: [52.3, 13.0, 52.7, 13.85] as const,
+    outline: [[52.66, 13.30], [52.68, 13.48], [52.60, 13.60], [52.55, 13.76], [52.43, 13.76], [52.35, 13.63], [52.38, 13.42], [52.34, 13.25],
+      [52.40, 13.10], [52.53, 13.11], [52.63, 13.20]] as LatLng[],
+    attribution: 'Aerial photo (Berlin): Geoportal Berlin, TrueDOP 2024, Datenlizenz Deutschland – Zero 2.0',
+  },
+]
+export type GermanPhotoId = (typeof GERMAN_PHOTOS)[number]['id']
+export const germanPhotosNear = ([lat, lng]: LatLng) => GERMAN_PHOTOS.filter(g => lat >= g.near[0] && lat <= g.near[2] && lng >= g.near[1] && lng <= g.near[3])
+
 /** Whose aerial photos may be printed here: the Kadaster's (CC BY 4.0),
- *  Digitaal Vlaanderen's (Flemish Open Data licence) or IGN's (Licence Ouverte 2.0).
- *  Elsewhere none: Esri may not be printed. */
-export const printablePhotos = (p: LatLng): 'nl' | 'vl' | 'fr' | undefined =>
-  (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : inFrance(p) ? 'fr' : undefined)
+ *  Digitaal Vlaanderen's (Flemish Open Data licence), IGN's (Licence Ouverte 2.0)
+ *  or a German state's (GERMAN_PHOTOS). Elsewhere none: Esri may not be printed. */
+export const printablePhotos = (p: LatLng): 'nl' | 'vl' | 'fr' | GermanPhotoId | undefined =>
+  (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : inFrance(p) ? 'fr' : GERMAN_PHOTOS.find(g => inOutline(g.outline, p))?.id)
 
 /** The map's tiles. On satellite, over the Netherlands (inNetherlands of the map's centre): the Kadaster's
  *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). Over France
@@ -478,8 +502,9 @@ export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' 
 /** A printable aerial photo for a drawing, exactly its extent so the drawing
  *  lines up on top: the Kadaster's (PDOK WMS) in the Netherlands, Digitaal
  *  Vlaanderen's in Flanders, IGN's (Géoplateforme WMS) in France. */
-export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' | 'fr' = 'nl', px = 440): string {
-  const [base, layer] = region === 'vl'
+export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' | 'fr' | GermanPhotoId = 'nl', px = 440): string {
+  const de = GERMAN_PHOTOS.find(g => g.id === region)
+  const [base, layer] = de ? [de.wms, de.layers] : region === 'vl'
     ? ['https://geo.api.vlaanderen.be/OMWRGBMRVL/wms', 'Ortho']
     : region === 'fr'
       ? ['https://data.geopf.fr/wms-r/wms', 'ORTHOIMAGERY.ORTHOPHOTOS']
@@ -491,7 +516,10 @@ export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' 
   return `${base}?${q}`
 }
 
-export const PHOTO_CREDIT = { nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0' } as const
+export const PHOTO_CREDIT = {
+  nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0',
+  nw: 'Geobasis NRW, Datenlizenz Deutschland – Zero 2.0', be: 'Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0',
+} as const
 
 // --- Wallonia's regulated kayak rivers ---------------------------------------------
 
