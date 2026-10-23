@@ -325,6 +325,15 @@ export const GERMAN_PHOTOS = [
       [49.6, 9.9], [49.75, 9.6], [49.6, 9.1], [49.75, 9.05]] as LatLng[],
     attribution: 'Aerial photo (Bavaria): Bayerische Vermessungsverwaltung, CC BY 4.0',
   },
+  {
+    // he_dop_rgb, not he_dop20_rgb: the 20 cm layer draws nothing below its scale limit.
+    id: 'he' as const, wms: 'https://www.gds-srv.hessen.de/cgi-bin/lika-services/ogc-free-images.ows', layers: 'he_dop_rgb',
+    near: [49.35, 7.7, 51.7, 10.3] as const,
+    outline: [[51.66, 9.45], [51.4, 9.75], [51.35, 9.95], [51.15, 10.2], [50.85, 10.05], [50.65, 10.08], [50.45, 9.95], [50.3, 9.7], [50.15, 9.5],
+      [50.05, 9.1], [49.8, 9.05], [49.6, 9.1], [49.5, 8.95], [49.4, 8.8], [49.55, 8.55], [49.7, 8.38], [49.9, 8.33], [50.0, 8.25], [50.05, 8.0],
+      [49.98, 7.88], [50.1, 7.78], [50.3, 7.95], [50.55, 8.1], [50.7, 8.12], [50.85, 8.2], [51.0, 8.5], [51.1, 8.55], [51.25, 8.75], [51.45, 8.9], [51.55, 9.15]] as LatLng[],
+    attribution: 'Aerial photo (Hessen): HVBG, Datenlizenz Deutschland – Zero 2.0',
+  },
 ]
 export type GermanPhotoId = (typeof GERMAN_PHOTOS)[number]['id']
 export const germanPhotosNear = ([lat, lng]: LatLng) => GERMAN_PHOTOS.filter(g => lat >= g.near[0] && lat <= g.near[2] && lng >= g.near[1] && lng <= g.near[3])
@@ -537,7 +546,7 @@ export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' 
 export const PHOTO_CREDIT = {
   nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0',
   nw: 'Geobasis NRW, Datenlizenz Deutschland – Zero 2.0', be: 'Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0',
-  bb: '© GeoBasis-DE/LGB, dl-de/by-2-0', by: 'Bayerische Vermessungsverwaltung, CC BY 4.0',
+  bb: '© GeoBasis-DE/LGB, dl-de/by-2-0', by: 'Bayerische Vermessungsverwaltung, CC BY 4.0', he: 'HVBG, Datenlizenz Deutschland – Zero 2.0',
 } as const
 
 // --- Wallonia's regulated kayak rivers ---------------------------------------------

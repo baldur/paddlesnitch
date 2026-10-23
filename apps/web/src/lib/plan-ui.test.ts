@@ -185,7 +185,7 @@ describe('the map tiles', () => {
       .toEqual({ Cologne: 'nw', Dortmund: 'nw', Münster: 'nw', Bielefeld: 'nw', Siegen: 'nw' })
     expect(where({ Alexanderplatz: [52.52, 13.41], Spandau: [52.535, 13.2], Köpenick: [52.445, 13.575] })).toEqual({ Alexanderplatz: 'be', Spandau: 'be', Köpenick: 'be' })
     expect(where({ Osnabrück: [52.27, 8.05], Koblenz: [50.36, 7.59], Kassel: [51.31, 9.49], Maastricht: [50.85, 5.69] }))
-      .toEqual({ Osnabrück: null, Koblenz: null, Kassel: null, Maastricht: 'nl' })
+      .toEqual({ Osnabrück: null, Koblenz: null, Kassel: 'he', Maastricht: 'nl' })   // Kassel is in Hessen
     expect(printablePhotos([51.37, 6.17])).not.toBe('nw')   // Venlo, just over the Dutch border
     expect(germanPhotosNear([50.94, 6.96]).map(g => g.id)).toEqual(['nw'])
     expect(germanPhotosNear([52.52, 13.41]).map(g => g.id)).toEqual(['be', 'bb'])   // Berlin's own first, then Brandenburg's
@@ -201,9 +201,19 @@ describe('the map tiles', () => {
       .toEqual({ Munich: 'by', Nuremberg: 'by', Passau: 'by', Würzburg: 'by', Regensburg: 'by', Bamberg: 'by' })
     expect(where({ Magdeburg: [52.13, 11.63], Dresden: [51.05, 13.74], Rostock: [54.09, 12.1], Szczecin: [53.43, 14.55], Stuttgart: [48.78, 9.18],
       Heilbronn: [49.14, 9.22], Salzburg: [47.8, 13.04], Innsbruck: [47.27, 11.39], Pilsen: [49.74, 13.38], Erfurt: [50.98, 11.03], Frankfurt: [50.11, 8.68] }))
-      .toEqual({ Magdeburg: null, Dresden: null, Rostock: null, Szczecin: null, Stuttgart: null, Heilbronn: null, Salzburg: null, Innsbruck: null, Pilsen: null, Erfurt: null, Frankfurt: null })
+      .toEqual({ Magdeburg: null, Dresden: null, Rostock: null, Szczecin: null, Stuttgart: null, Heilbronn: null, Salzburg: null, Innsbruck: null, Pilsen: null, Erfurt: null, Frankfurt: 'he' })
     expect(new URL(aerialPhotoUrl({ bbox: [48, 11, 48.01, 11.01] }, 'by')).searchParams.get('LAYERS')).toBe('by_dop40c')
     expect(GERMAN_PHOTOS.find(g => g.id === 'bb')!.attribution).toContain('GeoBasis-DE/LGB, dl-de/by-2-0')
+  })
+
+  it('Hessen (DL-DE Zero) the same way, with the layer that draws at every zoom', () => {
+    const where = (pts: Record<string, number[]>) => Object.fromEntries(Object.entries(pts).map(([n, p]) => [n, printablePhotos(p as [number, number]) ?? null]))
+    expect(where({ Frankfurt: [50.11, 8.68], Kassel: [51.31, 9.49], Darmstadt: [49.87, 8.65], Fulda: [50.55, 9.68], Gießen: [50.58, 8.68], Marburg: [50.81, 8.77] }))
+      .toEqual({ Frankfurt: 'he', Kassel: 'he', Darmstadt: 'he', Fulda: 'he', Gießen: 'he', Marburg: 'he' })
+    expect(where({ Mannheim: [49.49, 8.47], Siegen: [50.87, 8.02], Göttingen: [51.53, 9.93], Koblenz: [50.36, 7.59], Erfurt: [50.98, 11.03] }))
+      .toEqual({ Mannheim: null, Siegen: 'nw', Göttingen: null, Koblenz: null, Erfurt: null })
+    expect(printablePhotos([49.79, 9.93])).toBe('by')   // Würzburg
+    expect(GERMAN_PHOTOS.find(g => g.id === 'he')!.layers).toBe('he_dop_rgb')   // he_dop20_rgb is blank when zoomed out
   })
 
   it('is the dark map by default', () => {
