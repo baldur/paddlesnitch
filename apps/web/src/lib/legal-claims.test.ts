@@ -52,7 +52,10 @@ const SERVICES: Record<string, string> = {
   'geoservices.bayern.de': 'Bayerische Vermessungsverwaltung',   // Bavarian aerial photos
   'www.gds-srv.hessen.de': 'HVBG Hessen',   // Hessian aerial photos
   'www.geodaten-mv.de': 'LAiV Mecklenburg-Vorpommern',   // Mecklenburg aerial photos
-  'owsproxy.lgl-bw.de': 'LGL Baden-Württemberg',   // Baden-Württemberg aerial photos   // Berlin aerial photos in the browser, and in print   // French aerial photo tiles in the browser, and in print
+  'owsproxy.lgl-bw.de': 'LGL Baden-Württemberg',   // Baden-Württemberg aerial photos
+  'wmts.geo.admin.ch': 'swisstopo',   // Swiss aerial photos on screen
+  'wms.geo.admin.ch': 'swisstopo',   // and in print
+  'maps.wien.gv.at': 'basemap.at',   // Austrian aerial photos   // Berlin aerial photos in the browser, and in print   // French aerial photo tiles in the browser, and in print
   'geo.api.vlaanderen.be': 'Digitaal Vlaanderen',   // Flemish aerial photo tiles in the browser   // aerial photo tiles in the browser (and the water boards' data at build time)
   'unpkg.com': 'unpkg',
 }

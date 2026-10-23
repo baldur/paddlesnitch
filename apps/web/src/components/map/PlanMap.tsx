@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, WMSTileLayer, Pane, Polyline, CircleMarker, To
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inFrance, inNetherlands, mapTiles, nearFlanders, type GermanPhotoId } from '@/lib/plan-ui'
+import { COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inAustria, inFrance, inNetherlands, inSwitzerland, mapTiles, nearFlanders, type GermanPhotoId } from '@/lib/plan-ui'
 
 // The planner's map: the rivers and canals of the UK, Ireland, the Netherlands, Belgium, France and Germany, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
@@ -125,14 +125,14 @@ export default function PlanMap({
   onPick: (p: LatLng, zoom: number) => void
 }) {
   // Only whether the view is over the Netherlands, Flanders or France matters (which photos to use).
-  const [over, setOver] = useState<'nl' | 'fr' | undefined>()
+  const [over, setOver] = useState<'nl' | 'fr' | 'ch' | 'at' | undefined>()
   const [overVl, setOverVl] = useState(false)
   const [overDe, setOverDe] = useState<GermanPhotoId[]>([])
   const overNl = over === 'nl'
   const tiles = mapTiles(satellite, over)
   return (
     <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
-      <WatchCentre onChange={c => { setOver(inNetherlands(c) ? 'nl' : inFrance(c) ? 'fr' : undefined); setOverVl(nearFlanders(c)); setOverDe(germanPhotosNear(c).map(g => g.id)) }} />
+      <WatchCentre onChange={c => { setOver(inNetherlands(c) ? 'nl' : inFrance(c) ? 'fr' : inSwitzerland(c) ? 'ch' : inAustria(c) ? 'at' : undefined); setOverVl(nearFlanders(c)); setOverDe(germanPhotosNear(c).map(g => g.id)) }} />
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
       {satellite && !overNl && overVl && (

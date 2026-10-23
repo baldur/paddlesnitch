@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inFrance, inNetherlands, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -153,6 +153,20 @@ describe('the map tiles', () => {
     expect(mapTiles(false, 'fr').base).toContain('/World_Dark_Gray_Base/')
   })
 
+  it("over Switzerland swisstopo's SWISSIMAGE, over Austria basemap.at's orthophotos, each credited; both replace Esri (white or foreign imagery beyond)", () => {
+    expect(mapTiles(true, 'ch')).toMatchObject({ base: expect.stringContaining('wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage'), attribution: expect.stringContaining('swisstopo') })
+    expect(mapTiles(true, 'at')).toMatchObject({ base: expect.stringContaining('maps.wien.gv.at/basemap/bmaporthofoto30cm'), attribution: expect.stringContaining('basemap.at') })
+    const inside = (f: (p: [number, number]) => boolean, pts: Record<string, number[]>) => Object.entries(pts).filter(([, p]) => !f(p as [number, number])).map(([n]) => n)
+    const outside = (f: (p: [number, number]) => boolean, pts: Record<string, number[]>) => Object.entries(pts).filter(([, p]) => f(p as [number, number])).map(([n]) => n)
+    expect(inside(inSwitzerland, { Bern: [46.95, 7.45], Zürich: [47.37, 8.54], Lausanne: [46.52, 6.63], Luzern: [47.05, 8.31], Chur: [46.85, 9.53], Sion: [46.23, 7.36], Interlaken: [46.69, 7.86] })).toEqual([])
+    expect(outside(inSwitzerland, { Freiburg: [47.99, 7.85], Milan: [45.46, 9.19], Annecy: [45.9, 6.13], Vaduz: [47.14, 9.52], Innsbruck: [47.27, 11.39], Konstanz: [47.67, 9.18] })).toEqual([])
+    expect(inside(inAustria, { Vienna: [48.21, 16.37], Linz: [48.31, 14.29], Innsbruck: [47.27, 11.39], Graz: [47.07, 15.44], Melk: [48.23, 15.33], Klagenfurt: [46.62, 14.31], Salzburg: [47.80, 13.04] })).toEqual([])
+    expect(outside(inAustria, { Munich: [48.14, 11.58], Brno: [49.19, 16.6], Ljubljana: [46.05, 14.5], Verona: [45.44, 10.99], Zürich: [47.37, 8.54], Vaduz: [47.14, 9.52], Freilassing: [47.84, 12.98] })).toEqual([])
+    expect(printablePhotos([46.95, 7.45])).toBe('ch')
+    expect(printablePhotos([48.21, 16.37])).toBeUndefined()   // basemap.at has no WMS: on screen only
+    expect(new URL(aerialPhotoUrl({ bbox: [46.93, 7.44, 46.94, 7.45] }, 'ch')).searchParams.get('LAYERS')).toBe('ch.swisstopo.swissimage')
+  })
+
   it('knows France from its neighbours, Corsica included', () => {
     const inside = { Paris: [48.857, 2.352], Lille: [50.63, 3.06], Strasbourg: [48.58, 7.75], Lyon: [45.76, 4.84], Marseille: [43.30, 5.37], Toulouse: [43.60, 1.44],
       Bordeaux: [44.84, -0.58], Brest: [48.39, -4.49], 'Vallon-Pont-d’Arc': [44.40, 4.39], Chamonix: [45.92, 6.87], Ajaccio: [41.93, 8.74] }
@@ -225,7 +239,7 @@ describe('the map tiles', () => {
     expect(where({ Stuttgart: [48.78, 9.18], Heilbronn: [49.14, 9.22], Freiburg: [47.99, 7.85], Karlsruhe: [49.01, 8.40], Heidelberg: [49.40, 8.69], Tübingen: [48.52, 9.06] }))
       .toEqual({ Stuttgart: 'bw', Heilbronn: 'bw', Freiburg: 'bw', Karlsruhe: 'bw', Heidelberg: 'bw', Tübingen: 'bw' })
     expect(where({ Lübeck: [53.87, 10.69], Hamburg: [53.55, 9.99], Neuruppin: [52.93, 12.8], Prenzlau: [53.32, 13.86], Strasbourg: [48.58, 7.75], Zürich: [47.37, 8.54], Speyer: [49.32, 8.43] }))
-      .toEqual({ Lübeck: null, Hamburg: null, Neuruppin: 'bb', Prenzlau: 'bb', Strasbourg: 'fr', Zürich: null, Speyer: null })
+      .toEqual({ Lübeck: null, Hamburg: null, Neuruppin: 'bb', Prenzlau: 'bb', Strasbourg: 'fr', Zürich: 'ch', Speyer: null })
     expect(GERMAN_PHOTOS.find(g => g.id === 'mv')!.attribution).toContain('© GeoBasis-DE/M-V')
     expect(GERMAN_PHOTOS.find(g => g.id === 'mv')).toMatchObject({ tileSize: 512 })   // its watermark, a quarter as often
     expect(GERMAN_PHOTOS.find(g => g.id === 'bw')!.attribution).toContain('LGL-BW')
