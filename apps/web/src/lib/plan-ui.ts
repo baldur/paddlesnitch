@@ -290,7 +290,8 @@ export const inFrance = (p: LatLng) => FRANCE_OUTLINES.some(o => inOutline(o, p)
 /** German states publish their own aerial photos (there's no national open
  *  set). Each one's WMS is transparent outside the state, so it goes over Esri
  *  when the map is centred `near` it, and its rough `outline` (a few km) says
- *  where a printed drawing gets it. Datenlizenz Deutschland – Zero 2.0 for both. */
+ *  where a printed drawing gets it (first match wins: Berlin's own before
+ *  Brandenburg's, which also covers Berlin). Licences as credited. */
 export const GERMAN_PHOTOS = [
   {
     id: 'nw' as const, wms: 'https://www.wms.nrw.de/geobasis/wms_nw_dop', layers: 'nw_dop_rgb',
@@ -306,6 +307,23 @@ export const GERMAN_PHOTOS = [
     outline: [[52.66, 13.30], [52.68, 13.48], [52.60, 13.60], [52.55, 13.76], [52.43, 13.76], [52.35, 13.63], [52.38, 13.42], [52.34, 13.25],
       [52.40, 13.10], [52.53, 13.11], [52.63, 13.20]] as LatLng[],
     attribution: 'Aerial photo (Berlin): Geoportal Berlin, TrueDOP 2024, Datenlizenz Deutschland – Zero 2.0',
+  },
+  {
+    id: 'bb' as const, wms: 'https://isk.geobasis-bb.de/mapproxy/dop20c/service/wms', layers: 'bebb_dop20c',
+    near: [51.3, 11.2, 53.6, 14.8] as const,
+    outline: [[53.05, 11.27], [53.35, 11.6], [53.25, 12.1], [53.4, 12.6], [53.45, 13.2], [53.56, 13.6], [53.45, 14.25], [53.25, 14.42], [52.85, 14.15],
+      [52.55, 14.63], [52.35, 14.58], [52.05, 14.75], [51.75, 14.65], [51.55, 14.75], [51.36, 14.4], [51.45, 13.85], [51.38, 13.25], [51.6, 13.0],
+      [51.75, 12.65], [51.98, 12.4], [52.15, 12.25], [52.3, 12.25], [52.6, 12.25], [52.85, 12.1], [53.0, 11.6]] as LatLng[],
+    attribution: 'Aerial photo (Brandenburg): © GeoBasis-DE/LGB, dl-de/by-2-0',
+  },
+  {
+    id: 'by' as const, wms: 'https://geoservices.bayern.de/od/wms/dop/v1/dop40', layers: 'by_dop40c',
+    near: [47.25, 8.95, 50.6, 13.9] as const,
+    outline: [[50.0, 9.0], [50.3, 9.6], [50.55, 10.05], [50.4, 10.7], [50.4, 11.3], [50.55, 11.9], [50.32, 12.2], [50.0, 12.5], [49.6, 12.6],
+      [49.3, 12.95], [49.0, 13.4], [48.75, 13.84], [48.55, 13.73], [48.3, 13.4], [47.95, 12.9], [47.7, 13.05], [47.55, 12.2], [47.6, 11.6],
+      [47.4, 11.0], [47.5, 10.4], [47.27, 10.2], [47.55, 9.6], [47.8, 10.1], [48.4, 10.02], [48.9, 10.4], [49.1, 10.2], [49.5, 10.0],
+      [49.6, 9.9], [49.75, 9.6], [49.6, 9.1], [49.75, 9.05]] as LatLng[],
+    attribution: 'Aerial photo (Bavaria): Bayerische Vermessungsverwaltung, CC BY 4.0',
   },
 ]
 export type GermanPhotoId = (typeof GERMAN_PHOTOS)[number]['id']
@@ -519,6 +537,7 @@ export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' 
 export const PHOTO_CREDIT = {
   nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0',
   nw: 'Geobasis NRW, Datenlizenz Deutschland – Zero 2.0', be: 'Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0',
+  bb: '© GeoBasis-DE/LGB, dl-de/by-2-0', by: 'Bayerische Vermessungsverwaltung, CC BY 4.0',
 } as const
 
 // --- Wallonia's regulated kayak rivers ---------------------------------------------
