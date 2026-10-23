@@ -6,7 +6,7 @@ import { gzipSync } from 'zlib'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
-import { overviewLines } from '@paddlesnitch/waterways/display'
+import { MAX_RESPONSE_BYTES, overviewLines, tooBigToServe } from '@paddlesnitch/waterways/display'
 import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
 import { publishedKey, publishedNdjsonKey, readNetwork } from '@paddlesnitch/waterways/national'
 import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
@@ -27,7 +27,7 @@ import { osmPortages, portageOnRoute, portagesAt, type PublicPortage } from '@pa
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
-import { coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
+import { chunkLines, coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
 import { sampleLine } from '@paddlesnitch/waterways/plan-store'
 import { portageLines, stopLines } from './plan-ui'
 
@@ -141,6 +141,22 @@ describe("the zoomed-out map's overview", () => {
     expect(out).toHaveLength(3)
     expect(out[0].length).toBeLessThanOrEqual(3)   // the wiggle is under the 500 m tolerance
     expect(out.flat(2).every(v => Math.round(v * 1000) / 1000 === v)).toBe(true)   // 3 dp, ~110 m
+  })
+
+  it('cuts coverage lines into chunks the server can answer, every line kept, in order', () => {
+    const lines = Array.from({ length: 1000 }, (_, i) => [[52 + i / 1000, 1], [52.5, 1 + i / 1000]] as LatLng[])
+    const chunks = chunkLines(lines, 5000)
+    expect(chunks.length).toBeGreaterThan(5)
+    expect(chunks.every(c => JSON.stringify(c).length <= 5000)).toBe(true)
+    expect(chunks.flat()).toEqual(lines)
+    expect(chunkLines([], 5000)).toEqual([[]])
+  })
+
+  it('knows what the server can answer: under 6 MiB uncompressed, with room to spare (the build checks the overview)', () => {
+    expect(MAX_RESPONSE_BYTES).toBeLessThan(6 * 1024 * 1024)
+    expect(tooBigToServe('x'.repeat(MAX_RESPONSE_BYTES))).toBe(false)
+    expect(tooBigToServe('x'.repeat(MAX_RESPONSE_BYTES + 1))).toBe(true)
+    expect(tooBigToServe('ß'.repeat(MAX_RESPONSE_BYTES / 2 + 1))).toBe(true)   // bytes, not characters
   })
 })
 

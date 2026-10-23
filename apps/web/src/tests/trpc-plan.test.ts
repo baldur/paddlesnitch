@@ -269,7 +269,7 @@ describe("the map's network and places", () => {
   })
 
   it("coverage and the most-needed list change as paddlers add portages and plans: never cached for good, even for the live version", async () => {
-    for (const name of ['coverage', 'coverage-lines', 'needed']) {
+    for (const name of ['coverage', 'coverage-lines', 'coverage-lines-some-0', 'needed']) {
       expect([name, (await get(name, 'dw-fixture')).headers.get('Cache-Control')]).toEqual([name, 'public, max-age=300'])
     }
   })
@@ -277,9 +277,13 @@ describe("the map's network and places", () => {
   it('serves coverage by waterway, and the scored water by level for the map', async () => {
     const rows = await (await get('coverage')).json()
     expect(rows.find((r: { name: string }) => r.name === 'Kennet and Avon Canal')).toMatchObject({ kind: 'canal', locksWithSide: 0 })
-    const lines = await (await get('coverage-lines')).json()
-    expect(Object.keys(lines).sort()).toEqual(['good', 'some', 'thin'])
-    expect(lines.some.length).toBeGreaterThan(10)
+    // An index of chunks per level, then the chunks: all in one was 7.9 MB with Germany, over Lambda's 6 MB limit (502).
+    const index = await (await get('coverage-lines')).json()
+    expect(Object.keys(index).sort()).toEqual(['good', 'some', 'thin'])
+    const some = await (await get('coverage-lines-some-0')).json()
+    expect(some.length).toBeGreaterThan(10)
+    expect(some.flat(2).every((v: number) => Math.round(v * 1000) / 1000 === v)).toBe(true)   // 3 dp
+    expect((await get(`coverage-lines-some-${index.some}`)).status).toBe(404)   // past the last chunk
   })
 
   it('404s anything else, including the old places index (searched on the server now: 15 MB with France)', async () => {

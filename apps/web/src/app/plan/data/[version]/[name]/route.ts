@@ -3,18 +3,23 @@
 // coarsely), `area-{y}_{x}` (one 0.5° area in detail), `openportage` (paddlers' portage details, CC0), `needed`
 // (locks with no portage details, most-planned first), `tides-nl` (Rijkswaterstaat's predicted Dutch high and
 // low waters, fetched at build time), and coverage by waterway: `coverage` (the scores, for
-// /plan/gaps) and `coverage-lines` (the scored water by level, for the map). The version is in the URL, so a response for the live version
+// /plan/gaps) and `coverage-lines` (how many chunks of scored water each level has) with
+// `coverage-lines-{good|some|thin}-{i}` (the chunks, for the map: in one response it was
+// over Lambda's 6 MB limit with Germany). The version is in the URL, so a response for the live version
 // never changes and can be cached for good (by CloudFront too: /plan/data/* honours these headers), except
 // coverage and `needed`, which move as paddlers add portages and plans.
 import { areaLines, overviewLines } from '@paddlesnitch/waterways/display'
 import { loadCoverage, loadNational, loadNeeded, loadOfficialTides } from '@paddlesnitch/waterways/national'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
-import { coverageLines } from '@paddlesnitch/waterways/waterway-coverage'
+import { chunkLines, coverageLines } from '@paddlesnitch/waterways/waterway-coverage'
+import type { LatLng } from '@paddlesnitch/waterways/types'
 
 export const dynamic = 'force-dynamic'
 
 let overview: { version: string; lines: unknown } | null = null
-let covLines: { rows: unknown; lines: unknown } | null = null
+let covLines: { rows: unknown; chunks: Record<'good' | 'some' | 'thin', LatLng[][][]> } | null = null
+/** Each coverage-lines chunk's JSON at most this: well under Lambda's 6 MB. */
+const CHUNK_BYTES = 2_000_000
 
 export async function GET(_req: Request, { params }: { params: Promise<{ version: string; name: string }> }) {
   const { version, name } = await params
@@ -38,17 +43,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
     body = await loadNeeded()
   } else if (name === 'coverage') {
     body = (await loadCoverage()).rows
-  } else if (name === 'coverage-lines') {
+  } else if (name === 'coverage-lines' || /^coverage-lines-(good|some|thin)-\d+$/.test(name)) {
     const { rows } = await loadCoverage()
-    if (covLines?.rows !== rows) covLines = { rows, lines: coverageLines(ds.links, rows) }
-    body = covLines.lines
+    if (covLines?.rows !== rows) {
+      const lines = coverageLines(ds.links, rows)
+      covLines = { rows, chunks: { good: chunkLines(lines.good, CHUNK_BYTES), some: chunkLines(lines.some, CHUNK_BYTES), thin: chunkLines(lines.thin, CHUNK_BYTES) } }
+    }
+    const c = covLines.chunks
+    if (name === 'coverage-lines') body = { good: c.good.length, some: c.some.length, thin: c.thin.length }
+    else {
+      const [, level, i] = /^coverage-lines-(good|some|thin)-(\d+)$/.exec(name)!
+      const chunk = c[level as 'good' | 'some' | 'thin'][Number(i)]
+      if (!chunk) return new Response('Not found', { status: 404 })
+      body = chunk
+    }
   } else if (area) {
     body = areaLines(ds.links, area)
   } else {
     return new Response('Not found', { status: 404 })
   }
   // An old version's URL gets today's data, briefly cached, rather than a 404.
-  const live = name === 'coverage' || name === 'coverage-lines' || name === 'needed'
+  const live = name.startsWith('coverage') || name === 'needed'
   const cache = version === ds.version && !live ? 'public, max-age=31536000, immutable' : 'public, max-age=300'
   return Response.json(body, { headers: { 'Cache-Control': cache } })
 }

@@ -20,6 +20,7 @@ import { getObject, putObject } from '@paddlesnitch/core/storage'
 import { gunzipSync } from 'zlib'
 import { reachesAhead, type OfficialTides } from '@paddlesnitch/waterways/tide'
 import { featuresAlong, NEAR_M, WATERBOARD_NEAR_M } from '@paddlesnitch/waterways/along'
+import { MAX_RESPONSE_BYTES, overviewLines, tooBigToServe } from '@paddlesnitch/waterways/display'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
 import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
@@ -158,8 +159,12 @@ async function main() {
   const places = buildPlaces(osmPlaces, [...features, ...osmFeatures, ...saFeatures], links)
   lap(`places: ${places.length}`)
 
-  const failed = checkRoutes(links, [...features, ...osmFeatures, ...saFeatures])
+  let failed = checkRoutes(links, [...features, ...osmFeatures, ...saFeatures])
   lap('check routes')
+  // Served whole from /plan/data/{v}/overview: over Lambda's limit it's a 502.
+  const overviewJson = JSON.stringify(overviewLines(links)), overviewBytes = Buffer.byteLength(overviewJson)
+  if (tooBigToServe(overviewJson)) { failed++; console.log(`  ✗ overview: ${(overviewBytes / 1e6).toFixed(1)} MB, over ${(MAX_RESPONSE_BYTES / 1e6).toFixed(1)} MB: coarsen overviewLines`) }
+  else console.log(`  ✓ overview: ${(overviewBytes / 1e6).toFixed(1)} MB of ${(MAX_RESPONSE_BYTES / 1e6).toFixed(1)} MB`)
 
   if (!args.includes('--publish')) {
     console.log(failed ? `\n${failed} check route(s) failed.` : '\nAll check routes pass. Run with --publish to publish.')

@@ -113,14 +113,28 @@ export function levelOf(r: Pick<WaterwayCoverage, 'km' | 'locks' | 'locksWithSid
   return 'some'
 }
 
-/** The scored waterways' lines for the map, coarsely, grouped by level. */
+/** The scored waterways' lines for the map, coarsely (300 m, 3 dp ~110 m),
+ *  grouped by level. Served in chunks (coverageChunks): Lambda answers at most 6 MB. */
 export function coverageLines(links: NetLink[], rows: WaterwayCoverage[]): Record<CoverageLevel, LatLng[][]> {
   const rowOf = new Map(rows.map(r => [r.id, r]))
   const groupOf = groupLinks(links)
   const out: Record<CoverageLevel, LatLng[][]> = { good: [], some: [], thin: [] }
   for (const l of links) {
     const row = rowOf.get(groupOf.get(l.id) ?? '')
-    if (row) out[row.level].push(simplify(l.line, 150).map(p => [Math.round(p[0] * 1e4) / 1e4, Math.round(p[1] * 1e4) / 1e4] as LatLng))
+    if (row) out[row.level].push(simplify(l.line, 300).map(p => [Math.round(p[0] * 1e3) / 1e3, Math.round(p[1] * 1e3) / 1e3] as LatLng))
+  }
+  return out
+}
+
+/** Lines cut into chunks of at most `maxBytes` of JSON each, in order. */
+export function chunkLines(lines: LatLng[][], maxBytes: number): LatLng[][][] {
+  const out: LatLng[][][] = [[]]
+  let size = 2
+  for (const l of lines) {
+    const n = JSON.stringify(l).length + 1
+    if (size + n > maxBytes && out[out.length - 1].length) { out.push([]); size = 2 }
+    out[out.length - 1].push(l)
+    size += n
   }
   return out
 }
