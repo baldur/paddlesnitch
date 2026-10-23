@@ -8,7 +8,7 @@ import { lockKey } from './build'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { Feature, LatLng } from './types'
 
-export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo' | 'pegelonline'
+export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo' | 'pegelonline' | 'bafu'
 
 export type Gauge = {
   source: GaugeSource
@@ -64,6 +64,7 @@ export const gaugeUrl = (g: Gauge): string =>
     : g.source === 'sepa' ? 'https://waterlevels.sepa.org.uk/'
       : g.source === 'rws' ? 'https://waterinfo.rws.nl/'
       : g.source === 'waterinfo' ? 'https://www.waterinfo.be/'
+      : g.source === 'bafu' ? `https://www.hydrodaten.admin.ch/de/seen-und-fluesse/stationen-und-daten/${encodeURIComponent(g.id)}`
       : g.source === 'pegelonline' ? `https://www.pegelonline.wsv.de/gast/stammdaten?pegelnr=${encodeURIComponent(g.id)}`
         : `https://waterlevel.ie/${g.id}/0001/`
 
@@ -186,6 +187,39 @@ export function pegelonlineGauges(stations: unknown[], now: number): (Gauge & { 
     out.push({
       source: 'pegelonline', id: s.number ?? s.uuid, name: titleCase(s.longname ?? s.uuid), ...(s.water?.longname ? { river: titleCase(s.water.longname) } : {}),
       at: [s.latitude, s.longitude], datum: 'stage', valueM: Math.round(w.value) / 100, readAt: new Date(t).toISOString(), ...(state ? { state } : {}),
+    })
+  }
+  return out
+}
+
+/** Swiss LV95 (E, N) to WGS84, swisstopo's approximate formulas (~1 m). */
+export function lv95ToWgs84(e: number, n: number): LatLng {
+  const y = (e - 2_600_000) / 1e6, x = (n - 1_200_000) / 1e6
+  const lng = 2.6779094 + 4.728982 * y + 0.791484 * y * x + 0.1306 * y * x * x - 0.0436 * y ** 3
+  const lat = 16.9023892 + 3.238272 * x - 0.270978 * y * y - 0.002528 * x * x - 0.0447 * y * y * x - 0.0140 * x ** 3
+  return [Math.round((lat * 100 / 36) * 1e6) / 1e6, Math.round((lng * 100 / 36) * 1e6) / 1e6]
+}
+
+/** Switzerland (BAFU hydrology, the federal stations): each station's water
+ *  level in metres above sea level ('aod': not comparable across gauges) and
+ *  "high" only when its latest reading has reached BAFU's first flood-danger
+ *  threshold (wl_1, same unit). The map's level icons aren't danger levels, so
+ *  they're not used. Only fresh readings count (RWS_FRESH_MS). */
+export function bafuGauges(fc: { features?: unknown[] }, now: number): (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] {
+  type F = { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | null | undefined> }
+  const num = (s: string | null | undefined) => { const m = /^-?\d+(\.\d+)?/.exec((s ?? '').trim()); return m ? Number(m[0]) : undefined }
+  const unitOf = (s: string | null | undefined) => (s ?? '').trim().replace(/^-?\d+(\.\d+)?\s*/, '')
+  const out: (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] = []
+  for (const f of (fc.features ?? []) as F[]) {
+    const p = f.properties ?? {}, c = f.geometry?.coordinates
+    const level = num(p.sensor_waterlevel_last_value), t = Date.parse(p.sensor_waterlevel_measured_at ?? '')
+    if (level === undefined || !Number.isFinite(t) || now - t > RWS_FRESH_MS || !c || !p.key) continue
+    const value = num(p.last_value), wl1 = num(p.wl_1)
+    const high = value !== undefined && wl1 !== undefined && unitOf(p.wl_1) === (p.unit ?? '').trim() && value >= wl1
+    const [, place] = (p.label ?? '').split(' - ')
+    out.push({
+      source: 'bafu', id: p.key, name: (place ?? p.label ?? p.key).trim(), ...(p.hydro_body_name ? { river: p.hydro_body_name } : {}),
+      at: lv95ToWgs84(c[0], c[1]), datum: 'aod', valueM: level, readAt: new Date(t).toISOString(), ...(high ? { state: 'high' as const } : {}),
     })
   }
   return out

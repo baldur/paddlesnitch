@@ -5,7 +5,7 @@
 // A source that fails is named in `unavailable` and shown as unknown.
 import type { LatLng, Feature } from './types'
 import {
-  eaGauges, gaugesAlong, gaugeUrl, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, pegelonlineGauges,
+  eaGauges, gaugesAlong, gaugeUrl, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, pegelonlineGauges, bafuGauges,
   THAMES_CONDITIONS_PAGE, THAMES_CONDITIONS_URL, type Gauge, type GaugeReading, type ThamesReach,
 } from './live'
 
@@ -15,6 +15,7 @@ const OPW_LATEST = 'https://waterlevel.ie/geojson/latest/'
 const RWS = 'https://ddapi20-waterwebservices.rijkswaterstaat.nl'
 const WATERINFO = 'https://download.waterinfo.be/tsmdownload/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=1&format=json&request=getTimeseriesValueLayer&timeseriesgroup_id=192780&metadata=true'
 const PEGELONLINE = 'https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json?includeTimeseries=true&includeCurrentMeasurement=true'
+const BAFU = 'https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson'
 const UA = 'paddlesnitch-river-planner (+https://paddlesnitch.com/plan)'
 const MIN = 60_000
 
@@ -88,6 +89,9 @@ const flanders = cached(15 * MIN, async () => waterinfoGauges(await getJson<unkn
 /** Every German federal gauge's current level and state in one call (~750 KB): no route is sent. */
 const germany = cached(15 * MIN, async () => pegelonlineGauges(await getJson<unknown[]>(PEGELONLINE), Date.now()))
 
+/** Every Swiss federal station in one call (~250 KB). BAFU asks for no more than every 10 minutes. */
+const switzerland = cached(15 * MIN, async () => bafuGauges(await getJson<{ features?: unknown[] }>(BAFU), Date.now()))
+
 const rwsStations = cached(24 * 60 * MIN, async () =>
   rwsGauges(await postJson(`${RWS}/METADATASERVICES/OphalenCatalogus`, { CatalogusFilter: { Grootheden: true, Eenheden: true, Compartimenten: true } })))
 /** Every Dutch station's latest level in one call (~4 MB, ~2 s), so no route is
@@ -117,11 +121,11 @@ export type RouteConditions = {
 export async function conditionsAlong(line: LatLng[], waterways: string[], locks: Feature[]): Promise<RouteConditions> {
   const unavailable: string[] = []
   const safe = async <T>(name: string, p: Promise<T>): Promise<T | null> => { try { return await p } catch { unavailable.push(name); return null } }
-  const [ea, sepa, ie, nl, vl, de, boards] = await Promise.all([
+  const [ea, sepa, ie, nl, vl, de, ch, boards] = await Promise.all([
     safe('Environment Agency', eaStations()), safe('SEPA', sepaStations()), safe('OPW', opw()), safe('Rijkswaterstaat', rwsNow()),
-    safe('waterinfo.be', flanders()), safe('PEGELONLINE', germany()), safe('GOV.UK river conditions', thames()),
+    safe('waterinfo.be', flanders()), safe('PEGELONLINE', germany()), safe('BAFU', switzerland()), safe('GOV.UK river conditions', thames()),
   ])
-  const all: Gauge[] = [...(ea ?? []), ...(sepa ?? []), ...(ie ?? []), ...(nl?.gauges ?? []), ...(vl ?? []), ...(de ?? [])]
+  const all: Gauge[] = [...(ea ?? []), ...(sepa ?? []), ...(ie ?? []), ...(nl?.gauges ?? []), ...(vl ?? []), ...(de ?? []), ...(ch ?? [])]
   const onRoute = gaugesAlong(line, all, waterways)
 
   const needEa = onRoute.some(g => g.source === 'ea'), needSepa = onRoute.filter(g => g.source === 'sepa').map(g => g.id)
@@ -130,11 +134,11 @@ export async function conditionsAlong(line: LatLng[], waterways: string[], locks
     needSepa.length ? safe('SEPA', sepaValues(needSepa)) : null,
     Promise.all(onRoute.map(g => (g.source === 'ea' && g.datum === 'stage' ? eaTypicalRange(g.id) : Promise.resolve(undefined)))),
   ])
-  const withReading = new Map([...(ie ?? []), ...(vl ?? []), ...(de ?? [])].map(g => [`${g.source}:${g.id}`, g]))
+  const withReading = new Map([...(ie ?? []), ...(vl ?? []), ...(de ?? []), ...(ch ?? [])].map(g => [`${g.source}:${g.id}`, g]))
   const gauges: GaugeReading[] = onRoute.map((g, i) => {
     const r = g.source === 'ea' ? latest?.get(g.measure ?? '') : undefined
     const s = g.source === 'sepa' ? sepaNow?.get(g.id) : g.source === 'rws' ? nl?.latest.get(g.id) : undefined
-    const o = g.source === 'opw' || g.source === 'waterinfo' || g.source === 'pegelonline' ? withReading.get(`${g.source}:${g.id}`) : undefined
+    const o = g.source === 'opw' || g.source === 'waterinfo' || g.source === 'pegelonline' || g.source === 'bafu' ? withReading.get(`${g.source}:${g.id}`) : undefined
     const valueM = r?.value ?? s?.value ?? o?.valueM
     return {
       ...g, valueM, readAt: r?.dateTime ?? s?.at ?? o?.readAt,

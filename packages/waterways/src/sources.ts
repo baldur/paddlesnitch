@@ -133,6 +133,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'Datenlizenz Deutschland – Zero – 2.0',
     attribution: 'Water levels: PEGELONLINE, WSV',
   },
+  'bafu-levels': {
+    name: 'BAFU hydrological data (Swiss Federal Office for the Environment)',
+    url: 'https://www.hydrodaten.admin.ch/',
+    licence: 'Free use, commercial included; source recommended (BAFU terms of use)',
+    attribution: 'Water levels: Bundesamt für Umwelt BAFU',
+  },
   'thames-conditions': {
     name: 'GOV.UK — River Thames: current river conditions',
     url: 'https://www.gov.uk/guidance/river-thames-current-river-conditions',

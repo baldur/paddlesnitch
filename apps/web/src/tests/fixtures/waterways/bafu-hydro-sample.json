@@ -1,0 +1,135 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": 70,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2600725.0,
+     1197996.0
+    ]
+   },
+   "properties": {
+    "label": "Aare - Bern, Schönau",
+    "key": "2135",
+    "hydro_body_name": "Aare",
+    "last_value": "62",
+    "metric": "discharge_ms",
+    "unit": "m³/s",
+    "sensor_waterlevel_measured_at": "2026-10-23T16:50:00.000+02:00",
+    "sensor_waterlevel_last_value": "501.76 m ü.M.",
+    "wl_1": "360 m³/s",
+    "wl_2": "430 m³/s",
+    "wl_3": "500 m³/s",
+    "wl_4": "560 m³/s",
+    "kind": "river"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 20,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2687467.0,
+     1221424.0
+    ]
+   },
+   "properties": {
+    "label": "Ägerisee - Unterägeri",
+    "key": "2031",
+    "hydro_body_name": "Ägerisee",
+    "last_value": "723.27",
+    "metric": "masl",
+    "unit": "m ü.M.",
+    "sensor_waterlevel_measured_at": "2026-10-23T16:50:00.000+02:00",
+    "sensor_waterlevel_last_value": "723.27 m ü.M.",
+    "wl_1": "724.10 m ü.M.",
+    "wl_2": "724.45 m ü.M.",
+    "wl_3": "725.00 m ü.M.",
+    "wl_4": "725.25 m ü.M.",
+    "kind": "lake"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 70,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2600725.0,
+     1197996.0
+    ]
+   },
+   "properties": {
+    "label": "Aare - Testhoch",
+    "key": "9999",
+    "hydro_body_name": "Aare",
+    "last_value": "400",
+    "metric": "discharge_ms",
+    "unit": "m³/s",
+    "sensor_waterlevel_measured_at": "2026-10-23T16:50:00.000+02:00",
+    "sensor_waterlevel_last_value": "501.76 m ü.M.",
+    "wl_1": "360 m³/s",
+    "wl_2": "430 m³/s",
+    "wl_3": "500 m³/s",
+    "wl_4": "560 m³/s",
+    "kind": "river"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 70,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2600725.0,
+     1197996.0
+    ]
+   },
+   "properties": {
+    "label": "Aare - Bern, Schönau",
+    "key": "9998",
+    "hydro_body_name": "Aare",
+    "last_value": "62",
+    "metric": "discharge_ms",
+    "unit": "m³/s",
+    "sensor_waterlevel_measured_at": "2026-10-22T08:00:00.000+02:00",
+    "sensor_waterlevel_last_value": "501.76 m ü.M.",
+    "wl_1": "360 m³/s",
+    "wl_2": "430 m³/s",
+    "wl_3": "500 m³/s",
+    "wl_4": "560 m³/s",
+    "kind": "river"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 70,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2600725.0,
+     1197996.0
+    ]
+   },
+   "properties": {
+    "label": "Aare - Bern, Schönau",
+    "key": "9997",
+    "hydro_body_name": "Aare",
+    "last_value": "62",
+    "metric": "discharge_ms",
+    "unit": "m³/s",
+    "sensor_waterlevel_measured_at": "2026-10-23T16:50:00.000+02:00",
+    "sensor_waterlevel_last_value": null,
+    "wl_1": "360 m³/s",
+    "wl_2": "430 m³/s",
+    "wl_3": "500 m³/s",
+    "wl_4": "560 m³/s",
+    "kind": "river"
+   }
+  }
+ ]
+}

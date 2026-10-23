@@ -32,6 +32,7 @@ function stubNetwork(fail: string[] = []) {
     if (url.includes('OphalenCatalogus')) return respond(fixture('rws-catalogue-sample.json'))
     if (url.includes('download.waterinfo.be')) return respond(fixture('waterinfo-layer-sample.json'))
     if (url.includes('pegelonline.wsv.de')) return respond(fixture('pegelonline-stations-sample.json'))
+    if (url.includes('hydrodaten.admin.ch')) return respond(fixture('bafu-hydro-sample.json'))
     if (url.includes('OphalenLaatsteWaarnemingen')) return respond(fixture('rws-latest-sample.json'))
     return new Response('not stubbed', { status: 404 })
   }))
@@ -91,6 +92,17 @@ describe('live conditions along a route', () => {
       stubNetwork()
       const c = await conditionsAlong([[52.457153, 12.856784], [52.469153, 12.856784]], ['Untere Havel-Wasserstraße'], [])
       expect(c.gauges.find(g => g.source === 'pegelonline')).toMatchObject({ name: 'Ketzin', valueM: 2.45, state: 'normal', url: expect.stringContaining('pegelonline.wsv.de') })
+    } finally { vi.useRealTimers() }
+  })
+
+  it('a Swiss station on the route, by river name (BAFU), its level above sea level', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-23T15:30:00Z'))
+    try {
+      stubNetwork()
+      const [lat, lng] = [46.9335, 7.4492]
+      const c = await conditionsAlong([[lat - 0.004, lng], [lat + 0.004, lng]], ['Aare'], [])
+      expect(c.gauges.find(g => g.source === 'bafu')).toMatchObject({ name: 'Bern, Schönau', valueM: 501.76, url: expect.stringContaining('hydrodaten.admin.ch/de/') })
     } finally { vi.useRealTimers() }
   })
 
