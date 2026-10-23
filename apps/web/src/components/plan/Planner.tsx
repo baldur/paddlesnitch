@@ -322,6 +322,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
                 <li key={id}><a className="tt-link" href={SOURCES[id].url} target="_blank" rel="noreferrer">{SOURCES[id].attribution}</a></li>
               ))}
             </ul>
+            <p className="pb-2"><Link className="tt-link" href="/plan/sources">Licences, aerial photos and how we fetch →</Link></p>
           </details>
         </section>
       </aside>
