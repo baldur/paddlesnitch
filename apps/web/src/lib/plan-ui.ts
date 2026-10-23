@@ -287,6 +287,26 @@ const FRANCE_OUTLINES: LatLng[][] = [[
 ]]
 export const inFrance = (p: LatLng) => FRANCE_OUTLINES.some(o => inOutline(o, p))
 
+/** Switzerland, roughly (a few km): Liechtenstein, Konstanz and Geneva's French
+ *  surroundings left out. Inside it swisstopo's SWISSIMAGE replaces Esri. */
+const SWITZERLAND_OUTLINE: LatLng[] = [
+  [47.58, 7.58], [47.6, 8.2], [47.7, 8.6], [47.8, 8.7], [47.65, 9.0], [47.645, 9.17], [47.55, 9.6], [47.45, 9.65], [47.27, 9.53], [47.05, 9.47],
+  [47.0, 9.6], [46.95, 9.85], [46.85, 10.3], [46.6, 10.49], [46.5, 10.25], [46.25, 10.1], [46.45, 9.45], [46.0, 9.05], [45.82, 8.97], [46.0, 8.7],
+  [46.1, 8.45], [46.25, 8.15], [45.92, 7.85], [45.87, 7.15], [46.05, 6.95], [46.25, 6.8], [46.45, 6.8], [46.45, 6.5], [46.25, 6.25], [46.13, 6.05],
+  [46.2, 5.96], [46.38, 6.12], [46.6, 6.15], [46.95, 6.5], [47.05, 6.75], [47.3, 7.0], [47.5, 7.2], [47.45, 7.45],
+]
+export const inSwitzerland = (p: LatLng) => inOutline(SWITZERLAND_OUTLINE, p)
+
+/** Austria, roughly: the Berchtesgaden salient and Liechtenstein left out.
+ *  Inside it basemap.at's orthophotos replace Esri (white beyond Austria). */
+const AUSTRIA_OUTLINE: LatLng[] = [
+  [47.55, 9.6], [47.27, 9.56], [47.05, 9.6], [46.9, 10.15], [46.75, 10.45], [46.85, 11.0], [46.75, 11.6], [46.95, 12.2], [46.65, 12.7], [46.6, 13.6],
+  [46.45, 14.4], [46.4, 15.0], [46.65, 15.6], [46.8, 16.1], [47.0, 16.5], [47.5, 16.4], [47.75, 16.9], [48.0, 17.15], [48.6, 17.0], [48.85, 16.9],
+  [48.75, 16.4], [48.95, 15.4], [49.0, 15.0], [48.75, 14.7], [48.6, 14.0], [48.5, 13.6], [48.25, 13.0], [47.85, 13.0], [47.7, 12.8], [47.55, 13.05],
+  [47.68, 12.25], [47.55, 11.75], [47.45, 11.25], [47.55, 10.6], [47.4, 10.2], [47.55, 9.95],
+]
+export const inAustria = (p: LatLng) => inOutline(AUSTRIA_OUTLINE, p)
+
 /** German states publish their own aerial photos (there's no national open
  *  set). Each one's WMS is transparent outside the state, so it goes over Esri
  *  when the map is centred `near` it, and its rough `outline` (a few km) says
@@ -358,8 +378,8 @@ export const germanPhotosNear = ([lat, lng]: LatLng) => GERMAN_PHOTOS.filter(g =
 /** Whose aerial photos may be printed here: the Kadaster's (CC BY 4.0),
  *  Digitaal Vlaanderen's (Flemish Open Data licence), IGN's (Licence Ouverte 2.0)
  *  or a German state's (GERMAN_PHOTOS). Elsewhere none: Esri may not be printed. */
-export const printablePhotos = (p: LatLng): 'nl' | 'vl' | 'fr' | GermanPhotoId | undefined =>
-  (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : inFrance(p) ? 'fr' : GERMAN_PHOTOS.find(g => inOutline(g.outline, p))?.id)
+export const printablePhotos = (p: LatLng): 'nl' | 'vl' | 'fr' | 'ch' | GermanPhotoId | undefined =>
+  (inNetherlands(p) ? 'nl' : inFlanders(p) ? 'vl' : inFrance(p) ? 'fr' : inSwitzerland(p) ? 'ch' : GERMAN_PHOTOS.find(g => inOutline(g.outline, p))?.id)
 
 /** The map's tiles. On satellite, over the Netherlands (inNetherlands of the map's centre): the Kadaster's
  *  8 cm aerial photos (PDOK, CC BY 4.0: unlike Esri, fine to print). Over France
@@ -377,7 +397,21 @@ export const FLANDERS_PHOTOS = {
   attribution: 'Aerial photo (Flanders): Digitaal Vlaanderen, Vlaamse Open Data licentie',
 }
 
-export function mapTiles(satellite: boolean, over?: 'nl' | 'fr') {
+export function mapTiles(satellite: boolean, over?: 'nl' | 'fr' | 'ch' | 'at') {
+  if (satellite && over === 'ch') return {
+    base: 'https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg',
+    baseNativeZoom: 19,
+    labels: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
+    labelsNativeZoom: 19,
+    attribution: `Aerial photo: © swisstopo (SWISSIMAGE) · ${DATA_ATTR}`,
+  }
+  if (satellite && over === 'at') return {
+    base: 'https://maps.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/{z}/{y}/{x}.jpeg',
+    baseNativeZoom: 19,
+    labels: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
+    labelsNativeZoom: 19,
+    attribution: `Aerial photo: basemap.at, CC BY 4.0 · ${DATA_ATTR}`,
+  }
   if (satellite && over === 'fr') return {
     base: 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
     baseNativeZoom: 19,
@@ -546,9 +580,9 @@ export function portageMap(line: LatLng[], stop: Pick<Stop, 'chainageM' | 'leg' 
 /** A printable aerial photo for a drawing, exactly its extent so the drawing
  *  lines up on top: the Kadaster's (PDOK WMS) in the Netherlands, Digitaal
  *  Vlaanderen's in Flanders, IGN's (Géoplateforme WMS) in France. */
-export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' | 'fr' | GermanPhotoId = 'nl', px = 440): string {
+export function aerialPhotoUrl(d: Pick<PortageMap, 'bbox'>, region: 'nl' | 'vl' | 'fr' | 'ch' | GermanPhotoId = 'nl', px = 440): string {
   const de = GERMAN_PHOTOS.find(g => g.id === region)
-  const [base, layer] = de ? [de.wms, de.layers] : region === 'vl'
+  const [base, layer] = de ? [de.wms, de.layers] : region === 'ch' ? ['https://wms.geo.admin.ch/', 'ch.swisstopo.swissimage'] : region === 'vl'
     ? ['https://geo.api.vlaanderen.be/OMWRGBMRVL/wms', 'Ortho']
     : region === 'fr'
       ? ['https://data.geopf.fr/wms-r/wms', 'ORTHOIMAGERY.ORTHOPHOTOS']
@@ -564,6 +598,7 @@ export const PHOTO_CREDIT = {
   nl: 'Beeldmateriaal.nl (Kadaster), CC BY 4.0', vl: 'Digitaal Vlaanderen, Vlaamse Open Data licentie', fr: 'IGN, BD ORTHO, Licence Ouverte 2.0',
   nw: 'Geobasis NRW, Datenlizenz Deutschland – Zero 2.0', be: 'Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0',
   bb: '© GeoBasis-DE/LGB, dl-de/by-2-0', by: 'Bayerische Vermessungsverwaltung, CC BY 4.0', he: 'HVBG, Datenlizenz Deutschland – Zero 2.0',
+  ch: '© swisstopo (SWISSIMAGE)', at: 'basemap.at, CC BY 4.0 (on screen)',
   mv: '© GeoBasis-DE/M-V 2026', bw: 'LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de',
 } as const
 
