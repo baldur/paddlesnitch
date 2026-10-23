@@ -31,7 +31,12 @@ const LEVEL_COLOUR = Object.fromEntries(COVERAGE_LEVELS.map(l => [l.id, l.colour
 function Coverage({ version }: { version: string }) {
   const [lines, setLines] = useState<Record<'good' | 'some' | 'thin', LatLng[][]> | null>(null)
   useEffect(() => {
-    fetch(`/plan/data/${version}/coverage-lines`).then(r => (r.ok ? r.json() : Promise.reject())).then(setLines, () => setLines(null))
+    // An index, then each level's chunks (in one response it's over the server's limit).
+    const json = <T,>(name: string) => fetch(`/plan/data/${version}/${name}`).then(r => (r.ok ? r.json() as Promise<T> : Promise.reject()))
+    const level = (l: 'good' | 'some' | 'thin', n: number) => Promise.all(Array.from({ length: n }, (_, i) => json<LatLng[][]>(`coverage-lines-${l}-${i}`))).then(cs => cs.flat())
+    json<Record<'good' | 'some' | 'thin', number>>('coverage-lines')
+      .then(n => Promise.all([level('good', n.good), level('some', n.some), level('thin', n.thin)]))
+      .then(([good, some, thin]) => setLines({ good, some, thin }), () => setLines(null))
   }, [version])
   if (!lines) return null
   return (
