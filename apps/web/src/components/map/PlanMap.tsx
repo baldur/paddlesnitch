@@ -1,10 +1,10 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, WMSTileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { COVERAGE_LEVELS, FLANDERS_PHOTOS, inFrance, inNetherlands, mapTiles, nearFlanders } from '@/lib/plan-ui'
+import { COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inFrance, inNetherlands, mapTiles, nearFlanders, type GermanPhotoId } from '@/lib/plan-ui'
 
 // The planner's map: the rivers and canals of the UK, Ireland, the Netherlands, Belgium, France and Germany, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
@@ -127,16 +127,21 @@ export default function PlanMap({
   // Only whether the view is over the Netherlands, Flanders or France matters (which photos to use).
   const [over, setOver] = useState<'nl' | 'fr' | undefined>()
   const [overVl, setOverVl] = useState(false)
+  const [overDe, setOverDe] = useState<GermanPhotoId[]>([])
   const overNl = over === 'nl'
   const tiles = mapTiles(satellite, over)
   return (
     <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
-      <WatchCentre onChange={c => { setOver(inNetherlands(c) ? 'nl' : inFrance(c) ? 'fr' : undefined); setOverVl(nearFlanders(c)) }} />
+      <WatchCentre onChange={c => { setOver(inNetherlands(c) ? 'nl' : inFrance(c) ? 'fr' : undefined); setOverVl(nearFlanders(c)); setOverDe(germanPhotosNear(c).map(g => g.id)) }} />
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
       {satellite && !overNl && overVl && (
         <TileLayer key="flanders" url={FLANDERS_PHOTOS.url} attribution={FLANDERS_PHOTOS.attribution} maxNativeZoom={FLANDERS_PHOTOS.nativeZoom} maxZoom={19} />
       )}
+      {/* German states' photos (NRW, Berlin): transparent outside the state, so over Esri. */}
+      {satellite && GERMAN_PHOTOS.filter(g => overDe.includes(g.id)).map(g => (
+        <WMSTileLayer key={g.id} url={g.wms} params={{ layers: g.layers, format: 'image/png', transparent: true }} attribution={g.attribution} maxZoom={19} />
+      ))}
       {coverage ? <Coverage version={version} /> : <Network version={version} />}
       {/* Esri's place names, above the rivers but below the markers and clicks. */}
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
