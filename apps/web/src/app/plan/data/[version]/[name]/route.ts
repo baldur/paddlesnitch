@@ -1,6 +1,7 @@
 // What the planner's map draws, from the live national dataset
 // (docs/features/waterways-uk-ireland.md): `overview` (the whole network,
-// coarsely), `area-{y}_{x}` (one 0.5° area in detail), `openportage` (paddlers' portage details, CC0), `needed`
+// coarsely; `overview-chunks` says how many `overview-{i}` chunks of ≤2 MB to fetch, as the whole
+// passed Lambda's 6 MB limit with more countries), `area-{y}_{x}` (one 0.5° area in detail), `openportage` (paddlers' portage details, CC0), `needed`
 // (locks with no portage details, most-planned first), `tides-nl` (Rijkswaterstaat's predicted Dutch high and
 // low waters, fetched at build time), and coverage by waterway: `coverage` (the scores, for
 // /plan/gaps) and `coverage-lines` (how many chunks of scored water each level has) with
@@ -16,7 +17,7 @@ import type { LatLng } from '@paddlesnitch/waterways/types'
 
 export const dynamic = 'force-dynamic'
 
-let overview: { version: string; lines: unknown } | null = null
+let overview: { version: string; lines: LatLng[][]; chunks: LatLng[][][] } | null = null
 let covLines: { rows: unknown; chunks: Record<'good' | 'some' | 'thin', LatLng[][][]> } | null = null
 /** Each coverage-lines chunk's JSON at most this: well under Lambda's 6 MB. */
 const CHUNK_BYTES = 2_000_000
@@ -33,9 +34,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
   const ds = await loadNational()
   const area = /^area-(-?\d+_-?\d+)$/.exec(name)?.[1]
   let body: unknown
+  const ov = () => {
+    if (overview?.version !== ds.version) {
+      const lines = overviewLines(ds.links)
+      overview = { version: ds.version, lines, chunks: chunkLines(lines, CHUNK_BYTES) }
+    }
+    return overview
+  }
+  const ovChunk = /^overview-(\d+)$/.exec(name)
   if (name === 'overview') {
-    if (overview?.version !== ds.version) overview = { version: ds.version, lines: overviewLines(ds.links) }
-    body = overview.lines
+    body = ov().lines   // whole, for tabs still running older code; over Lambda's 6 MB it would 502
+  } else if (name === 'overview-chunks') {
+    body = { chunks: ov().chunks.length }
+  } else if (ovChunk) {
+    const chunk = ov().chunks[Number(ovChunk[1])]
+    if (!chunk) return new Response('Not found', { status: 404 })
+    body = chunk
   } else if (name === 'tides-nl') {
     body = await loadOfficialTides()
     if (!body) return new Response('Not found', { status: 404 })

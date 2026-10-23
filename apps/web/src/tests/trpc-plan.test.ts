@@ -255,9 +255,15 @@ describe("the map's network and places", () => {
   const get = async (name: string, version = 'none') =>
     mapData(new Request(`http://x/plan/data/${version}/${name}`), { params: Promise.resolve({ version, name }) })
 
-  it('serves the overview and an area in detail', async () => {
-    const overview = await (await get('overview')).json()
+  it('serves the overview (in chunks the server can always answer) and an area in detail', async () => {
+    const overview = await (await get('overview')).json()   // whole, for tabs still running older code
     expect(overview.length).toBeGreaterThan(10)
+    const { chunks } = await (await get('overview-chunks')).json()
+    expect(chunks).toBeGreaterThanOrEqual(1)
+    const parts = await Promise.all(Array.from({ length: chunks }, async (_, i) => (await get(`overview-${i}`)).json()))
+    expect(parts.flat()).toEqual(overview)
+    expect((await get(`overview-${chunks}`)).status).toBe(404)
+    expect((await get('overview-chunks', 'dw-fixture')).headers.get('Cache-Control')).toContain('immutable')
     const reading = await (await get('area-102_-2')).json()   // 51.0–51.5 N, 1.0–0.5 W: Reading
     expect(reading.length).toBeGreaterThan(10)
     expect(await (await get('area-0_0')).json()).toEqual([])   // the Gulf of Guinea

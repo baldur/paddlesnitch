@@ -6,7 +6,7 @@ import { gzipSync } from 'zlib'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
-import { MAX_RESPONSE_BYTES, overviewLines, tooBigToServe } from '@paddlesnitch/waterways/display'
+import { overviewLines } from '@paddlesnitch/waterways/display'
 import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
 import { publishedKey, publishedNdjsonKey, readDataset, readNetwork } from '@paddlesnitch/waterways/national'
 import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
@@ -169,13 +169,6 @@ describe("the zoomed-out map's overview", () => {
     expect(chunks.every(c => JSON.stringify(c).length <= 5000)).toBe(true)
     expect(chunks.flat()).toEqual(lines)
     expect(chunkLines([], 5000)).toEqual([[]])
-  })
-
-  it('knows what the server can answer: under 6 MiB uncompressed, with room to spare (the build checks the overview)', () => {
-    expect(MAX_RESPONSE_BYTES).toBeLessThan(6 * 1024 * 1024)
-    expect(tooBigToServe('x'.repeat(MAX_RESPONSE_BYTES))).toBe(false)
-    expect(tooBigToServe('x'.repeat(MAX_RESPONSE_BYTES + 1))).toBe(true)
-    expect(tooBigToServe('ß'.repeat(MAX_RESPONSE_BYTES / 2 + 1))).toBe(true)   // bytes, not characters
   })
 })
 

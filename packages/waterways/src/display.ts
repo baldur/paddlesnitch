@@ -9,12 +9,6 @@ export const AREA_DEG = 0.5
 /** Below this zoom the map shows the overview instead of areas. */
 export const AREA_MIN_ZOOM = 9
 
-/** The server Lambda answers at most 6 MiB, counted before compression: a
- *  bigger response is a 502 (places with France, coverage lines with Germany).
- *  The build refuses to publish an overview over this, leaving room to spare. */
-export const MAX_RESPONSE_BYTES = 5_500_000
-export const tooBigToServe = (json: string) => Buffer.byteLength(json) > MAX_RESPONSE_BYTES
-
 export const areaKey = (y: number, x: number) => `${y}_${x}`
 
 /** Every area a map view touches. */
