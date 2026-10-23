@@ -25,6 +25,19 @@ const fetchLines = (url: string) => {
   return p
 }
 
+/** The overview's chunk URLs (one request for the count, cached per version);
+ *  the whole overview if that fails. */
+const overviewUrls = new Map<string, Promise<string[]>>()
+const overviewChunkUrls = (version: string) => {
+  let p = overviewUrls.get(version)
+  if (!p) {
+    p = fetch(`/plan/data/${version}/overview-chunks`).then(r => (r.ok ? r.json() as Promise<{ chunks: number }> : Promise.reject()))
+      .then(({ chunks }) => Array.from({ length: chunks }, (_, i) => `/plan/data/${version}/overview-${i}`), () => [`/plan/data/${version}/overview`])
+    overviewUrls.set(version, p)
+  }
+  return p
+}
+
 const LEVEL_COLOUR = Object.fromEntries(COVERAGE_LEVELS.map(l => [l.id, l.colour])) as Record<'good' | 'some' | 'thin', string>
 
 /** The scored water, coloured by how well we know it (the COVERAGE switch). */
@@ -58,9 +71,9 @@ function Network({ version }: { version: string }) {
     const n = ++latest.current
     const b = map.getBounds()
     const urls = map.getZoom() < AREA_MIN_ZOOM
-      ? [`/plan/data/${version}/overview`]
-      : areasIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).map(k => `/plan/data/${version}/area-${k}`)
-    Promise.allSettled(urls.map(fetchLines)).then(rs => {
+      ? overviewChunkUrls(version)
+      : Promise.resolve(areasIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).map(k => `/plan/data/${version}/area-${k}`))
+    urls.then(us => Promise.allSettled(us.map(fetchLines))).then(rs => {
       if (n === latest.current) setLines(rs.flatMap(r => (r.status === 'fulfilled' ? r.value : [])))
     })
   }, [map, version])
