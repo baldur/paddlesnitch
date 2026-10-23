@@ -163,7 +163,7 @@ function PrintedPortage({ line, stop }: { line: ComputedPlan['line']; stop: Stop
 }
 
 /** A drawing beside a stop: where paddlers described the landings, and where
- *  there's a printable aerial photo (the Netherlands, Flanders, France, NRW, Berlin) at every lock. */
+ *  there's a printable aerial photo (the Netherlands, Flanders, France, and German states with open photos) at every lock. */
 const photoCredits = (stops: Stop[]) => {
   const regions = [...new Set(stops.filter(drawn).map(s => printablePhotos(s.feature.at)).filter((r): r is NonNullable<typeof r> => !!r))]
   return regions.length ? ` Aerial photos: ${regions.map(r => PHOTO_CREDIT[r]).join('; ')}.` : ''

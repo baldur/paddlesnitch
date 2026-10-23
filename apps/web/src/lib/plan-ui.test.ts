@@ -184,13 +184,26 @@ describe('the map tiles', () => {
     expect(where({ Cologne: [50.94, 6.96], Dortmund: [51.51, 7.47], Münster: [51.96, 7.63], Bielefeld: [52.02, 8.53], Siegen: [50.87, 8.02] }))
       .toEqual({ Cologne: 'nw', Dortmund: 'nw', Münster: 'nw', Bielefeld: 'nw', Siegen: 'nw' })
     expect(where({ Alexanderplatz: [52.52, 13.41], Spandau: [52.535, 13.2], Köpenick: [52.445, 13.575] })).toEqual({ Alexanderplatz: 'be', Spandau: 'be', Köpenick: 'be' })
-    expect(where({ Osnabrück: [52.27, 8.05], Koblenz: [50.36, 7.59], Kassel: [51.31, 9.49], Potsdam: [52.39, 13.06], Bernau: [52.68, 13.59], Maastricht: [50.85, 5.69] }))
-      .toEqual({ Osnabrück: null, Koblenz: null, Kassel: null, Potsdam: null, Bernau: null, Maastricht: 'nl' })
+    expect(where({ Osnabrück: [52.27, 8.05], Koblenz: [50.36, 7.59], Kassel: [51.31, 9.49], Maastricht: [50.85, 5.69] }))
+      .toEqual({ Osnabrück: null, Koblenz: null, Kassel: null, Maastricht: 'nl' })
     expect(printablePhotos([51.37, 6.17])).not.toBe('nw')   // Venlo, just over the Dutch border
     expect(germanPhotosNear([50.94, 6.96]).map(g => g.id)).toEqual(['nw'])
-    expect(germanPhotosNear([52.52, 13.41]).map(g => g.id)).toEqual(['be'])
-    expect(germanPhotosNear([48.14, 11.58])).toEqual([])   // Munich: none yet
-    expect(GERMAN_PHOTOS.every(g => /Datenlizenz Deutschland/.test(g.attribution))).toBe(true)
+    expect(germanPhotosNear([52.52, 13.41]).map(g => g.id)).toEqual(['be', 'bb'])   // Berlin's own first, then Brandenburg's
+    expect(germanPhotosNear([51.5, 10.5])).toEqual([])   // the Harz: none yet
+    expect(GERMAN_PHOTOS.filter(g => !/Datenlizenz Deutschland|dl-de\/|CC BY/.test(g.attribution)).map(g => g.id)).toEqual([])   // every one credits an open licence
+  })
+
+  it('Brandenburg (DL-DE BY 2.0) round Berlin, and Bavaria (CC BY 4.0), the same way; Berlin keeps its own sharper photos', () => {
+    const where = (pts: Record<string, number[]>) => Object.fromEntries(Object.entries(pts).map(([n, p]) => [n, printablePhotos(p as [number, number]) ?? null]))
+    expect(where({ Potsdam: [52.39, 13.06], Bernau: [52.68, 13.59], 'Frankfurt (Oder)': [52.34, 14.55], Cottbus: [51.76, 14.33], Brandenburg: [52.41, 12.55], Alexanderplatz: [52.52, 13.41] }))
+      .toEqual({ Potsdam: 'bb', Bernau: 'bb', 'Frankfurt (Oder)': 'bb', Cottbus: 'bb', Brandenburg: 'bb', Alexanderplatz: 'be' })
+    expect(where({ Munich: [48.14, 11.58], Nuremberg: [49.45, 11.08], Passau: [48.57, 13.46], Würzburg: [49.79, 9.93], Regensburg: [49.01, 12.10], Bamberg: [49.89, 10.89] }))
+      .toEqual({ Munich: 'by', Nuremberg: 'by', Passau: 'by', Würzburg: 'by', Regensburg: 'by', Bamberg: 'by' })
+    expect(where({ Magdeburg: [52.13, 11.63], Dresden: [51.05, 13.74], Rostock: [54.09, 12.1], Szczecin: [53.43, 14.55], Stuttgart: [48.78, 9.18],
+      Heilbronn: [49.14, 9.22], Salzburg: [47.8, 13.04], Innsbruck: [47.27, 11.39], Pilsen: [49.74, 13.38], Erfurt: [50.98, 11.03], Frankfurt: [50.11, 8.68] }))
+      .toEqual({ Magdeburg: null, Dresden: null, Rostock: null, Szczecin: null, Stuttgart: null, Heilbronn: null, Salzburg: null, Innsbruck: null, Pilsen: null, Erfurt: null, Frankfurt: null })
+    expect(new URL(aerialPhotoUrl({ bbox: [48, 11, 48.01, 11.01] }, 'by')).searchParams.get('LAYERS')).toBe('by_dop40c')
+    expect(GERMAN_PHOTOS.find(g => g.id === 'bb')!.attribution).toContain('GeoBasis-DE/LGB, dl-de/by-2-0')
   })
 
   it('is the dark map by default', () => {

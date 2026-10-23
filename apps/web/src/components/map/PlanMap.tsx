@@ -138,8 +138,9 @@ export default function PlanMap({
       {satellite && !overNl && overVl && (
         <TileLayer key="flanders" url={FLANDERS_PHOTOS.url} attribution={FLANDERS_PHOTOS.attribution} maxNativeZoom={FLANDERS_PHOTOS.nativeZoom} maxZoom={19} />
       )}
-      {/* German states' photos (NRW, Berlin): transparent outside the state, so over Esri. */}
-      {satellite && GERMAN_PHOTOS.filter(g => overDe.includes(g.id)).map(g => (
+      {/* German states' photos: transparent outside the state, so over Esri. Added
+          last is drawn on top, so in reverse: Berlin's own over Brandenburg's. */}
+      {satellite && GERMAN_PHOTOS.filter(g => overDe.includes(g.id)).reverse().map(g => (
         <WMSTileLayer key={g.id} url={g.wms} params={{ layers: g.layers, format: 'image/png', transparent: true }} attribution={g.attribution} maxZoom={19} />
       ))}
       {coverage ? <Coverage version={version} /> : <Network version={version} />}
