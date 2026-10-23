@@ -1,6 +1,6 @@
 # Feature spec: River planner data for Austria and Switzerland
 
-**Status:** 🚧 started 2026-10-23 (owner: "Austria and Switzerland"). Same defaults as before: one dataset, no ditches, open and keyless data only.
+**Status:** ✅ A1–A4 merged 2026-10-23 (#603–#606; owner: "Austria and Switzerland"). Austrian live levels parked (key needed). Same defaults as before: one dataset, no ditches, open and keyless data only.
 
 ## What's different
 
@@ -21,7 +21,7 @@
 
 | Phase | What | Done when |
 |---|---|---|
-| **A1** Network | Both extracts; memory and overview size; check routes (Danube Melk → Krems, the Aare through Bern, a lake) | Check routes pass, memory and overview fit |
+| **A1** Network ✅ (#604) | Both extracts: +15,657 links, ~17,500 km (259,945 km in all). Check routes Melk → Krems (Danube, 35.0 km), through Bern (Aare, 4.1 km), Zürich → Rapperswil (28.4 km). Server peak 1,385 MB (was 1,231); the overview reached 5.2 MB, so it's now served in chunks (#607) | Check routes pass ✅, memory fits ✅ |
 | **A2** Swiss levels ✅ | BAFU stations on a route | An Aare plan shows Bern's gauge |
-| **A3** Weirs | AMBER Europe for Austria and Switzerland | A plan lists its weirs |
-| **A4** Photos | swisstopo and basemap.at, on screen and in print | — |
+| **A3** Weirs ✅ (#605) | AMBER Europe for Austria (21,592) and Switzerland (109,068) | A plan lists its weirs |
+| **A4** Photos ✅ (#606) | swisstopo SWISSIMAGE replaces Esri when centred in Switzerland (it carries imagery past the border), and prints via its WMS; basemap.at replaces Esri when centred in Austria (white beyond it) and is on screen only (no WMS) | — |
