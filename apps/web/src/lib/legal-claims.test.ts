@@ -49,7 +49,8 @@ const SERVICES: Record<string, string> = {
   'www.wms.nrw.de': 'Geobasis NRW',   // NRW aerial photos in the browser, and in print
   'gdi.berlin.de': 'Geoportal Berlin',
   'isk.geobasis-bb.de': 'LGB Brandenburg',   // Brandenburg aerial photos
-  'geoservices.bayern.de': 'Bayerische Vermessungsverwaltung',   // Bavarian aerial photos   // Berlin aerial photos in the browser, and in print   // French aerial photo tiles in the browser, and in print
+  'geoservices.bayern.de': 'Bayerische Vermessungsverwaltung',   // Bavarian aerial photos
+  'www.gds-srv.hessen.de': 'HVBG Hessen',   // Hessian aerial photos   // Berlin aerial photos in the browser, and in print   // French aerial photo tiles in the browser, and in print
   'geo.api.vlaanderen.be': 'Digitaal Vlaanderen',   // Flemish aerial photo tiles in the browser   // aerial photo tiles in the browser (and the water boards' data at build time)
   'unpkg.com': 'unpkg',
 }
