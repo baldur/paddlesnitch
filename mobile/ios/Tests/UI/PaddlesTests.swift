@@ -8,7 +8,7 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(scrollTo("paddle-pdl-motion").exists)
         XCTAssertTrue(scrollTo("paddle-pdl-strava").exists)
         XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
-        XCTAssertTrue(text(containing: "Also recorded by Strava").exists)
+        XCTAssertTrue(scrollToElement(text(containing: "Also recorded by Strava")).exists)
     }
 
     func testOpeningAPaddleShowsItsStatsNoteAndSummary() {
@@ -34,14 +34,7 @@ final class PaddlesTests: AppTestCase {
 
     func testTheListPassesTheAccessibilityAudit() throws {
         XCTAssertTrue(element("logbook").waitForExistence(timeout: 10))
-        // iOS 26+ draws the tab bar as glass floating over the list, and the
-        // rows scrolling under it are blurred on purpose. The contrast check
-        // measures them anyway, so contrast is checked with the list scrolled
-        // to its end, where no row is under the bar.
-        try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast]))
-        scrollTo("paddle-pdl-river")
-        app.swipeUp()
-        try audit(.contrast)
+        try audit()
     }
 
     func testAPaddlePassesTheAccessibilityAudit() throws {
