@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { confirmForgotPassword, signIn } from '@/lib/cognito'
-import { setAuthCookies } from '@/lib/auth'
+import { signedInResponse } from '@/lib/auth'
 
 // Confirms the reset using the emailed code + new password, then signs the
 // user in straight away so they don't have to re-enter credentials.
@@ -38,7 +38,5 @@ export async function POST(req: NextRequest) {
   if ('error' in tokens) {
     return NextResponse.json({ ok: true, signedIn: false })
   }
-  const res = NextResponse.json({ ok: true, signedIn: true })
-  setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
-  return res
+  return signedInResponse(req, { ok: true, signedIn: true }, tokens.idToken, tokens.refreshToken)
 }

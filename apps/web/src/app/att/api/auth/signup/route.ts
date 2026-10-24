@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signUp, signIn } from '@/lib/cognito'
-import { setAuthCookies } from '@/lib/auth'
+import { signedInResponse } from '@/lib/auth'
 import { recordAcceptance } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { applyPendingInvitations } from '@/lib/pending-invitations'
@@ -70,10 +70,8 @@ export async function POST(req: NextRequest) {
   }
 
   emitMetric('signup')
-  const res = NextResponse.json(
+  return signedInResponse(req,
     { id: created.sub, email: normalised, displayName: String(displayName).trim() },
-    { status: 201 }
+    tokens.idToken, tokens.refreshToken, { status: 201 },
   )
-  setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
-  return res
 }

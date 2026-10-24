@@ -54,6 +54,30 @@ error     4xx/5xx  { "error": { "message": …, "code": …, "data": { "code": "
 
 A query with no input omits `?input=`.
 
+## Signing in
+
+REST, not tRPC. Send `x-paddlesnitch-app: <platform>/<version>` (e.g.
+`android/0.1.0`) on every sign-in call: the answer then carries `idToken` and
+`refreshToken` instead of setting cookies. Keep the refresh token in the
+platform's secure storage; send the ID token as `Authorization: Bearer` on
+every API call.
+
+| Call | Body | Answer |
+|---|---|---|
+| `POST /att/api/auth/login` | `{email, password}` | `{id, email, displayName, needsTerms, idToken, refreshToken}`; 401 wrong password |
+| `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
+| `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
+| `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 201, as login; 422 if `acceptedTosVersion` isn't current |
+| `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
+| `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
+
+`website` and `elapsedMs` are the anti-bot fields the website's forms send: an
+empty honeypot, and the milliseconds since the form appeared. A call that
+fills `website` or arrives under 2 s is dropped while looking like a success,
+so send the real time. `needsTerms: true` means an older account must accept
+the current Terms before going on (the website's flow; the apps open it).
+Every error answer has a human-readable `error`.
+
 ## fixtures/api/
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
