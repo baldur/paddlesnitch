@@ -62,6 +62,7 @@
   <dialog id="menu">
     <h2>Kayak</h2>
     <p class="lede">A first-person marathon kayak race. Find a rhythm, keep your balance, sprint to catch a wash and rest on it, and save something for the finish.</p>
+    <p id="account" class="account"></p>
     <form method="dialog">
       <fieldset class="hulls">
         <legend>Your boat</legend>
@@ -72,10 +73,15 @@
       <button value="race" autofocus>Division 9 race <small>6 km, 12 paddlers</small></button>
       <button value="practice">Practice time trial <small>1 km, on your own</small></button>
       <button value="reading">Reading Thames <small>6.3 km up the real river from Christchurch Bridge to Mapledurham, 12 paddlers</small></button>
+      <button value="live">Race friends <small>a live race against people you send a link to</small></button>
       <button value="loop">Time Trial Loop <small>5.4 km from Reading Canoe Club round St Mary's and Fry's islands and back, interval starts</small></button>
     </form>
     <p class="rotate-hint">Turn your phone sideways to race</p>
     <p id="best"></p>
+    <details id="boards">
+      <summary>Leaderboards</summary>
+      <div id="boardlist"><p>Loading…</p></div>
+    </details>
     <p id="nogpu" class="warning" hidden></p>
     <details>
       <summary>Controls</summary>
@@ -109,10 +115,41 @@
     </form>
   </dialog>
 
+  <dialog id="live">
+    <h2>Race friends</h2>
+    <p class="lede">A live race against up to five others. Make one and send them the link, or join one with its code.</p>
+    <div id="liveSetup">
+      <p>
+        <label for="liveCourse">Course</label>
+        <select id="liveCourse">
+          <option value="race">Division 9 river, 6 km</option>
+          <option value="reading">Reading Thames, 6.3 km</option>
+          <option value="loop">Time Trial Loop, 5.4 km</option>
+          <option value="practice">Practice, 1 km</option>
+        </select>
+        <button type="button" id="liveCreate">Make a race</button>
+      </p>
+      <p>
+        <label for="liveCode">Code</label>
+        <input id="liveCode" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" size="5">
+        <button type="button" id="liveJoin">Join</button>
+      </p>
+    </div>
+    <div id="liveLobby" hidden>
+      <p>Race <b id="liveCodeShow"></b> on <span id="liveCourseShow"></span> · <button type="button" id="liveCopy">Copy the link</button></p>
+      <ul id="livePlayers"></ul>
+      <p id="liveNote"></p>
+      <button type="button" id="liveStart" hidden>Start the race</button>
+    </div>
+    <p id="liveError" class="warning"></p>
+    <form method="dialog" class="dialog-links"><button value="back">Back</button></form>
+  </dialog>
+
   <dialog id="finished">
     <h2 id="result"></h2>
     <p id="details"></p>
     <ol id="standings"></ol>
+    <p id="ranked"></p>
     <form method="dialog">
       <button value="again" autofocus>Go again</button>
       <button value="menu">Menu</button>

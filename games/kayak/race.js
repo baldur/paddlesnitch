@@ -52,7 +52,10 @@ const ON_LINE = 2.5; // a bow this close behind the line is on it
 // you: the player's { power, endurance, hull }. birds: swans and ducks on the
 // water (a course file's `birds` say where they crowd). format: 'mass' (the
 // starter, everyone on the line) or 'interval' (a time trial: see below).
-export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, format = 'mass' } = {}) {
+// live: a race against other people ({ players: [{ id, name }], you, host }),
+// whose boats are driven over the network (main.js, live.js), not by think().
+export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, format = 'mass', live = null } = {}) {
+  if (live) return liveRace(course, { seed, you, birds, live });
   if (format === 'interval') return intervalRace(course, { rivals, seed, you, birds });
   const rand = mulberry32(seed);
   const solo = !rivals.length;
@@ -108,6 +111,40 @@ export function createRace(course, { rivals = [], seed = 1, you = {}, birds = tr
 }
 
 export const started = (race) => race.start.phase === 'go' || race.start.phase === 'interval';
+
+// --- a live race -----------------------------------------------------------
+// Everyone starts on the line, in lanes in the order they joined. The host's
+// game runs the starter (it sees every boat, so it knows when the line is
+// steady); the others follow its calls (applyCall).
+
+function liveRace(course, { seed, you, birds, live }) {
+  const rand = mulberry32(seed);
+  const onLine = course.start - BOW - 0.3;
+  const heading = headingAt(course, onLine);
+  const n = live.players.length;
+  const racers = live.players.map((p, k) => {
+    const lateral = (k - (n - 1) / 2) * LANE * 1.4;
+    const c = pointAt(course, onLine);
+    const at = { x: c.x - c.tz * lateral, z: c.z + c.tx * lateral, heading };
+    const mine = p.id === live.you;
+    const boat = createBoat({ ...at, ...(mine ? you : {}) });
+    return { name: mine ? 'You' : p.name, id: p.id, boat, loc: locate(course, at.x, at.z, Math.round(onLine / 2)), finish: null, draft: 0, ai: null, remote: !mine };
+  });
+  return {
+    course, racers, player: racers.find((r) => !r.remote), time: 0, rand, contacts: new Set(),
+    birds: birds ? createBirds(course, rand, course.scenery?.birds) : [],
+    gaps: [], live,
+    start: { phase: 'line-up', timer: LINE_UP, wait: NUDGE, line: course.start, holds: 0, calls: ['line-up'], follow: live.you !== live.host },
+  };
+}
+
+// A starter's call from the host ('line-up', 'ready', 'go', 'hold'), in a live race.
+export function applyCall(race, call) {
+  const st = race.start;
+  if (call === 'go' && st.phase !== 'go') for (const r of race.racers) r.boat.speedup = race.course.speedup ?? 1;
+  st.phase = call;
+  st.calls.push(call);
+}
 
 // --- a time trial ----------------------------------------------------------
 // Interval starts, as at a club time trial or a head race: the boats wait in
@@ -239,7 +276,7 @@ function starter(race, dt) {
 export function stepRace(race, dt, input) {
   const { course, racers, player } = race;
   if (race.format === 'interval') interval(race);
-  else starter(race, dt);
+  else if (!race.start.follow) starter(race, dt);
   const going = started(race);
   if (going) race.time += dt;
   const splashes = [];
@@ -247,6 +284,12 @@ export function stepRace(race, dt, input) {
 
   const washes = racers.map((r) => totalWash(r, racers));
   racers.forEach((r, i) => {
+    if (r.remote) {
+      // Someone else's boat: its state comes over the network; just keep its clock and place.
+      r.boat.time += dt;
+      r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);
+      return;
+    }
     // Until you're let go in a time trial, only your balance counts.
     const intent = r.ai ? think(r, race) : released(race, r) ? { ...input } : { ...input, strokes: [], sprint: false };
     r.draft = washes[i].draft;
@@ -273,7 +316,7 @@ export function stepRace(race, dt, input) {
   }
 
   for (const r of racers) {
-    if (going && r.finish === null && r.loc.s >= course.finish && (race.format !== 'interval' || r.crossed !== null)) {
+    if (going && !r.remote && r.finish === null && r.loc.s >= course.finish && (race.format !== 'interval' || r.crossed !== null)) {
       r.finish = race.format === 'interval' ? race.time - r.crossed : race.time;
       if (r === player) events.push('finish');
     }

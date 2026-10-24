@@ -4,7 +4,7 @@ import { createBoat, step } from '../kayak/sim.js';
 import { readFile } from 'node:fs/promises';
 import { raceRiver, courseFromFile, pointAt, locate, headingAt } from '../kayak/course.js';
 import { wrap } from '../kayak/sim.js';
-import { createRace, stepRace, standings, started, wash, elapsed, DIVISION_9 } from '../kayak/race.js';
+import { createRace, stepRace, standings, started, wash, elapsed, applyCall, DIVISION_9 } from '../kayak/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -239,5 +239,44 @@ test('the time trial loop: round St Mary\'s and Fry\'s islands and back, everyon
   const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
   assert.ok(minutes[0] > 24 && minutes.at(-1) < 33, `${minutes[0]}-${minutes.at(-1)} minutes`);
   assert.deepEqual(rivals.filter((r) => r.boat.capsizes).map((r) => r.name), []);
+});
+
+test('a live race: everyone on the line, the host runs the starter, the others follow its calls', () => {
+  const course = raceRiver();
+  const players = [{ id: 'a', name: 'Ann' }, { id: 'b', name: 'Bob' }, { id: 'c', name: 'Cat' }];
+  const host = createRace(course, { live: { players, you: 'a', host: 'a' }, birds: false });
+  const guest = createRace(course, { live: { players, you: 'b', host: 'a' }, birds: false });
+  assert.equal(host.player.id, 'a');
+  assert.equal(guest.player.id, 'b');
+  assert.deepEqual(guest.racers.map((r) => [r.name, !!r.remote]), [['Ann', true], ['You', false], ['Cat', true]]);
+  const bow = (r) => r.loc.s + 3.3;
+  for (const r of host.racers) assert.ok(Math.abs(bow(r) - host.start.line) < 1.5, `${r.name} on the line`);
+
+  // The host's starter sees everyone sitting on the line and calls them; the guest's never does.
+  const hostCalls = [];
+  const guestCalls = [];
+  for (let t = 0; t < 12 && !started(host); t += DT) {
+    hostCalls.push(...stepRace(host, DT, { strokes: [], lean: balance(host.player.boat) }).events);
+    guestCalls.push(...stepRace(guest, DT, { strokes: [], lean: balance(guest.player.boat) }).events);
+  }
+  assert.deepEqual(hostCalls.filter((e) => ['line-up', 'ready', 'go'].includes(e)), ['line-up', 'ready', 'go']);
+  assert.deepEqual(guestCalls.filter((e) => ['ready', 'go'].includes(e)), []);
+  assert.equal(started(guest), false);
+
+  applyCall(guest, 'ready');
+  applyCall(guest, 'go');
+  assert.deepEqual(stepRace(guest, DT, { strokes: [], lean: 0 }).events.filter((e) => e !== 'stroke'), ['ready', 'go']);
+  assert.ok(started(guest));
+
+  // Remote boats are moved by the network, never by the physics or the finish line.
+  const ann = guest.racers[0];
+  const before = [ann.boat.x, ann.boat.z];
+  ann.boat.speed = 5;
+  for (let k = 0; k < 120; k++) stepRace(guest, DT, { strokes: [], lean: 0 });
+  assert.deepEqual([ann.boat.x, ann.boat.z], before);
+  Object.assign(ann.boat, { x: pointAt(course, course.finish + 5).x, z: pointAt(course, course.finish + 5).z });
+  ann.loc.i = Math.round((course.finish + 5) / 2);
+  stepRace(guest, DT, { strokes: [], lean: 0 });
+  assert.equal(ann.finish, null, 'their finish comes from them');
 });
 

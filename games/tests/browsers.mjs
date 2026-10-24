@@ -25,7 +25,8 @@ const server = createServer(async (req, res) => {
   if (path === '/favicon.ico') return res.writeHead(204).end(); // the site's, not ours
   try {
     const file = join(ROOT, path.endsWith('/') ? `${path}index.html` : path);
-    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(await readFile(file));
+    const body = await readFile(file); // before the headers: a missing file (the site's API, say) is a 404
+    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
   } catch {
     res.writeHead(404).end();
   }
