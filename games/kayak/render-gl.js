@@ -8,7 +8,7 @@ import { SKY, MESH, WATER } from './shaders-gl.js';
 import { waterGrid } from './meshes.js';
 import { createPacer } from './pacing.js';
 
-const FRAME_BYTES = 16 * 4 + 24 * 16;
+const FRAME_BYTES = 16 * 4 + 26 * 16;
 const MAX_DPR = matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
 
 export function createRendererGL(canvas) {

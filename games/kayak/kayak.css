@@ -80,6 +80,8 @@ header button {
 .meters .bar { height: 10px; border-radius: 5px; background: rgb(0 0 0 / 0.35); overflow: hidden; }
 #rhythm { height: 100%; width: 100%; background: linear-gradient(90deg, #4aa3ff, #b48cff); transform-origin: left; }
 .bar.rhythm.locked { box-shadow: 0 0 10px #b48cff; }
+#flow { font-weight: 600; color: #d9c4ff; }
+.bar.sprint.spending { box-shadow: 0 0 10px #ffb347; }
 #stamina { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5a3c, #ffd23f 40%, #6fdc8c); transform-origin: left; }
 
 #hud.solo #pos { display: none; }
@@ -98,6 +100,22 @@ header button {
   transition: opacity 0.4s;
 }
 #wash.on { opacity: 1; }
+
+#place {
+  position: absolute;
+  top: 3.6rem;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+#place.on { opacity: 1; }
 
 #assisted {
   position: absolute;
@@ -231,3 +249,5 @@ summary { cursor: pointer; }
   .readout b { font-size: 1.2rem; }
   .readout { font-size: 0.75rem; }
 }
+
+#menu .credit { font-size: 0.8rem; color: var(--dim); }

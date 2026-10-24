@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { practiceRiver, raceRiver } from './course.js';
+import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course.js';
 import { createRace, stepRace, standings, DIVISION_9 } from './race.js';
 import { buildWorld } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, SEAT, SHOULDER } from './meshes.js';
@@ -16,9 +16,11 @@ const MIN_FOV_X = (75 * Math.PI) / 180;
 const HULL_KEY = 'snitchmedia:kayak:hull';
 const FORM_KEY = 'snitchmedia:kayak:form'; // sessionStorage: this visit only, for now
 
+// Real rivers come from course files (courses/*.json), loaded when first picked.
 const MODES = {
-  race: { course: raceRiver(6), rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:div9' },
-  practice: { course: practiceRiver(), rivals: [], bestKey: 'snitchmedia:kayak:practice' },
+  race: { course: raceRiver(6), rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:div9', label: 'Division 9' },
+  practice: { course: practiceRiver(), rivals: [], bestKey: 'snitchmedia:kayak:practice', label: 'Practice' },
+  reading: { file: 'courses/reading.json', rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:reading', label: 'Reading Thames' },
 };
 
 // Boat and club colours; the player is always the first.
@@ -43,7 +45,7 @@ const menu = document.getElementById('menu');
 const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
-const els = Object.fromEntries(['clock', 'togo', 'pos', 'wash', 'speed', 'rate', 'stamina', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -57,6 +59,8 @@ let hull = 'club';
 try { if (HULLS[localStorage.getItem(HULL_KEY)]) hull = localStorage.getItem(HULL_KEY); } catch {}
 let renderer = null;
 let meshes = null;
+let placeNext = 0; // the next landmark to name (showPlace)
+let placeTimer = 0;
 
 // --- race flow ---------------------------------------------------------------
 
@@ -73,6 +77,8 @@ function reset() {
   let next = 1;
   liveries = new Map(race.racers.map((r) => [r, r === race.player ? 0 : next++]));
   controls.clear();
+  placeNext = 0;
+  placeTimer = 0;
 }
 
 function start() {
@@ -127,7 +133,7 @@ function finish() {
   }
 
   const before = form();
-  train((mode.course.finish - mode.course.start) / 1000);
+  train((mode.course.finish - mode.course.start) / mode.course.speedup / 1000);
   const gained = form() - before;
 
   const caps = race.player.boat.capsizes;
@@ -143,7 +149,7 @@ function finish() {
   // Rivals still out on the course get the time they're on track for.
   els.standings.replaceChildren(...table.map((r) => {
     const li = document.createElement('li');
-    const t = r.finish ?? race.time + (mode.course.finish - r.loc.s) / Math.max(r.boat.speed, 2);
+    const t = r.finish ?? race.time + (mode.course.finish - r.loc.s) / (Math.max(r.boat.speed, 2) * mode.course.speedup);
     li.textContent = `${r.name} ${formatTime(shown(t), 0)}`;
     if (r === race.player) li.className = 'you';
     return li;
@@ -162,7 +168,7 @@ function toMenu() {
     try { b = JSON.parse(localStorage.getItem(m.bestKey)); } catch {}
     if (b == null) return '';
     if (typeof b === 'number') b = { time: b };
-    return name === 'race' ? `Division 9 best: ${ordinal(b.place)}, ${formatTime(b.time)}` : `Practice best: ${formatTime(b.time)}`;
+    return m.rivals.length ? `${m.label} best: ${ordinal(b.place)}, ${formatTime(b.time)}` : `${m.label} best: ${formatTime(b.time)}`;
   });
   const t = training();
   if (t.races) lines.push(`Form this session: +${(form() * 100).toFixed(1)}% after ${t.races} race${t.races > 1 ? 's' : ''}`);
@@ -223,9 +229,19 @@ matchMedia('(orientation: portrait) and (pointer: coarse)').addEventListener('ch
 });
 
 menu.addEventListener('cancel', (e) => e.preventDefault());
-menu.addEventListener('close', () => {
-  if (!MODES[menu.returnValue]) return;
-  mode = MODES[menu.returnValue];
+menu.addEventListener('close', async () => {
+  const next = MODES[menu.returnValue];
+  if (!next) return;
+  if (!next.course) {
+    try {
+      next.course = await loadCourse(next.file);
+    } catch (err) {
+      els.best.textContent = `${err.message} Check your connection and try again.`;
+      openDialog(menu);
+      return;
+    }
+  }
+  mode = next;
   if (renderer) useWorld();
   start();
 });
@@ -364,7 +380,10 @@ function simulate(dt) {
 
 // --- rendering ---------------------------------------------------------------
 
-const frameData = new Float32Array(112);
+const frameData = new Float32Array(120);
+// Deep water: a made-up river's, and the real Thames's olive green.
+const WATER = [0.07, 0.2, 0.24, 0];
+const THAMES = [0.19, 0.23, 0.16, 0];
 const SUN = normalize([0.35, 0.42, -0.84]);
 
 function boatFrame(b) {
@@ -540,13 +559,19 @@ function render(time) {
   frameData.set([...up, tanY], 24);
   frameData.set([...fwd, 0], 28);
   frameData.set([...SUN, 0], 32);
-  frameData.set([0.3, 0.52, 0.84, 0], 36);
+  frameData.set([0.3, 0.52, 0.84, race.course.scenery ? 0.8 : 0], 36); // w: cloud cover, on a real river's English sky
   frameData.set([0.78, 0.85, 0.9, 0.0016], 40);
-  frameData.set([0.07, 0.2, 0.24, 0], 44);
+  frameData.set(race.course.scenery ? THAMES : WATER, 44);
   for (let i = 0; i < 16; i++) {
     const b = race.racers[i]?.boat;
     frameData.set(b && b.swim <= 0 ? [b.x, b.z, b.heading, b.speed] : [0, 0, 0, 0], 48 + i * 4);
   }
+  // The riverside trees, for their reflections: a real river's are tall and
+  // come down to the water, a made-up one's stand back across the fields.
+  const c = pointAt(race.course, race.player.loc.s);
+  const { half } = widthAt(race.course, race.player.loc.s);
+  frameData.set([c.x, c.z, c.tx, c.tz], 112);
+  frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(mode)];
   for (const r of race.racers) {
     const set = meshes.racers[liveries.get(r)];
@@ -600,7 +625,7 @@ function updateHud(dt) {
   document.body.classList.toggle('capsized', boat.swim > 0);
   if (hud.hidden) return;
   const { course } = race;
-  const togo = Math.max(0, Math.min(course.finish - course.start, course.finish - loc.s)) * course.warp;
+  const togo = Math.max(0, Math.min(course.finish - course.start, course.finish - loc.s)) * course.warp / course.speedup;
   els.clock.textContent = formatTime(shown(race.player.finish ?? race.time));
   els.togo.textContent = course.warp > 1 ? `${(togo / 1000).toFixed(2)} km` : `${Math.ceil(togo)} m`;
   els.pos.textContent = `${ordinal(standings(race).indexOf(race.player) + 1)} / ${race.racers.length}`;
@@ -608,6 +633,9 @@ function updateHud(dt) {
   els.speed.textContent = (boat.speed * 3.6).toFixed(1);
   els.rate.textContent = strokeRate(boat);
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
+  els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
+  els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
+  showPlace(course, loc.s, dt);
   els.rhythm.style.transform = `scaleX(${boat.rhythm.toFixed(3)})`;
   els.rhythm.parentElement.classList.toggle('locked', boat.rhythm > 0.9);
   hud.classList.toggle('assisted', controls.assist);
@@ -617,6 +645,19 @@ function updateHud(dt) {
   els.rudder.style.transform = `translateX(${(controls.rudder * 39).toFixed(1)}px)`;
   const angle = Math.max(-1.1, Math.min(1.1, boat.roll / BOAT.capsize)) * 90;
   els.needle.style.transform = `rotate(${angle.toFixed(1)}deg)`;
+}
+
+// Landmarks (a real river's course.scenery.places) named one at a time as you
+// come up to them, each for a few seconds; any already passed are skipped.
+function showPlace(course, s, dt) {
+  const list = course.scenery?.places ?? [];
+  placeTimer -= dt;
+  while (list[placeNext] && s > list[placeNext].s + 30) placeNext++;
+  if (placeTimer <= 0 && list[placeNext] && s > list[placeNext].s - 60) {
+    els.place.textContent = list[placeNext++].name;
+    placeTimer = 3.5;
+  }
+  els.place.classList.toggle('on', placeTimer > 0.8);
 }
 
 // The beat cue: the side to stroke next lights up, and its ring closes in on

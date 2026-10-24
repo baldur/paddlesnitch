@@ -7,7 +7,7 @@ import { SKY, MESH, WATER } from './shaders.js';
 import { waterGrid } from './meshes.js';
 
 const SAMPLES = 4; // MSAA
-const FRAME_BYTES = 16 * 4 + 24 * 16;
+const FRAME_BYTES = 16 * 4 + 26 * 16;
 // Resolution follows the GPU: if frames take longer than this to draw, render
 // fewer pixels (down to half the screen's density); when there's room again,
 // creep back up. Phones start lower, since their screens are dense and small.

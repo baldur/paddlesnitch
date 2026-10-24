@@ -8,10 +8,12 @@ struct Frame {
   camUp: vec4f,      // xyz, w = tan(vertical fov / 2)
   camFwd: vec4f,
   sunDir: vec4f,     // towards the sun
-  skyTop: vec4f,
+  skyTop: vec4f,      // w = cloud cover, 0..1
   skyHorizon: vec4f, // also the fog colour; w = fog density
   water: vec4f,      // deep water colour
   boats: array<vec4f, 16>, // x, z, heading, speed: for their wakes
+  river: vec4f,      // the river where you are: centre x, z and direction x, z
+  banks: vec4f,      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -20,11 +22,43 @@ fn fog(color: vec3f, dist: f32) -> vec3f {
   return mix(color, frame.skyHorizon.rgb, clamp(f, 0.0, 1.0));
 }
 
+fn hash2(p: vec2f) -> f32 {
+  return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
+}
+
+fn noise2(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2f(1.0, 0.0)), u.x), mix(hash2(i + vec2f(0.0, 1.0)), hash2(i + vec2f(1.0, 1.0)), u.x), u.y);
+}
+
+// Fair-weather cumulus on a layer overhead, drifting slowly downwind: how much
+// cloud is in a direction (x), and how dense its core is there (y).
+fn clouds(dir: vec3f) -> vec2f {
+  let cover = frame.skyTop.w;
+  if (cover <= 0.0 || dir.y <= 0.0) { return vec2f(0.0); }
+  var p = dir.xz / (dir.y + 0.08) * 1.2 + vec2f(frame.camPos.w * 0.004, 0.0);
+  var n = 0.0;
+  var a = 0.5;
+  for (var k = 0; k < 4; k++) {
+    n += a * noise2(p);
+    p = p * 2.03 + vec2f(1.7, 9.2);
+    a *= 0.5;
+  }
+  let t = 0.75 - 0.4 * cover;
+  return vec2f(smoothstep(t, t + 0.12, n) * smoothstep(0.0, 0.08, dir.y), smoothstep(t + 0.08, t + 0.4, n));
+}
+
 fn skyColor(dir: vec3f, halo: f32) -> vec3f {
   let h = clamp(dir.y, 0.0, 1.0);
   var c = mix(frame.skyHorizon.rgb, frame.skyTop.rgb, pow(h, 0.55));
   let sun = max(dot(dir, frame.sunDir.xyz), 0.0);
-  c += vec3f(1.0, 0.86, 0.62) * (pow(sun, 3000.0) * 8.0 + pow(sun, 48.0) * 0.2) * halo;
+  let cl = clouds(dir);
+  // Bright edges, greyer where the cloud is thick.
+  let cloud = mix(vec3f(0.96, 0.96, 0.95), vec3f(0.64, 0.68, 0.74), cl.y) + vec3f(1.0, 0.9, 0.75) * pow(sun, 8.0) * 0.25;
+  c = mix(c, mix(cloud, frame.skyHorizon.rgb, 1.0 - smoothstep(0.0, 0.25, h)), cl.x);
+  c += vec3f(1.0, 0.86, 0.62) * (pow(sun, 3000.0) * 8.0 + pow(sun, 48.0) * 0.2) * halo * (1.0 - cl.x);
   return c;
 }
 `;
@@ -152,6 +186,24 @@ fn wake(p: vec2f) -> vec2f {
   return out;
 }
 
+// The riverside trees seen in the water. The reflected ray is followed across
+// the river (taken as straight from where you are) to the line of trees on the
+// bank it's heading for: if it meets them below their tops, it sees leaves.
+// Rays heading up or down the river see the sky over the next reach.
+const TREES = vec3f(0.14, 0.2, 0.1);
+fn treeline(p: vec2f, refl: vec3f) -> f32 {
+  if (frame.banks.w < 0.5) { return 0.0; }
+  let along = frame.river.zw;
+  let across = vec2f(-along.y, along.x);
+  let l = clamp(dot(p - frame.river.xy, across), -frame.banks.x, frame.banks.y);
+  let rl = dot(refl.xz, across);
+  let bank = select(-frame.banks.x, frame.banks.y, rl > 0.0);
+  let reach = min(abs(bank - l) / max(abs(rl), 0.0001), 900.0);
+  let a = dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
+  let top = frame.banks.z * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3));
+  return 0.8 * (1.0 - smoothstep(top * 0.4, top * 1.6, reach * refl.y));
+}
+
 @fragment fn fs(in: Out) -> @location(0) vec4f {
   let t = frame.camPos.w;
   let p = in.world.xz;
@@ -174,7 +226,7 @@ fn wake(p: vec2f) -> vec2f {
   let v = toEye / dist;
   let fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
   let refl = reflect(-v, n);
-  let sky = skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0);
+  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES, treeline(p, refl));
   var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15, 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles.
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;

@@ -9,11 +9,14 @@ const NARROWBOAT = 2.1; // beam of a moored narrowboat, metres
 
 // points: [[x, z], ...] in paddling order. start/finish are distances along the river.
 // width: metres from bank to bank, or a function of the distance along.
-// moorings: [{ s, length, side }]: a narrowboat moored against the left (-1) or
-// right (1) bank, centred `s` metres along. bridges: distances along.
+// moorings: [{ s, length, side, beam? }]: a boat moored against the left (-1) or
+// right (1) bank, centred `s` metres along (a narrowboat unless `beam` says
+// otherwise). bridges: distances along, or { s, style, ... } for a real one.
 // warp: race distances and times are shown this many times longer than they
 // really are, so a 6 km marathon fits in a few minutes of play (see README).
-export function createCourse(points, { width = 20, start = 60, finish = 1060, warp = 1, moorings = [], bridges = [] } = {}) {
+// speedup: boats move this many times their speed through the world, for a real
+// river drawn at its true size (warp then shows its true distances).
+export function createCourse(points, { width = 20, start = 60, finish = 1060, warp = 1, speedup = 1, moorings = [], bridges = [] } = {}) {
   const raw = [];
   for (let i = 0; i < points.length - 1; i++) {
     const p0 = points[Math.max(i - 1, 0)];
@@ -51,11 +54,11 @@ export function createCourse(points, { width = 20, start = 60, finish = 1060, wa
     p.left = p.half;
     p.right = p.half;
     for (const m of moorings) {
-      if (Math.abs(p.s - m.s) < m.length / 2 + 1) p[m.side < 0 ? 'left' : 'right'] = p.half - NARROWBOAT;
+      if (Math.abs(p.s - m.s) < m.length / 2 + 1) p[m.side < 0 ? 'left' : 'right'] = p.half - (m.beam ?? NARROWBOAT);
     }
   });
 
-  return { samples, start, finish, warp, moorings, bridges, length: (samples.length - 1) * SPACING };
+  return { samples, start, finish, warp, speedup, moorings, bridges, length: (samples.length - 1) * SPACING };
 }
 
 // The open water at a distance along: { half, left, right } in metres from the centreline.
@@ -155,6 +158,38 @@ export function raceRiver(km = 6, warp = 4) {
     }
   }
   return createCourse(points, { width, start, finish, warp, moorings, bridges: [600, 1150] });
+}
+
+// Beam of each kind of moored boat, metres.
+const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6 };
+
+// A real river from a course file (made by apps/web/scripts/courses, see
+// docs/features/game-courses-from-video.md): its line and widths in true metres,
+// and the scenery along it in `scenery`, for world.js.
+export function courseFromFile(data) {
+  const cum = [0];
+  for (let i = 1; i < data.line.length; i++) {
+    const [a, b] = [data.line[i - 1], data.line[i]];
+    cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+  }
+  const width = (s) => {
+    let i = 0;
+    while (i < cum.length - 2 && cum[i + 1] < s) i++;
+    const f = Math.max(0, Math.min(1, (s - cum[i]) / (cum[i + 1] - cum[i] || 1)));
+    return data.width[i] + (data.width[i + 1] - data.width[i]) * f;
+  };
+  const course = createCourse(data.line, {
+    width, start: data.start, finish: data.finish, warp: data.warp, speedup: data.speedup,
+    moorings: data.moorings.map((m) => ({ ...m, beam: BEAM[m.kind] ?? NARROWBOAT })),
+    bridges: data.bridges,
+  });
+  return { ...course, scenery: data };
+}
+
+export async function loadCourse(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Couldn't load the course (${res.status}).`);
+  return courseFromFile(await res.json());
 }
 
 function catmullRom(p0, p1, p2, p3, t) {

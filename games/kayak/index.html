@@ -26,7 +26,8 @@
       <span id="togo">6.00 km</span>
       <span id="pos">1st / 8</span>
     </div>
-    <p id="wash">On the wash</p>
+    <p id="wash">On the wash: resting</p>
+    <p id="place" aria-live="polite"></p>
     <p id="assisted">Balance assist on: tilt isn't available</p>
     <p id="touchhelp">Tap left, then right, when the ring closes · Slide a finger sideways to steer · Turn the phone to lean</p>
     <div class="cue left" id="cueL" aria-hidden="true"><span class="ring"></span>L</div>
@@ -46,10 +47,10 @@
         <div class="rudder" aria-hidden="true"><span id="rudder"></span></div>
       </div>
       <div class="meters">
-        <span>Rhythm</span>
+        <span>Rhythm <b id="flow"></b></span>
         <div class="bar rhythm"><div id="rhythm"></div></div>
-        <span>Stamina</span>
-        <div class="bar"><div id="stamina"></div></div>
+        <span>Sprint</span>
+        <div class="bar sprint"><div id="stamina"></div></div>
       </div>
     </div>
     <p id="flash" aria-live="assertive"></p>
@@ -59,7 +60,7 @@
 
   <dialog id="menu">
     <h2>Kayak</h2>
-    <p class="lede">A first-person marathon kayak race. Find a rhythm, keep your balance, and sit on someone's wash to save your strength for the sprint.</p>
+    <p class="lede">A first-person marathon kayak race. Find a rhythm, keep your balance, sprint to catch a wash and rest on it, and save something for the finish.</p>
     <form method="dialog">
       <fieldset class="hulls">
         <legend>Your boat</legend>
@@ -69,6 +70,7 @@
       </fieldset>
       <button value="race" autofocus>Division 9 race <small>6 km, 12 paddlers</small></button>
       <button value="practice">Practice time trial <small>1 km, on your own</small></button>
+      <button value="reading">Reading Thames <small>6.3 km up the real river from Christchurch Bridge to Mapledurham, 12 paddlers</small></button>
     </form>
     <p class="rotate-hint">Turn your phone sideways to race</p>
     <p id="best"></p>
@@ -76,17 +78,19 @@
     <details>
       <summary>Controls</summary>
       <ul>
-        <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> paddle strokes. Alternate them on a steady beat, about 85-90 a minute when racing: rhythm is speed. Uneven strokes, two on one side, steering hard and bumping into people all knock you off it</li>
+        <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> paddle strokes. Alternate them on a steady beat, up to about 90 a minute: rhythm is speed, and holding it builds flow, a few percent more over the next 20 seconds. Uneven strokes, two on one side, steering hard and bumping into people all knock you off it</li>
+        <li>Paddling quicker than about 90 a minute is a sprint, and spends the sprint bar. Use it to catch someone, then rest on their wash: it fills there several times faster. Empty, a quicker beat gets you nothing extra</li>
         <li>The start: you begin behind the field. Paddle up into a gap on the line, stop, and wait for the horn. It comes without warning after "Are you ready?" Go early and everyone waits while the line comes up to you</li>
         <li><kbd>A</kbd> <kbd>D</kbd> lean to keep your balance. Standing still is wobbly; speed steadies you</li>
         <li><kbd>Q</kbd> <kbd>E</kbd> rudder. It only bites when you're moving</li>
-        <li>Tuck in right behind a boat, or alongside its back half, to ride its wash: you go further for less effort, but the boat rocks more</li>
-        <li>Race distances and times are shown four times longer than you actually paddle, so a 6 km race takes about 7 minutes</li>
+        <li>Tuck in right behind a boat, or alongside its back half, to ride its wash: you go further for less effort and your sprint fills up, but the boat rocks more</li>
+        <li>Race distances and times are shown four times longer than you actually paddle, so a 6 km race takes about 7 minutes. On the Reading Thames the river is true to size and you cover it four times faster</li>
         <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes, left stick rudder, right stick lean</li>
         <li>Phone, held sideways: tap the left or right half of the screen to stroke, in time with the rings at the sides. To steer, put a finger down and slide it left or right; the bar under the balance gauge shows your rudder. Turn the phone like a steering wheel to shift your weight: when the boat dips one way, lean the other, as you would in a real kayak. (Tilt needs the page over HTTPS on iPhone; without it, balance is done for you)</li>
         <li><kbd>P</kbd> or <kbd>Esc</kbd> to pause, <kbd>M</kbd> to toggle sound</li>
       </ul>
     </details>
+    <p class="credit">Reading Thames map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
     <p class="dialog-links"><a href="../" class="leave">&larr; All games</a></p>
   </dialog>
 
