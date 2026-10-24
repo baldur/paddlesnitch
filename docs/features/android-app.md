@@ -1,6 +1,6 @@
 # Feature spec: Android app
 
-🚧 **Spec — 2026-10-24. P0 under way** (project, CI and a debug build on the owner's Pixel 9 Pro; upload key and `assetlinks.json` still to do). **P1 started:** models generated from the contract (`buildSrc/ContractModels.kt`) and the Paddles list on the sample paddles.
+🚧 **P0 done 2026-10-24**: `mobile/android`, CI (`android.yml`) building a debug APK and a release APK signed with the upload key (secrets `ANDROID_UPLOAD_*`; the key itself is on the owner's Mac, `~/.paddlesnitch-android/`), `/.well-known/assetlinks.json` (route in `apps/web/src/app/.well-known/`), installed on the owner's Pixel 9 Pro. **P1 started:** models generated from the contract (`buildSrc/ContractModels.kt`) and the Paddles list on the sample paddles.
 
 The native Android app: Kotlin + Jetpack Compose + Material 3, Android 10
 (API 29) and up, distributed on Google Play. What it shares with the iPhone app
