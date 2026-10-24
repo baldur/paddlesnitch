@@ -2,13 +2,14 @@
 // others' boats are played back smoothly. No DOM, no network (live.js is the
 // network); tested in tests/kayak-net.test.js.
 //
-// Each browser sends its own boat's state ~15 times a second on an unreliable
-// channel, so some arrive late, out of order or not at all. The other boats are
-// drawn DELAY behind, between the two states either side of that moment, which
-// hides the gaps; if nothing newer has come, they coast on along their heading.
+// Each browser sends its own boat's state 10 times a second through the relay,
+// so they arrive a little late, unevenly, and now and then not at all. The
+// other boats are drawn DELAY behind, between the two states either side of
+// that moment, which hides the gaps; if nothing newer has come, they coast on
+// along their heading.
 
-export const SEND_HZ = 15;
-export const DELAY = 0.1; // seconds behind the sender that the others' boats are shown
+export const SEND_HZ = 10;
+export const DELAY = 0.2; // seconds behind the sender that the others' boats are shown
 const KEEP = 1; // seconds of states kept per boat
 
 // A boat's state as one short array (sent as JSON): sender time, position,

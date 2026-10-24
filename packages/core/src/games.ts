@@ -1,12 +1,12 @@
-// The kayak game's server side: a leaderboard per course, and the mailbox that
-// lets browsers find each other for a live race (docs/features/game-accounts-leaderboard-live.md).
+// The kayak game's server side: a leaderboard per course, and live races
+// (docs/features/game-accounts-leaderboard-live.md).
 //
-// Live races connect browser to browser (WebRTC). This only carries the
-// handshake: a few small messages per pair of players, kept in the object store
-// one object each (the store has no atomic append, so nothing is ever
-// read-modified-written by two players at once).
+// A live race's messages go through the relay (infra/lambdas/game-relay), a
+// WebSocket per phone. This makes and joins races, and hands each player a
+// one-use ticket to connect to the relay with: the relay reads it from the
+// store, so it needs no sign-in code of its own.
 import { randomBytes } from 'crypto'
-import { getJson, putJson, listKeys, deleteObject } from './storage'
+import { getJson, putJson, listKeys } from './storage'
 
 // --- leaderboard -------------------------------------------------------------
 
@@ -67,15 +67,13 @@ export async function getLeaderboard(course: GameCourse, userId?: string) {
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ'
 export const LIVE_MAX_PLAYERS = 6
 export const LIVE_HOURS = 3
-const INBOX_MAX = 50 // messages waiting for one player: a handshake needs a few
+const TICKET_SECONDS = 60 // a ticket is used straight away, once
 
 export type LiveRoom = { code: string; course: GameCourse; host: string; createdAt: string }
 export type LivePlayer = { id: string; name: string; joinedAt: string }
-export type LiveMessage = { from: string; kind: 'offer' | 'answer'; sdp: string; at: string }
 
 const roomKey = (code: string) => `games/live/${code}/meta.json`
 const playerKey = (code: string, id: string) => `games/live/${code}/players/${id}.json`
-const inboxPrefix = (code: string, id: string) => `games/live/${code}/inbox/${id}/`
 
 export function raceCode(bytes = randomBytes(4)): string {
   return [...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join('')
@@ -118,18 +116,9 @@ export async function joinRoom(code: string, player: { id: string; name: string 
   return { room, players: already ? players : [...players, me] }
 }
 
-export async function sendMessage(code: string, to: string, message: Omit<LiveMessage, 'at'>) {
-  const prefix = inboxPrefix(code, to)
-  if ((await listKeys(prefix)).length >= INBOX_MAX) return false
-  const at = new Date().toISOString()
-  await putJson(`${prefix}${Date.now()}-${randomBytes(3).toString('hex')}.json`, { ...message, at })
-  return true
-}
-
-/** Takes a player's waiting messages, oldest first, and empties the inbox. */
-export async function takeMessages(code: string, id: string): Promise<LiveMessage[]> {
-  const keys = (await listKeys(inboxPrefix(code, id))).sort()
-  const messages = await Promise.all(keys.map((k) => getJson<LiveMessage>(k)))
-  await Promise.all(keys.map((k) => deleteObject(k)))
-  return messages.filter((m): m is LiveMessage => !!m)
+/** A one-use pass for the relay: it lets this player connect to this race, once, within a minute. */
+export async function relayTicket(code: string, player: { id: string; name: string }, now = Date.now()) {
+  const ticket = randomBytes(18).toString('base64url')
+  await putJson(`games/live/tickets/${ticket}.json`, { code, userId: player.id, name: player.name, expires: now + TICKET_SECONDS * 1000 })
+  return ticket
 }
