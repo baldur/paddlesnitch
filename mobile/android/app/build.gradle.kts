@@ -21,6 +21,10 @@ android {
         targetSdk = 37
         versionCode = System.getenv("PS_VERSION_CODE")?.toInt() ?: 1
         versionName = "0.1.0"
+        // The server the app talks to. Point a debug build at a dev server with
+        // -Ppaddlesnitch.api=http://<your Mac's LAN address>:3000
+        val api = (project.findProperty("paddlesnitch.api") as String?) ?: "https://paddlesnitch.com"
+        buildConfigField("String", "API_BASE_URL", "\"$api\"")
     }
 
     signingConfigs {
@@ -128,10 +132,14 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.json)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 }
