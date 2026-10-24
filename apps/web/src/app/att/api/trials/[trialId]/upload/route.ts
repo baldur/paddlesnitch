@@ -6,7 +6,8 @@ import { getJson, putJson, putObject } from '@/lib/storage'
 import { indexEntry } from '@/lib/entries'
 import { trackToCsv } from '@paddlesnitch/timing/csv'
 import { parseTrace, parseFailureMessage } from '@/lib/parse'
-import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint } from '@/lib/geo'
+import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint, noRunReason } from '@/lib/geo'
+import { gateReason, parseFailureReason } from '@/lib/upload-reasons'
 import { captureConditions } from '@/lib/conditions'
 import { emitMetric } from '@/lib/metrics'
 import { isBoatClass, validateCrew } from '@/lib/types'
@@ -95,7 +96,7 @@ async function processBuffer(
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
   if (!parseResult.ok) {
-    return NextResponse.json({ error: parseFailureMessage(parseResult.reason) }, { status: 422 })
+    return NextResponse.json({ error: parseFailureMessage(parseResult.reason), reason: parseFailureReason(parseResult.reason) }, { status: 422 })
   }
   return processTrack(parseResult.track, Buffer.from(arrayBuffer), filename, course, user, trialId, boatClass, crew, trialDate)
 }
@@ -122,6 +123,8 @@ async function processTrack(
       ? diagnoseGates(track, course.gates)
       : undefined
     const message = gateAnalysis ? gateDiagnosisMessage(gateAnalysis) : GENERIC_NO_MATCH
+    const code = gateAnalysis ? gateReason(gateAnalysis)
+      : { reason: noRunReason(track, course.startLine, course.finishLine, course.type, course.gateDirection) }
 
     // Persist the FULL failing track + course geometry so a failure can be
     // reproduced and debugged offline — successful entries are saved, but a
@@ -150,6 +153,7 @@ async function processTrack(
     return NextResponse.json(
       {
         error: message,
+        ...code,
         diagnostic: { track: trackToLatLngs(track), course, gateAnalysis },
       },
       { status: 422 }
@@ -275,7 +279,7 @@ export async function POST(
       const streams = await getActivityStreams(tokens.accessToken, idNum)
       if (!streams) {
         return NextResponse.json(
-          { error: 'Couldn’t load that Strava activity. It may have no GPS track, or be private.' },
+          { error: 'Couldn’t load that Strava activity. It may have no GPS track, or be private.', reason: 'STRAVA_UNAVAILABLE' },
           { status: 422 }
         )
       }
@@ -297,7 +301,7 @@ export async function POST(
     const resolvedUrl = resolveActivityUrl(url)
     if (!resolvedUrl) {
       return NextResponse.json(
-        { error: 'Use a Strava activity link or a direct link to a .gpx file.' },
+        { error: 'Use a Strava activity link or a direct link to a .gpx file.', reason: 'BAD_LINK' },
         { status: 422 }
       )
     }
@@ -310,6 +314,7 @@ export async function POST(
           error: fetched.error === 'too_large'
             ? 'That file is too large. Download it and upload the file instead.'
             : 'Couldn’t fetch that activity. Use a public https link, or download it and upload the file.',
+          reason: fetched.error === 'too_large' ? 'FILE_TOO_LARGE' : 'FETCH_FAILED',
         },
         { status: 422 }
       )

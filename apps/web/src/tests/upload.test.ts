@@ -233,6 +233,7 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const file = new File(['not a gps file'], 'data.txt', { type: 'text/plain' })
     const res = await upload(uploadReq(trial.id, file), { params: Promise.resolve({ trialId: trial.id }) })
     expect(res.status).toBe(422)
+    expect((await res.json()).reason).toBe('UNKNOWN_FORMAT')   // machine-readable beside the message (#515)
   })
 
   it('returns 422 when track does not cross the course lines', async () => {
@@ -245,6 +246,7 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const file = new File([offCourse], 'activity.gpx')
     const res = await upload(uploadReq(trial.id, file), { params: Promise.resolve({ trialId: trial.id }) })
     expect(res.status).toBe(422)
+    expect((await res.json()).reason).toBe('MISSED_START')
   })
 
   it('returns the parsed track + course as a diagnostic when the track does not cross', async () => {
@@ -309,6 +311,7 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const body = await res.json()
     expect(body.error).toMatch(/Gate 1 was not crossed/)
     expect(body.diagnostic.gateAnalysis.blocking).toEqual({ gateNumber: 1, requiredDirection: 1, reason: 'not_crossed' })
+    expect(body).toMatchObject({ reason: 'MISSED_GATE', gate: 1 })
   })
 
   it('returns 400 when the trial is closed', async () => {
