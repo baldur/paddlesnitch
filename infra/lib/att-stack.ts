@@ -926,6 +926,21 @@ export class AttStack extends cdk.Stack {
       ],
     })
 
+    // DMARC aggregate reports (the rua= address on _dmarc.paddlesnitch.com).
+    // Daily XML from the big mailbox providers: kept in S3 for when we need
+    // them, never forwarded to a person's inbox.
+    ruleSet.addRule('DmarcReports', {
+      recipients: ['dmarc@paddlesnitch.com'],
+      scanEnabled: true,
+      tlsPolicy: ses.TlsPolicy.OPTIONAL,
+      actions: [
+        new sesActions.S3({
+          bucket: inboundEmailBucket,
+          objectKeyPrefix: 'inbound-email/dmarc/',
+        }),
+      ],
+    })
+
     // MX record so the world knows where to send paddlesnitch.com mail.
     // priority 10 is conventional for a single MX target.
     new route53.MxRecord(this, 'InboundMx', {
@@ -1308,6 +1323,35 @@ export class AttStack extends cdk.Stack {
       metric: new cloudwatch.Metric({ namespace: 'AWS/SES', metricName: 'Reputation.BounceRate', statistic: 'Maximum', period: cdk.Duration.hours(1) }),
       threshold: 0.05, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
     })
+    alarm('SesComplaintAlarm', {
+      alarmName: 'paddlesnitch-email-complaints',
+      alarmDescription: 'SES complaint rate above 0.1%; SES reviews accounts at about 0.5%.',
+      metric: new cloudwatch.Metric({ namespace: 'AWS/SES', metricName: 'Reputation.ComplaintRate', statistic: 'Maximum', period: cdk.Duration.hours(1) }),
+      threshold: 0.001, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
+    // Every single bounce, complaint and reject, not just the rate (#22, #23).
+    // The account-level suppression list (BOUNCE + COMPLAINT, set in the
+    // console) already stops us mailing those addresses again; this tells us
+    // it happened. The configuration set was made by hand and is the default
+    // for the paddlesnitch.com identity, so it's referenced by name.
+    alerts.addToResourcePolicy(new iam.PolicyStatement({
+      principals: [new iam.ServicePrincipal('ses.amazonaws.com')],
+      actions: ['sns:Publish'],
+      resources: [alerts.topicArn],
+      conditions: { StringEquals: { 'AWS:SourceAccount': this.account } },
+    }))
+    const sesEvents = new ses.CfnConfigurationSetEventDestination(this, 'SesDeliveryProblems', {
+      configurationSetName: 'my-first-configuration-set',
+      eventDestination: {
+        name: 'delivery-problems-to-alerts',
+        enabled: true,
+        matchingEventTypes: ['bounce', 'complaint', 'reject'],
+        snsDestination: { topicArn: alerts.topicArn },
+      },
+    })
+    // SES checks it may publish when the destination is created.
+    sesEvents.node.addDependency(alerts)
 
     // A runaway bill (a loop, or someone driving Bedrock/SES). Budgets are
     // free. Account-wide, because the account is shared and the `project` tag
