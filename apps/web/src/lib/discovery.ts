@@ -48,6 +48,7 @@ paddlesnitch is not a navigation authority. Check stream warnings, lock notices 
 - \`GET ${SITE}/api/v1/places?q=\`: locks, wharves, slipways and towns on the water, by name.
 - \`GET ${SITE}/api/v1/trials\`, \`/api/v1/trials/{id}\`, \`/api/v1/trials/{id}/leaderboard\`: public time trials and results.
 - Every response carries \`attribution\`; show those credits with the data.
+- MCP (read-only, no auth, Streamable HTTP): ${SITE}/mcp — tools search_places, plan_route, list_trials, get_trial, get_leaderboard.
 
 ## Time trials
 
