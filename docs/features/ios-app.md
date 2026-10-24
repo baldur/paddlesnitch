@@ -227,7 +227,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **P0. Project + CI** ✅ | XcodeGen project, `PaddleKit` package, `contract-gen` for tokens, placeholder icon, CI build + tests on iOS 17 and newest simulators, lint | We can build and test | No |
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag; While Using + background session; sidecar → `deriveCadence` | The iPhone can be a tracker; whether stroke rate is possible | **Yes** |
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
-| **S3. API spike** | Generated models + client for two procedures over C1; token sign-in over C2 | The contract and sign-in shape | No |
+| **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
 | **P1. Read** | Sign-in, Paddles list + one paddle (MapKit), This iPhone, link-outs | Daily-use value; shell and theme | No |
 | **P2. Record** | Recorder → upload as a phone device → appears in Paddles; Live Activity | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
