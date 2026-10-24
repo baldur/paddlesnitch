@@ -30,7 +30,8 @@ question 1).
 | How the apps share work | **Shared contracts, not shared code.** Each app is written fully natively (Kotlin/Compose; Swift/SwiftUI). They share a generated API schema, golden test fixtures and design tokens, and both must pass the same fixtures. Kotlin Multiplatform was considered and **not** chosen |
 | Oldest versions | Android 10 (API 29); iOS 17. Newer features switch on where the phone has them, and the app says what's missing |
 | What's in the apps | **Native screens** for the main things, trial upload and race-a-section included. Rarely used admin pages open the website |
-| Distribution | Google Play and the App Store from the start, through their test tracks first |
+| Distribution | Google Play and the App Store, through their test tracks first. Android starts with direct installs on the owner's phone; the Play account (personal) comes after |
+| App id | `com.paddlesnitch.app` on both stores (permanent) |
 | Watch | Later, Wear OS only |
 
 ## Goals
@@ -225,8 +226,8 @@ They run in parallel and meet only at this contract.
    email-code sign-in doesn't count, Sign in with Apple becomes a Cognito
    identity provider, a shared server change in C2 (and it would show on
    Android and the web too, if we want sign-in options to match).
-4. **App name on the stores.** Proposed id on both: `com.paddlesnitch.app`
-   (Android package name, iOS bundle ID).
+4. **App name on the stores.** (The id is decided: `com.paddlesnitch.app` on
+   both, as the Android package name and the iOS bundle ID.)
 
 Maps are per platform: MapKit on iPhone; the tile question is Android's
 ([`android-app.md`](android-app.md)).

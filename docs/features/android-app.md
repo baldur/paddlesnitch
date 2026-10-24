@@ -92,16 +92,36 @@ The protocol is fixed by the tracker sync contract and its fixtures. On Android:
   Compose, Hilt or manual DI, Ktor or OkHttp + kotlinx.serialization). Pick in
   S3, keep it boring.
 
+## Before Play: installing straight onto phones
+
+Decided 2026-10-24: the owner **tests on their own phone first** and opens the
+Play account later. Until then:
+
+- **Debug builds over USB or WiFi** (`adb install`, or Run from Android Studio)
+  on the owner's phone. This is enough for S1–S3 and P1–P3.
+- **An emulator** for screens, sign-in and the capability list across Android
+  versions. It **can't** stand in for a paddle (real GPS with the screen off,
+  motion, the phone maker's battery killer) or for the real tracker over
+  Bluetooth, so S1 and S2 need the phone.
+- **A signed APK from CI** (a workflow artifact) for anyone else who wants to try
+  it before Play exists, installed via "install unknown apps". Google's 2026
+  developer verification will eventually cover such installs too, but `adb`
+  installs by a developer stay allowed. Check the status before handing APKs to
+  testers.
+- The debug signing key isn't the release key. Create the **upload key** once
+  and keep it in a GitHub secret from the start, so the first Play upload isn't
+  a key ceremony.
+
 ## Distribution on Google Play
 
-Start this **first** (P0), because two of the steps take calendar time.
+Opened **after** the owner has used the app on their phone. Note the calendar
+cost: a personal account can't reach production until a 14-day closed test
+has run, so opening it a little before P5 avoids waiting at the end.
 
-- **Account type.** A *personal* developer account created after Nov 2023 must
-  run a **closed test with at least 12 testers opted in for 14 days in a row**
-  before it can publish to production. An *organisation* account skips that but
-  needs a legal entity and a D-U-N-S number (free, can take a couple of weeks).
-  Either way there's identity verification and a one-off US$25 fee. **Decision
-  needed.**
+- **Account type: personal** (decided 2026-10-24). A personal developer
+  account created after Nov 2023 must run a **closed test with at least 12
+  testers opted in for 14 days in a row** before it can publish to production.
+  Identity verification and a one-off US$25 fee.
 - **Tracks.** Internal testing (up to 100 people, live in minutes) → closed
   testing for beta testers (the tracker beta group) → production. **Every merge
   to `main` that touches `mobile/android/` goes to internal testing**, and
@@ -123,8 +143,8 @@ Start this **first** (P0), because two of the steps take calendar time.
 - **Android developer verification** (Google's 2026 requirement for apps on
   certified devices): covered by a verified Play account; confirm when the
   account is set up.
-- **Package name** decided once, never changed (proposal:
-  `com.paddlesnitch.app`, the same as the iOS bundle ID).
+- **Package name: `com.paddlesnitch.app`** (decided 2026-10-24, permanent),
+  the same as the iOS bundle ID.
 
 ## Testing (Android)
 
@@ -141,7 +161,7 @@ Start this **first** (P0), because two of the steps take calendar time.
 
 | Phase | What | Proves |
 |---|---|---|
-| **P0. Play account** | Developer account, package name, empty app on internal testing via CI, `assetlinks.json` | We can ship; starts the account clock |
+| **P0. Build and install** | `mobile/android` project, CI builds a signed APK, upload key in a secret, `assetlinks.json`; installs on the owner's phone | We can put a build on a phone |
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag on a cheap Samsung + one other phone; GPS provider; sidecar → `deriveCadence` | The phone can be a tracker; whether stroke rate is possible |
 | **S2. Tracker spike** | CompanionDeviceManager pairing + one background sync from the real tracker, with receipt | Sync with nothing pressed works on Android |
 | **S3. API spike** | Generated models + client for two procedures over C1; token sign-in over C2 | The contract and sign-in shape |
@@ -149,16 +169,15 @@ Start this **first** (P0), because two of the steps take calendar time.
 | **P2. Record** | Recorder → upload as a phone device → appears in Paddles | The phone as a tracker |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site |
-| **P5. Production** | Closed test (≥14 days if personal account), store listing, production | Real users |
+| **P5. Play** | Personal Play account, internal testing, closed test with ≥12 testers for 14 days, store listing, production | Real users |
 | Later | Tracker updates over Bluetooth (after signed firmware), Health Connect, passkeys, Wear OS | |
 
 S1–S3 run alongside P0 and the shared C1–C3. Their results may change P2/P3.
 
 ## Open questions (Android)
 
-1. **Personal or organisation Play account?** If personal, who are the 12
-   testers?
-2. **Package name** (permanent).
-3. **GPS provider:** fused or raw GNSS, decided in S1.
-4. **Map tiles:** Esri's terms and attribution for use in an app, or a
+1. **Who are the 12 closed-test testers?** (The tracker beta group is the
+   obvious pool.)
+2. **GPS provider:** fused or raw GNSS, decided in S1.
+3. **Map tiles:** Esri's terms and attribution for use in an app, or a
    different keyless source.
