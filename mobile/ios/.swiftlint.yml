@@ -1,0 +1,22 @@
+# swift-format owns layout; SwiftLint only checks what it can't.
+included:
+  - App
+  - Tests
+  - Packages/PaddleKit/Sources
+  - Packages/PaddleKit/Tests
+excluded:
+  - Packages/PaddleKit/Sources/DesignSystem/Generated
+disabled_rules:
+  - line_length
+  - trailing_comma
+  - opening_brace
+  - vertical_parameter_alignment_on_call
+  - identifier_name
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - fatal_error_message
+  - unowned_variable_capture
+  - weak_delegate
+force_unwrapping:
+  severity: warning
