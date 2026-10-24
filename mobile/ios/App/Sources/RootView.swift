@@ -12,12 +12,13 @@ struct RootView: View {
 
     var body: some View {
         TabView {
+            // The same list view throughout; it reloads when `sourceID` changes
+            // (samples, or this person's). Rebuilding its navigation stack
+            // under the closing sign-in sheet crashed UIKit on iOS 17.
             PaddleListView(
-                source: source, isSample: account.user == nil, needsTerms: account.user?.needsTerms == true,
-                signIn: { signingIn = true }
+                source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
+                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true }
             )
-            // A new list when the account changes: samples, or this person's.
-            .id(account.user?.id ?? "samples")
             .tabItem { Label("Paddles", systemImage: "water.waves") }
             YouView(account: account, signIn: { signingIn = true })
                 .tabItem { Label("You", systemImage: "person.crop.circle") }

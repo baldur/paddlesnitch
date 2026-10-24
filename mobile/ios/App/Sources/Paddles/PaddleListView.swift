@@ -5,6 +5,8 @@ import SwiftUI
 
 struct PaddleListView: View {
     let source: any PaddlesSource
+    /// Which paddles `source` holds; a change reloads the list.
+    let sourceID: String
     let isSample: Bool
     /// The account must accept changed Terms on the website (as on Android:
     /// a notice, not a block).
@@ -13,9 +15,13 @@ struct PaddleListView: View {
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var termsOpen = false
+    @State private var loadedID: String?
 
-    init(source: any PaddlesSource, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void) {
+    init(
+        source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void
+    ) {
         self.source = source
+        self.sourceID = sourceID
         self.isSample = isSample
         self.needsTerms = needsTerms
         self.signIn = signIn
@@ -32,7 +38,15 @@ struct PaddleListView: View {
                     PaddleDetailView(id: row.id, source: source)
                 }
         }
-        .task { await model.load() }
+        .task(id: sourceID) {
+            // Signed in or out: back to the top, and load the other paddles.
+            if let loadedID, loadedID != sourceID {
+                path = []
+                model = PaddleListModel(source: source)
+            }
+            loadedID = sourceID
+            await model.load()
+        }
         .sheet(isPresented: $termsOpen) {
             SafariView(url: PaddlesnitchApp.baseURL.appending(path: "terms/accept")).ignoresSafeArea()
         }

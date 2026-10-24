@@ -129,7 +129,10 @@ struct SignInView: View {
         }
     }
 
+    /// The keyboard goes first, so the sheet isn't still laying out for it
+    /// while it closes.
     private func submit() {
+        focus = nil
         Task {
             if await form.submit(to: account) { dismiss() }
         }
