@@ -142,7 +142,11 @@ Reuses what the browser already proved
   `apple-app-site-association`, both under `/.well-known/`) carrying a
   **one-time code** the app swaps for tokens. Tokens never appear in a URL.
   `apple-app-site-association` declares `webcredentials` as well as
-  `applinks`, so iOS offers saved paddlesnitch.com passwords.
+  `applinks`, so iOS offers saved paddlesnitch.com passwords. Its app IDs need
+  the Apple team ID, which only exists once the Apple Developer Program is
+  joined (iOS P5). Until then the file ships without the iOS app IDs, and Strava
+  sign-in on iPhone waits for P5. Android's `assetlinks.json` needs only the
+  signing key's fingerprint, so it can be real from Android P0.
 - **Signed-in website pages from the apps:** proposal is a one-time code
   handed to the in-app browser, which a web route turns into the usual cookies.
 - **Phone devices** on the relay route (above).
