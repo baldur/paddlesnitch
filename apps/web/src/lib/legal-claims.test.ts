@@ -39,7 +39,9 @@ const SERVICES: Record<string, string> = {
   'ddapi20-waterwebservices.rijkswaterstaat.nl': 'Rijkswaterstaat',
   'download.waterinfo.be': 'waterinfo.be',
   'www.pegelonline.wsv.de': 'PEGELONLINE',
-  'www.hydrodaten.admin.ch': 'BAFU',   // Swiss water levels, read by our server (and a station's own page)   // German water levels, read by our server (and a gauge's own page)
+  'www.hydrodaten.admin.ch': 'BAFU',
+  'opendata-download-hydroobs.smhi.se': 'SMHI',   // Swedish river flows, read by our server
+  'www.smhi.se': 'SMHI',   // a station's own page   // Swiss water levels, read by our server (and a station's own page)   // German water levels, read by our server (and a gauge's own page)
   'www.gov.uk': 'GOV.UK',
   'api.github.com': 'GitHub',
   'github.com': 'GitHub',

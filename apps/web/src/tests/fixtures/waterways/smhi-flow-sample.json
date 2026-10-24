@@ -1,0 +1,53 @@
+{
+ "parameter": {
+  "key": "2",
+  "name": "Vattenföring (15 min)",
+  "unit": "m³/s"
+ },
+ "station": [
+  {
+   "id": 1583,
+   "key": "1583",
+   "name": "VÄSTERSEL",
+   "catchmentName": "MOÄLVEN",
+   "latitude": 63.4332,
+   "longitude": 18.3034,
+   "value": [
+    {
+     "date": 1792788300000,
+     "value": 19.3,
+     "quality": "O"
+    },
+    {
+     "date": 1792789200000,
+     "value": 19.4,
+     "quality": "O"
+    }
+   ]
+  },
+  {
+   "id": 2227,
+   "key": "2227",
+   "name": "BUSKBÄCKEN",
+   "catchmentName": "NORRSTRÖM",
+   "latitude": 59.9038,
+   "longitude": 15.2314,
+   "value": []
+  },
+  {
+   "id": 9999,
+   "key": "9999",
+   "name": "GAMMAL",
+   "catchmentName": "MOÄLVEN",
+   "latitude": 63.4332,
+   "longitude": 18.3034,
+   "value": [
+    {
+     "date": 1792681200000,
+     "value": 5.0,
+     "quality": "O"
+    }
+   ]
+  }
+ ]
+}

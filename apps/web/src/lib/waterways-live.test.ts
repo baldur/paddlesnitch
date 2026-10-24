@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, pegelonlineGauges, bafuGauges, lv95ToWgs84, type Gauge,
+  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, pegelonlineGauges, bafuGauges, lv95ToWgs84, smhiGauges, type Gauge,
 } from '@paddlesnitch/waterways/live'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
@@ -84,6 +84,12 @@ describe('gauges', () => {
     expect(g[0]).toMatchObject({ source: 'bafu', id: '2135', readAt: '2026-10-23T14:50:00.000Z' })
     expect(g[0].at[0]).toBeCloseTo(46.93, 1)   // Bern
     expect(g[0].at[1]).toBeCloseTo(7.45, 1)
+  })
+
+  it('Sweden (SMHI): the latest flow in m³/s (SMHI publishes flows, not levels), river from the catchment; no readings or stale left out', () => {
+    const g = smhiGauges(fixture('smhi-flow-sample.json'), Date.parse('2026-10-23T21:30:00Z'))
+    expect(g.map(x => [x.name, x.river, x.flowM3s, x.valueM])).toEqual([['Västersel', 'Moälven', 19.4, undefined]])
+    expect(g[0]).toMatchObject({ source: 'smhi', id: '1583', at: [63.4332, 18.3034], readAt: '2026-10-23T21:00:00.000Z' })
   })
 
   it('Swiss LV95 to latitude and longitude (swisstopo\'s approximate formulas)', () => {

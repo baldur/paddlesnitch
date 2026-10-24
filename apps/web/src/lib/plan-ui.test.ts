@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, gaugeValueText, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -123,6 +123,15 @@ describe('the start time box', () => {
     const local = new Date(2027, 3, 17, 8, 5)
     expect(localInput(local.toISOString())).toBe('2027-04-17T08:05')
     expect(localInput(undefined)).toBe('')
+  })
+})
+
+describe('a gauge reading in words', () => {
+  it('a level in metres (NAP for Dutch gauges), a flow in m³/s where that is all a source gives, else none', () => {
+    expect(gaugeValueText({ valueM: 1.234 })).toBe('1.23 m')
+    expect(gaugeValueText({ valueM: -0.5, datum: 'nap' })).toBe('-0.50 m NAP')
+    expect(gaugeValueText({ flowM3s: 19.4 })).toBe('19.4 m³/s')
+    expect(gaugeValueText({})).toBeNull()
   })
 })
 

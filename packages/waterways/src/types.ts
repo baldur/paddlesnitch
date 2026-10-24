@@ -27,6 +27,7 @@ export type SourceId =
   | 'waterinfo-levels'       // Flemish water levels, waterinfo.be (live, CC BY 4.0)
   | 'pegelonline-levels'     // German federal water levels, PEGELONLINE (live, DL-DE Zero 2.0)
   | 'bafu-levels'            // Swiss federal water levels, BAFU (live, free use, source recommended)
+  | 'smhi-flows'             // Swedish river flows, SMHI (live, CC BY 4.0)
   | 'thames-conditions'      // GOV.UK River Thames current conditions (live, OGL)
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
