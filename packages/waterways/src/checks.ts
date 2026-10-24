@@ -46,4 +46,8 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'Melk → Krems (Danube, the Wachau)', start: [48.2310, 15.3340], finish: [48.4060, 15.6010], source: 'OSM; a route must exist' },
   { name: 'Bern: Eichholz → Altenberg (Aare)', start: [46.9320, 7.4560], finish: [46.9540, 7.4500], source: 'The Aare swim and paddle run through Bern; a route must exist' },
   { name: 'Zürich: Bellevue → Rapperswil (Lake Zurich)', start: [47.3650, 8.5450], finish: [47.2260, 8.8150], source: 'OSM; a route must exist' },
+  // Denmark and Sweden (docs/features/waterways-denmark-sweden.md): routes found, no counts pinned yet.
+  { name: 'Silkeborg → Ry (Gudenå, through the lakes)', start: [56.1690, 9.5530], finish: [56.0880, 9.7700], source: 'The Gudenå canoe route; a route must exist' },
+  { name: 'Borensberg → Motala (Göta kanal)', start: [58.5600, 15.2850], finish: [58.5400, 15.0450], source: 'OSM; a route must exist' },
+  { name: 'Stockholm: Kungsholmen → Slussen', start: [59.3270, 18.0300], finish: [59.3200, 18.0720], source: 'OSM; a route must exist' },
 ]
