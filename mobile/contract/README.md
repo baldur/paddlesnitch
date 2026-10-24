@@ -102,7 +102,9 @@ apps show. Function name → cases of `{ "in", "out" }`, where each `out` is wha
 the website's own function returned for `in` when `pnpm mobile:contract` ran.
 Port each function and run it over every case. The inputs sit at the edges
 where ports go wrong: rounding at :59.5, `toFixed` on 1.005 (round the exact
-binary value, as JavaScript does, not the shortest decimal), 22.5° on the compass.
+binary value, as JavaScript does, not the shortest decimal), `toFixed` on an
+exact tie like 0.125 or 2.25 (JavaScript rounds up; C's printf rounds to
+even), 22.5° on the compass.
 
 | Function | `in` | What it is |
 |---|---|---|

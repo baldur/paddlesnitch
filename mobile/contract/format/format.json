@@ -140,6 +140,12 @@
     },
     {
       "in": {
+        "distanceKm": 0.125
+      },
+      "out": "0.13 km"
+    },
+    {
+      "in": {
         "distanceKm": 0
       },
       "out": "0.00 km"
@@ -272,6 +278,17 @@
         "hasMotion": true
       },
       "out": "The GPS lost the sky 1.5 hours after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 8100,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 2.3 hours after you set off, so no route was recorded after that. The boat motion was."
     },
     {
       "in": {
