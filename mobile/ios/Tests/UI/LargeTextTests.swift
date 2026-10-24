@@ -36,4 +36,11 @@ final class LargeTextTests: AppTestCase {
         try checkWholeScreen()
         XCTAssertTrue(text(containing: "Version").exists)
     }
+
+    func testSignInAtTheLargestTextSize() throws {
+        app.buttons["sample-notice-action"].tap()
+        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
+        try checkWholeScreen()
+        XCTAssertTrue(app.buttons["sign-in-submit"].exists)
+    }
 }

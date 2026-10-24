@@ -24,10 +24,11 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(text(containing: "PADDLING").exists)
     }
 
-    func testYouListsTheAccountPages() {
+    func testYouSignedOutOffersToSignIn() {
         tab("You").tap()
         XCTAssertTrue(app.buttons["Privacy policy"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["Account settings"].exists)
+        XCTAssertTrue(app.buttons["Sign in"].exists)
+        XCTAssertFalse(app.buttons["Account settings"].exists, "account pages need an account")
     }
 
     // MARK: Apple's accessibility audit on every screen

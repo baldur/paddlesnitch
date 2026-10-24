@@ -1,6 +1,6 @@
 # Feature spec: iPhone app
 
-🚧 **Spec — 2026-10-24. P0 built (project, tokens, CI); the rest not built.** How to work on it: [`mobile/ios/README.md`](../../mobile/ios/README.md).
+🚧 **Spec — 2026-10-24. P0 and P1 built; S1, S2 and P2 on need a real iPhone.** How to work on it: [`mobile/ios/README.md`](../../mobile/ios/README.md).
 
 The native iPhone app: Swift + SwiftUI, iOS 17 and up, distributed through
 TestFlight and the App Store. What it shares with the Android app (the
@@ -228,7 +228,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag; While Using + background session; sidecar → `deriveCadence` | The iPhone can be a tracker; whether stroke rate is possible | **Yes** |
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
-| **P1. Read** 🚧 | Paddles list + one paddle (MapKit), a You tab with link-outs, IBM Plex bundled; built on the sample paddles, sign-in next (C2 server side is #638) | Daily-use value; shell and theme | No |
+| **P1. Read** ✅ | Paddles list + one paddle (MapKit), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
 | **P2. Record** | Recorder → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |

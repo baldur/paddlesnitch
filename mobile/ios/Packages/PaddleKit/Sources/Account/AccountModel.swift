@@ -1,0 +1,123 @@
+import Foundation
+import Observation
+import PaddleAPI
+
+/// Who's signed in, and the client their calls go through.
+@MainActor @Observable
+public final class AccountModel {
+    public struct User: Codable, Equatable, Sendable {
+        public var id: String
+        public var email: String
+        public var displayName: String
+        /// The account must accept changed Terms on the website. Known only
+        /// from signing in; a restored session says false.
+        public var needsTerms: Bool
+    }
+
+    public enum State: Equatable, Sendable {
+        case signedOut
+        case signedIn(User)
+    }
+
+    public private(set) var state: State = .signedOut
+    /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
+    public private(set) var client: PaddleClient
+    public var user: User? {
+        if case .signedIn(let user) = state { user } else { nil }
+    }
+
+    private let anonymous: PaddleClient
+    private let session: TokenSession
+    private let profile: ProfileStore
+
+    public init(
+        baseURL: URL, transport: any HTTPTransport, app: String, tokens: any TokenStore,
+        profile: ProfileStore = ProfileStore()
+    ) {
+        let anonymous = PaddleClient(baseURL: baseURL, transport: transport, app: app, idToken: { _ in nil })
+        let session = TokenSession(store: tokens) { refreshToken in
+            try await anonymous.send(Endpoints.authRefresh, RefreshToken(refreshToken: refreshToken)).idToken
+        }
+        self.anonymous = anonymous
+        self.session = session
+        self.profile = profile
+        self.client = anonymous
+        self.client = PaddleClient(baseURL: baseURL, transport: transport, app: app) { [weak self] refresh in
+            switch try await session.token(refresh: refresh) {
+            case .token(let token): return token
+            case .signedOut:
+                await self?.lost()
+                return nil
+            }
+        }
+        // Signed in on an earlier launch: show who at once, without the
+        // network. A refresh token the server no longer takes signs out on the
+        // first call.
+        if tokens.load() != nil, let user = profile.load() {
+            state = .signedIn(user)
+        } else {
+            profile.clear()
+        }
+    }
+
+    public func signIn(email: String, password: String) async throws {
+        try await accept(try await anonymous.send(Endpoints.authLogin, Login(email: email, password: password)))
+    }
+
+    public func createAccount(email: String, displayName: String, password: String) async throws {
+        let signup = Signup(
+            acceptedTosVersion: Constants.tosVersion, displayName: displayName, email: email, password: password)
+        try await accept(try await anonymous.send(Endpoints.authSignup, signup))
+    }
+
+    /// Signs out here at once, then asks the server to revoke the refresh
+    /// token. If that can't reach the server the token is still gone from
+    /// this phone.
+    public func signOut() async {
+        let refreshToken = await session.signOut()
+        profile.clear()
+        state = .signedOut
+        if let refreshToken {
+            _ = try? await anonymous.send(Endpoints.authLogout, RefreshToken(refreshToken: refreshToken))
+        }
+    }
+
+    /// Tokens first, so the first call after signing in already has them.
+    private func accept(_ answer: SignIn) async throws {
+        let user = User(
+            id: answer.id, email: answer.email, displayName: answer.displayName, needsTerms: answer.needsTerms == true)
+        try await session.signedIn(idToken: answer.idToken, refreshToken: answer.refreshToken)
+        profile.save(user)
+        state = .signedIn(user)
+    }
+
+    /// The server turned the refresh token down.
+    private func lost() {
+        profile.clear()
+        state = .signedOut
+    }
+}
+
+/// The signed-in person's name and email between launches. Not secret, so
+/// UserDefaults; the tokens live in the Keychain.
+public struct ProfileStore: Sendable {
+    public let key: String
+    let defaults: @Sendable () -> UserDefaults
+
+    public init(key: String = "signed-in-user", defaults: @escaping @Sendable () -> UserDefaults = { .standard }) {
+        self.key = key
+        self.defaults = defaults
+    }
+
+    func load() -> AccountModel.User? {
+        defaults().data(forKey: key).flatMap { try? JSONDecoder().decode(AccountModel.User.self, from: $0) }
+    }
+
+    func save(_ user: AccountModel.User) {
+        defaults().set(try? JSONEncoder().encode(user), forKey: key)
+    }
+
+    func clear() {
+        defaults().removeObject(forKey: key)
+    }
+}

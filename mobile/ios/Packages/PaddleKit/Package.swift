@@ -10,6 +10,8 @@ let package = Package(
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "PaddleAPI", targets: ["PaddleAPI"]),
         .library(name: "Paddles", targets: ["Paddles"]),
+        .library(name: "Account", targets: ["Account"]),
+        .library(name: "SampleServer", targets: ["SampleServer"]),
         .executable(name: "contract-gen", targets: ["ContractGen"]),
     ],
     targets: [
@@ -21,6 +23,10 @@ let package = Package(
         // The Paddles screens' logic: formatting as the web does, the route's
         // colour scale, and the list and one-paddle models.
         .target(name: "Paddles", dependencies: ["PaddleAPI"]),
+        // Signing in: tokens in the Keychain, refreshing them, who's signed in.
+        .target(name: "Account", dependencies: ["PaddleAPI"]),
+        // paddlesnitch.com played from the contract's fixtures, for UI tests.
+        .target(name: "SampleServer", dependencies: ["PaddleAPI"]),
         // Turns mobile/contract/ into Swift. The logic is a library so it
         // can be tested; the executable only reads and writes files.
         .target(name: "ContractGenKit"),
@@ -29,5 +35,6 @@ let package = Package(
         .testTarget(name: "ContractGenKitTests", dependencies: ["ContractGenKit"]),
         .testTarget(name: "PaddleAPITests", dependencies: ["PaddleAPI"]),
         .testTarget(name: "PaddlesTests", dependencies: ["Paddles", "PaddleAPI"]),
+        .testTarget(name: "AccountTests", dependencies: ["Account", "PaddleAPI", "SampleServer"]),
     ]
 )

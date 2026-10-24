@@ -38,18 +38,39 @@ touches `mobile/ios/` or `mobile/contract/`.
 |---|---|
 | `project.yml` | The Xcode project, as text. `Paddlesnitch.xcodeproj` is generated from it and not committed. |
 | `App/` | The app target: screens and wiring only. |
-| `Packages/PaddleKit/` | Everything testable without a simulator, one target per area (`DesignSystem`, `PaddleAPI`, `Paddles` now; `Recorder`, `TrackerLink`, `UploadQueue`, `Capabilities` as their phases arrive). `swift test` runs it on the Mac. |
+| `Packages/PaddleKit/` | Everything testable without a simulator, one target per area (`DesignSystem`, `PaddleAPI`, `Paddles`, `Account`, `SampleServer` now; `Recorder`, `TrackerLink`, `UploadQueue`, `Capabilities` as their phases arrive). `swift test` runs it on the Mac. |
 | `Packages/PaddleKit/Sources/PaddleAPI/` | Generated models (`Generated/`), the hand-mapped `Seat` and `Coordinate`, and `PaddleClient`: `try await client.call(Procedures.paddlesGet, ById(id: id))`. |
 | `Packages/PaddleKit/Sources/ContractGen*` | `contract-gen`: `mobile/contract/` → Swift. |
 | `Packages/PaddleKit/Sources/Paddles/` | The Paddles screens' logic: the web's formatting ported (`Format`, incl. JS `toFixed` rounding), the route colour scale, the list and one-paddle models. Screens in `App/` only draw these. |
 | `Tests/UI/` | XCUITest on the bundled sample paddles: the flows, Apple's accessibility audit on every screen, and `LargeTextTests` at the largest text size. |
 | `scripts/simulator.sh` | Finds or creates an iPhone simulator for an iOS version. |
 
-## Sample paddles
+## Signing in
 
-Until sign-in (C2) the app shows `mobile/contract/fixtures/api/`, bundled
-straight from the contract and labelled as samples. The UI tests run on the
-same data.
+Email and password, plus Create account, as on Android and the website
+(`Account`):
+- The refresh token is kept in the Keychain (this device only); the ID token
+  is held in memory and refreshed a minute before it expires. Several calls at
+  once share one refresh.
+- A call the server turns down with 401 gets a fresh token and is tried once
+  more. A refresh token the server refuses signs out.
+- The name and email are kept so the next launch shows you signed in without
+  the network.
+
+Signed out, Paddles shows the contract's sample paddles
+(`mobile/contract/fixtures/api/`, bundled straight from the contract).
+
+## Servers
+
+| How | Server |
+|---|---|
+| Normal | `https://paddlesnitch.com` (`PaddlesnitchBaseURL` in project.yml) |
+| Debug build + `PADDLESNITCH_BASE_URL=http://localhost:3000` in the scheme's environment | your Mac's `pnpm dev` |
+| Launch argument `-SampleServer` | `SampleServer`: the contract's fixtures played back offline (password `Password123`; `sam@example.com` must accept new Terms). The UI tests use it. |
+
+`-ResetAccount` starts signed out. The simulator build is signed ad hoc (no
+Apple account needed): an unsigned build has no Keychain, so signing in
+couldn't stick.
 
 ## Accessibility audit notes
 

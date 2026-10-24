@@ -24,23 +24,32 @@ public enum PaddleAPIError: Error, Equatable, Sendable {
     case badResponse(status: Int)
     /// The answer didn't match the contract.
     case undecodable(String)
+    /// A REST route said no, with words to show as they are (`ApiError`):
+    /// "That email and password don't match." `session` comes with a wrong
+    /// email code that can be tried again.
+    case rejected(message: String, status: Int, session: String?)
 }
 
-/// Calls the server's tRPC procedures over plain HTTP, as
-/// mobile/contract/README.md describes: queries are `GET ?input=`, mutations
-/// `POST`, answers `{ result: { data } }`.
+/// Calls the server as mobile/contract/README.md describes: tRPC procedures
+/// over plain HTTP (queries `GET ?input=`, mutations `POST`, answers
+/// `{ result: { data } }`) and the REST sign-in routes.
 public struct PaddleClient: Sendable {
     public var baseURL: URL
     public var transport: any HTTPTransport
-    /// The signed-in user's Cognito ID token, or nil when signed out.
-    public var idToken: @Sendable () async throws -> String?
+    /// The signed-in user's Cognito ID token, or nil when signed out. With
+    /// `refresh` true the old one was turned down: get a new one.
+    public var idToken: @Sendable (_ refresh: Bool) async throws -> String?
+    /// `x-paddlesnitch-app` on sign-in calls, e.g. `ios/0.1.0`: the server
+    /// then answers with tokens instead of setting cookies.
+    public var app: String
 
     public init(
-        baseURL: URL, transport: any HTTPTransport = URLSession.shared,
-        idToken: @escaping @Sendable () async throws -> String?
+        baseURL: URL, transport: any HTTPTransport = URLSession.shared, app: String = "ios/0",
+        idToken: @escaping @Sendable (_ refresh: Bool) async throws -> String?
     ) {
         self.baseURL = baseURL
         self.transport = transport
+        self.app = app
         self.idToken = idToken
     }
 
@@ -48,11 +57,45 @@ public struct PaddleClient: Sendable {
         try await call(procedure, NoInput())
     }
 
+    /// Calls a procedure. If the server turns the ID token down (it expired
+    /// early, say), it gets a fresh one and tries once more.
     public func call<Input, Output>(_ procedure: Procedure<Input, Output>, _ input: Input) async throws -> Output {
-        let token = try await idToken()
+        let token = try await idToken(false)
         if procedure.auth == .user && token == nil { throw PaddleAPIError.signedOut }
-        let (data, response) = try await transport.send(try request(for: procedure, input, token: token))
+        var (data, response) = try await transport.send(try request(for: procedure, input, token: token))
+        if response.statusCode == 401, token != nil, let fresh = try await idToken(true), fresh != token {
+            (data, response) = try await transport.send(try request(for: procedure, input, token: fresh))
+        }
         return try Self.decode(Output.self, from: data, status: response.statusCode)
+    }
+
+    /// Calls a REST route (mobile/contract/api/rest.json). A refusal comes
+    /// back as `PaddleAPIError.rejected` with the server's own words.
+    public func send<Input, Output>(_ endpoint: Endpoint<Input, Output>, _ input: Input) async throws -> Output {
+        let (data, response) = try await transport.send(try request(for: endpoint, input))
+        let decoder = JSONDecoder.paddlesnitch
+        let status = response.statusCode
+        if (200..<300).contains(status) {
+            do {
+                return try decoder.decode(Output.self, from: data)
+            } catch let error as DecodingError {
+                throw PaddleAPIError.undecodable(String(describing: error))
+            }
+        }
+        if let failure = try? decoder.decode(ApiError.self, from: data) {
+            throw PaddleAPIError.rejected(message: failure.error, status: status, session: failure.session)
+        }
+        throw PaddleAPIError.badResponse(status: status)
+    }
+
+    func request<Input, Output>(for endpoint: Endpoint<Input, Output>, _ input: Input) throws -> URLRequest {
+        var request = URLRequest(url: baseURL.appending(path: String(endpoint.path.drop { $0 == "/" })))
+        request.httpMethod = endpoint.method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(app, forHTTPHeaderField: "x-paddlesnitch-app")
+        if !(input is NoInput) { request.httpBody = try JSONEncoder.paddlesnitch.encode(input) }
+        return request
     }
 
     func request<Input, Output>(for procedure: Procedure<Input, Output>, _ input: Input, token: String?) throws
