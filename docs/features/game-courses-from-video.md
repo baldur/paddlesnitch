@@ -1,6 +1,6 @@
 # Game courses from 360 video
 
-✅ First course shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, in the kayak game (`/games/kayak/`, menu → Reading Thames).
+✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/kayak/`).
 
 A toolchain that turns paddling videos with GPS into a real river in the kayak game. It's built so that more courses are the same few commands. The longer-term aim is to let other people submit video, so the toolchain doubles as a way of surveying rivers: what's on each bank, where boats moor, where the locks and slipways are.
 
@@ -27,9 +27,13 @@ All steps live in `apps/web/scripts/courses/`, run with `pnpm --filter web <step
 
 ### 2. River (`river.ts`, geometry `lib/river.ts`)
 
-`course.json` gives the river's name and four points: `from`/`to` (the ends of the river line) and `start`/`finish` (the race lines). The centreline is the mapped river ways chained from `from` to `to` (Dijkstra). Where the river splits round an island, the channel nearer the paddler's GPS track wins (each edge's cost grows with its distance from the track). The ends are trimmed so the line never doubles back past an end point. Bank distances come from rays cast square to the line against every shoreline (river areas, islands, lock walls). The line is then moved to the middle of the water and smoothed. Game coordinates: metres, x east, **z south** (so the game's heading is a compass bearing).
+`course.json` gives the river's name and four points: `from`/`to` (the ends of the river line) and `start`/`finish` (the race lines). `osmFrom` reuses another course's OSM downloads for the same water. The centreline is the mapped river ways chained from `from` to `to` (Dijkstra). Where the river splits round an island, the channel nearer the paddler's GPS track wins (each edge's cost grows with its distance from the track). The ends are trimmed so the line never doubles back past an end point. Bank distances come from rays cast square to the line against every shoreline (river areas, islands, lock walls). The line is then moved to the middle of the water and smoothed. Game coordinates: metres, x east, **z south** (so the game's heading is a compass bearing).
 
 Overpass mirrors often refuse requests, so each mirror is tried three times and responses are cached. If it ever becomes a blocker, read a Geofabrik extract the way the river planner does.
+
+It also writes the **water's outlines** (each mapped river area and island ring once; an area's outline is kept whole, or the game's in-the-water test breaks). Where two mapped areas meet mid-river, their shared edge is dropped from the shoreline, or the bank rays would find a false bank there.
+
+**A route** (`route` in `course.json`) is a racing line that isn't the river line: a loop round islands, say. It's a list of legs: `{ along: [a, b] }` follows the river line between two points (either way), `{ way: <OSM id>, reverse? }` follows a mapped waterway (side channels have their own), and a bare `[lat, lng]` goes straight to a point (for a turn round the end of an island, or through a gap). The legs are joined, resampled every 5 m and given the open water each side; `start`/`finish` are found near its beginning and end (they can be the same place). Don't recentre a route: it wobbles through junctions and cuts hairpins. Put the points in mid-channel instead, and check the drawn map.
 
 ### 3. Frames (`frames.ts`, passes `lib/passes.ts`)
 
@@ -50,6 +54,8 @@ What the frames show, **tied to places, not to the course**: each item has `at` 
 - `railway`.
 - `wall`: a quay or revetment at the water's edge.
 
+A course can use another's observations (`observations` in `course.json`): the Time Trial Loop uses Reading's, placed on its own river line.
+
 **Pitfall: a pass up a different channel.** An observation is placed where the *camera* was and projected onto the course line. If the camera was in another channel round an island, the side comes out wrong: a row of cruisers on the island's far side ended up on the course's left at Fry's Island. Label from a pass that follows the course's own channel, or (better, for the vision-model step) record where the *thing* is rather than the camera.
 
 Because they're geo-referenced, the same observations can feed another course on overlapping water, or the river planner (moorings, landing stages, locks). For Reading they were labelled by Claude from frames every 100 m. The next step is a vision model labelling frames (Bedrock, as the Analyse insights do), with a person checking.
@@ -60,7 +66,10 @@ Combines the river and the observations into what the game draws:
 
 - `line` and `width`: a running median takes out spikes where a ray slipped into a side stream, clamped to 20–100 m.
 - `banks` (cover per stretch), `walls`, `moorings` (rows of boats filling each observed stretch), `bridges` (one per crossing cluster, under the bridge's own OSM name, styled from the observations).
-- `places`: the landmarks named on screen as you pass them, from the course's `places` list of OSM names (optionally relabelled) in `course.json`, each where the river comes nearest it.
+- `places`: the landmarks named on screen as you pass them, from the course's `places` list of OSM names (optionally relabelled, or `{ label, at }` for a point of your own) in `course.json`. On the river line each is named where the line comes nearest; on a route, once each time the route goes by, as you come up to it.
+- `birds`: where swans crowd (`{ near: <OSM name>, count, spread }`).
+- `styles`: OSM building names drawn as bespoke models (`rowing-club`, `canoe-club`), modelled from the frames.
+- `water`, and `route` (its line every 5 m and the open water each side, smoothed per side).
 - OSM `buildings` (footprints with heights; `building:levels` when mapped), `woods`, single `trees`, `railways`, `locks` and `weirs`.
 
 The file carries `credit` and `licence`. **It's derived from OSM, so it is an ODbL database.** The game's menu credits OpenStreetMap.
@@ -81,11 +90,21 @@ Serves `games/`, plays the course in Chrome with `#debug`, puts the boat at each
   - cruisers, narrowboats and trip boats;
   - a railway embankment with overhead-line portals;
   - locks and weirs, when they're on the line;
-  - quays and revetments (`walls`), pontoons in front of boathouses near the water, windows on the walls that face the river, and swans;
+  - land shaped by the mapped water: strips out from the river line whose points dip under the surface wherever the outlines say it's water, so islands and side channels appear (extra rows round water behind an island; far rows every 12 m);
+  - quays and revetments (`walls`), pontoons in front of boathouses near the water, windows on the walls that face the river;
+  - bespoke landmarks (`styles`): Reading Rowing Club (white clubhouse, red hipped roof and cupola, balcony and stairs, flag, a hard down to the water) and Reading Canoe Club (red-brick boathouse, white-railed balcony, roller doors, kayak racks, river wall), each with its name in blocky letters; trees keep clear so they're seen from the water;
+  - bridges that span all the water they cross (Caversham Bridge reaches over Piper's Island's north channel, with a pier on the island);
   - a cloudy sky;
   - the ends closed off 320 m deep so the water plane doesn't show past them.
-- **Size:** about 365k triangles (39 MB of vertices) against the made-up race's 98k. The test caps it at 400k.
+- **Size:** Reading about 335k triangles, the loop about 150k, against the made-up race's 98k. The test caps Reading at 400k.
 - **Named places:** the HUD names each landmark in `places` as you come up to it, one at a time.
+- **Swans and ducks** (`birds.js`), on every course: swans drift and barely move aside, so you steer round them or capsize; ducks fly off. Crowds by Reading Rowing Club.
+
+### The Time Trial Loop
+
+Owner's course, 2026-10-24: from Reading Canoe Club up the narrow back channel of St Mary's Island, through the ~9 m gap at its west tip (between it and a little islet: "only one or two boats side by side"), back down the main channel past the club, north of Piper's Island, down the north side of Fry's Island, round its east end (by Christchurch Bridge), back up the south side, south of Piper's, and home to the club: 5.4 km. St Mary's Island isn't named in OSM; it's the islet at 51.4697, -1.0045.
+
+It's a time trial with **interval starts**: boats wait in two columns by the banks below the line and are let go 30 s apart (as shown), you 5th; each is timed from crossing the start line, as in a head race. Your place is by the time everyone's on track for. Most of the route is two-way water, so the AI keeps right there and further right for boats coming the other way; the HUD tells you to keep right.
 
 ## Adding a course
 

@@ -69,6 +69,9 @@ const CASES = [
   { name: 'chromium, desktop, Reading Thames', engine: chromium, ctx: desktop, course: 'reading' },
   { name: 'iphone safari, Reading Thames', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'reading' },
   { name: 'chrome GPU, desktop, Reading Thames', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'reading', expect: 'webgpu' },
+  // A time trial on a loop round islands, with interval starts.
+  { name: 'chromium, desktop, Time Trial Loop', engine: chromium, ctx: desktop, course: 'loop' },
+  { name: 'iphone safari, Time Trial Loop', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'loop' },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -93,8 +96,16 @@ async function play(c, page, errors) {
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
   await page.evaluate(() => {
     const { race, course, boat } = window.kayak;
+    // This checks the game runs and answers the keys, not balance: the test never leans.
+    boat.hull = { ...boat.hull, capsize: 10 };
     const i = Math.round((race.start.line - 4) / 2);
     const [a, n] = [course.samples[i], course.samples[i + 1]];
+    if (race.format === 'interval') {
+      // A time trial: bring everyone's start forward, so yours comes at once.
+      const by = race.player.release - race.time - 1;
+      for (const r of race.racers) r.release -= by;
+    }
+    // Out of the start queue by the bank, onto the line, mid-river (the test doesn't steer).
     if (race.racers.length > 1) Object.assign(boat, { x: a.x, z: a.z, heading: Math.atan2(n.x - a.x, -(n.z - a.z)), speed: 0, roll: 0, rollRate: 0 });
   });
   // The horn comes after a few seconds of race time: minutes, on CI's software graphics.

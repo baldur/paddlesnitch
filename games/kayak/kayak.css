@@ -198,6 +198,26 @@ header button {
 }
 #hud.helping #touchhelp { display: block; }
 
+/* Phones: the sprint toggle, under the right-hand beat cue. */
+#sprint {
+  position: absolute;
+  right: 12px;
+  top: calc(50% + 48px);
+  display: none;
+  pointer-events: auto;
+  padding: 0.5rem 0.8rem;
+  border-radius: 1rem;
+  border: 2px solid #ffb347;
+  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+  font-weight: 700;
+  touch-action: none;
+}
+#sprint[aria-pressed="true"] { background: #ff8a1f; }
+@media (pointer: coarse) {
+  #sprint { display: block; }
+}
+
 #tiltdebug {
   position: fixed;
   top: 2.5rem;

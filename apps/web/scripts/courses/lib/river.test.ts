@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { banks, chainCentreline, crossings, cumulative, locate, projection, recentre, resample, type XZ } from './river'
+import { banks, chainCentreline, crossings, cumulative, locate, projection, recentre, resample, thinLine, type XZ } from './river'
 
 describe('projection', () => {
   it('puts north at -z and east at +x, in metres, and round-trips', () => {
@@ -84,3 +84,11 @@ describe('crossings', () => {
     expect(crossings(line, cumulative(line), [[-20, -150], [20, -150]])).toEqual([150])
   })
 })
+
+describe('thinLine', () => {
+  it('drops points closer than the tolerance, keeping both ends', () => {
+    const line: XZ[] = [[0, 0], [0.5, 0], [1, 0], [3, 0], [3.2, 0], [3.4, 0]]
+    expect(thinLine(line, 1.5)).toEqual([[0, 0], [3, 0], [3.4, 0]])
+  })
+})
+

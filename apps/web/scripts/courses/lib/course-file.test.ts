@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bridges, courseFile, mooringRow, places, widths, type RiverThing } from './course-file'
+import { bridges, courseFile, mooringRow, places, routePlaces, sides, widths, type RiverThing } from './course-file'
 import type { XZ } from './river'
 
 describe('widths', () => {
@@ -79,6 +79,15 @@ describe('courseFile', () => {
     })
     expect(out.buildings.map((b) => [b.kind, b.height])).toEqual([['flats', 12], ['house', 7]])
   })
+
+  it('marks named landmarks for a bespoke model', () => {
+    const square: XZ[] = [[40, -450], [50, -450], [50, -460], [40, -460], [40, -450]]
+    const out = courseFile({
+      ...base, observations: [], styles: { 'Rowing Club': 'rowing-club' },
+      things: [{ kind: 'boathouse', name: 'Rowing Club', s: 450, lateral: 40, tags: { building: 'boathouse' }, shape: square }],
+    })
+    expect(out.buildings[0].style).toBe('rowing-club')
+  })
 })
 
 describe('places', () => {
@@ -89,3 +98,37 @@ describe('places', () => {
       .toEqual([{ s: 120, name: 'The island' }, { s: 400, name: 'Bridge' }, { s: 920, name: 'Lock ahead' }])
   })
 })
+
+describe('birds', () => {
+  it('puts each flock beside the landmark it is named for', () => {
+    const out = courseFile({
+      name: 'Test', speedup: 4, warp: 4, start: 50, finish: 950,
+      line: Array.from({ length: 101 }, (_, i): XZ => [0, -i * 10]), edges: Array.from({ length: 101 }, () => ({ left: 25, right: 25 })),
+      things: [{ kind: 'boathouse', name: 'Rowing Club', s: 300, lateral: -30, tags: {} }],
+      observations: [], place: () => ({ s: 0, same: true }),
+      birds: [{ near: 'Rowing Club', count: 10, spread: 100 }, { near: 'Nowhere', count: 3, spread: 50 }],
+    })
+    expect(out.birds).toEqual([{ s: 300, count: 10, spread: 100 }])
+  })
+})
+
+describe('a route', () => {
+  // Up a straight reach and back down it, 10 m to the right of the way up.
+  const up = Array.from({ length: 101 }, (_, i): XZ => [0, -i * 10])
+  const line: XZ[] = [...up, ...up.slice().reverse().map(([x, z]): XZ => [x + 10, z])]
+
+  it('names a landmark once each time it goes by, as you come up to it', () => {
+    const club = { name: 'Club', shape: [[-30, -500], [-30, -540]] as XZ[] }
+    const out = routePlaces([club], ['Club', { name: 'Missing', label: 'x' }], line, [0, 2000])
+    expect(out.map((p) => p.name)).toEqual(['Club', 'Club'])
+    expect(out[0].s).toBeGreaterThan(300)
+    expect(out[0].s).toBeLessThan(500)
+    expect(out[1].s).toBeGreaterThan(1000)
+  })
+
+  it('keeps the open water each side, filling gaps and smoothing out spikes', () => {
+    const edges = [{ left: 5, right: 20 }, { left: 5, right: null }, { left: 1, right: 20 }, { left: 5, right: 20 }, { left: 5, right: 20 }]
+    expect(sides(edges)).toEqual({ left: [5, 5, 5, 5, 5], right: [20, 20, 20, 20, 20] })
+  })
+})
+

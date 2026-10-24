@@ -1,0 +1,95 @@
+{
+  "name": "Reading: the club's time trial loop",
+  "title": "Time Trial Loop",
+  "blurb": "From the canoe club round St Mary's Island, down round Fry's Island and back: interval starts",
+  "river": "River Thames",
+  "from": [51.46175, -0.96945],
+  "start": [51.467645, -0.982164],
+  "finish": [51.467645, -0.982164],
+  "to": [51.467635, -1.010318],
+  "recordings": ["0093", "0095"],
+  "osmFrom": "reading",
+  "observations": "reading",
+  "route": [
+    {
+      "along": [
+        [51.467375, -0.981173],
+        [51.4699, -1.0027]
+      ]
+    },
+    [51.47003, -1.00324],
+    [51.46999, -1.00366],
+    [51.46998, -1.00413],
+    [51.46994, -1.00442],
+    [51.46982, -1.004585],
+    [51.46966, -1.004585],
+    [51.4695, -1.00458],
+    [51.46937, -1.00442],
+    {
+      "along": [
+        [51.46932, -1.00395],
+        [51.4662, -0.9781]
+      ]
+    },
+    {
+      "way": 97774581
+    },
+    [51.46448, -0.9742],
+    [51.46442, -0.9735],
+    [51.46422, -0.97249],
+    [51.46371, -0.97113],
+    [51.46335, -0.97066],
+    [51.46282, -0.97034],
+    [51.46258, -0.97012],
+    [51.46238, -0.97014],
+    [51.46229, -0.97046],
+    {
+      "along": [
+        [51.46248, -0.9709],
+        [51.467658, -0.982695]
+      ]
+    }
+  ],
+  "places": [
+    "Reading Canoe Club",
+    {
+      "name": "Wychotes Waterside Activity Centre",
+      "label": "Wychcotes"
+    },
+    "Thames Side Promenade",
+    {
+      "label": "St Mary's Island: up the back channel",
+      "at": [51.47002, -1.0033]
+    },
+    {
+      "label": "Through the gap",
+      "at": [51.46972, -1.004585]
+    },
+    "Reading Rowing Club",
+    "Caversham Bridge",
+    "Piper's Island",
+    "Christchurch Meadows",
+    "Fry's Island",
+    {
+      "label": "Round the end of Fry's Island",
+      "at": [51.4624, -0.97015]
+    },
+    "Christchurch Bridge"
+  ],
+  "birds": [
+    {
+      "near": "Reading Rowing Club",
+      "count": 14,
+      "spread": 120
+    },
+    {
+      "near": "Caversham Bridge",
+      "count": 5,
+      "spread": 60
+    }
+  ],
+  "styles": {
+    "Reading Rowing Club": "rowing-club",
+    "Reading Canoe Club": "canoe-club"
+  }
+}

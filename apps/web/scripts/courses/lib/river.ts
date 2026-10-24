@@ -115,6 +115,14 @@ export function chainCentreline(ways: XZ[][], from: XZ, to: XZ, guide: XZ[]): XZ
   return ends.filter((p, i) => i === 0 || dist(p, ends[i - 1]) > 0.5)
 }
 
+/** A polyline with points closer than `tol` metres to the last one kept dropped (the ends always stay). */
+export function thinLine(line: XZ[], tol: number): XZ[] {
+  const out = [line[0]]
+  for (let i = 1; i < line.length - 1; i++) if (dist(line[i], out.at(-1)!) >= tol) out.push(line[i])
+  if (line.length > 1) out.push(line.at(-1)!)
+  return out
+}
+
 /** Even samples every `step` metres along a polyline. */
 export function resample(line: XZ[], step: number): XZ[] {
   const cum = cumulative(line)
