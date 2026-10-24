@@ -500,8 +500,8 @@ Rules for when this happens:
 | **P3. Signed firmware** | ed25519-signed manifests, checked on every update; replay protection (audit decision 5) | Updates are genuine whoever carries them |
 | **P4. Bluetooth + browser prototype** | Tracker Bluetooth service, pairing, Settings rows for **WiFi** and **Bluetooth** (J9), a test page on /devices that lists and reads recordings | Real speed, battery cost, pairing on Chrome/Edge |
 | **P5. Setup, sync and updates from the browser** | The connection chooser (J1 step 2); linking and WiFi details over Bluetooth (step 3); account upload endpoint and receipts (J4); updates over Bluetooth (J11, step 4); then the **Bluetooth only** row | No WiFi anywhere: set up, paddle arrives, tracker stays current |
-| **P6. Android app** | Expo app with pairing, linking, automatic sync and updates (J3, J5) | Sync with nothing pressed |
-| **P7. iPhone app** | If testers need it | Same, on iPhone |
+| **P6. Android app** | Native app ([`mobile-apps.md`](mobile-apps.md) P3) with pairing, linking, automatic sync and updates (J3, J5) | Sync with nothing pressed |
+| **P7. iPhone app** | Native, over the same shared core ([`mobile-apps.md`](mobile-apps.md) P6) | Same, on iPhone |
 | **P8. On the tracker** | Live stroke rate; later maybe summaries | Matches the server on the reference capture |
 
 **Order constraints:**
@@ -523,7 +523,7 @@ Rules for when this happens:
 
 ## Open questions
 
-1. **Expo or fully native for the apps?** Expo keeps one codebase with the web
+1. **Decided 2026-10-24: fully native** (Kotlin Multiplatform core, see [`mobile-apps.md`](mobile-apps.md)). Was: **Expo or fully native for the apps?** Expo keeps one codebase with the web
    and fits the planned mobile client, but background Bluetooth needs a custom
    build, not the Expo Go test app.
 2. **How long to advertise** after a paddle (battery against convenience).
