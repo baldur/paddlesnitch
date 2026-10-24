@@ -37,6 +37,10 @@ describe('why a recording is not a paddle', () => {
     expect(noPaddleMessage({ kind: 'gps_lost', lostAfterS: 300, recordedS: 3600 }, false)).toBe('The GPS lost the sky 5 minutes after you set off, so no route was recorded after that.')
   })
 
+  it('says "1 second", not "1 seconds", when the GPS was lost at once', () => {
+    expect(noPaddleMessage({ kind: 'gps_lost', lostAfterS: 0.4, recordedS: 3600 }, false)).toBe('The GPS lost the sky 1 second after you set off, so no route was recorded after that.')
+  })
+
   it('the GPS never found the sky', () => {
     const r = noPaddleReason(csv(900, { fix: () => false, lost: 'empty' }), 500)
     expect(r).toEqual({ kind: 'no_gps', recordedS: 900 })

@@ -378,7 +378,8 @@ export function recordingStart(csv: string): string | null {
   return null
 }
 
-const span = (s: number) => (s < 90 ? `${Math.max(1, Math.round(s))} seconds` : s < 5400 ? `${Math.round(s / 60)} minutes` : `${(s / 3600).toFixed(1)} hours`)
+const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
+const span = (s: number) => (s < 90 ? plural(Math.max(1, Math.round(s)), 'second') : s < 5400 ? `${Math.round(s / 60)} minutes` : `${(s / 3600).toFixed(1)} hours`)
 
 /** The reason as the recording's page says it. `hasMotion`: the boat motion was recorded. */
 export function noPaddleMessage(r: NoPaddleReason, hasMotion: boolean): string {

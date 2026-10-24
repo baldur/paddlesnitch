@@ -65,6 +65,13 @@ export function fmtTime(value: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+/** A wind direction in degrees (where it blows FROM) → one of 8 compass points: 22.4 → 'N', 22.6 → 'NE'. */
+export function compassPoint(deg: number): string {
+  return COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8]
+}
+
 /** A course's sport for a label: 'both' is meaningless on its own. */
 export function sportLabel(sport: string | undefined): string {
   switch (sport) {

@@ -28,7 +28,7 @@ describe('mobile/contract is up to date', () => {
   const generated = mobileContractFiles(tokensCss)
 
   it('has exactly the generated files, with the generated content (run pnpm mobile:contract)', () => {
-    expect([...committed('api'), ...committed('tokens')].sort()).toEqual(Object.keys(generated).sort())
+    expect([...committed('api'), ...committed('tokens'), ...committed('format')].sort()).toEqual(Object.keys(generated).sort())
     for (const [name, content] of Object.entries(generated)) {
       expect(readFileSync(path.join(CONTRACT, name), 'utf8'), name).toBe(content)
     }
