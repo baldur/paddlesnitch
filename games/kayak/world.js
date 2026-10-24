@@ -41,7 +41,6 @@ const COLORS = {
   quay: [0.66, 0.63, 0.56],
   cream: [0.9, 0.88, 0.81],
   pontoon: [0.78, 0.78, 0.75],
-  beak: [0.95, 0.5, 0.12],
 };
 
 // Narrowboat paintwork: cabin sides, and the trim along the top.
@@ -72,27 +71,30 @@ const ROOFS = [[0.32, 0.2, 0.17], [0.28, 0.28, 0.3], [0.45, 0.25, 0.18]];
 export function buildWorld(course, seed = 1) {
   const rand = mulberry32(seed);
   const m = new MeshBuilder();
-  const { samples } = course;
-  const stride = 3; // bank quads every 6 m
   const real = course.scenery;
-  const profile = real ? REAL_PROFILE : PROFILE;
+  // A real river's scenery is placed along the river line, which a race on a
+  // route (a loop, round islands) doesn't follow.
+  const river = real?.river ?? course;
+  const { samples } = river;
+  const stride = 3; // bank quads every 6 m
 
-  // The towpath runs along the left bank; a real river's banks are coloured by
-  // what's on them.
-  for (const side of [-1, 1]) {
-    for (let i = 0; i + stride < samples.length; i += stride) {
-      const a = samples[i];
-      const b = samples[i + stride];
-      const cover = real && coverAt(real, side, a.s);
-      for (let k = 0; k < profile.length - 1; k++) {
-        const [d0, h0] = profile[k];
-        const [d1, h1] = profile[k + 1];
-        const p = (s, d, h) => [s.x + -s.tz * side * (s.half + d), h + bump(s.x, s.z, d), s.z + s.tx * side * (s.half + d)];
-        const green = real
-          ? (k <= 2 && (cover === 'park' || cover === 'gardens') ? COLORS.mown : k <= 2 ? SHADED : COLORS.meadow)
-          : k === 1 ? (side < 0 ? COLORS.towpath : COLORS.grass) : COLORS.meadow;
-        const color = k === 0 ? COLORS.mud : shade(green, rand, 0.08);
-        m.quad(p(a, d0, h0), p(b, d0, h0), p(b, d1, h1), p(a, d1, h1), color);
+  if (real) {
+    river.land = waterMap(real.water ?? []);
+    realLand(m, river, real, rand);
+  } else {
+    // The towpath runs along the left bank.
+    for (const side of [-1, 1]) {
+      for (let i = 0; i + stride < samples.length; i += stride) {
+        const a = samples[i];
+        const b = samples[i + stride];
+        for (let k = 0; k < PROFILE.length - 1; k++) {
+          const [d0, h0] = PROFILE[k];
+          const [d1, h1] = PROFILE[k + 1];
+          const p = (s, d, h) => [s.x + -s.tz * side * (s.half + d), h + bump(s.x, s.z, d), s.z + s.tx * side * (s.half + d)];
+          const green = k === 1 ? (side < 0 ? COLORS.towpath : COLORS.grass) : COLORS.meadow;
+          const color = k === 0 ? COLORS.mud : shade(green, rand, 0.08);
+          m.quad(p(a, d0, h0), p(b, d0, h0), p(b, d1, h1), p(a, d1, h1), color);
+        }
       }
     }
   }
@@ -101,8 +103,8 @@ export function buildWorld(course, seed = 1) {
   // Close the river off just before the start and after the end. A real river's
   // banks reach much further, so its ends are closed further back too (at the
   // far end of the Reading Thames, just behind a lock's gates).
-  for (const s of [0, course.length]) {
-    const c = pointAt(course, s);
+  for (const s of [0, river.length]) {
+    const c = pointAt(river, s);
     const dir = s === 0 ? -1 : 1;
     const depth = real ? 320 : 6;
     const back = [c.x + c.tx * dir * depth, c.z + c.tz * dir * depth];
@@ -115,7 +117,7 @@ export function buildWorld(course, seed = 1) {
     );
   }
 
-  if (real) realScenery(m, course, real, rand);
+  if (real) realScenery(m, river, real, rand);
 
   // Trees along both banks, kept out of the water on the inside of bends, and
   // off the towpath.
@@ -135,15 +137,15 @@ export function buildWorld(course, seed = 1) {
     }
   }
 
-  course.moorings.forEach((boat, k) => {
-    if (boat.kind === 'cruiser' || boat.kind === 'trip-boat') cruiser(m, course, boat, rand);
-    else narrowboat(m, course, boat, PAINT[k % PAINT.length]);
+  river.moorings.forEach((boat, k) => {
+    if (boat.kind === 'cruiser' || boat.kind === 'trip-boat') cruiser(m, river, boat, rand);
+    else narrowboat(m, river, boat, PAINT[k % PAINT.length]);
   });
-  for (const b of course.bridges) {
-    if (typeof b === 'number') bridge(m, course, b);
-    else if (b.style === 'cable-stayed') cableStayedBridge(m, course, b);
-    else if (b.style === 'concrete-arch') concreteBridge(m, course, b);
-    else bridge(m, course, b.s);
+  for (const b of river.bridges) {
+    if (typeof b === 'number') bridge(m, river, b);
+    else if (b.style === 'cable-stayed') cableStayedBridge(m, river, b);
+    else if (b.style === 'concrete-arch') concreteBridge(m, river, b);
+    else bridge(m, river, b.s);
   }
 
   // Hills on the horizon, kept well clear of every part of the river.
@@ -154,12 +156,14 @@ export function buildWorld(course, seed = 1) {
     const x = box[0] + rand() * (box[2] - box[0]);
     const z = box[1] + rand() * (box[3] - box[1]);
     const radius = 120 + rand() * 160;
-    if (Math.abs(locate(course, x, z).lateral) < radius + 450) continue;
+    if (Math.abs(locate(river, x, z).lateral) < radius + 450) continue;
     m.cone([x, 0, z], radius, 50 + rand() * 90, 7, shade(COLORS.hill, rand, 0.1));
     placed++;
   }
 
-  gantry(m, course, course.start, COLORS.start, COLORS.post);
+  // (A loop that finishes where it starts gets the finish banner only.)
+  const [a, b] = [pointAt(course, course.start), pointAt(course, course.finish)];
+  if (Math.hypot(a.x - b.x, a.z - b.z) > 20) gantry(m, course, course.start, COLORS.start, COLORS.post);
   gantry(m, course, course.finish, COLORS.finishA, COLORS.finishB);
 
   // Buoys either end of the start and finish lines, a marker post every 250 m.
@@ -338,11 +342,130 @@ function coverAt(real, side, s) {
   return real.banks.find((b) => b.side === side && s >= b.from && s <= b.to)?.cover ?? 'trees';
 }
 
-// The ground under any point beside a real river, and how far it is from the water.
-function ground(course, x, z) {
-  const at = locate(course, x, z);
-  const d = Math.abs(at.lateral) - widthAt(course, at.s).half;
+// The ground under any point beside a real river, and how far it is from the
+// water: from the mapped water's outlines where there are some (islands, side
+// channels), else from the river line.
+function ground(course, x, z, lineD = null) {
+  let d = lineD;
+  if (d === null) {
+    const at = locate(course, x, z);
+    d = Math.abs(at.lateral) - widthAt(course, at.s).half;
+  }
+  if (course.land?.rings) {
+    if (course.land.inside(x, z)) return { d: -1, y: -0.6 };
+    if (d < SHORE_SEARCH) d = course.land.shore(x, z);
+  }
   return { d, y: d < 0 ? -0.4 : groundHeight(d, REAL_PROFILE) + bump(x, z, d) };
+}
+
+const SHORE_SEARCH = 60; // metres: further from the river line than this, the line's distance will do
+
+// The mapped water (rings of the river's areas and its islands, as segments):
+// whether a point is in it (an odd number of crossings), and how far the
+// nearest shore is (up to SHORE_SEARCH).
+function waterMap(rings) {
+  const bands = new Map(); // 10 m bands of z: the segments spanning each, for crossings
+  const cells = new Map(); // 20 m squares: the segments in each, for distances
+  const add = (map, k, seg) => map.set(k, [...(map.get(k) ?? []), seg]);
+  for (const ring of rings) {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const seg = [ring[i], ring[i + 1]];
+      const [[ax, az], [bx, bz]] = seg;
+      for (let b = Math.floor(Math.min(az, bz) / 10); b <= Math.floor(Math.max(az, bz) / 10); b++) add(bands, b, seg);
+      const len = Math.hypot(bx - ax, bz - az);
+      const seen = new Set();
+      for (let t = 0; t <= len; t += 10) {
+        const f = len ? t / len : 0;
+        const k = `${Math.floor((ax + (bx - ax) * f) / 20)},${Math.floor((az + (bz - az) * f) / 20)}`;
+        if (!seen.has(k)) add(cells, k, seg);
+        seen.add(k);
+      }
+      const k = `${Math.floor(bx / 20)},${Math.floor(bz / 20)}`;
+      if (!seen.has(k)) add(cells, k, seg);
+    }
+  }
+  return {
+    rings: rings.length,
+    inside(x, z) {
+      let odd = false;
+      for (const [[ax, az], [bx, bz]] of bands.get(Math.floor(z / 10)) ?? []) {
+        if ((az > z) !== (bz > z) && x < ax + ((z - az) * (bx - ax)) / (bz - az)) odd = !odd;
+      }
+      return odd;
+    },
+    shore(x, z) {
+      let best = SHORE_SEARCH;
+      const r = Math.ceil(SHORE_SEARCH / 20);
+      const [cx, cz] = [Math.floor(x / 20), Math.floor(z / 20)];
+      for (let i = cx - r; i <= cx + r; i++) {
+        for (let j = cz - r; j <= cz + r; j++) {
+          for (const [[ax, az], [bx, bz]] of cells.get(`${i},${j}`) ?? []) {
+            const dx = bx - ax;
+            const dz = bz - az;
+            const f = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+            best = Math.min(best, Math.hypot(x - ax - dx * f, z - az - dz * f));
+          }
+        }
+      }
+      return best;
+    },
+  };
+}
+
+// The land beside a real river: strips out from the river line, shaped by the
+// mapped water (dipping under the surface wherever it's water, so islands and
+// side channels show). Rows across are every 6 m along near the river and 12 m
+// further out, with extra rows round any water beyond the bank.
+const NEAR = [-6, 0, 3, 7, 12, 20, 30, 45];
+const FAR = [45, 65, 90, 120, 160, 220, 320];
+function realLand(m, river, real, rand) {
+  const { samples } = river;
+  const at = (s, side, d) => [s.x + -s.tz * side * (s.half + d), s.z + s.tx * side * (s.half + d)];
+  const strip = (side, stride, rowsAt) => {
+    for (let n = 0; (n + 1) * stride < samples.length; n++) {
+      const a = samples[n * stride];
+      const b = samples[(n + 1) * stride];
+      const across = rowsAt(n);
+      const cover = coverAt(real, side, a.s);
+      const point = (s, d) => {
+        const [x, z] = at(s, side, d);
+        const g = ground(river, x, z, d);
+        return { p: [x, g.y, z], d: g.d };
+      };
+      let prev = [point(a, across[0]), point(b, across[0])];
+      for (let k = 1; k < across.length; k++) {
+        const next = [point(a, across[k]), point(b, across[k])];
+        const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
+        const green = near < 7 && (cover === 'park' || cover === 'gardens') ? COLORS.mown : near < 7 ? SHADED : COLORS.meadow;
+        const color = near < 1 ? COLORS.mud : shade(green, rand, 0.08);
+        m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
+        prev = next;
+      }
+    }
+  };
+  for (const side of [-1, 1]) {
+    // Other water beyond the bank (past some land: a side channel behind an
+    // island), with rows every 2.5 m round it.
+    const extra = [];
+    for (let i = 0; i < samples.length; i += 3) {
+      let land = false;
+      const wet = [];
+      for (let d = 0; d < 45; d += 2) {
+        const w = river.land.inside(...at(samples[i], side, d));
+        if (!w) land = true;
+        else if (land) wet.push(d);
+      }
+      extra.push(wet.length ? [Math.max(2, wet[0] - 8), Math.min(45, wet.at(-1) + 8)] : null);
+    }
+    strip(side, 3, (n) => {
+      const rows = new Set(NEAR);
+      for (let k = Math.max(0, n - 3); k <= Math.min(extra.length - 1, n + 4); k++) {
+        if (extra[k]) for (let d = extra[k][0]; d <= extra[k][1]; d += 2.5) rows.add(Math.round(d * 2) / 2);
+      }
+      return [...rows].sort((p, q) => p - q);
+    });
+    strip(side, 6, () => FAR);
+  }
 }
 
 // How each kind of bank is planted: trees per 6 m of bank, how far back, and
@@ -356,13 +479,15 @@ const PLANTING = {
 };
 
 function realScenery(m, course, real, rand) {
-  // Building footprints, binned so trees can keep out of them.
+  // Building footprints, binned so trees can keep out of them (and well clear
+  // of a landmark, so it can be seen from the water).
   const bins = new Map();
   const key = (x, z) => `${Math.floor(x / 20)},${Math.floor(z / 20)}`;
   for (const b of real.buildings) {
     const xs = b.shape.map((p) => p[0]);
     const zs = b.shape.map((p) => p[1]);
-    const box = [Math.min(...xs) - 2, Math.min(...zs) - 2, Math.max(...xs) + 2, Math.max(...zs) + 2];
+    const margin = b.style ? 30 : 2;
+    const box = [Math.min(...xs) - margin, Math.min(...zs) - margin, Math.max(...xs) + margin, Math.max(...zs) + margin];
     for (let x = box[0]; x <= box[2] + 20; x += 20) {
       for (let z = box[1]; z <= box[3] + 20; z += 20) {
         const k = key(Math.min(x, box[2]), Math.min(z, box[3]));
@@ -390,6 +515,7 @@ function realScenery(m, course, real, rand) {
       // Scrub hanging over the water's edge.
       if (rand() < p.bushes * 0.7 && !walled(real, side, s)) {
         const [x, z] = at(0.5 + rand() * 1.5);
+        if (built(x, z)) continue;
         m.sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
       }
       if (p.stages && rand() < p.stages) landingStage(m, c, side, w);
@@ -413,7 +539,6 @@ function realScenery(m, course, real, rand) {
 
   for (const b of real.buildings) building(m, course, b, rand);
   for (const w of real.walls ?? []) embankment(m, course, w, rand);
-  swans(m, course, real, rand);
   for (const line of real.railways) railway(m, course, line);
   for (const lock of real.locks) lockGates(m, lock);
   for (const weir of real.weirs) weirSill(m, weir);
@@ -476,37 +601,6 @@ function embankment(m, course, { side, from, to }, rand) {
   }
 }
 
-// Mute swans, in pairs and small groups, a few metres out from the bank;
-// most of them in town.
-function swans(m, course, real, rand) {
-  for (let s = course.start - 40; s < course.finish; s += rand() < 0.5 ? 90 : 160) {
-    if (s > 1600 && rand() < 0.75) continue;
-    const side = rand() < 0.5 ? -1 : 1;
-    if (real.moorings.some((b) => b.side === side && Math.abs(b.s - s) < b.length)) continue;
-    const c = pointAt(course, s);
-    const w = widthAt(course, s).half;
-    const group = 1 + Math.floor(rand() * 3);
-    for (let k = 0; k < group; k++) {
-      const d = w - 3 - rand() * 5;
-      const along = (rand() - 0.5) * 8;
-      const x = c.x - c.tz * side * d + c.tx * along;
-      const z = c.z + c.tx * side * d + c.tz * along;
-      swan(m, x, z, Math.atan2(c.tx, -c.tz) + (rand() - 0.5) * 2.5);
-    }
-  }
-}
-
-function swan(m, x, z, heading) {
-  const f = [Math.sin(heading), -Math.cos(heading)];
-  const at = (ahead, y) => [x + f[0] * ahead, y, z + f[1] * ahead];
-  m.sphere(at(0, 0.12), 0.38, COLORS.white, 3, 6);
-  m.sphere(at(-0.35, 0.2), 0.26, COLORS.white, 2, 5);
-  beam(m, at(0.3, 0.25), at(0.42, 0.62), 0.06, COLORS.white);
-  beam(m, at(0.42, 0.62), at(0.36, 0.9), 0.055, COLORS.white);
-  m.sphere(at(0.42, 0.92), 0.08, COLORS.white, 2, 5);
-  beam(m, at(0.46, 0.91), at(0.6, 0.88), 0.03, COLORS.beak);
-}
-
 // A boathouse's pontoon, floating along the bank in front of it.
 function pontoon(m, course, at, length) {
   const c = pointAt(course, at.s);
@@ -531,6 +625,7 @@ function building(m, course, b, rand) {
   const cz = ring.reduce((a, p) => a + p[1], 0) / ring.length;
   const g = ground(course, cx, cz);
   if (g.d < 0) return; // on an island or a pontoon the river line doesn't know about
+  if (LANDMARKS[b.style]) return LANDMARKS[b.style](m, course, facing(course, ring, cx, cz, g));
   const y0 = g.y - 1;
   const top = g.y + b.height;
   const wall = b.kind === 'boathouse' ? (rand() < 0.5 ? COLORS.white : [0.3, 0.42, 0.33]) : WALLS[Math.floor(rand() * WALLS.length)];
@@ -580,6 +675,147 @@ function building(m, course, b, rand) {
     const [bx, bz] = ring[(i + 1) % ring.length];
     m.tri([ax, top, az], [bx, top, bz], peak, roof);
   }
+}
+
+// --- landmarks, modelled from the frames ---------------------------------------
+
+// A footprint squared up to face the river: `at(x, y, z)` is x metres along
+// the bank, y up from the ground and z towards the water, from the middle of
+// the footprint; `along` and `depth` are its extents ([min, max]).
+function facing(course, ring, cx, cz, g) {
+  const p = pointAt(course, locate(course, cx, cz).s);
+  const len = Math.hypot(p.x - cx, p.z - cz) || 1;
+  const fwd = [(p.x - cx) / len, (p.z - cz) / len];
+  const right = [-fwd[1], fwd[0]];
+  const xs = ring.map(([x, z]) => (x - cx) * right[0] + (z - cz) * right[1]);
+  const zs = ring.map(([x, z]) => (x - cx) * fwd[0] + (z - cz) * fwd[1]);
+  const origin = [cx, g.y, cz];
+  return {
+    origin, right, fwd, toWater: len - widthAt(course, locate(course, cx, cz).s).half,
+    along: [Math.min(...xs), Math.max(...xs)], depth: [Math.min(...zs), Math.max(...zs)],
+    at: (x, y, z) => [cx + right[0] * x + fwd[0] * z, g.y + y, cz + right[1] * x + fwd[1] * z],
+    box: (m, xr, yr, zr, color) => orientedBox(m, origin, right, fwd, xr, yr, zr, color),
+  };
+}
+
+const CLUB = {
+  render: [0.94, 0.93, 0.89],
+  tiles: [0.58, 0.27, 0.19],
+  rail: [0.5, 0.22, 0.17],
+  dark: [0.16, 0.17, 0.19],
+  brick: [0.58, 0.29, 0.21],
+  band: [0.86, 0.8, 0.66],
+  door: [0.33, 0.34, 0.36],
+  board: [0.95, 0.95, 0.93],
+  hard: [0.74, 0.72, 0.67],
+  piling: [0.45, 0.41, 0.34],
+};
+
+// Reading Rowing Club: a long white clubhouse under a big red hipped roof with
+// a cupola, a first-floor balcony with stairs down at each end, a flagpole,
+// and a concrete hard down to the water.
+function rowingClub(m, course, f) {
+  const half = Math.min(14, (f.along[1] - f.along[0]) / 2);
+  const [back, front] = [Math.max(f.depth[0], -6), Math.min(f.depth[1], 5)];
+  f.box(m, [-half, half], [-1, 7], [back, front], CLUB.render);
+  f.box(m, [-half + 1, half - 1], [0.3, 2.7], [front, front + 0.05], CLUB.dark);
+  for (let x = -half + 1.5; x < half - 1.5; x += 2.4) f.box(m, [x, x + 1.5], [4, 5.7], [front, front + 0.05], CLUB.dark);
+  // The balcony, its railing, and stairs down at both ends.
+  f.box(m, [-half, half], [3.1, 3.35], [front, front + 2], CLUB.render);
+  f.box(m, [-half, half], [4.2, 4.35], [front + 1.9, front + 2], CLUB.rail);
+  for (let x = -half; x <= half; x += 1.5) f.box(m, [x, x + 0.1], [3.35, 4.2], [front + 1.9, front + 2], CLUB.rail);
+  for (const e of [-1, 1]) {
+    for (let k = 0; k < 8; k++) {
+      const x = e * (half - 0.4 - k * 0.45);
+      f.box(m, e < 0 ? [x, x + 1.2] : [x - 1.2, x], [3.1 - (k + 1) * 0.39, 3.1 - k * 0.39], [front + 2, front + 3.2], CLUB.rail);
+    }
+  }
+  roof(m, f, half + 0.6, [back - 0.6, front + 0.6], 7, 4.2, CLUB.tiles);
+  // The cupola on the ridge, and the flag.
+  f.box(m, [-0.8, 0.8], [11, 12.4], [(back + front) / 2 - 0.8, (back + front) / 2 + 0.8], CLUB.render);
+  const top = f.at(0, 12.4, (back + front) / 2);
+  m.cone(top, 1.1, 1.2, 4, CLUB.tiles);
+  const pole = f.at(half + 2, 0, front + 3);
+  m.cylinder(pole, 0.08, 11, 5, COLORS.white);
+  f.box(m, [half + 2.1, half + 4.3], [9.4, 10.8], [front + 2.97, front + 3.03], [0.75, 0.12, 0.15]);
+  // The hard, down to the water, and the club's name on the balcony.
+  const [x0, x1, edge] = [-half - 4, half + 6, front + f.toWater + 2];
+  const ramp = [f.at(x0, 0.12, front), f.at(x1, 0.12, front), f.at(x1, -f.origin[1] - 0.3, edge), f.at(x0, -f.origin[1] - 0.3, edge)];
+  m.tri(ramp[0], ramp[1], ramp[2], CLUB.hard);
+  m.tri(ramp[0], ramp[2], ramp[3], CLUB.hard);
+  sign(m, f, 'READING ROWING CLUB', 0, 3.45, front + 2.06, CLUB.rail, COLORS.white);
+}
+
+// Reading Canoe Club: a two-storey red-brick boathouse with roller doors, a
+// white-railed balcony, its name over the door, boats racked outside, and a
+// sheet-piled river wall.
+function canoeClub(m, course, f) {
+  const half = Math.min(12, (f.along[1] - f.along[0]) / 2);
+  const [back, front] = [Math.max(f.depth[0], -6), Math.min(f.depth[1], 4)];
+  f.box(m, [-half, half], [-1, 6.6], [back, front - 2.2], CLUB.brick);
+  f.box(m, [-half, half], [-1, 3.2], [front - 2.2, front], CLUB.brick);
+  f.box(m, [-half, half], [3.2, 3.5], [front - 2.2, front + 0.1], CLUB.band);
+  for (const x of [-half + 1, -half / 3 + 0.5, half / 3]) f.box(m, [x, x + half / 2 - 1], [0, 2.8], [front, front + 0.05], CLUB.door);
+  f.box(m, [-half + 1, half - 1], [4.2, 5.6], [front - 2.2, front - 2.15], CLUB.dark);
+  f.box(m, [-half, half], [4.4, 4.5], [front, front + 0.1], COLORS.white);
+  for (let x = -half; x <= half; x += 1.2) f.box(m, [x, x + 0.06], [3.5, 4.4], [front, front + 0.06], COLORS.white);
+  f.box(m, [-half, half], [6.6, 6.9], [back, front - 2.1], CLUB.band);
+  // The name, on a white board over the doors.
+  f.box(m, [-6.6, 6.6], [2.85, 3.2], [front + 0.06, front + 0.1], CLUB.board);
+  sign(m, f, 'READING CANOE CLUB', 0, 2.88, front + 0.12, null, CLUB.dark, 0.06);
+  // Kayaks and canoes on a rack by the wall, in club colours.
+  const colours = [[0.9, 0.2, 0.15], [0.1, 0.45, 0.8], [0.95, 0.75, 0.1], [0.15, 0.6, 0.3], [0.9, 0.45, 0.1], [0.85, 0.85, 0.85]];
+  for (let tier = 0; tier < 3; tier++) {
+    for (let k = 0; k < 2; k++) {
+      const x = half + 1.5 + k * 0.9;
+      f.box(m, [x, x + 0.5], [0.5 + tier * 0.6, 0.8 + tier * 0.6], [front - 4.5, front + 0.5], colours[(tier * 2 + k) % colours.length]);
+    }
+  }
+  f.box(m, [half + 1.3, half + 3.3], [0, 2.2], [front - 4.6, front - 4.4], CLUB.piling);
+  // The river wall in front: dark timber and steel piling, a ladder.
+  const water = front + f.toWater;
+  f.box(m, [-half - 6, half + 8], [-f.origin[1] - 0.6, 0.3], [water - 0.3, water], CLUB.piling);
+  f.box(m, [-half - 6, half + 8], [-f.origin[1] - 0.6, 0.3], [front, water - 0.3], CLUB.hard);
+  for (const y of [0.1, 0.5, 0.9]) f.box(m, [-half + 2, -half + 2.6], [y, y + 0.05], [water, water + 0.1], COLORS.white);
+}
+
+const LANDMARKS = { 'rowing-club': rowingClub, 'canoe-club': canoeClub };
+
+// A hipped roof over x in [-half, half], z in [z0, z1], from eaves at `y` up `rise`.
+function roof(m, f, half, [z0, z1], y, rise, color) {
+  const mid = (z0 + z1) / 2;
+  const inset = Math.min(half, (z1 - z0) / 2);
+  const c = [f.at(-half, y, z0), f.at(half, y, z0), f.at(half, y, z1), f.at(-half, y, z1)];
+  const ridge = [f.at(-half + inset, y + rise, mid), f.at(half - inset, y + rise, mid)];
+  m.tri(c[0], c[1], ridge[1], color);
+  m.tri(c[0], ridge[1], ridge[0], color);
+  m.tri(c[3], c[2], ridge[1], color.map((v) => v * 0.9));
+  m.tri(c[3], ridge[1], ridge[0], color.map((v) => v * 0.9));
+  m.tri(c[0], c[3], ridge[0], color.map((v) => v * 0.8));
+  m.tri(c[1], c[2], ridge[1], color.map((v) => v * 0.8));
+}
+
+// Blocky capitals, 3 by 5 pixels, for club names.
+const GLYPHS = {
+  A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111',
+  G: '011100101101011', I: '111010010010111', L: '100100100100111', N: '101111111111101', O: '010101101101010',
+  R: '110101110101101', U: '101101101101111', W: '101101111111101', ' ': '000000000000000',
+};
+
+// `text` centred at x, its bottom at y, on the face at depth z, facing the
+// water, on an optional `board` colour behind it. `px`: pixel size, metres.
+function sign(m, f, text, x, y, z, board, color, px = 0.12) {
+  const width = text.length * 4 * px - px;
+  if (board) f.box(m, [x - width / 2 - px, x + width / 2 + px], [y - px, y + 6 * px], [z - 0.02, z], board);
+  [...text].forEach((ch, i) => {
+    const glyph = GLYPHS[ch] ?? GLYPHS[' '];
+    for (let k = 0; k < 15; k++) {
+      if (glyph[k] !== '1') continue;
+      const gx = x - width / 2 + (i * 4 + (k % 3)) * px;
+      const gy = y + (4 - Math.floor(k / 3)) * px;
+      f.box(m, [gx, gx + px], [gy, gy + px], [z, z + 0.02], color);
+    }
+  });
 }
 
 function area(ring) {
@@ -661,33 +897,54 @@ function cableStayedBridge(m, course, { s, mast = -1 }) {
   }
 }
 
-// A 1920s concrete road bridge: two wide flat arches on a pier, a pale stone
-// face, balustrades and lamp posts.
+// A 1920s concrete road bridge: wide flat arches over the water it crosses
+// (over each channel, where it crosses an island), piers between them, a pale
+// stone face, balustrades and lamp posts.
 function concreteBridge(m, course, { s }) {
   const c = pointAt(course, s);
   const right = [-c.tz, c.tx];
   const fwd = [c.tx, c.tz];
   const origin = [c.x, 0, c.z];
-  const span = widthAt(course, s).half + 2;
   const deck = 6.5;
-  const pier = span * 0.35; // the pier stands to one side of the main channel
-  const arches = [[-span, pier - 2], [pier + 2, span]];
-  for (const [a, b] of arches) {
+  const half = widthAt(course, s).half;
+  const wet = (x) => (course.land?.rings ? course.land.inside(c.x + right[0] * x, c.z + right[1] * x) : Math.abs(x) < half);
+  // The water across the line, out to where a long stretch of land begins.
+  const spans = [];
+  for (const dir of [-1, 1]) {
+    let dry = 0;
+    for (let x = 0; Math.abs(x) < 150 && dry < 25; x += dir) {
+      dry = wet(x) ? 0 : dry + 1;
+      if (wet(x)) spans.push(x);
+    }
+  }
+  const [lo, hi] = [Math.min(-half, ...spans) - 1, Math.max(half, ...spans) + 1];
+  const arches = [];
+  for (let x = lo; x <= hi; x++) {
+    if (!wet(x)) continue;
+    if (arches.length && x - arches.at(-1)[1] <= 2) arches.at(-1)[1] = x;
+    else arches.push([x, x]);
+  }
+  for (const [a0, b0] of arches) {
+    const [a, b] = [a0 - 1, b0 + 1];
     const mid = (a + b) / 2;
-    const half = (b - a) / 2;
-    const under = (x) => 1.2 + 3.6 * Math.sqrt(Math.max(0, 1 - ((x - mid) / half) ** 2));
-    const n = 16;
+    const span = (b - a) / 2;
+    const under = (x) => 1.2 + 3.6 * Math.sqrt(Math.max(0, 1 - ((x - mid) / span) ** 2));
+    const n = Math.max(4, Math.round(span / 2));
     for (let k = 0; k < n; k++) {
       const x0 = a + ((b - a) * k) / n;
       const x1 = a + ((b - a) * (k + 1)) / n;
       orientedBox(m, origin, right, fwd, [x0, x1], [under((x0 + x1) / 2), deck], [-6, 6], COLORS.cream);
     }
   }
-  orientedBox(m, origin, right, fwd, [pier - 2, pier + 2], [-0.5, deck], [-6.5, 6.5], COLORS.stone);
+  // Piers and the abutments: the deck carried solid over the land between.
+  for (let k = 0; k <= arches.length; k++) {
+    const a = k ? arches[k - 1][1] + 1 : lo - 12;
+    const b = k < arches.length ? arches[k][0] - 1 : hi + 12;
+    if (b > a) orientedBox(m, origin, right, fwd, [a, b], [-0.5, deck], [-6.5, 6.5], COLORS.cream);
+  }
   for (const e of [-1, 1]) {
-    orientedBox(m, origin, right, fwd, e < 0 ? [-span - 12, -span] : [span, span + 12], [-0.5, deck], [-6.5, 6.5], COLORS.stone);
-    orientedBox(m, origin, right, fwd, [-span - 12, span + 12], [deck, deck + 1.1], e < 0 ? [-6, -5.5] : [5.5, 6], COLORS.white);
-    for (let x = -span; x <= span; x += 12) {
+    orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 1.1], e < 0 ? [-6, -5.5] : [5.5, 6], COLORS.white);
+    for (let x = lo; x <= hi; x += 12) {
       const p = [origin[0] + right[0] * x + fwd[0] * e * 5.75, deck + 1.1, origin[2] + right[1] * x + fwd[1] * e * 5.75];
       m.cylinder(p, 0.08, 3.2, 5, COLORS.boatHull);
       m.sphere([p[0], p[1] + 3.3, p[2]], 0.25, COLORS.white, 2, 5);

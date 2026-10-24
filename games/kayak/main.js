@@ -1,8 +1,8 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
 import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course.js';
-import { createRace, stepRace, standings, DIVISION_9 } from './race.js';
+import { createRace, stepRace, standings, elapsed, projected, DIVISION_9 } from './race.js';
 import { buildWorld } from './world.js';
-import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, SEAT, SHOULDER } from './meshes.js';
+import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
@@ -21,6 +21,7 @@ const MODES = {
   race: { course: raceRiver(6), rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:div9', label: 'Division 9' },
   practice: { course: practiceRiver(), rivals: [], bestKey: 'snitchmedia:kayak:practice', label: 'Practice' },
   reading: { file: 'courses/reading.json', rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:reading', label: 'Reading Thames' },
+  loop: { file: 'courses/loop.json', rivals: DIVISION_9, format: 'interval', bestKey: 'snitchmedia:kayak:loop', label: 'Time Trial Loop' },
 };
 
 // Boat and club colours; the player is always the first.
@@ -45,10 +46,11 @@ const menu = document.getElementById('menu');
 const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
-const els = Object.fromEntries(['clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['sprint', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
+controls.bindSprint(els.sprint);
 
 let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'finished'
 let resumeTo = 'racing';
@@ -61,6 +63,9 @@ let renderer = null;
 let meshes = null;
 let placeNext = 0; // the next landmark to name (showPlace)
 let placeTimer = 0;
+let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprintHint)
+let hitSwan = -Infinity; // race time the player last paddled into a swan
+const BIRDS_DRAWN = 64; // of each kind
 
 // --- race flow ---------------------------------------------------------------
 
@@ -68,6 +73,7 @@ function reset() {
   const f = form();
   race = createRace(mode.course, {
     rivals: mode.rivals,
+    format: mode.format,
     seed: (Math.random() * 2 ** 31) | 0,
     you: { hull, power: 1 + f, endurance: 1 + f * 1.5 },
   });
@@ -79,6 +85,7 @@ function reset() {
   controls.clear();
   placeNext = 0;
   placeTimer = 0;
+  hints = { left: 3, wait: 8 };
 }
 
 function start() {
@@ -87,6 +94,9 @@ function start() {
   state = 'start';
   hud.hidden = false;
   hud.classList.toggle('solo', race.racers.length === 1);
+  if (race.format === 'interval') {
+    show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
+  }
 }
 
 function pause() {
@@ -149,7 +159,8 @@ function finish() {
   // Rivals still out on the course get the time they're on track for.
   els.standings.replaceChildren(...table.map((r) => {
     const li = document.createElement('li');
-    const t = r.finish ?? race.time + (mode.course.finish - r.loc.s) / (Math.max(r.boat.speed, 2) * mode.course.speedup);
+    const t = race.format === 'interval' ? projected(race, r)
+      : r.finish ?? race.time + (mode.course.finish - r.loc.s) / (Math.max(r.boat.speed, 2) * mode.course.speedup);
     li.textContent = `${r.name} ${formatTime(shown(t), 0)}`;
     if (r === race.player) li.className = 'you';
     return li;
@@ -299,6 +310,11 @@ const sounds = {
     noise({ freq: 400, to: 120, q: 0.6, duration: 0.3, gain: 0.15, type: 'lowpass' });
     tone({ freq: 70, duration: 0.12, type: 'sine', gain: 0.1 });
   },
+  // An angry swan: a hiss and a honk.
+  swan: () => {
+    noise({ freq: 3200, to: 2400, q: 0.6, duration: 0.6, gain: 0.12 });
+    tone({ freq: 520, to: 430, duration: 0.25, type: 'sawtooth', gain: 0.08 });
+  },
   // The starter: a horn for the off, a whistle for a jumped start.
   go: () => {
     tone({ freq: 233, duration: 0.9, type: 'sawtooth', gain: 0.12 });
@@ -331,8 +347,9 @@ function react({ events, splashes }) {
     sounds[e]?.();
     if (e === 'stroke') controls.rumble(0.25, 40);
     if (e === 'weak') show('Weak stroke', { small: true, hold: 0.5 });
+    if (e === 'swan') hitSwan = race.time;
     if (e === 'capsize') {
-      show('Capsized!', { hold: race.player.boat.hull.swimTime - 0.5 });
+      show(race.time - hitSwan < 0.5 ? 'You hit a swan!' : 'Capsized!', { hold: race.player.boat.hull.swimTime - 0.5 });
       controls.rumble(1, 400);
     }
     if (e === 'bank') controls.rumble(0.8, 150);
@@ -341,6 +358,15 @@ function react({ events, splashes }) {
     if (e === 'line-up') say(race.start.holds ? 'Back to the line' : 'Paddlers, come up to the line');
     if (e === 'nudge') say("Come on up to the line, please. We're waiting for you");
     if (e === 'ready') say('Are you ready?');
+    if (e === 'ten') {
+      say('Ten seconds');
+      show('Your start in 10', { small: true, hold: 1.5 });
+    }
+    if (e === 'count') {
+      const n = Math.ceil(race.player.release - race.time);
+      say(String(n));
+      show(String(n), { hold: 0.7 });
+    }
     if (e === 'hold') say('Hold it! Hold the line!');
     if (e === 'line-up') show(race.start.holds ? 'Come back up to the line' : race.racers.length > 1 ? 'Paddle up into a gap on the line' : 'Wait for the horn', { small: true, hold: 3 });
     if (e === 'nudge') show('Paddle up to the line and stop', { small: true, hold: 3 });
@@ -348,6 +374,7 @@ function react({ events, splashes }) {
     if (e === 'go') {
       state = 'racing';
       show('Go!', { hold: 0.6 });
+      if (race.format === 'interval') setTimeout(() => show('Keep right: boats come back the other way', { small: true, hold: 3 }), 1500);
       controls.rumble(0.8, 300);
     }
     if (e === 'hold') {
@@ -532,6 +559,16 @@ function placeRacers() {
     renderer.place(set.arms, arms);
   }
   renderer.place(meshes.paddle, paddles);
+  // Swans and ducks, bobbing; a duck in the air flaps up and away.
+  const birds = { swan: [], duck: [] };
+  for (const b of race.birds) {
+    if (b.gone || birds[b.kind].length >= BIRDS_DRAWN) continue;
+    const f = [Math.sin(b.heading), 0, -Math.cos(b.heading)];
+    const y = b.fly > 0 ? Math.min(6, b.fly * 2) : 0.02 * Math.sin(b.phase * 2);
+    birds[b.kind].push(basis([-f[2], 0, f[0]], [0, 1, 0], f.map((v) => -v), [b.x, y, b.z]));
+  }
+  renderer.place(meshes.swan, birds.swan);
+  renderer.place(meshes.duck, birds.duck);
 }
 
 function render(time) {
@@ -578,7 +615,7 @@ function render(time) {
     list.push(kayakFor(r));
     if (r !== race.player) list.push(set.body, set.arms);
   }
-  list.push(meshes.paddle);
+  list.push(meshes.paddle, meshes.swan, meshes.duck);
   renderer.draw(frameData, list);
 }
 
@@ -626,7 +663,9 @@ function updateHud(dt) {
   if (hud.hidden) return;
   const { course } = race;
   const togo = Math.max(0, Math.min(course.finish - course.start, course.finish - loc.s)) * course.warp / course.speedup;
-  els.clock.textContent = formatTime(shown(race.player.finish ?? race.time));
+  els.clock.textContent = race.format !== 'interval' ? formatTime(shown(race.player.finish ?? race.time))
+    : race.player.crossed === null && race.time < race.player.release ? `Start in ${Math.ceil(race.player.release - race.time)}`
+    : formatTime(shown(elapsed(race, race.player)));
   els.togo.textContent = course.warp > 1 ? `${(togo / 1000).toFixed(2)} km` : `${Math.ceil(togo)} m`;
   els.pos.textContent = `${ordinal(standings(race).indexOf(race.player) + 1)} / ${race.racers.length}`;
   els.wash.classList.toggle('on', race.player.draft > 0.3 && state === 'racing');
@@ -634,6 +673,9 @@ function updateHud(dt) {
   els.rate.textContent = strokeRate(boat);
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
   els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
+  if (controls.sprintTouch && boat.stamina <= 0) controls.stopSprint();
+  els.sprint.setAttribute('aria-pressed', controls.sprintTouch);
+  sprintHint(boat, dt);
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
   els.rhythm.style.transform = `scaleX(${boat.rhythm.toFixed(3)})`;
@@ -649,6 +691,20 @@ function updateHud(dt) {
 
 // Landmarks (a real river's course.scenery.places) named one at a time as you
 // come up to them, each for a few seconds; any already passed are skipped.
+// Tells you about the sprint when it would help: stamina to spare, and a boat
+// a little way ahead to catch. A few times a race at most.
+function sprintHint(boat, dt) {
+  hints.wait -= dt;
+  if (state !== 'racing' || hints.left <= 0 || hints.wait > 0 || boat.sprinting || boat.stamina < 0.8) return;
+  const { loc } = race.player;
+  const k = race.course.speedup ?? 1;
+  const ahead = race.racers.some((r) => r !== race.player && r.finish === null
+    && r.loc.s - loc.s > 14 * k && r.loc.s - loc.s < 40 * k && Math.abs(r.loc.lateral - loc.lateral) < 8);
+  if (!ahead) return;
+  show(phone.matches ? 'Tap Sprint to catch their wash' : 'Hold Shift to sprint onto their wash', { small: true, hold: 2.5 });
+  hints = { left: hints.left - 1, wait: 30 };
+}
+
 function showPlace(course, s, dt) {
   const list = course.scenery?.places ?? [];
   placeTimer -= dt;
@@ -763,6 +819,8 @@ try {
     worlds: new Map(),
     paddle: renderer.createMesh(paddleMesh({ shaft: [0.22, 0.23, 0.26], blade: [1, 0.82, 0.2] }), LIVERIES.length),
     kayaks: new Map(),
+    swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
+    duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),
     racers: LIVERIES.map((l, i) => ({
       body: i ? renderer.createMesh(paddlerMesh(l)) : null,
       arms: i ? renderer.createMesh(limbMesh(l.top), 2) : null,

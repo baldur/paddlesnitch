@@ -20,13 +20,18 @@ export type CourseFile = {
   walls: Array<{ side: -1 | 1; from: number; to: number }>
   bridges: Array<{ s: number; name?: string; style: string; mast?: -1 | 1 }>
   moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' }>
-  buildings: Array<{ shape: XZ[]; height: number; kind: 'house' | 'flats' | 'boathouse' | 'other' }>
+  buildings: Array<{ shape: XZ[]; height: number; kind: 'house' | 'flats' | 'boathouse' | 'other'; style?: string }>
   woods: XZ[][]
   trees: XZ[]
   railways: XZ[][]
   locks: Array<{ gates: XZ[][]; chamber?: XZ[] }>
   weirs: XZ[][]
   places: Array<{ s: number; name: string }>
+  birds: Array<{ s: number; count: number; spread: number }>
+  /** The water's outlines (rings of the river's areas and its islands), to shape the land. */
+  water: XZ[][]
+  /** A racing line that isn't `line` (a loop, round islands): every 5 m, with the open water each side. */
+  route?: { line: XZ[]; left: number[]; right: number[]; start: number; finish: number }
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10
@@ -51,6 +56,57 @@ export function widths(edges: Array<{ left: number | null; right: number | null 
     const w = near.length ? near[Math.floor(near.length / 2)] : 40
     return r1(Math.max(min, Math.min(max, w)))
   })
+}
+
+/**
+ * Open water each side of a line: like `widths`, but per side, for a racing
+ * line that keeps to one side of a channel. Gaps are filled from neighbours.
+ */
+export function sides(edges: Array<{ left: number | null; right: number | null }>, [min, max] = [3, 60], window = 1) {
+  const side = (k: 'left' | 'right') => {
+    const raw = edges.map((e) => e[k] ?? NaN)
+    return raw.map((_, i) => {
+      let near: number[] = []
+      for (let w = window; !near.length && w < raw.length; w *= 2) near = raw.slice(Math.max(0, i - w), i + w + 1).filter(Number.isFinite).sort((a, b) => a - b)
+      return r1(Math.max(min, Math.min(max, near.length ? near[Math.floor(near.length / 2)] : 20)))
+    })
+  }
+  return { left: side('left'), right: side('right') }
+}
+
+/**
+ * Landmarks along a racing line that may pass the same place more than once:
+ * named once each time the line goes by (a stretch of line within `maxM` of
+ * it), as you come up to it; passes less than `apart` metres of line apart
+ * count as one. One at the very start is named at the start.
+ */
+export function routePlaces(shapes: Array<{ name: string; shape: XZ[] }>, list: Landmark[], line: XZ[], [start, finish]: [number, number], maxM = 120, apart = 250): CourseFile['places'] {
+  const cum = cumulative(line)
+  const out: CourseFile['places'] = []
+  for (const p of list) {
+    const { name, label } = typeof p === 'string' ? { name: p, label: p } : p
+    const points = shapes.filter((t) => t.name === name).flatMap((t) => t.shape)
+    if (!points.length) continue
+    const d = line.map((q) => Math.min(...points.map((r) => Math.hypot(q[0] - r[0], q[1] - r[1]))))
+    const passes: Array<{ from: number; to: number; at: number }> = []
+    for (let i = 0; i < line.length; i++) {
+      if (d[i] > maxM) continue
+      const last = passes.at(-1)
+      if (last && cum[i] - cum[last.to] < apart) {
+        last.to = i
+        if (d[i] < d[last.at]) last.at = i
+      } else passes.push({ from: i, to: i, at: i })
+    }
+    for (const pass of passes) {
+      // Named as you come up to it: the first point of the pass about as near as it gets.
+      let i = pass.from
+      while (d[i] > d[pass.at] + 25) i++
+      const s = cum[i]
+      if (s > finish || cum[pass.to] < start) continue
+      out.push({ s: r1(Math.max(s, start + 5)), name: label })
+    }
+  }
+  return out.sort((a, b) => a.s - b.s)
 }
 
 /** Bridges: every deck crossing of the line, one per bridge (roads, paths and decks of the same bridge cluster). */
@@ -108,6 +164,8 @@ const kindOfBuilding = (tags: Record<string, string>): CourseFile['buildings'][n
     : 'other'
 
 export type Landmark = string | { name: string; label: string }
+/** Where swans and ducks crowd: `count` of them within `spread` metres of the river beside `near` (an OSM name). */
+export type Flock = { near: string; count: number; spread: number }
 
 /**
  * The landmarks named on screen as you pass, from the course's list of OSM
@@ -129,6 +187,11 @@ export function courseFile(input: {
   line: XZ[]; edges: Array<{ left: number | null; right: number | null }>; things: RiverThing[]
   observations: Observation[]
   places?: Landmark[]
+  birds?: Flock[]
+  /** OSM building names to draw with a bespoke model in the game, by style. */
+  styles?: Record<string, string>
+  water?: XZ[][]
+  route?: { line: XZ[]; edges: Array<{ left: number | null; right: number | null }>; start: number; finish: number }
   place: (at: LatLng, heading: number) => { s: number; same: boolean }
 }): CourseFile {
   const rand = mulberry32(7)
@@ -164,13 +227,14 @@ export function courseFile(input: {
   }
 
   const buildings = input.things
-    .filter((t) => t.kind === 'building' && t.shape && t.shape.length >= 4 && Math.abs(t.lateral) < 200)
+    .filter((t) => (t.kind === 'building' || t.kind === 'boathouse') && t.shape && t.shape.length >= 4 && Math.abs(t.lateral) < 200)
     .map((t) => {
       let kind = kindOfBuilding(t.tags)
       if (kind !== 'boathouse' && flats.some((f) => t.s >= f.from - 30 && t.s <= f.to + 30 && Math.sign(t.lateral) === f.side)) kind = 'flats'
       const levels = Number(t.tags['building:levels'])
       const height = Number.isFinite(levels) && levels > 0 ? levels * 3 + 1 : HEIGHTS[kind]
-      return { shape: pts(thin(t.shape!, 12)), height, kind }
+      const style = t.name ? input.styles?.[t.name] : undefined
+      return { shape: pts(thin(t.shape!, 12)), height, kind, ...(style ? { style } : {}) }
     })
 
   const near = (t: RiverThing, m: number) => Math.abs(t.lateral) < m
@@ -196,6 +260,22 @@ export function courseFile(input: {
       return gates.length ? [{ gates, ...(chamber ? { chamber: pts(chamber.shape!) } : {}) }] : []
     })(),
     weirs: input.things.filter((t) => t.kind === 'weir' && t.shape && t.shape.length > 1 && t.s < cumulative(input.line).at(-1)! - 1).map((t) => pts(t.shape!)),
-    places: places(input.things, input.places ?? [], [input.start, input.finish]),
+    ...(input.route ? routeExtras(input, input.route) : {
+      places: places(input.things, input.places ?? [], [input.start, input.finish]),
+      birds: (input.birds ?? []).flatMap((b) => places(input.things, [b.near], [input.start, input.finish]).map((p) => ({ s: p.s, count: b.count, spread: b.spread }))),
+    }),
+    water: (input.water ?? []).map(pts),
   }
 }
+
+// A route's line, sides, and the places and flocks along it (by distance along the route).
+function routeExtras(input: Parameters<typeof courseFile>[0], route: NonNullable<Parameters<typeof courseFile>[0]['route']>) {
+  const shapes = input.things.filter((t) => t.name && t.shape).map((t) => ({ name: t.name!, shape: t.shape! }))
+  const ends: [number, number] = [route.start, route.finish]
+  return {
+    route: { line: pts(route.line), ...sides(route.edges), start: r1(route.start), finish: r1(route.finish) },
+    places: routePlaces(shapes, input.places ?? [], route.line, ends),
+    birds: (input.birds ?? []).flatMap((b) => routePlaces(shapes, [b.near], route.line, ends).slice(0, 1).map((p) => ({ s: p.s, count: b.count, spread: b.spread }))),
+  }
+}
+

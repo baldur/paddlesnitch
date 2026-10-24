@@ -5,7 +5,7 @@
 export const BOAT = {
   // Strokes: each one adds speed; drag takes it away again. Tuned to real K1
   // marathon paddling, counting every blade: about 10 km/h at an easy 60,
-  // 13 km/h at a racing 85-90, and 14-15 km/h sprinting at 100-110.
+  // 13 km/h at a racing 85-90, and 15-16 km/h sprinting at 100-110.
   impulse: 0.7, // m/s from a clean stroke at full stamina
   minInterval: 0.5, // strokes closer together than this catch less water, and rush the rhythm
   minGap: 0.4, // a stroke can't start while the last blade is still in the water: 150 a minute at most
@@ -14,13 +14,15 @@ export const BOAT = {
   linearDrag: 0.02,
   strokeTime: 0.5, // how long the blade is in the water
 
-  // Stamina is sprint energy. Paddling at your comfortable beat (`costBeat`,
-  // about 91 a minute) or slower is free, and stamina refills meanwhile. A
-  // quicker beat is a sprint: it spends stamina with the square of how much
-  // quicker, and once it's gone a quicker beat pulls no harder than the
-  // comfortable one. Sitting on a wash refills it several times faster: sprint
-  // up to someone, then rest on their wash.
-  cost: 0.06,
+  // Stamina is sprint energy, spent only while the sprint button is held. Then
+  // each stroke pulls `sprintBoost` harder, and a beat quicker than your
+  // comfortable one (`costBeat`, about 91 a minute) counts in full; each stroke
+  // costs `cost`, more the quicker the beat. Otherwise paddling is free and
+  // stamina refills, and a beat quicker than the comfortable one pulls no
+  // harder than it would. A wash refills it several times faster: sprint up to
+  // someone, then rest on their wash.
+  cost: 0.035,
+  sprintBoost: 0.2,
   costBeat: 0.66,
   recover: 1 / 30, // per second, at the comfortable beat or slower
   washRecover: 1 / 8, // more per second, at the sweet spot of a wash
@@ -96,7 +98,7 @@ export function createBoat({ x = 0, z = 0, heading = 0, power = 1, endurance = 1
     hull: HULLS[hull],
     rhythm: 0,
     flow: 0, // 0..1, built by holding the rhythm
-    sprinting: false, // the last stroke came quicker than the comfortable beat
+    sprinting: false, // the sprint button is held, with stamina to spend
     beat: null, // the stroke interval you've settled into
     steer: 0, // how hard the rudder is working, 0..1
     speed: 0,
@@ -116,7 +118,7 @@ export function createBoat({ x = 0, z = 0, heading = 0, power = 1, endurance = 1
 }
 
 // input: { strokes: ['left' | 'right', ...], rudder: -1..1, lean: -1..1,
-//          draft: 0..1, rock: 0..1 } (draft and rock come from race.js's wash())
+//          sprint: bool, draft: 0..1, rock: 0..1 } (draft and rock come from race.js's wash())
 // Returns the events that happened, for sound and the HUD:
 // 'stroke' | 'weak' | 'capsize' | 'remount'.
 export function step(boat, dt, input) {
@@ -136,11 +138,10 @@ export function step(boat, dt, input) {
   }
 
   for (const side of input.strokes ?? []) {
-    if (boat.time - boat.lastStroke >= H.minGap) events.push(stroke(boat, side));
+    if (boat.time - boat.lastStroke >= H.minGap) events.push(stroke(boat, side, input.sprint));
   }
 
-  const comfortable = steadyBeat(boat);
-  if (boat.time - boat.lastStroke > comfortable) boat.sprinting = false;
+  if (!input.sprint || boat.stamina <= 0) boat.sprinting = false;
   if (!boat.sprinting) boat.stamina = Math.min(1, boat.stamina + (H.recover * boat.endurance + H.washRecover * (input.draft ?? 0)) * dt);
   boat.flow = boat.rhythm >= H.flowRhythm
     ? Math.min(1, boat.flow + dt / H.flowTime)
@@ -181,20 +182,22 @@ export function step(boat, dt, input) {
   return events;
 }
 
-function stroke(boat, side) {
+function stroke(boat, side, sprint) {
   const H = boat.hull;
   const gap = boat.time - boat.lastStroke;
   let quality = Math.min(1, gap / H.minInterval);
   const repeat = side === boat.lastSide;
   if (repeat) quality *= H.sameSide;
-  // A sprint stroke spends stamina; without it, it pulls no harder than one at
-  // the comfortable beat would.
+  // Sprinting, a stroke pulls harder and spends stamina; otherwise a beat
+  // quicker than the comfortable one pulls no harder than that would.
   const comfortable = steadyBeat(boat);
-  boat.sprinting = gap < comfortable;
+  const pace = Math.max(gap, H.minInterval);
+  boat.sprinting = !!sprint && boat.stamina > 0;
   if (boat.sprinting) {
-    const fuel = Math.min(1, boat.stamina / 0.05);
-    quality *= fuel + (1 - fuel) * Math.max(gap, H.minInterval) / comfortable;
-    boat.stamina = Math.max(0, boat.stamina - H.cost * ((comfortable / Math.max(gap, H.minInterval)) ** 2 - 1));
+    quality *= 1 + H.sprintBoost;
+    boat.stamina = Math.max(0, boat.stamina - H.cost * (comfortable / pace) ** 2);
+  } else if (pace < comfortable) {
+    quality *= pace / comfortable;
   }
   keepTime(boat, gap, repeat);
 
@@ -211,7 +214,7 @@ function stroke(boat, side) {
   return quality < 0.6 ? 'weak' : 'stroke';
 }
 
-// The beat a boat can keep up for ever: quicker than this is a sprint. Fitter
+// The comfortable beat: quicker than this only pays while sprinting. Fitter
 // paddlers (more endurance) have a quicker one.
 export function steadyBeat(boat) {
   return boat.hull.costBeat / Math.cbrt(boat.endurance);

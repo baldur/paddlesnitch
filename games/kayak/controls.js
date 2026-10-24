@@ -19,6 +19,7 @@ export const KEYS = {
   leanRight: 'KeyD',
   rudderLeft: 'KeyQ',
   rudderRight: 'KeyE',
+  sprint: ['ShiftLeft', 'ShiftRight', 'Space'],
 };
 
 const PAD = { LB: 4, RB: 5, LT: 6, RT: 7 };
@@ -43,13 +44,14 @@ export class Controls {
   #touching = false;
   #fingers = new Map(); // pointerId -> x where it came down
   #dragRudder = 0;
+  #sprintTouch = false;
   #tilt = { on: false, zero: null, flip: 1, lean: 0, at: null, fused: null };
   // What the sensors are doing, for the #tilt readout in main.js.
   debug = { permission: 'not asked', orientations: 0, motions: 0, source: 'none', beta: null, gamma: null, accel: null, turn: null, zero: null };
 
   constructor(target) {
     addEventListener('keydown', (e) => {
-      if (Object.values(KEYS).includes(e.code)) e.preventDefault();
+      if (Object.values(KEYS).flat().includes(e.code)) e.preventDefault();
       if (e.repeat) return;
       if (e.code === KEYS.strokeLeft) this.#strokes.push('left');
       if (e.code === KEYS.strokeRight) this.#strokes.push('right');
@@ -79,6 +81,25 @@ export class Controls {
     };
     target.addEventListener('pointerup', lift);
     target.addEventListener('pointercancel', lift);
+  }
+
+  // An on-screen button (phones), tapped to start sprinting and again to stop:
+  // both thumbs are busy paddling, so it can't be held.
+  bindSprint(el) {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.#sprintTouch = !this.#sprintTouch;
+    });
+  }
+
+  // The on-screen sprint, on or off (main.js turns it off when stamina runs out).
+  get sprintTouch() {
+    return this.#sprintTouch;
+  }
+
+  stopSprint() {
+    this.#sprintTouch = false;
   }
 
   // Starts reading the motion sensors. Call it from a tap or click: iOS asks
@@ -210,6 +231,7 @@ export class Controls {
     this.rudder = clamp(keyRudder + axis(0) + this.#dragRudder);
     return {
       strokes,
+      sprint: KEYS.sprint.some((k) => this.#held.has(k)) || !!this.#pad?.buttons[BUTTON.A]?.pressed || this.#sprintTouch,
       rudder: this.rudder,
       lean: clamp(this.#keyLean + axis(2) + (this.tilting ? this.#tilt.lean : 0)),
     };
@@ -217,6 +239,7 @@ export class Controls {
 
   clear() {
     this.#strokes = [];
+    this.#sprintTouch = false;
   }
 
   rumble(strength = 0.4, duration = 60) {

@@ -4,7 +4,7 @@ import { createBoat, step } from '../kayak/sim.js';
 import { readFile } from 'node:fs/promises';
 import { raceRiver, courseFromFile, pointAt, locate, headingAt } from '../kayak/course.js';
 import { wrap } from '../kayak/sim.js';
-import { createRace, stepRace, standings, started, wash, DIVISION_9 } from '../kayak/race.js';
+import { createRace, stepRace, standings, started, wash, elapsed, DIVISION_9 } from '../kayak/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -80,7 +80,7 @@ test('touching hulls are pushed apart and count as one bump', () => {
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 0.47);
 });
 
-test('a pack of rivals races a full 6 km without capsizing, finishing in about 28 minutes', () => {
+test('a pack of rivals races a full 6 km without capsizing, finishing in about 31 minutes', () => {
   const course = raceRiver();
   const race = createRace(course, { rivals: DIVISION_9, seed: 3 });
   // The player comes up to the line, then just sits there.
@@ -94,8 +94,8 @@ test('a pack of rivals races a full 6 km without capsizing, finishing in about 2
   const rivals = standings(race).filter((r) => r.ai);
   assert.ok(rivals.every((r) => r.finish !== null), 'everyone finished');
   const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
-  assert.ok(minutes[0] > 25 && minutes[0] < 29, `winner ${minutes[0]}`);
-  assert.ok(minutes.at(-1) < 35, `last ${minutes.at(-1)}`);
+  assert.ok(minutes[0] > 29 && minutes[0] < 33, `winner ${minutes[0]}`);
+  assert.ok(minutes.at(-1) < 36, `last ${minutes.at(-1)}`);
   assert.ok(rivals.every((r) => r.boat.capsizes === 0));
   assert.equal(standings(race).at(-1), race.player, 'a player who never paddles comes last');
 });
@@ -195,9 +195,49 @@ test('a pack races the true-size Reading Thames: lined up at true speed, then fo
   assert.ok(rivals.every((r) => r.finish !== null), 'everyone finished');
   // 6.26 km at a club pace, in real-equivalent minutes.
   const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
-  assert.ok(minutes[0] > 26 && minutes[0] < 30, `winner ${minutes[0]}`);
-  assert.ok(minutes.at(-1) < 34, `last ${minutes.at(-1)}`);
+  assert.ok(minutes[0] > 29 && minutes[0] < 34, `winner ${minutes[0]}`);
+  assert.ok(minutes.at(-1) < 37, `last ${minutes.at(-1)}`);
   assert.ok(rivals.every((r) => r.boat.capsizes === 0));
-  assert.ok(banked < 5, `rivals spent ${banked} s on the banks`);
+  assert.ok(banked < 15, `rivals spent ${banked} s on the banks`); // a few brushes, swerving round swans
+});
+
+const loopCourse = async () => courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
+
+test('a time trial lets boats go one at a time, and times each from the start line', async () => {
+  const course = await loopCourse();
+  const race = createRace(course, { rivals: DIVISION_9.slice(0, 5), seed: 3, format: 'interval', you: { slot: 2 } });
+  assert.equal(race.racers.indexOf(race.player), 2, 'you go third');
+  const gap = 30 / course.warp;
+  assert.deepEqual(race.racers.map((r) => r.release - race.racers[0].release), race.racers.map((_, k) => k * gap));
+  const calls = [];
+  const startAt = race.player.loc.s;
+  // Paddling before your start gets you nowhere.
+  let next = 0;
+  while (race.time < race.player.release + 20) {
+    const strokes = race.time >= next ? [race.player.boat.lastSide === 'left' ? 'right' : 'left'] : [];
+    if (strokes.length) next = race.time + 0.7;
+    calls.push(...stepRace(race, DT, { strokes, lean: balance(race.player.boat) }).events.filter((e) => ['ten', 'count', 'go'].includes(e)));
+    if (race.time < race.player.release) assert.ok(race.player.loc.s - startAt < 1, 'held until your start');
+  }
+  assert.deepEqual(calls, ['ten', 'count', 'count', 'count', 'count', 'count', 'go']);
+  assert.ok(race.player.crossed !== null && race.player.crossed > race.player.release, 'your clock starts at the line');
+  assert.ok(Math.abs(elapsed(race, race.player) - (race.time - race.player.crossed)) < 1e-9);
+  const [first, second] = race.racers;
+  assert.ok(first.crossed < second.crossed, 'the first boat off crossed first');
+});
+
+test('the time trial loop: round St Mary\'s and Fry\'s islands and back, everyone home without a swim', async () => {
+  const course = await loopCourse();
+  const km = ((course.finish - course.start) * course.warp) / course.speedup / 1000;
+  assert.ok(km > 5.2 && km < 5.6, `${km} km`);
+  assert.ok(course.samples.filter((p) => p.shared).length > course.samples.length / 3, 'much of it is two-way water');
+  assert.ok(Math.min(...course.samples.map((p) => p.left + p.right)) < 15, 'the gap at St Mary\'s is narrow');
+  const race = createRace(course, { rivals: DIVISION_9, seed: 1, format: 'interval' });
+  while (race.time < 700 && race.racers.some((r) => r.ai && r.finish === null)) stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+  const rivals = standings(race).filter((r) => r.ai);
+  assert.ok(rivals.every((r) => r.finish !== null), 'everyone finished');
+  const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
+  assert.ok(minutes[0] > 24 && minutes.at(-1) < 33, `${minutes[0]}-${minutes.at(-1)} minutes`);
+  assert.deepEqual(rivals.filter((r) => r.boat.capsizes).map((r) => r.name), []);
 });
 

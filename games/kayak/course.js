@@ -16,7 +16,9 @@ const NARROWBOAT = 2.1; // beam of a moored narrowboat, metres
 // really are, so a 6 km marathon fits in a few minutes of play (see README).
 // speedup: boats move this many times their speed through the world, for a real
 // river drawn at its true size (warp then shows its true distances).
-export function createCourse(points, { width = 20, start = 60, finish = 1060, warp = 1, speedup = 1, moorings = [], bridges = [] } = {}) {
+// sides: instead of `width`, the open water left and right of the line at a
+// distance along ({ left, right }), for a racing line that keeps to one side.
+export function createCourse(points, { width = 20, sides = null, start = 60, finish = 1060, warp = 1, speedup = 1, moorings = [], bridges = [] } = {}) {
   const raw = [];
   for (let i = 0; i < points.length - 1; i++) {
     const p0 = points[Math.max(i - 1, 0)];
@@ -50,9 +52,14 @@ export function createCourse(points, { width = 20, start = 60, finish = 1060, wa
     p.tx = (b.x - a.x) / len;
     p.tz = (b.z - a.z) / len;
     // half: centreline to bank. left/right: centreline to the open water's edge.
-    p.half = (typeof width === 'function' ? width(p.s) : width) / 2;
-    p.left = p.half;
-    p.right = p.half;
+    if (sides) {
+      Object.assign(p, sides(p.s));
+      p.half = (p.left + p.right) / 2;
+    } else {
+      p.half = (typeof width === 'function' ? width(p.s) : width) / 2;
+      p.left = p.half;
+      p.right = p.half;
+    }
     for (const m of moorings) {
       if (Math.abs(p.s - m.s) < m.length / 2 + 1) p[m.side < 0 ? 'left' : 'right'] = p.half - (m.beam ?? NARROWBOAT);
     }
@@ -83,6 +90,7 @@ export function roomAhead(course, s, ahead) {
 // search to nearby samples, which is all a moving boat needs.
 export function locate(course, x, z, hint = -1) {
   const { samples } = course;
+  hint = Math.min(hint, samples.length - 2);
   const from = hint < 0 ? 0 : Math.max(0, hint - 25);
   const to = hint < 0 ? samples.length - 1 : Math.min(samples.length - 1, hint + 25);
   let best = null;
@@ -165,25 +173,71 @@ const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6 };
 
 // A real river from a course file (made by apps/web/scripts/courses, see
 // docs/features/game-courses-from-video.md): its line and widths in true metres,
-// and the scenery along it in `scenery`, for world.js.
+// and the scenery along it in `scenery`, for world.js. `scenery.river` is the
+// river line itself, which everything in the file is placed along. With a
+// `route` (a loop, round islands) the race follows that instead: moored boats
+// narrow it wherever they lie, and `shared` marks water it uses both ways.
 export function courseFromFile(data) {
-  const cum = [0];
-  for (let i = 1; i < data.line.length; i++) {
-    const [a, b] = [data.line[i - 1], data.line[i]];
-    cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
-  }
-  const width = (s) => {
-    let i = 0;
-    while (i < cum.length - 2 && cum[i + 1] < s) i++;
-    const f = Math.max(0, Math.min(1, (s - cum[i]) / (cum[i + 1] - cum[i] || 1)));
-    return data.width[i] + (data.width[i + 1] - data.width[i]) * f;
+  const along = (line, values) => {
+    const cum = [0];
+    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]));
+    return (s) => {
+      let i = 0;
+      while (i < cum.length - 2 && cum[i + 1] < s) i++;
+      const f = Math.max(0, Math.min(1, (s - cum[i]) / (cum[i + 1] - cum[i] || 1)));
+      return values[i] + (values[i + 1] - values[i]) * f;
+    };
   };
-  const course = createCourse(data.line, {
-    width, start: data.start, finish: data.finish, warp: data.warp, speedup: data.speedup,
-    moorings: data.moorings.map((m) => ({ ...m, beam: BEAM[m.kind] ?? NARROWBOAT })),
-    bridges: data.bridges,
+  const moorings = data.moorings.map((m) => ({ ...m, beam: BEAM[m.kind] ?? NARROWBOAT }));
+  const river = createCourse(data.line, {
+    width: along(data.line, data.width), start: data.start, finish: data.finish, warp: data.warp, speedup: data.speedup,
+    moorings, bridges: data.bridges,
   });
-  return { ...course, scenery: data };
+  if (!data.route) return { ...river, scenery: { ...data, river } };
+  const { line, left, right, start, finish } = data.route;
+  const [l, r] = [along(line, left), along(line, right)];
+  const course = createCourse(line, { sides: (s) => ({ left: l(s), right: r(s) }), start, finish, warp: data.warp, speedup: data.speedup });
+  for (const m of moorings) moored(course, river, m);
+  twoWay(course);
+  return { ...course, scenery: { ...data, river } };
+}
+
+// Narrows a route where a boat moored on the river (`m`, placed along `river`) lies.
+function moored(course, river, m) {
+  const c = pointAt(river, m.s);
+  const w = widthAt(river, m.s).half - m.beam / 2;
+  const bx = c.x - c.tz * m.side * w;
+  const bz = c.z + c.tx * m.side * w;
+  for (const p of course.samples) {
+    const along = (bx - p.x) * p.tx + (bz - p.z) * p.tz;
+    const lateral = (bx - p.x) * -p.tz + (bz - p.z) * p.tx;
+    if (Math.abs(along) > m.length / 2 + 1 || Math.abs(lateral) > Math.max(p.left, p.right) + m.beam) continue;
+    const edge = Math.max(2, Math.abs(lateral) - m.beam / 2);
+    if (lateral > 0) p.right = Math.min(p.right, edge);
+    else p.left = Math.min(p.left, edge);
+  }
+}
+
+// Marks the samples of a route that share water with another part of it (boats
+// come the other way there): another sample far along the route but close by.
+function twoWay(course) {
+  const cell = (x, z) => `${Math.floor(x / 20)},${Math.floor(z / 20)}`;
+  const grid = new Map();
+  for (const p of course.samples) grid.set(cell(p.x, p.z), [...(grid.get(cell(p.x, p.z)) ?? []), p]);
+  for (const p of course.samples) {
+    const reach = Math.max(p.left, p.right);
+    p.shared = false;
+    for (let dx = -1; dx <= 1 && !p.shared; dx++) {
+      for (let dz = -1; dz <= 1 && !p.shared; dz++) {
+        for (const q of grid.get(cell(p.x + dx * 20, p.z + dz * 20)) ?? []) {
+          if (Math.abs(q.s - p.s) > 200 && Math.hypot(q.x - p.x, q.z - p.z) < reach) {
+            p.shared = true;
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 export async function loadCourse(url) {

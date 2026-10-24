@@ -39,5 +39,21 @@
       "name": "Mapledurham Weir",
       "label": "Mapledurham Lock ahead"
     }
-  ]
+  ],
+  "birds": [
+    {
+      "near": "Reading Rowing Club",
+      "count": 14,
+      "spread": 120
+    },
+    {
+      "near": "Caversham Bridge",
+      "count": 5,
+      "spread": 60
+    }
+  ],
+  "styles": {
+    "Reading Rowing Club": "rowing-club",
+    "Reading Canoe Club": "canoe-club"
+  }
 }
