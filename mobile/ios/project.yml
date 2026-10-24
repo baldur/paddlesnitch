@@ -11,8 +11,11 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    # No team until the Developer Program (P5); the simulator needs none.
-    CODE_SIGN_STYLE: Automatic
+    # No team until the Developer Program (P5). The simulator build is signed
+    # ad hoc ("-"), which needs no account but does give the app its Keychain:
+    # an unsigned build can't keep the refresh token (errSecMissingEntitlement).
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY[sdk=iphonesimulator*]: "-"
 packages:
   PaddleKit:
     path: Packages/PaddleKit
@@ -35,6 +38,10 @@ targets:
         product: PaddleAPI
       - package: PaddleKit
         product: Paddles
+      - package: PaddleKit
+        product: Account
+      - package: PaddleKit
+        product: SampleServer
     info:
       path: App/Info.plist
       properties:
@@ -47,6 +54,12 @@ targets:
           - UIInterfaceOrientationPortrait
         UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
+        # The server. A debug build can point elsewhere with the environment
+        # variable PADDLESNITCH_BASE_URL (e.g. http://localhost:3000).
+        PaddlesnitchBaseURL: https://paddlesnitch.com
+        NSAppTransportSecurity:
+          # Plain http only to this Mac's own dev server (pnpm dev).
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.paddlesnitch.app

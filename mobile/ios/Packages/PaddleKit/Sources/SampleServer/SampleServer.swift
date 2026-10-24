@@ -1,0 +1,127 @@
+import Foundation
+import PaddleAPI
+
+/// A stand-in for paddlesnitch.com that answers from the contract's golden
+/// answers (mobile/contract/fixtures/api). The app's UI tests run against it
+/// (launch argument `-SampleServer`), and so do the Account tests: the whole
+/// sign-in flow, offline and the same every time.
+///
+/// Accounts: any email with password `Password123` signs in;
+/// `sam@example.com` gets an account that must accept new Terms.
+public final class SampleServer: HTTPTransport, @unchecked Sendable {
+    public static let password = "Password123"
+    public static let needsTermsEmail = "sam@example.com"
+
+    private let fixtures: URL
+    private let lock = NSLock()
+    private var _requests: [URLRequest] = []
+    private var revoked: Set<String> = []
+    private var _refusesRefresh = false
+    /// Make the refresh route turn every token down, as after a password reset.
+    public var refusesRefresh: Bool {
+        get { lock.withLock { _refusesRefresh } }
+        set { lock.withLock { _refusesRefresh = newValue } }
+    }
+
+    public init(fixtures: URL) {
+        self.fixtures = fixtures
+    }
+
+    public var requests: [URLRequest] { lock.withLock { _requests } }
+    public var revokedTokens: Set<String> { lock.withLock { revoked } }
+
+    public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        lock.withLock { _requests.append(request) }
+        let (status, body) = try answer(request)
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url, statusCode: status, httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"])
+        else { throw URLError(.badURL) }
+        return (body, response)
+    }
+
+    private func answer(_ request: URLRequest) throws -> (Int, Data) {
+        let path = request.url?.path ?? ""
+        if path.hasPrefix("/att/api/auth/") {
+            return try auth(path: path, body: request.httpBody ?? Data())
+        }
+        if path.hasPrefix("/api/trpc/") {
+            return try trpc(path: path, request: request)
+        }
+        return (404, Data(#"{"error":"Not found"}"#.utf8))
+    }
+
+    /// The sign-in routes (mobile/contract/api/rest.json).
+    private func auth(path: String, body: Data) throws -> (Int, Data) {
+        switch path {
+        case "/att/api/auth/login":
+            let login = try JSONDecoder().decode(Login.self, from: body)
+            guard login.password == Self.password else { return (401, try fixture("auth.error")) }
+            return (200, try fixture(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
+        case "/att/api/auth/signup":
+            let signup = try JSONDecoder().decode(Signup.self, from: body)
+            guard signup.acceptedTosVersion == Constants.tosVersion else {
+                return (422, Data(#"{"error":"The Terms of Service have changed. Update the app to sign up."}"#.utf8))
+            }
+            return (201, try fixture("auth.login"))
+        case "/att/api/auth/refresh":
+            let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
+            let refused = lock.withLock { _refusesRefresh || revoked.contains(token) }
+            return refused ? (401, try fixture("auth.error")) : (200, try fixture("auth.refresh"))
+        case "/att/api/auth/logout":
+            let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
+            _ = lock.withLock { revoked.insert(token) }
+            return (200, Data(#"{"ok":true}"#.utf8))
+        default:
+            return (404, Data(#"{"error":"Not found"}"#.utf8))
+        }
+    }
+
+    /// The tRPC procedures (mobile/contract/api/procedures.json).
+    private func trpc(path: String, request: URLRequest) throws -> (Int, Data) {
+        let signedIn = request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true
+        switch path {
+        case "/api/trpc/me":
+            return (200, trpc(try fixture(signedIn ? "me.signed-in" : "me.signed-out")))
+        case "/api/trpc/paddles.list":
+            return signedIn ? (200, trpc(try fixture("paddles.list"))) : Self.unauthorized
+        case "/api/trpc/paddles.get":
+            guard signedIn else { return Self.unauthorized }
+            return try paddle(id: try input(ById.self, from: request).id)
+        default:
+            return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
+        }
+    }
+
+    /// The first `paddles.get*.json` with this id, `paddles.get.json` first.
+    private func paddle(id: String) throws -> (Int, Data) {
+        let names = try FileManager.default.contentsOfDirectory(atPath: fixtures.path)
+            .filter { $0.hasPrefix("paddles.get") && $0.hasSuffix(".json") }.sorted()
+        for name in names {
+            let data = try Data(contentsOf: fixtures.appending(path: name))
+            if (try? JSONDecoder.paddlesnitch.decode(AnalysisSession.self, from: data))?.id == id {
+                return (200, trpc(data))
+            }
+        }
+        return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
+    }
+
+    private static let unauthorized = (
+        401, Data(#"{"error":{"message":"Sign in","data":{"code":"UNAUTHORIZED","httpStatus":401}}}"#.utf8)
+    )
+
+    private func fixture(_ name: String) throws -> Data {
+        try Data(contentsOf: fixtures.appending(path: "\(name).json"))
+    }
+
+    private func trpc(_ data: Data) -> Data {
+        Data(#"{"result":{"data":"#.utf8) + data + Data("}}".utf8)
+    }
+
+    private func input<T: Decodable>(_ type: T.Type, from request: URLRequest) throws -> T {
+        let query = URLComponents(url: request.url ?? URL(filePath: "/"), resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "input" }?.value
+        return try JSONDecoder().decode(T.self, from: Data((query ?? "").utf8))
+    }
+}

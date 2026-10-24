@@ -3,26 +3,50 @@ import Testing
 
 @testable import PaddleAPI
 
-/// Records requests and answers each with a canned response.
+/// Records requests and answers them in turn with canned responses; the last
+/// one repeats.
 final class FakeTransport: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _requests: [URLRequest] = []
-    let status: Int
-    let body: Data
+    private let answers: [(status: Int, body: Data)]
 
     init(status: Int = 200, body: Data) {
-        self.status = status
-        self.body = body
+        answers = [(status, body)]
+    }
+
+    init(answers: [(status: Int, body: Data)]) {
+        self.answers = answers
     }
 
     var requests: [URLRequest] { lock.withLock { _requests } }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        lock.withLock { _requests.append(request) }
+        let index = lock.withLock {
+            _requests.append(request)
+            return min(_requests.count, answers.count) - 1
+        }
+        let answer = answers[index]
         guard let url = request.url,
-            let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)
+            let response = HTTPURLResponse(url: url, statusCode: answer.status, httpVersion: nil, headerFields: nil)
         else { throw URLError(.badURL) }
-        return (body, response)
+        return (answer.body, response)
+    }
+}
+
+/// Hands out ID tokens and records whether each ask was for a fresh one.
+actor TokenRecorder {
+    private(set) var asks: [Bool] = []
+    let current: String?
+    let fresh: String?
+
+    init(current: String?, fresh: String?) {
+        self.current = current
+        self.fresh = fresh
+    }
+
+    func token(refresh: Bool) -> String? {
+        asks.append(refresh)
+        return refresh ? fresh : current
     }
 }
 
@@ -30,7 +54,7 @@ final class FakeTransport: HTTPTransport, @unchecked Sendable {
     let base = URL(string: "https://paddlesnitch.test") ?? URL(filePath: "/")
 
     func client(_ transport: FakeTransport, token: String? = "id-token") -> PaddleClient {
-        PaddleClient(baseURL: base, transport: transport, idToken: { token })
+        PaddleClient(baseURL: base, transport: transport, app: "ios/9.9", idToken: { _ in token })
     }
 
     // MARK: Requests (the wire format in mobile/contract/README.md)
@@ -121,6 +145,70 @@ final class FakeTransport: HTTPTransport, @unchecked Sendable {
             try await client(transport).call(Procedures.paddlesList)
         } throws: { error in
             if case .undecodable = error as? PaddleAPIError { true } else { false }
+        }
+    }
+
+    // MARK: Retrying with a fresh token
+
+    @Test func aTurnedDownTokenIsRefreshedAndTheCallTriedOnce() async throws {
+        let unauthorized = Data(#"{"error":{"message":"no","data":{"code":"UNAUTHORIZED"}}}"#.utf8)
+        let transport = FakeTransport(answers: [(401, unauthorized), (200, try Contract.answer("paddles.list"))])
+        let tokens = TokenRecorder(current: "old", fresh: "new")
+        let client = PaddleClient(baseURL: base, transport: transport, idToken: { await tokens.token(refresh: $0) })
+        _ = try await client.call(Procedures.paddlesList)
+        #expect(await tokens.asks == [false, true])
+        #expect(
+            transport.requests.map { $0.value(forHTTPHeaderField: "Authorization") } == ["Bearer old", "Bearer new"])
+    }
+
+    @Test func noFreshTokenMeansSignedOutWithoutASecondTry() async throws {
+        let transport = FakeTransport(status: 401, body: Data())
+        let tokens = TokenRecorder(current: "old", fresh: nil)
+        let client = PaddleClient(baseURL: base, transport: transport, idToken: { await tokens.token(refresh: $0) })
+        await #expect(throws: PaddleAPIError.signedOut) {
+            try await client.call(Procedures.paddlesList)
+        }
+        #expect(transport.requests.count == 1)
+    }
+
+    // MARK: REST (sign-in)
+
+    @Test func aSignInPostsJSONWithTheAppHeader() async throws {
+        let transport = FakeTransport(body: try Contract.fixture("auth.login"))
+        let signIn = try await client(transport, token: nil)
+            .send(Endpoints.authLogin, Login(email: "pat@example.com", password: "Secret123"))
+        #expect(!signIn.refreshToken.isEmpty)
+        let request = try #require(transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "https://paddlesnitch.test/att/api/auth/login")
+        #expect(request.value(forHTTPHeaderField: "x-paddlesnitch-app") == "ios/9.9")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+        let body = try JSONDecoder().decode(Login.self, from: try #require(request.httpBody))
+        #expect(body == Login(email: "pat@example.com", password: "Secret123"))
+    }
+
+    @Test func aRefusalCarriesTheServersWords() async throws {
+        let transport = FakeTransport(status: 401, body: try Contract.fixture("auth.error"))
+        await #expect(
+            throws: PaddleAPIError.rejected(message: "That email and password don’t match.", status: 401, session: nil)
+        ) {
+            try await client(transport).send(Endpoints.authLogin, Login(email: "a", password: "b"))
+        }
+    }
+
+    @Test func aWrongCodeComesBackWithItsNewSession() async throws {
+        let transport = FakeTransport(status: 400, body: try Contract.fixture("auth.otp-verify.retry"))
+        await #expect {
+            try await client(transport).send(Endpoints.authOtpVerify, OtpVerify(code: "1", email: "a", session: "s"))
+        } throws: { error in
+            if case .rejected(_, 400, let session) = error as? PaddleAPIError { session != nil } else { false }
+        }
+    }
+
+    @Test func aRefusalThatIsntAnApiErrorIsABadResponse() async throws {
+        let transport = FakeTransport(status: 502, body: Data("<html>".utf8))
+        await #expect(throws: PaddleAPIError.badResponse(status: 502)) {
+            try await client(transport).send(Endpoints.authRefresh, RefreshToken(refreshToken: "r"))
         }
     }
 }

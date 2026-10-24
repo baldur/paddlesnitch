@@ -9,10 +9,39 @@ class AppTestCase: XCTestCase {
     /// Extra launch arguments, e.g. a text size.
     var launchArguments: [String] { [] }
 
+    /// Every test talks to the sample server (the contract's fixtures, no
+    /// network) and starts signed out.
     override func setUp() async throws {
         continueAfterFailure = false
-        app.launchArguments += launchArguments
+        app.launchArguments += ["-SampleServer", "-ResetAccount"] + launchArguments
         app.launch()
+    }
+
+    /// Opens the sign-in sheet from the Paddles notice and signs in.
+    func signIn(email: String = "pat@example.com", password: String = "Password123") {
+        let button = app.buttons["sample-notice-action"]
+        XCTAssertTrue(button.waitForExistence(timeout: 10))
+        button.tap()
+        fill(email: email, password: password)
+        app.buttons["sign-in-submit"].tap()
+    }
+
+    /// Signs in and waits until the samples have made way for the account's
+    /// own paddles.
+    func signInAndWait(email: String = "pat@example.com") {
+        signIn(email: email)
+        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "still showing the samples")
+        XCTAssertTrue(element("logbook").waitForExistence(timeout: 10))
+    }
+
+    func fill(email: String, password: String) {
+        let emailField = app.textFields["Email"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 10))
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.secureTextFields["Password"]
+        passwordField.tap()
+        passwordField.typeText(password)
     }
 
     func element(_ identifier: String) -> XCUIElement {

@@ -22,6 +22,8 @@ public enum FailureMessage {
             "Sign in again to see your paddles."
         case PaddleAPIError.notFound:
             "This paddle isn't there any more."
+        case PaddleAPIError.rejected(let message, _, _):
+            message
         case is URLError:
             "Can't reach paddlesnitch. Check your connection and try again."
         default:
