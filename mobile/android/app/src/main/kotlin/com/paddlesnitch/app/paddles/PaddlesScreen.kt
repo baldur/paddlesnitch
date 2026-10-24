@@ -106,7 +106,7 @@ private fun Logbook(list: PaddleList) {
         }
         val t = list.totals
         Text(
-            "In all: ${t.count} paddle${if (t.count == 1L) "" else "s"}, ${String.format(java.util.Locale.US, "%.1f", t.totalKm)} km, " +
+            "In all: ${t.count} paddle${if (t.count == 1L) "" else "s"}, ${toFixed(t.totalKm, 1)} km, " +
                 "${fmtClock(t.totalS)} on the water${t.since?.let { ", since ${fmtMonth(it)}" } ?: ""}.",
             color = PsColor.muted, fontSize = 14.sp,
         )
