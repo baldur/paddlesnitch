@@ -3,19 +3,20 @@ name: Waterways refresh
 # Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium, France, Germany, Austria, Switzerland, Denmark and Sweden data
 # (docs/features/waterways-uk-ireland.md): OSM from Geofabrik plus every
 # source's normalised features, the check routes, then a new version uploaded
-# to S3 and a PR pointing packages/waterways/data/manifest.json at it. Nothing
-# goes live until a person merges that PR. Off the hour: scheduled runs on the
-# hour get delayed or dropped.
+# to S3. That version is read back the way the server loads it and checked
+# again (routes and memory); only if it passes does the run commit
+# packages/waterways/data/manifest.json to main and start the deploy. No person
+# in the loop: any failure opens an issue and the site keeps the version it has.
+# Off the hour: scheduled runs on the hour get delayed or dropped.
 on:
   schedule:
     - cron: '17 2 * * 0'
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write        # the fallback when Actions may not open PRs
-  actions: write       # to dispatch the checks on the PR branch
+  contents: write      # to commit the manifest to main
+  issues: write        # to report a failed run
+  actions: write       # to start the deploy
   id-token: write      # for the AWS role
 
 concurrency:
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180   # the extracts alone take ~90 minutes
     # The AWS role (att-github-waterways) trusts only this environment, and can
     # only touch waterways/* in the data bucket (infra/lib/att-stack.ts).
     environment: waterways-data
@@ -122,48 +123,74 @@ jobs:
           DATA_BUCKET: paddlesnitch-data-prod
         run: NODE_OPTIONS=--max-old-space-size=8000 pnpm waterways:national --publish | tee -a "$RUNNER_TEMP/build.log"
 
-      - name: Open a PR to make it live
+      # The server's own loader (readDataset) reading the version back from S3:
+      # every check route again, and the memory the dataset needs on the 2 GB
+      # Lambda. One retry, so a passing blip in S3 doesn't cost a week.
+      - name: Check the published version as the server will load it
+        working-directory: apps/web
+        env:
+          DATA_BUCKET: paddlesnitch-data-prod
+        run: |
+          pnpm waterways:verify | tee "$RUNNER_TEMP/verify.log" && exit 0
+          sleep 60
+          pnpm waterways:verify | tee "$RUNNER_TEMP/verify.log"
+
+      # A push made with GITHUB_TOKEN doesn't start other workflows, so the
+      # deploy is dispatched. It runs the full test suite before it deploys and
+      # its smoke test (a route on the new data) after.
+      - name: Make it live
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./packages/waterways/data/manifest.json').version")
-          branch="waterways/refresh-$version"
+          echo "version=$version" >> "$GITHUB_ENV"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Branch from main as it is now, not the commit this run started on:
-          # if main moved meanwhile (a workflow file among the changes), a branch
-          # cut from the old commit is refused ("refusing to allow a GitHub App
-          # to create or update workflow … without workflows permission").
           cp packages/waterways/data/manifest.json "$RUNNER_TEMP/manifest.json"
-          git fetch --quiet origin main
-          git switch -c "$branch" origin/main
-          cp "$RUNNER_TEMP/manifest.json" packages/waterways/data/manifest.json
-          git add packages/waterways/data/manifest.json
-          git commit -m "data(waterways): publish $version"
-          git push -u origin "$branch"
+          # On top of main as it is now: it may have moved during the build.
+          for attempt in 1 2 3; do
+            git fetch --quiet origin main
+            git switch --quiet --discard-changes --force-create publish origin/main
+            cp "$RUNNER_TEMP/manifest.json" packages/waterways/data/manifest.json
+            git add packages/waterways/data/manifest.json
+            git commit --quiet -m "data(waterways): publish $version" -m "$(grep -E '^\s+(network|✓|✗)' "$RUNNER_TEMP/build.log" | head -40)"
+            git push origin publish:main && break
+            [ "$attempt" = 3 ] && { echo "::error::could not push to main"; exit 1; }
+            sleep 10
+          done
+          started=$(date -u -d "-1 minute" +%Y-%m-%dT%H:%M:%SZ)   # a little early: clocks differ
+          gh workflow run deploy.yml --ref main
+          # Find that run and wait for it, so a failed deploy is reported here too.
+          for i in $(seq 1 30); do
+            run=$(gh run list --workflow deploy.yml --event workflow_dispatch --branch main --created ">=$started" --limit 1 --json databaseId --jq '.[0].databaseId')
+            [ -n "$run" ] && break
+            sleep 10
+          done
+          [ -n "$run" ] || { echo "::error::the deploy run didn't start"; exit 1; }
+          echo "deploy run: https://github.com/${{ github.repository }}/actions/runs/$run"
+          gh run watch "$run" --interval 30 > /dev/null || true
+          [ "$(gh run view "$run" --json conclusion --jq .conclusion)" = success ] || { echo "::error::the deploy of $version failed: https://github.com/${{ github.repository }}/actions/runs/$run"; exit 1; }
+          echo "$version is live."
+
+      - name: Report a failed refresh
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Waterways refresh failed"
+          run_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           {
-            echo "Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium, France, Germany, Austria, Switzerland, Denmark and Sweden data. Merging makes version \`$version\` live."
+            echo "The weekly waterways refresh failed${version:+ with version \`$version\`}: $run_url"
             echo
-            echo '```'
-            grep -E '^\s+(network|OSM|features|places|✓|✗|wrote)' "$RUNNER_TEMP/build.log" | head -60
-            echo '```'
-            echo
-            echo 'Sources:'
-            echo '```'
-            cat "$RUNNER_TEMP/sources.log"
-            echo '```'
-          } > "$RUNNER_TEMP/body.md"
-          if gh pr create --title "data(waterways): publish $version" --body-file "$RUNNER_TEMP/body.md" --head "$branch" --base main; then
-            # A PR opened with GITHUB_TOKEN doesn't start pull_request runs.
-            gh workflow run checks.yml --ref "$branch"
-            gh workflow run e2e.yml --ref "$branch"
-          else
-            # The repo setting "Allow GitHub Actions to create and approve pull
-            # requests" is off: ask a person to open it (their PR runs checks).
-            { echo "The weekly waterways refresh published \`$version\` but may not open PRs itself."; echo;
-              echo "Open the PR: https://github.com/${{ github.repository }}/compare/main...$branch?expand=1"; echo; cat "$RUNNER_TEMP/body.md"; } > "$RUNNER_TEMP/issue.md"
-            gh issue create --title "Waterways data $version is ready to publish" --body-file "$RUNNER_TEMP/issue.md"
-          fi
+            echo "If it failed before **Make it live** finished pushing, the site still serves the previous version and nothing needs undoing. If the deploy itself failed after the push, main already points at the new version: fix the deploy, or revert the \`data(waterways): publish\` commit."
+            for f in verify build; do
+              [ -s "$RUNNER_TEMP/$f.log" ] || continue
+              echo; echo "$f (last lines):"; echo '```'; grep -v '^      via' "$RUNNER_TEMP/$f.log" | tail -40; echo '```'
+            done
+          } > "$RUNNER_TEMP/failed.md"
+          open=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$open" ]; then gh issue comment "$open" --body-file "$RUNNER_TEMP/failed.md"
+          else gh issue create --title "$title" --body-file "$RUNNER_TEMP/failed.md"; fi
 
   # Looking for improved data: one digest issue a week of new datasets about
   # locks, weirs, slipways, canoe access and the like on data.gov.ie,

@@ -26,6 +26,7 @@
     "waterways:sources": "tsx scripts/waterways/fetch-sources.ts",
     "waterways:tides": "tsx scripts/waterways/fit-tides.ts",
     "waterways:discover": "tsx scripts/waterways/discover.ts",
+    "waterways:verify": "tsx scripts/waterways/verify-published.ts",
     "mobile:contract": "tsx scripts/mobile-contract.ts"
   },
   "dependencies": {

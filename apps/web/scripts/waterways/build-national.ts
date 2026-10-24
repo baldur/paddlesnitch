@@ -19,17 +19,16 @@ import { gzipSync } from 'zlib'
 import { getObject, putObject } from '@paddlesnitch/core/storage'
 import { gunzipSync } from 'zlib'
 import { reachesAhead, type OfficialTides } from '@paddlesnitch/waterways/tide'
-import { featuresAlong, NEAR_M, WATERBOARD_NEAR_M } from '@paddlesnitch/waterways/along'
+import { NEAR_M, WATERBOARD_NEAR_M } from '@paddlesnitch/waterways/along'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
-import { CHECK_ROUTES } from '@paddlesnitch/waterways/checks'
+import { checkRoutes } from '@paddlesnitch/waterways/checks'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { publishedKey, publishedNdjsonKey, type Manifest } from '@paddlesnitch/waterways/national'
 import { toNdjson } from '@paddlesnitch/waterways/ndjson'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
-import { route, snap } from '@paddlesnitch/waterways/network'
+import { snap } from '@paddlesnitch/waterways/network'
 import { buildPlaces } from '@paddlesnitch/waterways/places'
-import { SNAP_MAX_M } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng, NetLink, OsmElement } from '@paddlesnitch/waterways/types'
 
 const args = process.argv.slice(2)
@@ -201,28 +200,6 @@ async function main() {
   }
   await fsp.writeFile(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')
   console.log(`Published ${version}; manifest updated.`)
-}
-
-/** Route every check; print what was found. Returns how many failed. */
-function checkRoutes(links: NetLink[], features: Feature[]): number {
-  let failed = 0
-  for (const c of CHECK_ROUTES) {
-    const s = snap(links, c.start, SNAP_MAX_M), f = snap(links, c.finish, SNAP_MAX_M)
-    const r = s && f ? route(links, s, f) : null
-    const km = r ? r.lengthM / 1000 : 0
-    const along = r ? featuresAlong(r.line, features) : []
-    const locks = along.filter(a => a.item.kind === 'lock').length
-    const weirs = along.filter(a => a.item.kind === 'weir').length
-    const problems: string[] = []
-    if (!r) problems.push(!s ? 'start off the water' : !f ? 'finish off the water' : 'not connected')
-    if (r && c.expectKm && Math.abs(km - c.expectKm) / c.expectKm > 0.03) problems.push(`expected ${c.expectKm} km`)
-    if (r && c.expectLocks !== undefined && locks !== c.expectLocks) problems.push(`expected ${c.expectLocks} locks`)
-    if (r && c.expectWeirs !== undefined && weirs !== c.expectWeirs) problems.push(`expected ${c.expectWeirs} weirs`)
-    if (problems.length) failed++
-    const via = r ? [...new Set(r.legs.map(l => l.name || '(unnamed)'))].join(' > ') : ''
-    console.log(`  ${problems.length ? '✗' : '✓'} ${c.name}: ${r ? `${km.toFixed(1)} km, ${locks} locks, ${weirs} weirs` : '—'}${problems.length ? `  [${problems.join('; ')}]` : ''}${via ? `\n      via ${via.length > 200 ? via.slice(0, 200) + '…' : via}` : ''}`)
-  }
-  return failed
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
