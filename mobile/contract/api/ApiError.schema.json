@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ApiError.schema.json",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string"
+    },
+    "session": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "error"
+  ]
+}

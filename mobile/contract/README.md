@@ -62,6 +62,13 @@ REST, not tRPC. Send `x-paddlesnitch-app: <platform>/<version>` (e.g.
 platform's secure storage; send the ID token as `Authorization: Bearer` on
 every API call.
 
+The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
+`Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
+`RefreshToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
+output and the statuses that answer an `ApiError`. Golden answers:
+`fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
+just accepted the Terms).
+
 | Call | Body | Answer |
 |---|---|---|
 | `POST /att/api/auth/login` | `{email, password}` | `{id, email, displayName, needsTerms, idToken, refreshToken}`; 401 wrong password |

@@ -13,7 +13,11 @@ class FixturesTest {
 
     @Test
     fun everyFixtureHasAModelAndDecodes() {
-        val byProcedure = mapOf("me" to Me.serializer(), "paddles.list" to PaddleList.serializer(), "paddles.get" to AnalysisSession.serializer())
+        val byProcedure = mapOf(
+            "me" to Me.serializer(), "paddles.list" to PaddleList.serializer(), "paddles.get" to AnalysisSession.serializer(),
+            "auth.login" to SignIn.serializer(), "auth.refresh" to Refreshed.serializer(),
+            "auth.error" to ApiError.serializer(), "auth.otp-verify.retry" to ApiError.serializer(),
+        )
         val names = dir.list()!!.filter { it.endsWith(".json") }
         assertTrue(names.size >= 7)
         for (name in names) {
@@ -42,6 +46,12 @@ class FixturesTest {
         assertEquals(BoatClass.Unknown, s.boatClass)
         assertEquals(Segment.Kind.Unknown, s.result.stops[0].kind)
         assertEquals(NoPaddleReason.Unknown("eaten_by_seal"), s.result.noGps?.reason)
+    }
+
+    @Test
+    fun signInAnswers() {
+        assertEquals(true, read("auth.login.needs-terms.json", SignIn.serializer()).needsTerms)
+        assertEquals("AYABeOtp-session-from-cognito", read("auth.otp-verify.retry.json", ApiError.serializer()).session)
     }
 
     @Test

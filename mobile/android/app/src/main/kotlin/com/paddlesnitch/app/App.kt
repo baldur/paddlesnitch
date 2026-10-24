@@ -54,7 +54,7 @@ fun App() {
         when {
             signingIn -> {
                 BackHandler { signingIn = false }
-                SignInScreen(api, onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms }, onCancel = { signingIn = false }, modifier = m)
+                SignInScreen(api, onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
             }
             signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onSignOut = { scope.launch { api.signOut(); signedIn = false } }, modifier = m)
             else -> PaddlesScreen(sample, sample = true, modifier = m, action = {

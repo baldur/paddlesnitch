@@ -126,6 +126,53 @@ export const AnalysisSession = named('AnalysisSession', z.object({
   hiddenFromBuddies: z.literal(true).optional(),
 }))
 
+// ---- Signing in (REST, not tRPC: mobile/contract/README.md, "Signing in") ----
+// These routes are Next route handlers with untyped JSON answers, so there's no
+// router type to check the schemas against; instead mobile-signin.test.ts reads
+// the routes' real answers through them.
+
+export const SignIn = named('SignIn', z.object({
+  id: z.string(),
+  email: z.string(),
+  displayName: z.string(),
+  // Missing on sign-up: a new account has just accepted the current Terms.
+  needsTerms: z.boolean().optional(),
+  idToken: z.string(),
+  refreshToken: z.string(),
+}))
+export const OtpSession = named('OtpSession', z.object({ session: z.string() }))
+export const Refreshed = named('Refreshed', z.object({ idToken: z.string() }))
+export const Ok = named('Ok', z.object({ ok: z.literal(true) }))
+/** Every refusal from these routes: words to show as they are; `session` when an email code was wrong but tries remain. */
+export const ApiError = named('ApiError', z.object({ error: z.string(), session: z.string().optional() }))
+
+const Login = named('Login', z.object({ email: z.string(), password: z.string() }))
+const OtpRequest = named('OtpRequest', z.object({
+  email: z.string(),
+  // The anti-bot fields: always "", and the real milliseconds since the form appeared.
+  website: z.literal(''),
+  elapsedMs: z.number(),
+}))
+const OtpVerify = named('OtpVerify', z.object({ email: z.string(), session: z.string(), code: z.string() }))
+const Signup = named('Signup', z.object({ email: z.string(), displayName: z.string(), password: z.string(), acceptedTosVersion: z.string() }))
+const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }))
+
+type Rest = { input: z.ZodType; output: z.ZodType; errors: number[] }
+
+/**
+ * The REST routes the apps call to sign in, by "<METHOD> <path>". Send
+ * `x-paddlesnitch-app: <platform>/<version>` on each. Every status in `errors`
+ * answers with an ApiError.
+ */
+export const restRoutes = {
+  'POST /att/api/auth/login': { input: Login, output: SignIn, errors: [400, 401, 500] },
+  'POST /att/api/auth/otp-request': { input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
+  'POST /att/api/auth/otp-verify': { input: OtpVerify, output: SignIn, errors: [400, 500] },
+  'POST /att/api/auth/signup': { input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
+  'POST /att/api/auth/refresh': { input: RefreshToken, output: Refreshed, errors: [401] },
+  'POST /att/api/auth/logout': { input: RefreshToken, output: Ok, errors: [] },
+} satisfies Record<string, Rest>
+
 type Procedure = { kind: 'query' | 'mutation'; auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodType }
 
 /** Every procedure the apps may call, by its tRPC path. */
@@ -150,8 +197,9 @@ check<Same<z.infer<typeof ById>, In['paddles']['get']>>()
 /**
  * The contract as files, path → content: one JSON Schema per named type
  * (draft-07, the version Kotlin and Swift generators handle best; types refer
- * to each other by file name; unnamed fields allowed) and `procedures.json`, mapping each tRPC path to
- * its kind, auth and the names of its input and output types.
+ * to each other by file name; unnamed fields allowed), `procedures.json`, mapping each tRPC path to
+ * its kind, auth and the names of its input and output types, and `rest.json`,
+ * the same for the sign-in routes plus the statuses that answer an ApiError.
  */
 export function apiContractFiles(): Record<string, string> {
   const { schemas } = z.toJSONSchema(contractRegistry, {
@@ -166,6 +214,9 @@ export function apiContractFiles(): Record<string, string> {
   const idOf = (s: z.ZodType) => contractRegistry.get(s)!.id
   files['procedures.json'] = json(Object.fromEntries(Object.entries(contractProcedures).map(([path, p]) => [path, {
     kind: p.kind, auth: p.auth, input: p.input ? idOf(p.input) : null, output: idOf(p.output),
+  }])))
+  files['rest.json'] = json(Object.fromEntries(Object.entries(restRoutes).map(([route, r]) => [route, {
+    input: idOf(r.input), output: idOf(r.output), errors: r.errors,
   }])))
   return files
 }
