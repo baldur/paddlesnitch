@@ -23,9 +23,18 @@ targets:
     sources:
       - App/Sources
       - App/Resources
+      # The contract's golden answers, shown as sample paddles until sign-in
+      # (C2). Bundled straight from mobile/contract, never copied.
+      - path: ../contract/fixtures/api
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: PaddleKit
         product: DesignSystem
+      - package: PaddleKit
+        product: PaddleAPI
+      - package: PaddleKit
+        product: Paddles
     info:
       path: App/Info.plist
       properties:

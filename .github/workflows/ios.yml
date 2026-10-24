@@ -68,7 +68,14 @@ jobs:
         run: brew install xcodegen
       - name: Download the iOS ${{ matrix.download }} simulator
         if: matrix.download
-        run: xcodebuild -downloadPlatform iOS -buildVersion ${{ matrix.download }}
+        # Apple's download fails now and then (exit 70); try three times.
+        run: |
+          for attempt in 1 2 3; do
+            xcodebuild -downloadPlatform iOS -buildVersion ${{ matrix.download }} && exit 0
+            echo "Download attempt $attempt failed; retrying in 30 s"
+            sleep 30
+          done
+          exit 1
       - name: App tests
         run: make test-app IOS=${{ matrix.ios }}
       - name: Keep the test results

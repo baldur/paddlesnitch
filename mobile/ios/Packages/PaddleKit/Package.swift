@@ -9,14 +9,18 @@ let package = Package(
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "PaddleAPI", targets: ["PaddleAPI"]),
+        .library(name: "Paddles", targets: ["Paddles"]),
         .executable(name: "contract-gen", targets: ["ContractGen"]),
     ],
     targets: [
         // Colours, radii and fonts generated from mobile/contract/tokens/.
-        .target(name: "DesignSystem"),
+        .target(name: "DesignSystem", resources: [.copy("Resources/Fonts")]),
         // The server's API: models generated from mobile/contract/api/ and a
         // small tRPC client.
         .target(name: "PaddleAPI"),
+        // The Paddles screens' logic: formatting as the web does, the route's
+        // colour scale, and the list and one-paddle models.
+        .target(name: "Paddles", dependencies: ["PaddleAPI"]),
         // Turns mobile/contract/ into Swift. The logic is a library so it
         // can be tested; the executable only reads and writes files.
         .target(name: "ContractGenKit"),
@@ -24,5 +28,6 @@ let package = Package(
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "ContractGenKitTests", dependencies: ["ContractGenKit"]),
         .testTarget(name: "PaddleAPITests", dependencies: ["PaddleAPI"]),
+        .testTarget(name: "PaddlesTests", dependencies: ["Paddles", "PaddleAPI"]),
     ]
 )
