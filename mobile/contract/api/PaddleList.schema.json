@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "PaddleList.schema.json",
+  "type": "object",
+  "properties": {
+    "cards": {
+      "type": "array",
+      "items": {
+        "$ref": "PaddleCard.schema.json"
+      }
+    },
+    "totals": {
+      "$ref": "PaddleTotals.schema.json"
+    },
+    "logbook": {
+      "$ref": "Logbook.schema.json"
+    }
+  },
+  "required": [
+    "cards",
+    "totals",
+    "logbook"
+  ]
+}

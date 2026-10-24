@@ -22,7 +22,8 @@
     "cognito": "pnpm --filter web cognito",
     "cognito:init": "pnpm --filter web cognito:init",
     "rivers": "pnpm --filter web rivers",
-    "build:open-next": "pnpm --filter web build:open-next"
+    "build:open-next": "pnpm --filter web build:open-next",
+    "mobile:contract": "pnpm --filter web mobile:contract"
   },
   "comment_devDependencies": "@aws-sdk/client-ses is hoisted to the workspace root so the infra-lambda vitest tests (importing infra/lambdas/*.mjs from outside any package) resolve it during `pnpm test`, which CI runs before infra/npm ci.",
   "devDependencies": {

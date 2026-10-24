@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "BoatClass.schema.json",
+  "type": "string",
+  "enum": [
+    "K1",
+    "K2",
+    "K4",
+    "1X",
+    "2X",
+    "4X+",
+    "4X-",
+    "2-",
+    "4+",
+    "4-",
+    "8+"
+  ]
+}

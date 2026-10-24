@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
-import { paddleTotals } from '@paddlesnitch/core/paddles'
+import { paddleTotals, paddleLogbook, groupSameOuting } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
@@ -42,10 +42,16 @@ export function othersView(session: AnalysisSession) {
 }
 
 export const paddlesRouter = router({
-  // Dashboard/home payload: lean cards + rolled-up totals.
+  // The Paddles list as the apps draw it (mobile/contract): lean cards, one per
+  // outing (another source's recording of it under `sameOuting`), plus the
+  // totals and logbook worked out here so no app re-implements them. Totals
+  // and logbook count every recording, as the website's list does.
   list: protectedProcedure.query(async ({ ctx }) => {
     const cards = await listPaddleCards(ctx.user.id)
-    return { cards, totals: paddleTotals(cards) }
+    const grouped = groupSameOuting(cards.map(c => ({ ...c, source: { type: c.sourceType } })))
+      .map(({ lead: { source: _, ...lead }, others }) =>
+        others.length ? { ...lead, sameOuting: others.map(o => ({ id: o.id, sourceType: o.sourceType })) } : lead)
+    return { cards: grouped, totals: paddleTotals(cards), logbook: paddleLogbook(cards, new Date()) }
   }),
 
   // Library list: richer per-paddle summaries (note, effort count, …), newest first.

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "Seat.schema.json",
+  "anyOf": [
+    {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    {
+      "type": "string",
+      "const": "C"
+    }
+  ]
+}

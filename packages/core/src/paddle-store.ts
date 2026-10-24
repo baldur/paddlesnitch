@@ -4,7 +4,7 @@
 // (analysis/{userId}/{id}/session.json) and projects each to a lean PaddleCard.
 // Small scale (a user's own paddles) → read-each, like att entries.
 import { getJson, listKeys } from './storage'
-import { thumbRoute, type PaddleCard } from './paddles'
+import { thumbRoute, isMotionOnly, type PaddleCard } from './paddles'
 import { isBoatClass } from './types'
 
 // Only the fields we project from — the Analyse app owns the full schema.
@@ -13,12 +13,14 @@ type StoredSession = {
   paddledAt: string
   source?: { type?: string }
   boatClass?: unknown
+  note?: string
   result?: {
     distanceKm?: number
     durationS?: number
     cruiseSpeed?: number
     avgSR?: number | null
     points?: { lat: number; lng: number }[]
+    noGps?: unknown
   }
 }
 
@@ -34,6 +36,8 @@ function toCard(s: StoredSession): PaddleCard {
     boatClass: isBoatClass(s.boatClass) ? s.boatClass : undefined,
     sourceType: s.source?.type ?? 'file',
     route: thumbRoute(r.points ?? []),
+    ...(s.note?.trim() ? { note: s.note } : {}),
+    ...(isMotionOnly(r) ? { noGps: true as const } : {}),
   }
 }
 
@@ -43,6 +47,7 @@ function toCard(s: StoredSession): PaddleCard {
 type StoredSummary = {
   id: string; paddledAt: string; source?: { type?: string }; boatClass?: unknown
   distanceKm?: number; durationS?: number; cruiseSpeed?: number; avgSR?: number | null; route?: [number, number][]
+  note?: string; noGps?: true
 }
 
 function summaryToCard(s: StoredSummary): PaddleCard {
@@ -52,6 +57,8 @@ function summaryToCard(s: StoredSummary): PaddleCard {
     boatClass: isBoatClass(s.boatClass) ? s.boatClass : undefined,
     sourceType: s.source?.type ?? 'file',
     route: s.route ?? [],
+    ...(s.note?.trim() ? { note: s.note } : {}),
+    ...(s.noGps ? { noGps: true as const } : {}),
   }
 }
 

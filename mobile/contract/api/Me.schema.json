@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "Me.schema.json",
+  "type": "object",
+  "properties": {
+    "user": {
+      "anyOf": [
+        {
+          "$ref": "AuthUser.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "user"
+  ]
+}
