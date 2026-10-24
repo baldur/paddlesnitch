@@ -229,16 +229,18 @@ export function bafuGauges(fc: { features?: unknown[] }, now: number): (Gauge & 
 
 /** Sweden (SMHI hydrological observations, CC BY 4.0): every station's flows
  *  over the last hour in one call; SMHI publishes discharge (m³/s), and only ten
- *  levels. The catchment names the river. Only fresh readings count (RWS_FRESH_MS). */
+ *  levels. No river name: SMHI gives the catchment, and most stations are on a
+ *  tributary of it, so they match a route by distance (GAUGE_UNNAMED_NEAR_M).
+ *  Only fresh readings count (RWS_FRESH_MS). */
 export function smhiGauges(body: { station?: unknown[] }, now: number): (Gauge & { valueM?: number; flowM3s: number; readAt: string })[] {
-  type S = { key?: string; name?: string; catchmentName?: string; latitude?: number; longitude?: number; value?: { date?: number; value?: number }[] }
+  type S = { key?: string; name?: string; latitude?: number; longitude?: number; value?: { date?: number; value?: number }[] }
   const out: (Gauge & { valueM?: number; flowM3s: number; readAt: string })[] = []
   for (const s of (body.station ?? []) as S[]) {
     const last = s.value?.[s.value.length - 1]
     if (typeof last?.value !== 'number' || typeof last.date !== 'number' || now - last.date > RWS_FRESH_MS) continue
     if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number' || !s.key) continue
     out.push({
-      source: 'smhi', id: s.key, name: titleCase(s.name ?? s.key), ...(s.catchmentName ? { river: titleCase(s.catchmentName) } : {}),
+      source: 'smhi', id: s.key, name: titleCase(s.name ?? s.key),
       at: [s.latitude, s.longitude], flowM3s: last.value, readAt: new Date(last.date).toISOString(),
     })
   }
