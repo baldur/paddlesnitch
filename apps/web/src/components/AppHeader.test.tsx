@@ -20,7 +20,8 @@ describe('AppHeader (shared AppShell wrapper)', () => {
     expect(html).toMatch(/<nav aria-label="Sections" class="hidden sm:flex/)
     expect(html).toMatch(/<nav aria-label="Sections" class="sm:hidden fixed inset-x-0 bottom-0/)
     const bottomBar = html.slice(html.lastIndexOf('<nav aria-label="Sections"'))
-    expect(bottomBar.match(/<a href=/g)).toHaveLength(3)   // Paddles, Trials, Plan…
+    expect(bottomBar.match(/<a href=/g)).toHaveLength(4)   // Paddles, Trials, Plan, Games…
+    expect(bottomBar).toContain('grid-cols-5')             // …and You: five across
     expect(bottomBar).toContain('ACCOUNTNAV')               // …and the You tab
     expect(html).toMatch(/<div class="px-4 pb-2[^"]*"><span>GROUPS<\/span>/)
   })
@@ -35,6 +36,7 @@ describe('AppHeader (shared AppShell wrapper)', () => {
     expect(html).toContain('>Trials<')          // section tabs, sentence case
     expect(html).toContain('>Paddles<')
     expect(html).toContain('>Plan<')
+    expect(html).toContain('>Games<')           // #632: games beside the other sections
     expect(html).toContain('BREADCRUMB')
     expect(html).toContain('EXTRA')
     // Report/Profile/Settings/Sign out moved into the account dropdown
@@ -58,6 +60,7 @@ describe('the highlighted tab follows the URL', () => {
     ['/att/trials/abc', ['/att']],
     ['/paddles/xyz', ['/paddles']],
     ['/plan', ['/plan']],
+    ['/games', ['/games']],
     ['/plan/abc', ['/plan']],
     ['/', []],
     ['/profile/abc', []],
