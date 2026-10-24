@@ -33,6 +33,22 @@ extension ModelsGenerator {
         return out
     }
 
+    /// `Constants.swift` from constants.json: values the server decides, like
+    /// the Terms version sign-up must agree to. Strings only, for now.
+    static func constantsFile(_ data: Data) throws -> String {
+        let constants = try JSONDecoder().decode([String: JSON].self, from: data).sorted(by: { $0.key < $1.key })
+        var out = header + "/// Values the server decides, from mobile/contract/api/constants.json.\n"
+        out += "public enum Constants {\n"
+        for (key, value) in constants {
+            guard Naming.isIdentifier(key), let text = value.string else {
+                throw Failure.unsupported(
+                    type: "constants.json", reason: "\(key) must be a string with an identifier name")
+            }
+            out += "    public static let \(Naming.escaped(key)) = \(literal(text))\n"
+        }
+        return out + "}\n"
+    }
+
     /// `POST /att/api/auth/otp-verify` → `authOtpVerify`: the path after
     /// `/api/`, so `att` (where the route happens to live) doesn't show.
     static func endpointName(_ path: String) -> String {
