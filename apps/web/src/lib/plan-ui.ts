@@ -229,6 +229,10 @@ export function printHref(d: PlanDraft, opts: { id?: string; share?: string; cre
   return `/plan/print${q ? `?${q}` : ''}`
 }
 
+/** What the far end is called: where a one-way trip finishes, or where a
+ *  return trip turns back (#630: "Finish" read as a second destination). */
+export const farEndLabel = (shape: PlanShape): 'Finish' | 'Turn at' => shape === 'return' ? 'Turn at' : 'Finish'
+
 export const PLAN_ERROR_TEXT: Record<PlanError, string> = {
   start_off_water: "The start isn't on a river or canal we cover. Zoom in and click on the water to move it.",
   finish_off_water: "The finish isn't on a river or canal we cover. Zoom in and click on the water to move it.",

@@ -37,6 +37,10 @@ test('a whole plan from the keyboard: start and finish by name (#506)', async ({
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('plan-summary')).toContainText('Distance', { timeout: 15_000 })
   await expect(page).toHaveURL(/from=.*&to=/)
+  // On a return trip the far end is where you turn back, not a finish (#630).
+  await page.getByRole('button', { name: 'Return' }).click()
+  await expect(page.getByRole('combobox', { name: 'Turn at' })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'Finish' })).toHaveCount(0)
 })
 
 test('a hand-written link names its ends, and the address becomes coordinates (#508)', async ({ page }) => {
@@ -155,7 +159,7 @@ test('portage nudges: a plan says which locks lack landing details, and a lock l
 
 test('the places search moves the map to a lock', async ({ page }) => {
   await page.goto('/plan')
-  const box = page.getByLabel('Go to a place')
+  const box = page.getByLabel('Find a place on the map')
   await box.click()
   await box.fill('marsh lo')
   await page.getByRole('option', { name: /^Marsh Lock/ }).click()
