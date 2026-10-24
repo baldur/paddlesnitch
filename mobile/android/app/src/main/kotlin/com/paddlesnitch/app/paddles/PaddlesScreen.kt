@@ -48,16 +48,26 @@ private fun Modifier.card() = background(PsColor.surface, cardShape).border(1.dp
  * card per outing. Everything is worked out on the server (paddles.list).
  */
 @Composable
-fun PaddlesScreen(list: PaddleList, sample: Boolean, modifier: Modifier = Modifier) {
+fun PaddlesScreen(
+    list: PaddleList,
+    sample: Boolean,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+    notice: (@Composable () -> Unit)? = null,
+) {
     LazyColumn(
         modifier.fillMaxWidth(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Text("Paddles", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.semantics { heading() })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Paddles", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f).semantics { heading() })
+                action?.invoke()
+            }
         }
+        if (notice != null) item { Box(Modifier.fillMaxWidth().card().padding(12.dp)) { notice() } }
         if (sample) item {
             Text(
                 "Sample paddles. Sign in to see your own.",
