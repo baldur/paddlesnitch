@@ -34,10 +34,17 @@ const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 export function searchPlaces(places: Place[], query: string, near?: LatLng, limit = 8): Place[] {
   const q = fold(query)
   if (!q) return []
+  const qWords = q.split(' ')
   const scored: { p: Place; score: number }[] = []
   for (const p of places) {
     const name = fold(p.name)
-    const hit = name.startsWith(q) ? 0 : name.split(' ').some(w => w.startsWith(q)) || name.includes(` ${q}`) ? 1 : -1
+    const words = name.split(' ')
+    // Whole query first; then every word in any order, so "Cropredy Lock" finds
+    // the Canal & River Trust's "Lock 25, Cropredy".
+    const hit = name.startsWith(q) ? 0
+      : words.some(w => w.startsWith(q)) || name.includes(` ${q}`) ? 1
+      : qWords.length > 1 && qWords.every(qw => words.some(w => w.startsWith(qw))) ? 2
+      : -1
     if (hit < 0) continue
     const d = near ? Math.hypot(p.at[0] - near[0], (p.at[1] - near[1]) * Math.cos((near[0] * Math.PI) / 180)) : 0
     scored.push({ p, score: hit * 1000 + KIND_RANK[p.kind] * 100 + Math.min(d, 9.99) * 10 })

@@ -322,6 +322,17 @@ describe('places search', () => {
     expect(searchPlaces(places, '  ')).toEqual([])
   })
 
+  it('matches the words in any order, after whole-name matches ("Cropredy Lock" is CRT\'s "Lock 25, Cropredy")', () => {
+    const ps: Place[] = [
+      { name: 'Lock 25, Cropredy', kind: 'lock', at: [52.11, -1.31] },
+      { name: 'Cropredy', kind: 'village', at: [52.12, -1.31] },
+      { name: 'Cropredy Lock Cottage', kind: 'hamlet', at: [52.11, -1.32] },
+    ]
+    expect(searchPlaces(ps, 'Cropredy Lock').map(p => p.name)).toEqual(['Cropredy Lock Cottage', 'Lock 25, Cropredy'])
+    expect(searchPlaces(ps, 'cropredy lock 25').map(p => p.name)).toEqual(['Lock 25, Cropredy'])
+    expect(searchPlaces(ps, 'Cropredy Weir')).toEqual([])
+  })
+
   it('prefers bigger places, then nearer ones', () => {
     const ps: Place[] = [
       { name: 'Abbey Hamlet', kind: 'hamlet', at: [51.5, 0] },
