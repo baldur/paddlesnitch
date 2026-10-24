@@ -46,9 +46,9 @@ public enum ModelsGenerator {
 
     /// `schemas` maps a file name (`BoatClass.schema.json`) to its contents.
     /// Returns file name → Swift source.
-    public static func generate(schemas: [String: Data], procedures: Data, rest: Data? = nil) throws
-        -> [String: String]
-    {
+    public static func generate(
+        schemas: [String: Data], procedures: Data, rest: Data? = nil, constants: Data? = nil
+    ) throws -> [String: String] {
         var files: [String: String] = [:]
         var known: Set<String> = []
         for (file, data) in schemas {
@@ -61,6 +61,9 @@ public enum ModelsGenerator {
         files["Procedures.swift"] = try proceduresFile(procedures, known: known)
         if let rest {
             files["Endpoints.swift"] = try endpointsFile(rest, known: known)
+        }
+        if let constants {
+            files["Constants.swift"] = try constantsFile(constants)
         }
         return files
     }

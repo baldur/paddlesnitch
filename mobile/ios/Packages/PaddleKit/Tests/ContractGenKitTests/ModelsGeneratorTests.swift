@@ -19,7 +19,8 @@ import Testing
         }
         let expected = try ModelsGenerator.generate(
             schemas: schemas, procedures: try Data(contentsOf: api.appending(path: "procedures.json")),
-            rest: try? Data(contentsOf: api.appending(path: "rest.json")))
+            rest: try? Data(contentsOf: api.appending(path: "rest.json")),
+            constants: try? Data(contentsOf: api.appending(path: "constants.json")))
 
         let generated = mobileDir.appending(path: "ios/Packages/PaddleKit/Sources/PaddleAPI/Generated")
         let committed = try FileManager.default.contentsOfDirectory(atPath: generated.path).filter {
@@ -126,6 +127,20 @@ import Testing
             )["Endpoints.swift"])
         #expect(swift.contains("public static let authOtpVerify = Endpoint<Login, SignIn>("))
         #expect(swift.contains(#"method: "POST", path: "/att/api/auth/otp-verify", errorStatuses: [400, 500])"#))
+    }
+
+    @Test func constantsBecomeStaticStrings() throws {
+        let swift = try #require(
+            try ModelsGenerator.generate(
+                schemas: [:], procedures: noProcedures, constants: Data(#"{"tosVersion":"002"}"#.utf8)
+            )["Constants.swift"])
+        #expect(swift.contains(#"public static let tosVersion = "002""#))
+    }
+
+    @Test func aConstantThatIsntAStringIsRefused() {
+        #expect(throws: ModelsGenerator.Failure.self) {
+            try ModelsGenerator.generate(schemas: [:], procedures: noProcedures, constants: Data(#"{"n":2}"#.utf8))
+        }
     }
 
     @Test func aRouteNamingAMissingTypeIsRefused() {
