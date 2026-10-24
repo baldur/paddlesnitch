@@ -83,7 +83,7 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     name: 'AMBER Atlas of Instream Barriers in Europe',
     url: 'https://doi.org/10.6084/m9.figshare.12629051.v5',
     licence: 'CC BY 4.0',
-    attribution: 'Barriers in Belgium, Germany, Austria and Switzerland: AMBER Consortium, Belletti et al. (2020) Nature 588, CC BY 4.0',
+    attribution: 'Barriers in Belgium, Germany, Austria, Switzerland, Denmark and Sweden: AMBER Consortium, Belletti et al. (2020) Nature 588, CC BY 4.0',
   },
   roe: {
     name: 'Référentiel des obstacles à l’écoulement (ROE), France',
