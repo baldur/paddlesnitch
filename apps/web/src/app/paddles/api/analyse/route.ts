@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@paddlesnitch/core/auth'
+import { getRequestUser } from '@paddlesnitch/core/auth'
 import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
 import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { parseTrace, parseFailureMessage } from '@paddlesnitch/timing/parse'
@@ -19,7 +19,7 @@ import { loadDeviceSessionTrack } from '@paddlesnitch/analysis/device-sessions'
 // flow, history, LLM) each degrade on their own so one of them never fails the
 // analysis.
 export async function POST(req: NextRequest) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Sign in to analyse and save paddles.' }, { status: 401 })
 
   try {

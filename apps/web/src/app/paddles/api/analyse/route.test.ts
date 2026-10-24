@@ -8,7 +8,7 @@ import fs from 'fs/promises'
 // temp dir (like the store tests). No LLM backend is configured, so the insight
 // falls back to the deterministic template — the route still returns + saves.
 const USER = { id: 'user-1', email: 'p@example.com', displayName: 'Pat' }
-vi.mock('@paddlesnitch/core/auth', () => ({ getAuthUser: () => Promise.resolve(USER) }))
+vi.mock('@paddlesnitch/core/auth', () => ({ getAuthUser: () => Promise.resolve(USER), getRequestUser: () => Promise.resolve(USER) }))
 // `after()` needs a request scope that doesn't exist in a bare test — run its
 // callback inline so the profile refresh still exercises, keeping NextRequest/
 // NextResponse real.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, getRequestUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewTrial, canManageTrial } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
@@ -17,11 +17,11 @@ function isParticipation(v: unknown): v is Participation {
   return v === 'members' || v === 'invitational' || v === 'public'
 }
 
-export async function GET(_: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params) {
   const { trialId } = await params
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const viewer = await getAuthUser()
+  const viewer = await getRequestUser(req)
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
   if (!canViewTrial(trial, viewer, viewerGroupIds)) {
     // Hide existence of private trials from non-owners.

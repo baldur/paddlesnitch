@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { linkClaim } from '@/lib/devices'
 import { limitLink } from '@/lib/device-limits'
 
@@ -8,7 +8,7 @@ import { limitLink } from '@/lib/device-limits'
 // account. The device collects the actual token on its next poll, so the secret
 // never reaches the browser. See docs/features/device-uplink.md.
 export async function POST(req: Request) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const limit = await limitLink(user.id)
   if (limit.limited) return limit.response

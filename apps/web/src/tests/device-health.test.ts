@@ -96,13 +96,13 @@ describe('tracker health reports', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     await report(deviceToken, CRASH)
     mockAuth(u.idToken)
-    const { devices } = await (await listDevices()).json()
+    const { devices } = await (await listDevices(new Request("http://x/api/account/devices"))).json()
     expect(devices[0].health).toMatchObject({ kind: 'boot', resetReason: 'PANIC', crashTask: 'uplink' })
     // A later heartbeat replaces the latest report, but the crash stays visible.
     mockAuth(null)
     await report(deviceToken, { kind: 'heartbeat', uptimeS: 3600 })
     mockAuth(u.idToken)
-    const again = (await (await listDevices()).json()).devices[0]
+    const again = (await (await listDevices(new Request("http://x/api/account/devices"))).json()).devices[0]
     expect(again.health.kind).toBe('heartbeat')
     expect(again.lastCrash).toMatchObject({ task: 'uplink' })
   })

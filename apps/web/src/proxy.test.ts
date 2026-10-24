@@ -65,6 +65,15 @@ describe('proxy auth gate', () => {
     expect(redirectsToAuth(proxy(req('POST', '/att/api/courses', true)))).toBe(false)
   })
 
+  it('lets a mobile app\'s Bearer-signed API mutation through (the route verifies the token)', () => {
+    const bearer = (method: string, path: string) =>
+      new NextRequest(`https://paddlesnitch.com${path}`, { method, headers: { authorization: 'Bearer eyJ.app.token' } })
+    expect(redirectsToAuth(proxy(bearer('POST', '/att/api/trials/t1/upload')))).toBe(false)
+    expect(redirectsToAuth(proxy(bearer('POST', '/api/account/devices/link')))).toBe(false)
+    // Pages still need the website's cookie.
+    expect(redirectsToAuth(proxy(bearer('GET', '/account')))).toBe(true)
+  })
+
   it('never gates GETs', () => {
     expect(redirectsToAuth(proxy(req('GET', '/att/api/courses')))).toBe(false)
   })

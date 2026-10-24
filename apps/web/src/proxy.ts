@@ -51,7 +51,13 @@ export function proxy(req: NextRequest) {
       (pathname.startsWith('/att/api') || pathname.startsWith('/api/account')) &&
       !pathname.startsWith('/att/api/auth'))
 
-  if (requiresAuth && !req.cookies.get('tt_id')) {
+  // The mobile apps sign API calls with `Authorization: Bearer` instead of the
+  // cookie (docs/features/mobile-apps.md). Like the cookie, it is only checked
+  // for presence here; the route verifies it. Pages still need the cookie.
+  const appApiCall = /^Bearer\s/i.test(req.headers.get('authorization') ?? '') &&
+    (pathname.startsWith('/att/api') || pathname.startsWith('/api/account'))
+
+  if (requiresAuth && !req.cookies.get('tt_id') && !appApiCall) {
     // `next` carries the QUERY STRING as well as the path. It used to be the
     // pathname alone, while the clone kept the original params — so a gated URL
     // like /devices?code=ABC123 redirected to

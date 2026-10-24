@@ -39,6 +39,17 @@ export function clearAuthCookies(jar: CookieJar) {
   jar.delete(REFRESH_COOKIE)
 }
 
+// The person behind a request from the website OR a mobile app: the apps send
+// their Cognito ID token as `Authorization: Bearer <token>`
+// (docs/features/mobile-apps.md), the website the tt_id cookie. A Bearer header
+// that isn't a valid ID token (expired, or a tracker's device token) is null:
+// it never falls back to a cookie, and a device token never signs in a person.
+export async function getRequestUser(req: Request): Promise<AuthUser | null> {
+  const m = /^Bearer\s+(.+)$/i.exec((req.headers.get('authorization') ?? '').trim())
+  if (m) return verifyIdToken(m[1].trim())
+  return getAuthUser()
+}
+
 // Returns the authenticated user from the ID-token cookie, or null.
 // If the ID token is expired but the refresh token is valid, transparently refreshes
 // (when called from a mutable context — Route Handlers and Server Actions).

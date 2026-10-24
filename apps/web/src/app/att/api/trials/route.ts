@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, getRequestUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewCourse, canManageCourse, canManageTrial, isListedForViewer } from '@/lib/permissions'
 import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
@@ -19,7 +19,7 @@ function isParticipation(v: unknown): v is Participation {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const courseId = searchParams.get('courseId')
-  const viewer = await getAuthUser()
+  const viewer = await getRequestUser(req)
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
 
   const all = await listTrials()

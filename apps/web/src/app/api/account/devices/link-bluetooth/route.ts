@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { linkByTokenHash } from '@/lib/devices'
 import { limitLink } from '@/lib/device-limits'
 
@@ -9,7 +9,7 @@ import { limitLink } from '@/lib/device-limits'
 // it; only its hash comes here, with the tracker's signature over it. Same limit
 // as linking by code.
 export async function POST(req: Request) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const limit = await limitLink(user.id)
   if (limit.limited) return limit.response
