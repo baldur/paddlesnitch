@@ -157,6 +157,13 @@ export class AttStack extends cdk.Stack {
         // Counters are rewritten on every request; don't keep their history.
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // Live kayak races' mailboxes (packages/core/src/games.ts): who's in a
+        // race and the connection handshakes. A race is over within hours.
+        id: 'expire-game-live-races',
+        prefix: 'games/live/',
+        expiration: cdk.Duration.days(1),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Prepared "Download my data" files: fetched within minutes of being made.
         id: 'expire-account-exports',
         prefix: 'exports/',

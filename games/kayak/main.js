@@ -1,6 +1,9 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
 import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course.js';
-import { createRace, stepRace, standings, elapsed, projected, DIVISION_9 } from './race.js';
+import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISION_9 } from './race.js';
+import { call, whoAmI, SIGN_IN } from './account.js';
+import { joinLive } from './live.js';
+import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
 import { createRenderer } from './render.js';
@@ -23,6 +26,11 @@ const MODES = {
   reading: { file: 'courses/reading.json', rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:reading', label: 'Reading Thames' },
   loop: { file: 'courses/loop.json', rivals: DIVISION_9, format: 'interval', bestKey: 'snitchmedia:kayak:loop', label: 'Time Trial Loop' },
 };
+for (const [key, m] of Object.entries(MODES)) m.key = key;
+// Anyone can paddle practice; the races, the leaderboard and live races need an account.
+const OPEN = new Set(['practice']);
+// #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
+const HASH = new URLSearchParams(location.hash.slice(1));
 
 // Boat and club colours; the player is always the first.
 const LIVERIES = [
@@ -46,7 +54,8 @@ const menu = document.getElementById('menu');
 const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
-const els = Object.fromEntries(['sprint', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const live = document.getElementById('live');
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'sprint', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -74,8 +83,9 @@ function reset() {
   race = createRace(mode.course, {
     rivals: mode.rivals,
     format: mode.format,
-    seed: (Math.random() * 2 ** 31) | 0,
+    seed: liveRace?.seed ?? ((Math.random() * 2 ** 31) | 0),
     you: { hull, power: 1 + f, endurance: 1 + f * 1.5 },
+    live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
   });
   // Practice also sharpens your feel for the beat.
   const h = race.player.boat.hull;
@@ -101,6 +111,8 @@ function start() {
 
 function pause() {
   if (state !== 'racing' && state !== 'start') return;
+  // A live race can't start again for one player alone.
+  paused.querySelector('button[value="restart"]').hidden = !!liveRace;
   resumeTo = state;
   state = 'paused';
   openDialog(paused);
@@ -142,6 +154,7 @@ function finish() {
     try { localStorage.setItem(mode.bestKey, JSON.stringify(best)); } catch {}
   }
 
+  submitResult(time);
   const before = form();
   train((mode.course.finish - mode.course.start) / mode.course.speedup / 1000);
   const gained = form() - before;
@@ -166,11 +179,13 @@ function finish() {
     return li;
   }));
   els.standings.hidden = solo;
+  finished.querySelector('button[value="again"]').hidden = !!liveRace;
   tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
   setTimeout(() => { if (state === 'finished') openDialog(finished); }, 1500);
 }
 
 function toMenu() {
+  endLive();
   state = 'menu';
   hud.hidden = true;
   reset();
@@ -241,8 +256,13 @@ matchMedia('(orientation: portrait) and (pointer: coarse)').addEventListener('ch
 
 menu.addEventListener('cancel', (e) => e.preventDefault());
 menu.addEventListener('close', async () => {
+  if (menu.returnValue === 'live') return openLive();
   const next = MODES[menu.returnValue];
   if (!next) return;
+  if (!OPEN.has(next.key) && !account.offline && !account.user) {
+    location.href = SIGN_IN;
+    return;
+  }
   if (!next.course) {
     try {
       next.course = await loadCourse(next.file);
@@ -282,7 +302,215 @@ function handleGamepad(pressed) {
     paused.close('resume');
     return;
   }
-  if (!gamepadDialogs([menu, paused, finished], pressed) && pressed.has(BUTTON.START)) pause();
+  if (!gamepadDialogs([menu, live, paused, finished], pressed) && pressed.has(BUTTON.START)) pause();
+}
+
+// --- account and leaderboards ---------------------------------------------------
+
+let account = { user: null, offline: true }; // until the site answers
+
+function link(text, href) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.textContent = text;
+  return a;
+}
+
+function showAccount() {
+  els.boards.hidden = account.offline;
+  if (account.offline) return els.account.replaceChildren();
+  if (account.user) {
+    els.account.textContent = `Signed in as ${account.user.displayName || account.user.email}: your race times go on the leaderboards.`;
+  } else {
+    els.account.replaceChildren(link('Sign in', SIGN_IN), ' to race the courses, race friends and get on the leaderboards. Practice is open to everyone.');
+  }
+}
+
+// A finished race's time goes on the course's leaderboard (signed in only).
+async function submitResult(time) {
+  els.ranked.textContent = '';
+  if (!account.user) return;
+  try {
+    const { best, rank } = await call('games.submit', { course: mode.key, time, hull }, { mutation: true });
+    els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
+      : rank ? `Your best on the ${mode.label} leaderboard is ${ordinal(rank)}.` : '';
+  } catch {
+    els.ranked.textContent = "Couldn't reach the leaderboard.";
+  }
+}
+
+els.boards.addEventListener('toggle', async () => {
+  if (!els.boards.open) return;
+  const boards = await Promise.all(Object.values(MODES).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
+  els.boardlist.replaceChildren(...boards.map(([m, b]) => {
+    const div = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = m.label;
+    div.append(title);
+    if (!b) div.append(": couldn't load it");
+    else if (!b.top.length) div.append(': no times yet');
+    else {
+      const ol = document.createElement('ol');
+      for (const e of b.top.slice(0, 5)) {
+        const li = document.createElement('li');
+        li.textContent = `${e.name} ${formatTime(e.time)} (${HULLS[e.hull]?.name ?? e.hull})`;
+        if (e.you) li.className = 'you';
+        ol.append(li);
+      }
+      div.append(ol);
+      if (b.you && b.you.rank > 5) div.append(`You: ${ordinal(b.you.rank)}, ${formatTime(b.you.time)}`);
+    }
+    return div;
+  }));
+});
+
+// --- live races -------------------------------------------------------------------
+// Make or join a race (live.js connects everyone), wait in the lobby, then the
+// host starts it: everyone builds the same race (same seed and order) and each
+// boat's state goes to the others 15 times a second (net.js).
+
+let lobby = null; // the live.js connection, from the lobby to the end of the race
+let liveRace = null; // { room, order, seed } once a live race has begun
+const tracks = new Map(); // player id -> states received (net.js)
+let sendTimer = 0;
+const STATUS = { open: 'connected', connecting: 'connecting…', waiting: 'joining…', failed: "can't connect (their network may block it)", gone: 'left' };
+
+function openLive(code = '') {
+  els.liveError.replaceChildren();
+  els.liveCode.value = code;
+  if (account.offline) els.liveError.textContent = 'Live races need paddlesnitch.com: open the game there.';
+  else if (!account.user) els.liveError.replaceChildren('Live races need an account. ', link('Sign in', SIGN_IN + encodeURIComponent(code ? `#race=${code}` : '')));
+  showLobby();
+  openDialog(live);
+  if (code && account.user && !lobby) joinRace(code);
+}
+
+function joinRace(code) {
+  if (!/^[A-Z]{4}$/.test(code)) {
+    els.liveError.textContent = 'A race code is four letters.';
+    return;
+  }
+  enterLobby(call('games.live.join', { code }, { mutation: true }));
+}
+
+async function enterLobby(request) {
+  els.liveError.replaceChildren();
+  try {
+    const info = await request;
+    lobby = joinLive(info, { players: showLobby, peer: showLobby, message: onLive });
+    lobby.course = info.room.course;
+    history.replaceState(null, '', `#${HASH.has('debug') ? 'debug&' : ''}race=${info.room.code}`);
+    showLobby();
+  } catch (err) {
+    els.liveError.textContent = err.status === 404 ? 'That race has finished, or it is full.' : `Couldn't get into the race (${err.message}).`;
+  }
+}
+
+function showLobby() {
+  els.liveSetup.hidden = !!lobby;
+  els.liveLobby.hidden = !lobby;
+  if (!lobby) return;
+  els.liveCodeShow.textContent = lobby.code;
+  els.liveCourseShow.textContent = MODES[lobby.course]?.label ?? lobby.course;
+  els.livePlayers.replaceChildren(...lobby.players.map((p) => {
+    const li = document.createElement('li');
+    const you = p.id === lobby.you;
+    li.textContent = `${p.name}${you ? ' (you)' : ''}${p.id === lobby.host ? ', starter' : ''} `;
+    const small = document.createElement('small');
+    small.textContent = you ? '' : STATUS[lobby.status(p.id)];
+    li.append(small);
+    if (you) li.className = 'you';
+    return li;
+  }));
+  const ready = lobby.players.filter((p) => p.id !== lobby.you && lobby.status(p.id) === 'open');
+  const host = lobby.host === lobby.you;
+  els.liveStart.hidden = !host;
+  els.liveStart.disabled = !ready.length;
+  els.liveNote.textContent = host
+    ? ready.length ? "Start it when everyone's in." : 'Send the link to your friends. You can start once someone has joined.'
+    : 'The race starts when its starter starts it.';
+}
+
+const raceLink = () => `${location.origin}${location.pathname}#race=${lobby.code}`;
+
+els.liveCreate.addEventListener('click', () => enterLobby(call('games.live.create', { course: els.liveCourse.value }, { mutation: true })));
+els.liveJoin.addEventListener('click', () => joinRace(els.liveCode.value.trim().toUpperCase()));
+els.liveCopy.addEventListener('click', () => {
+  navigator.clipboard?.writeText(raceLink()).then(() => { els.liveCopy.textContent = 'Copied'; }).catch(() => {});
+});
+els.liveStart.addEventListener('click', () => {
+  const order = lobby.players.filter((p) => p.id === lobby.you || lobby.status(p.id) === 'open').map(({ id, name }) => ({ id, name }));
+  const seed = (Math.random() * 2 ** 31) | 0;
+  lobby.sure({ type: 'start', order, seed });
+  begin(order, seed);
+});
+live.addEventListener('close', () => {
+  if (!liveRace) toMenu(); // Back, or Escape, from the lobby
+});
+
+function onLive(id, msg) {
+  if (Array.isArray(msg)) {
+    const s = decodeState(msg);
+    if (!s) return;
+    if (!tracks.has(id)) tracks.set(id, createTrack());
+    receive(tracks.get(id), s, performance.now() / 1000);
+    return;
+  }
+  const r = race?.racers.find((x) => x.id === id);
+  if (msg.type === 'start' && id === lobby?.host && !liveRace && msg.order.some((p) => p.id === lobby.you)) begin(msg.order, msg.seed);
+  else if (msg.type === 'call' && liveRace && id === lobby.host) applyCall(race, msg.call);
+  else if (msg.type === 'finish' && liveRace && r && r.finish === null) r.finish = msg.time;
+  else if (msg.type === 'bye') {
+    if (liveRace && r) r.name = `${r.name} (left)`;
+    showLobby();
+  }
+}
+
+async function begin(order, seed) {
+  const m = MODES[lobby.course];
+  if (!m.course) m.course = await loadCourse(m.file);
+  lobby.stopPolling();
+  liveRace = { room: { you: lobby.you, host: lobby.host }, order, seed };
+  tracks.clear();
+  mode = m;
+  live.close();
+  if (renderer) useWorld();
+  start();
+}
+
+// Before each step: the others' boats where the network last said, a little behind.
+function liveBefore(dt) {
+  const now = performance.now() / 1000;
+  for (const r of race.racers) {
+    const track = r.remote && tracks.get(r.id);
+    const s = track && sample(track, now, r.boat.speedup);
+    if (s) applyState(r.boat, s);
+  }
+  sendTimer += dt;
+  if (sendTimer >= 1 / SEND_HZ) {
+    sendTimer = 0;
+    lobby.fast(encodeState(now, race.player.boat));
+  }
+}
+
+// After each step: the host passes on the starter's calls; everyone their finish.
+function liveAfter(events) {
+  for (const e of events) {
+    if (lobby.host === lobby.you && ['line-up', 'ready', 'go', 'hold'].includes(e)) lobby.sure({ type: 'call', call: e });
+    if (e === 'finish') lobby.sure({ type: 'finish', time: race.player.finish });
+  }
+}
+
+function endLive() {
+  if (!lobby && !liveRace) return;
+  lobby?.close();
+  lobby = null;
+  liveRace = null;
+  tracks.clear();
+  if (HASH.has('race') || location.hash.includes('race=')) {
+    HASH.delete('race');
+    history.replaceState(null, '', `${location.pathname}${HASH.has('debug') ? '#debug' : ''}`);
+  }
 }
 
 // --- feedback ----------------------------------------------------------------
@@ -402,7 +630,10 @@ function simulate(dt) {
   }
   if (controls.assist) input.lean = Math.max(-1, Math.min(1, input.lean - (boat.roll * 2 + boat.rollRate * 0.6)));
   else if (controls.tilting) input.lean = Math.max(-1, Math.min(1, input.lean - TILT_REFLEX * boat.rollRate));
-  react(stepRace(race, dt, input));
+  if (liveRace) liveBefore(dt);
+  const result = stepRace(race, dt, input);
+  if (liveRace) liveAfter(result.events);
+  react(result);
 }
 
 // --- rendering ---------------------------------------------------------------
@@ -620,7 +851,7 @@ function render(time) {
 }
 
 // Open the page with #tilt to see what the motion sensors are doing.
-const tiltReadout = location.hash === '#tilt' ? document.getElementById('tiltdebug') : null;
+const tiltReadout = HASH.has('tilt') ? document.getElementById('tiltdebug') : null;
 const sensorPermissions = {};
 if (tiltReadout) {
   tiltReadout.hidden = false;
@@ -799,7 +1030,7 @@ function useWorld() {
 // --- start up ----------------------------------------------------------------
 
 // Lets automated playtests read the race from outside: open the page with #debug.
-if (location.hash === '#debug') {
+if (HASH.has('debug')) {
   window.kayak = {
     get race() { return race; },
     get boat() { return race.player.boat; },
@@ -808,11 +1039,21 @@ if (location.hash === '#debug') {
     get state() { return state; },
     get gpu() { return renderer?.stats; },
     get tilt() { return controls.tiltLean; },
+    get live() { return liveRace; },
   };
 }
 
 reset();
 toMenu();
+whoAmI().then((a) => {
+  account = a;
+  showAccount();
+  // Opened from a live race's link.
+  if (HASH.get('race') && state === 'menu') {
+    menu.close('');
+    openLive(HASH.get('race').toUpperCase());
+  }
+});
 try {
   renderer = await createRenderer(canvas);
   meshes = {

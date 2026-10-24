@@ -13,6 +13,7 @@
     "test:games": "node --test games/tests/*.test.js",
     "test:games:browsers": "node games/tests/browsers.mjs",
     "games": "python3 -m http.server 8000 -d games",
+    "games:site": "node games/tests/site.mjs",
     "typecheck": "pnpm --filter web exec tsc --noEmit -p .",
     "perf": "pnpm --filter web perf",
     "e2e": "pnpm --filter web e2e",

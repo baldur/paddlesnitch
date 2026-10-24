@@ -271,3 +271,12 @@ summary { cursor: pointer; }
 }
 
 #menu .credit { font-size: 0.8rem; color: var(--dim); }
+
+#menu .account { font-size: 0.9rem; }
+#boards #boardlist { display: grid; gap: 0.6rem; font-size: 0.85rem; }
+#boards ol { margin: 0.2rem 0 0; padding-left: 1.6rem; }
+#boards .you, #livePlayers .you { font-weight: 700; }
+#live select, #live input { font: inherit; padding: 0.3rem 0.4rem; }
+#live input { text-transform: uppercase; letter-spacing: 0.15em; }
+#livePlayers { padding-left: 1.2rem; }
+#livePlayers small { opacity: 0.75; }
