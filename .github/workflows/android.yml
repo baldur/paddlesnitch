@@ -50,7 +50,7 @@ jobs:
         env:
           KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
           PS_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
-          PS_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          PS_UPLOAD_KEY_ALIAS: upload   # the key's name in the keystore; not a secret
           PS_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
           PS_VERSION_CODE: ${{ github.run_number }}
         run: |

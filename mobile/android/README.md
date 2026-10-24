@@ -30,5 +30,5 @@ Or open this directory in Android Studio and press Run. The debug build is
 - **Sample paddles**: the same fixtures ship as assets and are shown, labelled,
   until sign-in.
 - **Signing**: debug builds use the local debug key. CI signs release builds
-  with the upload key from the `ANDROID_UPLOAD_*` secrets (see
+  with the upload key (alias `upload`) from the `ANDROID_UPLOAD_*` secrets (see
   `.github/workflows/android.yml`); the key is never in the repo.
