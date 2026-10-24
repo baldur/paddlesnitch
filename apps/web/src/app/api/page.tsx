@@ -43,7 +43,7 @@ export default function ApiPage() {
 
         <Section title="For AI assistants: MCP">
           <p className="text-base text-fg">
-            The same data as a read-only <a className="tt-link" href="https://modelcontextprotocol.io">MCP</a> server, no sign-in:{' '}
+            The same data as a read-only MCP (Model Context Protocol) server, no sign-in:{' '}
             <code className="break-all">{SITE}/mcp</code> (Streamable HTTP). Tools: <code>search_places</code>, <code>plan_route</code>,{' '}
             <code>list_trials</code>, <code>get_trial</code>, <code>get_leaderboard</code>. Each returns what the matching endpoint below returns.
           </p>
