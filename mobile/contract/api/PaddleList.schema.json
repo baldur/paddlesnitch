@@ -11,10 +11,14 @@
     },
     "totals": {
       "$ref": "PaddleTotals.schema.json"
+    },
+    "logbook": {
+      "$ref": "Logbook.schema.json"
     }
   },
   "required": [
     "cards",
-    "totals"
+    "totals",
+    "logbook"
   ]
 }

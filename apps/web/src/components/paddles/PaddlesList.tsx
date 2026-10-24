@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
-import { weeklyKm, weekStreak, monthKm, groupSameOuting, paddleTotals, isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
+import { paddleLogbook, groupSameOuting, paddleTotals, isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
 import { fmtWeekday, fmtMonth } from '@paddlesnitch/core/format'
 import { Page, PageHeader, Section, Eyebrow } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
@@ -121,16 +121,13 @@ export default function PaddlesList() {
         <StravaFirstImport />
 
         {sessions && sessions.length > 0 && (() => {
-          const now = new Date()
-          const weeks = weeklyKm(sessions, now)
-          const streak = weekStreak(sessions, now)
-          const month = monthKm(sessions, now)
+          const { weeks, streakWeeks: streak, thisMonthKm, lastMonthKm } = paddleLogbook(sessions, new Date())
           const quiet = weeks.every(w => w.km === 0)
           return (
             <section className={`${cardClass} p-4 flex flex-col gap-4`} aria-label="Logbook">
               <div className="grid grid-cols-3 gap-3">
                 <Stat label="This week" value={`${weeks[weeks.length - 1].km} km`} />
-                <Stat label="This month" value={`${month.thisMonth} km`} sub={`${month.lastMonth} km last month`} />
+                <Stat label="This month" value={`${thisMonthKm} km`} sub={`${lastMonthKm} km last month`} />
                 <Stat label="Streak" value={streak ? `${streak} wk` : '—'} sub={streak ? `week${streak === 1 ? '' : 's'} in a row` : 'start one this week'} />
               </div>
               <div className="flex flex-col gap-2">

@@ -224,7 +224,7 @@ platform tell the other when the contract or fixture formats change.
 
 | Phase | What | Needed by |
 |---|---|---|
-| **C1. Contract pipeline** ✅ | Schemas for `me`, `paddles.list`, `paddles.get`; `pnpm mobile:contract`; freshness + drift checks; tokens → JSON | Both apps' first screens |
+| **C1. Contract pipeline** ✅ | Schemas for `me`, `paddles.list` (cards with note / no-GPS / same outing, totals, logbook — all worked out on the server), `paddles.get`; `pnpm mobile:contract`; freshness + drift checks; tokens → JSON | Both apps' first screens |
 | **C2. Sign-in** | `getRequestUser`, token-returning sign-in, Strava one-time code, app-link files | Both apps' sign-in |
 | **C3. Recording + sync** | Phone devices on the relay route; CSV + Bluetooth + receipt fixtures from the existing web code and firmware | Both apps' recording and tracker phases |
 | **C4. Signed-in website pages** | One-time code → cookies | Both apps' link-outs |

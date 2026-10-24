@@ -41,6 +41,9 @@ export const PaddleCard = named('PaddleCard', z.object({
   boatClass: BoatClassSchema.optional(),
   sourceType: z.string(),
   route: z.array(z.tuple([z.number(), z.number()])),
+  note: z.string().optional(),
+  noGps: z.literal(true).optional(),
+  sameOuting: z.array(z.object({ id: z.string(), sourceType: z.string() })).optional(),
 }))
 export const PaddleTotals = named('PaddleTotals', z.object({
   count: z.int(),
@@ -48,7 +51,13 @@ export const PaddleTotals = named('PaddleTotals', z.object({
   totalS: z.number(),
   since: timestamp().nullable(),
 }))
-export const PaddleList = named('PaddleList', z.object({ cards: z.array(PaddleCard), totals: PaddleTotals }))
+const Logbook = named('Logbook', z.object({
+  weeks: z.array(z.object({ week: z.iso.date(), km: z.number() })),
+  streakWeeks: z.int(),
+  thisMonthKm: z.number(),
+  lastMonthKm: z.number(),
+}))
+export const PaddleList = named('PaddleList', z.object({ cards: z.array(PaddleCard), totals: PaddleTotals, logbook: Logbook }))
 
 const AnalysisPoint = named('AnalysisPoint', z.object({
   t: z.number(), lat: z.number(), lng: z.number(), speed: z.number(),

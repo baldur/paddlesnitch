@@ -52,6 +52,31 @@
         "minItems": 2,
         "maxItems": 2
       }
+    },
+    "note": {
+      "type": "string"
+    },
+    "noGps": {
+      "type": "boolean",
+      "const": true
+    },
+    "sameOuting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sourceType"
+        ]
+      }
     }
   },
   "required": [

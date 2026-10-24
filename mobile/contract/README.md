@@ -57,9 +57,18 @@ A query with no input omits `?input=`.
 ## fixtures/api/
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
-`me.signed-out`, `paddles.list`, `paddles.get`, `paddles.get.motion-only` (a
+`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`),
+`paddles.get.strava` (`pdl-strava`), `paddles.get.motion-only` (`pdl-motion`, a
 paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
 (rule 2; deliberately does **not** fit the schema). The paddles are synthetic.
+
+`paddles.list` is the Paddles screen as the website draws it, worked out on the
+server: one card per outing (`pdl-river-watch`, the same outing from Strava,
+sits under `pdl-river` in `sameOuting` and has no card of its own), the note,
+`noGps` (draw the "no GPS" tag, never the route: a paddle that lost its GPS
+part-way still has a route from before), the totals, and the `logbook` (12
+weeks oldest first, weeks start Monday UTC). Totals and logbook count every
+recording, as the website does.
 Add a fixture whenever a real answer turns out to have a shape these don't.
 
 ## tokens/

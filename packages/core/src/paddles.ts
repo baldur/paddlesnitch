@@ -17,6 +17,11 @@ export type PaddleCard = {
   boatClass?: BoatClass
   sourceType: string          // 'file' | 'strava' | 'trial' | 'device'
   route: [number, number][]   // ≤24 [lat,lng] points for the thumbnail
+  note?: string               // the owner's diary note, when there is one
+  noGps?: true                // a paddle without a map (#414): draw no route
+  // The same outing recorded by another source, shown once under this card
+  // (see groupSameOuting). Set only by paddles.list.
+  sameOuting?: { id: string; sourceType: string }[]
 }
 
 // ≤24 evenly-spaced [lat,lng] points, rounded to ~1 m, for a list thumbnail.
@@ -122,6 +127,19 @@ export function monthKm(paddles: Dated[], now: Date): { thisMonth: number; lastM
     else if (pk === k - 1) lastMonth += kmOf(p)
   }
   return { thisMonth: Math.round(thisMonth * 10) / 10, lastMonth: Math.round(lastMonth * 10) / 10 }
+}
+
+export type Logbook = {
+  weeks: { week: string; km: number }[]   // last 12 weeks, oldest first, this week last
+  streakWeeks: number
+  thisMonthKm: number
+  lastMonthKm: number
+}
+
+/** The logbook at the top of the Paddles list, worked out once for the web and the apps. */
+export function paddleLogbook(paddles: Dated[], now: Date): Logbook {
+  const month = monthKm(paddles, now)
+  return { weeks: weeklyKm(paddles, now), streakWeeks: weekStreak(paddles, now), thisMonthKm: month.thisMonth, lastMonthKm: month.lastMonth }
 }
 
 /**
