@@ -6,7 +6,9 @@
 import { gunzipSync } from 'zlib'
 import { getObject, usesLocalStorage } from '@paddlesnitch/core/storage'
 import manifestJson from '../data/manifest.json'
+import { readNdjsonGz } from './ndjson'
 import type { Place } from './places'
+import type { OfficialTides } from './tide'
 import { osmPortages, portagesAt, type PublicPortage } from './portage'
 import { listPublicPortages } from './portage-store'
 import { planDemand, planLines } from './plan-store'
@@ -65,6 +67,84 @@ export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
 }
 
 export const publishedKey = (version: string, name: string) => `waterways/published/${version}/${name}.json.gz`
+export const publishedNdjsonKey = (version: string, name: string) => `waterways/published/${version}/${name}.ndjson.gz`
+
+/** Every link's points in one Float64Array (lat, lng, lat, lng, …): ~4 million
+ *  points as [lat, lng] arrays cost ~94 bytes each, here 16. */
+class LinePool {
+  buf = new Float64Array(1 << 20)
+  used = 0
+  add(line: LatLng[]): number {
+    const off = this.used
+    if (off + line.length * 2 > this.buf.length) {
+      const bigger = new Float64Array(Math.max(this.buf.length * 2, off + line.length * 2))
+      bigger.set(this.buf.subarray(0, off))
+      this.buf = bigger
+    }
+    for (let i = 0; i < line.length; i++) { this.buf[off + 2 * i] = line[i][0]; this.buf[off + 2 * i + 1] = line[i][1] }
+    this.used = off + line.length * 2
+    return off
+  }
+  finish() { this.buf = this.buf.slice(0, this.used) }
+}
+
+/** A link whose line lives in the pool: `line` is unpacked when read (one link
+ *  at a time: a snap, a route leg, a map area), so callers see a NetLink. */
+class PackedLink implements NetLink {
+  id!: string
+  name!: string
+  form!: NetLink['form']
+  from!: string
+  to!: string
+  lengthM!: number
+  boat?: NetLink['boat']
+  culvert?: true
+  canoeRoute?: string
+  readonly #pool: LinePool
+  readonly #off: number
+  readonly #n: number
+  constructor(l: NetLink, pool: LinePool) {
+    const { line, ...rest } = l
+    Object.assign(this, rest)
+    this.#pool = pool
+    this.#off = pool.add(line)
+    this.#n = line.length
+  }
+  get line(): LatLng[] {
+    const b = this.#pool.buf, out = new Array<LatLng>(this.#n)
+    for (let i = 0; i < this.#n; i++) out[i] = [b[this.#off + 2 * i], b[this.#off + 2 * i + 1]]
+    return out
+  }
+}
+
+/** The network, streamed from its NDJSON copy when the version has one (from
+ *  2026-10-22), else parsed from the JSON (older versions); lines packed. */
+export async function readNetwork(get: (key: string) => Promise<Buffer | null>, version: string): Promise<NetLink[] | null> {
+  const pool = new LinePool()
+  const nd = await get(publishedNdjsonKey(version, 'network')).catch(() => null)
+  const buf = nd ? null : await get(publishedKey(version, 'network')).catch(() => null)
+  if (!nd && !buf) return null
+  const links = nd
+    ? await readNdjsonGz<NetLink>(nd, l => new PackedLink(l as NetLink, pool))
+    : (JSON.parse(gunzipSync(buf!).toString('utf8')) as NetLink[]).map(l => new PackedLink(l, pool))
+  pool.finish()
+  return links
+}
+
+let official: { version: string; value: Promise<OfficialTides | null> } | null = null
+/** Rijkswaterstaat's predicted Dutch high and low waters published with the
+ *  live version (`tides-nl`), or null when that version has none. */
+export function loadOfficialTides(): Promise<OfficialTides | null> {
+  const v = manifest.version
+  if (!v) return Promise.resolve(null)
+  if (official?.version !== v) {
+    const value = getObject(publishedKey(v, 'tides-nl'))
+      .then(buf => (buf ? JSON.parse(gunzipSync(buf).toString('utf8')) as OfficialTides : null))
+      .catch(() => null)
+    official = { version: v, value }
+  }
+  return official.value
+}
 
 let loading: Promise<NationalDataset> | null = null
 
@@ -78,22 +158,33 @@ export function loadNational(): Promise<NationalDataset> {
 
 async function load(): Promise<NationalDataset> {
   const v = manifest.version
-  const read = async <T>(name: string): Promise<T | null> => {
-    const buf = v ? await getObject(publishedKey(v, name)) : null
-    return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as T) : null
-  }
-  const links = await read<NetLink[]>('network')
-  if (!links) {
+  const ds = v ? await readDataset(getObject, v) : null
+  if (!ds) {
     // Nothing published yet (no version) runs on the fixture everywhere; a named
     // version missing from S3 is a broken deploy and must say so.
     if (v && !usesLocalStorage()) throw new Error(`waterways: published version ${v} not found`)
     return fixture()
   }
-  const [features, osmFeatures, places, portages] = await Promise.all([
-    read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Place[]>('places'), read<OsmElement[]>('osm-portages'),
+  return ds
+}
+
+/** A published version, every file fetched at once: on a cold start the
+ *  downloads overlap rather than wait for the 34 MB network first. Null when
+ *  the version has no network. */
+export async function readDataset(get: (key: string) => Promise<Buffer | null>, v: string): Promise<NationalDataset | null> {
+  const read = async <T>(name: string): Promise<T | null> => {
+    const buf = await get(publishedKey(v, name))
+    return buf ? (JSON.parse(gunzipSync(buf).toString('utf8')) as T) : null
+  }
+  const rest = Promise.all([
+    read<Feature[]>('features'), read<Feature[]>('osm-features'), read<Feature[]>('sa-features'), read<Place[]>('places'), read<OsmElement[]>('osm-portages'),
   ])
-  // Routing sees one list; the files stay apart (licence layers: OSM is ODbL).
-  return { version: v!, links, features: [...(features ?? []), ...(osmFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
+  rest.catch(() => {})   // no network: the caller falls back, and these don't matter
+  const links = await readNetwork(get, v)
+  if (!links) return null
+  const [features, osmFeatures, saFeatures, places, portages] = await rest
+  // Routing sees one list; the files stay apart (licence layers: OSM is ODbL, sa-features CC BY-SA).
+  return { version: v, links, features: [...(features ?? []), ...(osmFeatures ?? []), ...(saFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
 }
 
 async function fixture(): Promise<NationalDataset> {

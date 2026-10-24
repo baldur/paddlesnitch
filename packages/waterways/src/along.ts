@@ -81,10 +81,20 @@ function candidates<T extends object>(line: LatLng[], items: T[], at: (t: T) => 
  *  on a side cut, a brook or a marina entrance, not on the way. The navigation
  *  authorities put locks and weirs beside the channel, hence NEAR_M's wider net. */
 export const ON_WATER_NEAR_M = 60
-const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims', 'ifi'])
+const ON_WATER_SOURCES = new Set(['osm', 'amber', 'sepa', 'ea-aims', 'ifi', 'amber-eu', 'roe'])
+
+/** Things in the water itself. Slipways, put-ins and toilets stand on the bank,
+ *  which on a wide river or estuary is well over 60 m from the line. */
+const IN_WATER = new Set<Feature['kind']>(['lock', 'weir', 'hazard', 'portage'])
+
+/** The Dutch water boards' structures stand in polder water: one more than this
+ *  from the route is in a side ditch (a dam at its mouth, a pumping station's
+ *  outfall), not on the way. Their own locks sit within 5 m of the network. */
+export const WATERBOARD_NEAR_M = 10
 
 /** How far from the water a feature may sit and still be on it. */
-export const nearOf = (f: Feature) => (ON_WATER_SOURCES.has(f.source.source) ? Math.min(ON_WATER_NEAR_M, NEAR_M[f.kind]) : NEAR_M[f.kind])
+export const nearOf = (f: Feature) => (f.source.source === 'nl-waterboards' ? WATERBOARD_NEAR_M
+  : ON_WATER_SOURCES.has(f.source.source) && IN_WATER.has(f.kind) ? Math.min(ON_WATER_NEAR_M, NEAR_M[f.kind]) : NEAR_M[f.kind])
 
 export const featuresAlong = (line: LatLng[], features: Feature[]) => along(line, features, f => f.at, nearOf)
 

@@ -2,13 +2,20 @@
 // keeps to the navigation, snapping and "what's along" on a grid index, the
 // route/time split the server and browser share, and the places search.
 import fs from 'fs'
+import { gzipSync } from 'zlib'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { featuresAlong } from '@paddlesnitch/waterways/along'
+import { overviewLines } from '@paddlesnitch/waterways/display'
+import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
+import { publishedKey, publishedNdjsonKey, readDataset, readNetwork } from '@paddlesnitch/waterways/national'
+import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
-import { featuresFromAmber, featuresFromIfi, featuresFromSepa } from '@paddlesnitch/waterways/ingest/barriers'
+import { AMBER_EU_WHERE, featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
+import { featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
+import { featuresFromWaterboards, hitsOf } from '@paddlesnitch/waterways/ingest/waterboards'
 import { featuresFromUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
 import { isOurs, linksFromWays, osmAccess, osmFacilities, osmGateLocks, osmLocks, type OsmWay } from '@paddlesnitch/waterways/ingest/osm'
 import { featuresFromScottishCanals } from '@paddlesnitch/waterways/ingest/scottish-canals'
@@ -20,7 +27,7 @@ import { osmPortages, portageOnRoute, portagesAt, type PublicPortage } from '@pa
 import { REGIONS } from '@paddlesnitch/waterways/regions'
 import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { Feature, LatLng, NetLink, RegionDataset } from '@paddlesnitch/waterways/types'
-import { coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
+import { chunkLines, coverageLines, levelOf, waterwayCoverage } from '@paddlesnitch/waterways/waterway-coverage'
 import { sampleLine } from '@paddlesnitch/waterways/plan-store'
 import { portageLines, stopLines } from './plan-ui'
 
@@ -29,6 +36,152 @@ const AT = '2026-10-12T00:00:00.000Z'
 
 const way = (id: number, nodes: number[], coords: LatLng[], tags: Record<string, string> = {}): OsmWay =>
   ({ id, nodes, coords, tags: { waterway: 'river', ...tags } })
+
+describe('Rijkswaterstaat FIS: Dutch locks and slipways (CC0)', () => {
+  it('a lock outline becomes a lock at its middle, with its name; a slipway point stays a point', () => {
+    const [lock] = featuresFromFisLocks([{
+      geometry: { type: 'Polygon', coordinates: [[[5.1140, 52.0975], [5.1150, 52.0975], [5.1150, 52.0983], [5.1140, 52.0983], [5.1140, 52.0975]]] },
+      properties: { id: 12345, name: 'Weerdsluis' },
+    }], AT)
+    expect(lock).toMatchObject({ id: 'rws-fis:lock:12345', kind: 'lock', name: 'Weerdsluis', source: { source: 'rws-fis', sourceId: '12345' } })
+    expect(lock.at[0]).toBeCloseTo(52.0978, 3)
+    expect(lock.at[1]).toBeCloseTo(5.1144, 3)
+    const [slip] = featuresFromFisSlipways([{ geometry: { type: 'Point', coordinates: [4.641075, 52.347937] }, properties: { id: 1552, name: 'Trailerhelling Zuid-Schalkwijk' } }], AT)
+    expect(slip).toMatchObject({ id: 'rws-fis:slipway:1552', kind: 'slipway', at: [52.347937, 4.641075] })
+    expect(featuresFromFisLocks([{ geometry: null, properties: { id: 1 } }], AT)).toEqual([])
+  })
+})
+
+describe('Dutch water boards: weirs, dams, pumping stations and locks (CC BY-SA, own file)', () => {
+  it('reads each layer as what a paddler meets, named where the board names it', () => {
+    const pt = (id: string, props: Record<string, unknown> = {}) => ({ geometry: { type: 'Point', coordinates: [4.44, 51.74] }, properties: { nen3610id: id, statusobject: 'gerealiseerd', ...props } })
+    expect(featuresFromWaterboards('stuw', [pt('a', { naam: 'Stuw Burgemeester Henrylaan' })], AT)[0])
+      .toMatchObject({ id: 'nl-waterboards:stuw:a', kind: 'weir', name: 'Stuw Burgemeester Henrylaan', at: [51.74, 4.44], source: { source: 'nl-waterboards' } })
+    expect(featuresFromWaterboards('vastedam', [pt('b')], AT)[0]).toMatchObject({ kind: 'hazard', name: 'Dam' })
+    expect(featuresFromWaterboards('gemaal', [pt('c', { naam: '' })], AT)[0]).toMatchObject({ kind: 'hazard', name: 'Pumping station' })
+    expect(featuresFromWaterboards('sluis', [pt('d')], AT)[0].kind).toBe('lock')
+    expect(featuresFromWaterboards('duiker', [pt('e')], AT)).toEqual([])                                   // culverts aren't read
+    expect(featuresFromWaterboards('stuw', [pt('f', { statusobject: 'gesloopt' })], AT)).toEqual([])       // demolished
+  })
+
+  it('a structure drawn as a line or an area sits at its middle', () => {
+    const [f] = featuresFromWaterboards('sluis', [{ geometry: { type: 'Polygon', coordinates: [[[4.0, 52.0], [4.002, 52.0], [4.002, 52.002], [4.0, 52.002]]] }, properties: { nen3610id: 'g' } }], AT)
+    expect(f.at).toEqual([52.001, 4.001])
+  })
+
+  it("reads the quadrant's count, which drives the paging (pages can come back short)", () => {
+    expect(hitsOf('<wfs:FeatureCollection numberMatched="13976" numberReturned="0"/>')).toBe(13976)
+    expect(hitsOf('<ows:ExceptionReport/>')).toBeNaN()
+  })
+
+  it("counts on a route only within 10 m: a dam at a side ditch's mouth isn't on the way", () => {
+    const line: LatLng[] = [[52, 4.6], [52, 4.61]]
+    const wb = (id: string, dLat: number): Feature => ({ id, kind: 'hazard', name: 'Dam', at: [52 + dLat, 4.605], source: { source: 'nl-waterboards', fetchedAt: AT } })
+    expect(featuresAlong(line, [wb('on', 0.00005), wb('side', 0.0003)]).map(a => a.item.id)).toEqual(['on'])   // ~6 m, ~33 m
+  })
+})
+
+describe('fetching sources (#559: rws-fis "fetch failed" six runs running)', () => {
+  const ok = () => new Response('fine', { status: 200 })
+  const netErr = () => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ETIMEDOUT 131.237.78.226:443'), { code: 'ETIMEDOUT' }) })
+
+  it('retries a network error or a 5xx, then succeeds', async () => {
+    const answers: (() => Promise<Response>)[] = [() => Promise.reject(netErr()), () => Promise.resolve(new Response('busy', { status: 503 })), () => Promise.resolve(ok())]
+    let n = 0
+    const res = await fetchWithRetry('https://x', {}, { delayMs: 0, fetchImpl: () => answers[n++]() })
+    expect([res.status, n]).toEqual([200, 3])
+  })
+
+  it("doesn't retry a 4xx: that's an answer", async () => {
+    let n = 0
+    const res = await fetchWithRetry('https://x', {}, { delayMs: 0, fetchImpl: async () => { n++; return new Response('no', { status: 404 }) } })
+    expect([res.status, n]).toEqual([404, 1])
+  })
+
+  it('gives up after the last try and says why, not just "fetch failed"', async () => {
+    let n = 0
+    const err = await fetchWithRetry('https://geo.example/x', {}, { tries: 3, delayMs: 0, fetchImpl: async () => { n++; throw netErr() } }).catch(e => e)
+    expect(n).toBe(3)
+    expect(fetchError(err)).toBe('fetch failed (ETIMEDOUT: connect ETIMEDOUT 131.237.78.226:443)')
+    expect(fetchError(new Error('404 https://x'))).toBe('404 https://x')
+  })
+})
+
+describe('the network, published one link per line and read as a stream (peak memory ~1 GB → ~0.35 GB with Germany)', () => {
+  const links = Array.from({ length: 3000 }, (_, i) => ({ id: `l${i}`, name: i % 2 ? 'Untere Havel-Wasserstraße' : '', form: 'canal', from: `n${i}`, to: `n${i + 1}`,
+    line: Array.from({ length: 40 }, (_, k) => [52 + i / 1e4 + k / 1e5, 13 + k / 1e5]), lengthM: 123.4 })) as unknown as NetLink[]
+
+  it('round-trips every link exactly, across stream chunk boundaries and non-ASCII names', async () => {
+    const gz = gzipSync(toNdjson(links))
+    expect(await readNdjsonGz(gz)).toEqual(links)
+  })
+
+  it('reads the NDJSON copy when there is one, else the JSON one (older versions)', async () => {
+    const store = new Map<string, Buffer>([[publishedKey('v1', 'network'), gzipSync(JSON.stringify(links.slice(0, 2)))]])
+    const get = async (k: string) => store.get(k) ?? null
+    expect((await readNetwork(get, 'v1'))?.map(l => l.id)).toEqual(['l0', 'l1'])
+    store.set(publishedNdjsonKey('v1', 'network'), gzipSync(toNdjson(links.slice(5, 7))))
+    expect((await readNetwork(get, 'v1'))?.map(l => l.id)).toEqual(['l5', 'l6'])
+    expect(await readNetwork(get, 'missing')).toBeNull()
+  })
+
+  it('keeps every point in one shared array (~250 MB less memory), and each link still reads its line as [lat, lng] pairs', async () => {
+    const some = links.slice(0, 50).map((l, i) => ({ ...l, boat: i % 2 ? 'yes' as const : undefined, canoeRoute: i === 3 ? 'Lahn' : undefined }))
+    for (const gz of [gzipSync(toNdjson(some)), null]) {
+      const store = new Map<string, Buffer>(gz ? [[publishedNdjsonKey('v1', 'network'), gz]] : [[publishedKey('v1', 'network'), gzipSync(JSON.stringify(some))]])
+      const got = (await readNetwork(async k => store.get(k) ?? null, 'v1'))!
+      expect(got.map(l => l.line)).toEqual(some.map(l => l.line))
+      expect(got.map(l => [l.id, l.name, l.form, l.from, l.to, l.lengthM, l.boat, l.canoeRoute])).toEqual(some.map(l => [l.id, l.name, l.form, l.from, l.to, l.lengthM, l.boat, l.canoeRoute]))
+      expect(Object.keys(got[0])).not.toContain('line')   // not a stored array
+    }
+  })
+
+  it('asks for every file at once on a cold start, not the other files after the network', async () => {
+    const asked: string[] = []
+    let releaseNetwork!: () => void
+    const networkDone = new Promise<void>(r => { releaseNetwork = r })
+    const store = new Map<string, Buffer>([
+      [publishedNdjsonKey('v1', 'network'), gzipSync(toNdjson(links.slice(0, 2)))],
+      [publishedKey('v1', 'features'), gzipSync(JSON.stringify([]))],
+      [publishedKey('v1', 'places'), gzipSync(JSON.stringify([{ name: 'Weilburg', kind: 'town', at: [50.48, 8.26] }]))],
+    ])
+    const get = async (k: string) => { asked.push(k.split('/').pop()!); if (k.includes('network')) await networkDone; return store.get(k) ?? null }
+    const loading = readDataset(get, 'v1')
+    await new Promise(r => setTimeout(r, 0))
+    expect(asked.sort()).toEqual(['features.json.gz', 'network.ndjson.gz', 'osm-features.json.gz', 'osm-portages.json.gz', 'places.json.gz', 'sa-features.json.gz'])
+    releaseNetwork()
+    const ds = await loading
+    expect([ds?.links.length, ds?.places.map(p => p.name)]).toEqual([2, ['Weilburg']])
+    expect(await readDataset(async () => null, 'missing')).toBeNull()
+  })
+})
+
+describe("the zoomed-out map's overview", () => {
+  // A straight-ish 5 km line, wiggling ±40 m every 100 m: nothing a zoom-8 pixel (~400 m) can show.
+  const wiggly = (lat0: number): LatLng[] => Array.from({ length: 51 }, (_, i) => [lat0 + 0.00012 + (i % 2 ? 0.00036 : 0), -1.00007 + i * 0.0014] as LatLng)
+  const link = (line: LatLng[], extra: Partial<NetLink>) => ({ line, lengthM: 5000, ...extra }) as NetLink
+
+  it('canals, navigations and rivers over 2 km, coarse enough to stay small with France in it', () => {
+    const out = overviewLines([
+      link(wiggly(51), { form: 'canal' }),
+      link(wiggly(52), { boat: 'yes', lengthM: 900 }),
+      link(wiggly(53), { lengthM: 3000 }),
+      link(wiggly(54), { lengthM: 1500 }),     // a short stream: not at this zoom
+    ])
+    expect(out).toHaveLength(3)
+    expect(out[0].length).toBeLessThanOrEqual(3)   // the wiggle is under the 500 m tolerance
+    expect(out.flat(2).every(v => Math.round(v * 1000) / 1000 === v)).toBe(true)   // 3 dp, ~110 m
+  })
+
+  it('cuts coverage lines into chunks the server can answer, every line kept, in order', () => {
+    const lines = Array.from({ length: 1000 }, (_, i) => [[52 + i / 1000, 1], [52.5, 1 + i / 1000]] as LatLng[])
+    const chunks = chunkLines(lines, 5000)
+    expect(chunks.length).toBeGreaterThan(5)
+    expect(chunks.every(c => JSON.stringify(c).length <= 5000)).toBe(true)
+    expect(chunks.flat()).toEqual(lines)
+    expect(chunkLines([], 5000)).toEqual([[]])
+  })
+})
 
 describe('the network is Britain and Ireland only', () => {
   it("drops water wholly east of Lowestoft (the Maasgeul off Rotterdam), keeps the Waveney", () => {
@@ -47,6 +200,15 @@ describe('paddle access from OSM tags', () => {
       way(5, [9, 10], [[55, 0], [55, 0.01]]),
     ])
     expect(links.map(l => [l.boat, l.culvert])).toEqual([['yes', undefined], ['yes', undefined], ['no', undefined], [undefined, true], [undefined, undefined]])
+  })
+
+  it('water on a mapped canoe route is paddleable unless it says canoe=no', () => {
+    const links = linksFromWays([
+      way(1, [1, 2], [[52.2, 4.6], [52.2, 4.61]], { canoe_route: 'Kanoroute Kaag-Braassem' }),
+      way(2, [3, 4], [[52.3, 4.6], [52.3, 4.61]], { canoe_route: 'Kanoroute Kaag-Braassem', boat: 'no' }),
+      way(3, [5, 6], [[52.4, 4.6], [52.4, 4.61]], { canoe_route: 'Twiskeroute', canoe: 'no' }),
+    ])
+    expect(links.map(l => l.boat)).toEqual(['yes', 'yes', 'no'])
   })
 
   it('keeps to the navigation rather than a shorter channel nobody may paddle', () => {
@@ -82,6 +244,12 @@ describe('grid index', () => {
     expect(snap(links, [51.6, 0.005])!.dist).toBeGreaterThan(10_000)
   })
 
+  it('a small maxM is honoured even when the nearest link is in the next grid cell (it used to return one up to ~1 km away)', () => {
+    const links = linksFromWays([way(1, [1, 2], [[51.5, 0], [51.5, 0.01]])])
+    expect(snap(links, [51.5045, 0.005], 60)).toBeNull()            // ~500 m off
+    expect(snap(links, [51.5003, 0.005], 60)!.dist).toBeLessThan(60)   // ~33 m off
+  })
+
   it('finds features along a route whose vertices are far apart', () => {
     const line: LatLng[] = [[51.5, -0.3], [51.5, 0.13]]
     const lock: Feature = { id: 'mid', kind: 'lock', name: 'Middle Lock', at: [51.5005, -0.08], source: { source: 'curated', fetchedAt: AT } }
@@ -96,6 +264,25 @@ describe('routing on the server, timing in the browser', () => {
     const routed = routePlan(ds, input)
     if (typeof routed === 'string') throw new Error(routed)
     expect(timePlan(routed, input)).toEqual(computePlan(ds, input))
+  })
+
+  it('names the marked canoe routes a plan follows, not one it only touches', () => {
+    // 1.4 km along Kanoroute A, then 300 m along Kanoroute B.
+    const links = linksFromWays([
+      way(1, [1, 2], [[52, 4.6], [52, 4.62]], { canoe_route: 'Kanoroute A', name: 'Vaart' }),
+      way(2, [2, 3], [[52, 4.62], [52, 4.6244]], { canoe_route: 'Kanoroute B', name: 'Sloot' }),
+    ])
+    const routed = routePlan({ links, features: [] }, { start: [52, 4.6], finish: [52, 4.6243], shape: 'one_way' })
+    if (typeof routed === 'string') throw new Error(routed)
+    expect(routed.canoeRoutes).toEqual(['Kanoroute A'])
+  })
+
+  it("junction-network legs ('4-5; canoe') are paddleable but not named on the plan", () => {
+    const links = linksFromWays([way(1, [1, 2], [[52, 4.6], [52, 4.62]], { canoe_route: '4-5; canoe', name: 'Rotte' })])
+    expect(links[0].boat).toBe('yes')
+    const routed = routePlan({ links, features: [] }, { start: [52, 4.6], finish: [52, 4.619], shape: 'one_way' })
+    if (typeof routed === 'string') throw new Error(routed)
+    expect(routed.canoeRoutes).toBeUndefined()
   })
 
   it('a routed plan carries no times, so pace changes need no new route', () => {
@@ -247,6 +434,12 @@ describe('OSM lock chambers (filling gaps)', () => {
     expect(locks[0]).toMatchObject({ kind: 'lock', source: { source: 'osm', sourceId: 'way/1' } })
   })
 
+  it('a boat lift or inclined plane (Ronquières, two lanes) is one lock to carry round, named', () => {
+    const lane = (id: number, lng: number): OsmWay => way(id, [id * 10, id * 10 + 1], [[50.590, lng], [50.604, lng + 0.003]], { waterway: 'boat_lift', name: 'Plan Incliné de Ronquières', boat: 'yes' })
+    const locks = osmLocks([lane(31770308, 4.2210), lane(31770310, 4.2222)], AT)   // lanes ~90 m apart
+    expect(locks.map(l => [l.kind, l.name])).toEqual([['lock', 'Plan Incliné de Ronquières']])
+  })
+
   it('skips boat rollers and private marina locks', () => {
     expect(osmLocks([
       chamber(1, [51.43, -0.32], { lock_name: 'Teddington Lock Boat Rollers' }),
@@ -268,6 +461,12 @@ describe('OSM lock chambers (filling gaps)', () => {
       id: 'osm:lock:node/32336165', kind: 'lock', name: 'Town Lock', at: [51.194748, 0.279174],
       source: { source: 'osm', sourceId: 'node/32336165', fetchedAt: AT },
     }])
+  })
+
+  it('an OSM slipway on the bank of a wide river counts at 100 m; an OSM lock that far off is on a side cut', () => {
+    const line: LatLng[] = [[52, -1], [52, -0.99]]
+    const off = (kind: Feature['kind']): Feature => ({ id: kind, kind, at: [52.0009, -0.995], source: { source: 'osm', fetchedAt: AT } })   // ~100 m north
+    expect(featuresAlong(line, [off('slipway'), off('lock')]).map(a => a.item.id)).toEqual(['slipway'])
   })
 
   it('counts on a route only when the chamber is on the water travelled, not a side cut', () => {
@@ -294,6 +493,42 @@ describe('weirs and waterfalls from the barrier inventories', () => {
       ['amber:EN_12722_EA', undefined, undefined],     // named "Null" in the source
     ])
     expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toContain('About 0.5 m high.')
+  })
+
+  it('AMBER Europe (Belgium): weirs, dams, sluices and bed sills as weirs, a height where one was measured; culverts left out', () => {
+    const pt = (id: number, label: string, height: string) => ({ geometry: { type: 'Point' as const, coordinates: [4.95, 50.20] as [number, number] }, properties: { OBJECTID: id, Country: 'BELGIUM', LabelAtlas: label, Height: height } })
+    const out = featuresFromAmberEu([pt(1, 'WEIR', '1.8'), pt(2, 'DAM', 'NA'), pt(3, 'CULVERT', 'NA'), pt(4, 'RAMP/BED SILL', '0.4')], AT)
+    expect(out.map(f => [f.id, f.kind, f.weir?.heightM])).toEqual([['amber-eu:1', 'weir', 1.8], ['amber-eu:2', 'weir', undefined], ['amber-eu:4', 'weir', 0.4]])
+    // Belgium, Germany, Austria and Switzerland: Britain has AMBER-GB, the Netherlands its water boards, France ROE.
+    expect(AMBER_EU_WHERE).toContain("Country IN ('BELGIUM','GERMANY','AUSTRIA','SWITZERLAND')")
+    expect(out[0]).toMatchObject({ at: [50.2, 4.95], source: { source: 'amber-eu' } })
+  })
+
+  it('ROE (France): dams and weirs that stand, a drop where measured and a canoe pass where there is one; culverts, bridges, fords and demolished weirs left out', () => {
+    const pt = (id: string, type: string, p: Record<string, string> = {}) => ({ geometry: { type: 'Point' as const, coordinates: [1.2189, 44.8242] as [number, number] },
+      properties: { CdObstEcoul: id, CdTypeOuvrage: type, LbEtOuvrage: 'Existant', NomPrincipalObstEcoul: '', HautChutEtObstEcoul: '', LbTypeDispFranchNavig1: '', LbTypeDispFranchNavig2: '', LbTypeDispFranchNavig3: '', ...p } })
+    const out = featuresFromRoe([
+      pt('ROE1', '1.2.1', { NomPrincipalObstEcoul: 'Moulin de Brais ', HautChutEtObstEcoul: '1.5', LbTypeDispFranchNavig2: 'Passe à canoë' }),
+      pt('ROE2', '1.1.3', { NomPrincipalObstEcoul: 'Seuil en rivière', LbEtOuvrage: 'Détruit partiellement', HautChutEtObstEcoul: '0' }),
+      pt('ROE3', '1.2', { LbEtOuvrage: 'Détruit entièrement' }),
+      pt('ROE4', '1.2', { LbEtOuvrage: 'En projet' }),
+      pt('ROE5', '1.4.1'),                       // a culvert (buse)
+      pt('ROE6', '1.3'),                         // a dyke along the bank
+      pt('ROE7', ''),                            // type unknown
+    ], AT)
+    expect(out.map(f => [f.id, f.kind, f.name, f.weir])).toEqual([
+      ['roe:ROE1', 'weir', 'Moulin de Brais', { heightM: 1.5, canoePass: true }],
+      ['roe:ROE2', 'weir', undefined, undefined],
+    ])
+    expect(out[0]).toMatchObject({ at: [44.8242, 1.2189], source: { source: 'roe' } })
+    expect(stopLines({ feature: out[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toEqual(['About 1.5 m high.', 'Canoe pass beside it.'])
+  })
+
+  it('ROE pages: GeoJSON in WGS84, in a stable order, only the fields we read', () => {
+    const u = new URL(roePageUrl(20000))
+    expect(Object.fromEntries(['TYPENAMES', 'STARTINDEX', 'COUNT', 'SORTBY', 'SRSNAME'].map(k => [k, u.searchParams.get(k)])))
+      .toEqual({ TYPENAMES: 'ObstEcoul_FXX', STARTINDEX: '20000', COUNT: '10000', SORTBY: 'gid', SRSNAME: 'EPSG:4326' })
+    expect(u.searchParams.get('PROPERTYNAME')).toContain('LbTypeDispFranchNavig1')
   })
 
   it('IFI: weirs and sluices as weirs, rock waterfalls as hazards; counted on a route only on the water', () => {
@@ -430,6 +665,25 @@ describe('toilets and drinking water mapped in OpenStreetMap', () => {
       ['osm:facility:node/2', 'facility', ['drinking_water'], undefined],
       ['osm:facility:node/3', 'facility', ['drinking_water'], undefined],
     ])
+  })
+
+  it('canoe, kayak and paddleboard hire become access points that say so; pedalo and motorboat hire, and closed ones, do not', () => {
+    const got = osmAccess([
+      pt(1, { amenity: 'boat_rental', canoe_rental: 'yes', kayak_rental: 'yes', name: 'Kayak Vert' }),
+      pt(2, { amenity: 'boat_rental', name: 'Canoë 2000' }),
+      pt(3, { amenity: 'boat_rental', standup_paddleboard_rental: 'yes', access: 'customers' }),   // you're the customer
+      pt(4, { amenity: 'boat_rental', sport: 'canoe' }),
+      pt(5, { amenity: 'boat_rental', pedalboat_rental: 'yes', motorboat_rental: 'yes', name: 'Pédalos du lac' }),
+      pt(6, { amenity: 'boat_rental', canoe_rental: 'yes', access: 'private' }),
+      pt(7, { amenity: 'boat_rental', canoe_rental: 'no', name: 'Canoe Club' }),
+    ], AT)
+    expect(got.map(f => [f.id, f.kind, f.name, f.hire])).toEqual([
+      ['osm:access:node/1', 'access', 'Kayak Vert', true],
+      ['osm:access:node/2', 'access', 'Canoë 2000', true],
+      ['osm:access:node/3', 'access', undefined, true],
+      ['osm:access:node/4', 'access', undefined, true],
+    ])
+    expect(stopLines({ feature: got[0], leg: 'out', chainageM: 0, fromPrevM: 0, portage: false, portagesBefore: 0, elapsedS: 0 })).toEqual(['Canoe and kayak hire.'])
   })
 })
 

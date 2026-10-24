@@ -36,17 +36,35 @@ const SERVICES: Record<string, string> = {
   // Live river conditions on Plan: whole national lists, never a user's route.
   'timeseries.sepa.org.uk': 'SEPA',
   'waterlevel.ie': 'OPW',
+  'ddapi20-waterwebservices.rijkswaterstaat.nl': 'Rijkswaterstaat',
+  'download.waterinfo.be': 'waterinfo.be',
+  'www.pegelonline.wsv.de': 'PEGELONLINE',
+  'www.hydrodaten.admin.ch': 'BAFU',   // Swiss water levels, read by our server (and a station's own page)   // German water levels, read by our server (and a gauge's own page)
   'www.gov.uk': 'GOV.UK',
   'api.github.com': 'GitHub',
   'github.com': 'GitHub',
   'server.arcgisonline.com': 'Esri',
   'www.esri.com': 'Esri',
+  'service.pdok.nl': 'PDOK',
+  'data.geopf.fr': 'IGN',
+  'www.wms.nrw.de': 'Geobasis NRW',   // NRW aerial photos in the browser, and in print
+  'gdi.berlin.de': 'Geoportal Berlin',
+  'isk.geobasis-bb.de': 'LGB Brandenburg',   // Brandenburg aerial photos
+  'geoservices.bayern.de': 'Bayerische Vermessungsverwaltung',   // Bavarian aerial photos
+  'www.gds-srv.hessen.de': 'HVBG Hessen',   // Hessian aerial photos
+  'www.geodaten-mv.de': 'LAiV Mecklenburg-Vorpommern',   // Mecklenburg aerial photos
+  'owsproxy.lgl-bw.de': 'LGL Baden-Württemberg',   // Baden-Württemberg aerial photos
+  'wmts.geo.admin.ch': 'swisstopo',   // Swiss aerial photos on screen
+  'wms.geo.admin.ch': 'swisstopo',   // and in print
+  'maps.wien.gv.at': 'basemap.at',   // Austrian aerial photos   // Berlin aerial photos in the browser, and in print   // French aerial photo tiles in the browser, and in print
+  'geo.api.vlaanderen.be': 'Digitaal Vlaanderen',   // Flemish aerial photo tiles in the browser   // aerial photo tiles in the browser (and the water boards' data at build time)
   'unpkg.com': 'unpkg',
 }
 // Our own site, legal links and test-only values -- not processors.
 const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org',
   'evil.example.com', 'example.invalid',
-  'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk',   // links to a gauge's own page
+  'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk', 'waterinfo.rws.nl', 'www.waterinfo.be',   // links to a gauge's own page
+  'kayak.spw.wallonie.be',   // a link to Wallonia's kayak status; nothing is fetched from it
   'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
 ])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
@@ -54,11 +72,11 @@ const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.o
 // The rest are credit links to a source. If the app ever calls one of these
 // at runtime, move it to SERVICES and name it on the privacy page.
 const BUILD_TIME_SOURCES = new Set([
-  'services.arcgis.com', 'www.arcgis.com', 'overpass-api.de', 'overpass.kumi.systems',
+  'services.arcgis.com', 'www.arcgis.com', 'geo.rijkswaterstaat.nl', 'data.overheid.nl', 'overpass-api.de', 'overpass.kumi.systems',
   'www.openstreetmap.org', 'data-canalrivertrust.opendata.arcgis.com', 'www.dwrace.co.uk',
   'd1hxd0sho1wxko.cloudfront.net', 'www.scottishcanals.co.uk', 'www.waterwaysireland.org', 'download.geofabrik.de',
   'environment.data.gov.uk', 'umap.openstreetmap.fr', 'www.data.gov.uk',
-  'map.sepa.org.uk', 'services3.arcgis.com', 'amber.international', 'services-eu1.arcgis.com', 'www.fisheriesireland.ie',
+  'map.sepa.org.uk', 'services3.arcgis.com', 'amber.international', 'services-eu1.arcgis.com', 'www.fisheriesireland.ie', 'services9.arcgis.com', 'doi.org', 'services.sandre.eaufrance.fr', 'www.data.gouv.fr',
 ])
 
 describe('privacy page names every outside service the code uses', () => {

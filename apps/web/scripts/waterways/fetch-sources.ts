@@ -18,14 +18,17 @@ import { gunzipSync, gzipSync } from 'zlib'
 import { getObject, putObject } from '@paddlesnitch/core/storage'
 import { assess, HEALTH_KEY, healthLines, stagedKey, type HealthFile } from '@paddlesnitch/waterways/health'
 import { lockKey } from '@paddlesnitch/waterways/build'
+import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { readZip } from '@paddlesnitch/timing/unzip'
-import { AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
+import { AMBER_EU, AMBER_EU_WHERE, featuresFromAmberEu, featuresFromRoe, ROE_PAGE, roePageUrl, AMBER_GB, arcgisPageUrl, featuresFromAmber, featuresFromIfi, featuresFromSepa, IFI_BARRIERS, IFI_WHERE, SEPA_OBSTACLES } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { AIMS_FILES, AIMS_URL, featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
 import { EA_UMAPS, featuresFromUmap, umapLayerIds, umapLayerUrl, umapUrl, type EaUmap } from '@paddlesnitch/waterways/ingest/ea-umap'
 import { featuresFromScottishCanals, SCOTTISH_CANALS_LAYERS, type ScottishCanalsLayer } from '@paddlesnitch/waterways/ingest/scottish-canals'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
+import { FIS_LOCKS, FIS_SLIPWAYS, featuresFromFisLocks, featuresFromFisSlipways } from '@paddlesnitch/waterways/ingest/rws-fis'
+import { featuresFromWaterboards, hitsOf, NL_QUADRANTS, WATERBOARD_LAYERS, waterboardHitsUrl, waterboardPageUrl, WFS_PAGE } from '@paddlesnitch/waterways/ingest/waterboards'
 import { featuresFromWi, WI_LAYERS, wiQueryUrl, type WiLayer } from '@paddlesnitch/waterways/ingest/waterways-ireland'
 import type { CrewDetail, Feature } from '@paddlesnitch/waterways/types'
 
@@ -48,7 +51,7 @@ async function cachedBytes(source: string, name: string, url: string): Promise<{
       return { bytes, fetchedAt: stat.mtime.toISOString() }
     } catch { /* not cached yet */ }
   }
-  const res = await fetch(url, { headers: { 'User-Agent': UA } })
+  const res = await fetchWithRetry(url, { headers: { 'User-Agent': UA } })
   if (!res.ok) throw new Error(`${res.status} ${url}`)
   const bytes = Buffer.from(await res.arrayBuffer())
   await fs.mkdir(path.dirname(file), { recursive: true })
@@ -175,10 +178,51 @@ JOBS.amber = async () => {
   return featuresFromAmber(features, fetchedAt)
 }
 
+// AMBER Europe, Belgium, Germany, Austria and Switzerland: weirs, dams, sluices and bed sills (CC BY 4.0).
+JOBS['amber-eu'] = async () => {
+  const { features, fetchedAt } = await arcgisAll('amber-eu', AMBER_EU, AMBER_EU_WHERE)
+  return featuresFromAmberEu(features, fetchedAt)
+}
+
+// ROE: France's weirs and dams, with the drop and any canoe pass (Licence Ouverte 2.0, Sandre WFS).
+JOBS.roe = async () => {
+  const out: Feature[] = []
+  for (let page = 0; ; page++) {
+    const { body, fetchedAt } = await cached('roe', `page-${page}.geojson`, roePageUrl(page * ROE_PAGE))
+    const features = JSON.parse(body).features ?? []
+    out.push(...featuresFromRoe(features, fetchedAt))
+    if (features.length < ROE_PAGE) break
+  }
+  return out
+}
+
 // Inland Fisheries Ireland: the Republic's weirs, sluices, dams and waterfalls (CC BY 4.0).
 JOBS.ifi = async () => {
   const { features, fetchedAt } = await arcgisAll('ifi', IFI_BARRIERS, IFI_WHERE)
   return featuresFromIfi(features, fetchedAt)
+}
+
+// The Dutch water boards' weirs, dams, pumping stations and small locks (CC BY-SA 4.0, PDOK WFS, 1,000 a page).
+JOBS['nl-waterboards'] = async () => {
+  const out = new Map<string, Feature>()   // by id: a structure on a quadrant's edge comes twice
+  for (const layer of Object.keys(WATERBOARD_LAYERS)) {
+    for (const [q, bbox] of NL_QUADRANTS.entries()) {
+      const hits = hitsOf((await cached('nl-waterboards', `${layer}-q${q}-hits.xml`, waterboardHitsUrl(layer, bbox))).body)
+      if (!Number.isFinite(hits)) throw new Error(`no count for ${layer} quadrant ${q}`)
+      for (let page = 0; page * WFS_PAGE < hits; page++) {
+        const { body, fetchedAt } = await cached('nl-waterboards', `${layer}-q${q}-${page}.json`, waterboardPageUrl(layer, bbox, page * WFS_PAGE))
+        for (const f of featuresFromWaterboards(layer, JSON.parse(body).features ?? [], fetchedAt)) out.set(f.id, f)
+      }
+    }
+  }
+  return [...out.values()]
+}
+
+// Rijkswaterstaat FIS/VNDS: every lock on the Dutch fairway network and the trailer slipways (CC0).
+JOBS['rws-fis'] = async () => {
+  const locks = await cached('rws-fis', 'locks.geojson', FIS_LOCKS)
+  const slips = await arcgisAll('rws-fis/slipways', FIS_SLIPWAYS)
+  return [...featuresFromFisLocks(JSON.parse(locks.body).features ?? [], locks.fetchedAt), ...featuresFromFisSlipways(slips.features, slips.fetchedAt)]
 }
 
 async function main() {
@@ -199,7 +243,7 @@ async function main() {
       continue
     }
     let features: Feature[] | undefined, error: string | undefined
-    try { features = await job() } catch (e) { error = (e as Error).message.slice(0, 300) }
+    try { features = await job() } catch (e) { error = fetchError(e).slice(0, 300) }
     const staged = await getObject(stagedKey(name)).then(b => b && gunzipSync(b).toString()).catch(() => null)
     const stagedCount = staged ? (JSON.parse(staged) as Feature[]).length : null
     const { use, health: h } = assess(features ? { features: features.length } : { error: error! }, prev?.sources[name], stagedCount, now)

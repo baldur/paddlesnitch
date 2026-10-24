@@ -23,9 +23,17 @@ export type SourceId =
   | 'ea-levels'              // EA flood-monitoring river levels (live, OGL)
   | 'sepa-levels'            // SEPA river levels (live, OGL)
   | 'opw-levels'             // OPW waterlevel.ie (live, CC BY 4.0)
+  | 'rws-levels'             // Rijkswaterstaat water heights (live, open data)
+  | 'waterinfo-levels'       // Flemish water levels, waterinfo.be (live, CC BY 4.0)
+  | 'pegelonline-levels'     // German federal water levels, PEGELONLINE (live, DL-DE Zero 2.0)
+  | 'bafu-levels'            // Swiss federal water levels, BAFU (live, free use, source recommended)
   | 'thames-conditions'      // GOV.UK River Thames current conditions (live, OGL)
   | 'amber'                  // AMBER-GB barrier atlas (CC BY 4.0)
   | 'ifi'                    // Inland Fisheries Ireland barriers (CC BY 4.0)
+  | 'amber-eu'               // AMBER Atlas of Instream Barriers in Europe, Belgium (CC BY 4.0)
+  | 'roe'                    // France's register of river obstacles, OFB/Sandre (Licence Ouverte 2.0)
+  | 'rws-fis'                // Rijkswaterstaat FIS/VNDS: Dutch locks and slipways (CC0)
+  | 'nl-waterboards'         // Dutch water boards' weirs, dams, pumping stations, locks (CC BY-SA 4.0, own file)
   | 'scottish-canals'        // Scottish Canals open data (OGL)
   | 'waterways-ireland'      // Waterways Ireland ArcGIS layers (non-commercial)
   | 'osm'                    // OpenStreetMap (kept in its own table — ODbL)
@@ -45,6 +53,7 @@ export type NetLink = {
    *  untagged. Routing prefers 'yes' (the navigation) and avoids 'no'. */
   boat?: 'yes' | 'no'
   culvert?: true             // underground: never route through one
+  canoeRoute?: string        // the marked canoe route it's part of (OSM route=canoe)
 }
 
 export type FeatureKind =
@@ -93,7 +102,8 @@ export type Feature = {
   lock?: LockDetail
   portage?: PortageDetail
   crew?: CrewDetail
-  weir?: { heightM?: number }  // measured height, where the source has one
+  hire?: true               // canoe, kayak or paddleboard hire here (OSM)
+  weir?: { heightM?: number; canoePass?: boolean }  // measured height, where the source has one; a canoe pass beside it (ROE)
   facilities?: Facility[]
   photos?: string[]          // URLs published by the source
 }

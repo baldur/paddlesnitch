@@ -1,8 +1,8 @@
 // Our own tide fit (packages/waterways/src/tide.ts): recovers a known tide,
 // finds its high and low waters, and backtests honestly.
 import { describe, expect, it } from 'vitest'
-import { backtest, CONSTITUENTS, fitTide, observedHighs, tideAt, tideExtremes, type TideSample, type TidesFile } from '@paddlesnitch/waterways/tide'
-import { tideWindow } from './plan-ui'
+import { backtest, compactExtremes, CONSTITUENTS, reachesAhead, fitTide, observedHighs, officialExtremes, tideAt, tideExtremes, type OfficialTides, type TideSample, type TidesFile } from '@paddlesnitch/waterways/tide'
+import { reachesDutchTide, tideNote, tideWindow } from './plan-ui'
 
 const RAD = Math.PI / 180
 const START = Date.parse('2026-01-01T00:00:00Z')
@@ -69,7 +69,7 @@ describe('the tide window on a plan', () => {
   const file: TidesFile = { fittedAt: '', credit: '', gauges: { richmond: gauge(false, 12), towerPier: gauge(true, 15), poor: { ...gauge(true, 90), label: 'Poor fit' } } }
   const plan = {
     start: { at: [51.4, -0.4] as [number, number], waterway: 'River Thames' }, finish: { at: [51.5, -0.1] as [number, number], waterway: 'River Thames' },
-    line: [], lengthM: 20_000, portages: 1, movingS: 0, totalS: 0, tidalFromM: 8_000,
+    line: [[51.4, -0.4], [51.5, -0.1]] as [number, number][], lengthM: 20_000, portages: 1, movingS: 0, totalS: 0, tidalFromM: 8_000,
     stops: [{ feature: { id: 'l', kind: 'lock' as const, at: [51.43, -0.32] as [number, number], source: { source: 'ea-thames-locks' as const, fetchedAt: '' } }, leg: 'out' as const, chainageM: 7_900, fromPrevM: 0, portage: true, portagesBefore: 0, elapsedS: 0 }],
   }
 
@@ -80,6 +80,58 @@ describe('the tide window on a plan', () => {
     expect(w.gauges[0].extremes.every(e => e.type === 'high')).toBe(true)   // Richmond: high waters only
     expect(w.afterHigh?.gauge).toBe('Richmond')
     expect(Math.abs(w.afterHigh!.minutes)).toBeLessThan(7 * 60)
+  })
+
+  it("shows no tide where the route meets tidal water far from any gauge (the Severn isn't the Thames)", () => {
+    const severn = { ...plan, line: [[51.85, -2.25], [51.70, -2.45]] as [number, number][], finish: { at: [51.70, -2.45] as [number, number], waterway: 'River Severn' } }
+    expect(tideWindow(severn, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, file)).toBeNull()
+  })
+
+  it('in Zeeland: the Dutch gauges near where the route meets the tide, nearest first, on NAP', () => {
+    const nl = (label: string, at: [number, number]) => ({ ...gauge(true, 15), label, at, datum: 'NAP' as const })
+    const dutch: TidesFile = { ...file, gauges: { ...file.gauges, vlissingen: nl('Vlissingen', [51.442, 3.6]), terneuzen: nl('Terneuzen', [51.336, 3.82]) } }
+    const zeeland = { ...plan, line: [[51.50, 3.70], [51.40, 3.70]] as [number, number][], finish: { at: [51.40, 3.70] as [number, number], waterway: 'Westerschelde' }, tidalFromM: 2_000 }
+    const w = tideWindow(zeeland, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, dutch)!
+    expect(w.gauges.map(g => g.label)).toEqual(['Vlissingen', 'Terneuzen'])   // no Thames gauge, the nearer first
+    expect(w.afterHigh?.gauge).toBe('Vlissingen')
+    expect(tideNote(w)).toContain('heights above NAP')
+    expect(tideNote(tideWindow(plan, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, dutch)!)).toContain('Ordnance Datum')
+  })
+
+  it("Rijkswaterstaat's own predictions take over from our Dutch fits where they're loaded", () => {
+    const nl = (label: string, at: [number, number]) => ({ ...gauge(true, 15), label, at, datum: 'NAP' as const })
+    const ours: TidesFile = { ...file, gauges: { hansweert: nl('Hansweert', [51.4457, 3.9974]) } }
+    const T = Date.parse('2026-02-10T08:00:00.000Z')
+    const official: OfficialTides = { fetchedAt: '', credit: '', gauges: {
+      vlissingen: { label: 'Vlissingen', at: [51.442, 3.6], ...compactExtremes([
+        { t: T - 2 * 3_600_000, h: -1.9 }, { t: T + 4 * 3_600_000, h: 2.1 }, { t: T + 10 * 3_600_000, h: -1.8 }, { t: T + 16 * 3_600_000, h: 2.0 }]) },
+    } }
+    const zeeland = { ...plan, line: [[51.50, 3.70], [51.40, 3.70]] as [number, number][], finish: { at: [51.40, 3.70] as [number, number], waterway: 'Westerschelde' }, tidalFromM: 2_000 }
+    expect(reachesDutchTide(zeeland)).toBe(true)
+    expect(reachesDutchTide(plan)).toBe(false)   // the Thames
+    const w = tideWindow(zeeland, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, ours, official)!
+    expect(w.gauges.map(g => [g.label, g.official ?? false])).toEqual([['Vlissingen', true]])   // our Hansweert fit steps aside
+    expect(w.gauges[0].extremes.map(e => [e.type, e.height])).toEqual([['low', -1.9], ['high', 2.1]])   // 6 h before to 9 h after reaching it
+    expect(w.afterHigh?.gauge).toBe('Vlissingen')
+    expect(tideNote(w)).toContain("Rijkswaterstaat's predicted")
+    // Not loaded (offline, or an old version without them): our fit is used.
+    expect(tideWindow(zeeland, { paceKmh: 8, portageMinutes: 5, startAt: '2026-02-10T08:00:00.000Z' }, ours, null)!.gauges.map(g => g.label)).toEqual(['Hansweert'])
+  })
+
+  it('carries last week\'s predictions forward only while every gauge still reaches a month ahead', () => {
+    const now = Date.parse('2026-10-21T00:00:00Z'), day = 86_400_000
+    const gauge = (endDays: number) => ({ label: 'x', at: [51, 4] as [number, number], ...compactExtremes([{ t: now, h: 1 }, { t: now + endDays * day, h: -1 }]) })
+    expect(reachesAhead({ fetchedAt: '', credit: '', gauges: { a: gauge(400), b: gauge(60) } }, now)).toBe(true)
+    expect(reachesAhead({ fetchedAt: '', credit: '', gauges: { a: gauge(400), b: gauge(20) } }, now)).toBe(false)
+    expect(reachesAhead({ fetchedAt: '', credit: '', gauges: {} }, now)).toBe(false)
+  })
+
+  it('reads the compact predictions back: highs and lows by their neighbours, a double low as two lows', () => {
+    const t0 = Date.parse('2026-03-01T00:00:00Z'), h = 3_600_000
+    const g = { label: 'Hoek van Holland', at: [51.98, 4.12] as [number, number], ...compactExtremes([
+      { t: t0, h: 1.1 }, { t: t0 + 5 * h, h: -0.6 }, { t: t0 + 7 * h, h: -0.5 }, { t: t0 + 9 * h, h: -0.7 }, { t: t0 + 12.5 * h, h: 1.2 }]) }
+    expect(officialExtremes(g, t0, t0 + 13 * h).map(e => e.type)).toEqual(['high', 'low', 'high', 'low', 'high'])
+    expect(officialExtremes(g, t0 + 4 * h, t0 + 10 * h).map(e => e.at)).toEqual(['2026-03-01T05:00:00.000Z', '2026-03-01T07:00:00.000Z', '2026-03-01T09:00:00.000Z'])
   })
 
   it('needs a start time and a route that reaches tidal water', () => {

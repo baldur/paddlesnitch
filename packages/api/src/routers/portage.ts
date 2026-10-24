@@ -9,6 +9,9 @@ import { isPlatformAdmin } from '@paddlesnitch/core/admin'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { MAX_CARRY_M, MAX_NOTES } from '@paddlesnitch/waterways/portage'
 import { addPortage, deletePortage, flagPortage, hidePortage, listMyPortages } from '@paddlesnitch/waterways/portage-store'
+import { portagesFromTrack } from '@paddlesnitch/waterways/portage-detect'
+import { loadNational } from '@paddlesnitch/waterways/national'
+import { getSession } from '@paddlesnitch/analysis/analysis-store'
 import { router, protectedProcedure } from '../trpc'
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
@@ -35,6 +38,22 @@ export const portageRouter = router({
   }),
 
   mine: protectedProcedure.query(({ ctx }) => listMyPortages(ctx.user.id)),
+
+  /** Carries on one of your own saved paddles, round locks you haven't already
+   *  described: suggestions for you to check and publish, never published for you. */
+  fromPaddle: protectedProcedure.input(z.object({ sessionId: id })).query(async ({ ctx, input }) => {
+    const s = await getSession(ctx.user.id, input.sessionId)
+    const points = s?.result?.points
+    if (!points?.length) return []
+    const lat = points.map(p => p.lat), lng = points.map(p => p.lng)
+    const pad = 0.01   // ~1 km: well over portage-detect's PASS_M
+    const [s0, w0, n0, e0] = [Math.min(...lat) - pad, Math.min(...lng) - pad, Math.max(...lat) + pad, Math.max(...lng) + pad]
+    const [ds, mine] = await Promise.all([loadNational(), listMyPortages(ctx.user.id)])
+    const done = new Set(mine.map(p => p.featureId))
+    const locks = ds.features.filter(f => (f.kind === 'lock' || f.kind === 'portage') && !done.has(f.id)
+      && f.at[0] >= s0 && f.at[0] <= n0 && f.at[1] >= w0 && f.at[1] <= e0)
+    return portagesFromTrack(points, locks).filter(x => haversine(x.at, x.landings[0]) <= LANDING_NEAR_M && haversine(x.at, x.landings[1]) <= LANDING_NEAR_M)
+  }),
 
   delete: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {
     if (!(await deletePortage(ctx.user.id, input.id))) throw new TRPCError({ code: 'NOT_FOUND' })

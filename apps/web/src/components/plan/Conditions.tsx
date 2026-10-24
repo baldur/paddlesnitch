@@ -3,7 +3,7 @@ import { fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import type { ComputedPlan } from '@paddlesnitch/waterways/plan'
 import type { RouteConditions } from '@paddlesnitch/waterways/live-store'
 import { fmtDuration } from '@paddlesnitch/waterways/plan'
-import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, TIDE_CAVEAT, type TideWindow } from '@/lib/plan-ui'
+import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, tideNote, type TideWindow, regulatedKayakRivers, WALLOON_KAYAK_STATUS } from '@/lib/plan-ui'
 
 // "Conditions now" for a plan (docs/features/river-planner.md, P5): daylight
 // at the finish, the Thames boards on your reaches, and the river gauges along
@@ -24,6 +24,7 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
   const muted = print ? 'text-gray-700' : 'text-muted'
   const warn = print ? 'font-semibold' : 'text-red'
   const raised = data?.thames?.reaches.filter(r => r.level !== 'none') ?? []
+  const regulated = regulatedKayakRivers(plan.waterways ?? [])
   return (
     <section className={print ? 'avoid-break mb-4 text-sm space-y-2' : 'space-y-3'} data-testid="conditions">
       <h2 className={h2}>Conditions now</h2>
@@ -35,6 +36,13 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
         </p>
       )}
       {!day && <p className={muted}>Set a start time to see where you&apos;ll be at sunset.</p>}
+
+      {regulated.length > 0 && (
+        <p data-testid="kayak-regulated">
+          <span className={warn}>Kayaking on {regulated.join(' and ')} is allowed only at suitable river flows.</span>{' '}
+          Check today&apos;s status with the Walloon public service before you go: {print ? 'kayak.spw.wallonie.be' : <a className="underline" href={WALLOON_KAYAK_STATUS} target="_blank" rel="noreferrer">kayak.spw.wallonie.be</a>}.
+        </p>
+      )}
 
       {plan.tidalFromM !== undefined && !startAt && <p className={muted}>Your route reaches tidal water: set a start time to see the tide when you get there.</p>}
       {tide && (
@@ -49,11 +57,11 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
               <li key={g.id}>
                 <span className="font-medium">{g.label}</span>:{' '}
                 {g.extremes.map((e, i) => <span key={i} className="tabular">{i > 0 && ', '}{e.type === 'high' ? 'HW' : 'LW'} {fmtTime(e.at)} ({e.height.toFixed(1)} m)</span>)}
-                <span className={muted}> · within {g.p95Min} min in 95% of last month&apos;s highs</span>
+                <span className={muted}>{g.official ? ' · Rijkswaterstaat' : ` · within ${g.p95Min} min in 95% of last month's highs`}</span>
               </li>
             ))}
           </ul>
-          <p className={`text-sm ${muted}`}>{TIDE_CAVEAT} Our own fit of Environment Agency gauge readings (OGL); heights above Ordnance Datum.</p>
+          <p className={`text-sm ${muted}`}>{tideNote(tide)}</p>
         </div>
       )}
       {plan.tidalFromM !== undefined && startAt && !tide?.gauges.length && <p className={muted}>Tide predictions aren&apos;t ready yet for this stretch.</p>}
@@ -84,7 +92,7 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
                 {g.river ? <span className={muted}> · {g.river}</span> : null}
                 {': '}
                 {g.valueM === undefined ? <span className={muted}>no recent reading</span> : <>
-                  <span className="tabular">{g.valueM.toFixed(2)} m</span>
+                  <span className="tabular">{g.valueM.toFixed(2)} m{g.datum === 'nap' ? ' NAP' : ''}</span>
                   {g.state && <span className={g.state === 'normal' ? muted : warn}> {GAUGE_STATE_TEXT[g.state]}</span>}
                   {g.readAt && <span className={muted}> at {fmtTime(g.readAt)}</span>}
                 </>}

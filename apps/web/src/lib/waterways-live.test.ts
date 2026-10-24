@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, sepaGauges, stateOf, thamesReachesOnRoute, type Gauge,
+  eaGauges, gaugesAlong, opwGauges, parseThamesConditions, rwsGauges, rwsLatest, sepaGauges, stateOf, thamesReachesOnRoute, waterinfoGauges, pegelonlineGauges, bafuGauges, lv95ToWgs84, type Gauge,
 } from '@paddlesnitch/waterways/live'
 import { inDark, sunTimes } from '@paddlesnitch/waterways/sun'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
@@ -45,6 +45,51 @@ describe('gauges', () => {
 
   it('OPW: level sensors only, and only stations OPW lets us republish', () => {
     expect(opwGauges(fixture('opw-latest-sample.json')).map(g => g.id)).toEqual(['0000001041', '0000001043'])
+  })
+
+  it('Rijkswaterstaat: locations that measure water height, on NAP', () => {
+    const g = rwsGauges(fixture('rws-catalogue-sample.json'))
+    expect(g.map(x => x.id).sort()).toEqual(['dronten.roggebotsluis.vossemeer', 'genemuiden', 'groenevaart.boven'])   // not the location measuring something else
+    expect(g.find(x => x.id === 'genemuiden')).toMatchObject({ source: 'rws', name: 'Genemuiden', datum: 'nap', at: [52.633395, 6.033154] })
+  })
+
+  it("Rijkswaterstaat: the newest fresh reading per location, in metres; the 1980s archives it mixes in don't count", () => {
+    const latest = rwsLatest(fixture('rws-latest-sample.json'), Date.parse('2026-10-21T05:00:00Z'))
+    expect([...latest.keys()]).toEqual(['genemuiden'])                                   // Roggebotsluis's newest is from 2023
+    expect(latest.get('genemuiden')).toEqual({ value: -0.5, at: '2026-10-21T03:20:00.000Z' })
+    expect(rwsLatest(fixture('rws-latest-sample.json'), Date.parse('2026-10-22T05:00:00Z')).size).toBe(0)   // a day old: not now
+  })
+
+  it('Flanders (waterinfo.be): fresh levels in metres, the river from "Place/River"; empty and stale readings left out', () => {
+    const g = waterinfoGauges(fixture('waterinfo-layer-sample.json'), Date.parse('2026-10-21T15:00:00Z'))
+    expect(g.map(x => [x.name, x.river, x.valueM])).toEqual([
+      ['Kieldrecht', 'Noordzuidverbinding', 0.829], ['Malderen', 'Grote Molenbeek', 6.621], ['Koersel', 'Zwarte beek', 38.222],
+    ])
+    expect(g[0]).toMatchObject({ source: 'waterinfo', readAt: '2026-10-21T14:15:00.000Z' })
+  })
+
+  it('Germany (PEGELONLINE): fresh levels in metres with the WSV\'s own state, names in title case; no level series, or stale, left out', () => {
+    const g = pegelonlineGauges(fixture('pegelonline-stations-sample.json'), Date.parse('2026-10-22T17:30:00Z'))
+    expect(g.map(x => [x.name, x.river, x.valueM, x.state])).toEqual([
+      ['Ketzin', 'Untere Havel-Wasserstrasse', 2.45, 'normal'], ['Schöna', 'Elbe', 3.12, 'high'],
+    ])
+    expect(g[0]).toMatchObject({ source: 'pegelonline', id: '580430', at: [52.463153, 12.856784], readAt: '2026-10-22T17:15:00.000Z', datum: 'stage' })
+  })
+
+  it('Switzerland (BAFU): the water level in metres above sea level, river or lake by name; high only past the first flood threshold; stale or no level left out', () => {
+    const g = bafuGauges(fixture('bafu-hydro-sample.json'), Date.parse('2026-10-23T15:30:00Z'))
+    expect(g.map(x => [x.name, x.river, x.valueM, x.state ?? null, x.datum])).toEqual([
+      ['Bern, Schönau', 'Aare', 501.76, null, 'aod'], ['Unterägeri', 'Ägerisee', 723.27, null, 'aod'], ['Testhoch', 'Aare', 501.76, 'high', 'aod'],
+    ])
+    expect(g[0]).toMatchObject({ source: 'bafu', id: '2135', readAt: '2026-10-23T14:50:00.000Z' })
+    expect(g[0].at[0]).toBeCloseTo(46.93, 1)   // Bern
+    expect(g[0].at[1]).toBeCloseTo(7.45, 1)
+  })
+
+  it('Swiss LV95 to latitude and longitude (swisstopo\'s approximate formulas)', () => {
+    const [lat, lng] = lv95ToWgs84(2600000, 1200000)   // the old Bern observatory, the projection's origin
+    expect(lat).toBeCloseTo(46.95108, 4)
+    expect(lng).toBeCloseTo(7.43864, 4)
   })
 
   it('SEPA: the station list with positions', () => {

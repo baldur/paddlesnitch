@@ -10,6 +10,7 @@ import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { simplify } from '@paddlesnitch/waterways/line'
 import { findOnWater } from '@paddlesnitch/waterways/find'
 import { loadNational } from '@paddlesnitch/waterways/national'
+import { searchPlaces } from '@paddlesnitch/waterways/places'
 import { clickChoices, routePlan, snapClick } from '@paddlesnitch/waterways/plan'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { conditionsAlong } from '@paddlesnitch/waterways/live-store'
@@ -63,6 +64,12 @@ export const planRouter = router({
   // with its waterway, nearest to `near` first among equals.
   find: publicProcedure.input(z.object({ q: z.string().max(100), near: latLng.optional(), waterway: z.string().max(100).optional() }))
     .query(async ({ input }) => findOnWater(await loadNational(), input.q, { near: input.near, waterway: input.waterway })),
+
+  // The map's "Go to" box: towns, locks and weirs by name, nearest to `near`
+  // first among equals. Searched here: the whole index (270,000 places with
+  // France) is too big to send to the browser.
+  places: publicProcedure.input(z.object({ q: z.string().max(100), near: latLng.optional() }))
+    .query(async ({ input }) => searchPlaces((await loadNational()).places, input.q, input.near)),
 
   list: protectedProcedure.query(({ ctx }) => listPlans(ctx.user.id)),
 

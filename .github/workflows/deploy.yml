@@ -55,7 +55,28 @@ jobs:
 
       # Single unified app (att now serves /att + /analyse); one OpenNext bundle.
       - name: Build OpenNext bundle
-        run: pnpm build:open-next
+        run: |
+          set -o pipefail
+          pnpm build:open-next 2>&1 | tee "$RUNNER_TEMP/open-next.log"
+
+      # OpenNext installs the Lambda's linux/arm64 dependencies with npm and,
+      # if that fails, logs "Could not install dependencies" and carries on:
+      # the bundle ships without them and every request 502s (2026-10-21: an
+      # AWS SDK package was published 10 s after a dependent asked for it).
+      # Stop here instead, before anything is deployed.
+      - name: Check the server bundle is complete
+        run: |
+          if grep -q "Could not install dependencies" "$RUNNER_TEMP/open-next.log"; then
+            echo "::error::OpenNext could not install the Lambda's dependencies; not deploying. Re-run the job."
+            grep -B2 -A6 "npm error" "$RUNNER_TEMP/open-next.log" | head -40
+            exit 1
+          fi
+          fn=apps/web/.open-next/server-functions/default
+          # Top level: a broken install leaves them only under node_modules/.pnpm, where Node can't find them.
+          for m in @swc/helpers styled-jsx @next/env; do
+            [ -d "$fn/node_modules/$m" ] || { echo "::error::$m is missing from the server bundle; not deploying."; exit 1; }
+          done
+          echo "server bundle: $(du -sh "$fn" | cut -f1)"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -89,6 +110,12 @@ jobs:
           check /att 200
           check /guide 200
           check '/api/trpc/me' 200
+          # One route on the planner: proves the published river dataset loads
+          # in production, and loads it on the warm instance (~9 s with France)
+          # so the first paddler after a deploy doesn't wait for it.
+          plan='/api/trpc/plan.route?batch=1&input=%7B%220%22%3A%7B%22start%22%3A%5B51.355333%2C-1.994961%5D%2C%22finish%22%3A%5B51.500833%2C-0.121667%5D%2C%22shape%22%3A%22one_way%22%7D%7D'
+          code=$(curl -s -o /dev/null -w '%{http_code} %{time_total}s' --max-time 60 "$BASE$plan"); echo "plan.route (Devizes to Westminster) -> $code"
+          [ "${code%% *}" = 200 ]
           asset=$(curl -s --max-time 20 "$BASE/" | grep -oE '/_next/static/[^"]+\.js' | head -1)
           [ -n "$asset" ] && check "$asset" 200
 

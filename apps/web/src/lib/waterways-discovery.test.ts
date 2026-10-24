@@ -44,6 +44,14 @@ describe('discovery', () => {
     expect(got.map(c => c.id)).toEqual(['weir', 'canal'])
   })
 
+  it('the Netherlands: Dutch titles count, and the sources we already use stay out though the register re-harvests them', () => {
+    const c = (id: string, title: string): Candidate => ({ catalogue: 'data.overheid.nl', id, title, url: `https://data.overheid.nl/dataset/${id}`, created: '2026-10-05T00:00:00Z' })
+    expect(newCandidates([
+      c('a', 'Kanoroutes Fryslân'), c('b', 'Stuwen waterschap Rivierenland'), c('c', 'Locaties sportvisserij: trailerhellingen'),
+      c('d', 'FIS_VNDS - Lock - vlakken'), c('e', 'Waterschappen Kunstwerken IMWA'), c('f', 'Verdedigingslinies (punten)'),
+    ], since).map(x => x.id).sort()).toEqual(['a', 'b', 'c'])
+  })
+
   it('writes the digest as a checklist', () => {
     const body = digest([{ catalogue: 'OpenDataNI', id: 'x', title: 'Lough Erne canoe trail', url: 'https://u', publisher: 'DAERA', created: '2026-10-05T00:00:00Z', licence: 'OGL' }], since)
     expect(body).toContain('since 2026-10-01')

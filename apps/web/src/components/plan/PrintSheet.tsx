@@ -7,10 +7,11 @@ import { SOURCES } from '@paddlesnitch/waterways/sources'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import LoadingState from '@/components/LoadingState'
 import Conditions from '@/components/plan/Conditions'
-import { TIDES } from '@/lib/tides'
+import PortageDrawing from '@/components/plan/PortageDrawing'
+import { TIDES, useOfficialTides } from '@/lib/tides'
 import { trpc } from '@/lib/trpc'
 import {
-  crewLines, draftParams, groupOf, isCrewStop, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
+  aerialPhotoUrl, crewLines, draftParams, groupOf, isCrewStop, PHOTO_CREDIT, printablePhotos, isDarkStop, km, portageLines, portageMap, printHref, shownGroups, stopLines, tideWindow, type PlanDraft,
 } from '@/lib/plan-ui'
 
 // The paper copy of a plan (docs/features/river-planner.md, "Print"): black on
@@ -34,6 +35,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
     { enabled: !!draft.start && !!draft.finish, staleTime: Infinity },
   )
   const result = routed.data?.plan
+  const officialTides = useOfficialTides(typeof result === 'string' ? null : result)
   const conditions = trpc.plan.conditions.useQuery(
     { start: draft.start ?? [0, 0], finish: draft.finish ?? [0, 0] },
     { enabled: !!draft.start && !!draft.finish, staleTime: 10 * 60_000, retry: false },
@@ -64,6 +66,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
           <p className="mt-1">
             {plan.start.waterway || 'unnamed water'} to {plan.finish.waterway || 'unnamed water'} · {draft.shape === 'return' ? 'return' : 'one-way'}
             {draft.startAt && <> · {fmtDay(draft.startAt)}</>}
+            {plan.canoeRoutes?.length ? <> · on {plan.canoeRoutes.join(', ')}</> : null}
           </p>
           <dl className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-3 font-mono">
             <Fact label="Distance" value={km(plan.lengthM)} />
@@ -83,7 +86,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
           </section>
         )}
 
-        <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} print />
+        <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES, officialTides)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} print />
 
         {crew
           ? <CrewTable plan={plan} stops={stops} startAt={draft.startAt} notes={stopNotes} />
@@ -91,7 +94,7 @@ export default function PrintSheet({ draft, id, share, crew, show }: { draft: Pl
 
         <footer className="mt-6 pt-3 border-t border-black text-xs space-y-1">
           <p><strong>Not a navigation authority.</strong> Check stream warnings, lock notices and, below Teddington, the tide before you go. Portage sides marked unknown are unknown: look before you land.</p>
-          <p>Data: {CREDITED.map(c => SOURCES[c].attribution).join(' · ')}. Portage details from paddlers, CC0.</p>
+          <p>Data: {CREDITED.map(c => SOURCES[c].attribution).join(' · ')}. Portage details from paddlers, CC0.{photoCredits(stops)}</p>
           <p>Printed from paddlesnitch.com/plan.</p>
         </footer>
       </article>
@@ -134,7 +137,7 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
             <td className="py-1.5 pr-2 font-mono">{km(s.chainageM).replace(' km', '')}</td>
             <td className="py-1.5 pr-2 font-mono font-semibold">{when(s, startAt)}{isDarkStop(s) && <span className="block text-[11px] font-normal">dark</span>}</td>
             <td className="py-1.5">
-              {s.portages?.[0] && <PortageDrawing line={plan.line} stop={s} />}
+              {drawn(s) && <PrintedPortage line={plan.line} stop={s} />}
               {i === turn && <p className="font-mono text-[11px] uppercase tracking-[0.1em]">Turn at {km(plan.turnM!)}</p>}
               <p className="font-semibold">{s.feature.name ?? KIND[s.feature.kind]}<span className="font-normal"> · {KIND[s.feature.kind]}</span></p>
               {s.portages?.flatMap(p => portageLines(p).map((l, j) => <p key={`${p.id}-${j}`}>{l} <span className="text-gray-600">({p.by})</span></p>))}
@@ -151,29 +154,22 @@ function RouteTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops
 
 /** Where to land at a portage, drawn from our data (the satellite imagery
  *  may not be printed): route, direction, take-out (T), put-in (P), carry. */
-function PortageDrawing({ line, stop }: { line: ComputedPlan['line']; stop: Stop }) {
-  const d = portageMap(line, stop, stop.portages![0])
-  const clip = `clip-${stop.leg}-${stop.feature.id.replace(/[^\w-]/g, '_')}`
-  return (
-    <svg viewBox={`0 0 ${d.size} ${d.size}`} className="avoid-break float-right ml-3 mb-1 w-[38mm] h-[38mm] border border-black bg-white"
-      role="img" aria-label={`Map of ${stop.feature.name ?? 'the portage'}: take out at T, put in at P`} data-testid="portage-drawing">
-      <clipPath id={clip}><rect width={d.size} height={d.size} /></clipPath>
-      <g clipPath={`url(#${clip})`}>
-        <path d={d.route} fill="none" stroke="#9ca3af" strokeWidth={10} strokeLinecap="round" strokeLinejoin="round" />
-        <line x1={d.takeOut[0]} y1={d.takeOut[1]} x2={d.putIn[0]} y2={d.putIn[1]} stroke="black" strokeWidth={2} strokeDasharray="5 4" />
-        <rect x={d.lock[0] - 5} y={d.lock[1] - 5} width={10} height={10} fill="white" stroke="black" strokeWidth={2} />
-        <g transform={`translate(${d.arrow.x} ${d.arrow.y}) rotate(${d.arrow.deg})`}><path d="M0 -9 L6 6 L0 2 L-6 6 Z" fill="black" /></g>
-        {([['T', d.takeOut], ['P', d.putIn]] as const).map(([t, [x, y]]) => (
-          <g key={t}><circle cx={x} cy={y} r={9} fill="black" /><text x={x} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill="white">{t}</text></g>
-        ))}
-      </g>
-      <text x={d.size - 12} y={18} textAnchor="middle" fontSize={12} fontWeight={700}>N</text>
-      <path d={`M${d.size - 12} 22 l4 10 h-8 Z`} fill="black" />
-      <line x1={8} y1={d.size - 10} x2={8 + d.scale.px} y2={d.size - 10} stroke="black" strokeWidth={3} />
-      <text x={8} y={d.size - 15} fontSize={11}>{d.scale.m} m</text>
-    </svg>
-  )
+function PrintedPortage({ line, stop }: { line: ComputedPlan['line']; stop: Stop }) {
+  const map = portageMap(line, stop, stop.portages?.[0])
+  const region = printablePhotos(stop.feature.at)
+  return <PortageDrawing map={map} id={`${stop.leg}-${stop.feature.id}`} name={stop.feature.name}
+    photo={region ? aerialPhotoUrl(map, region) : undefined}
+    className="avoid-break float-right ml-3 mb-1 w-[38mm] h-[38mm]" />
 }
+
+/** A drawing beside a stop: where paddlers described the landings, and where
+ *  there's a printable aerial photo (the Netherlands, Flanders, France, and German states with open photos) at every lock. */
+const photoCredits = (stops: Stop[]) => {
+  const regions = [...new Set(stops.filter(drawn).map(s => printablePhotos(s.feature.at)).filter((r): r is NonNullable<typeof r> => !!r))]
+  return regions.length ? ` Aerial photos: ${regions.map(r => PHOTO_CREDIT[r]).join('; ')}.` : ''
+}
+
+const drawn = (s: Stop) => !!s.portages?.[0] || (s.portage && !!printablePhotos(s.feature.at))
 
 function CrewTable({ plan, stops, startAt, notes }: { plan: ComputedPlan; stops: Stop[]; startAt?: string; notes: Record<string, string> }) {
   const turn = turnIndex(plan, stops)

@@ -184,6 +184,7 @@ export type TidesFile = {
   gauges: Record<string, {
     label: string
     at: [number, number]
+    datum?: 'NAP'                 // heights above NAP (Dutch gauges); otherwise Ordnance Datum
     lows: boolean                 // false: high waters only (Richmond's half-tide lock holds the low water up)
     from: string; to: string      // the readings fitted
     backtest: { n: number; faults: number; medianMin: number; p95Min: number; medianHeightM: number }
@@ -197,5 +198,66 @@ export type TidesFile = {
  *  is mostly neaps. Every view shows the real figure next to the prediction. */
 export const SHOW_MEDIAN_MIN = 15
 export const SHOW_P95_MIN = 45
-export const showable = (g: TidesFile['gauges'][string]) =>
+export const showable = (g: Pick<TidesFile['gauges'][string], 'backtest'>) =>
   g.backtest.n >= 20 && g.backtest.medianMin <= SHOW_MEDIAN_MIN && g.backtest.p95Min <= SHOW_P95_MIN
+
+/** Dutch tide gauges fitted from Rijkswaterstaat's measured water heights
+ *  (scripts/waterways/download-rws-tides.ts, then fit-tides.ts): the
+ *  Westerschelde, Oosterschelde, the Maas mouth up to Dordrecht, the North Sea
+ *  coast and the Wadden Sea. Rijkswaterstaat location codes. */
+export const RWS_TIDE_GAUGES: Record<string, { code: string; label: string; at: [number, number] }> = {
+  vlissingen: { code: 'vlissingen', label: 'Vlissingen', at: [51.442, 3.6] },
+  terneuzen: { code: 'terneuzen', label: 'Terneuzen', at: [51.3362, 3.8198] },
+  hansweert: { code: 'hansweert', label: 'Hansweert', at: [51.4457, 3.9974] },
+  bath: { code: 'rilland.bath', label: 'Bath', at: [51.3988, 4.2101] },
+  stavenisse: { code: 'stavenisse', label: 'Stavenisse', at: [51.598, 4.004] },
+  hoekVanHolland: { code: 'hoekvanholland', label: 'Hoek van Holland', at: [51.9769, 4.1198] },
+  maassluis: { code: 'maassluis', label: 'Maassluis', at: [51.9175, 4.2498] },
+  rotterdam: { code: 'rotterdam.nieuwemaas.boerengat', label: 'Rotterdam (Boerengat)', at: [51.9184, 4.5003] },   // Boompjes has no measured series
+  dordrecht: { code: 'dordrecht.oudemaas.benedenmerwede', label: 'Dordrecht', at: [51.82, 4.671] },
+  scheveningen: { code: 'scheveningen', label: 'Scheveningen', at: [52.099, 4.2636] },
+  ijmuiden: { code: 'ijmuiden.buitenhaven', label: 'IJmuiden', at: [52.463, 4.555] },
+  denHelder: { code: 'denhelder.marsdiep', label: 'Den Helder', at: [52.9644, 4.745] },
+  harlingen: { code: 'harlingen.waddenzee', label: 'Harlingen', at: [53.1756, 5.4093] },
+  terschelling: { code: 'terschelling.west', label: 'West-Terschelling', at: [53.363, 5.22] },
+  lauwersoog: { code: 'lauwersoog.waddenzee', label: 'Lauwersoog', at: [53.4083, 6.196] },
+  delfzijl: { code: 'delfzijl', label: 'Delfzijl', at: [53.328, 6.931] },
+}
+
+/** Rijkswaterstaat's own predicted high and low waters ("getijextreem
+ *  berekend", GETETBRKD2) for the Dutch gauges, fetched at build time and
+ *  published with each data version as `tides-nl`, so a plan never sends its
+ *  whereabouts anywhere. Compact: per gauge a base time (ms) and
+ *  [minutes after base, cm above NAP] pairs. */
+export type OfficialTides = {
+  fetchedAt: string
+  credit: string
+  gauges: Record<string, { label: string; at: [number, number]; base: number; ext: [number, number][] }>
+}
+
+export function compactExtremes(list: { t: number; h: number }[]): { base: number; ext: [number, number][] } {
+  const sorted = [...list].sort((a, b) => a.t - b.t)
+  const base = sorted[0]?.t ?? 0
+  return { base, ext: sorted.map(e => [Math.round((e.t - base) / 60_000), Math.round(e.h * 100)]) }
+}
+
+/** The predicted extremes between two times. Highs and lows are told apart by
+ *  their neighbours (Hoek van Holland's double low water is two lows). */
+export function officialExtremes(g: OfficialTides['gauges'][string], from: number, to: number): TideExtreme[] {
+  const out: TideExtreme[] = []
+  g.ext.forEach(([m, cm], i) => {
+    const t = g.base + m * 60_000
+    if (t < from || t > to) return
+    const prev = g.ext[i - 1]?.[1], next = g.ext[i + 1]?.[1]
+    const high = (prev === undefined || cm > prev) && (next === undefined || cm > next)
+    out.push({ type: high ? 'high' : 'low', at: new Date(t).toISOString(), height: cm / 100 })
+  })
+  return out
+}
+
+/** Whether a published set of predictions still reaches this many days ahead,
+ *  so a week whose fetch failed can carry it forward instead of shipping none. */
+export function reachesAhead(t: OfficialTides, now: number, days = 30): boolean {
+  const ends = Object.values(t.gauges).map(g => g.base + (g.ext.at(-1)?.[0] ?? 0) * 60_000)
+  return ends.length > 0 && Math.min(...ends) >= now + days * 86_400_000
+}

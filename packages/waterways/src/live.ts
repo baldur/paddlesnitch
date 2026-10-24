@@ -8,18 +8,18 @@ import { lockKey } from './build'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { Feature, LatLng } from './types'
 
-export type GaugeSource = 'ea' | 'sepa' | 'opw'
+export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo' | 'pegelonline' | 'bafu'
 
 export type Gauge = {
   source: GaugeSource
-  id: string                   // EA station reference, SEPA ts_id, OPW station ref
+  id: string                   // EA station reference, SEPA ts_id, OPW station ref, Rijkswaterstaat location code
   name: string
   river?: string
   at: LatLng
   measure?: string             // EA: the stage measure's id, for its latest reading
   /** The reading is on the gauge's own scale (EA mASD/m, SEPA, OPW), which
    *  the typical range uses; 'aod' is metres above sea level, not comparable. */
-  datum?: 'stage' | 'aod'
+  datum?: 'stage' | 'aod' | 'nap'   // nap: metres above NAP, the Dutch datum (Rijkswaterstaat)
 }
 
 export type GaugeReading = Gauge & {
@@ -39,7 +39,8 @@ export const MAX_GAUGES = 12
 /** A gauge with no river named must be this close to count. */
 export const GAUGE_UNNAMED_NEAR_M = 300
 
-const riverKey = (s: string) => s.toLowerCase().replace(/^(river|the)\s+/, '').replace(/\s+/g, ' ').trim()
+// ß as ss: PEGELONLINE writes WASSERSTRASSE, OSM Wasserstraße.
+const riverKey = (s: string) => s.toLowerCase().replace(/ß/g, 'ss').replace(/^(river|the)\s+/, '').replace(/\s+/g, ' ').trim()
 
 /** The gauges on a route, in travel order, thinned evenly to MAX_GAUGES. A
  *  gauge that names its river counts only on a river the route paddles (not a
@@ -61,7 +62,11 @@ export function stateOf(value: number | undefined, typical: GaugeReading['typica
 export const gaugeUrl = (g: Gauge): string =>
   g.source === 'ea' ? `https://check-for-flooding.service.gov.uk/station/${encodeURIComponent(g.id)}`
     : g.source === 'sepa' ? 'https://waterlevels.sepa.org.uk/'
-      : `https://waterlevel.ie/${g.id}/0001/`
+      : g.source === 'rws' ? 'https://waterinfo.rws.nl/'
+      : g.source === 'waterinfo' ? 'https://www.waterinfo.be/'
+      : g.source === 'bafu' ? `https://www.hydrodaten.admin.ch/de/seen-und-fluesse/stationen-und-daten/${encodeURIComponent(g.id)}`
+      : g.source === 'pegelonline' ? `https://www.pegelonline.wsv.de/gast/stammdaten?pegelnr=${encodeURIComponent(g.id)}`
+        : `https://waterlevel.ie/${g.id}/0001/`
 
 // --- Parsing each source's station list ----------------------------------------
 
@@ -108,6 +113,114 @@ export function opwGauges(fc: { features?: unknown[] }): (Gauge & { valueM?: num
     const [lng, lat] = f.geometry.coordinates
     const v = Number(p.value)
     out.push({ source: 'opw', id: ref, name: String(p.station_name ?? ref), at: [lat, lng], datum: 'stage', valueM: Number.isFinite(v) ? v : undefined, readAt: typeof p.datetime === 'string' ? p.datetime : undefined })
+  }
+  return out
+}
+
+/** Rijkswaterstaat (the Netherlands): every location measuring water height
+ *  (WATHTE, cm above NAP) in the DDL catalogue. */
+export function rwsGauges(cat: { AquoMetadataLijst?: unknown[]; AquoMetadataLocatieLijst?: unknown[]; LocatieLijst?: unknown[] }): Gauge[] {
+  type Md = { AquoMetadata_MessageID: number; Grootheid?: { Code?: string } }
+  type Link = { AquoMetaData_MessageID: number; Locatie_MessageID: number }
+  type Loc = { Locatie_MessageID: number; Code: string; Naam?: string; Lat?: number; Lon?: number }
+  const level = new Set((cat.AquoMetadataLijst as Md[] ?? []).filter(m => m.Grootheid?.Code === 'WATHTE').map(m => m.AquoMetadata_MessageID))
+  const at = new Set((cat.AquoMetadataLocatieLijst as Link[] ?? []).filter(l => level.has(l.AquoMetaData_MessageID)).map(l => l.Locatie_MessageID))
+  return (cat.LocatieLijst as Loc[] ?? []).flatMap(l => (at.has(l.Locatie_MessageID) && typeof l.Lat === 'number' && typeof l.Lon === 'number'
+    ? [{ source: 'rws' as const, id: l.Code, name: l.Naam ?? l.Code, at: [l.Lat, l.Lon] as LatLng, datum: 'nap' as const }] : []))
+}
+
+/** A reading this old isn't "now". */
+export const RWS_FRESH_MS = 6 * 3_600_000
+
+/** The latest reading per location from OphalenLaatsteWaarnemingen, in metres.
+ *  The service returns every series a location ever had, archives from the
+ *  1980s included, so only the newest reading counts, and only if it's fresh. */
+export function rwsLatest(body: { WaarnemingenLijst?: unknown[] }, now: number): Map<string, { value: number; at: string }> {
+  type W = { Locatie?: { Code?: string }; MetingenLijst?: { Tijdstip?: string; Meetwaarde?: { Waarde_Numeriek?: number } }[] }
+  const out = new Map<string, { value: number; at: string }>()
+  for (const w of body.WaarnemingenLijst as W[] ?? []) {
+    const code = w.Locatie?.Code
+    for (const m of w.MetingenLijst ?? []) {
+      const t = Date.parse(m.Tijdstip ?? ''), v = m.Meetwaarde?.Waarde_Numeriek
+      if (!code || !Number.isFinite(t) || typeof v !== 'number' || Math.abs(v) > 5000 || now - t > RWS_FRESH_MS) continue
+      const at = new Date(t).toISOString()
+      if (!out.has(code) || out.get(code)!.at < at) out.set(code, { value: v / 100, at })
+    }
+  }
+  return out
+}
+
+/** Flanders (waterinfo.be, VMM and De Vlaamse Waterweg): every station's latest
+ *  water level in one KiWIS value layer. "Place/River" names give the river, so
+ *  gauges match a route by name. Only fresh readings count (RWS_FRESH_MS). */
+export function waterinfoGauges(rows: unknown[], now: number): (Gauge & { valueM: number; readAt: string })[] {
+  type Row = { ts_id?: number; station_name?: string; station_latitude?: number; station_longitude?: number; ts_value?: number | null; timestamp?: string; ts_unitsymbol?: string }
+  const out: (Gauge & { valueM: number; readAt: string })[] = []
+  for (const r of rows as Row[]) {
+    const t = Date.parse(r.timestamp ?? '')
+    if (typeof r.ts_value !== 'number' || r.ts_unitsymbol !== 'm' || !Number.isFinite(t) || now - t > RWS_FRESH_MS) continue
+    if (typeof r.station_latitude !== 'number' || typeof r.station_longitude !== 'number') continue
+    const [place, river] = (r.station_name ?? '').split('/')
+    out.push({ source: 'waterinfo', id: String(r.ts_id), name: place || String(r.ts_id), ...(river ? { river } : {}), at: [r.station_latitude, r.station_longitude], valueM: r.ts_value, readAt: new Date(t).toISOString() })
+  }
+  return out
+}
+
+/** "UNTERE HAVEL-WASSERSTRASSE" → "Untere Havel-Wasserstrasse". */
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase())
+
+/** Germany (PEGELONLINE, the federal waterways' gauges): every station's
+ *  current water level ("W", cm on the gauge's own scale) in one call, with the
+ *  WSV's own verdict against mean low and high water (stateMnwMhw), so no
+ *  typical range is needed. Only fresh readings count (RWS_FRESH_MS). */
+export function pegelonlineGauges(stations: unknown[], now: number): (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] {
+  type Ts = { shortname?: string; unit?: string; currentMeasurement?: { timestamp?: string; value?: number; stateMnwMhw?: string } }
+  type St = { uuid?: string; number?: string; longname?: string; latitude?: number; longitude?: number; water?: { longname?: string }; timeseries?: Ts[] }
+  const STATE: Record<string, GaugeReading['state']> = { low: 'low', normal: 'normal', high: 'high' }
+  const out: (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] = []
+  for (const s of stations as St[]) {
+    const w = s.timeseries?.find(t => t.shortname === 'W' && t.unit === 'cm')?.currentMeasurement
+    const t = Date.parse(w?.timestamp ?? '')
+    if (typeof w?.value !== 'number' || !Number.isFinite(t) || now - t > RWS_FRESH_MS) continue
+    if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number' || !s.uuid) continue
+    const state = STATE[w.stateMnwMhw ?? '']
+    out.push({
+      source: 'pegelonline', id: s.number ?? s.uuid, name: titleCase(s.longname ?? s.uuid), ...(s.water?.longname ? { river: titleCase(s.water.longname) } : {}),
+      at: [s.latitude, s.longitude], datum: 'stage', valueM: Math.round(w.value) / 100, readAt: new Date(t).toISOString(), ...(state ? { state } : {}),
+    })
+  }
+  return out
+}
+
+/** Swiss LV95 (E, N) to WGS84, swisstopo's approximate formulas (~1 m). */
+export function lv95ToWgs84(e: number, n: number): LatLng {
+  const y = (e - 2_600_000) / 1e6, x = (n - 1_200_000) / 1e6
+  const lng = 2.6779094 + 4.728982 * y + 0.791484 * y * x + 0.1306 * y * x * x - 0.0436 * y ** 3
+  const lat = 16.9023892 + 3.238272 * x - 0.270978 * y * y - 0.002528 * x * x - 0.0447 * y * y * x - 0.0140 * x ** 3
+  return [Math.round((lat * 100 / 36) * 1e6) / 1e6, Math.round((lng * 100 / 36) * 1e6) / 1e6]
+}
+
+/** Switzerland (BAFU hydrology, the federal stations): each station's water
+ *  level in metres above sea level ('aod': not comparable across gauges) and
+ *  "high" only when its latest reading has reached BAFU's first flood-danger
+ *  threshold (wl_1, same unit). The map's level icons aren't danger levels, so
+ *  they're not used. Only fresh readings count (RWS_FRESH_MS). */
+export function bafuGauges(fc: { features?: unknown[] }, now: number): (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] {
+  type F = { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | null | undefined> }
+  const num = (s: string | null | undefined) => { const m = /^-?\d+(\.\d+)?/.exec((s ?? '').trim()); return m ? Number(m[0]) : undefined }
+  const unitOf = (s: string | null | undefined) => (s ?? '').trim().replace(/^-?\d+(\.\d+)?\s*/, '')
+  const out: (Gauge & { valueM: number; readAt: string; state?: GaugeReading['state'] })[] = []
+  for (const f of (fc.features ?? []) as F[]) {
+    const p = f.properties ?? {}, c = f.geometry?.coordinates
+    const level = num(p.sensor_waterlevel_last_value), t = Date.parse(p.sensor_waterlevel_measured_at ?? '')
+    if (level === undefined || !Number.isFinite(t) || now - t > RWS_FRESH_MS || !c || !p.key) continue
+    const value = num(p.last_value), wl1 = num(p.wl_1)
+    const high = value !== undefined && wl1 !== undefined && unitOf(p.wl_1) === (p.unit ?? '').trim() && value >= wl1
+    const [, place] = (p.label ?? '').split(' - ')
+    out.push({
+      source: 'bafu', id: p.key, name: (place ?? p.label ?? p.key).trim(), ...(p.hydro_body_name ? { river: p.hydro_body_name } : {}),
+      at: lv95ToWgs84(c[0], c[1]), datum: 'aod', valueM: level, readAt: new Date(t).toISOString(), ...(high ? { state: 'high' as const } : {}),
+    })
   }
   return out
 }

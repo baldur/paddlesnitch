@@ -1,6 +1,6 @@
 name: Waterways refresh
 
-# Weekly rebuild of the river planner's UK and Ireland data
+# Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium, France, Germany, Austria and Switzerland data
 # (docs/features/waterways-uk-ireland.md): OSM from Geofabrik plus every
 # source's normalised features, the check routes, then a new version uploaded
 # to S3 and a PR pointing packages/waterways/data/manifest.json at it. Nothing
@@ -25,7 +25,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     # The AWS role (att-github-waterways) trusts only this environment, and can
     # only touch waterways/* in the data bucket (infra/lib/att-stack.ts).
     environment: waterways-data
@@ -51,12 +51,18 @@ jobs:
       - name: Install pyosmium
         run: pip install osmium
 
-      - name: Download the OSM extract (Britain and Ireland)
-        run: curl -sSfL -o "$RUNNER_TEMP/gbie.osm.pbf" https://download.geofabrik.de/europe/britain-and-ireland-latest.osm.pbf
-
-      - name: Extract rivers, canals, points and places
+      # One extract per country group; the build reads each (build-national.ts,
+      # EXTRACTS). Downloaded, extracted and deleted one at a time: together
+      # they're ~9 GB, most of the runner's free disk.
+      - name: Download and extract the OSM extracts (Britain and Ireland, the Netherlands, Belgium, France, Germany, Austria, Switzerland)
         working-directory: apps/web
-        run: python scripts/waterways/osm_extract.py "$RUNNER_TEMP/gbie.osm.pbf" .cache/waterways/osm/gbie
+        run: |
+          for x in gbie:britain-and-ireland nl:netherlands be:belgium fr:france de:germany at:austria ch:switzerland; do
+            id="${x%%:*}"; name="${x#*:}"
+            curl -sSfL -o "$RUNNER_TEMP/$id.osm.pbf" "https://download.geofabrik.de/europe/$name-latest.osm.pbf"
+            python scripts/waterways/osm_extract.py "$RUNNER_TEMP/$id.osm.pbf" ".cache/waterways/osm/$id"
+            rm "$RUNNER_TEMP/$id.osm.pbf"
+          done
 
       # The waterways role sits beside the deploy role in the same account.
       - name: Work out the waterways role
@@ -97,15 +103,24 @@ jobs:
             fi
           done
 
+      # Rijkswaterstaat's predicted Dutch high and low waters, published with the
+      # version as tides-nl. Without them the planner falls back to our own fits.
+      - name: Fetch Dutch tide predictions
+        working-directory: apps/web
+        # Capped: 80 requests at up to 2 minutes each could outlast the job if RWS hung.
+        run: timeout 600 pnpm exec tsx scripts/waterways/fetch-rws-tide-extremes.ts || echo "::warning::Dutch tide predictions not fetched; this version has none"
+
       - name: Build and check (no upload)
         working-directory: apps/web
+        env:
+          NODE_OPTIONS: --max-old-space-size=8000   # the four countries' network in one build
         run: pnpm waterways:national | tee "$RUNNER_TEMP/build.log"
 
       - name: Publish a new version
         working-directory: apps/web
         env:
           DATA_BUCKET: paddlesnitch-data-prod
-        run: pnpm waterways:national --publish | tee -a "$RUNNER_TEMP/build.log"
+        run: NODE_OPTIONS=--max-old-space-size=8000 pnpm waterways:national --publish | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Open a PR to make it live
         env:
@@ -115,12 +130,19 @@ jobs:
           branch="waterways/refresh-$version"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
+          # Branch from main as it is now, not the commit this run started on:
+          # if main moved meanwhile (a workflow file among the changes), a branch
+          # cut from the old commit is refused ("refusing to allow a GitHub App
+          # to create or update workflow … without workflows permission").
+          cp packages/waterways/data/manifest.json "$RUNNER_TEMP/manifest.json"
+          git fetch --quiet origin main
+          git switch -c "$branch" origin/main
+          cp "$RUNNER_TEMP/manifest.json" packages/waterways/data/manifest.json
           git add packages/waterways/data/manifest.json
           git commit -m "data(waterways): publish $version"
           git push -u origin "$branch"
           {
-            echo "Weekly rebuild of the river planner's UK and Ireland data. Merging makes version \`$version\` live."
+            echo "Weekly rebuild of the river planner's UK, Ireland, Netherlands, Belgium, France, Germany, Austria and Switzerland data. Merging makes version \`$version\` live."
             echo
             echo '```'
             grep -E '^\s+(network|OSM|features|places|✓|✗|wrote)' "$RUNNER_TEMP/build.log" | head -60

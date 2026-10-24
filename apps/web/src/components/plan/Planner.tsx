@@ -1,11 +1,11 @@
 'use client'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { keepPreviousData } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtDay, fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import manifest from '@paddlesnitch/waterways/data/manifest.json'
-import { searchPlaces, type Place } from '@paddlesnitch/waterways/places'
+import type { Place } from '@paddlesnitch/waterways/places'
 import { fmtDuration, timePlan, type ComputedPlan, type Spot, type Stop } from '@paddlesnitch/waterways/plan'
 import type { SavedPlan } from '@paddlesnitch/waterways/plan-store'
 import { NATIONAL } from '@paddlesnitch/waterways/regions'
@@ -18,7 +18,7 @@ import { Stat } from '@paddlesnitch/ui/Card'
 import PlanMapClient from '@/components/map/PlanMapClient'
 import Conditions from '@/components/plan/Conditions'
 import EndSearch from '@/components/plan/EndSearch'
-import { TIDES } from '@/lib/tides'
+import { TIDES, useOfficialTides } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
@@ -109,6 +109,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
     () => (current?.plan && typeof current.plan !== 'string' && draft.finish ? timePlan(current.plan, draft) : null),
     [current, draft],
   )
+  const officialTides = useOfficialTides(plan)
   const visible = plan?.stops.filter(s => shown.has(groupOf(s.feature.kind))) ?? []
   const conditions = trpc.plan.conditions.useQuery(
     { start: draft.start ?? [0, 0], finish: draft.finish ?? [0, 0] },
@@ -181,7 +182,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
         )}
         <p className="hidden sm:block absolute top-2 right-2 z-[500] max-w-[16rem] rounded-control bg-bg/90 border border-border px-2 py-1 text-sm text-muted pointer-events-none">
           {manifest.version
-            ? 'Rivers and canals of the UK and Ireland. Switch on Coverage to see how well we know each.'
+            ? 'Rivers and canals of the UK, Ireland, the Netherlands, Belgium, France, Germany, Austria and Switzerland. Switch on Coverage to see how well we know each.'
             : 'River data so far: Devizes to Westminster.'}
         </p>
       </div>
@@ -219,7 +220,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
               ))}
             </div>
           )}
-          <PlaceSearch version={VERSION} near={draft.start ?? undefined}
+          <PlaceSearch near={draft.start ?? undefined}
             onPick={p => setFocus({ at: p.at, zoom: p.kind === 'lock' || p.kind === 'weir' ? 16 : 14 })} />
           {unfound.filter(u => !draft[u.end]).map(u => (
             <p key={u.end} className="mt-2 text-sm text-red">We couldn&apos;t find &ldquo;{u.name}&rdquo; on the water. Type the {u.end} in its box above, or click the map.</p>
@@ -264,7 +265,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
           </div>
         )}
 
-        {plan && <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
+        {plan && <Conditions plan={plan} startAt={draft.startAt} tide={tideWindow(plan, draft, TIDES, officialTides)} data={conditions.data} loading={conditions.isLoading} failed={conditions.isError} />}
 
         {plan && (
           <section>
@@ -321,12 +322,15 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
                 <li key={id}><a className="tt-link" href={SOURCES[id].url} target="_blank" rel="noreferrer">{SOURCES[id].attribution}</a></li>
               ))}
             </ul>
+            <p className="pb-2"><Link className="tt-link" href="/plan/sources">Licences, aerial photos and how we fetch →</Link></p>
           </details>
         </section>
       </aside>
     </main>
   )
 }
+
+const listOf = (xs: string[]) => (xs.length < 2 ? xs[0] : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`)
 
 function Summary({ plan }: { plan: ComputedPlan }) {
   return (
@@ -339,6 +343,7 @@ function Summary({ plan }: { plan: ComputedPlan }) {
         <Stat label="With portages" value={fmtDuration(plan.totalS)} />
         {plan.finishAt && <Stat label="Finish at" value={fmtDayTime(plan.finishAt)} tone="primary" />}
       </div>
+      {plan.canoeRoutes?.length ? <p className="mt-3 text-sm text-muted" data-testid="canoe-routes">On {listOf(plan.canoeRoutes)}, a marked canoe route.</p> : null}
     </section>
   )
 }
@@ -559,19 +564,15 @@ function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
   )
 }
 
-/** Type a town, village, lock or weir; pick one to move the map there. The
- *  index loads the first time the box gets focus. */
-function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng; onPick: (p: Place) => void }) {
-  const [places, setPlaces] = useState<Place[] | null>(null)
+/** Type a town, village, lock or weir; pick one to move the map there.
+ *  Searched on the server (plan.places) as you type. */
+function PlaceSearch({ near, onPick }: { near?: LatLng; onPick: (p: Place) => void }) {
   const [q, setQ] = useState('')
+  const [debounced, setDebounced] = useState('')
   const [open, setOpen] = useState(false)
-  const asked = useRef(false)
-  const load = () => {
-    if (asked.current) return
-    asked.current = true
-    fetch(`/plan/data/${version}/places`).then(r => (r.ok ? r.json() : Promise.reject())).then(setPlaces, () => { asked.current = false })
-  }
-  const hits = places ? searchPlaces(places, q, near) : []
+  useEffect(() => { const t = setTimeout(() => setDebounced(q.trim()), 200); return () => clearTimeout(t) }, [q])
+  const found = trpc.plan.places.useQuery({ q: debounced, near }, { enabled: debounced.length >= 2, staleTime: Infinity })
+  const hits = debounced.length >= 2 ? found.data ?? [] : []
   const pick = (p: Place) => { onPick(p); setQ(p.name); setOpen(false) }
   return (
     <div className="mt-3 relative">
@@ -579,7 +580,7 @@ function PlaceSearch({ version, near, onPick }: { version: string; near?: LatLng
         <span className="text-sm font-medium text-fg">Go to</span>
         <input className={INPUT} value={q} placeholder="Town, village or lock" aria-label="Go to a place"
           role="combobox" aria-expanded={open && hits.length > 0} aria-controls="place-results" autoComplete="off"
-          onFocus={() => { load(); setOpen(true) }}
+          onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onChange={e => { setQ(e.target.value); setOpen(true) }}
           onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); pick(hits[0]) } if (e.key === 'Escape') setOpen(false) }} />

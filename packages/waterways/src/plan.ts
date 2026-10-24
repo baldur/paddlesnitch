@@ -66,6 +66,8 @@ export type ComputedPlan = {
   /** Where the outward route first reaches tidal water (metres from the
    *  start), for the tide window; unset when it never does. */
   tidalFromM?: number
+  canoeRoutes?: string[]   // marked canoe routes it follows for at least CANOE_ROUTE_MIN_M, in order
+  waterways?: string[]     // the named waterways it paddles, in order (always set by routePlan)
 }
 
 export type PlanError = 'start_off_water' | 'finish_off_water' | 'too_short' | 'not_connected'
@@ -145,6 +147,7 @@ export function routePlan(
     lengthM: out.lengthM * legs.length,
     waterways: [...new Set(out.legs.map(l => l.name).filter(Boolean))],
     tidalFromM: tidalFrom(dataset.links, out.legs),
+    ...canoeRoutesOf(dataset.links, out.legs),
     stops,
   }
 }
@@ -161,6 +164,23 @@ function canalAt(links: NetLink[], legs: { linkId: string; from: number; to: num
 }
 
 /** Metres along the route to the first tidal link, if any. */
+/** A name worth showing. Dutch junction networks number their legs ("4-5;
+ *  canoe", "12-39"): still paddleable water, but not a route anyone knows by name. */
+export const isRouteName = (r: string) => /[a-z]{3}/i.test(r) && !/^\d/.test(r.trim()) && r !== 'canoe route'
+
+/** A marked canoe route counts as followed after this much of it. */
+export const CANOE_ROUTE_MIN_M = 500
+
+function canoeRoutesOf(links: NetLink[], legs: { linkId: string; from: number; to: number }[]): { canoeRoutes?: string[] } {
+  const metres = new Map<string, number>()
+  for (const leg of legs) {
+    const r = linkById(links, leg.linkId)?.canoeRoute
+    if (r && isRouteName(r)) metres.set(r, (metres.get(r) ?? 0) + Math.abs(leg.to - leg.from))
+  }
+  const routes = [...metres].filter(([, m]) => m >= CANOE_ROUTE_MIN_M).map(([r]) => r)
+  return routes.length ? { canoeRoutes: routes } : {}
+}
+
 function tidalFrom(links: NetLink[], legs: { linkId: string; from: number; to: number }[]): number | undefined {
   let m = 0
   for (const leg of legs) {

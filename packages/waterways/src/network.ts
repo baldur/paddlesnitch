@@ -26,11 +26,12 @@ export function snap(links: NetLink[], p: LatLng, maxM = Infinity): Snap | null 
     for (let y = cy - r; y <= cy + r; y++) {
       for (let x = cx - r; x <= cx + r; x++) {
         if (Math.max(Math.abs(y - cy), Math.abs(x - cx)) !== r) continue   // this ring only
-        for (const link of cells.get(`${y}:${x}`) ?? []) consider(link)
+        for (const link of cells.get(cellKey(y, x)) ?? []) consider(link)
       }
     }
     // Everything within r cells is searched, so a hit that close is the nearest.
-    if (best && (best as Snap).dist <= r * CELL_MIN_M) return best
+    // Nothing outside can be nearer, so this is the nearest: still too far is none.
+    if (best && (best as Snap).dist <= r * CELL_MIN_M) return (best as Snap).dist <= maxM ? best : null
     if (r * CELL_MIN_M >= maxM) return best && (best as Snap).dist <= maxM ? best : null
   }
   for (const link of links) consider(link)
@@ -52,7 +53,7 @@ export function snapChoices(links: NetLink[], p: LatLng, radiusM: number): Snap[
   const seen = new Set<NetLink>()
   for (let y = cy - r; y <= cy + r; y++) {
     for (let x = cx - r; x <= cx + r; x++) {
-      for (const link of cells.get(`${y}:${x}`) ?? []) {
+      for (const link of cells.get(cellKey(y, x)) ?? []) {
         if (seen.has(link)) continue
         seen.add(link)
         const pr = project(link.line, p)
@@ -76,10 +77,13 @@ const CELL = 0.02                                 // degrees
 const CELL_MIN_M = CELL * 111_320 * Math.cos((61 * Math.PI) / 180)   // a cell's narrowest side in the UK and Ireland
 const RINGS = 4
 const cellOf = (p: LatLng): [number, number] => [Math.floor(p[0] / CELL), Math.floor(p[1] / CELL)]
+/** A cell as one number (|x| < 9,000 at CELL = 0.02°): building the index for
+ *  ~4 million points with string keys took most of a cold start. */
+const cellKey = (y: number, x: number) => y * 100_000 + x
 
 type Index = {
   byId: Map<string, NetLink>
-  cells: Map<string, NetLink[]>
+  cells: Map<number, NetLink[]>
   adj: Map<string, { link: NetLink; to: string }[]>
 }
 const indexes = new WeakMap<NetLink[], Index>()
@@ -87,20 +91,23 @@ const indexes = new WeakMap<NetLink[], Index>()
 function indexOf(links: NetLink[]): Index {
   const hit = indexes.get(links)
   if (hit) return hit
-  const cells = new Map<string, NetLink[]>()
+  const cells = new Map<number, NetLink[]>()
   const adj = new Map<string, { link: NetLink; to: string }[]>()
   const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => { const l = m.get(k); if (l) l.push(v); else m.set(k, [v]) }
   for (const link of links) {
-    const keys = new Set<string>()
-    for (let i = 0; i < link.line.length; i++) {
-      const [y, x] = cellOf(link.line[i])
-      keys.add(`${y}:${x}`)
-      // A long straight segment can cross cells between its vertices.
-      if (i > 0) {
-        const [py, px] = cellOf(link.line[i - 1])
+    const keys = new Set<number>()
+    let py = 0, px = 0
+    const line = link.line   // once: on the server it's unpacked on each read
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i]
+      const y = Math.floor(p[0] / CELL), x = Math.floor(p[1] / CELL)
+      if (i === 0) keys.add(cellKey(y, x))
+      else if (y !== py || x !== px) {
+        // A long straight segment can cross cells between its vertices.
         for (let yy = Math.min(y, py); yy <= Math.max(y, py); yy++)
-          for (let xx = Math.min(x, px); xx <= Math.max(x, px); xx++) keys.add(`${yy}:${xx}`)
+          for (let xx = Math.min(x, px); xx <= Math.max(x, px); xx++) keys.add(cellKey(yy, xx))
       }
+      py = y; px = x
     }
     for (const k of keys) push(cells, k, link)
     push(adj, link.from, { link, to: link.to })

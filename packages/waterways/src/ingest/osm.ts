@@ -82,6 +82,7 @@ export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
     const form: NetLink['form'] = w.tags?.waterway === 'canal' ? 'canal' : w.tags?.tidal === 'yes' ? 'tidalRiver' : 'inlandRiver'
     const boat = paddleable(w.tags ?? {})
     const culvert = w.tags?.tunnel === 'culvert'
+    const canoeRoute = w.tags?.canoe_route
     let start = 0
     for (let i = 1; i < w.nodes.length; i++) {
       if (i < w.nodes.length - 1 && (uses.get(w.nodes[i]) ?? 0) < 2) continue
@@ -96,6 +97,7 @@ export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
         lengthM: Math.round(lineLength(line)),
         ...(boat ? { boat } : {}),
         ...(culvert ? { culvert: true as const } : {}),
+        ...(canoeRoute ? { canoeRoute } : {}),
       })
       start = i
     }
@@ -103,9 +105,11 @@ export function linksFromWays(ways: OsmWay[], simplifyM = 3): NetLink[] {
   return out
 }
 
-/** canoe=* says it for paddlers; failing that, boat=* (yes on navigations). */
+/** canoe=* says it for paddlers; failing that, being on a mapped canoe route
+ *  (canoe_route, set by osm_extract.py from route=canoe relations); failing
+ *  that, boat=* (yes on navigations). */
 function paddleable(tags: Record<string, string>): NetLink['boat'] {
-  const v = tags.canoe ?? tags.boat
+  const v = tags.canoe ?? (tags.canoe_route ? 'yes' : undefined) ?? tags.boat
   if (v === 'yes' || v === 'designated' || v === 'permissive') return 'yes'
   if (v === 'no' || v === 'private') return 'no'
   return undefined
@@ -129,16 +133,22 @@ export function osmElementsFromOverpass(elements: OverpassElement[]): OsmElement
  *  drawn as several ways is merged), at the chamber's middle. These are OSM
  *  data (ODbL): the national build publishes them in their own file and they
  *  only fill gaps where no authority lists the lock. */
+/** A boat lift's lanes this close together are one lift. */
+const LIFT_LANES_M = 250
+
 export function osmLocks(ways: OsmWay[], fetchedAt: string, mergeM = 50): Feature[] {
   const chambers: { ids: number[]; at: LatLng; name?: string }[] = []
   for (const w of ways) {
+    // A boat lift or inclined plane is a lock to a paddler: you carry round it.
+    // Its lanes (Ronquières has two, ~100 m apart) are one.
+    const lift = w.tags?.waterway === 'boat_lift'
     // Boat rollers are tagged as chambers (Teddington, Richmond): a portage aid,
     // not a lock. Private locks are marina entrances, not on anyone's way.
-    if (w.tags?.lock !== 'yes' || !w.coords.length || /roller/i.test(w.tags.lock_name ?? '')) continue
-    if (w.tags.access === 'private' || w.tags.access === 'no') continue
+    if ((!lift && w.tags?.lock !== 'yes') || !w.coords.length || /roller/i.test(w.tags?.lock_name ?? '')) continue
+    if (w.tags?.access === 'private' || w.tags?.access === 'no') continue
     const at = w.coords[Math.floor(w.coords.length / 2)]
-    const name = w.tags.lock_name ?? (/\block\b/i.test(w.tags.name ?? '') ? w.tags.name : undefined)
-    const same = chambers.find(c => haversine(c.at, at) <= mergeM)
+    const name = lift ? w.tags?.name : w.tags?.lock_name ?? (/\block\b/i.test(w.tags?.name ?? '') ? w.tags?.name : undefined)
+    const same = chambers.find(c => haversine(c.at, at) <= (lift ? LIFT_LANES_M : mergeM))
     if (same) { same.ids.push(w.id); same.name ??= name; continue }
     chambers.push({ ids: [w.id], at, name })
   }
@@ -179,24 +189,37 @@ export function osmGateLocks(points: OsmElement[], chambers: Feature[], fetchedA
   })
 }
 
-/** Public slipways and canoe put-ins mapped in OpenStreetMap: places to get on
- *  and off the water where no authority lists one (the build applies the gap
- *  rule). Private, customers-only and closed ones are left out. ODbL, published
- *  with the OSM locks in osm-features. */
+/** Hire of something you paddle (OSM amenity=boat_rental): a canoe base is
+ *  where a descent starts. Pedalos and motorboats aren't. */
+function paddleHire(t: Record<string, string>): boolean {
+  if (t.amenity !== 'boat_rental') return false
+  const kinds = ['canoe_rental', 'kayak_rental', 'standup_paddleboard_rental']
+  if (kinds.some(k => t[k] === 'yes')) return true
+  if (kinds.some(k => t[k] === 'no')) return false
+  return t.sport === 'canoe' || /cano|kayak|paddle|\bsup\b/i.test(t.name ?? '')
+}
+
+/** Public slipways, canoe put-ins and canoe hire mapped in OpenStreetMap:
+ *  places to get on and off the water where no authority lists one (the build
+ *  applies the gap rule). Private, customers-only and closed ones are left out,
+ *  except that hire is for customers by nature. ODbL, published with the OSM
+ *  locks in osm-features. */
 export function osmAccess(points: OsmElement[], fetchedAt: string): Feature[] {
   const closed = new Set(['private', 'no', 'customers', 'members', 'customers;private', 'emergency'])
   return points.flatMap(p => {
     const t = p.tags
-    if (closed.has(t.access ?? '') || closed.has(t.canoe ?? '')) return []
+    const hire = paddleHire(t)
+    if ((hire ? ['private', 'no'].includes(t.access ?? '') : closed.has(t.access ?? '')) || closed.has(t.canoe ?? '')) return []
     const slipway = t.leisure === 'slipway'
     const putIn = t.canoe === 'put_in' || (t.waterway === 'access_point' && ['yes', 'designated', 'permissive', 'permit'].includes(t.canoe ?? 'yes'))
-    if (!slipway && !putIn) return []
+    if (!slipway && !putIn && !hire) return []
     return [{
       id: `osm:access:${p.id}`,
       kind: slipway ? 'slipway' as const : 'access' as const,
       name: t.name,
       at: p.at,
       source: { source: 'osm' as const, sourceId: p.id, fetchedAt },
+      ...(hire ? { hire: true as const } : {}),
     }]
   })
 }

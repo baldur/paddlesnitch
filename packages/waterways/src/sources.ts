@@ -11,6 +11,10 @@ export type SourceInfo = {
   /** Licensed for non-commercial use only: fine while paddlesnitch is free
    *  (owner, 2026-10-12); must never feed the CC0 contribution layer. */
   nonCommercial?: true
+  /** Share-alike (CC BY-SA): published in its own file (sa-features), like the
+   *  OSM layer, never merged into the core features or the CC0 contributions
+   *  (owner, 2026-10-21). */
+  shareAlike?: true
 }
 
 export const SOURCES: Record<SourceId, SourceInfo> = {
@@ -68,6 +72,31 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'CC BY 4.0',
     attribution: 'Barrier data © Inland Fisheries Ireland, CC BY 4.0',
   },
+  'nl-waterboards': {
+    name: 'Dutch water boards — Waterschappen Kunstwerken IMWA (via PDOK)',
+    url: 'https://data.overheid.nl/en/dataset/waterschappen-kunstwerken-imwa',
+    licence: 'CC BY-SA 4.0',
+    attribution: 'Weirs, dams and pumping stations: Dutch water boards (Het Waterschapshuis), CC BY-SA 4.0',
+    shareAlike: true,
+  },
+  'amber-eu': {
+    name: 'AMBER Atlas of Instream Barriers in Europe',
+    url: 'https://doi.org/10.6084/m9.figshare.12629051.v5',
+    licence: 'CC BY 4.0',
+    attribution: 'Barriers in Belgium, Germany, Austria and Switzerland: AMBER Consortium, Belletti et al. (2020) Nature 588, CC BY 4.0',
+  },
+  roe: {
+    name: 'Référentiel des obstacles à l’écoulement (ROE), France',
+    url: 'https://www.data.gouv.fr/datasets/obstacles-a-lecoulement-metropole',
+    licence: 'Licence Ouverte 2.0',
+    attribution: 'Weirs and dams in France: ROE, Office français de la biodiversité (OFB) / Sandre, Licence Ouverte 2.0',
+  },
+  'rws-fis': {
+    name: 'Rijkswaterstaat — Vaarweginformatie (FIS/VNDS)',
+    url: 'https://data.overheid.nl/en/dataset/49337-vaarweginformatie-sluizen',
+    licence: 'CC0',
+    attribution: 'Locks and slipways: Rijkswaterstaat, CC0',
+  },
   'ea-levels': {
     name: 'Environment Agency real-time flood-monitoring API',
     url: 'https://environment.data.gov.uk/flood-monitoring/doc/reference',
@@ -85,6 +114,30 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     url: 'https://waterlevel.ie',
     licence: 'CC BY 4.0',
     attribution: 'Water levels © Office of Public Works (waterlevel.ie), CC BY 4.0',
+  },
+  'rws-levels': {
+    name: 'Rijkswaterstaat — Waterinfo (DDL)',
+    url: 'https://waterinfo.rws.nl/',
+    licence: 'Open data',
+    attribution: 'Water levels: Rijkswaterstaat',
+  },
+  'waterinfo-levels': {
+    name: 'waterinfo.be (VMM, De Vlaamse Waterweg)',
+    url: 'https://www.waterinfo.be/',
+    licence: 'CC BY 4.0',
+    attribution: 'Water levels: waterinfo.be (VMM, De Vlaamse Waterweg), CC BY 4.0',
+  },
+  'pegelonline-levels': {
+    name: 'PEGELONLINE (Wasserstraßen- und Schifffahrtsverwaltung des Bundes)',
+    url: 'https://www.pegelonline.wsv.de/',
+    licence: 'Datenlizenz Deutschland – Zero – 2.0',
+    attribution: 'Water levels: PEGELONLINE, WSV',
+  },
+  'bafu-levels': {
+    name: 'BAFU hydrological data (Swiss Federal Office for the Environment)',
+    url: 'https://www.hydrodaten.admin.ch/',
+    licence: 'Free use, commercial included; source recommended (BAFU terms of use)',
+    attribution: 'Water levels: Bundesamt für Umwelt BAFU',
   },
   'thames-conditions': {
     name: 'GOV.UK — River Thames: current river conditions',

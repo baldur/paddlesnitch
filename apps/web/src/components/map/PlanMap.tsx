@@ -1,17 +1,17 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, WMSTileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { COVERAGE_LEVELS, mapTiles } from '@/lib/plan-ui'
+import { COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inAustria, inFrance, inNetherlands, inSwitzerland, mapTiles, nearFlanders, type GermanPhotoId } from '@/lib/plan-ui'
 
-// The planner's map: the rivers and canals of the UK and Ireland, the planned
+// The planner's map: the rivers and canals of the UK, Ireland, the Netherlands, Belgium, France, Germany, Austria and Switzerland, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
 // it's the start or the finish.
 
-/** The UK and Ireland, for a first look with nothing planned. */
-const HOME: [[number, number], [number, number]] = [[49.9, -10.6], [60.9, 1.8]]
+/** The UK, Ireland, the Netherlands, Belgium, France, Germany, Austria and Switzerland, for a first look with nothing planned. */
+const HOME: [[number, number], [number, number]] = [[42.3, -10.6], [60.9, 17.2]]
 
 // Network pieces already fetched, shared across map instances; keyed by URL.
 const loaded = new Map<string, Promise<LatLng[][]>>()
@@ -25,13 +25,31 @@ const fetchLines = (url: string) => {
   return p
 }
 
+/** The overview's chunk URLs (one request for the count, cached per version);
+ *  the whole overview if that fails. */
+const overviewUrls = new Map<string, Promise<string[]>>()
+const overviewChunkUrls = (version: string) => {
+  let p = overviewUrls.get(version)
+  if (!p) {
+    p = fetch(`/plan/data/${version}/overview-chunks`).then(r => (r.ok ? r.json() as Promise<{ chunks: number }> : Promise.reject()))
+      .then(({ chunks }) => Array.from({ length: chunks }, (_, i) => `/plan/data/${version}/overview-${i}`), () => [`/plan/data/${version}/overview`])
+    overviewUrls.set(version, p)
+  }
+  return p
+}
+
 const LEVEL_COLOUR = Object.fromEntries(COVERAGE_LEVELS.map(l => [l.id, l.colour])) as Record<'good' | 'some' | 'thin', string>
 
 /** The scored water, coloured by how well we know it (the COVERAGE switch). */
 function Coverage({ version }: { version: string }) {
   const [lines, setLines] = useState<Record<'good' | 'some' | 'thin', LatLng[][]> | null>(null)
   useEffect(() => {
-    fetch(`/plan/data/${version}/coverage-lines`).then(r => (r.ok ? r.json() : Promise.reject())).then(setLines, () => setLines(null))
+    // An index, then each level's chunks (in one response it's over the server's limit).
+    const json = <T,>(name: string) => fetch(`/plan/data/${version}/${name}`).then(r => (r.ok ? r.json() as Promise<T> : Promise.reject()))
+    const level = (l: 'good' | 'some' | 'thin', n: number) => Promise.all(Array.from({ length: n }, (_, i) => json<LatLng[][]>(`coverage-lines-${l}-${i}`))).then(cs => cs.flat())
+    json<Record<'good' | 'some' | 'thin', number>>('coverage-lines')
+      .then(n => Promise.all([level('good', n.good), level('some', n.some), level('thin', n.thin)]))
+      .then(([good, some, thin]) => setLines({ good, some, thin }), () => setLines(null))
   }, [version])
   if (!lines) return null
   return (
@@ -53,9 +71,9 @@ function Network({ version }: { version: string }) {
     const n = ++latest.current
     const b = map.getBounds()
     const urls = map.getZoom() < AREA_MIN_ZOOM
-      ? [`/plan/data/${version}/overview`]
-      : areasIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).map(k => `/plan/data/${version}/area-${k}`)
-    Promise.allSettled(urls.map(fetchLines)).then(rs => {
+      ? overviewChunkUrls(version)
+      : Promise.resolve(areasIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).map(k => `/plan/data/${version}/area-${k}`))
+    urls.then(us => Promise.allSettled(us.map(fetchLines))).then(rs => {
       if (n === latest.current) setLines(rs.flatMap(r => (r.status === 'fulfilled' ? r.value : [])))
     })
   }, [map, version])
@@ -72,7 +90,7 @@ function Clicks({ onPick }: { onPick: (p: LatLng, zoom: number) => void }) {
 }
 
 // Fit the route when it changes, never on other re-renders (which would undo
-// the paddler's zoom); with no route, the asked-for view or the UK and Ireland.
+// the paddler's zoom); with no route, the asked-for view or HOME.
 function Frame({ route, view }: { route: LatLng[]; view?: { at: LatLng; zoom: number } }) {
   const map = useMap()
   const first = route[0], last = route.at(-1)
@@ -98,6 +116,11 @@ function Focus({ focus }: { focus: MapFocus | null }) {
   return null
 }
 
+function WatchCentre({ onChange }: { onChange: (c: LatLng) => void }) {
+  const map = useMapEvents({ moveend: () => { const c = map.getCenter(); onChange([c.lat, c.lng]) } })
+  return null
+}
+
 export default function PlanMap({
   version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], choices = [], onPick,
 }: {
@@ -114,11 +137,26 @@ export default function PlanMap({
   choices?: { at: LatLng; label: string }[] // the waterways an unclear click could have meant
   onPick: (p: LatLng, zoom: number) => void
 }) {
-  const tiles = mapTiles(satellite)
+  // Only whether the view is over the Netherlands, Flanders or France matters (which photos to use).
+  const [over, setOver] = useState<'nl' | 'fr' | 'ch' | 'at' | undefined>()
+  const [overVl, setOverVl] = useState(false)
+  const [overDe, setOverDe] = useState<GermanPhotoId[]>([])
+  const overNl = over === 'nl'
+  const tiles = mapTiles(satellite, over)
   return (
     <MapContainer bounds={HOME} preferCanvas className="h-full w-full" data-testid="plan-map">
+      <WatchCentre onChange={c => { setOver(inNetherlands(c) ? 'nl' : inFrance(c) ? 'fr' : inSwitzerland(c) ? 'ch' : inAustria(c) ? 'at' : undefined); setOverVl(nearFlanders(c)); setOverDe(germanPhotosNear(c).map(g => g.id)) }} />
       {/* Keyed so switching swaps the layer rather than mutating its url. */}
       <TileLayer key={tiles.base} url={tiles.base} attribution={tiles.attribution} maxNativeZoom={tiles.baseNativeZoom} maxZoom={19} />
+      {satellite && !overNl && overVl && (
+        <TileLayer key="flanders" url={FLANDERS_PHOTOS.url} attribution={FLANDERS_PHOTOS.attribution} maxNativeZoom={FLANDERS_PHOTOS.nativeZoom} maxZoom={19} />
+      )}
+      {/* German states' photos: transparent outside the state, so over Esri. Added
+          last is drawn on top, so in reverse: Berlin's own over Brandenburg's. */}
+      {satellite && GERMAN_PHOTOS.filter(g => overDe.includes(g.id)).reverse().map(g => (
+        <WMSTileLayer key={g.id} url={g.wms} params={{ layers: g.layers, format: 'image/png', transparent: true }} attribution={g.attribution} maxZoom={19}
+          tileSize={'tileSize' in g ? g.tileSize : 256} />
+      ))}
       {coverage ? <Coverage version={version} /> : <Network version={version} />}
       {/* Esri's place names, above the rivers but below the markers and clicks. */}
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>

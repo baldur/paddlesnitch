@@ -237,6 +237,14 @@ describe('routing on the server (plan.route)', () => {
     await expect(anon.plan.choices({ at: DW.start, radiusM: 5000 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
+  it('searches places on the server for the map\'s Go to box: the whole index is too big to send (France made it 15 MB)', async () => {
+    const hits = await anon.plan.places({ q: 'marsh', near: DW.start })
+    expect(hits.some(p => /Marsh Lock/.test(p.name))).toBe(true)
+    expect(hits.length).toBeLessThanOrEqual(8)
+    expect(await anon.plan.places({ q: '  ' })).toEqual([])
+    await expect(anon.plan.places({ q: 'x'.repeat(101) })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
   it('saves plans made on the national network', async () => {
     const ann = await makeUser('Ann')
     expect((await as(ann).plan.save({ ...DW, region: 'gbie' })).region).toBe('gbie')
@@ -247,14 +255,18 @@ describe("the map's network and places", () => {
   const get = async (name: string, version = 'none') =>
     mapData(new Request(`http://x/plan/data/${version}/${name}`), { params: Promise.resolve({ version, name }) })
 
-  it('serves the overview, an area in detail, and the places index', async () => {
-    const overview = await (await get('overview')).json()
+  it('serves the overview (in chunks the server can always answer) and an area in detail', async () => {
+    const overview = await (await get('overview')).json()   // whole, for tabs still running older code
     expect(overview.length).toBeGreaterThan(10)
+    const { chunks } = await (await get('overview-chunks')).json()
+    expect(chunks).toBeGreaterThanOrEqual(1)
+    const parts = await Promise.all(Array.from({ length: chunks }, async (_, i) => (await get(`overview-${i}`)).json()))
+    expect(parts.flat()).toEqual(overview)
+    expect((await get(`overview-${chunks}`)).status).toBe(404)
+    expect((await get('overview-chunks', 'dw-fixture')).headers.get('Cache-Control')).toContain('immutable')
     const reading = await (await get('area-102_-2')).json()   // 51.0–51.5 N, 1.0–0.5 W: Reading
     expect(reading.length).toBeGreaterThan(10)
     expect(await (await get('area-0_0')).json()).toEqual([])   // the Gulf of Guinea
-    const places = await (await get('places')).json()
-    expect(places.some((p: { name: string }) => /Marsh Lock/.test(p.name))).toBe(true)
   })
 
   it('caches the live version for good and anything else briefly', async () => {
@@ -262,15 +274,26 @@ describe("the map's network and places", () => {
     expect((await get('overview', 'old-version')).headers.get('Cache-Control')).toBe('public, max-age=300')
   })
 
+  it("coverage and the most-needed list change as paddlers add portages and plans: never cached for good, even for the live version", async () => {
+    for (const name of ['coverage', 'coverage-lines', 'coverage-lines-some-0', 'needed']) {
+      expect([name, (await get(name, 'dw-fixture')).headers.get('Cache-Control')]).toEqual([name, 'public, max-age=300'])
+    }
+  })
+
   it('serves coverage by waterway, and the scored water by level for the map', async () => {
     const rows = await (await get('coverage')).json()
     expect(rows.find((r: { name: string }) => r.name === 'Kennet and Avon Canal')).toMatchObject({ kind: 'canal', locksWithSide: 0 })
-    const lines = await (await get('coverage-lines')).json()
-    expect(Object.keys(lines).sort()).toEqual(['good', 'some', 'thin'])
-    expect(lines.some.length).toBeGreaterThan(10)
+    // An index of chunks per level, then the chunks: all in one was 7.9 MB with Germany, over Lambda's 6 MB limit (502).
+    const index = await (await get('coverage-lines')).json()
+    expect(Object.keys(index).sort()).toEqual(['good', 'some', 'thin'])
+    const some = await (await get('coverage-lines-some-0')).json()
+    expect(some.length).toBeGreaterThan(10)
+    expect(some.flat(2).every((v: number) => Math.round(v * 1000) / 1000 === v)).toBe(true)   // 3 dp
+    expect((await get(`coverage-lines-some-${index.some}`)).status).toBe(404)   // past the last chunk
   })
 
-  it('404s anything else', async () => {
+  it('404s anything else, including the old places index (searched on the server now: 15 MB with France)', async () => {
     expect((await get('secrets')).status).toBe(404)
+    expect((await get('places')).status).toBe(404)
   })
 })
