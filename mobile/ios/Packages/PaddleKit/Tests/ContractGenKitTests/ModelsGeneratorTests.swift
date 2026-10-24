@@ -93,6 +93,21 @@ import Testing
         #expect(swift.contains("public var route: [Coordinate]\n"))
     }
 
+    @Test func arrayElementTypesAreSingular() throws {
+        let swift = try #require(
+            try generate([
+                "Log.schema.json": """
+                {"type":"object","properties":{
+                 "weeks":{"type":"array","items":{"type":"object","properties":{"km":{"type":"number"}},"required":["km"]}},
+                 "sameOuting":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}}},
+                 "required":["weeks"]}
+                """
+            ])["Log.swift"])
+        #expect(swift.contains("public var weeks: [Week]\n"))
+        #expect(swift.contains("public struct Week: Codable"))
+        #expect(swift.contains("public var sameOuting: [SameOutingItem]?\n"))
+    }
+
     @Test func aUnionWithoutKindIsRefused() {
         #expect(throws: ModelsGenerator.Failure.self) {
             try generate(["Bad.schema.json": #"{"oneOf":[{"type":"object","properties":{"x":{"type":"string"}}}]}"#])

@@ -257,7 +257,7 @@ public enum ModelsGenerator {
         guard let items = schema["items"] else {
             throw Failure.unsupported(type: owner, reason: "\(name): array without items")
         }
-        let element = try typeRef(items, name: name + "Item", owner: owner, nested: &nested)
+        let element = try typeRef(items, name: Naming.singular(name), owner: owner, nested: &nested)
         return TypeRef(swift: "[\(element.swift)\(element.optional ? "?" : "")]")
     }
 

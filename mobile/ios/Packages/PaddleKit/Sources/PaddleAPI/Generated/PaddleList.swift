@@ -6,10 +6,12 @@ import Foundation
 
 public struct PaddleList: Codable, Hashable, Sendable {
     public var cards: [PaddleCard]
+    public var logbook: Logbook
     public var totals: PaddleTotals
 
-    public init(cards: [PaddleCard], totals: PaddleTotals) {
+    public init(cards: [PaddleCard], logbook: Logbook, totals: PaddleTotals) {
         self.cards = cards
+        self.logbook = logbook
         self.totals = totals
     }
 }

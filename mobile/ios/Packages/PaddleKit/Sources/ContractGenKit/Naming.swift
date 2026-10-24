@@ -13,6 +13,12 @@ enum Naming {
         words(name).map(capitalized).joined()
     }
 
+    /// The element type for an array property: `Weeks` → `Week`. A name
+    /// that isn't a plain plural gets `Item`: `SameOuting` → `SameOutingItem`.
+    static func singular(_ name: String) -> String {
+        name.count > 3 && name.hasSuffix("s") && !name.hasSuffix("ss") ? String(name.dropLast()) : name + "Item"
+    }
+
     /// Swift keywords used as a property or case name need backticks.
     static func escaped(_ name: String) -> String {
         keywords.contains(name) ? "`\(name)`" : name

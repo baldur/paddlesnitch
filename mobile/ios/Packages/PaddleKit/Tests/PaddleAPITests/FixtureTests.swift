@@ -35,10 +35,28 @@ import Testing
 
     @Test func paddleListHasDatesAndRouteCoordinates() throws {
         let list = try decoder.decode(PaddleList.self, from: try Contract.fixture("paddles.list"))
-        #expect(list.totals.count == list.cards.count)
+        // Cards group recordings of one outing; totals count every recording.
+        let recordings = list.cards.reduce(0) { $0 + 1 + ($1.sameOuting?.count ?? 0) }
+        #expect(list.totals.count == recordings)
         #expect(list.totals.since == parseTimestamp("2026-09-01T07:30:00Z"))
         let card = try #require(list.cards.first)
         #expect(card.route.first == Coordinate(latitude: 51.45603, longitude: -0.969))
+    }
+
+    @Test func theLogbookHasTwelveWeeksOldestFirst() throws {
+        let logbook = try decoder.decode(PaddleList.self, from: try Contract.fixture("paddles.list")).logbook
+        #expect(logbook.weeks.count == 12)
+        #expect(logbook.weeks.map(\.week) == logbook.weeks.map(\.week).sorted())
+    }
+
+    @Test func cardsCarryNoGpsNoteAndOtherRecordingsOfTheOuting() throws {
+        let cards = try decoder.decode(PaddleList.self, from: try Contract.fixture("paddles.list")).cards
+        let motion = try #require(cards.first { $0.id == "pdl-motion" })
+        #expect(motion.noGps == true)
+        let river = try #require(cards.first { $0.id == "pdl-river" })
+        #expect(river.noGps == nil)
+        #expect(river.note == "Headwind on the way back.")
+        #expect(river.sameOuting?.map(\.id) == ["pdl-river-watch"])
     }
 
     @Test func aMotionOnlyPaddleSaysWhyThereIsNoRoute() throws {
