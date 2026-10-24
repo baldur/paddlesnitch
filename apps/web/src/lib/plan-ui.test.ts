@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, farEndLabel, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, gaugeValueText, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, farEndLabel, planSummaryText, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, gaugeValueText, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -382,5 +382,14 @@ describe('the far end’s name (#630)', () => {
   it('is Finish on a one-way trip and Turn at on a return trip', () => {
     expect(farEndLabel('one_way')).toBe('Finish')
     expect(farEndLabel('return')).toBe('Turn at')
+  })
+})
+
+describe('planSummaryText (#513)', () => {
+  const stops = (n: number) => Array.from({ length: n + 1 }, (_, i) => ({ portage: i < n }))
+  it('says distance, shape, portages and the waterways', () => {
+    expect(planSummaryText({ lengthM: 13_640, stops: stops(6), waterways: ['Oxford Canal'] }, 'return')).toBe('13.6 km return, 6 portages, Oxford Canal')
+    expect(planSummaryText({ lengthM: 5_000, stops: stops(1), waterways: ['River Kennet', 'Kennet and Avon Canal', 'River Thames'] }, 'one_way')).toBe('5.0 km one-way, 1 portage, River Kennet and Kennet and Avon Canal')
+    expect(planSummaryText({ lengthM: 2_000, stops: [] }, 'one_way')).toBe('2.0 km one-way, no portages')
   })
 })

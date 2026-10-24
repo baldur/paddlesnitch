@@ -9,6 +9,7 @@ import { getPublicProfileLinks } from '@/lib/profile'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import { resultMarks } from '@/lib/course-records'
 import CourseMapClient from '@/components/map/CourseMapClient'
+import { courseLinesText } from '@/lib/course-text'
 import AppHeader from '@/components/AppHeader'
 import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
@@ -124,6 +125,12 @@ export default async function TrialPage({
                 </span>
               )}
             </div>
+            <details className="text-sm text-muted">
+              <summary className="cursor-pointer py-3">The course lines as text</summary>
+              <ul className="mt-1 space-y-1 tabular">
+                {courseLinesText(course).map(t => <li key={t}>{t}</li>)}
+              </ul>
+            </details>
           </Section>
         )}
       </Page>

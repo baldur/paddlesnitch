@@ -160,7 +160,7 @@ function Buddies() {
                 onChange={e => sharing.mutate({ paddles: e.target.checked })} />
               Buddies can see my paddles
             </label>
-            <p className="text-sm text-muted">They never see your notes. To hide one paddle, open it in <Link href="/paddles" className="text-primary-text">Paddles</Link> and choose Hide from buddies.</p>
+            <p className="text-sm text-muted">They never see your notes. To hide one paddle, open it in <Link href="/paddles" className="tt-link">Paddles</Link> and choose Hide from buddies.</p>
           </section>
         )}
       </Page>

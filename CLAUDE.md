@@ -994,6 +994,7 @@ CI: **every pull request** runs `checks.yml` (vitest, `pnpm typecheck` over the 
 - **One critical path per spec file.** Keep specs focused so a failure points directly at one broken flow.
 - **No shared state between specs.** Each test creates its own user via `signUpFlow()` (in `e2e/helpers.ts`) with a unique email. Don't seed shared data across runs.
 - **When a vitest story would suffice, write the vitest story.** Reserve Playwright for things vitest physically can't reach.
+- **axe runs on every public page and, signed in, on `/paddles`, `/plan`, `/att`, `/account`, `/devices`, `/buddies`, `/profile/me`** (`e2e/critical/accessibility.spec.ts`, #510): unlabelled controls, a missing main landmark or anything serious fails. A trial page's course map has a text equivalent (`courseLinesText`).
 
 Failure artifacts (trace, screenshot, video) upload as `playwright-report` on a failed CI run; viewable inline in the Actions UI. Locally: `pnpm exec playwright show-report` after a failed run.
 
