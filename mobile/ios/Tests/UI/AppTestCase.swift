@@ -60,6 +60,18 @@ class AppTestCase: XCTestCase {
         return target
     }
 
+    /// iOS 17 predicts that a navigation bar's large title (a one-line UIKit
+    /// label) "may be clipped at larger Dynamic Type sizes", without naming
+    /// the element. It's raised only on the two screens with large titles, and
+    /// the same screens' content passes the real clipping check at the largest
+    /// size (LargeTextTests). iOS 18+ doesn't raise it. Anything the audit pins
+    /// on an element still fails.
+    static func isIOS17LargeTitleWarning(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+        issue.auditType == .textClipped && issue.element == nil
+            && issue.detailedDescription.contains("may be clipped at larger Dynamic Type sizes")
+            && ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 18
+    }
+
     /// Wholly in the readable area, or, for an element taller than that area
     /// (a row at the largest text size), its top and its middle are.
     func isReadable(_ element: XCUIElement) -> Bool {
@@ -70,9 +82,28 @@ class AppTestCase: XCTestCase {
     }
 
     func open(_ paddle: String, file: StaticString = #filePath, line: UInt = #line) {
-        let row = scrollTo("paddle-\(paddle)")
-        XCTAssertTrue(isReadable(row), "\(paddle) isn't on screen to tap", file: file, line: line)
-        row.tap()
+        let row = element("paddle-\(paddle)")
+        _ = app.windows.firstMatch.waitForExistence(timeout: 10)
+        // Swipe until a good slice of the row (44 pt, a tap target) is in the
+        // readable area, then tap in that slice: at the largest text size a
+        // row can be taller than the screen, and its middle may be under a bar.
+        for _ in 0..<10 {
+            if row.exists, visibleSlice(of: row).height >= 44 { break }
+            if row.exists && row.frame.minY < readableArea.minY { app.swipeDown() } else { app.swipeUp() }
+        }
+        let slice = visibleSlice(of: row)
+        guard slice.height >= 44 else {
+            XCTFail("\(paddle) isn't on screen to tap", file: file, line: line)
+            return
+        }
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: slice.midX - window.frame.minX, dy: slice.midY - window.frame.minY))
+            .tap()
+    }
+
+    func visibleSlice(of element: XCUIElement) -> CGRect {
+        element.exists ? element.frame.intersection(readableArea) : .null
     }
 
     /// Apple's accessibility audit, reporting every issue on the screen with
@@ -91,6 +122,7 @@ class AppTestCase: XCTestCase {
     ) throws {
         var issues: [String] = []
         try app.performAccessibilityAudit(for: types) { issue in
+            if Self.isIOS17LargeTitleWarning(issue) { return true }
             let element = issue.element.map { "\($0.elementType) \"\($0.label)\"" } ?? "screen"
             issues.append("\(issue.compactDescription): \(element)")
             // An issue the audit can't pin on an element keeps Xcode's
