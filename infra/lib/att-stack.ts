@@ -602,12 +602,14 @@ export class AttStack extends cdk.Stack {
       environment: { DATA_BUCKET: dataBucket.bucketName },
     })
     dataBucket.grantReadWrite(relayFn, 'games/live/*')
-    const relayIntegration = new WebSocketLambdaIntegration('GameRelay', relayFn)
+    // One integration per route: CDK's permission for API Gateway to call the
+    // Lambda is per integration and scoped to the route it's first bound to,
+    // so a shared one let only $connect through.
     const relayApi = new apigwv2.WebSocketApi(this, 'GameRelayApi', {
       apiName: 'paddlesnitch-game-relay',
-      connectRouteOptions: { integration: relayIntegration },
-      disconnectRouteOptions: { integration: relayIntegration },
-      defaultRouteOptions: { integration: relayIntegration },
+      connectRouteOptions: { integration: new WebSocketLambdaIntegration('GameRelay', relayFn) },
+      disconnectRouteOptions: { integration: new WebSocketLambdaIntegration('GameRelayDisconnect', relayFn) },
+      defaultRouteOptions: { integration: new WebSocketLambdaIntegration('GameRelayDefault', relayFn) },
     })
     const relayStage = new apigwv2.WebSocketStage(this, 'GameRelayStage', {
       webSocketApi: relayApi,
