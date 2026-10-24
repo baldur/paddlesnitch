@@ -1,6 +1,9 @@
 // Known routes the national build must get right. A build that breaks one
 // fails (docs/features/waterways-uk-ireland.md, "Check routes").
-import type { LatLng } from './types'
+import { featuresAlong } from './along'
+import { route, snap } from './network'
+import { SNAP_MAX_M } from './plan'
+import type { Feature, LatLng, NetLink } from './types'
 
 export type CheckRoute = {
   name: string
@@ -51,3 +54,26 @@ export const CHECK_ROUTES: CheckRoute[] = [
   { name: 'Borensberg → Motala (Göta kanal)', start: [58.5600, 15.2850], finish: [58.5400, 15.0450], source: 'OSM; a route must exist' },
   { name: 'Stockholm: Kungsholmen → Slussen', start: [59.3270, 18.0300], finish: [59.3200, 18.0720], source: 'OSM; a route must exist' },
 ]
+
+/** Route every check against a network and its features; print what was found.
+ *  Returns how many failed. Shared by the build and the post-publish verify. */
+export function checkRoutes(links: NetLink[], features: Feature[], log: (line: string) => void = console.log): number {
+  let failed = 0
+  for (const c of CHECK_ROUTES) {
+    const s = snap(links, c.start, SNAP_MAX_M), f = snap(links, c.finish, SNAP_MAX_M)
+    const r = s && f ? route(links, s, f) : null
+    const km = r ? r.lengthM / 1000 : 0
+    const along = r ? featuresAlong(r.line, features) : []
+    const locks = along.filter(a => a.item.kind === 'lock').length
+    const weirs = along.filter(a => a.item.kind === 'weir').length
+    const problems: string[] = []
+    if (!r) problems.push(!s ? 'start off the water' : !f ? 'finish off the water' : 'not connected')
+    if (r && c.expectKm && Math.abs(km - c.expectKm) / c.expectKm > 0.03) problems.push(`expected ${c.expectKm} km`)
+    if (r && c.expectLocks !== undefined && locks !== c.expectLocks) problems.push(`expected ${c.expectLocks} locks`)
+    if (r && c.expectWeirs !== undefined && weirs !== c.expectWeirs) problems.push(`expected ${c.expectWeirs} weirs`)
+    if (problems.length) failed++
+    const via = r ? [...new Set(r.legs.map(l => l.name || '(unnamed)'))].join(' > ') : ''
+    log(`  ${problems.length ? '✗' : '✓'} ${c.name}: ${r ? `${km.toFixed(1)} km, ${locks} locks, ${weirs} weirs` : '—'}${problems.length ? `  [${problems.join('; ')}]` : ''}${via ? `\n      via ${via.length > 200 ? via.slice(0, 200) + '…' : via}` : ''}`)
+  }
+  return failed
+}

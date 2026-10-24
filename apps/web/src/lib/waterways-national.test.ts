@@ -11,6 +11,7 @@ import { readNdjsonGz, toNdjson } from '@paddlesnitch/waterways/ndjson'
 import { publishedKey, publishedNdjsonKey, readDataset, readNetwork } from '@paddlesnitch/waterways/national'
 import { fetchError, fetchWithRetry } from '@paddlesnitch/waterways/fetch-retry'
 import { mergeFeatures } from '@paddlesnitch/waterways/build'
+import { CHECK_ROUTES, checkRoutes } from '@paddlesnitch/waterways/checks'
 import { AMBER_EU_WHERE, featuresFromAmber, featuresFromAmberEu, featuresFromIfi, featuresFromRoe, featuresFromSepa, roePageUrl } from '@paddlesnitch/waterways/ingest/barriers'
 import { readDbf } from '@paddlesnitch/waterways/ingest/dbf'
 import { featuresFromAims } from '@paddlesnitch/waterways/ingest/ea-aims'
@@ -764,5 +765,31 @@ describe('OpenPortage: portage details as met on a route', () => {
     const [out, back] = r.stops
     expect(out.portages?.[0].takeOut.bank).toBe('left')
     expect(back.portages?.[0].takeOut.bank).toBe('right')
+  })
+})
+
+// Shared by the build and the weekly refresh's post-publish verify
+// (scripts/waterways/verify-published.ts), which gates the data going live.
+describe('check routes', () => {
+  const run = (features: Feature[]) => {
+    const lines: string[] = []
+    const failed = checkRoutes(ds.links, features, l => lines.push(l))
+    return { failed, line: (name: string) => lines.find(l => l.includes(name)) ?? '' }
+  }
+
+  // The fixture lacks Richmond half-tide lock (it comes from OSM in the real build).
+  const richmond = { ...ds.features.find(f => f.kind === 'lock')!, id: 'richmond', name: 'Richmond Lock', at: [51.46256, -0.31675] as LatLng }
+
+  it('passes Devizes → Westminster with every lock and fails routes off the water', () => {
+    const { failed, line } = run([...ds.features, richmond])
+    expect(line('Devizes → Westminster')).toMatch(/^  ✓ .*201\.\d km, 78 locks/)
+    expect(line('Stockholm')).toMatch(/^  ✗ .*start off the water/)
+    expect(failed).toBe(CHECK_ROUTES.length - CHECK_ROUTES.filter(c => line(c.name).startsWith('  ✓')).length)
+    expect(failed).toBeGreaterThan(0)
+  })
+
+  it('fails a route whose locks have gone missing from the data', () => {
+    const { line } = run([...ds.features, richmond].filter(f => f.kind !== 'lock'))
+    expect(line('Devizes → Westminster')).toMatch(/^  ✗ .*expected 78 locks/)
   })
 })
