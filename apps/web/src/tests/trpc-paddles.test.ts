@@ -3,7 +3,7 @@
 // createCaller (the same path SSR uses) against a real temp local store. This is
 // the QA seam: the router's behaviour + auth gating is testable without HTTP,
 // and its types are shared with web + mobile so they can't drift.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import os from 'os'
 import path from 'path'
 import fs from 'fs/promises'
@@ -43,6 +43,58 @@ describe('paddles.list', () => {
     expect(res.cards[1].boatClass).toBe('K1')
     expect(res.cards[1].route.length).toBe(2)                          // thumbnail route derived
     expect(res.totals).toEqual({ count: 2, totalKm: 10, totalS: 3000, since: '2026-09-01T10:00:00.000Z' })
+  })
+
+  // What the apps need to draw the same list as the website (mobile/contract).
+  it('carries the note and marks a paddle without a map, which may still have a route from before the GPS was lost', async () => {
+    await writeSession(dir, 'aaa', {
+      id: 'aaa', paddledAt: '2026-09-01T10:00:00.000Z', source: { type: 'device' }, note: 'Lost the GPS at the bridge.',
+      result: { distanceKm: 0, durationS: 1200, cruiseSpeed: 0, avgSR: 60, points: [{ lat: 51.1, lng: -0.9 }, { lat: 51.2, lng: -0.8 }], noGps: { reason: { kind: 'gps_lost' }, strokes: 900 } },
+    })
+    await writeSession(dir, 'bbb', {
+      id: 'bbb', paddledAt: '2026-09-10T10:00:00.000Z', source: { type: 'file' }, note: '  ',
+      result: { distanceKm: 6, durationS: 1800, cruiseSpeed: 3.4, avgSR: null, points: [] },
+    })
+    const [b, a] = (await createCaller({ user: USER }).paddles.list()).cards
+    expect(a).toMatchObject({ note: 'Lost the GPS at the bridge.', noGps: true })
+    expect(a.route.length).toBe(2)
+    expect(b.note).toBeUndefined()
+    expect(b.noGps).toBeUndefined()
+  })
+
+  it('shows one outing recorded by the tracker and Strava once, the tracker\'s card leading', async () => {
+    const outing = (id: string, type: string, at: string) => writeSession(dir, id, {
+      id, paddledAt: at, source: { type },
+      result: { distanceKm: 4, durationS: 1200, cruiseSpeed: 3.1, avgSR: 60, points: [{ lat: 51.1, lng: -0.9 }, { lat: 51.2, lng: -0.8 }] },
+    })
+    await outing('watch', 'strava', '2026-09-01T10:00:30.000Z')
+    await outing('tracker', 'device', '2026-09-01T10:00:00.000Z')
+    await outing('later', 'file', '2026-09-05T10:00:00.000Z')
+    const res = await createCaller({ user: USER }).paddles.list()
+    expect(res.cards.map(c => [c.id, c.sameOuting])).toEqual([
+      ['later', undefined],
+      ['tracker', [{ id: 'watch', sourceType: 'strava' }]],
+    ])
+    expect(res.totals.count).toBe(3)                                   // every recording counts, as on the website
+  })
+
+  it('works out the logbook the website shows: last 12 weeks, streak, this month and last', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-16T12:00:00Z'))                // a Wednesday
+    try {
+      const paddle = (id: string, at: string, km: number) => writeSession(dir, id, {
+        id, paddledAt: at, source: { type: 'file' }, result: { distanceKm: km, durationS: 1800, cruiseSpeed: 3, avgSR: null, points: [] },
+      })
+      await paddle('a', '2026-08-28T10:00:00.000Z', 3)                // last month, week of 24 Aug
+      await paddle('b', '2026-09-02T10:00:00.000Z', 4)                // week of 31 Aug
+      await paddle('c', '2026-09-09T10:00:00.000Z', 5)                // last week
+      await paddle('d', '2026-09-15T10:00:00.000Z', 6.25)             // this week
+      const { logbook } = await createCaller({ user: USER }).paddles.list()
+      expect(logbook.weeks).toHaveLength(12)
+      expect(logbook.weeks.at(-1)).toEqual({ week: '2026-09-14', km: 6.3 })
+      expect(logbook.weeks.filter(w => w.km).map(w => w.week)).toEqual(['2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14'])
+      expect(logbook).toMatchObject({ streakWeeks: 4, thisMonthKm: 15.3, lastMonthKm: 3 })
+    } finally { vi.useRealTimers() }
   })
 
   it('is empty for a user with no paddles', async () => {

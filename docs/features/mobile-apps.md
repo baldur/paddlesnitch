@@ -1,6 +1,6 @@
 # Feature spec: mobile apps (shared contract)
 
-🚧 **Spec — 2026-10-24. Not built.**
+🚧 **Spec — 2026-10-24. C1 (contract pipeline) built 2026-10-25; the rest not built.**
 
 paddlesnitch gets two native apps, **Android** and **iPhone**, built side by
 side. Wear OS comes much later. On both platforms the phone works as a **tracker** (records a paddle on its own) and
@@ -167,12 +167,31 @@ Reuses what the browser already proved
 
 ## API contract
 
-- tRPC **inputs** are already zod. **Outputs** are inferred TypeScript types.
-  For every procedure the apps use, add a zod `.output()` schema; it also
-  checks the server's answers at runtime.
-- `pnpm api:schema` emits JSON Schema for those procedures with zod v4's
-  `z.toJSONSchema` into `mobile/contract/api/`, committed; CI fails if it's out
-  of date. REST routes the apps call get hand-written zod and the same output.
+- tRPC **inputs** are already zod. **Outputs** are inferred TypeScript types,
+  so every procedure the apps use gets a zod output schema in
+  `packages/api/src/contract.ts`, listed in `contractProcedures`.
+- Those schemas are **not** attached with `.output()`. Stored paddles go back
+  years and some lack fields the types now have (the tests themselves write
+  partial ones), so runtime output validation could turn old data into a 500 on
+  the website. Instead, type checks in `contract.ts` fail `pnpm typecheck` when a
+  schema and the procedure's real output type differ in any way (a field added,
+  removed, retyped, or made optional), and the contract test checks real
+  answers against the schemas.
+- `pnpm mobile:contract` writes JSON Schema (draft-07, via zod v4's
+  `z.toJSONSchema`) into `mobile/contract/api/`, one file per named type plus
+  `procedures.json`, and the tokens into `mobile/contract/tokens/`. The output is committed;
+  `src/tests/mobile-contract.test.ts` fails in `pnpm test` while it's stale.
+  Schemas never forbid extra fields, so a new server field can't break an old
+  app. REST routes the apps call get the same treatment when the apps need them.
+- Timestamps carry `format: date-time`, whole numbers are `integer`, and every
+  object union is discriminated by a `kind` constant. Both apps decode an
+  unknown enum value or union kind to an `unknown` case and never throw, so the
+  server can add values as well as fields. Golden answers per procedure live
+  in `mobile/contract/fixtures/api/` (one deliberately full of unknown values),
+  checked against the schemas in `pnpm test` and decoded by both apps' tests.
+- The format the apps read is written down in
+  [`mobile/contract/README.md`](../../mobile/contract/README.md), with tests
+  that the HTTP answers really look like that.
 - Both clients speak tRPC's plain HTTP form (queries `GET
   /api/trpc/<path>?input=…`, mutations `POST`, answers `{ result: { data } }`).
   The router has no transformer, so it stays **plain JSON**; keep it that way.
@@ -212,7 +231,7 @@ platform tell the other when the contract or fixture formats change.
 
 | Phase | What | Needed by |
 |---|---|---|
-| **C1. Contract pipeline** | `.output()` on the first procedures, `pnpm api:schema`, CI check, tokens → JSON | Both apps' first screens |
+| **C1. Contract pipeline** ✅ | Schemas for `me`, `paddles.list` (cards with note / no-GPS / same outing, totals, logbook — all worked out on the server), `paddles.get`; `pnpm mobile:contract`; freshness + drift checks; tokens → JSON | Both apps' first screens |
 | **C2. Sign-in** (Bearer on REST ✅) | `getRequestUser`, token-returning sign-in, Strava one-time code, app-link files | Both apps' sign-in |
 | **C3. Recording + sync** | Phone devices on the relay route; CSV + Bluetooth + receipt fixtures from the existing web code and firmware | Both apps' recording and tracker phases |
 | **C4. Signed-in website pages** | One-time code → cookies | Both apps' link-outs |

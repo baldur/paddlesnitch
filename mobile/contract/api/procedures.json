@@ -1,0 +1,20 @@
+{
+  "me": {
+    "kind": "query",
+    "auth": "public",
+    "input": null,
+    "output": "Me"
+  },
+  "paddles.list": {
+    "kind": "query",
+    "auth": "user",
+    "input": null,
+    "output": "PaddleList"
+  },
+  "paddles.get": {
+    "kind": "query",
+    "auth": "user",
+    "input": "ById",
+    "output": "AnalysisSession"
+  }
+}

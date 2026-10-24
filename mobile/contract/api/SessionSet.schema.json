@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "SessionSet.schema.json",
+  "type": "object",
+  "properties": {
+    "count": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "avgDurS": {
+      "type": "number"
+    },
+    "avgSpeed": {
+      "type": "number"
+    },
+    "avgSR": {
+      "type": [
+        "number",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "count",
+    "avgDurS",
+    "avgSpeed",
+    "avgSR"
+  ]
+}

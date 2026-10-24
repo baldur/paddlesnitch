@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "AnalysisSource.schema.json",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "file",
+        "strava",
+        "trial",
+        "device"
+      ]
+    },
+    "filename": {
+      "type": "string"
+    },
+    "stravaActivityId": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "sport": {
+      "type": "string"
+    },
+    "trialId": {
+      "type": "string"
+    },
+    "entryId": {
+      "type": "string"
+    },
+    "courseName": {
+      "type": "string"
+    },
+    "deviceId": {
+      "type": "string"
+    },
+    "deviceSessionId": {
+      "type": "string"
+    },
+    "deviceName": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type"
+  ]
+}

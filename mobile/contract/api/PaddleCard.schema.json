@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "PaddleCard.schema.json",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "paddledAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "distanceKm": {
+      "type": "number"
+    },
+    "durationS": {
+      "type": "number"
+    },
+    "cruiseSpeed": {
+      "type": "number"
+    },
+    "avgSR": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "boatClass": {
+      "allOf": [
+        {
+          "$ref": "BoatClass.schema.json"
+        }
+      ]
+    },
+    "sourceType": {
+      "type": "string"
+    },
+    "route": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "additionalItems": false,
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "note": {
+      "type": "string"
+    },
+    "noGps": {
+      "type": "boolean",
+      "const": true
+    },
+    "sameOuting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sourceType"
+        ]
+      }
+    }
+  },
+  "required": [
+    "id",
+    "paddledAt",
+    "distanceKm",
+    "durationS",
+    "cruiseSpeed",
+    "avgSR",
+    "sourceType",
+    "route"
+  ]
+}

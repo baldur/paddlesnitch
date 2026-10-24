@@ -25,7 +25,8 @@
     "waterways:national": "tsx scripts/waterways/build-national.ts",
     "waterways:sources": "tsx scripts/waterways/fetch-sources.ts",
     "waterways:tides": "tsx scripts/waterways/fit-tides.ts",
-    "waterways:discover": "tsx scripts/waterways/discover.ts"
+    "waterways:discover": "tsx scripts/waterways/discover.ts",
+    "mobile:contract": "tsx scripts/mobile-contract.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1152.0",
