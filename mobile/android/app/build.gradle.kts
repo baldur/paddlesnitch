@@ -3,6 +3,7 @@ import groovy.json.JsonSlurper
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // The release build is signed with the upload key when CI provides it (a
@@ -95,15 +96,38 @@ val generateTokens = tasks.register<GenerateTokens>("generateTokens") {
     outputDir.set(layout.buildDirectory.dir("generated/tokens"))
 }
 
+// The API models, from the shared contract (mobile/contract/api), the same
+// way: see buildSrc/src/main/kotlin/ContractModels.kt.
+abstract class GenerateModels : DefaultTask() {
+    @get:InputDirectory abstract val apiDir: DirectoryProperty
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val dir = outputDir.get().asFile.resolve("com/paddlesnitch/app/api").apply { mkdirs() }
+        dir.resolve("Models.kt").writeText(ContractModels.generate(apiDir.get().asFile, "com.paddlesnitch.app.api"))
+    }
+}
+
+val generateModels = tasks.register<GenerateModels>("generateModels") {
+    apiDir.set(rootProject.layout.projectDirectory.dir("../contract/api"))
+    outputDir.set(layout.buildDirectory.dir("generated/models"))
+}
+
 androidComponents {
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateTokens, GenerateTokens::outputDir)
+        variant.sources.kotlin?.addGeneratedSourceDirectory(generateModels, GenerateModels::outputDir)
+        // The contract's golden answers ship as the app's sample paddles
+        // (shown until sign-in, labelled as samples).
+        variant.sources.assets?.addStaticSourceDirectory(rootProject.layout.projectDirectory.dir("../contract/fixtures").asFile.path)
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.kotlinx.serialization.json)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)

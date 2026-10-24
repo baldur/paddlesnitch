@@ -23,6 +23,12 @@ Or open this directory in Android Studio and press Run. The debug build is
 - **Colours and radii**: generated at build time from
   `mobile/contract/tokens/tokens.json` into `PsColor` / `PsRadius`
   (`generateTokens` in `app/build.gradle.kts`). Never hard-code a colour.
+- **API models**: generated at build time from `mobile/contract/api/` into
+  `com.paddlesnitch.app.api` (`buildSrc/src/main/kotlin/ContractModels.kt`).
+  An enum or `kind` the app doesn't know decodes to `Unknown`, never an error.
+  `FixturesTest` reads every golden answer in `mobile/contract/fixtures/api`.
+- **Sample paddles**: the same fixtures ship as assets and are shown, labelled,
+  until sign-in.
 - **Signing**: debug builds use the local debug key. CI signs release builds
   with the upload key from the `ANDROID_UPLOAD_*` secrets (see
   `.github/workflows/android.yml`); the key is never in the repo.
