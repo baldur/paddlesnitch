@@ -9,7 +9,8 @@ and neither app's source is ever the reference.
 |---|---|---|
 | `api/` | JSON Schema (draft-07) for every procedure the apps call, plus `procedures.json` | `pnpm mobile:contract`, from `packages/api/src/contract.ts` |
 | `tokens/` | Colours, radii and font families | `pnpm mobile:contract`, from `packages/ui/src/tokens.css` |
-| `fixtures/` | Golden files: recording CSV, tracker Bluetooth protocol, receipts | Phase C3 (not yet) |
+| `fixtures/api/` | Golden answers per procedure, which both apps must decode | By hand, from synthetic paddles run through the real analysis; checked against the schemas by `pnpm test` |
+| `fixtures/` (rest) | Recording CSV, tracker Bluetooth protocol, receipts | Phase C3 (not yet) |
 
 **Don't edit `api/` or `tokens/` by hand.** Change the source, run
 `pnpm mobile:contract`, commit the result. `pnpm test` fails while they differ.
@@ -22,8 +23,31 @@ and neither app's source is ever the reference.
   `kind` is `query` or `mutation`, `auth` is `public` or `user` (needs
   `Authorization: Bearer <Cognito ID token>`), and `input`/`output` name a type
   (`input: null` = takes nothing).
-- Unnamed fields are allowed everywhere. The server only **adds** fields, so an
-  app must ignore fields it doesn't know.
+- Timestamps are strings with `"format": "date-time"` (ISO 8601). Whole
+  numbers (counts, seat numbers, Strava ids) are `"type": "integer"`; every
+  other number is a double.
+
+### Rules both apps follow
+
+1. **Ignore fields you don't know.** Unnamed fields are allowed everywhere; the
+   server only ever adds fields.
+2. **Never throw on an unknown enum value or union kind.** A newer server may
+   add a source type, a boat class, a segment kind or a `NoPaddleReason`. Decode
+   it into an `unknown` case and carry on. `fixtures/api/paddles.get.unknown-values.json`
+   has one of each (plus an unknown field); both apps' tests must decode it.
+3. **Unions of objects are discriminated by `kind`.** Every `oneOf` variant is an
+   object with a `kind` string constant, so it maps to a Kotlin sealed type or a
+   Swift enum with associated values. `pnpm test` enforces this. Two
+   shapes are mapped by hand instead: the `[lat, lng]` tuples (arrays with
+   `items: [...]`) and `Seat` (`integer` or `"C"`).
+
+## fixtures/api/
+
+`<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
+`me.signed-out`, `paddles.list`, `paddles.get`, `paddles.get.motion-only` (a
+paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
+(rule 2; deliberately does **not** fit the schema). The paddles are synthetic.
+Add a fixture whenever a real answer turns out to have a shape these don't.
 
 ### Calling a procedure
 

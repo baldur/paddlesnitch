@@ -11,6 +11,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
 import { contractProcedures, Me, PaddleList, AnalysisSession } from '@paddlesnitch/api/contract'
+import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 import { mobileContractFiles, tokensFromCss } from '@/lib/mobile-contract'
 
@@ -137,5 +138,59 @@ describe('the HTTP form the apps speak', () => {
     const res = await call('/api/trpc/paddles.list', null)
     expect(res.status).toBe(401)
     expect((await res.json()).error.data.code).toBe('UNAUTHORIZED')
+  })
+})
+
+// The golden answers both apps decode in their own tests.
+describe('fixtures/api', () => {
+  const fixture = (name: string) => JSON.parse(readFileSync(path.join(CONTRACT, 'fixtures/api', name), 'utf8'))
+  const schemaFor: Record<string, z.ZodType> = { me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession }
+  const names = readdirSync(path.join(CONTRACT, 'fixtures/api')).filter(f => !f.includes('unknown-values'))
+
+  it.each(names)('%s fits its procedure\'s output schema', name => {
+    // <procedure>[.<case>].json — the longest procedure path the name starts with.
+    const procedure = Object.keys(schemaFor).filter(p => name.startsWith(`${p}.`)).sort((a, b) => b.length - a.length)[0]
+    const schema = schemaFor[procedure]
+    expect(schema, `no schema for ${name}`).toBeDefined()
+    expect(schema.safeParse(fixture(name)).error?.issues).toBeUndefined()
+  })
+
+  it('covers every contract procedure', () => {
+    for (const p of Object.keys(contractProcedures)) expect(names.some(n => n.startsWith(`${p}.`)), p).toBe(true)
+  })
+
+  // A newer server may add a value to any closed set. The apps must decode
+  // these to an "unknown" case; the schema itself should object at exactly
+  // those places and nowhere else (an extra field is never an issue).
+  it('unknown-values breaks the schema only at the new enum values and union kind', () => {
+    const issues = AnalysisSession.safeParse(fixture('paddles.get.unknown-values.json')).error?.issues ?? []
+    expect([...new Set(issues.map(i => i.path.slice(0, 4).join('.')))].sort()).toEqual([
+      'boatClass', 'result.noGps.reason.kind', 'result.stops.0.kind', 'source.type',
+    ])
+  })
+})
+
+describe('schema rules the app generators rely on', () => {
+  const schemas = Object.entries(mobileContractFiles(tokensCss)).filter(([n]) => n.endsWith('.schema.json'))
+  const walk = (node: unknown, visit: (n: Record<string, unknown>) => void) => {
+    if (node && typeof node === 'object') {
+      visit(node as Record<string, unknown>)
+      for (const v of Object.values(node)) walk(v, visit)
+    }
+  }
+
+  it('every oneOf variant is an object with a `kind` constant', () => {
+    for (const [name, content] of schemas) walk(JSON.parse(content), n => {
+      if (!Array.isArray(n.oneOf)) return
+      for (const v of n.oneOf as { properties?: { kind?: { const?: unknown } } }[]) {
+        expect(typeof v.properties?.kind?.const, name).toBe('string')
+      }
+    })
+  })
+
+  it('timestamps are date-time and counts are integers', () => {
+    const get = (n: string) => JSON.parse(schemas.find(([f]) => f === `api/${n}.schema.json`)![1])
+    expect(get('AnalysisSession').properties.paddledAt.format).toBe('date-time')
+    expect(get('PaddleTotals').properties.count.type).toBe('integer')
   })
 })

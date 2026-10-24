@@ -176,6 +176,12 @@ Reuses what the browser already proved
   `src/tests/mobile-contract.test.ts` fails in `pnpm test` while it's stale.
   Schemas never forbid extra fields, so a new server field can't break an old
   app. REST routes the apps call get the same treatment when the apps need them.
+- Timestamps carry `format: date-time`, whole numbers are `integer`, and every
+  object union is discriminated by a `kind` constant. Both apps decode an
+  unknown enum value or union kind to an `unknown` case and never throw, so the
+  server can add values as well as fields. Golden answers per procedure live
+  in `mobile/contract/fixtures/api/` (one deliberately full of unknown values),
+  checked against the schemas in `pnpm test` and decoded by both apps' tests.
 - The format the apps read is written down in
   [`mobile/contract/README.md`](../../mobile/contract/README.md), with tests
   that the HTTP answers really look like that.

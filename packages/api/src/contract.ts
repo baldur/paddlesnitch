@@ -16,9 +16,11 @@ import type { AppRouter } from './root'
 
 export const contractRegistry = z.registry<{ id: string }>()
 const named = <T extends z.ZodType>(id: string, schema: T): T => { contractRegistry.add(schema, { id }); return schema }
+// ISO 8601 timestamps; `format: date-time` lets the apps generate a real date type.
+const timestamp = () => z.iso.datetime({ offset: true })
 
 const BoatClassSchema = named('BoatClass', z.enum(BOAT_CLASSES as [BoatClass, ...BoatClass[]]))
-const SeatSchema = named('Seat', z.union([z.number(), z.literal('C')]))
+const SeatSchema = named('Seat', z.union([z.int(), z.literal('C')]))
 
 export const AuthUser = named('AuthUser', z.object({
   id: z.string(),
@@ -31,7 +33,7 @@ export const ById = named('ById', z.object({ id: z.string() }))
 
 export const PaddleCard = named('PaddleCard', z.object({
   id: z.string(),
-  paddledAt: z.string(),
+  paddledAt: timestamp(),
   distanceKm: z.number(),
   durationS: z.number(),
   cruiseSpeed: z.number(),
@@ -41,10 +43,10 @@ export const PaddleCard = named('PaddleCard', z.object({
   route: z.array(z.tuple([z.number(), z.number()])),
 }))
 export const PaddleTotals = named('PaddleTotals', z.object({
-  count: z.number(),
+  count: z.int(),
   totalKm: z.number(),
   totalS: z.number(),
-  since: z.string().nullable(),
+  since: timestamp().nullable(),
 }))
 export const PaddleList = named('PaddleList', z.object({ cards: z.array(PaddleCard), totals: PaddleTotals }))
 
@@ -60,7 +62,7 @@ const Segment = named('Segment', z.object({
   trend: z.string().optional(),
 }))
 const SessionSet = named('SessionSet', z.object({
-  count: z.number(), avgDurS: z.number(), avgSpeed: z.number(), avgSR: z.number().nullable(),
+  count: z.int(), avgDurS: z.number(), avgSpeed: z.number(), avgSR: z.number().nullable(),
 }))
 const Conditions = named('Conditions', z.object({
   windKmh: z.number().optional(), windDir: z.number().optional(),
@@ -84,12 +86,12 @@ export const AnalysisResult = named('AnalysisResult', z.object({
   insight: z.string(),
   insightModel: z.string().optional(),
   conditions: Conditions.optional(),
-  noGps: z.object({ reason: NoPaddleReason, strokes: z.number() }).optional(),
+  noGps: z.object({ reason: NoPaddleReason, strokes: z.int() }).optional(),
 }))
 const AnalysisSource = named('AnalysisSource', z.object({
   type: z.enum(['file', 'strava', 'trial', 'device']),
   filename: z.string().optional(),
-  stravaActivityId: z.number().optional(),
+  stravaActivityId: z.int().optional(),
   sport: z.string().optional(),
   trialId: z.string().optional(),
   entryId: z.string().optional(),
@@ -101,8 +103,8 @@ const AnalysisSource = named('AnalysisSource', z.object({
 export const AnalysisSession = named('AnalysisSession', z.object({
   id: z.string(),
   userId: z.string(),
-  createdAt: z.string(),
-  paddledAt: z.string(),
+  createdAt: timestamp(),
+  paddledAt: timestamp(),
   source: AnalysisSource,
   doubleStrokeRate: z.boolean(),
   note: z.string(),

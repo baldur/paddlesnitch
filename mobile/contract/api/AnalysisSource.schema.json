@@ -16,7 +16,9 @@
       "type": "string"
     },
     "stravaActivityId": {
-      "type": "number"
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
     },
     "sport": {
       "type": "string"
