@@ -104,6 +104,13 @@ export function daylightSummary(plan: ComputedPlan, startAt?: string): { sunrise
   return { sunrise: s?.sunrise, sunset: s?.sunset, darkStops: plan.stops.filter(isDarkStop).length }
 }
 
+/** A gauge's reading in words: a level (m, or m NAP on the Dutch datum), else a flow. */
+export function gaugeValueText(g: { valueM?: number; flowM3s?: number; datum?: string }): string | null {
+  if (g.valueM !== undefined) return `${g.valueM.toFixed(2)} m${g.datum === 'nap' ? ' NAP' : ''}`
+  if (g.flowM3s !== undefined) return `${g.flowM3s.toFixed(1)} m³/s`
+  return null
+}
+
 export const GAUGE_STATE_TEXT = { high: 'above its usual range', normal: 'in its usual range', low: 'below its usual range' } as const
 
 /** A Thames reach's board in a few words, and how loudly to show it. */

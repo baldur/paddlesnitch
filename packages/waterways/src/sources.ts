@@ -139,6 +139,12 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
     licence: 'Free use, commercial included; source recommended (BAFU terms of use)',
     attribution: 'Water levels: Bundesamt für Umwelt BAFU',
   },
+  'smhi-flows': {
+    name: 'SMHI hydrological observations (Swedish Meteorological and Hydrological Institute)',
+    url: 'https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning',
+    licence: 'CC BY 4.0',
+    attribution: 'River flows: SMHI, CC BY 4.0',
+  },
   'thames-conditions': {
     name: 'GOV.UK — River Thames: current river conditions',
     url: 'https://www.gov.uk/guidance/river-thames-current-river-conditions',

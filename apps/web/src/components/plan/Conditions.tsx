@@ -3,7 +3,7 @@ import { fmtDayTime, fmtTime } from '@paddlesnitch/core/format'
 import type { ComputedPlan } from '@paddlesnitch/waterways/plan'
 import type { RouteConditions } from '@paddlesnitch/waterways/live-store'
 import { fmtDuration } from '@paddlesnitch/waterways/plan'
-import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, km, tideNote, type TideWindow, regulatedKayakRivers, WALLOON_KAYAK_STATUS } from '@/lib/plan-ui'
+import { BOARD_TEXT, daylightSummary, GAUGE_STATE_TEXT, gaugeValueText, km, tideNote, type TideWindow, regulatedKayakRivers, WALLOON_KAYAK_STATUS } from '@/lib/plan-ui'
 
 // "Conditions now" for a plan (docs/features/river-planner.md, P5): daylight
 // at the finish, the Thames boards on your reaches, and the river gauges along
@@ -91,8 +91,8 @@ export default function Conditions({ plan, startAt, tide, data, loading, failed,
                 {print ? g.name : <a className="tt-link" href={g.url} target="_blank" rel="noreferrer">{g.name}</a>}
                 {g.river ? <span className={muted}> · {g.river}</span> : null}
                 {': '}
-                {g.valueM === undefined ? <span className={muted}>no recent reading</span> : <>
-                  <span className="tabular">{g.valueM.toFixed(2)} m{g.datum === 'nap' ? ' NAP' : ''}</span>
+                {gaugeValueText(g) === null ? <span className={muted}>no recent reading</span> : <>
+                  <span className="tabular">{gaugeValueText(g)}</span>
                   {g.state && <span className={g.state === 'normal' ? muted : warn}> {GAUGE_STATE_TEXT[g.state]}</span>}
                   {g.readAt && <span className={muted}> at {fmtTime(g.readAt)}</span>}
                 </>}

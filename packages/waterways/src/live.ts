@@ -8,7 +8,7 @@ import { lockKey } from './build'
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { Feature, LatLng } from './types'
 
-export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo' | 'pegelonline' | 'bafu'
+export type GaugeSource = 'ea' | 'sepa' | 'opw' | 'rws' | 'waterinfo' | 'pegelonline' | 'bafu' | 'smhi'
 
 export type Gauge = {
   source: GaugeSource
@@ -25,6 +25,7 @@ export type Gauge = {
 export type GaugeReading = Gauge & {
   chainageM: number
   valueM?: number              // stage, metres
+  flowM3s?: number             // discharge, where a source gives a flow rather than a level (SMHI)
   readAt?: string              // ISO
   typical?: { low: number; high: number }
   state?: 'low' | 'normal' | 'high'
@@ -64,6 +65,7 @@ export const gaugeUrl = (g: Gauge): string =>
     : g.source === 'sepa' ? 'https://waterlevels.sepa.org.uk/'
       : g.source === 'rws' ? 'https://waterinfo.rws.nl/'
       : g.source === 'waterinfo' ? 'https://www.waterinfo.be/'
+      : g.source === 'smhi' ? `https://www.smhi.se/data/sjoar-och-vattendrag/vattenforing/waterdischargeDaily/${encodeURIComponent(g.id)}`
       : g.source === 'bafu' ? `https://www.hydrodaten.admin.ch/de/seen-und-fluesse/stationen-und-daten/${encodeURIComponent(g.id)}`
       : g.source === 'pegelonline' ? `https://www.pegelonline.wsv.de/gast/stammdaten?pegelnr=${encodeURIComponent(g.id)}`
         : `https://waterlevel.ie/${g.id}/0001/`
@@ -220,6 +222,24 @@ export function bafuGauges(fc: { features?: unknown[] }, now: number): (Gauge & 
     out.push({
       source: 'bafu', id: p.key, name: (place ?? p.label ?? p.key).trim(), ...(p.hydro_body_name ? { river: p.hydro_body_name } : {}),
       at: lv95ToWgs84(c[0], c[1]), datum: 'aod', valueM: level, readAt: new Date(t).toISOString(), ...(high ? { state: 'high' as const } : {}),
+    })
+  }
+  return out
+}
+
+/** Sweden (SMHI hydrological observations, CC BY 4.0): every station's flows
+ *  over the last hour in one call; SMHI publishes discharge (m³/s), and only ten
+ *  levels. The catchment names the river. Only fresh readings count (RWS_FRESH_MS). */
+export function smhiGauges(body: { station?: unknown[] }, now: number): (Gauge & { valueM?: number; flowM3s: number; readAt: string })[] {
+  type S = { key?: string; name?: string; catchmentName?: string; latitude?: number; longitude?: number; value?: { date?: number; value?: number }[] }
+  const out: (Gauge & { valueM?: number; flowM3s: number; readAt: string })[] = []
+  for (const s of (body.station ?? []) as S[]) {
+    const last = s.value?.[s.value.length - 1]
+    if (typeof last?.value !== 'number' || typeof last.date !== 'number' || now - last.date > RWS_FRESH_MS) continue
+    if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number' || !s.key) continue
+    out.push({
+      source: 'smhi', id: s.key, name: titleCase(s.name ?? s.key), ...(s.catchmentName ? { river: titleCase(s.catchmentName) } : {}),
+      at: [s.latitude, s.longitude], flowM3s: last.value, readAt: new Date(last.date).toISOString(),
     })
   }
   return out
