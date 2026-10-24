@@ -21,6 +21,8 @@ import * as events from 'aws-cdk-lib/aws-events'
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications'
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets'
 import * as sesActions from 'aws-cdk-lib/aws-ses-actions'
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2'
+import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations'
 import { Construct } from 'constructs'
 
 // Lambda logs used to be kept for ever (no retention was set): growing cost,
@@ -579,6 +581,43 @@ export class AttStack extends cdk.Stack {
         retryAttempts: 0,
       })],
     })
+
+    // The kayak game's live-race relay (docs/features/game-accounts-leaderboard-live.md):
+    // every phone in a race holds a WebSocket here, and the Lambda passes each
+    // message on to the others in the race. Phones never connect to each other,
+    // so it works on any network. Its state is a few small objects under
+    // games/live/ (swept after a day by the lifecycle rule). Players connect
+    // with a one-use ticket the site's API writes there, so the relay has no
+    // sign-in code. Paid per message: nothing when nobody's racing, a few cents
+    // a race. The stage throttle caps the whole API (about 50 players racing at
+    // once) so a runaway client can't run up a bill.
+    const relayFn = new lambda.Function(this, 'GameRelayFn', {
+      logRetention: LOG_RETENTION,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/game-relay')),
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(10),
+      environment: { DATA_BUCKET: dataBucket.bucketName },
+    })
+    dataBucket.grantReadWrite(relayFn, 'games/live/*')
+    const relayIntegration = new WebSocketLambdaIntegration('GameRelay', relayFn)
+    const relayApi = new apigwv2.WebSocketApi(this, 'GameRelayApi', {
+      apiName: 'paddlesnitch-game-relay',
+      connectRouteOptions: { integration: relayIntegration },
+      disconnectRouteOptions: { integration: relayIntegration },
+      defaultRouteOptions: { integration: relayIntegration },
+    })
+    const relayStage = new apigwv2.WebSocketStage(this, 'GameRelayStage', {
+      webSocketApi: relayApi,
+      stageName: 'live',
+      autoDeploy: true,
+      throttle: { rateLimit: 500, burstLimit: 1000 },
+    })
+    relayApi.grantManageConnections(relayFn)
+    serverFn.addEnvironment('RELAY_URL', relayStage.url)
+    new cdk.CfnOutput(this, 'GameRelayUrl', { value: relayStage.url })
 
     const serverUrl = serverFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,

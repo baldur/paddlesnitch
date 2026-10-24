@@ -62,8 +62,8 @@ describe('the leaderboard', () => {
   })
 })
 
-describe('live races: the mailbox', () => {
-  it('two players find each other: create, join by code, offer and answer', async () => {
+describe('live races: making, joining and the relay ticket', () => {
+  it('two players get into the same race, each with a one-use ticket for the relay', async () => {
     const created = await as(PAT).games.live.create({ course: 'reading' })
     const { code } = created.room
     expect(code).toMatch(/^[A-HJKMNP-Z]{4}$/)
@@ -73,21 +73,21 @@ describe('live races: the mailbox', () => {
     expect(joined.room.course).toBe('reading')
     expect(joined.players.map((p) => p.id)).toEqual([PAT.id, SAM.id])
 
-    // The newcomer offers to each player already there; they answer.
-    await as(SAM).games.live.send({ code, to: PAT.id, kind: 'offer', sdp: 'v=0 offer' })
-    const forPat = await as(PAT).games.live.inbox({ code })
-    expect(forPat).toMatchObject([{ from: SAM.id, kind: 'offer', sdp: 'v=0 offer' }])
-    await expect(as(PAT).games.live.inbox({ code })).resolves.toEqual([])
-
-    await as(PAT).games.live.send({ code, to: SAM.id, kind: 'answer', sdp: 'v=0 answer' })
-    expect(await as(SAM).games.live.inbox({ code })).toMatchObject([{ from: PAT.id, kind: 'answer' }])
-    expect((await as(PAT).games.live.room({ code })).players).toHaveLength(2)
+    // The relay reads the ticket from the store to know who is connecting.
+    for (const [who, { relay }] of [[PAT, created], [SAM, joined]] as const) {
+      expect(relay.url).toBeNull() // unset locally: the game uses its own origin's /live
+      const pass = JSON.parse(await fs.readFile(path.join(dir, `games/live/tickets/${relay.ticket}.json`), 'utf8'))
+      expect(pass).toMatchObject({ code, userId: who.id })
+      expect(pass.expires).toBeGreaterThan(Date.now())
+    }
+    expect(created.relay.ticket).not.toBe(joined.relay.ticket)
   })
 
-  it('keeps out anyone who hasn\'t joined, and races that don\'t exist', async () => {
+  it('a new ticket to reconnect, only for a player in the race', async () => {
     const { room } = await as(PAT).games.live.create({ course: 'race' })
-    await expect(as(SAM).games.live.inbox({ code: room.code })).rejects.toThrow(/FORBIDDEN/)
-    await expect(as(SAM).games.live.send({ code: room.code, to: PAT.id, kind: 'offer', sdp: 'x' })).rejects.toThrow(/FORBIDDEN/)
+    await expect(as(PAT).games.live.ticket({ code: room.code })).resolves.toMatchObject({ ticket: expect.stringMatching(/^[\w-]{20,}$/) })
+    await expect(as(SAM).games.live.ticket({ code: room.code })).rejects.toThrow(/FORBIDDEN/)
+    await expect(as(PAT).games.live.ticket({ code: 'ZZZZ' })).rejects.toThrow(/race_gone/)
     await expect(as(SAM).games.live.join({ code: 'ZZZZ' })).rejects.toThrow(/race_gone_or_full/)
     await expect(as(null).games.live.create({ course: 'race' })).rejects.toThrow(/UNAUTHORIZED/)
   })

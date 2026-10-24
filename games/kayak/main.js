@@ -365,15 +365,16 @@ els.boards.addEventListener('toggle', async () => {
 });
 
 // --- live races -------------------------------------------------------------------
-// Make or join a race (live.js connects everyone), wait in the lobby, then the
-// host starts it: everyone builds the same race (same seed and order) and each
-// boat's state goes to the others 15 times a second (net.js).
+// Make or join a race (live.js connects to the relay), wait in the lobby, then
+// the host starts it: everyone builds the same race (same seed and order) and
+// each boat's state goes to the others 10 times a second (net.js).
 
 let lobby = null; // the live.js connection, from the lobby to the end of the race
 let liveRace = null; // { room, order, seed } once a live race has begun
 const tracks = new Map(); // player id -> states received (net.js)
 let sendTimer = 0;
-const STATUS = { open: 'connected', connecting: 'connecting…', waiting: 'joining…', failed: "can't connect (their network may block it)", gone: 'left' };
+let lobbyTimer = null; // refreshes the lobby's round-trip times
+const STATUS = { open: 'connected', connecting: 'connecting…', waiting: 'joining…', gone: 'left' };
 
 function openLive(code = '') {
   els.liveError.replaceChildren();
@@ -397,7 +398,8 @@ async function enterLobby(request) {
   els.liveError.replaceChildren();
   try {
     const info = await request;
-    lobby = joinLive(info, { players: showLobby, peer: showLobby, message: onLive });
+    lobby = joinLive(info, { players: showLobby, message: onLive });
+    lobbyTimer = setInterval(showLobby, 1000);
     lobby.course = info.room.course;
     history.replaceState(null, '', `#${HASH.has('debug') ? 'debug&' : ''}race=${info.room.code}`);
     showLobby();
@@ -417,7 +419,8 @@ function showLobby() {
     const you = p.id === lobby.you;
     li.textContent = `${p.name}${you ? ' (you)' : ''}${p.id === lobby.host ? ', starter' : ''} `;
     const small = document.createElement('small');
-    small.textContent = you ? '' : STATUS[lobby.status(p.id)];
+    const rtt = lobby.status(p.id) === 'open' && lobby.rtt(p.id);
+    small.textContent = you ? '' : `${STATUS[lobby.status(p.id)]}${rtt ? ` · ${rtt} ms` : ''}`;
     li.append(small);
     if (you) li.className = 'you';
     return li;
@@ -469,7 +472,8 @@ function onLive(id, msg) {
 async function begin(order, seed) {
   const m = MODES[lobby.course];
   if (!m.course) m.course = await loadCourse(m.file);
-  lobby.stopPolling();
+  lobby.racing();
+  clearInterval(lobbyTimer);
   liveRace = { room: { you: lobby.you, host: lobby.host }, order, seed };
   tracks.clear();
   mode = m;
@@ -504,6 +508,7 @@ function liveAfter(events) {
 function endLive() {
   if (!lobby && !liveRace) return;
   lobby?.close();
+  clearInterval(lobbyTimer);
   lobby = null;
   liveRace = null;
   tracks.clear();
@@ -1040,6 +1045,7 @@ if (HASH.has('debug')) {
     get gpu() { return renderer?.stats; },
     get tilt() { return controls.tiltLean; },
     get live() { return liveRace; },
+    get lobby() { return lobby; },
   };
 }
 
