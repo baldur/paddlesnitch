@@ -87,7 +87,7 @@ The protocol is fixed by the tracker sync contract and its fixtures. On Android:
   tokens (no dynamic colour: the design system is fixed). Edge to edge,
   predictive back, themed icon.
 - Maps: MapLibre Native (likely) over the same Esri dark grey tiles as the web,
-  subject to the shared tiles question.
+  subject to open question 4.
 - Navigation, DI and networking: standard current Jetpack choices (Navigation
   Compose, Hilt or manual DI, Ktor or OkHttp + kotlinx.serialization). Pick in
   S3, keep it boring.
@@ -124,7 +124,7 @@ Start this **first** (P0), because two of the steps take calendar time.
   certified devices): covered by a verified Play account; confirm when the
   account is set up.
 - **Package name** decided once, never changed (proposal:
-  `com.paddlesnitch.app`).
+  `com.paddlesnitch.app`, the same as the iOS bundle ID).
 
 ## Testing (Android)
 
@@ -160,3 +160,5 @@ S1–S3 run alongside P0 and the shared C1–C3. Their results may change P2/P3.
    testers?
 2. **Package name** (permanent).
 3. **GPS provider:** fused or raw GNSS, decided in S1.
+4. **Map tiles:** Esri's terms and attribution for use in an app, or a
+   different keyless source.

@@ -140,11 +140,18 @@ Reuses what the browser already proved
   the callback lands on a verified app link (Android `assetlinks.json`, iOS
   `apple-app-site-association`, both under `/.well-known/`) carrying a
   **one-time code** the app swaps for tokens. Tokens never appear in a URL.
+  `apple-app-site-association` declares `webcredentials` as well as
+  `applinks`, so iOS offers saved paddlesnitch.com passwords.
 - **Signed-in website pages from the apps:** proposal is a one-time code
   handed to the in-app browser, which a web route turns into the usual cookies.
 - **Phone devices** on the relay route (above).
 - **Minimum supported app version**, per platform. Below it the app asks the
   user to update.
+- **A store-review account.** App Review and Play review both need to sign in.
+  SES is still in sandbox, so email codes don't reach reviewers. Keep a
+  reviewer account that signs in with a **password**, seeded in production,
+  with a few sample paddles, and its credentials in both stores' review notes
+  (never in the repo).
 
 ## API contract
 
@@ -213,6 +220,13 @@ They run in parallel and meet only at this contract.
 1. **Signed-in website pages:** one-time code → cookies, or something else.
 2. **Phone stroke rate:** usable from a phone in a bag or on a deck mount?
    Each platform's spike reports.
-3. **Map tiles in apps:** Esri's terms and attribution for native use, or a
-   different keyless source.
-4. **App name on the stores.**
+3. **Sign in with Apple.** App Review guideline 4.8: an app offering a
+   third-party login (Strava) must also offer a privacy-focused one. If our own
+   email-code sign-in doesn't count, Sign in with Apple becomes a Cognito
+   identity provider, a shared server change in C2 (and it would show on
+   Android and the web too, if we want sign-in options to match).
+4. **App name on the stores.** Proposed id on both: `com.paddlesnitch.app`
+   (Android package name, iOS bundle ID).
+
+Maps are per platform: MapKit on iPhone; the tile question is Android's
+([`android-app.md`](android-app.md)).
