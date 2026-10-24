@@ -13,10 +13,22 @@ describe('Claude intake is read-and-comment only', () => {
     expect(intake).toMatch(/contents: read/)
     expect(intake).not.toMatch(/contents: write|pull-requests: write/)
     const tools = /--allowedTools ([^"]+)/.exec(intake)![1].split(',')
-    expect(tools).not.toContain('Edit')
-    expect(tools).not.toContain('Write')
-    // Bash only as specific `gh issue` commands, never bare.
-    for (const t of tools.filter(t => t.startsWith('Bash'))) expect(t).toMatch(/^Bash\(gh issue (view|comment|edit):\*\)$/)
+    // Claude only reads: no shell, no Edit/Write (2026-10-24).
+    expect(tools.sort()).toEqual(['Glob', 'Grep', 'Read'])
+  })
+
+  it('the workflow, not Claude, claims the issue and posts the comment', () => {
+    // Claude's `gh issue` calls were silently denied by the tool permission
+    // rules, so runs "succeeded" with no comment; its final answer is posted instead.
+    expect(intake).toMatch(/gh issue edit "\$ISSUE" --add-label claude-active/)
+    expect(intake).toMatch(/execution_file/)
+    expect(intake).toMatch(/gh issue comment "\$ISSUE" --body-file/)
+  })
+
+  it('only auto-runs on customer issues, never for a bot', () => {
+    expect(intake).toMatch(/contains\(github\.event\.issue\.labels\.\*\.name, 'customer-reported'\)/)
+    expect(intake).toMatch(/github\.actor != 'claude\[bot\]'/)
+    expect(intake).toMatch(/github\.actor != 'github-actions\[bot\]'/)
   })
 
   it('both Claude workflows pin the action to a commit', () => {
