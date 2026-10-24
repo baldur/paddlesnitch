@@ -171,6 +171,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`tracker-bluetooth-sync.md`](docs/features/tracker-bluetooth-sync.md) | 📋 spec, not built | Recordings home by phone/browser over Bluetooth, compression first, game-style setup |
 | [`mobile-apps.md`](docs/features/mobile-apps.md) | 📋 spec, not built | Native Android + iPhone apps sharing a contract, not code: generated API schema, golden fixtures, design tokens in `mobile/contract/`; phone as tracker; server changes. Replaces the Expo plan |
 | [`android-app.md`](docs/features/android-app.md) | 📋 spec, not built | The Android app: Kotlin + Compose, Android 10+, capability list, CompanionDeviceManager pairing, Google Play |
+| [`ios-app.md`](docs/features/ios-app.md) | 📋 spec, not built | The iPhone app: Swift + SwiftUI, iOS 17+, capability list + "This iPhone", While Using recording, AccessorySetupKit pairing, MapKit; build first (simulator + free Apple ID), App Store at P5 |
 | [`buddies-and-compare.md`](docs/features/buddies-and-compare.md) | ✅ 2026-10-11 | Mutual buddies who see each other's paddles; two paddles on one map to study the line |
 | [`one-paddle.md`](docs/features/one-paddle.md) | ✅ phases 1–4 built | One paddle whatever the source: tracker stroke rate through the paddle, automatic tracker paddles, boat motion on the paddle page, same-outing comparison |
 | [`motion-only-paddles.md`](docs/features/motion-only-paddles.md) | ✅ B built 2026-10-11 | A tracker recording whose GPS failed becomes a paddle without a map (no estimated distance) |
