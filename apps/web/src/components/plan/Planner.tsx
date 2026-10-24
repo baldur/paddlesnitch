@@ -22,7 +22,7 @@ import { TIDES, useOfficialTides } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
+  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, farEndLabel, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
   type LockLink, type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -203,7 +203,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             </p>
           ) : (
             <p className="text-base text-muted">
-              {!draft.start ? 'Click the water to set your start.' : !draft.finish ? 'Now click the water where you finish.' : 'Click again to move the nearer end.'}
+              {!draft.start ? 'Click the water to set your start.' : !draft.finish ? (draft.shape === 'return' ? 'Now click the water where you turn back.' : 'Now click the water where you finish.') : 'Click again to move the nearer end.'}
               {!draft.finish && ' Zoomed out, a click zooms in first.'}
             </p>
           )}
@@ -211,13 +211,13 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             <dl className="mt-4 grid grid-cols-[5rem_1fr] gap-y-1 text-base">
               <dt className={`${eyebrowClass} pt-1`}>Start</dt>
               <dd>{!draft.start ? 'not set' : current?.start ? current.start.waterway || 'unnamed water' : '—'}</dd>
-              <dt className={`${eyebrowClass} pt-1`}>Finish</dt>
+              <dt className={`${eyebrowClass} pt-1`}>{farEndLabel(draft.shape)}</dt>
               <dd>{!draft.finish ? 'not set' : current?.finish ? current.finish.waterway || 'unnamed water' : '—'}</dd>
             </dl>
           ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               {(['start', 'finish'] as const).map(end => (
-                <EndSearch key={end} label={end === 'start' ? 'Start' : 'Finish'} at={draft[end]}
+                <EndSearch key={end} label={end === 'start' ? 'Start' : farEndLabel(draft.shape)} at={draft[end]}
                   waterway={!draft[end] ? null : current ? current[end]?.waterway ?? null : null}
                   near={draft.start ?? draft.finish ?? undefined}
                   onPick={h => { setChoosing(null); setDraft(d => ({ ...d, [end]: h.at })); setFocus({ at: h.at, zoom: 15 }) }} />
@@ -581,8 +581,8 @@ function PlaceSearch({ near, onPick }: { near?: LatLng; onPick: (p: Place) => vo
   return (
     <div className="mt-3 relative">
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-fg">Go to</span>
-        <input className={INPUT} value={q} placeholder="Town, village or lock" aria-label="Go to a place"
+        <span className="text-sm font-medium text-fg">Find on the map</span>
+        <input className={INPUT} value={q} placeholder="Town, village or lock" aria-label="Find a place on the map"
           role="combobox" aria-expanded={open && hits.length > 0} aria-controls="place-results" autoComplete="off"
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}

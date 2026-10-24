@@ -4,7 +4,7 @@ import type { Stop } from '@paddlesnitch/waterways/plan'
 import type { Feature, LatLng } from '@paddlesnitch/waterways/types'
 import type { PortageOnRoute } from '@paddlesnitch/waterways/portage'
 import { lineLength } from '@paddlesnitch/waterways/line'
-import { addPortageHref, aerialPhotoUrl, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, gaugeValueText, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
+import { addPortageHref, aerialPhotoUrl, farEndLabel, regulatedKayakRivers, lockFromParams, portageMap, daylightSummary, isDarkStop, crewLines, isCrewStop, printHref, shownGroups, asInput, draftFromParams, draftParams, groupOf, localInput, mapTiles, gaugeValueText, inAustria, inFrance, inNetherlands, inSwitzerland, nearFlanders, germanPhotosNear, GERMAN_PHOTOS, FLANDERS_PHOTOS, printablePhotos, pixelsToMetres, placeClick, stopId, stopLines, type PlanDraft } from './plan-ui'
 
 const feature = (over: Partial<Feature>): Feature => ({
   id: 'x', kind: 'lock', name: 'Cookham Lock', at: [51.56, -0.71],
@@ -375,5 +375,12 @@ describe("Wallonia's regulated kayak rivers", () => {
     expect(regulatedKayakRivers(['La Lesse', "L'Ourthe", 'Amblève', 'Meuse', 'Lesse'])).toEqual(['the Lesse', 'the Ourthe', 'the Amblève'])
     expect(regulatedKayakRivers(["Canal de l'Ourthe", 'La Houillette', 'Lesse souterraine', 'River Thames'])).toEqual([])
     expect(regulatedKayakRivers(["L'Ourthe orientale", 'la Semois', 'La Sûre'])).toEqual(['the Ourthe orientale', 'the Semois', 'the Sûre'])
+  })
+})
+
+describe('the far end’s name (#630)', () => {
+  it('is Finish on a one-way trip and Turn at on a return trip', () => {
+    expect(farEndLabel('one_way')).toBe('Finish')
+    expect(farEndLabel('return')).toBe('Turn at')
   })
 })

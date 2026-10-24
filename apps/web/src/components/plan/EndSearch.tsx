@@ -15,7 +15,7 @@ const KIND: Record<Found['kind'], string> = {
 }
 
 export default function EndSearch({ label, at, waterway, near, onPick }: {
-  label: 'Start' | 'Finish'
+  label: 'Start' | 'Finish' | 'Turn at'
   at: LatLng | null          // the end as set now (by a pick or a click)
   waterway?: string | null   // its waterway, once known ('' for unnamed water)
   near?: LatLng              // prefer matches near here
