@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "Segment.schema.json",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "rest",
+        "cruise",
+        "surge"
+      ]
+    },
+    "fromT": {
+      "type": "number"
+    },
+    "toT": {
+      "type": "number"
+    },
+    "durS": {
+      "type": "number"
+    },
+    "distM": {
+      "type": "number"
+    },
+    "avgSpeed": {
+      "type": "number"
+    },
+    "splitPer500": {
+      "type": "number"
+    },
+    "avgSR": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "srCv": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "avgDps": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "trend": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "fromT",
+    "toT",
+    "durS",
+    "distM",
+    "avgSpeed",
+    "splitPer500",
+    "avgSR",
+    "srCv",
+    "avgDps"
+  ]
+}

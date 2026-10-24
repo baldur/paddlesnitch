@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "PaddleTotals.schema.json",
+  "type": "object",
+  "properties": {
+    "count": {
+      "type": "number"
+    },
+    "totalKm": {
+      "type": "number"
+    },
+    "totalS": {
+      "type": "number"
+    },
+    "since": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "count",
+    "totalKm",
+    "totalS",
+    "since"
+  ]
+}

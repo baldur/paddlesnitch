@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "AnalysisResult.schema.json",
+  "type": "object",
+  "properties": {
+    "durationS": {
+      "type": "number"
+    },
+    "distanceKm": {
+      "type": "number"
+    },
+    "avgSpeed": {
+      "type": "number"
+    },
+    "avgSR": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "avgDps": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "srCv": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "cruiseSpeed": {
+      "type": "number"
+    },
+    "strokeRateDoubled": {
+      "type": "boolean"
+    },
+    "points": {
+      "type": "array",
+      "items": {
+        "$ref": "AnalysisPoint.schema.json"
+      }
+    },
+    "stops": {
+      "type": "array",
+      "items": {
+        "$ref": "Segment.schema.json"
+      }
+    },
+    "surges": {
+      "type": "array",
+      "items": {
+        "$ref": "Segment.schema.json"
+      }
+    },
+    "sets": {
+      "type": "array",
+      "items": {
+        "$ref": "SessionSet.schema.json"
+      }
+    },
+    "insight": {
+      "type": "string"
+    },
+    "insightModel": {
+      "type": "string"
+    },
+    "conditions": {
+      "allOf": [
+        {
+          "$ref": "Conditions.schema.json"
+        }
+      ]
+    },
+    "noGps": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "NoPaddleReason.schema.json"
+        },
+        "strokes": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "reason",
+        "strokes"
+      ]
+    }
+  },
+  "required": [
+    "durationS",
+    "distanceKm",
+    "avgSpeed",
+    "avgSR",
+    "avgDps",
+    "cruiseSpeed",
+    "strokeRateDoubled",
+    "points",
+    "stops",
+    "surges",
+    "sets",
+    "insight"
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "NoPaddleReason.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "no_gps"
+        },
+        "recordedS": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "recordedS"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "gps_lost"
+        },
+        "lostAfterS": {
+          "type": "number"
+        },
+        "recordedS": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "lostAfterS",
+        "recordedS"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "too_short"
+        },
+        "movedM": {
+          "type": "number"
+        },
+        "minM": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "movedM",
+        "minM"
+      ]
+    }
+  ]
+}

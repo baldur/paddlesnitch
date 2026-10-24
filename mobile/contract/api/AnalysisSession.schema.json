@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "AnalysisSession.schema.json",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "paddledAt": {
+      "type": "string"
+    },
+    "source": {
+      "$ref": "AnalysisSource.schema.json"
+    },
+    "doubleStrokeRate": {
+      "type": "boolean"
+    },
+    "note": {
+      "type": "string"
+    },
+    "insight": {
+      "type": "string"
+    },
+    "result": {
+      "$ref": "AnalysisResult.schema.json"
+    },
+    "boatClass": {
+      "allOf": [
+        {
+          "$ref": "BoatClass.schema.json"
+        }
+      ]
+    },
+    "seat": {
+      "allOf": [
+        {
+          "$ref": "Seat.schema.json"
+        }
+      ]
+    },
+    "shareId": {
+      "type": "string"
+    },
+    "insightPending": {
+      "type": "boolean",
+      "const": true
+    },
+    "hiddenFromBuddies": {
+      "type": "boolean",
+      "const": true
+    }
+  },
+  "required": [
+    "id",
+    "userId",
+    "createdAt",
+    "paddledAt",
+    "source",
+    "doubleStrokeRate",
+    "note",
+    "insight",
+    "result"
+  ]
+}

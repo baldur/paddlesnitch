@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "PaddleCard.schema.json",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "paddledAt": {
+      "type": "string"
+    },
+    "distanceKm": {
+      "type": "number"
+    },
+    "durationS": {
+      "type": "number"
+    },
+    "cruiseSpeed": {
+      "type": "number"
+    },
+    "avgSR": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "boatClass": {
+      "allOf": [
+        {
+          "$ref": "BoatClass.schema.json"
+        }
+      ]
+    },
+    "sourceType": {
+      "type": "string"
+    },
+    "route": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "additionalItems": false,
+        "minItems": 2,
+        "maxItems": 2
+      }
+    }
+  },
+  "required": [
+    "id",
+    "paddledAt",
+    "distanceKm",
+    "durationS",
+    "cruiseSpeed",
+    "avgSR",
+    "sourceType",
+    "route"
+  ]
+}
