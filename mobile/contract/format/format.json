@@ -1,0 +1,299 @@
+{
+  "fmtDur": [
+    {
+      "in": 0,
+      "out": "0:00"
+    },
+    {
+      "in": 0.4,
+      "out": "0:00"
+    },
+    {
+      "in": 59.4,
+      "out": "0:59"
+    },
+    {
+      "in": 59.5,
+      "out": "1:00"
+    },
+    {
+      "in": 119.6,
+      "out": "2:00"
+    },
+    {
+      "in": 125.4,
+      "out": "2:05"
+    },
+    {
+      "in": 600,
+      "out": "10:00"
+    },
+    {
+      "in": 3599.6,
+      "out": "60:00"
+    }
+  ],
+  "fmtClock": [
+    {
+      "in": 0,
+      "out": "0:00"
+    },
+    {
+      "in": 59.5,
+      "out": "1:00"
+    },
+    {
+      "in": 185,
+      "out": "3:05"
+    },
+    {
+      "in": 3599.5,
+      "out": "1:00:00"
+    },
+    {
+      "in": 3600,
+      "out": "1:00:00"
+    },
+    {
+      "in": 3725,
+      "out": "1:02:05"
+    },
+    {
+      "in": 36000,
+      "out": "10:00:00"
+    }
+  ],
+  "split500": [
+    {
+      "in": 0,
+      "out": "—"
+    },
+    {
+      "in": 0.2,
+      "out": "—"
+    },
+    {
+      "in": 0.21,
+      "out": "39:41"
+    },
+    {
+      "in": 3.0269791402084816,
+      "out": "2:45"
+    },
+    {
+      "in": 4.1806020066889635,
+      "out": "2:00"
+    },
+    {
+      "in": 4.5,
+      "out": "1:51"
+    }
+  ],
+  "fmtWeekday": [
+    {
+      "in": "2026-09-13T07:30:00.000Z",
+      "out": "Sun, 13 Sep 2026"
+    },
+    {
+      "in": "2026-09-14T00:30:00+01:00",
+      "out": "Sun, 13 Sep 2026"
+    },
+    {
+      "in": "2024-02-29T12:00:00Z",
+      "out": "Thu, 29 Feb 2024"
+    },
+    {
+      "in": "not a date",
+      "out": "not a date"
+    }
+  ],
+  "fmtMonth": [
+    {
+      "in": "2026-09-01T07:30:00.000Z",
+      "out": "Sep 2026"
+    },
+    {
+      "in": "2026-12-31T23:59:59.999Z",
+      "out": "Dec 2026"
+    },
+    {
+      "in": "2027-01-01T00:30:00+01:00",
+      "out": "Dec 2026"
+    },
+    {
+      "in": "not a date",
+      "out": "not a date"
+    }
+  ],
+  "paddleKm": [
+    {
+      "in": {
+        "distanceKm": 4.2478
+      },
+      "out": "4.25 km"
+    },
+    {
+      "in": {
+        "distanceKm": 1.005
+      },
+      "out": "1.00 km"
+    },
+    {
+      "in": {
+        "distanceKm": 0
+      },
+      "out": "0.00 km"
+    },
+    {
+      "in": {
+        "distanceKm": 0,
+        "noGps": true
+      },
+      "out": "—"
+    },
+    {
+      "in": {
+        "distanceKm": 3.2,
+        "noGps": true
+      },
+      "out": "—"
+    }
+  ],
+  "compassPoint": [
+    {
+      "in": 0,
+      "out": "N"
+    },
+    {
+      "in": 22.4,
+      "out": "N"
+    },
+    {
+      "in": 22.5,
+      "out": "NE"
+    },
+    {
+      "in": 22.6,
+      "out": "NE"
+    },
+    {
+      "in": 225,
+      "out": "SW"
+    },
+    {
+      "in": 337.5,
+      "out": "N"
+    },
+    {
+      "in": 350,
+      "out": "N"
+    },
+    {
+      "in": 360,
+      "out": "N"
+    },
+    {
+      "in": -10,
+      "out": "N"
+    }
+  ],
+  "noPaddleMessage": [
+    {
+      "in": {
+        "reason": {
+          "kind": "no_gps",
+          "recordedS": 1800
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS never found the sky, so no route was recorded. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "no_gps",
+          "recordedS": 1800
+        },
+        "hasMotion": false
+      },
+      "out": "The GPS never found the sky, so no route was recorded."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 0.4,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 1 second after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 89,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 89 seconds after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 90,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 2 minutes after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 5399,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 90 minutes after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 5400,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 1.5 hours after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "gps_lost",
+          "lostAfterS": 9000,
+          "recordedS": 7200
+        },
+        "hasMotion": true
+      },
+      "out": "The GPS lost the sky 2.5 hours after you set off, so no route was recorded after that. The boat motion was."
+    },
+    {
+      "in": {
+        "reason": {
+          "kind": "too_short",
+          "movedM": 12,
+          "minM": 100
+        },
+        "hasMotion": true
+      },
+      "out": "Too short to be a paddle: the boat moved 12 m, and a paddle needs 100 m."
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtDay, fmtWeekday, fmtMonth, fmtDayMonth, fmtDayTime, fmtTime, sportLabel, participationLabel } from '@paddlesnitch/core/format'
+import { fmtDay, fmtWeekday, fmtMonth, fmtDayMonth, fmtDayTime, fmtTime, sportLabel, participationLabel, compassPoint } from '@paddlesnitch/core/format'
 
 describe('shared wording for stored values', () => {
   it('writes a day the same way on the server and in the browser', () => {
@@ -28,5 +28,11 @@ describe('shared wording for stored values', () => {
   })
   it('says who may enter a trial in words', () => {
     expect(['members', 'invitational', 'public'].map(participationLabel)).toEqual(['Group members', 'Invited only', 'Anyone'])
+  })
+})
+
+describe('compassPoint', () => {
+  it('names the nearest of 8 points, rounding at the half-way line and wrapping round north', () => {
+    expect([0, 22.4, 22.6, 90, 225, 350, 360, -10].map(compassPoint)).toEqual(['N', 'N', 'NE', 'E', 'SW', 'N', 'N', 'N'])
   })
 })

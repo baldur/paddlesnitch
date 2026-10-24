@@ -11,7 +11,7 @@ import { fmtDur, fmtClock, split500, rescaleDoubling, roundStrokes } from '@padd
 import { noPaddleMessage } from '@paddlesnitch/timing/device'
 import { gateAt, type Racer } from '@paddlesnitch/analysis/similar'
 import { haversine } from '@paddlesnitch/timing/geo'
-import { fmtDay, fmtWeekday } from '@paddlesnitch/core/format'
+import { fmtDay, fmtWeekday, compassPoint } from '@paddlesnitch/core/format'
 import { PageHeader, eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Stat, badgeClass, cardClass, Chevron } from '@paddlesnitch/ui/Card'
@@ -22,8 +22,7 @@ import { trpc } from '@/lib/trpc'
 import { sourceName } from './SameOuting'
 import PortageSuggestions from './PortageSuggestions'
 
-const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-const compass = (d?: number) => (d == null ? '' : COMPASS[Math.round(d / 45) % 8])
+const compass = (d?: number) => (d == null ? '' : compassPoint(d))
 const PANEL = 'bg-surface/95 border border-border rounded-control backdrop-blur-sm'
 
 function WindRose({ dir }: { dir: number }) {

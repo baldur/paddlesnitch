@@ -71,6 +71,26 @@ weeks oldest first, weeks start Monday UTC). Totals and logbook count every
 recording, as the website does.
 Add a fixture whenever a real answer turns out to have a shape these don't.
 
+## format/
+
+`format.json`: how the website writes the numbers, dates and messages both
+apps show. Function name → cases of `{ "in", "out" }`, where each `out` is what
+the website's own function returned for `in` when `pnpm mobile:contract` ran.
+Port each function and run it over every case. The inputs sit at the edges
+where ports go wrong: rounding at :59.5, `toFixed` on 1.005 (round the exact
+binary value, as JavaScript does, not the shortest decimal), 22.5° on the compass.
+
+| Function | `in` | What it is |
+|---|---|---|
+| `fmtDur` | seconds | `m:ss`, rounded first; minutes go past 59 |
+| `fmtClock` | seconds | `m:ss`, or `h:mm:ss` from an hour |
+| `split500` | speed, m/s | pace per 500 m via `fmtDur`; `—` at 0.2 m/s or slower |
+| `fmtWeekday` | ISO timestamp | `Sun, 13 Sep 2026` in UTC; unparseable → as given |
+| `fmtMonth` | ISO timestamp | `Sep 2026` in UTC; unparseable → as given |
+| `paddleKm` | `{distanceKm, noGps?}` | `4.25 km`; `—` for a paddle without a map |
+| `compassPoint` | degrees the wind blows from | one of N, NE … NW |
+| `noPaddleMessage` | `{reason, hasMotion}` | why a recording has no route (`reason` is a `NoPaddleReason`) |
+
 ## tokens/
 
 `tokens.json`: `color` (hex), `radius` (px), `font` (family names; the apps
