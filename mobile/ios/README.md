@@ -35,7 +35,8 @@ touches `mobile/ios/` or `mobile/contract/`.
 |---|---|
 | `project.yml` | The Xcode project, as text. `Paddlesnitch.xcodeproj` is generated from it and not committed. |
 | `App/` | The app target: screens and wiring only. |
-| `Packages/PaddleKit/` | Everything testable without a simulator, one target per area (`DesignSystem` now; `PaddleAPI`, `Recorder`, `TrackerLink`, `UploadQueue`, `Capabilities` as their phases arrive). `swift test` runs it on the Mac. |
+| `Packages/PaddleKit/` | Everything testable without a simulator, one target per area (`DesignSystem`, `PaddleAPI` now; `Recorder`, `TrackerLink`, `UploadQueue`, `Capabilities` as their phases arrive). `swift test` runs it on the Mac. |
+| `Packages/PaddleKit/Sources/PaddleAPI/` | Generated models (`Generated/`), the hand-mapped `Seat` and `Coordinate`, and `PaddleClient`: `try await client.call(Procedures.paddlesGet, ById(id: id))`. |
 | `Packages/PaddleKit/Sources/ContractGen*` | `contract-gen`: `mobile/contract/` → Swift. |
 | `Tests/UI/` | XCUITest: launch flows and Apple's accessibility audit. |
 | `scripts/simulator.sh` | Finds or creates an iPhone simulator for an iOS version. |
@@ -43,5 +44,12 @@ touches `mobile/ios/` or `mobile/contract/`.
 ## Generated files
 
 `DesignSystem/Generated/Tokens.swift` and the `LaunchBackground` colour come
-from `mobile/contract/tokens/tokens.json`. Don't edit them: run
-`make generate`. A package test fails while they're out of date.
+from `mobile/contract/tokens/tokens.json`; `PaddleAPI/Generated/` comes from
+`mobile/contract/api/`. Don't edit them: run `make generate`. A package test
+fails while they're out of date.
+
+The generated models follow the contract's rules: unknown fields are ignored,
+an unknown enum value or union `kind` decodes to `.unknown(…)` instead of
+throwing, `kind` unions are Swift enums with associated values, and
+timestamps are `Date`. The tests decode every answer in
+`mobile/contract/fixtures/api/`, and fail if a procedure has none.
