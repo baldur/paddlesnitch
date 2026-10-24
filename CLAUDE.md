@@ -1173,6 +1173,7 @@ Browser paddling games live in **`games/`** at the repo root. Like `firmware/` i
 - **Every browser:** kayak draws with WebGPU, else WebGL 2 (`?webgl` forces it); each optional feature has a fallback — table in `games/CLAUDE.md`.
 - **Visits:** `games/shared/analytics.js` sends one `pageview` to `/att/api/track` (same session id as the site), so games show in "pageviews by path".
 - **Locally:** `pnpm games` serves `games/` on :8000; `pnpm dev` serves the `/games` page but not the games.
+- **Real-river courses from 360 video** ([`game-courses-from-video.md`](docs/features/game-courses-from-video.md)): GoPro telemetry (`@paddlesnitch/timing/gpmf`, GPS9 + GPS5) → OSM river line + widths → frames every 50 m per pass → geo-referenced observations (`apps/web/scripts/courses/data/<id>/observations.json`) → `games/kayak/courses/<id>.json` (ODbL: derived from OSM; credited in the menu). Steps: `pnpm --filter web course:ingest|course:river|course:frames|course:build|course:compare`; working files in `apps/web/.cache/courses/`. First course: **Reading Thames** (Christchurch Bridge → Mapledurham, 6.3 km, a 12-boat race), drawn true size with `speedup: 4` (boats move 4× their speed) and `warp: 4` (times shown 4×), so the HUD shows true distances and times. Set `cameraYaw` per recording: the Reading camera faced forward from the back deck (180).
 
 ### Cost Model (Production, Low Scale)
 

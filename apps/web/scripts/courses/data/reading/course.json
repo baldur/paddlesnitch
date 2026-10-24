@@ -1,0 +1,43 @@
+{
+  "name": "Reading: Christchurch Bridge to Mapledurham",
+  "river": "River Thames",
+  "from": [51.46175, -0.96945],
+  "start": [51.46205, -0.9701],
+  "finish": [51.48352, -1.03752],
+  "to": [51.4844, -1.0375],
+  "recordings": ["0093", "0095"],
+  "cameraYaw": {
+    "0093": 180,
+    "0095": 180
+  },
+  "title": "Reading Thames",
+  "blurb": "6.3 km up the Thames from Christchurch Bridge to Mapledurham, 12 paddlers",
+  "places": [
+    "Christchurch Bridge",
+    "Fry's Island",
+    "Christchurch Meadows",
+    "Reading University Boat Club",
+    "Piper's Island",
+    "Caversham Bridge",
+    "Reading Rowing Club",
+    "Caversham Court Gardens",
+    "Reading Canoe Club",
+    "Thames Side Promenade",
+    {
+      "name": "Wychotes Waterside Activity Centre",
+      "label": "Wychcotes"
+    },
+    "Reading School Boat House",
+    {
+      "name": "Great Western Main Line",
+      "label": "The Great Western railway"
+    },
+    "Appletree Eyot",
+    "Poplar Island",
+    "Purley Gardens",
+    {
+      "name": "Mapledurham Weir",
+      "label": "Mapledurham Lock ahead"
+    }
+  ]
+}

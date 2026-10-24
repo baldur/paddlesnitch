@@ -13,10 +13,12 @@ layout(std140) uniform Frame {
   vec4 camUp;      // xyz, w = tan(vertical fov / 2)
   vec4 camFwd;
   vec4 sunDir;     // towards the sun
-  vec4 skyTop;
+  vec4 skyTop;     // w = cloud cover, 0..1
   vec4 skyHorizon; // also the fog colour; w = fog density
   vec4 water;      // deep water colour
   vec4 boats[16];  // x, z, heading, speed: for their wakes
+  vec4 river;      // the river where you are: centre x, z and direction x, z
+  vec4 banks;      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
 } frame;
 
 vec4 toGL(vec4 clip) { return vec4(clip.xy, clip.z * 2.0 - clip.w, clip.w); }
@@ -26,11 +28,43 @@ vec3 fog(vec3 color, float dist) {
   return mix(color, frame.skyHorizon.rgb, clamp(f, 0.0, 1.0));
 }
 
+float hash2(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float noise2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), u.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+// Fair-weather cumulus on a layer overhead, drifting slowly downwind: how much
+// cloud is in a direction (x), and how dense its core is there (y).
+vec2 clouds(vec3 dir) {
+  float cover = frame.skyTop.w;
+  if (cover <= 0.0 || dir.y <= 0.0) { return vec2(0.0); }
+  vec2 p = dir.xz / (dir.y + 0.08) * 1.2 + vec2(frame.camPos.w * 0.004, 0.0);
+  float n = 0.0;
+  float a = 0.5;
+  for (int k = 0; k < 4; k++) {
+    n += a * noise2(p);
+    p = p * 2.03 + vec2(1.7, 9.2);
+    a *= 0.5;
+  }
+  float t = 0.75 - 0.4 * cover;
+  return vec2(smoothstep(t, t + 0.12, n) * smoothstep(0.0, 0.08, dir.y), smoothstep(t + 0.08, t + 0.4, n));
+}
+
 vec3 skyColor(vec3 dir, float halo) {
   float h = clamp(dir.y, 0.0, 1.0);
   vec3 c = mix(frame.skyHorizon.rgb, frame.skyTop.rgb, pow(h, 0.55));
   float sun = max(dot(dir, frame.sunDir.xyz), 0.0);
-  c += vec3(1.0, 0.86, 0.62) * (pow(sun, 3000.0) * 8.0 + pow(sun, 48.0) * 0.2) * halo;
+  vec2 cl = clouds(dir);
+  // Bright edges, greyer where the cloud is thick.
+  vec3 cloud = mix(vec3(0.96, 0.96, 0.95), vec3(0.64, 0.68, 0.74), cl.y) + vec3(1.0, 0.9, 0.75) * pow(sun, 8.0) * 0.25;
+  c = mix(c, mix(cloud, frame.skyHorizon.rgb, 1.0 - smoothstep(0.0, 0.25, h)), cl.x);
+  c += vec3(1.0, 0.86, 0.62) * (pow(sun, 3000.0) * 8.0 + pow(sun, 48.0) * 0.2) * halo * (1.0 - cl.x);
   return c;
 }
 `;
@@ -160,6 +194,24 @@ vec2 wake(vec2 p) {
   return o;
 }
 
+// The riverside trees seen in the water. The reflected ray is followed across
+// the river (taken as straight from where you are) to the line of trees on the
+// bank it's heading for: if it meets them below their tops, it sees leaves.
+// Rays heading up or down the river see the sky over the next reach.
+const vec3 TREES = vec3(0.14, 0.2, 0.1);
+float treeline(vec2 p, vec3 refl) {
+  if (frame.banks.w < 0.5) return 0.0;
+  vec2 along = frame.river.zw;
+  vec2 across = vec2(-along.y, along.x);
+  float l = clamp(dot(p - frame.river.xy, across), -frame.banks.x, frame.banks.y);
+  float rl = dot(refl.xz, across);
+  float bank = rl > 0.0 ? frame.banks.y : -frame.banks.x;
+  float reach = min(abs(bank - l) / max(abs(rl), 0.0001), 900.0);
+  float a = dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
+  float top = frame.banks.z * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3));
+  return 0.8 * (1.0 - smoothstep(top * 0.4, top * 1.6, reach * refl.y));
+}
+
 void main() {
   float t = frame.camPos.w;
   vec2 p = vWorld.xz;
@@ -182,7 +234,7 @@ void main() {
   vec3 v = toEye / dist;
   float fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
   vec3 refl = reflect(-v, n);
-  vec3 sky = skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0);
+  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES, treeline(p, refl));
   vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15, 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles.
   c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;

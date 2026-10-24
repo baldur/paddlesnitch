@@ -65,6 +65,10 @@ const CASES = [
   { name: 'iphone, features missing', engine: webkit, ctx: landscape('iPhone 15'), touch: true, strip: true, expect: 'webgl2' },
   { name: 'firefox, desktop', engine: firefox, ctx: desktop },
   { name: 'firefox, features missing', engine: firefox, ctx: desktop, strip: true, expect: 'webgl2' },
+  // The real river: a course file, a world four times the size, boats moving at speedup.
+  { name: 'chromium, desktop, Reading Thames', engine: chromium, ctx: desktop, course: 'reading' },
+  { name: 'iphone safari, Reading Thames', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'reading' },
+  { name: 'chrome GPU, desktop, Reading Thames', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'reading', expect: 'webgpu' },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -82,9 +86,17 @@ async function play(c, page, errors) {
   await page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   const backend = await page.evaluate(() => window.kayak.gpu.backend);
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
-  // The practice time trial: on your own, so the horn doesn't wait for a pack.
-  const practice = page.locator('#menu button[value="practice"]');
+  // The practice time trial on your own, or a real river with the pack: there
+  // the horn waits for you on the line, so the boat is put there.
+  const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   await (c.touch ? practice.tap() : practice.click());
+  await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
+  await page.evaluate(() => {
+    const { race, course, boat } = window.kayak;
+    const i = Math.round((race.start.line - 4) / 2);
+    const [a, n] = [course.samples[i], course.samples[i + 1]];
+    if (race.racers.length > 1) Object.assign(boat, { x: a.x, z: a.z, heading: Math.atan2(n.x - a.x, -(n.z - a.z)), speed: 0, roll: 0, rollRate: 0 });
+  });
   // The horn comes after a few seconds of race time: minutes, on CI's software graphics.
   await page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 240_000 });
   // Paddle at about a racing rate: alternate sides, a stroke every 0.7 s of
@@ -97,8 +109,9 @@ async function play(c, page, errors) {
     const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
     await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
   }
-  const { speed, ms } = await page.evaluate(() => ({ speed: window.kayak.boat.speed, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs }));
+  const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.kayak.boat.speed, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
   if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
+  if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
 }
 

@@ -149,24 +149,68 @@ test('a steady beat builds rhythm, and rhythm is speed', () => {
   assert.ok(steady.speed > ragged.speed + 0.4);
 });
 
-test('riding a wash costs less stamina', () => {
-  const sprint = (draft) => {
+test('stamina is for sprinting: a comfortable beat is free, and a wash refills it fast', () => {
+  // Sprint until it's nearly gone, then ease off to a racing beat, alone or on a wash.
+  const refill = (draft) => {
     const boat = createBoat();
     let next = 0;
     let n = 0;
-    for (let t = 0; t < 20; t += DT) {
+    for (let t = 0; t < 30; t += DT) {
       const strokes = [];
       if (t >= next) {
         strokes.push(n++ % 2 ? 'right' : 'left');
-        next += 0.55;
+        next += t < 20 ? 0.52 : 0.75;
       }
-      step(boat, DT, { strokes, lean: balance(boat), draft });
+      step(boat, DT, { strokes, lean: balance(boat), draft: t < 20 ? 0 : draft });
+      if (Math.abs(t - 20) < DT / 2) assert.ok(boat.stamina < 0.3, `sprinted down to ${boat.stamina}`);
     }
     return boat.stamina;
   };
-  const alone = 1 - sprint(0);
-  const sheltered = 1 - sprint(1);
-  assert.ok(sheltered < alone * 0.5, `spent ${sheltered} on the wash vs ${alone} alone`);
+  const alone = refill(0);
+  const sheltered = refill(1);
+  assert.ok(alone > 0.3 && alone < 0.6, `alone back to ${alone}`);
+  assert.ok(sheltered > 0.95, `on the wash back to ${sheltered}`);
+  assert.equal(paddle(120, { interval: 0.68, lean: balance }).boat.stamina, 1, 'about 88 a minute costs nothing');
+});
+
+test('out of stamina, a sprint is no faster than the comfortable beat, and no slower', () => {
+  const at = (interval, stamina) => {
+    const boat = createBoat();
+    let next = 0;
+    let n = 0;
+    let sum = 0;
+    let count = 0;
+    for (let t = 0; t < 15; t += DT) {
+      const strokes = [];
+      if (t >= next) {
+        strokes.push(n++ % 2 ? 'right' : 'left');
+        next += interval;
+      }
+      boat.stamina = Math.min(boat.stamina, stamina);
+      step(boat, DT, { strokes, lean: balance(boat) });
+      if (t > 12) {
+        sum += boat.speed;
+        count++;
+      }
+    }
+    return sum / count;
+  };
+  const comfortable = at(0.66, 0);
+  const empty = at(0.55, 0);
+  assert.ok(Math.abs(empty - comfortable) < 0.15, `empty sprint ${empty} vs ${comfortable}`);
+  assert.ok(at(0.55, 1) > comfortable + 0.2, 'with stamina it is a real sprint');
+});
+
+test('holding the rhythm slowly builds flow, and flow is speed', () => {
+  const steady = paddle(40, { lean: balance }).boat;
+  assert.ok(steady.flow > 0.95, `flow ${steady.flow}`);
+  const early = paddle(8, { lean: balance }).boat;
+  assert.ok(early.flow < 0.3, `flow after 8 s ${early.flow}`);
+  const stopped = paddle(4, { interval: 0, lean: balance, boat: steady }).boat;
+  assert.ok(stopped.flow < 0.2, 'stopping loses it');
+  const noFlow = createBoat();
+  noFlow.hull = { ...noFlow.hull, flowBonus: 0 };
+  assert.ok(paddle(40, { lean: balance }).boat.speed > paddle(40, { lean: balance, boat: noFlow }).boat.speed + 0.05);
 });
 
 test('steering hard breaks your rhythm', () => {
@@ -247,4 +291,44 @@ test('a moored narrowboat is bank: you bounce off it', () => {
   const p = pointAt(course, m.s);
   Object.assign(boat, { x: p.x - p.tz * (w.half - 1.5), z: p.z + p.tx * (w.half - 1.5), heading: headingAt(course, m.s), speed: 3 });
   assert.equal(bounceOffBank(boat, locate(course, boat.x, boat.z), w.left, w.right), true);
+});
+
+test('a real river from a course file: true size, and boats cover it speedup times faster', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { courseFromFile } = await import('../kayak/course.js');
+  const { buildWorld } = await import('../kayak/world.js');
+  const data = JSON.parse(await readFile(new URL('../kayak/courses/reading.json', import.meta.url), 'utf8'));
+  const course = courseFromFile(data);
+  // 6.3 km of Thames between the lines, 20-100 m wide, shown as its true distance.
+  const km = ((course.finish - course.start) * course.warp) / course.speedup / 1000;
+  assert.ok(km > 6 && km < 6.5, `${km} km`);
+  for (let s = 0; s < course.length; s += 50) {
+    const w = widthAt(course, s).half * 2;
+    assert.ok(w >= 20 && w <= 100, `${w} m wide at ${s}`);
+  }
+  assert.match(data.credit, /OpenStreetMap/);
+  assert.match(data.licence, /ODbL/);
+
+  // The same strokes take a boat four times as far through the world.
+  const slow = paddle(20, { lean: balance, boat: createBoat({ heading: 0 }) }).boat;
+  const fast = paddle(20, { lean: balance, boat: createBoat({ heading: 0, speedup: course.speedup }) }).boat;
+  assert.equal(fast.speed.toFixed(6), slow.speed.toFixed(6));
+  assert.ok(Math.abs(-fast.z / -slow.z - course.speedup) < 1e-6);
+
+  // Its scenery builds, and stays within what a phone can draw.
+  const world = buildWorld(course);
+  assert.ok(world.count / 3 < 400_000, `${world.count / 3} triangles`);
+});
+
+test('a real course: moored boats narrow the open water by their own beam', async () => {
+  const { courseFromFile } = await import('../kayak/course.js');
+  const line = Array.from({ length: 51 }, (_, i) => [0, -i * 10]);
+  const course = courseFromFile({
+    line, width: line.map(() => 40), start: 20, finish: 480, warp: 4, speedup: 4,
+    moorings: [{ s: 100, length: 10, side: 1, kind: 'cruiser' }, { s: 300, length: 20, side: -1, kind: 'narrowboat' }],
+    bridges: [], banks: [], buildings: [], woods: [], trees: [], railways: [], locks: [], weirs: [],
+  });
+  assert.equal(widthAt(course, 100).right.toFixed(1), (20 - 3.4).toFixed(1));
+  assert.equal(widthAt(course, 300).left.toFixed(1), (20 - 2.1).toFixed(1));
+  assert.equal(widthAt(course, 200).left, 20);
 });

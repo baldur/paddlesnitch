@@ -1,0 +1,91 @@
+import { describe, it, expect } from 'vitest'
+import { bridges, courseFile, mooringRow, places, widths, type RiverThing } from './course-file'
+import type { XZ } from './river'
+
+describe('widths', () => {
+  it('takes out a one-sample spike and clamps to the river', () => {
+    const e = [50, 50, 50, 8, 50, 50, 50, 300, 50, 50].map((w) => ({ left: w / 2, right: w / 2 }))
+    expect(widths(e)).toEqual([50, 50, 50, 50, 50, 50, 50, 50, 50, 50])
+    expect(widths([{ left: 5, right: 5 }])).toEqual([20])
+    expect(widths([{ left: null, right: 30 }])).toEqual([40]) // no bank found: a middling width
+  })
+})
+
+const bridge = (s: number, tags: Record<string, string>, name?: string): RiverThing => ({ kind: 'bridge', s, lateral: 0, tags, name })
+
+describe('bridges', () => {
+  it('makes one bridge of the decks, roads and paths crossing at one place, under its own name', () => {
+    const got = bridges([
+      bridge(600, { highway: 'primary', bridge: 'yes' }, 'Caversham Road'),
+      bridge(605, { man_made: 'bridge' }, 'Caversham Bridge'),
+      bridge(612, { highway: 'footway', bridge: 'yes' }),
+      bridge(2000, { railway: 'rail', bridge: 'yes' }, 'Main Line'),
+    ], new Map([['Caversham Bridge', { style: 'concrete-arch' }]]))
+    expect(got).toEqual([
+      { s: 600, name: 'Caversham Bridge', style: 'concrete-arch' },
+      { s: 2000, name: 'Main Line', style: 'arch' },
+    ])
+  })
+})
+
+describe('mooringRow', () => {
+  const rand = () => 0.5
+  it('fills a stretch of bank nose to tail', () => {
+    const row = mooringRow(100, 200, 1, 'cruiser', rand)
+    expect(row.length).toBeGreaterThan(5)
+    expect(row.every((b) => b.side === 1 && b.kind === 'cruiser' && b.length >= 8 && b.length <= 12)).toBe(true)
+    for (let i = 1; i < row.length; i++) expect(row[i].s - row[i - 1].s).toBeGreaterThanOrEqual((row[i].length + row[i - 1].length) / 2)
+    expect(row[0].s - row[0].length / 2).toBeGreaterThanOrEqual(90)
+    expect(row.at(-1)!.s + row.at(-1)!.length / 2).toBeLessThanOrEqual(212)
+  })
+
+  it('puts at least one boat at a single spot', () => {
+    expect(mooringRow(500, 500, -1, 'narrowboat', rand)[0]).toMatchObject({ side: -1, kind: 'narrowboat' })
+  })
+})
+
+describe('courseFile', () => {
+  const line: XZ[] = Array.from({ length: 101 }, (_, i) => [0, -i * 10])        // 1 km due north
+  const edges = line.map(() => ({ left: 25, right: 25 }))
+  // A place is found by its z, and is "the same way" when heading north-ish.
+  const place = ([lat]: [number, number], heading: number) => ({ s: lat, same: heading < 90 || heading > 270 })
+  const base = { name: 'Test', speedup: 4, warp: 4, start: 50, finish: 950, line, edges, things: [] as RiverThing[], place }
+
+  it('puts a bank seen from the other direction on the other side, and keeps walls', () => {
+    const out = courseFile({
+      ...base,
+      observations: [
+        { kind: 'bank', cover: 'park', side: 'left', from: { at: [100, 0], heading: 0 }, to: { at: [300, 0], heading: 0 } },
+        { kind: 'bank', cover: 'wild', side: 'left', from: { at: [600, 0], heading: 180 }, to: { at: [400, 0], heading: 180 } },
+        { kind: 'wall', side: 'right', from: { at: [700, 0], heading: 0 }, to: { at: [800, 0], heading: 0 } },
+      ],
+    })
+    expect(out.banks).toEqual([{ side: -1, from: 100, to: 300, cover: 'park' }, { side: 1, from: 400, to: 600, cover: 'wild' }])
+    expect(out.walls).toEqual([{ side: 1, from: 700, to: 800 }])
+    expect(out.credit).toMatch(/OpenStreetMap/)
+    expect(out.licence).toMatch(/ODbL/)
+  })
+
+  it('keeps nearby buildings, makes those in a stretch of flats tall, and drops far ones', () => {
+    const square = (x: number, z: number): XZ[] => [[x, z], [x + 10, z], [x + 10, z - 10], [x, z - 10], [x, z]]
+    const out = courseFile({
+      ...base,
+      observations: [{ kind: 'buildings', style: 'flats', side: 'right', from: { at: [400, 0], heading: 0 }, to: { at: [500, 0], heading: 0 } }],
+      things: [
+        { kind: 'building', s: 450, lateral: 40, tags: { building: 'yes' }, shape: square(40, -450) },
+        { kind: 'building', s: 100, lateral: -40, tags: { building: 'house', 'building:levels': '2' }, shape: square(-50, -100) },
+        { kind: 'building', s: 100, lateral: 400, tags: { building: 'yes' }, shape: square(400, -100) },
+      ],
+    })
+    expect(out.buildings.map((b) => [b.kind, b.height])).toEqual([['flats', 12], ['house', 7]])
+  })
+})
+
+describe('places', () => {
+  const thing = (name: string, s: number, lateral = 20): RiverThing => ({ kind: 'island', name, s, lateral, tags: {} })
+  it('names landmarks where the river comes nearest, in course order, inside the race', () => {
+    const things = [thing('Bridge', 400), thing('Bridge', 410), thing('Island', 120), thing('Far away', 300, 900), thing('Weir', 1200)]
+    expect(places(things, ['Bridge', { name: 'Island', label: 'The island' }, 'Far away', 'Missing', { name: 'Weir', label: 'Lock ahead' }], [50, 950]))
+      .toEqual([{ s: 120, name: 'The island' }, { s: 400, name: 'Bridge' }, { s: 920, name: 'Lock ahead' }])
+  })
+})

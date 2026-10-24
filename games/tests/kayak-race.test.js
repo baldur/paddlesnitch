@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBoat, step } from '../kayak/sim.js';
-import { raceRiver, pointAt, locate, headingAt } from '../kayak/course.js';
+import { readFile } from 'node:fs/promises';
+import { raceRiver, courseFromFile, pointAt, locate, headingAt } from '../kayak/course.js';
 import { wrap } from '../kayak/sim.js';
 import { createRace, stepRace, standings, started, wash, DIVISION_9 } from '../kayak/race.js';
 
@@ -175,3 +176,28 @@ test('jumping the start holds it until the field comes up level, then starts aga
   assert.ok(race.start.line > race.course.start, 'the line moved up to the jumper');
   for (const r of race.racers) assert.ok(Math.abs(r.loc.s + 3.3 - race.start.line) < 2.5, `${r.name} is level`);
 });
+
+test('a pack races the true-size Reading Thames: lined up at true speed, then four times faster from the horn', async () => {
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/reading.json', import.meta.url), 'utf8')));
+  const race = createRace(course, { rivals: DIVISION_9, seed: 2 });
+  for (let t = 0; !started(race); t += DT) {
+    assert.ok(t < 60, 'the start never came');
+    assert.ok(race.racers.every((r) => r.boat.speedup === 1), 'lining up happens at true speed');
+    stepRace(race, DT, lineUp(race));
+  }
+  assert.ok(race.racers.every((r) => r.boat.speedup === course.speedup));
+  let banked = 0;
+  while (race.time < 900 && race.racers.some((r) => r.ai && r.finish === null)) {
+    stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+    banked += race.racers.filter((r) => r.ai && r.boat.onBank).length * DT;
+  }
+  const rivals = standings(race).filter((r) => r.ai);
+  assert.ok(rivals.every((r) => r.finish !== null), 'everyone finished');
+  // 6.26 km at a club pace, in real-equivalent minutes.
+  const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
+  assert.ok(minutes[0] > 26 && minutes[0] < 30, `winner ${minutes[0]}`);
+  assert.ok(minutes.at(-1) < 34, `last ${minutes.at(-1)}`);
+  assert.ok(rivals.every((r) => r.boat.capsizes === 0));
+  assert.ok(banked < 5, `rivals spent ${banked} s on the banks`);
+});
+

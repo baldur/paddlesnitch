@@ -61,6 +61,7 @@ export function createRace(course, { rivals = [], seed = 1, you = {} } = {}) {
   const onLine = course.start - BOW - 0.3;
   const heading = headingAt(course, onLine);
   const racer = (name, boat, ai) => ({ name, boat, loc: locate(course, boat.x, boat.z), finish: null, draft: 0, ai });
+  // Lining up happens at true speed; the course's speedup starts with the horn.
   const player = racer('You', createBoat({ ...place(solo ? onLine : onLine - BEHIND, 0, headingAt(course, onLine - BEHIND)), ...you }), null);
   // Who is still on the way: they're a few lengths back in their own lane,
   // in two loose rows, the back row clear of you in the middle.
@@ -135,6 +136,7 @@ function starter(race, dt) {
   } else if (st.timer <= 0 && st.phase === 'ready') {
     st.phase = 'go';
     st.calls.push('go');
+    for (const r of race.racers) r.boat.speedup = race.course.speedup ?? 1;
   }
 }
 
@@ -250,14 +252,17 @@ function think(r, race) {
     return { strokes, rudder: steer(r, course, ai.grid, 10), lean };
   }
 
+  // On a true-size course (speedup > 1) the same moment in the race is that
+  // many times further along, and a gap closes that many times quicker.
+  const k = course.speedup ?? 1;
   const togo = course.finish - loc.s;
   // The rhythm they could keep up forever: anything quicker spends stamina.
   const steady = steadyBeat(boat);
   const tired = boat.stamina < 0.35;
   let cadence = ai.cadence;
   if (r.finish !== null) cadence = race.time - r.finish < 8 ? 0.9 : 0; // paddle off, then drift
-  else if (togo < ai.kick && boat.stamina > 0.12) cadence *= 0.85;
-  else if (loc.s < race.start.line + 100) cadence *= 0.93; // sprint off the line for a place on a wash
+  else if (togo < ai.kick * k && boat.stamina > 0.12) cadence *= 0.85;
+  else if (loc.s < race.start.line + 100 * k) cadence *= 0.93; // sprint off the line for a place on a wash
   else if (tired) cadence = Math.max(cadence, steady * (1.05 + (0.35 - boat.stamina)));
 
   // Find the wash to sit on: the nearest boat just ahead, if it isn't too slow.
@@ -267,7 +272,7 @@ function think(r, race) {
     const gap = o.loc.s - loc.s;
     if (gap > 1.5 && gap < 14 && Math.abs(o.loc.lateral - loc.lateral) < 6 && (!leader || gap < leader.loc.s - loc.s)) leader = o;
   }
-  const kicking = togo < ai.kick && r.finish === null;
+  const kicking = togo < ai.kick * k && r.finish === null;
   const tooSlow = leader && leader.boat.speed < cruiseSpeed(ai.cadence, ai.power) - 0.25;
   let lateral = ai.lane;
   if (leader && !kicking && !tooSlow && r.finish === null && cadence) {
@@ -275,7 +280,7 @@ function think(r, race) {
     // back, ease off when riding up. The wash makes easing off cheap.
     const spot = ai.side ? 4.2 : 6.5;
     lateral = leader.loc.lateral + ai.side * 1.4;
-    const target = leader.boat.speed + limit(((leader.loc.s - loc.s) - spot) * 0.25, -0.6, 0.6);
+    const target = leader.boat.speed + limit(((leader.loc.s - loc.s) - spot) * 0.25 / k, -0.6, 0.6);
     ai.interval = limit(ai.interval - (target - boat.speed) * 0.003, tired ? cadence : cadence * 0.94, cadence * 1.4);
   } else {
     if (leader && (kicking || tooSlow)) lateral = leader.loc.lateral + ai.side * 3.2; // go round
@@ -290,7 +295,7 @@ function think(r, race) {
     if (Math.abs(gap) < 7 && Math.abs(apart) < 1.6) lateral += Math.sign(apart || ai.side) * (1.6 - Math.abs(apart)) * 2;
   }
   // Stay off the banks, and get out from behind moored boats in good time.
-  const room = roomAhead(course, loc.s, 30);
+  const room = roomAhead(course, loc.s, 30 * k);
   lateral = limit(lateral, -(room.left - 2.2), room.right - 2.2);
 
   const strokes = [];
@@ -299,7 +304,7 @@ function think(r, race) {
     ai.next = race.time + ai.interval * (1 + (race.rand() - 0.5) * 0.05);
   }
 
-  return { strokes, rudder: steer(r, course, lateral, 18), lean };
+  return { strokes, rudder: steer(r, course, lateral, 18 * Math.sqrt(k)), lean };
 }
 
 // Rudder towards a point `ahead` metres down the river, `lateral` off the middle.
