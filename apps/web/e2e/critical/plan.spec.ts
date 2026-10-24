@@ -163,6 +163,19 @@ test('the places search moves the map to a lock', async ({ page }) => {
   await expect(page.getByRole('listbox')).toHaveCount(0)
 })
 
+test('the plan survives a trip to the crew sheet and back (#629)', async ({ page }) => {
+  await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
+  await expect(page.getByTestId('plan-summary')).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Return' }).click()   // changes the plan after the page loaded
+  await expect(page).toHaveURL(/shape=return/)
+  await page.getByRole('link', { name: 'Crew sheet' }).click()
+  await expect(page).toHaveURL(/\/plan\/print/)
+  await page.goBack()
+  await expect(page).toHaveURL(/shape=return/)
+  await expect(page.getByRole('button', { name: 'Return' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('plan-summary')).toBeVisible()
+})
+
 test('a plan link opens the whole Devizes to Westminster route', async ({ page }) => {
   await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
   const summary = page.getByTestId('plan-summary')

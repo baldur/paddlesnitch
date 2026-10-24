@@ -93,11 +93,15 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
   // An unsaved plan lives in the address bar, so a reload or a link keeps it.
+  // Through the router, not history.replaceState: Next keeps its own record of
+  // the page's address, and going back from the crew or print sheet restored
+  // that one, losing the route (#629).
   useEffect(() => {
     if (saved || shared) return
     const q = draftParams(draft)
-    window.history.replaceState(null, '', `/plan${q ? `?${q}` : ''}`)
-  }, [draft, saved, shared])
+    const url = `/plan${q ? `?${q}` : ''}`
+    if (url !== window.location.pathname + window.location.search) router.replace(url, { scroll: false })
+  }, [draft, saved, shared, router])
 
   const routed = trpc.plan.route.useQuery(
     { start: draft.start ?? [0, 0], finish: draft.finish, shape: draft.shape },
