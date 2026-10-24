@@ -114,7 +114,7 @@ describe('a merged build reaches beta trackers only', () => {
     await boundToken(u, BETA)
     await boundToken(u, OTHER)
     mockAuth(u.idToken)
-    const body = await (await listDevices()).json()
+    const body = await (await listDevices(new Request("http://x/api/account/devices"))).json()
     const b = body.devices.find((d: { deviceId: string }) => d.deviceId === BETA)
     const o = body.devices.find((d: { deviceId: string }) => d.deviceId === OTHER)
     expect(b).toMatchObject({ beta: true, targetVersion: '0.19.0' })

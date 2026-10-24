@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts } from '@/lib/devices'
 import { handleSessionUpload } from '@/lib/session-upload'
 import { reportedFirmware, reportedModel } from '@/lib/device-route'
@@ -12,7 +12,7 @@ import { reportedFirmware, reportedModel } from '@/lib/device-route'
 // duplicate checks. The answer carries a receipt the tracker checks before it
 // marks the recording sent.
 export async function POST(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { deviceId } = await params
   const device = await getUserDevice(user.id, deviceId)
@@ -38,7 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ deviceI
 // page sends only the rest: { parts: [1, 2, …] }. Empty once the file has been
 // put together (its pieces are cleared), and for a file never started.
 export async function GET(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { deviceId } = await params
   if (!(await getUserDevice(user.id, deviceId))) return NextResponse.json({ error: 'not_found' }, { status: 404 })

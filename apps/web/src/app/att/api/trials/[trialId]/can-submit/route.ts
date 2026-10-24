@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { getJson } from '@/lib/storage'
 import { canViewTrial, canSubmitToTrial } from '@/lib/permissions'
 import { getGroup, getUserGroupIds } from '@/lib/groups'
@@ -18,7 +18,7 @@ type Params = { params: Promise<{ trialId: string }> }
 //   { canSubmit: false, reason: 'invitational' }                    // not invited
 export async function GET(req: NextRequest, { params }: Params) {
   const { trialId } = await params
-  const viewer = await getAuthUser()
+  const viewer = await getRequestUser(req)
   if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)

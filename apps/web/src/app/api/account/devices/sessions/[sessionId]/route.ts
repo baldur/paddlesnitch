@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { recordingReport, recordingReportVersion } from '@/lib/recording-report'
 import { etagMatches } from '@/lib/etag'
 
@@ -13,7 +13,7 @@ import { etagMatches } from '@/lib/etag'
 // with that version as its ETag: a repeat view the browser already has is a
 // 304 with no body, before anything but the recording's metadata is read.
 export async function GET(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { sessionId } = await params
   const deviceId = (new URL(req.url).searchParams.get('deviceId') ?? '').toUpperCase()

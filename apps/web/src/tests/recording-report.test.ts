@@ -7,7 +7,7 @@ import { makeDataDir, cleanDataDir } from './helpers'
 import { sidecar, trackCsv } from './tracker-fixtures'
 
 const auth = vi.hoisted(() => ({ user: null as null | { id: string; email: string; displayName: string } }))
-vi.mock('@/lib/auth', () => ({ getAuthUser: async () => auth.user }))
+vi.mock('@/lib/auth', () => ({ getAuthUser: async () => auth.user, getRequestUser: async () => auth.user }))
 
 import { GET } from '@/app/api/account/devices/sessions/[sessionId]/route'
 import { storeDeviceSession, storeDeviceMotion } from '@/lib/devices'

@@ -108,7 +108,7 @@ describe('device pairing (#212 device-uplink)', () => {
 
     // the device shows up in the owner's list
     mockAuth(u.idToken)
-    const list = await (await listDevices()).json()
+    const list = await (await listDevices(new Request("http://x/api/account/devices"))).json()
     expect(list.devices.map((d: { deviceId: string }) => d.deviceId)).toContain(DEVICE)
 
     // revoke → the token stops working
@@ -128,7 +128,7 @@ describe('device pairing (#212 device-uplink)', () => {
     await token(jreq(await provedPoll(DEVICE, claimSecret)))
 
     mockAuth(u.idToken)
-    const { devices } = await (await listDevices()).json()
+    const { devices } = await (await listDevices(new Request("http://x/api/account/devices"))).json()
     expect(devices).toHaveLength(1)
     expect(Object.keys(devices[0]).sort()).toEqual(['deviceId', 'firmware', 'lastSeenAt', 'linkedAt', 'model', 'name', 'targetVersion'])
   })

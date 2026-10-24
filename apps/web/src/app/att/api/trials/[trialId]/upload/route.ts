@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { fetchPublicFile } from '@/lib/fetch-public-file'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { indexEntry } from '@/lib/entries'
@@ -207,7 +207,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ trialId: string }> }
 ) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { trialId } = await params

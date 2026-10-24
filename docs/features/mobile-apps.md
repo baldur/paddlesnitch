@@ -130,10 +130,17 @@ Reuses what the browser already proved
 
 ## Server changes (shared by both apps)
 
-- **Bearer on REST.** tRPC already accepts `Authorization: Bearer <Cognito ID
-  token>`. The REST routes the apps call (trial upload, account device routes,
-  account endpoints) don't. Add one helper (`getRequestUser(req)`, cookie or
-  Bearer), use it on those routes, and add a test per route.
+- **Bearer on REST** ✅ (2026-10-25). `getRequestUser(req)` in
+  `@paddlesnitch/core/auth`: a Bearer Cognito ID token, else the website's
+  cookie. A Bearer header that isn't a valid ID token is null, never a cookie
+  fallback, and a tracker's device token never signs in a person. Used by tRPC
+  and by the REST routes the apps call: the trial reads (list, one trial,
+  leaderboard, can-submit) and trial upload, every `/api/account/devices/*`
+  route, and paddle upload (`POST /paddles/api/analyse`). Organiser
+  mutations (create/edit trials, courses, groups) and account settings stay
+  cookie-only; the apps open the website for those. `src/proxy.ts` lets a
+  Bearer-signed call to `/att/api/*` or `/api/account/*` past its cookie
+  check (pages still need the cookie). Tests: `src/tests/mobile-bearer.test.ts`.
 - **Token-returning sign-in.** Mobile variants of the sign-in routes return the
   ID + refresh tokens in the body, through the same code (anti-bot gate, terms
   acceptance, pending invitations).
@@ -206,7 +213,7 @@ platform tell the other when the contract or fixture formats change.
 | Phase | What | Needed by |
 |---|---|---|
 | **C1. Contract pipeline** | `.output()` on the first procedures, `pnpm api:schema`, CI check, tokens → JSON | Both apps' first screens |
-| **C2. Sign-in** | `getRequestUser`, token-returning sign-in, Strava one-time code, app-link files | Both apps' sign-in |
+| **C2. Sign-in** (Bearer on REST ✅) | `getRequestUser`, token-returning sign-in, Strava one-time code, app-link files | Both apps' sign-in |
 | **C3. Recording + sync** | Phone devices on the relay route; CSV + Bluetooth + receipt fixtures from the existing web code and firmware | Both apps' recording and tracker phases |
 | **C4. Signed-in website pages** | One-time code → cookies | Both apps' link-outs |
 
