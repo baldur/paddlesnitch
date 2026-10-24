@@ -1,0 +1,80 @@
+name: iOS
+
+# The iPhone app (mobile/ios, docs/features/ios-app.md). Build and test only:
+# no signing and no secrets until the Developer Program (P5). Every step is a
+# `make` target, so CI runs exactly what `make test` runs locally.
+on:
+  pull_request:
+    paths:
+      - 'mobile/ios/**'
+      - 'mobile/contract/**'
+      - '.github/workflows/ios.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/ios/**'
+      - 'mobile/contract/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: mobile/ios
+
+jobs:
+  packages:
+    name: iOS packages + lint
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: Install tools
+        run: brew install swiftlint
+      - name: Lint
+        run: make lint
+      # Includes the check that generated Swift matches mobile/contract/.
+      - name: Package tests
+        run: make test-packages
+
+  app:
+    name: iOS app (${{ matrix.name }})
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: newest iOS
+            ios: latest
+          # The supported floor. Runner images don't include an iOS 17
+          # simulator, so this job downloads one (several minutes).
+          - name: iOS 17
+            ios: '17'
+            download: '17.5'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: Install tools
+        run: brew install xcodegen
+      - name: Download the iOS ${{ matrix.download }} simulator
+        if: matrix.download
+        run: xcodebuild -downloadPlatform iOS -buildVersion ${{ matrix.download }}
+      - name: App tests
+        run: make test-app IOS=${{ matrix.ios }}
+      - name: Keep the test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results-${{ matrix.ios }}
+          path: mobile/ios/.build/DerivedData/Logs/Test
+          retention-days: 7

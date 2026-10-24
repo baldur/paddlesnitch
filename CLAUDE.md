@@ -117,6 +117,7 @@ packages/
   ui/         @paddlesnitch/ui        — shared UI shell + design tokens + RouteThumb
   waterways/  @paddlesnitch/waterways — river planner domain: OSM waterway network + routing (UK, Ireland, the Netherlands, Belgium, France and Germany: one dataset), locks/facilities from CRT/EA, places search, coverage (docs/features/river-planner.md, waterways-uk-ireland.md)
 firmware/     LilyGO T-Beam S3 Supreme tracker firmware — C/C++, built with PlatformIO, NOT pnpm
+mobile/       native apps, NOT pnpm: contract/ (shared schema, fixtures, tokens), ios/ (Swift, Xcode — `make test`; see mobile/ios/README.md)
 games/        browser games served at /games (plain HTML/JS, no build) — NOT pnpm; see games/CLAUDE.md
 ```
 
@@ -172,7 +173,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`tracker-bluetooth-sync.md`](docs/features/tracker-bluetooth-sync.md) | 📋 spec, not built | Recordings home by phone/browser over Bluetooth, compression first, game-style setup |
 | [`mobile-apps.md`](docs/features/mobile-apps.md) | 🚧 C1 built | Native Android + iPhone apps sharing a contract, not code: generated API schema, golden fixtures, design tokens in `mobile/contract/`; phone as tracker; server changes. Replaces the Expo plan. **C1:** schemas in `packages/api/src/contract.ts` (type-checked against the router, not runtime `.output()`), `pnpm mobile:contract` regenerates `mobile/contract/{api,tokens,format}`, `mobile-contract.test.ts` fails while stale |
 | [`android-app.md`](docs/features/android-app.md) | 🚧 P0 done, P1 started (`mobile/android`, CI `android.yml`, `/.well-known/assetlinks.json`) | The Android app: Kotlin + Compose, Android 10+, capability list, CompanionDeviceManager pairing, Google Play |
-| [`ios-app.md`](docs/features/ios-app.md) | 📋 spec, not built | The iPhone app: Swift + SwiftUI, iOS 17+, capability list + "This iPhone", While Using recording, AccessorySetupKit pairing, MapKit; build first (simulator + free Apple ID), App Store at P5 |
+| [`ios-app.md`](docs/features/ios-app.md) | 🚧 P0 built | The iPhone app: Swift + SwiftUI, iOS 17+, capability list + "This iPhone", While Using recording, AccessorySetupKit pairing, MapKit; build first (simulator + free Apple ID), App Store at P5 |
 | [`buddies-and-compare.md`](docs/features/buddies-and-compare.md) | ✅ 2026-10-11 | Mutual buddies who see each other's paddles; two paddles on one map to study the line |
 | [`one-paddle.md`](docs/features/one-paddle.md) | ✅ phases 1–4 built | One paddle whatever the source: tracker stroke rate through the paddle, automatic tracker paddles, boat motion on the paddle page, same-outing comparison |
 | [`motion-only-paddles.md`](docs/features/motion-only-paddles.md) | ✅ B built 2026-10-11 | A tracker recording whose GPS failed becomes a paddle without a map (no estimated distance) |
