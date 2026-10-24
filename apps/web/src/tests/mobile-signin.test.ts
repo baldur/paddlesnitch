@@ -16,6 +16,10 @@ import { POST as login } from '@/app/att/api/auth/login/route'
 import { POST as logout } from '@/app/att/api/auth/logout/route'
 import { POST as refreshRoute } from '@/app/att/api/auth/refresh/route'
 import { verifyIdToken, refresh } from '@/lib/cognito'
+import { restRoutes, SignIn, Refreshed, Ok, ApiError } from '@paddlesnitch/api/contract'
+import type { z } from 'zod'
+import { existsSync } from 'fs'
+import path from 'path'
 
 let dataDir: string
 beforeEach(async () => {
@@ -91,5 +95,29 @@ describe('signing out from an app', () => {
     const res = await logout(post('/att/api/auth/logout', { refreshToken: u.refreshToken }, true))
     expect(res.status).toBe(200)
     expect((await refreshRoute(post('/att/api/auth/refresh', { refreshToken: u.refreshToken }, true))).status).toBe(401)
+  })
+})
+
+// The schemas in mobile/contract/api/ (rest.json) are hand-written for these
+// routes, so the routes' real answers are read through them here.
+describe('the sign-in routes answer what the contract says', () => {
+  const fits = async (schema: z.ZodType, res: Response) => expect(schema.safeParse(await res.json()).error?.issues).toBeUndefined()
+
+  it('every route in rest.json exists', () => {
+    for (const route of Object.keys(restRoutes)) {
+      const [, p] = route.split(' ')
+      expect(existsSync(path.join(__dirname, '../app', p, 'route.ts')), route).toBe(true)
+    }
+  })
+
+  it('login, sign-up, refresh and sign-out answers and refusals', async () => {
+    const u = await makeUser('Pat')
+    await fits(SignIn, await login(post('/att/api/auth/login', { email: u.email, password: 'Password123' }, true)))
+    await fits(ApiError, await login(post('/att/api/auth/login', { email: u.email, password: 'Wrong12345' }, true)))
+    await fits(SignIn, await signup(post('/att/api/auth/signup', { email: email(), displayName: 'Sam', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true)))
+    await fits(ApiError, await signup(post('/att/api/auth/signup', { email: email(), displayName: 'Old', password: 'Password123', acceptedTosVersion: 'v0' }, true)))
+    await fits(Refreshed, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: u.refreshToken }, true)))
+    await fits(ApiError, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: 'nope' }, true)))
+    await fits(Ok, await logout(post('/att/api/auth/logout', { refreshToken: u.refreshToken }, true)))
   })
 })

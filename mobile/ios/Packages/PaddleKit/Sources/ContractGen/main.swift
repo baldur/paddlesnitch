@@ -31,7 +31,8 @@ do {
         schemas[file] = try Data(contentsOf: api.appending(path: file))
     }
     let models = try ModelsGenerator.generate(
-        schemas: schemas, procedures: try Data(contentsOf: api.appending(path: "procedures.json")))
+        schemas: schemas, procedures: try Data(contentsOf: api.appending(path: "procedures.json")),
+        rest: try? Data(contentsOf: api.appending(path: "rest.json")))
     try? FileManager.default.removeItem(at: modelsDir)
     try FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
     for (file, text) in models {

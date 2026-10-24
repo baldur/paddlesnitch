@@ -37,7 +37,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.paddlesnitch.app.BuildConfig
 import com.paddlesnitch.app.api.Api
-import com.paddlesnitch.app.api.SignedIn
+import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.launch
 
@@ -54,7 +54,7 @@ const val TOS_VERSION = "002"
  * Strava comes with the one-time code.)
  */
 @Composable
-fun SignInScreen(api: Api, onSignedIn: (SignedIn) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+fun SignInScreen(api: Api, onSignedIn: (SignIn) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     var creating by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }

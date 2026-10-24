@@ -12,10 +12,35 @@ import Testing
         #expect(Contract.fixtureNames.count >= 6)
     }
 
+    /// A tRPC fixture decodes as its procedure's output. A REST fixture
+    /// decodes as its route's answer, or, if it carries `error`, as the
+    /// `ApiError` that route can answer with.
     @Test(arguments: Contract.fixtureNames)
-    func everyFixtureDecodesAsItsProceduresOutput(name: String) throws {
-        let path = try #require(Contract.procedure(forFixture: name), "\(name) matches no procedure")
-        _ = try Procedures.decodeOutput(of: path, from: try Contract.fixture(name), using: decoder)
+    func everyFixtureDecodesAsItsAnswer(name: String) throws {
+        let data = try Contract.fixture(name)
+        if let path = Contract.procedure(forFixture: name) {
+            _ = try Procedures.decodeOutput(of: path, from: data, using: decoder)
+        } else if Contract.isErrorAnswer(name) {
+            #expect(name.hasPrefix("auth."), "an error answer for no known routes")
+            _ = try decoder.decode(ApiError.self, from: data)
+        } else {
+            let route = try #require(Contract.route(forFixture: name), "\(name) matches no procedure or route")
+            _ = try Endpoints.decodeOutput(of: route, from: data, using: decoder)
+        }
+    }
+
+    @Test func aSignInCarriesTheTokensAndNeedsTermsDefaultsToNo() throws {
+        let signIn = try decoder.decode(SignIn.self, from: try Contract.fixture("auth.login"))
+        #expect(!signIn.idToken.isEmpty && !signIn.refreshToken.isEmpty)
+        #expect(signIn.needsTerms != true)
+        let older = try decoder.decode(SignIn.self, from: try Contract.fixture("auth.login.needs-terms"))
+        #expect(older.needsTerms == true)
+    }
+
+    @Test func aWrongCodeComesBackWithANewSession() throws {
+        let retry = try decoder.decode(ApiError.self, from: try Contract.fixture("auth.otp-verify.retry"))
+        #expect(retry.session?.isEmpty == false)
+        #expect(!retry.error.isEmpty)
     }
 
     @Test(arguments: Contract.procedurePaths)

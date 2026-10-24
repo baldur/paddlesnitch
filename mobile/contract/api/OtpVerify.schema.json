@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "OtpVerify.schema.json",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string"
+    },
+    "session": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "email",
+    "session",
+    "code"
+  ]
+}

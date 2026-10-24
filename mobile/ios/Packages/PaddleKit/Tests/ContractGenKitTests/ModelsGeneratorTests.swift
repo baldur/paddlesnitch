@@ -18,7 +18,8 @@ import Testing
             schemas[file] = try Data(contentsOf: api.appending(path: file))
         }
         let expected = try ModelsGenerator.generate(
-            schemas: schemas, procedures: try Data(contentsOf: api.appending(path: "procedures.json")))
+            schemas: schemas, procedures: try Data(contentsOf: api.appending(path: "procedures.json")),
+            rest: try? Data(contentsOf: api.appending(path: "rest.json")))
 
         let generated = mobileDir.appending(path: "ios/Packages/PaddleKit/Sources/PaddleAPI/Generated")
         let committed = try FileManager.default.contentsOfDirectory(atPath: generated.path).filter {
@@ -106,6 +107,33 @@ import Testing
         #expect(swift.contains("public var weeks: [Week]\n"))
         #expect(swift.contains("public struct Week: Codable"))
         #expect(swift.contains("public var sameOuting: [SameOutingItem]?\n"))
+    }
+
+    static func object(field: String) -> String {
+        #"{"type":"object","properties":{"\#(field)":{"type":"string"}},"required":["\#(field)"]}"#
+    }
+
+    @Test func restRoutesBecomeTypedEndpoints() throws {
+        let swift = try #require(
+            try ModelsGenerator.generate(
+                schemas: [
+                    "Login.schema.json": Data(Self.object(field: "email").utf8),
+                    "SignIn.schema.json": Data(Self.object(field: "id").utf8),
+                ],
+                procedures: noProcedures,
+                rest: Data(
+                    #"{"POST /att/api/auth/otp-verify":{"input":"Login","output":"SignIn","errors":[400,500]}}"#.utf8)
+            )["Endpoints.swift"])
+        #expect(swift.contains("public static let authOtpVerify = Endpoint<Login, SignIn>("))
+        #expect(swift.contains(#"method: "POST", path: "/att/api/auth/otp-verify", errorStatuses: [400, 500])"#))
+    }
+
+    @Test func aRouteNamingAMissingTypeIsRefused() {
+        #expect(throws: ModelsGenerator.Failure.unknownType("Ghost")) {
+            try ModelsGenerator.generate(
+                schemas: [:], procedures: noProcedures,
+                rest: Data(#"{"POST /api/x":{"input":null,"output":"Ghost","errors":[]}}"#.utf8))
+        }
     }
 
     @Test func aUnionWithoutKindIsRefused() {

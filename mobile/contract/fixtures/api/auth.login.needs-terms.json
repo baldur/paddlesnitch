@@ -1,0 +1,8 @@
+{
+  "id": "user-2",
+  "email": "sam@example.com",
+  "displayName": "Sam",
+  "needsTerms": true,
+  "idToken": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEifQ.c2lnbmF0dXJl",
+  "refreshToken": "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0.cmVmcmVzaA.c2FtcGxl"
+}

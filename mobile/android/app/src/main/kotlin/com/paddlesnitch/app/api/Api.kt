@@ -7,11 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -19,23 +15,10 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /** Something to tell the person, in the server's own words when it gave some. */
-class ApiError(message: String, val status: Int = 0) : Exception(message)
+class ApiFailure(message: String, val status: Int = 0) : Exception(message)
 
 /** The session ended (the refresh token expired or was revoked): sign in again. */
 class SignedOut : Exception("Please sign in again.")
-
-@Serializable
-data class SignedIn(
-    val id: String,
-    val email: String,
-    val displayName: String,
-    val needsTerms: Boolean = false,
-    val idToken: String,
-    val refreshToken: String,
-)
-
-@Serializable
-private data class Refreshed(val idToken: String)
 
 /**
  * paddlesnitch.com for the app (mobile/contract/README.md): sign-in over REST
@@ -54,10 +37,10 @@ class Api(
 
     val signedIn: Boolean get() = tokens.refreshToken != null
 
-    suspend fun login(email: String, password: String): SignedIn =
+    suspend fun login(email: String, password: String): SignIn =
         signIn("/att/api/auth/login", """{"email":${str(email)},"password":${str(password)}}""")
 
-    suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignedIn =
+    suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignIn =
         signIn("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}""")
 
     suspend fun signOut() {
@@ -71,8 +54,8 @@ class Api(
     suspend fun paddles(): PaddleList = query("paddles.list", PaddleList.serializer())
     suspend fun paddle(id: String): AnalysisSession = query("paddles.get", AnalysisSession.serializer(), """{"id":${str(id)}}""")
 
-    private suspend fun signIn(path: String, body: String): SignedIn {
-        val answer = read(post(path, body), SignedIn.serializer())
+    private suspend fun signIn(path: String, body: String): SignIn {
+        val answer = read(post(path, body), SignIn.serializer())
         tokens.save(answer.idToken, answer.refreshToken)
         return answer
     }
@@ -116,7 +99,7 @@ class Api(
         try {
             http.newCall(req.newBuilder().header(APP_HEADER, "android/$appVersion").build()).execute().use { Answer(it.code, it.body.string()) }
         } catch (e: IOException) {
-            throw ApiError("Couldn’t reach paddlesnitch. Check your connection and try again.")
+            throw ApiFailure("Couldn’t reach paddlesnitch. Check your connection and try again.")
         }
     }
 
@@ -125,9 +108,10 @@ class Api(
         return ApiJson.decodeFromString(out, res.body)
     }
 
-    private fun error(res: Answer): ApiError {
-        val said = runCatching { (ApiJson.parseToJsonElement(res.body) as JsonObject)["error"]?.jsonPrimitive?.contentOrNull }.getOrNull()
-        return ApiError(said ?: "Something went wrong (${res.code}). Please try again.", res.code)
+    private fun error(res: Answer): ApiFailure {
+        // Sign-in refusals are the contract's ApiError; tRPC's errors are shaped differently.
+        val said = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body).error }.getOrNull()
+        return ApiFailure(said ?: "Something went wrong (${res.code}). Please try again.", res.code)
     }
 
     private fun str(s: String) = kotlinx.serialization.json.JsonPrimitive(s).toString()

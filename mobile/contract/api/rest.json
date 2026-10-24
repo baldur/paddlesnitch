@@ -1,0 +1,50 @@
+{
+  "POST /att/api/auth/login": {
+    "input": "Login",
+    "output": "SignIn",
+    "errors": [
+      400,
+      401,
+      500
+    ]
+  },
+  "POST /att/api/auth/otp-request": {
+    "input": "OtpRequest",
+    "output": "OtpSession",
+    "errors": [
+      400,
+      429,
+      500
+    ]
+  },
+  "POST /att/api/auth/otp-verify": {
+    "input": "OtpVerify",
+    "output": "SignIn",
+    "errors": [
+      400,
+      500
+    ]
+  },
+  "POST /att/api/auth/signup": {
+    "input": "Signup",
+    "output": "SignIn",
+    "errors": [
+      400,
+      409,
+      422,
+      500
+    ]
+  },
+  "POST /att/api/auth/refresh": {
+    "input": "RefreshToken",
+    "output": "Refreshed",
+    "errors": [
+      401
+    ]
+  },
+  "POST /att/api/auth/logout": {
+    "input": "RefreshToken",
+    "output": "Ok",
+    "errors": []
+  }
+}

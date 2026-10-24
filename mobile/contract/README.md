@@ -62,6 +62,13 @@ REST, not tRPC. Send `x-paddlesnitch-app: <platform>/<version>` (e.g.
 platform's secure storage; send the ID token as `Authorization: Bearer` on
 every API call.
 
+The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
+`Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
+`RefreshToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
+output and the statuses that answer an `ApiError`. Golden answers:
+`fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
+just accepted the Terms).
+
 | Call | Body | Answer |
 |---|---|---|
 | `POST /att/api/auth/login` | `{email, password}` | `{id, email, displayName, needsTerms, idToken, refreshToken}`; 401 wrong password |
@@ -85,6 +92,13 @@ Every error answer has a human-readable `error`.
 `paddles.get.strava` (`pdl-strava`), `paddles.get.motion-only` (`pdl-motion`, a
 paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
 (rule 2; deliberately does **not** fit the schema). The paddles are synthetic.
+
+Sign-in answers are `auth.<route>[.<case>].json`: the answer of
+`POST /att/api/auth/<route>` (`rest.json` gives its type). A fixture with an
+`error` field is that route's `ApiError` instead (`auth.otp-verify.retry`: a
+wrong code with tries left). `auth.error.json` is the refusal every sign-in
+route shares. So far: `auth.login`, `auth.login.needs-terms`,
+`auth.otp-verify.retry`, `auth.refresh`, `auth.error`.
 
 `paddles.list` is the Paddles screen as the website draws it, worked out on the
 server: one card per outing (`pdl-river-watch`, the same outing from Strava,

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "SignIn.schema.json",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "needsTerms": {
+      "type": "boolean"
+    },
+    "idToken": {
+      "type": "string"
+    },
+    "refreshToken": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "email",
+    "displayName",
+    "idToken",
+    "refreshToken"
+  ]
+}

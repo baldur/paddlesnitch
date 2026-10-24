@@ -43,7 +43,7 @@ class ApiTest {
 
     @Test fun aRefusalCarriesTheServersOwnWords() = runTest {
         answer(401, """{"error":"That email and password don’t match."}""")
-        val e = runCatching { api.login("pat@example.com", "nope") }.exceptionOrNull() as ApiError
+        val e = runCatching { api.login("pat@example.com", "nope") }.exceptionOrNull() as ApiFailure
         assertEquals("That email and password don’t match.", e.message)
         assertFalse(api.signedIn)
     }

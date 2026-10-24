@@ -10,7 +10,7 @@ import fs from 'fs/promises'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
-import { contractProcedures, Me, PaddleList, AnalysisSession } from '@paddlesnitch/api/contract'
+import { contractProcedures, restRoutes, Me, PaddleList, AnalysisSession, SignIn, Refreshed, ApiError } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 import { mobileContractFiles, tokensFromCss } from '@/lib/mobile-contract'
@@ -144,7 +144,11 @@ describe('the HTTP form the apps speak', () => {
 // The golden answers both apps decode in their own tests.
 describe('fixtures/api', () => {
   const fixture = (name: string) => JSON.parse(readFileSync(path.join(CONTRACT, 'fixtures/api', name), 'utf8'))
-  const schemaFor: Record<string, z.ZodType> = { me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession }
+  const schemaFor: Record<string, z.ZodType> = {
+    me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession,
+    // Sign-in (REST): named after the route, or `auth.error` / `.retry` for refusals.
+    'auth.login': SignIn, 'auth.refresh': Refreshed, 'auth.error': ApiError, 'auth.otp-verify.retry': ApiError,
+  }
   const names = readdirSync(path.join(CONTRACT, 'fixtures/api')).filter(f => !f.includes('unknown-values'))
 
   it.each(names)('%s fits its procedure\'s output schema', name => {
