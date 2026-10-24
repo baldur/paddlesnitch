@@ -107,12 +107,12 @@ describe('live conditions along a route', () => {
     } finally { vi.useRealTimers() }
   })
 
-  it('a Swedish station on the route, by its catchment river, with its flow (SMHI)', async () => {
+  it('a Swedish station on the route, by distance (its catchment is no river name: a tributary station would be hidden), with its flow (SMHI)', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-23T21:30:00Z'))
     try {
       stubNetwork()
-      const c = await conditionsAlong([[63.4292, 18.3034], [63.4372, 18.3034]], ['Moälven'], [])
+      const c = await conditionsAlong([[63.4292, 18.3034], [63.4372, 18.3034]], ['Vallsjöbäcken'], [])   // a tributary's name, not the catchment's
       expect(c.gauges.find(g => g.source === 'smhi')).toMatchObject({ name: 'Västersel', flowM3s: 19.4, url: expect.stringContaining('smhi.se/data/sjoar-och-vattendrag/vattenforing/waterdischargeDaily/1583') })
     } finally { vi.useRealTimers() }
   })

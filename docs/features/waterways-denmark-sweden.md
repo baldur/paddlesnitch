@@ -12,7 +12,7 @@
 | What | Source | Licence | Notes |
 |---|---|---|---|
 | Network, places, locks, hire | OSM via Geofabrik `denmark-latest`, `sweden-latest` | ODbL | ✅ D1 |
-| Swedish flows | **SMHI** hydrological observations, `opendata-download-hydroobs.smhi.se` parameter 2 (discharge, 15 min), `station-set/all/period/latest-hour` | CC BY 4.0 (SMHI open data) | Keyless, one call (~75 KB): 159 stations with readings, catchment as the river name. Discharge (m³/s), not level: gauges need a flow unit. Only 10 water-level stations (parameter 3) |
+| Swedish flows | **SMHI** hydrological observations, `opendata-download-hydroobs.smhi.se` parameter 2 (discharge, 15 min), `station-set/all/period/latest-hour` | CC BY 4.0 (SMHI open data) | Keyless, one call (~75 KB): 159–180 stations with readings. **No river name**: SMHI gives the catchment, and most stations sit on a tributary of it, so a catchment name hid them from their own route (#619's bug); they match by distance (300 m) instead. Discharge (m³/s), not level: gauges need a flow unit. Only 10 water-level stations (parameter 3) |
 | Danish levels | **Miljøportalen VandA/H** (`vandah.miljoeportal.dk/api`), keyless | To check | Station list one call (4.5 MB); readings need a station id per call, so fetch only the gauges on a route (like the EA), not every station |
 | Weirs, dams, sluices | AMBER Europe (`amber-eu`) | CC BY 4.0 | Denmark 1,595, Sweden 11,144 |
 | Aerial photos | Dataforsyningen (DK), Lantmäteriet (SE) | Open, but both need a (free) key | Not keyless: Esri on screen, nothing printed |
