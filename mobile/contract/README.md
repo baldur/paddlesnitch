@@ -93,6 +93,13 @@ Every error answer has a human-readable `error`.
 paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
 (rule 2; deliberately does **not** fit the schema). The paddles are synthetic.
 
+Sign-in answers are `auth.<route>[.<case>].json`: the answer of
+`POST /att/api/auth/<route>` (`rest.json` gives its type). A fixture with an
+`error` field is that route's `ApiError` instead (`auth.otp-verify.retry`: a
+wrong code with tries left). `auth.error.json` is the refusal every sign-in
+route shares. So far: `auth.login`, `auth.login.needs-terms`,
+`auth.otp-verify.retry`, `auth.refresh`, `auth.error`.
+
 `paddles.list` is the Paddles screen as the website draws it, worked out on the
 server: one card per outing (`pdl-river-watch`, the same outing from Strava,
 sits under `pdl-river` in `sameOuting` and has no card of its own), the note,
