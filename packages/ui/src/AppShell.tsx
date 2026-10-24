@@ -2,8 +2,8 @@
 import type { ReactNode } from 'react'
 
 // The platform header. Left: the paddlesnitch brand + the section tabs
-// (Paddles, Trials, Plan). On phones the tabs move to a bottom bar with a
-// fourth "You" tab (the account menu as a sheet). Right:
+// (Paddles, Trials, Plan, Games). On phones the tabs move to a bottom bar with a
+// fifth "You" tab (the account menu as a sheet). Right:
 // an optional page-specific (section) nav slot + the account nav (passed as
 // `account` so the host app supplies the wired AccountNav). Everything common to
 // every page — My profile, Settings, Report an issue, Sign out — now lives inside
@@ -13,13 +13,14 @@ import type { ReactNode } from 'react'
 // `active` highlights the current section's tab; leave it out on pages that
 // belong to neither (home, profile, account, devices, legal).
 
-export type Section = 'trials' | 'paddles' | 'plan'
+export type Section = 'trials' | 'paddles' | 'plan' | 'games'
 
 // Which top-level tab a path belongs to, if any.
 export function sectionFor(pathname: string): Section | undefined {
   if (pathname === '/att' || pathname.startsWith('/att/')) return 'trials'
   if (pathname === '/paddles' || pathname.startsWith('/paddles/')) return 'paddles'
   if (pathname === '/plan' || pathname.startsWith('/plan/')) return 'plan'
+  if (pathname === '/games' || pathname.startsWith('/games/')) return 'games'
   return undefined
 }
 
@@ -31,6 +32,8 @@ const ICONS: Record<Section, ReactNode> = {
   trials: <><circle cx="12" cy="13" r="7.5" /><path d="M12 13V9.5M10 2.5h4M18.5 6.5l1.5-1.5" /></>,
   // a folded map
   plan: <><path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z" /><path d="M9 4v13.5M15 6.5V20" /></>,
+  // a game controller
+  games: <><path d="M7 8h10a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6l-.6-.6h-2.8l-.6.6A4 4 0 0 1 3 13v-1a4 4 0 0 1 4-4z" /><path d="M8 11v3M6.5 12.5h3" /><circle cx="15.5" cy="11.5" r=".6" /><circle cx="17" cy="13.5" r=".6" /></>,
 }
 
 export default function AppShell({
@@ -38,6 +41,7 @@ export default function AppShell({
   trialsHref = '/att',
   paddlesHref = '/paddles',
   planHref = '/plan',
+  gamesHref = '/games',
   breadcrumb,
   nav,
   account,
@@ -47,18 +51,20 @@ export default function AppShell({
   trialsHref?: string
   paddlesHref?: string
   planHref?: string
+  gamesHref?: string
   breadcrumb?: ReactNode
   nav?: ReactNode        // optional page-specific nav items
   account?: ReactNode    // the host app's wired <AccountNav /> (header, from sm up)
   you?: ReactNode        // the same, as the phone bottom bar's "You" tab (variant 'tab')
 }) {
   // Plain <a>, not next/link, for the section tabs — simple full-nav between the
-  // top-level sections (root, /att, /paddles, /plan). App-supplied `nav` children can
+  // top-level sections (root, /att, /paddles, /plan, /games). App-supplied `nav` children can
   // still use next/link for same-section navigation.
   const sections: { id: Section; href: string; label: string }[] = [
     { id: 'paddles', href: paddlesHref, label: 'Paddles' },
     { id: 'trials', href: trialsHref, label: 'Trials' },
     { id: 'plan', href: planHref, label: 'Plan' },
+    { id: 'games', href: gamesHref, label: 'Games' },
   ]
   return (
     <>
@@ -90,12 +96,12 @@ export default function AppShell({
         )}
       </header>
 
-      {/* Phone navigation: four tabs at the bottom, in thumb reach. The same
+      {/* Phone navigation: five tabs at the bottom, in thumb reach. The same
           pattern as the native apps will use. Pages get bottom padding for it
           from the root layout. */}
       <nav
         aria-label="Sections"
-        className="sm:hidden fixed inset-x-0 bottom-0 z-[1050] border-t border-border bg-bg/95 backdrop-blur grid grid-cols-4 pb-[env(safe-area-inset-bottom,0px)]"
+        className="sm:hidden fixed inset-x-0 bottom-0 z-[1050] border-t border-border bg-bg/95 backdrop-blur grid grid-cols-5 pb-[env(safe-area-inset-bottom,0px)]"
       >
         {sections.map(t => (
           <a
