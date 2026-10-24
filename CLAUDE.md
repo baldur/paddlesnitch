@@ -745,6 +745,9 @@ Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded
    - **S3** — stores raw MIME at `s3://paddlesnitch-data-prod/inbound-email/privacy/{messageId}` for audit. Spam + virus scan headers are added by SES (`scanEnabled: true`).
    - **Lambda** — invokes `att-email-forwarder` (event-style, fire-and-forget).
 3. **Lambda forwarder** (`infra/lambdas/email-forwarder/index.mjs`) reads the raw MIME, parses headers, builds a fresh MIME with `From: noreply@paddlesnitch.com` + `Reply-To: <original sender>`, and `SendRawEmail`s it to `FORWARD_TO` (currently `baldur.gudbjornsson@gmail.com`).
+4. **`dmarc@paddlesnitch.com`** (rule `DmarcReports`) — DMARC aggregate reports (the `rua=` address) are stored at `inbound-email/dmarc/` in S3 only, never forwarded.
+
+**Outbound delivery problems:** the SES account-level suppression list (BOUNCE + COMPLAINT, console setting) stops repeat sends to bad addresses. Every bounce, complaint and reject on the default configuration set `my-first-configuration-set` (made by hand, referenced by name in CDK) is published to the `paddlesnitch-alerts` SNS topic, and bounce-rate (>5%) and complaint-rate (>0.1%) alarms sit next to the other alerts. Test: `src/tests/ses-delivery-alerts.test.ts`.
 
 #### One-time activation
 
