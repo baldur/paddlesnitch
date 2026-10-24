@@ -1,5 +1,6 @@
 import type { AuthUser } from './types'
 import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 import { refresh, verifyIdToken } from './cognito'
 import { resolveDeviceToken, type DeviceAuth } from './devices'
 
@@ -32,6 +33,27 @@ export function setAuthCookies(jar: CookieJar, idToken: string, refreshToken?: s
   if (refreshToken !== undefined) {
     jar.set(REFRESH_COOKIE, refreshToken, { ...base, maxAge: REFRESH_MAX_AGE })
   }
+}
+
+// The apps mark their sign-in calls with this header (value: platform/version,
+// e.g. "android/0.1.0") and get the tokens in the answer instead of cookies
+// (docs/features/mobile-apps.md, C2). The website never sends it.
+export const APP_HEADER = 'x-paddlesnitch-app'
+
+export function isAppRequest(req: Request): boolean {
+  return !!req.headers.get(APP_HEADER)
+}
+
+/**
+ * The answer to a successful sign-in, for the website or an app: the website
+ * gets the tokens as httpOnly cookies and never in the body; an app gets them
+ * in the body (it keeps them itself) and no cookies.
+ */
+export function signedInResponse(req: Request, body: Record<string, unknown>, idToken: string, refreshToken: string, init?: ResponseInit): NextResponse {
+  if (isAppRequest(req)) return NextResponse.json({ ...body, idToken, refreshToken }, init)
+  const res = NextResponse.json(body, init)
+  setAuthCookies(res.cookies, idToken, refreshToken)
+  return res
 }
 
 export function clearAuthCookies(jar: CookieJar) {

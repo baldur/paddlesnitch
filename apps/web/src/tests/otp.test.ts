@@ -129,6 +129,16 @@ describe('POST /att/api/auth/otp-verify', () => {
     expect(setCookie).toContain('tt_refresh=')
   })
 
+  it('answers an app with the tokens instead of cookies', async () => {
+    vi.mocked(cognito.otpVerify).mockResolvedValue({ idToken: 'id-token-xxx', refreshToken: 'refresh-token-xxx' })
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-1', email: 'alice@example.com', displayName: 'Alice' })
+    const req = jsonReq({ email: 'alice@example.com', session: 'sess', code: '123456' })
+    req.headers.set('x-paddlesnitch-app', 'ios/0.1.0')
+    const res = await otpVerify(req)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(await res.json()).toMatchObject({ id: 'sub-1', idToken: 'id-token-xxx', refreshToken: 'refresh-token-xxx' })
+  })
+
   // Audit decision 2026-09: the Terms were only on the password sign-up tab, so
   // an account made by email code (or Strava) never agreed to them.
   it('asks a user who has not accepted the current Terms to accept them', async () => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { otpVerify, verifyIdToken } from '@/lib/cognito'
-import { setAuthCookies } from '@/lib/auth'
+import { signedInResponse } from '@/lib/auth'
 import { hasAcceptedCurrent } from '@/lib/tos'
 
 // Step 2 of passwordless sign-in. Submit the 6-digit code from the user's
@@ -34,7 +34,5 @@ export async function POST(req: NextRequest) {
   }
   // needsTerms: the sign-in page sends them to accept the Terms first.
   const needsTerms = !(await hasAcceptedCurrent(user.id))
-  const res = NextResponse.json({ id: user.id, email: user.email, displayName: user.displayName, needsTerms })
-  setAuthCookies(res.cookies, result.idToken, result.refreshToken)
-  return res
+  return signedInResponse(req, { id: user.id, email: user.email, displayName: user.displayName, needsTerms }, result.idToken, result.refreshToken)
 }

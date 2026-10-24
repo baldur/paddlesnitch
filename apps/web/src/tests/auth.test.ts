@@ -178,7 +178,7 @@ describe('POST /att/api/auth/logout', () => {
       get: (name: string) => name === 'tt_refresh' ? { name, value: refreshToken } : undefined,
     } as ReturnType<typeof cookies> extends Promise<infer T> ? T : never)
 
-    const res = await logout()
+    const res = await logout(new Request('http://x/att/api/auth/logout', { method: 'POST' }))
     expect(res.status).toBe(200)
     const cleared = res.headers.get('set-cookie') ?? ''
     expect(cleared).toMatch(/tt_id=;|tt_id=.*Max-Age=0/i)

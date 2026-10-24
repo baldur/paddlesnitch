@@ -141,9 +141,15 @@ Reuses what the browser already proved
   cookie-only; the apps open the website for those. `src/proxy.ts` lets a
   Bearer-signed call to `/att/api/*` or `/api/account/*` past its cookie
   check (pages still need the cookie). Tests: `src/tests/mobile-bearer.test.ts`.
-- **Token-returning sign-in.** Mobile variants of the sign-in routes return the
-  ID + refresh tokens in the body, through the same code (anti-bot gate, terms
-  acceptance, pending invitations).
+- **Token-returning sign-in ✅.** The website's own sign-in routes, through the
+  same code (anti-bot gate, terms acceptance, pending invitations): a call with
+  the `x-paddlesnitch-app: <platform>/<version>` header gets the ID + refresh
+  tokens in the answer and no cookies (`signedInResponse` in
+  `@paddlesnitch/core/auth`; the website's answers never carry a token). Covers
+  password sign-in, sign-up, the email code and the password-reset confirm.
+  `POST /att/api/auth/refresh {refreshToken}` → `{idToken}` (401: sign in
+  again), and `POST /att/api/auth/logout {refreshToken}` revokes it. How to call
+  them: `mobile/contract/README.md`. Tests: `src/tests/mobile-signin.test.ts`.
 - **Strava sign-in from an app:** the in-app browser runs the existing flow;
   the callback lands on a verified app link (Android `assetlinks.json`, iOS
   `apple-app-site-association`, both under `/.well-known/`) carrying a
