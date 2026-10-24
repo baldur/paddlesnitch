@@ -41,14 +41,6 @@ and neither app's source is ever the reference.
    shapes are mapped by hand instead: the `[lat, lng]` tuples (arrays with
    `items: [...]`) and `Seat` (`integer` or `"C"`).
 
-## fixtures/api/
-
-`<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
-`me.signed-out`, `paddles.list`, `paddles.get`, `paddles.get.motion-only` (a
-paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
-(rule 2; deliberately does **not** fit the schema). The paddles are synthetic.
-Add a fixture whenever a real answer turns out to have a shape these don't.
-
 ### Calling a procedure
 
 Plain JSON over HTTPS, no batching:
@@ -61,6 +53,14 @@ error     4xx/5xx  { "error": { "message": …, "code": …, "data": { "code": "
 ```
 
 A query with no input omits `?input=`.
+
+## fixtures/api/
+
+`<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
+`me.signed-out`, `paddles.list`, `paddles.get`, `paddles.get.motion-only` (a
+paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
+(rule 2; deliberately does **not** fit the schema). The paddles are synthetic.
+Add a fixture whenever a real answer turns out to have a shape these don't.
 
 ## tokens/
 
