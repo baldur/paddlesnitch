@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder: a paddle stroke. Swap for the real mark before Play. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#38bdf8"
+        android:pathData="M36,70 L70,36 L74,40 L40,74 Z" />
+    <path
+        android:fillColor="#38bdf8"
+        android:pathData="M66,30 C72,26 80,28 80,28 C80,28 82,36 78,42 L70,36 Z M42,78 C36,82 28,80 28,80 C28,80 26,72 30,66 L38,72 Z" />
+</vector>

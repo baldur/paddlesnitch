@@ -1,6 +1,6 @@
 # Feature spec: Android app
 
-🚧 **Spec — 2026-10-24. Not built.**
+🚧 **Spec — 2026-10-24. P0 under way** (project, CI and a debug build on the owner's Pixel 9 Pro; upload key and `assetlinks.json` still to do).
 
 The native Android app: Kotlin + Jetpack Compose + Material 3, Android 10
 (API 29) and up, distributed on Google Play. What it shares with the iPhone app
