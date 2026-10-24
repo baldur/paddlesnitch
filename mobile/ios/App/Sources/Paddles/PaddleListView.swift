@@ -6,12 +6,19 @@ import SwiftUI
 struct PaddleListView: View {
     let source: any PaddlesSource
     let isSample: Bool
+    /// The account must accept changed Terms on the website (as on Android:
+    /// a notice, not a block).
+    let needsTerms: Bool
+    let signIn: () -> Void
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
+    @State private var termsOpen = false
 
-    init(source: any PaddlesSource, isSample: Bool) {
+    init(source: any PaddlesSource, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void) {
         self.source = source
         self.isSample = isSample
+        self.needsTerms = needsTerms
+        self.signIn = signIn
         _model = State(initialValue: PaddleListModel(source: source))
     }
 
@@ -26,6 +33,9 @@ struct PaddleListView: View {
                 }
         }
         .task { await model.load() }
+        .sheet(isPresented: $termsOpen) {
+            SafariView(url: PaddlesnitchApp.baseURL.appending(path: "terms/accept")).ignoresSafeArea()
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -51,13 +61,14 @@ struct PaddleListView: View {
     private func list(_ rows: [PaddleRow]) -> some View {
         List {
             if isSample {
-                Section {
-                    Text("These are sample paddles. Once you can sign in, yours appear here.")
-                        .font(.plexSans(.subheadline))
-                        .foregroundStyle(Palette.muted)
-                        .listRowBackground(Palette.surface)
-                        .accessibilityIdentifier("sample-notice")
-                }
+                notice(
+                    "These are sample paddles. Sign in to see yours.", id: "sample-notice", action: "Sign in",
+                    run: signIn)
+            }
+            if needsTerms {
+                notice(
+                    "The Terms of Service have changed. Please accept them on paddlesnitch.com.", id: "terms-notice",
+                    action: "Open the Terms", run: { termsOpen = true })
             }
             if let logbook = model.logbook {
                 Section {
@@ -103,6 +114,29 @@ struct PaddleListView: View {
         }
         .scrollContentBackground(.hidden)
         .refreshable { await model.load() }
+    }
+}
+
+extension PaddleListView {
+    /// A notice with one action. `id` marks the text, and `id-action` the
+    /// button (an identifier on the section would land on both).
+    fileprivate func notice(_ text: String, id: String, action: String, run: @escaping () -> Void) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(text)
+                    .font(.plexSans(.subheadline))
+                    .foregroundStyle(Palette.muted)
+                    .accessibilityIdentifier(id)
+                Button(action: run) {
+                    Text(action).font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Palette.primary)
+                .accessibilityIdentifier("\(id)-action")
+            }
+            .padding(.vertical, 4)
+            .listRowBackground(Palette.surface)
+        }
     }
 }
 

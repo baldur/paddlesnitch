@@ -1,3 +1,4 @@
+import Account
 import DesignSystem
 import SafariServices
 import SwiftUI
@@ -5,13 +6,15 @@ import SwiftUI
 /// The account tab. Account pages open the website for now (mobile-apps.md:
 /// account, privacy and terms stay web pages); signed-in link-outs come with C4.
 struct YouView: View {
+    let account: AccountModel
+    let signIn: () -> Void
+    @State private var confirmingSignOut = false
+
     struct WebPage: Identifiable {
         let title: String
         let path: String
         var id: String { path }
     }
-
-    static let site = URL(string: "https://paddlesnitch.com") ?? URL(filePath: "/")
 
     static let account = [
         WebPage(title: "Your profile", path: "/profile/me"),
@@ -27,7 +30,28 @@ struct YouView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Account") { rows(Self.account) }
+                Section("Account") {
+                    if let user = account.user {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.displayName).font(.plexSans(.body, weight: .semibold)).foregroundStyle(Palette.fg)
+                            Text(user.email).font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("signed-in-as")
+                        .listRowBackground(Palette.surface)
+                        rows(Self.account)
+                        Button("Sign out", role: .destructive) { confirmingSignOut = true }
+                            .font(.plexSans(.body))
+                            .foregroundStyle(Palette.red)
+                            .listRowBackground(Palette.surface)
+                    } else {
+                        Button(action: signIn) {
+                            Text("Sign in").font(.plexSans(.body, weight: .semibold)).foregroundStyle(
+                                Palette.primaryText)
+                        }
+                        .listRowBackground(Palette.surface)
+                    }
+                }
                 Section("About") {
                     rows(Self.about)
                     HStack {
@@ -45,8 +69,13 @@ struct YouView: View {
             .navigationTitle("You")
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in
-                SafariView(url: Self.site.appending(path: page.path))
+                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path))
                     .ignoresSafeArea()
+            }
+            .confirmationDialog("Sign out of paddlesnitch?", isPresented: $confirmingSignOut, titleVisibility: .visible)
+            {
+                Button("Sign out", role: .destructive) { Task { await account.signOut() } }
+                    .accessibilityIdentifier("confirm-sign-out")
             }
         }
     }
@@ -67,6 +96,10 @@ struct YouView: View {
             .listRowBackground(Palette.surface)
             .accessibilityHint("Opens paddlesnitch.com")
         }
+    }
+
+    static var shortVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
     }
 
     static var version: String {

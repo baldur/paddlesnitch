@@ -29,7 +29,6 @@ test-app: project
 	  -project Paddlesnitch.xcodeproj -scheme Paddlesnitch \
 	  -destination "platform=iOS Simulator,id=$$(scripts/simulator.sh $(IOS))" \
 	  -derivedDataPath $(DERIVED) \
-	  CODE_SIGNING_ALLOWED=NO \
 	  | xcbeautify
 
 lint:
