@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { haversine, processTrace, formatTime, diagnoseGates } from './geo'
+import { haversine, processTrace, formatTime, diagnoseGates, noRunReason } from './geo'
 import type { TrackPoint, Line } from './types'
 import failingGateTrace from '../tests/fixtures/gate-66-failing-trace.json'
 
@@ -344,5 +344,35 @@ describe('diagnoseGates', () => {
     expect(d.total).toBe(9)
     expect(d.gatesPassed).toBe(6)
     expect(d.blocking).toEqual({ gateNumber: 7, requiredDirection: 1, reason: 'wrong_direction' })
+  })
+})
+
+// The stable code behind the upload route's "no run" message (#515).
+describe('noRunReason', () => {
+  const startLine: Line = [[0.001, -0.001], [0.001, 0.001]]
+  const finishLine: Line = [[0.005, -0.001], [0.005, 0.001]]
+  const full = [pt(0.000, 0, 0), pt(0.002, 0, 10_000), pt(0.004, 0, 20_000), pt(0.006, 0, 30_000)]
+
+  it('MISSED_START when the start line is never crossed', () => {
+    expect(noRunReason([pt(0.002, 0, 0), pt(0.004, 0, 10_000)], startLine, finishLine)).toBe('MISSED_START')
+  })
+
+  it('MISSED_FINISH when the start is crossed but the finish never is', () => {
+    expect(noRunReason(full.slice(0, 3), startLine, finishLine)).toBe('MISSED_FINISH')
+  })
+
+  it('TOO_SHORT when both lines are crossed but the run fails the minimum time', () => {
+    expect(processTrace(full, startLine, finishLine, 'point_to_point', 3600)).toBeNull()
+    expect(noRunReason(full, startLine, finishLine)).toBe('TOO_SHORT')
+  })
+
+  it('a loop crossed once is MISSED_FINISH', () => {
+    expect(noRunReason(full.slice(0, 3), startLine, undefined, 'loop')).toBe('MISSED_FINISH')
+  })
+
+  it('a one-line gate crossed only the wrong way is WRONG_DIRECTION', () => {
+    const once = full.slice(0, 3)
+    const reasons = ([1, -1] as const).map(d => noRunReason(once, startLine, undefined, 'gate', d))
+    expect(reasons.sort()).toEqual(['MISSED_FINISH', 'WRONG_DIRECTION'])
   })
 })

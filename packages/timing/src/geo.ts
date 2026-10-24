@@ -441,6 +441,32 @@ export function processTrace(
   return best
 }
 
+/** Why a track that processTrace found no run in failed, for a single-line or
+ *  start/finish course (gate courses use diagnoseGates). Report only: the
+ *  stable code behind the upload route's message (#515). */
+export type NoRunReason = 'MISSED_START' | 'MISSED_FINISH' | 'WRONG_DIRECTION' | 'TOO_SHORT'
+
+export function noRunReason(
+  track: TrackPoint[],
+  startLine: Line,
+  finishLine: Line | undefined,
+  courseType: CourseType = 'point_to_point',
+  gateDirection?: 1 | -1,
+): NoRunReason {
+  const starts = findAllCrossings(track, startLine)
+  if (courseType === 'point_to_point' || courseType === 'one_way') {
+    // processTrace also tries the run finish→start, so either line can be the first.
+    const finishes = finishLine ? findAllCrossings(track, finishLine) : []
+    if (!starts.length) return 'MISSED_START'
+    if (!finishes.length) return 'MISSED_FINISH'
+    return 'TOO_SHORT'
+  }
+  if (!starts.length) return 'MISSED_START'
+  if (courseType === 'gate' && gateDirection != null && !starts.some(c => c.rxsSign === gateDirection)) return 'WRONG_DIRECTION'
+  if (courseType === 'gate' && finishLine && !findAllCrossings(track, finishLine).length) return 'MISSED_FINISH'
+  return starts.length < 2 && !(courseType === 'gate' && finishLine) ? 'MISSED_FINISH' : 'TOO_SHORT'
+}
+
 export function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
