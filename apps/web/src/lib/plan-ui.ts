@@ -242,6 +242,14 @@ export const PLAN_ERROR_TEXT: Record<PlanError, string> = {
 
 export const km = (m: number) => `${(m / 1000).toFixed(1)} km`
 
+/** A plan in one line, for a shared plan's description (#513):
+ *  "13.6 km return, 6 portages, Oxford Canal". */
+export function planSummaryText(p: { lengthM: number; stops: { portage: boolean }[]; waterways?: string[] }, shape: PlanShape): string {
+  const n = p.stops.filter(s => s.portage).length
+  const water = (p.waterways ?? []).slice(0, 2).join(' and ')
+  return `${km(p.lengthM)} ${shape === 'return' ? 'return' : 'one-way'}, ${n === 0 ? 'no portages' : n === 1 ? '1 portage' : `${n} portages`}${water ? `, ${water}` : ''}`
+}
+
 /** How well we know a waterway (see waterwayCoverage), as the map and /plan/gaps show it. */
 export const COVERAGE_LEVELS = [
   { id: 'good', label: 'Good', colour: '#22c55e', says: 'Places to get in and out, crew access, and every portage side known.' },
