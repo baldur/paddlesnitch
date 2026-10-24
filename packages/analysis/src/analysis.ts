@@ -60,7 +60,8 @@ const std = (a: number[]) => { const m = mean(a); return Math.sqrt(mean(a.map(x 
 const cv = (a: number[]) => (a.length < 2 || mean(a) === 0 ? 0 : std(a) / mean(a))
 const pct = (a: number[], p: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : 0 }
 const slope = (xs: number[], ys: number[]) => { const mx = mean(xs), my = mean(ys); let n = 0, d = 0; xs.forEach((x, i) => { n += (x - mx) * (ys[i] - my); d += (x - mx) ** 2 }); return d ? n / d : 0 }
-export const fmtDur = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+// Round first: rounding the seconds after splitting off the minutes wrote 119.6 s as "1:60".
+export const fmtDur = (s: number) => { const r = Math.round(s); return `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}` }
 // A duration as a clock: 3896 → "1:04:56", 725 → "12:05". Denser than words
 // where numbers sit side by side.
 export function fmtClock(s: number): string {

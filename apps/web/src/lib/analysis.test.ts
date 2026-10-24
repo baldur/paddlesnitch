@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyseTrack, fmtClock, fmtDurAdj, fmtDurWords, rescaleDoubling } from '@paddlesnitch/analysis/analysis'
+import { analyseTrack, fmtClock, fmtDur, fmtDurAdj, fmtDurWords, rescaleDoubling, split500 } from '@paddlesnitch/analysis/analysis'
 import { paddleTotals } from '@paddlesnitch/core/paddles'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
@@ -130,6 +130,15 @@ describe('fmtDurWords', () => {
     expect(fmtDurWords(3720)).toBe('1 hour 2 minutes')
     expect(fmtDurWords(3661)).toBe('1 hour 1 minute 1 second')
     expect(fmtDurWords(3605)).toBe('1 hour 5 seconds')
+  })
+})
+
+describe('fmtDur', () => {
+  it('rounds before splitting off the minutes, so 119.6 s is 2:00, not 1:60', () => {
+    expect(fmtDur(119.6)).toBe('2:00')
+    expect(fmtDur(59.5)).toBe('1:00')
+    expect(fmtDur(125.4)).toBe('2:05')
+    expect(split500(500 / 119.6)).toBe('2:00')
   })
 })
 
