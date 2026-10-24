@@ -8,7 +8,7 @@ import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 export const SITE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://paddlesnitch.com'
 
 /** Public pages that are always there. */
-export const PUBLIC_PAGES = ['/', '/plan', '/plan/gaps', '/att', '/att/courses', '/help', '/guide', '/privacy', '/terms']
+export const PUBLIC_PAGES = ['/', '/plan', '/plan/gaps', '/att', '/att/courses', '/help', '/guide', '/api', '/privacy', '/terms']
 
 export function robots(): MetadataRoute.Robots {
   return {
@@ -40,6 +40,14 @@ paddlesnitch is not a navigation authority. Check stream warnings, lock notices 
 - Full parameter reference: ${SITE}/help (Linking to a plan).
 - [Gaps](${SITE}/plan/gaps): how well each waterway is known, and the locks with no portage details yet.
 - [OpenPortage](${SITE}/plan/data/latest/openportage): paddlers' portage details as a CC0 JSON file.
+
+## API
+
+- [API docs](${SITE}/api): free, read-only JSON, no key. OpenAPI 3.1: ${SITE}/api/v1/openapi.json
+- \`GET ${SITE}/api/v1/plan?from=&to=&shape=&pace=&portage=&at=\`: a plan as JSON (route as GeoJSON, every stop with distance and time). Same parameters as the planner link.
+- \`GET ${SITE}/api/v1/places?q=\`: locks, wharves, slipways and towns on the water, by name.
+- \`GET ${SITE}/api/v1/trials\`, \`/api/v1/trials/{id}\`, \`/api/v1/trials/{id}/leaderboard\`: public time trials and results.
+- Every response carries \`attribution\`; show those credits with the data.
 
 ## Time trials
 

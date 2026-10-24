@@ -52,6 +52,13 @@ export default async function FaqPage() {
             </span>
             <Chevron />
           </Link>
+          <Link href="/api" className={`${cardLinkClass} px-4 py-3 flex items-center gap-3`}>
+            <span className="flex-1 min-w-0">
+              <span className="block text-base font-medium text-fg">The API</span>
+              <span className="block text-sm text-muted">Plans and public trials as JSON, for your own tools</span>
+            </span>
+            <Chevron />
+          </Link>
         </nav>
 
         <Section title="Questions about trials">
