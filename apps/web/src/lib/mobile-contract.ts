@@ -33,7 +33,8 @@ export function tokensFromCss(css: string): DesignTokens {
  * website's own function on `in` (described in mobile/contract/README.md).
  * The apps run their ports over every case, so all three say the same thing.
  * Pick inputs at the edges, where a port goes wrong: rounding at :59.5,
- * toFixed on a float like 1.005, the compass boundary at 22.5°.
+ * toFixed on a float like 1.005 and on an exact tie like 0.125, the compass
+ * boundary at 22.5°.
  */
 export function formatCases() {
   const cases = <I, O>(fn: (i: I) => O, inputs: I[]) => inputs.map(i => ({ in: i, out: fn(i) }))
@@ -45,13 +46,15 @@ export function formatCases() {
     fmtWeekday: cases(fmtWeekday, ['2026-09-13T07:30:00.000Z', '2026-09-14T00:30:00+01:00', '2024-02-29T12:00:00Z', 'not a date']),
     fmtMonth: cases(fmtMonth, ['2026-09-01T07:30:00.000Z', '2026-12-31T23:59:59.999Z', '2027-01-01T00:30:00+01:00', 'not a date']),
     paddleKm: cases((p: { distanceKm: number; noGps?: true }) => paddleKm(p), [
-      { distanceKm: 4.2478 }, { distanceKm: 1.005 }, { distanceKm: 0 }, { distanceKm: 0, noGps: true }, { distanceKm: 3.2, noGps: true },
+      // 0.125 is an exact tie: JavaScript rounds it up (0.13), C's printf to even (0.12).
+      { distanceKm: 4.2478 }, { distanceKm: 1.005 }, { distanceKm: 0.125 }, { distanceKm: 0 }, { distanceKm: 0, noGps: true }, { distanceKm: 3.2, noGps: true },
     ]),
     compassPoint: cases(compassPoint, [0, 22.4, 22.5, 22.6, 225, 337.5, 350, 360, -10]),
     noPaddleMessage: cases((i: { reason: NoPaddleReason; hasMotion: boolean }) => noPaddleMessage(i.reason, i.hasMotion), [
       { reason: { kind: 'no_gps', recordedS: 1800 }, hasMotion: true },
       { reason: { kind: 'no_gps', recordedS: 1800 }, hasMotion: false },
-      ...[0.4, 89, 90, 5399, 5400, 9000].map(s => ({ reason: lost(s), hasMotion: true })),
+      // 8100 s = 2.25 h, an exact tie for toFixed(1): 2.3, not 2.2.
+      ...[0.4, 89, 90, 5399, 5400, 8100, 9000].map(s => ({ reason: lost(s), hasMotion: true })),
       { reason: { kind: 'too_short', movedM: 12, minM: 100 }, hasMotion: true },
     ]),
   }
