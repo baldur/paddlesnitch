@@ -26,6 +26,7 @@
       <span id="togo">6.00 km</span>
       <span id="pos">1st / 8</span>
     </div>
+    <svg id="map" aria-hidden="true"></svg>
     <p id="wash">On the wash: resting</p>
     <p id="place" aria-live="polite"></p>
     <p id="assisted">Balance assist on: tilt isn't available</p>
@@ -117,9 +118,13 @@
 
   <dialog id="live">
     <h2>Race friends</h2>
-    <p class="lede">A live race against up to five others. Make one and send them the link, or join one with its code.</p>
+    <p class="lede">A live race against up to five others.</p>
     <div id="liveSetup">
-      <p>
+      <div class="choice" role="group" aria-label="Make a race or join one">
+        <button type="button" id="liveMakeTab" aria-pressed="true">Make a race</button>
+        <button type="button" id="liveJoinTab" aria-pressed="false">Join with a code</button>
+      </div>
+      <p id="liveMake">
         <label for="liveCourse">Course</label>
         <select id="liveCourse">
           <option value="race">Division 9 river, 6 km</option>
@@ -127,12 +132,14 @@
           <option value="loop">Time Trial Loop, 5.4 km</option>
           <option value="practice">Practice, 1 km</option>
         </select>
-        <button type="button" id="liveCreate">Make a race</button>
+        <button type="button" id="liveCreate">Make it</button>
+        <small>You'll get a link to send to the others.</small>
       </p>
-      <p>
+      <p id="liveJoinBox" hidden>
         <label for="liveCode">Code</label>
         <input id="liveCode" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" size="5">
         <button type="button" id="liveJoin">Join</button>
+        <small>The four letters from the link you were sent. The course is the one its maker chose.</small>
       </p>
     </div>
     <div id="liveLobby" hidden>

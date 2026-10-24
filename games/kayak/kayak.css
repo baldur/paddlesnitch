@@ -57,6 +57,26 @@ header button {
   font-weight: 700;
 }
 
+/* The course map, top right: the shape, start (green) and finish (white), a
+   dot per boat, and an arrow for you. */
+#map {
+  position: absolute;
+  top: 3.75rem;
+  right: 16px;
+  width: clamp(130px, 30vmin, 220px);
+  max-height: 40vh;
+  background: rgb(0 0 0 / 0.25);
+  border-radius: 8px;
+  overflow: visible;
+}
+#map.tall { width: auto; height: clamp(110px, 34vh, 220px); }
+#map .line { fill: none; stroke: rgb(255 255 255 / 0.75); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+#map .start { fill: #4ade80; }
+#map .finish { fill: #fff; stroke: #000; stroke-width: 1; }
+#map .rival { fill: #facc15; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
+#map .friend { fill: #38bdf8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
+#map .you { fill: #f43f5e; stroke: #fff; stroke-width: 1; }
+
 .hud-bottom {
   position: absolute;
   inset: auto 16px 16px;
@@ -145,6 +165,8 @@ header button {
   header h1 { font-size: 1rem; }
   header button { padding: 0.3rem 0.7rem; font-size: 0.85rem; }
   .hud-top { top: 2.6rem; font-size: 1.1rem; }
+  #map { top: 2.4rem; width: 150px; }
+  #map.tall { width: auto; height: 28vh; }
   #wash { top: 4.6rem; }
   .hud-bottom { inset: auto 16px 8px; }
   #balance { width: 110px; }
@@ -277,6 +299,9 @@ summary { cursor: pointer; }
 #boards ol { margin: 0.2rem 0 0; padding-left: 1.6rem; }
 #boards .you, #livePlayers .you { font-weight: 700; }
 #live select, #live input { font: inherit; padding: 0.3rem 0.4rem; }
+#live .choice { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+#live .choice button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+#live #liveMake small, #live #liveJoinBox small { display: block; margin-top: 0.4rem; color: var(--dim); }
 #live input { text-transform: uppercase; letter-spacing: 0.15em; }
 #livePlayers { padding-left: 1.2rem; }
 #livePlayers small { opacity: 0.75; }

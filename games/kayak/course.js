@@ -64,9 +64,47 @@ export function createCourse(points, { width = 20, sides = null, start = 60, fin
       if (Math.abs(p.s - m.s) < m.length / 2 + 1) p[m.side < 0 ? 'left' : 'right'] = p.half - (m.beam ?? NARROWBOAT);
     }
   });
+  withinReach(samples);
 
   return { samples, start, finish, warp, speedup, moorings, bridges, length: (samples.length - 1) * SPACING };
 }
+
+// On a bend tighter than the water is wide, a boat out on the inside is nearer
+// another part of the line than its own, so where it is along the course would
+// jump ahead (and the banks it's kept between with it). Brings the open water in
+// on the inside of such bends until every point of it is nearest its own part of
+// the line.
+const MIN_REACH = 3; // metres of water kept each side of the line, however tight the bend
+
+function withinReach(samples) {
+  const course = { samples };
+  const own = (i, lateral) => {
+    const p = samples[i];
+    return Math.abs(locate(course, p.x - p.tz * lateral, p.z + p.tx * lateral, i).i - i) <= 1;
+  };
+  const brought = { left: new Map(), right: new Map() }; // sample index -> the reach it was brought in to
+  for (let i = 1; i < samples.length - 1; i++) {
+    for (const [side, sign] of [['left', -1], ['right', 1]]) {
+      const p = samples[i];
+      if (own(i, sign * p[side])) continue;
+      let [lo, hi] = [0, p[side]];
+      while (hi - lo > 0.25) {
+        const mid = (lo + hi) / 2;
+        if (own(i, sign * mid)) lo = mid;
+        else hi = mid;
+      }
+      p[side] = Math.max(MIN_REACH, lo);
+      brought[side].set(i, p[side]);
+    }
+  }
+  // Between samples the line turns on, so each limit holds for its neighbours too.
+  for (const side of ['left', 'right']) {
+    for (const [i, reach] of brought[side]) {
+      for (let k = Math.max(0, i - NEIGHBOURS); k <= Math.min(samples.length - 1, i + NEIGHBOURS); k++) samples[k][side] = Math.min(samples[k][side], reach);
+    }
+  }
+}
+const NEIGHBOURS = 3;
 
 // The open water at a distance along: { half, left, right } in metres from the centreline.
 export function widthAt(course, s) {

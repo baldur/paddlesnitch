@@ -3,6 +3,7 @@ import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course
 import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISION_9 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
+import { courseMap, headingDegrees } from './map.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
@@ -55,7 +56,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'sprint', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'sprint', 'map', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -104,6 +105,7 @@ function start() {
   state = 'start';
   hud.hidden = false;
   hud.classList.toggle('solo', race.racers.length === 1);
+  drawMap();
   if (race.format === 'interval') {
     show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
   }
@@ -379,6 +381,7 @@ const STATUS = { open: 'connected', connecting: 'connecting…', waiting: 'joini
 function openLive(code = '') {
   els.liveError.replaceChildren();
   els.liveCode.value = code;
+  chooseLive(code ? 'join' : 'make');
   if (account.offline) els.liveError.textContent = 'Live races need paddlesnitch.com: open the game there.';
   else if (!account.user) els.liveError.replaceChildren('Live races need an account. ', link('Sign in', SIGN_IN + encodeURIComponent(code ? `#race=${code}` : '')));
   showLobby();
@@ -433,6 +436,19 @@ function showLobby() {
     ? ready.length ? "Start it when everyone's in." : 'Send the link to your friends. You can start once someone has joined.'
     : 'The race starts when its starter starts it.';
 }
+
+// Making a race (pick a course) or joining one (just its code: the course is its maker's).
+function chooseLive(which) {
+  els.liveMakeTab.setAttribute('aria-pressed', which === 'make');
+  els.liveJoinTab.setAttribute('aria-pressed', which === 'join');
+  els.liveMake.hidden = which !== 'make';
+  els.liveJoinBox.hidden = which !== 'join';
+}
+els.liveMakeTab.addEventListener('click', () => chooseLive('make'));
+els.liveJoinTab.addEventListener('click', () => {
+  chooseLive('join');
+  els.liveCode.focus();
+});
 
 const raceLink = () => `${location.origin}${location.pathname}#race=${lobby.code}`;
 
@@ -914,6 +930,7 @@ function updateHud(dt) {
   sprintHint(boat, dt);
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
+  moveMap();
   els.rhythm.style.transform = `scaleX(${boat.rhythm.toFixed(3)})`;
   els.rhythm.parentElement.classList.toggle('locked', boat.rhythm > 0.9);
   hud.classList.toggle('assisted', controls.assist);
@@ -923,6 +940,43 @@ function updateHud(dt) {
   els.rudder.style.transform = `translateX(${(controls.rudder * 39).toFixed(1)}px)`;
   const angle = Math.max(-1.1, Math.min(1.1, boat.roll / BOAT.capsize)) * 90;
   els.needle.style.transform = `rotate(${angle.toFixed(1)}deg)`;
+}
+
+// The course map: its shape once per race, then a dot per boat each frame (an
+// arrow for you, pointing where you're heading).
+const SVG = 'http://www.w3.org/2000/svg';
+let map = null; // { project, dots: Map(racer -> element) }
+
+function drawMap() {
+  const shape = courseMap(race.course);
+  const el = (name, attrs) => {
+    const e = document.createElementNS(SVG, name);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+  const tick = ([x, y], cls) => el('circle', { cx: x, cy: y, r: 3, class: cls });
+  els.map.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
+  els.map.style.aspectRatio = `${shape.width} / ${shape.height}`;
+  els.map.classList.toggle('tall', shape.height > shape.width);
+  els.map.replaceChildren(el('path', { d: shape.d, class: 'line' }), tick(shape.start, 'start'), tick(shape.finish, 'finish'));
+  const dots = new Map();
+  // Others first, so you're drawn on top.
+  for (const r of [...race.racers.filter((x) => x !== race.player), race.player]) {
+    const dot = r === race.player ? el('path', { d: 'M0 -5.5L4 4L0 2L-4 4Z', class: 'you' }) : el('circle', { r: 2.6, class: r.remote ? 'friend' : 'rival' });
+    els.map.append(dot);
+    dots.set(r, dot);
+  }
+  map = { project: shape.project, dots };
+}
+
+function moveMap() {
+  if (!map) return;
+  for (const [r, dot] of map.dots) {
+    const [x, y] = map.project(r.boat.x, r.boat.z);
+    const turn = r === race.player ? ` rotate(${headingDegrees(r.boat.heading).toFixed(0)})` : '';
+    dot.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})${turn}`);
+    dot.style.opacity = r.finish !== null && r !== race.player ? 0.4 : 1;
+  }
 }
 
 // Landmarks (a real river's course.scenery.places) named one at a time as you
