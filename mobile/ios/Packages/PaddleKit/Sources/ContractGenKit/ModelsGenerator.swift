@@ -18,7 +18,7 @@ public enum ModelsGenerator {
             switch self {
             case .unsupported(let type, let reason): "\(type): unsupported schema: \(reason)"
             case .badName(let type, let name): "\(type): \(name) doesn't make a Swift identifier"
-            case .unknownType(let name): "procedures.json names \(name), which has no schema"
+            case .unknownType(let name): "procedures.json or rest.json names \(name), which has no schema"
             }
         }
     }
@@ -46,7 +46,9 @@ public enum ModelsGenerator {
 
     /// `schemas` maps a file name (`BoatClass.schema.json`) to its contents.
     /// Returns file name → Swift source.
-    public static func generate(schemas: [String: Data], procedures: Data) throws -> [String: String] {
+    public static func generate(schemas: [String: Data], procedures: Data, rest: Data? = nil) throws
+        -> [String: String]
+    {
         var files: [String: String] = [:]
         var known: Set<String> = []
         for (file, data) in schemas {
@@ -57,6 +59,9 @@ public enum ModelsGenerator {
             files["\(name).swift"] = header + (try declaration(name: name, schema: schema, owner: name))
         }
         files["Procedures.swift"] = try proceduresFile(procedures, known: known)
+        if let rest {
+            files["Endpoints.swift"] = try endpointsFile(rest, known: known)
+        }
         return files
     }
 
