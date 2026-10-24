@@ -37,16 +37,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.paddlesnitch.app.BuildConfig
 import com.paddlesnitch.app.api.Api
+import com.paddlesnitch.app.api.Constants
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.launch
-
-/**
- * The Terms version this app shows and the person agrees to on sign-up. Must
- * match the server's CURRENT_TOS_VERSION (apps/web/src/lib/types.ts); when the
- * Terms change the server refuses an older app's sign-up and says why.
- */
-const val TOS_VERSION = "002"
 
 /**
  * Sign in or create an account, like the website's /signin: password sign-in
@@ -70,7 +64,9 @@ fun SignInScreen(api: Api, onSignedIn: (SignIn) -> Unit, onCancel: () -> Unit, m
         if (email.isBlank() || password.isEmpty() || (creating && name.isBlank())) { error = "Fill in every field."; return }
         busy = true; error = null
         scope.launch {
-            runCatching { if (creating) api.signUp(email.trim(), name.trim(), password, TOS_VERSION) else api.login(email.trim(), password) }
+            // Constants.tosVersion comes from mobile/contract/api/constants.json; if the
+            // Terms change before an app update, the server's 422 says why.
+            runCatching { if (creating) api.signUp(email.trim(), name.trim(), password, Constants.tosVersion) else api.login(email.trim(), password) }
                 .onSuccess(onSignedIn)
                 .onFailure { error = it.message }
             busy = false

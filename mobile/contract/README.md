@@ -109,6 +109,9 @@ weeks oldest first, weeks start Monday UTC). Totals and logbook count every
 recording, as the website does.
 Add a fixture whenever a real answer turns out to have a shape these don't.
 
+`api/constants.json`: values the apps send exactly as the server expects:
+`tosVersion`, the Terms version a new account agrees to (`Signup.acceptedTosVersion`).
+
 ## format/
 
 `format.json`: how the website writes the numbers, dates and messages both

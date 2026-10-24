@@ -24,6 +24,11 @@ object ContractModels {
             .sortedBy { it.name }
             .associate { it.name.removeSuffix(".schema.json") to JsonSlurper().parse(it) as Map<String, Any?> }
         val body = schemas.entries.joinToString("\n\n") { (name, schema) -> Gen(name).topLevel(schema) }
+        // api/constants.json: values the app must send exactly as the server expects.
+        @Suppress("UNCHECKED_CAST")
+        val constants = apiDir.resolve("constants.json").takeIf { it.exists() }
+            ?.let { JsonSlurper().parse(it) as Map<String, Any?> }.orEmpty()
+            .entries.joinToString("\n") { (k, v) -> "    const val $k = ${if (v is String) "\"$v\"" else v}" }
         return """
             |// Generated from mobile/contract/api by buildSrc/ContractModels.kt. Do not edit.
             |@file:Suppress("unused")
@@ -44,7 +49,7 @@ object ContractModels {
             |import kotlinx.serialization.json.jsonObject
             |import kotlinx.serialization.json.jsonPrimitive
             |
-            |""".trimMargin() + body + "\n"
+            |""".trimMargin() + body + "\n\n/** From api/constants.json. */\nobject Constants {\n$constants\n}\n"
     }
 
     private fun pascal(s: String) = s.split('_', '-', ' ').filter { it.isNotEmpty() }
