@@ -1,6 +1,6 @@
 # Feature spec: iPhone app
 
-🚧 **Spec — 2026-10-24. Not built.**
+🚧 **Spec — 2026-10-24. P0 built (project, tokens, CI); the rest not built.** How to work on it: [`mobile/ios/README.md`](../../mobile/ios/README.md).
 
 The native iPhone app: Swift + SwiftUI, iOS 17 and up, distributed through
 TestFlight and the App Store. What it shares with the Android app (the
@@ -106,16 +106,23 @@ The protocol is fixed by the tracker sync contract and its fixtures. On iPhone:
 ```
 mobile/ios/
   project.yml              XcodeGen: the Xcode project is generated, not hand-merged
+  Makefile                 Every command, local and CI: generate, test, lint
   App/                     The app target: SwiftUI screens, navigation, wiring only
-  Packages/                Local Swift packages, each testable on its own
-    PaddleAPI/             Generated models + a small tRPC/REST client, auth, token refresh
-    Recorder/              Location + motion → tracker CSV + _i10 sidecar, crash recovery
-    TrackerLink/           Tracker Bluetooth protocol over a CoreBluetooth abstraction
-    UploadQueue/           Background URLSession uploads, retries, receipts
-    DesignSystem/          Generated tokens, IBM Plex Mono, shared SwiftUI components
-    Capabilities/          The capability list behind "This iPhone"
+  Packages/PaddleKit/      One local Swift package, one target per area:
+    DesignSystem             Generated tokens, IBM Plex, shared SwiftUI components (P0)
+    ContractGen(Kit)         contract-gen: mobile/contract/ → Swift (P0)
+    PaddleAPI                Generated models + a small tRPC/REST client, auth, token refresh
+    Recorder                 Location + motion → tracker CSV + _i10 sidecar, crash recovery
+    TrackerLink              Tracker Bluetooth protocol over a CoreBluetooth abstraction
+    UploadQueue              Background URLSession uploads, retries, receipts
+    Capabilities             The capability list behind "This iPhone"
   Tests/UI/                XCUITest flows
 ```
+
+Targets are added when their phase starts, not ahead of it. Generated Swift
+is committed, and a package test fails while it differs from what
+`mobile/contract/` would generate (the same rule as the web's
+`pnpm mobile:contract` check).
 
 - **Swift 6 language mode** with complete concurrency checking: data races are
   compile errors.
@@ -124,9 +131,10 @@ mobile/ios/
 - **Logic lives in packages, screens stay thin.** The packages have no UIKit
   or SwiftUI dependency where they can avoid it, so their tests run with
   `swift test` on the Mac in seconds, without a simulator.
-- **Models from the contract.** A script turns `mobile/contract/api/` JSON
-  Schema into `Codable` Swift structs (decide in S3: quicktype or a small
-  generator of our own). `swift-openapi-generator` doesn't fit, because the
+- **Models from the contract.** `contract-gen` (our own, in `PaddleKit`)
+  turns `mobile/contract/api/` JSON Schema into `Codable` Swift structs.
+  quicktype was the alternative, but it handles the contract's tuples and
+  `kind` unions poorly. `swift-openapi-generator` doesn't fit, because the
   contract is JSON Schema over tRPC, not OpenAPI. The tRPC transport is about a
   hundred lines of our own.
 - **Maps: MapKit** (SwiftUI `Map` with route polylines, dark muted style). It's
@@ -163,7 +171,11 @@ When it's time:
   of each version gets a short beta review) → App Store. **Every merge to
   `main` that touches `mobile/ios/` goes to TestFlight internal**, and
   promotion is a manual workflow, as on Android and firmware.
-- **CI:** GitHub Actions macOS runners (free, since the repo is public). Until
+- **CI:** GitHub Actions macOS runners (free, since the repo is public),
+  `.github/workflows/ios.yml`. Runner images lag Xcode releases (Xcode 26.6
+  there while 27 is current) and ship no iOS 17 simulator, so the iOS 17 job
+  downloads one, and the code must build with both the runner's Xcode and
+  the newest. Until
   P5 CI only builds and tests, so it needs no secrets. From P5, signing uses Xcode's cloud-managed certificates and an App Store Connect API key
   in a protected GitHub environment. Apple has no OIDC equivalent, so this one
   key is unavoidable; it is limited to the App Manager role. Xcode Cloud is the
@@ -212,7 +224,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 
 | Phase | What | Proves | Needs a real iPhone |
 |---|---|---|---|
-| **P0. Project + CI** | XcodeGen project, package skeletons, CI build + tests on iOS 17 and newest simulators, lint | We can build and test | No |
+| **P0. Project + CI** ✅ | XcodeGen project, `PaddleKit` package, `contract-gen` for tokens, placeholder icon, CI build + tests on iOS 17 and newest simulators, lint | We can build and test | No |
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag; While Using + background session; sidecar → `deriveCadence` | The iPhone can be a tracker; whether stroke rate is possible | **Yes** |
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
 | **S3. API spike** | Generated models + client for two procedures over C1; token sign-in over C2 | The contract and sign-in shape | No |
@@ -231,7 +243,8 @@ closes that gap.
 
 1. **A test iPhone:** which one, and when. It blocks S1, S2 and P3.
 2. **Individual or Organisation** developer enrolment (decide at P5).
-3. **Swift model generator:** quicktype or our own, decided in S3.
+3. **App icon.** P0 ships a placeholder ("ps" on the dark background). The
+   web has no icon to reuse yet; a real one is needed before P5.
 
 Sign in with Apple and the app's store name are shared questions, in
 [`mobile-apps.md`](mobile-apps.md).
