@@ -56,6 +56,12 @@ public struct PaddleSummary: Hashable, Sendable {
     public let coachSummary: String?
     public let summaryPending: Bool
     public let note: String?
+    /// Nil without GPS or with too few speeds to scale.
+    public let legend: Legend?
+    public let repeats: [String]
+    public let efforts: [Effort]
+    public let rests: [String]
+    public let splits: [Split]
 
     public init(_ paddle: AnalysisSession) {
         let result = paddle.result
@@ -70,6 +76,11 @@ public struct PaddleSummary: Hashable, Sendable {
         coachSummary = insight.isEmpty ? nil : insight
         summaryPending = paddle.insightPending == true
         note = paddle.note.isEmpty ? nil : paddle.note
+        legend = route.isEmpty ? nil : Self.legend(result.points)
+        repeats = Self.repeats(result.sets)
+        efforts = Self.efforts(result.surges)
+        rests = Self.rests(result.stops)
+        splits = result.noGps == nil ? Self.splits(result.points) : []
     }
 
     static func gpsStats(_ result: AnalysisResult) -> [Stat] {

@@ -18,6 +18,14 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(text(containing: "from the SW").exists)
     }
 
+    func testAPaddleShowsItsSpeedLegendEffortsAndRests() {
+        open("pdl-river")
+        XCTAssertTrue(text(containing: "Speed colours: blue 17:44/500, red 2:31/500").waitForExistence(timeout: 10))
+        XCTAssertTrue(scrollToElement(text(containing: "Effort 1 at 1:53")).exists)
+        XCTAssertTrue(text(containing: "1:06 · 2:31/500 · 64 spm").exists)
+        XCTAssertTrue(text(containing: "29 s at 1:23").exists)
+    }
+
     func testAPaddleWithoutGPSSaysWhyThereIsNoMap() {
         open("pdl-motion")
         XCTAssertTrue(text(containing: "The GPS lost the sky").waitForExistence(timeout: 10))
@@ -41,6 +49,12 @@ final class PaddlesTests: AppTestCase {
     func testAPaddlePassesTheAccessibilityAudit() throws {
         open("pdl-river")
         XCTAssertTrue(text(containing: "PACE").waitForExistence(timeout: 10))
+        try audit()
+    }
+
+    func testAPaddleScrolledToItsEffortsPassesTheAccessibilityAudit() throws {
+        open("pdl-river")
+        XCTAssertTrue(scrollToElement(text(containing: "29 s at 1:23")).waitForExistence(timeout: 10))
         try audit()
     }
 

@@ -28,6 +28,7 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(text(containing: "PACE").waitForExistence(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(text(containing: "RIVER").exists, "the last stat is still there")
+        XCTAssertTrue(text(containing: "29 s at 1:23").exists, "and the rests, at the end")
     }
 
     func testYouAtTheLargestTextSize() throws {
