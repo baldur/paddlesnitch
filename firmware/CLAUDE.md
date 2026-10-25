@@ -505,11 +505,15 @@ check for an inverted or over-promoted code without a camera. See
 [`docs/features/qr-onboarding.md`](../docs/features/qr-onboarding.md); phone
 scanning is NOT yet verified.
 
-**Merging `firmware/**` to `main` RELEASES.** The workflow builds, publishes and
-promotes to stable in one run, so a merged change reaches devices on their next
-sync. Running it manually (`workflow_dispatch`) promotes any already-built
-version and is the **rollback** lever. Test by cable before you merge — that is
-now the gate, along with the firmware's own three-failed-boots rollback.
+**Merging `firmware/**` to `main` RELEASES to beta.** The workflow builds,
+publishes and promotes to the **beta** channel in one run, so a merged change
+reaches the beta trackers on their next sync (see "Beta first" above). Stable is
+the manual flip, `gh workflow run firmware-release.yml -f version=<v> -f
+channel=stable`, refused until a tracker reports a good start on that version.
+The same `workflow_dispatch` with an older version is the **rollback** lever.
+Test by cable before you merge — that is the gate, along with the firmware's own
+three-failed-boots rollback. The header of `.github/workflows/firmware-release.yml`
+is the authority.
 
 The version string comes from **`firmware/VERSION`**, read by
 `scripts/version.py` (a PlatformIO `pre:` script on `[hw]`). It is NOT a literal
