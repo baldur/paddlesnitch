@@ -4,7 +4,7 @@
 // tokens.css. Pure, so the contract test can compare it with what's committed.
 import { apiContractFiles } from '@paddlesnitch/api/contract'
 import { CURRENT_TOS_VERSION } from './types'
-import { fmtDur, fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
+import { fmtDur, fmtClock, split500, roundStrokes } from '@paddlesnitch/analysis/analysis'
 import { fmtWeekday, fmtMonth, compassPoint } from '@paddlesnitch/core/format'
 import { paddleKm } from '@paddlesnitch/core/paddles'
 import { noPaddleMessage, type NoPaddleReason } from '@paddlesnitch/timing/device'
@@ -58,6 +58,7 @@ export function formatCases() {
       ...[0.4, 89, 90, 5399, 5400, 8100, 9000].map(s => ({ reason: lost(s), hasMotion: true })),
       { reason: { kind: 'too_short', movedM: 12, minM: 100 }, hasMotion: true },
     ]),
+    roundStrokes: cases(roundStrokes, [0, 7, 999, 1000, 1049, 1050, 12345, 1234567]),
   }
 }
 

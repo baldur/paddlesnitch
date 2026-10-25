@@ -26,15 +26,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.SignInScreen
-import com.paddlesnitch.app.paddles.PaddlesScreen
+import com.paddlesnitch.app.paddles.PaddlesHost
+import com.paddlesnitch.app.paddles.sampleFile
 import com.paddlesnitch.app.ui.PsColor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Signed out: the sample paddles and a way in. Signed in: your own paddles. */
 @Composable
@@ -57,7 +61,7 @@ fun App() {
                 SignInScreen(api, onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
             }
             signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onSignOut = { scope.launch { api.signOut(); signedIn = false } }, modifier = m)
-            else -> PaddlesScreen(sample, sample = true, modifier = m, action = {
+            else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
         }
@@ -79,7 +83,7 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
     val signOut: @Composable () -> Unit = { TextButton(onClick = onSignOut) { Text("Sign out") } }
     val current = list
     when {
-        current != null -> PaddlesScreen(current, sample = false, modifier = modifier, action = signOut, notice = if (needsTerms) ({
+        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, modifier = modifier, action = signOut, notice = if (needsTerms) ({
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
                 TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
@@ -92,4 +96,8 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
         }
         else -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
+}
+
+private suspend fun readSample(context: android.content.Context, file: String): AnalysisSession = withContext(Dispatchers.IO) {
+    context.assets.open(file).bufferedReader().use { ApiJson.decodeFromString(AnalysisSession.serializer(), it.readText()) }
 }

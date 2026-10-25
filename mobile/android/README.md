@@ -11,7 +11,7 @@ Needs Android Studio (for its SDK and bundled JDK). From this directory:
 ```sh
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties   # once
-./gradlew :app:testDebugUnitTest    # unit tests
+./gradlew :app:testDebugUnitTest    # unit, UI and screenshot-capturing tests
 ./gradlew :app:installDebug         # build and install on the phone plugged in over USB
 ```
 
@@ -47,3 +47,17 @@ Or open this directory in Android Studio and press Run. The debug build is
 - **Signing**: debug builds use the local debug key. CI signs release builds
   with the upload key (alias `upload`) from the `ANDROID_UPLOAD_*` secrets (see
   `.github/workflows/android.yml`); the key is never in the repo.
+
+## Testing
+
+- **Unit tests** (plain JVM): formatters against `format.json`, the models
+  against the fixtures, the API against a fake server, and the paddle page's
+  workings (`PaddleDetailTest`: stats, colour scale, splits, map bounds).
+- **Compose UI tests on the JVM** with Robolectric (`PaddleScreensTest`):
+  tapping a card opens its paddle, back returns. MapLibre can't draw there, so
+  the page takes its map as a slot (`MapSlot`) and the tests pass a stand-in.
+- **Screenshot tests** with Roborazzi: the goldens are committed in
+  `app/src/test/screenshots/`. After a deliberate change to a screen, run
+  `./gradlew :app:recordRoborazziDebug` and commit the new images;
+  `./gradlew :app:verifyRoborazziDebug` (what CI runs) fails on any difference,
+  and CI uploads the diffs as `screenshot-diffs`.

@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi)
 }
 
 // The release build is signed with the upload key when CI provides it (a
@@ -50,6 +51,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Compose UI and screenshot tests run on the JVM under Robolectric.
+    testOptions.unitTests {
+        isIncludeAndroidResources = true
+        // Robolectric reaches into java.io on newer JDKs (Android Studio's is 25).
+        all { it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED", "--enable-native-access=ALL-UNNAMED") }
     }
 }
 
@@ -134,6 +142,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    implementation(libs.maplibre)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
@@ -142,4 +151,17 @@ dependencies {
     testImplementation(libs.json)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+}
+
+// Screenshot goldens are committed beside the tests: `./gradlew recordRoborazziDebug`
+// writes them, `verifyRoborazziDebug` (run by CI) fails on any difference.
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }
