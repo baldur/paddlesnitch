@@ -19,6 +19,7 @@ import { getDeviceSessionTrace } from '@/lib/devices'
 import { canSubmitToTrial, canViewTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng, EntryConditions } from '@/lib/types'
+import { withAction } from '@/lib/action'
 
 // Reduce a parsed track to [lat, lng] pairs for the diagnostic map we return
 // when processing fails. Strava streams can be many thousands of points; ~1500
@@ -207,7 +208,7 @@ async function processTrack(
   return NextResponse.json({ entryId, result }, { status: 201 })
 }
 
-export async function POST(
+async function post(
   req: NextRequest,
   { params }: { params: Promise<{ trialId: string }> }
 ) {
@@ -338,3 +339,5 @@ export async function POST(
   const arrayBuffer = await file.arrayBuffer()
   return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw, crew, trial.date)
 }
+
+export const POST = withAction('upload', post)

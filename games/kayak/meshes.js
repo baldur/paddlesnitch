@@ -299,3 +299,111 @@ function normalize(v) {
   const l = Math.hypot(...v) || 1;
   return v.map((x) => x / l);
 }
+
+// --- other boats on the river (traffic.js) ----------------------------------
+// In boat space like a kayak (x right, y up, -z forward), centred on the boat's
+// middle, `length` long. Rowers face the stern; their oars are separate
+// (oarMesh), swung by main.js.
+
+// A long low shell, pointed at both ends: deck and hull, `beam` wide.
+function shell(m, length, beam, { deck, hull, top = 0.12, depth = 0.14 }) {
+  const stations = 24;
+  const ring = (z) => {
+    const t = (z + length / 2) / length;
+    const shape = Math.sin(Math.PI * t) ** 0.55;
+    const w = (beam / 2) * shape;
+    return [[-w, 0.03, z], [0, top * shape + 0.03, z], [w, 0.03, z], [0, -depth * shape, z]];
+  };
+  for (let i = 0; i < stations; i++) {
+    const a = ring(-length / 2 + (length * i) / stations);
+    const b = ring(-length / 2 + (length * (i + 1)) / stations);
+    for (let k = 0; k < 4; k++) {
+      const k2 = (k + 1) % 4;
+      const out = [(a[k][0] + b[k2][0]) / 2, (a[k][1] + b[k2][1]) / 2, 0];
+      m.triFacing(a[k], b[k], b[k2], k < 2 ? deck : hull, out);
+      m.triFacing(a[k], b[k2], a[k2], k < 2 ? deck : hull, out);
+    }
+  }
+}
+
+// Where a rowing boat's oars pivot, and which way each points (-1 left, 1
+// right), stern seat first: one sculler's pair, or an eight's sweep oars.
+export const ROWLOCKS = {
+  sculler: [[-1, 0.75, 0.4], [1, 0.75, 0.4]],
+  eight: Array.from({ length: 8 }, (_, k) => [k % 2 ? 1 : -1, 0.82, 4.9 - k * 1.35]),
+};
+
+// A rower faces the stern, sitting this far towards the bow from their rowlock.
+const SEAT_BACK = 0.55;
+const ROWER = { kit: [0.12, 0.25, 0.6], skin: [0.8, 0.6, 0.45], cap: [0.9, 0.9, 0.9] };
+function rower(m, z) {
+  m.box([-0.17, 0.08, z - 0.1], [0.17, 0.55, z + 0.12], ROWER.kit);
+  m.sphere([0, 0.68, z + 0.05], 0.1, ROWER.skin, 4, 7);
+  m.sphere([0, 0.72, z + 0.05], 0.095, ROWER.cap, 3, 7);
+}
+
+export function scullerMesh() {
+  const m = new MeshBuilder();
+  shell(m, 8.2, 0.3, { deck: [0.95, 0.95, 0.93], hull: [0.92, 0.92, 0.9], top: 0.08, depth: 0.12 });
+  for (const [side, x, z] of ROWLOCKS.sculler) m.box([Math.min(0, side * x), 0.18, z - 0.03], [Math.max(0, side * x), 0.22, z + 0.03], [0.6, 0.6, 0.62]);
+  rower(m, 0.4 - SEAT_BACK);
+  return m.build();
+}
+
+export function eightMesh() {
+  const m = new MeshBuilder();
+  shell(m, 17.5, 0.62, { deck: [0.85, 0.88, 0.92], hull: [0.2, 0.3, 0.55], top: 0.1, depth: 0.16 });
+  for (const [side, x, z] of ROWLOCKS.eight) {
+    m.box([Math.min(0, side * x), 0.18, z - 0.03], [Math.max(0, side * x), 0.22, z + 0.03], [0.6, 0.6, 0.62]);
+    rower(m, z - SEAT_BACK);
+  }
+  // The cox, in the stern facing the crew (and forward), with a cap.
+  m.box([-0.15, 0.05, 7.05], [0.15, 0.35, 7.35], [0.9, 0.35, 0.1]);
+  m.sphere([0, 0.47, 7.15], 0.1, ROWER.skin, 4, 7);
+  m.sphere([0, 0.51, 7.15], 0.095, [0.9, 0.35, 0.1], 3, 7);
+  return m.build();
+}
+
+// A white river cruiser: a broad hull, a cabin with windows, people aboard.
+export function cruiserMesh() {
+  const m = new MeshBuilder();
+  const white = [0.95, 0.95, 0.93];
+  m.prism([[-1.5, -0.4, 4.6], [1.5, -0.4, 4.6], [1.5, -0.4, -4.4], [-1.5, -0.4, -4.4]],
+    [[-1.75, 0.6, 5.4], [1.75, 0.6, 5.4], [1.75, 0.6, -4.6], [-1.75, 0.6, -4.6]], white);
+  m.prism([[-0.8, -0.4, -4.4], [0.8, -0.4, -4.4], [0.1, -0.4, -5.4], [-0.1, -0.4, -5.4]],
+    [[-1.75, 0.6, -4.6], [1.75, 0.6, -4.6], [0.15, 0.7, -5.6], [-0.15, 0.7, -5.6]], white); // the bow
+  m.box([-1.78, 0.25, -4.6], [1.78, 0.38, 5.4], [0.1, 0.25, 0.55]); // a band round her
+  m.box([-1.35, 0.6, -2.6], [1.35, 1.75, 2.8], white);
+  m.box([-1.37, 1.05, -2.4], [1.37, 1.45, 2.6], [0.15, 0.2, 0.28]); // windows
+  m.box([-1.45, 1.75, -2.8], [1.45, 1.85, 3.0], [0.1, 0.25, 0.55]);
+  for (const [x, z, top] of [[-0.7, 4.2, [0.9, 0.2, 0.2]], [0.6, 3.8, [0.95, 0.8, 0.2]]]) {
+    m.box([x - 0.17, 0.6, z - 0.12], [x + 0.17, 1.25, z + 0.12], top);
+    m.sphere([x, 1.38, z], 0.11, ROWER.skin, 4, 7);
+  }
+  return m.build();
+}
+
+// A small motorboat: a planing hull, a windscreen and the driver.
+export function motorboatMesh() {
+  const m = new MeshBuilder();
+  const hull = [0.9, 0.9, 0.88];
+  m.prism([[-0.9, -0.3, 2.9], [0.9, -0.3, 2.9], [0.6, -0.3, -1.8], [-0.6, -0.3, -1.8]],
+    [[-1.2, 0.45, 3], [1.2, 0.45, 3], [1.1, 0.45, -1.8], [-1.1, 0.45, -1.8]], hull);
+  m.prism([[-0.6, -0.3, -1.8], [0.6, -0.3, -1.8], [0.05, 0.1, -3], [-0.05, 0.1, -3]],
+    [[-1.1, 0.45, -1.8], [1.1, 0.45, -1.8], [0.08, 0.55, -3.05], [-0.08, 0.55, -3.05]], hull);
+  m.box([-1.22, 0.2, -1.8], [1.22, 0.32, 3], [0.8, 0.15, 0.15]); // a stripe
+  m.box([-0.9, 0.45, -0.9], [0.9, 0.95, -0.8], [0.45, 0.6, 0.7]); // the windscreen
+  m.box([0.15, 0.45, -0.1], [0.55, 1.05, 0.25], [0.2, 0.2, 0.25]);
+  m.sphere([0.35, 1.18, 0.05], 0.11, ROWER.skin, 4, 7);
+  m.box([-0.4, 0.45, 2.75], [0.4, 0.85, 3.2], [0.15, 0.15, 0.18]); // the outboard
+  return m.build();
+}
+
+// One oar along +z, from the rowlock (z 0) to the blade tip (z 1); x and y in
+// metres, so stretching it along z keeps the blade's size.
+export function oarMesh() {
+  const m = new MeshBuilder();
+  m.box([-0.035, -0.035, 0], [0.035, 0.035, 0.84], [0.95, 0.95, 0.93]);
+  m.box([-0.02, -0.12, 0.82], [0.02, 0.12, 1], [0.15, 0.3, 0.75]);
+  return m.build();
+}

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { otpVerify, verifyIdToken } from '@/lib/cognito'
 import { signedInResponse } from '@/lib/auth'
 import { hasAcceptedCurrent } from '@/lib/tos'
+import { withAction } from '@/lib/action'
 
 // Step 2 of passwordless sign-in. Submit the 6-digit code from the user's
 // email. On success, set tt_id + tt_refresh cookies and return the user.
 // If the code was wrong but retries remain, return the new session so the
 // client can resubmit.
-export async function POST(req: NextRequest) {
+async function post(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const email = typeof body?.email === 'string' ? body.email.toLowerCase().trim() : ''
   const session = typeof body?.session === 'string' ? body.session : ''
@@ -36,3 +37,5 @@ export async function POST(req: NextRequest) {
   const needsTerms = !(await hasAcceptedCurrent(user.id))
   return signedInResponse(req, { id: user.id, email: user.email, displayName: user.displayName, needsTerms }, result.idToken, result.refreshToken)
 }
+
+export const POST = withAction('sign_in', post)

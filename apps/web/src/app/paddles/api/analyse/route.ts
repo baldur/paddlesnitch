@@ -8,6 +8,7 @@ import { analyseAndSave } from '@paddlesnitch/analysis/pipeline'
 import { type AnalysisSource } from '@paddlesnitch/analysis/analysis-store'
 import { loadTrialEntryTrack, listUserTrialEntries } from '@paddlesnitch/analysis/trials'
 import { loadDeviceSessionTrack } from '@paddlesnitch/analysis/device-sessions'
+import { withAction } from '@/lib/action'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
 // history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated
@@ -18,7 +19,7 @@ import { loadDeviceSessionTrack } from '@paddlesnitch/analysis/device-sessions'
 // instead of a raw 500 with a stack. The steps that legitimately fail (weather,
 // flow, history, LLM) each degrade on their own so one of them never fails the
 // analysis.
-export async function POST(req: NextRequest) {
+async function post(req: NextRequest) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Sign in to analyse and save paddles.' }, { status: 401 })
 
@@ -96,3 +97,5 @@ async function analysePaddle(req: NextRequest, userId: string): Promise<NextResp
     ...(duplicate ? { duplicate: true } : {}),
   })
 }
+
+export const POST = withAction('upload', post)

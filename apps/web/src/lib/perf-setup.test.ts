@@ -8,6 +8,7 @@ import path from 'path'
 const repo = path.resolve(__dirname, '../../../..')
 const read = (f: string) => readFileSync(path.join(repo, f), 'utf8')
 const stack = read('infra/lib/att-stack.ts')
+const dashboards = read('infra/lib/dashboards.ts')
 const script = read('apps/web/scripts/perf.ts')
 const workflow = read('.github/workflows/perf.yml')
 
@@ -15,7 +16,7 @@ const names = (src: string) => [...src.matchAll(/name: '([^']+)', path:/g)].map(
 
 describe('performance check setup', () => {
   it('charts every page the check times (a renamed page starts a new series)', () => {
-    const list = (name: string) => JSON.parse(new RegExp(`const ${name} = (\\[[^\\]]+\\])`).exec(stack)![1].replace(/'/g, '"'))
+    const list = (name: string) => JSON.parse(new RegExp(`const ${name} = (\\[[^\\]]+\\])`).exec(dashboards)![1].replace(/'/g, '"'))
     expect([...list('perfPages'), ...list('perfSignedIn')]).toEqual(names(script))
   })
 
