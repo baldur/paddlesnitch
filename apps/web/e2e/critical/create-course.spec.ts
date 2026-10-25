@@ -9,7 +9,7 @@ import { signUpFlow, createCourseViaApi } from '../helpers'
 // via /att/api/courses with the auth cookie set. Same route handler,
 // same cookie flow, same DB; what we lose is map-drag testing, which
 // belongs in component tests (and a manual smoke pass before deploy
-// per CLAUDE.md).
+// per apps/web/CLAUDE.md).
 //
 // What this DOES test end-to-end: signup → cookie set → authenticated
 // POST → catalogue server-render → course appears.

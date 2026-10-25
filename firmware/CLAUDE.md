@@ -967,3 +967,17 @@ matching `LoRaBoards.cpp`. **Check pins against that repo, not against blog post
 or photos of the silkscreen** — LilyGO ships several boards under near-identical
 names with different pinouts. `boards/t-beams3-supreme.json` is vendored from the
 same repo so builds do not depend on a PlatformIO core install.
+
+## Host tests
+
+Moved from the root `CLAUDE.md`.
+
+**Firmware has a host test environment now** — `cd firmware && pio test -e native`,
+~0.5 s, no board. It compiles only `src/naming.cpp` (the pure track-vs-sidecar
+predicates and the chunk maths) against `firmware/test/`. It exists because
+`isTrackUpload` not excluding the `_i10.csv` suffix cost a full debugging
+session and five wrong diagnoses; that is now three lines of test that run
+before the first flash. **Pure logic that has burned us belongs there.** Anything
+needing Arduino, the SD card or the radio stays in a hardware env — `[env]` was
+split into `[hw]` precisely so `native` inherits neither a board nor the arduino
+framework.

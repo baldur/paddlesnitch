@@ -103,13 +103,15 @@ The owner runs everything in one herdr workspace, a tab per role.
 
 | Role | Read first |
 |---|---|
-| all | `CLAUDE.md` (root), this page |
+| all | `CLAUDE.md` (root), this page; a nested `CLAUDE.md` loads by itself when you work in its folder (index in the root file) |
+| `lead` | `apps/web/CLAUDE.md`, `infra/CLAUDE.md`, `.github/CLAUDE.md`, `packages/*/CLAUDE.md` |
 | `android` | `mobile/android/README.md`, `mobile/android/CLAUDE.md`, `docs/features/android-app.md`, `docs/features/mobile-apps.md` |
 | `ios` | `mobile/ios/README.md`, `mobile/ios/CLAUDE.md`, `docs/features/ios-app.md`, `docs/features/mobile-apps.md` |
 | `firmware` | `firmware/CLAUDE.md`, `docs/features/release-testing.md`, `docs/features/device-uplink.md` |
-| `motion-core` | `docs/features/on-device-metrics.md`, `docs/features/one-paddle.md`, `docs/features/motion-only-paddles.md` |
+| `motion-core` | `packages/timing/CLAUDE.md`, `docs/features/on-device-metrics.md`, `docs/features/one-paddle.md`, `docs/features/motion-only-paddles.md` |
 | `game` | `games/CLAUDE.md` |
 | `design-usability` | `docs/features/design-system.md` |
+| `security-privacy` | `apps/web/CLAUDE.md`, `infra/CLAUDE.md`, `docs/features/devices-platform.md` |
 | `copy-style` | `CLAUDE.md` § Writing for the site |
 
 ## Local servers and ports
