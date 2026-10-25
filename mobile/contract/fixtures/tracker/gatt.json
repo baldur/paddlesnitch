@@ -1,0 +1,22 @@
+{
+  "service": "04dd0a01-9cd1-403e-a461-0b4af515a1b4",
+  "characteristics": {
+    "about": "04dd0a02-9cd1-403e-a461-0b4af515a1b4",
+    "paired": "04dd0a03-9cd1-403e-a461-0b4af515a1b4",
+    "link": "04dd0a04-9cd1-403e-a461-0b4af515a1b4",
+    "wifi": "04dd0a05-9cd1-403e-a461-0b4af515a1b4",
+    "sync": "04dd0a06-9cd1-403e-a461-0b4af515a1b4",
+    "data": "04dd0a07-9cd1-403e-a461-0b4af515a1b4"
+  },
+  "pairedOnly": ["paired", "link", "wifi", "sync", "data"],
+  "layout": "about,paired,link,wifi,sync,data/v2",
+  "namePrefix": "PT-",
+  "pageData": 500,
+  "pieceBytes": 65536,
+  "wifi": { "ssidMaxBytes": 32, "passMaxBytes": 64 },
+  "waits": {
+    "pairing": { "tries": 8, "delayMs": 1500, "readTimeoutMs": 3000 },
+    "wifi": { "tries": 30, "delayMs": 1500 },
+    "sync": { "tries": 120, "delayMs": 250 }
+  }
+}

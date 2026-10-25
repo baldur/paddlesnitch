@@ -1,6 +1,6 @@
 # Feature spec: Android app
 
-🚧 **P0 done 2026-10-24**: `mobile/android`, CI (`android.yml`) building a debug APK and a release APK signed with the upload key (secrets `ANDROID_UPLOAD_*`; the key itself is on the owner's Mac, `~/.paddlesnitch-android/`), `/.well-known/assetlinks.json` (route in `apps/web/src/app/.well-known/`), installed on the owner's Pixel 9 Pro. **P1 under way:** models generated from the contract (`buildSrc/ContractModels.kt`), formatters checked against `format.json`, the Paddles list, and password sign-in / sign-up / sign-out with the tokens in the Keystore (signed out it shows the sample paddles). Strava sign-in waits for the one-time code.
+🚧 **P0 done 2026-10-24**: `mobile/android`, CI (`android.yml`) building a debug APK and a release APK signed with the upload key (secrets `ANDROID_UPLOAD_*`; the key itself is on the owner's Mac, `~/.paddlesnitch-android/`), `/.well-known/assetlinks.json` (route in `apps/web/src/app/.well-known/`), installed on the owner's Pixel 9 Pro. **P1 under way:** models generated from the contract (`buildSrc/ContractModels.kt`), formatters checked against `format.json`, the Paddles list, and password sign-in / sign-up / sign-out with the tokens in the Keystore (signed out it shows the sample paddles). Strava sign-in waits for the one-time code. **P3 tracker setup built 2026-10-25, awaiting a hardware test** (`mobile/android/TRACKER-TESTING.md`): Paddles → **Tracker** finds the tracker with CompanionDeviceManager, pairs it (number on both screens, hold on the tracker), adds it to the account over Bluetooth (`link-bluetooth`), sends WiFi details and syncs recordings through the relay route with receipts. The protocol is pure Kotlin (`tracker/Tracker.kt`, `Protocol.kt`) behind a `TrackerLink` interface, tested against a fake tracker and against `mobile/contract/fixtures/tracker`; `BleTrackerLink` is the Android GATT side. Not yet: automatic sync (presence wake-up + the `connectedDevice` service), tracker settings, updates over Bluetooth.
 
 The native Android app: Kotlin + Jetpack Compose + Material 3, Android 10
 (API 29) and up, distributed on Google Play. What it shares with the iPhone app
@@ -72,6 +72,18 @@ The protocol is fixed by the tracker sync contract and its fixtures. On Android:
 - Android refuses the first paired-only read and a read can hang (found on the
   web, 2026-10-04). Use the same retry the web page uses: about 30 s in total,
   3 s per try.
+- **As built (2026-10-25):** the association filter is the paddlesnitch
+  service UUID only (the `PT-` name is in the scan response, which a filter on
+  the advertisement can miss). CompanionDeviceManager does the scan, so the app
+  asks only for `BLUETOOTH_CONNECT` (Android 12+) and never for location; 10–11
+  use the install-time `BLUETOOTH`/`BLUETOOTH_ADMIN`. `BLE_LAYOUT` isn't
+  readable over Bluetooth, so "differs" means: the discovered items don't
+  include all six from `gatt.json`; then the app calls the hidden
+  `BluetoothGatt.refresh()` and discovers again. MTU 517, so one DATA page is
+  one read. One GATT operation at a time, 10 s each; an operation given up on
+  is allowed to answer before the next one starts. The first connection is
+  retried once (status 133). The last tracker is remembered for "Connect to
+  PT-xxx". Manual sync runs with the screen open (no foreground service yet).
 
 ## Sign-in (Android side)
 

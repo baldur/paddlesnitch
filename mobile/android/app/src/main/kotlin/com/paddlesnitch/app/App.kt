@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.SignInScreen
 import com.paddlesnitch.app.paddles.PaddlesScreen
+import com.paddlesnitch.app.tracker.TrackerSetupScreen
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.launch
 
@@ -47,6 +49,7 @@ fun App() {
     var signedIn by remember { mutableStateOf(api.signedIn) }
     var signingIn by rememberSaveable { mutableStateOf(false) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
+    var settingUpTracker by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold { inner ->
@@ -56,7 +59,11 @@ fun App() {
                 BackHandler { signingIn = false }
                 SignInScreen(api, onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
             }
-            signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onSignOut = { scope.launch { api.signOut(); signedIn = false } }, modifier = m)
+            signedIn && settingUpTracker -> {
+                BackHandler { settingUpTracker = false }
+                TrackerSetupScreen(api, onClose = { settingUpTracker = false }, onSignedOut = { signedIn = false; settingUpTracker = false }, modifier = m)
+            }
+            signedIn -> MyPaddles(api, needsTerms, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false }, onSignOut = { scope.launch { api.signOut(); signedIn = false } }, modifier = m)
             else -> PaddlesScreen(sample, sample = true, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
@@ -65,7 +72,7 @@ fun App() {
 }
 
 @Composable
-private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, onSignOut: () -> Unit, modifier: Modifier) {
+private fun MyPaddles(api: Api, needsTerms: Boolean, onTracker: () -> Unit, onSignedOut: () -> Unit, onSignOut: () -> Unit, modifier: Modifier) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -77,9 +84,10 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
     val signOut: @Composable () -> Unit = { TextButton(onClick = onSignOut) { Text("Sign out") } }
+    val actions: @Composable () -> Unit = { Row { TextButton(onClick = onTracker) { Text("Tracker") }; signOut() } }
     val current = list
     when {
-        current != null -> PaddlesScreen(current, sample = false, modifier = modifier, action = signOut, notice = if (needsTerms) ({
+        current != null -> PaddlesScreen(current, sample = false, modifier = modifier, action = actions, notice = if (needsTerms) ({
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
                 TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }

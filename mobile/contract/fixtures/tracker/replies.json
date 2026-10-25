@@ -1,0 +1,53 @@
+{
+  "about": [
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"fw\":\"0.18.0\",\"model\":\"lilygo-tbeam-s3-supreme\",\"waiting\":2,\"linked\":true}",
+      "out": { "id": "435AC17C", "firmware": "0.18.0", "model": "lilygo-tbeam-s3-supreme", "waiting": 2, "linked": true } },
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"fw\":\"x\",\"model\":\"m\",\"waiting\":null,\"linked\":false}",
+      "out": { "id": "435AC17C", "firmware": "x", "model": "m", "waiting": null, "linked": false } },
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"fw\":\"x\",\"model\":\"m\",\"waiting\":0,\"linked\":true}\u0000",
+      "out": { "id": "435AC17C", "firmware": "x", "model": "m", "waiting": 0, "linked": true } },
+    { "raw": "{\"v\":2,\"id\":\"435AC17C\",\"fw\":\"x\",\"model\":\"m\",\"waiting\":0,\"linked\":true}", "out": null },
+    { "raw": "{\"v\":1,\"id\":\"<script>\",\"fw\":\"x\",\"model\":\"m\",\"waiting\":0,\"linked\":true}", "out": null },
+    { "raw": "not json", "out": null }
+  ],
+  "paired": [
+    { "raw": "{\"v\":1,\"paired\":true}", "out": true },
+    { "raw": "{\"v\":1,\"paired\":true}\u0000", "out": true },
+    { "raw": "{\"v\":1,\"paired\":false}", "out": false },
+    { "raw": "nope", "out": false }
+  ],
+  "link": [
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"state\":\"pending\",\"tokenHash\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"sig\":\"MEUCIQCx0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/0123456789abcdefghijklmno==\"}",
+      "out": { "id": "435AC17C", "state": "pending", "tokenHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "sig": "MEUCIQCx0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/0123456789abcdefghijklmno==" } },
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"state\":\"idle\",\"tokenHash\":\"\",\"sig\":\"\"}",
+      "out": { "id": "435AC17C", "state": "idle", "tokenHash": "", "sig": "" } },
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"state\":\"committed\",\"tokenHash\":\"\"}",
+      "out": { "id": "435AC17C", "state": "committed", "tokenHash": "", "sig": "" } },
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"state\":\"pending\",\"tokenHash\":\"NOT-HEX\",\"sig\":\"\"}", "out": null },
+    { "raw": "{\"v\":1,\"id\":\"435AC17C\",\"state\":\"other\",\"tokenHash\":\"\",\"sig\":\"\"}", "out": null }
+  ],
+  "wifi": [
+    { "raw": "{\"v\":1,\"state\":\"wrong_password\"}", "out": "wrong_password" },
+    { "raw": "{\"v\":1,\"state\":\"joined\"}\u0000", "out": "joined" },
+    { "raw": "{\"v\":1,\"state\":\"trying\"}", "out": "trying" },
+    { "raw": "{\"v\":1,\"state\":\"sideways\"}", "out": null }
+  ],
+  "sync": [
+    { "raw": "{\"v\":1,\"state\":\"ready\",\"len\":18234,\"part\":2,\"parts\":10,\"compressed\":true}",
+      "out": { "state": "ready", "len": 18234, "part": 2, "parts": 10, "compressed": true } },
+    { "raw": "{\"v\":1,\"state\":\"idle\",\"len\":0,\"part\":0,\"parts\":0,\"compressed\":false}",
+      "out": { "state": "idle", "len": 0, "part": 0, "parts": 0, "compressed": false } },
+    { "raw": "{\"v\":1,\"state\":\"nonsense\",\"len\":0,\"part\":0,\"parts\":0,\"compressed\":false}", "out": null }
+  ],
+  "list": [
+    { "raw": "[{\"n\":\"track_20261005_061002.csv\",\"u\":\"track_20261005_061002.csv\",\"s\":81234},{\"n\":\"track_20261005_061002_i10.csv\",\"u\":\"track_20261005_061002_imu.csv\",\"s\":2900000}]",
+      "out": [
+        { "name": "track_20261005_061002.csv", "upload": "track_20261005_061002.csv", "size": 81234 },
+        { "name": "track_20261005_061002_i10.csv", "upload": "track_20261005_061002_imu.csv", "size": 2900000 }
+      ] },
+    { "raw": "[{\"n\":\"../etc/passwd\",\"u\":\"x.csv\",\"s\":1},{\"n\":\".hidden.csv\",\"u\":\".hidden.csv\",\"s\":1},{\"n\":\"ok.csv\",\"u\":\"ok.csv\",\"s\":\"3\"},{\"n\":\"good.csv\",\"u\":\"good.csv\",\"s\":3}]",
+      "out": [ { "name": "good.csv", "upload": "good.csv", "size": 3 } ] },
+    { "raw": "[]", "out": [] },
+    { "raw": "oops", "out": [] }
+  ]
+}
