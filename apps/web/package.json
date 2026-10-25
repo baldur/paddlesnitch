@@ -23,6 +23,7 @@
     "course:river": "tsx scripts/courses/river.ts",
     "course:frames": "tsx scripts/courses/frames.ts",
     "course:build": "tsx scripts/courses/build.ts",
+    "course:route": "tsx scripts/courses/route.ts",
     "course:compare": "tsx scripts/courses/compare.ts",
     "build:open-next": "npx open-next build",
     "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy",

@@ -68,7 +68,16 @@ export function closeUp(course) {
     const [[x1, z1], [x2, z2]] = edges(samples[Math.round(s / (course.length / (samples.length - 1)))]);
     return [x1, z1, x2, z2];
   };
-  return { water: quads.join(''), start: across(course.start), finish: across(course.finish) };
+  // The racing line, for where the course goes at a split; and on a real river
+  // its mapped water (islands as holes: fill it even-odd), so the islands and
+  // other channels show as they are.
+  const line = samples.filter((_, i) => i % 2 === 0 || i === samples.length - 1)
+    .map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.z.toFixed(1)}`).join('');
+  const real = course.scenery?.water;
+  const water = real?.length
+    ? real.map((ring) => ring.map(([x, z], k) => `${k ? 'L' : 'M'}${x} ${z}`).join('') + 'Z').join('')
+    : quads.join('');
+  return { water, rule: real?.length ? 'evenodd' : 'nonzero', line, start: across(course.start), finish: across(course.finish) };
 }
 
 export function follow(boat) {

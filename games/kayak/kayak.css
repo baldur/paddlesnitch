@@ -98,6 +98,8 @@ header button {
 #near .rival { fill: #facc15; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
 #near .friend { fill: #38bdf8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
 #near .you { fill: #f43f5e; stroke: #fff; stroke-width: 1; }
+#near .route { fill: none; stroke: #fde047; stroke-width: 1.4; stroke-dasharray: 4 3; opacity: 0.9; }
+#near .buoy, #map .buoy { fill: #facc15; stroke: #000; stroke-width: 0.6; }
 #near .boat rect { fill: #d4d4d8; stroke: rgb(0 0 0 / 0.5); stroke-width: 0.5; }
 #near .boat .oars { stroke: #d4d4d8; stroke-width: 0.6; }
 #map .boat { fill: #d4d4d8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.6; }
@@ -170,7 +172,7 @@ header button {
 
 #place {
   position: absolute;
-  top: 3.6rem;
+  top: 6.3rem; /* under the clock */
   left: 50%;
   translate: -50% 0;
   margin: 0;
@@ -407,3 +409,47 @@ summary { cursor: pointer; }
 #livePlayers { padding-left: 1.2rem; }
 #livePlayers small { opacity: 0.75; }
 #livePlayers .face { width: 1.6rem; height: 1.6rem; margin-right: 0.4rem; vertical-align: middle; border-radius: 50%; background: #b9d6e4; }
+
+/* Coming up to a turn or a split: which way, under the clock. */
+#cue {
+  position: absolute;
+  top: 8.2rem; /* under the place name */
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(36rem, calc(100vw - 32px));
+  padding: 0.45rem 0.9rem;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.45);
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 1.05rem;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+#cue.on { opacity: 1; }
+#cue b { font-size: 2.2rem; line-height: 1; color: #fde047; }
+/* A gate missed: go back. Stays until you have. */
+#missed {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  translate: -50% -50%;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  background: rgb(220 38 38 / 0.9);
+  font-family: var(--font);
+  font-weight: 700;
+  text-align: center;
+  max-width: calc(100vw - 32px);
+}
+@media (max-height: 500px) {
+  #place { top: 3.6rem; }
+  /* Between the two maps, under the place name. */
+  #cue { top: 5.3rem; font-size: 0.82rem; padding: 0.3rem 0.7rem; max-width: calc(100vw - 2 * 180px); }
+  #cue b { font-size: 1.4rem; }
+}

@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course.js';
+import { practiceRiver, raceRiver, loadCourse, riverView } from './course.js';
 import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISION_9 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
@@ -62,7 +62,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'behind', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -114,6 +114,8 @@ function reset() {
   controls.clear();
   placeNext = 0;
   placeTimer = 0;
+  cueNext = 0;
+  cueTimer = 0;
   hints = { left: 3, wait: 8 };
 }
 
@@ -1048,6 +1050,7 @@ function placeRacers() {
   renderer.place(meshes.duck, birds.duck);
 }
 
+let reflected = null; // the river line the water's reflections are taken from, eased
 function render(time) {
   placeRacers();
   placeTraffic();
@@ -1090,9 +1093,10 @@ function render(time) {
   for (let i = 0; i < 16; i++) frameData.set(wakes[i] ?? [0, 0, 0, 0], 48 + i * 4);
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
-  const c = pointAt(race.course, race.player.loc.s);
-  const { half } = widthAt(race.course, race.player.loc.s);
-  frameData.set([c.x, c.z, c.tx, c.tz], 112);
+  reflected = riverView(race.course, race.player.loc.s, reflected, time - (reflected?.time ?? time));
+  reflected.time = time;
+  const { half } = reflected;
+  frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(mode)];
   for (const r of race.racers) {
@@ -1163,6 +1167,7 @@ function updateHud(dt) {
   sprintHint(boat, dt);
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
+  showCue(course, loc.s, dt);
   moveMap();
   els.rhythm.style.transform = `scaleX(${boat.rhythm.toFixed(3)})`;
   els.rhythm.parentElement.classList.toggle('locked', boat.rhythm > 0.9);
@@ -1191,7 +1196,11 @@ function drawMap() {
   const water = closeUp(race.course);
   const line = ([x1, y1, x2, y2], cls) => el('line', { x1, y1, x2, y2, class: cls });
   const world = el('g', {});
-  world.append(el('path', { d: water.water, class: 'water' }), line(water.start, 'start'), line(water.finish, 'finish'));
+  world.append(el('path', { d: water.water, class: 'water', 'fill-rule': water.rule }), el('path', { d: water.line, class: 'route' }),
+    line(water.start, 'start'), line(water.finish, 'finish'));
+  // Turning buoys, on both maps.
+  const marks = race.course.scenery?.marks ?? [];
+  for (const m of marks) world.append(el('circle', { cx: m.x, cy: m.z, r: 2.2, class: 'buoy' }));
   // The other boats: their hulls to scale, and a rowing boat's oars across.
   const boats = new Map();
   for (const b of race.traffic?.boats ?? []) {
@@ -1214,6 +1223,7 @@ function drawMap() {
   els.map.style.aspectRatio = `${shape.width} / ${shape.height}`;
   els.map.classList.toggle('tall', shape.height > shape.width);
   els.map.replaceChildren(el('path', { d: shape.d, class: 'line' }), tick(shape.start, 'start'), tick(shape.finish, 'finish'));
+  for (const m of marks) els.map.append(el('circle', { cx: shape.project(m.x, m.z)[0], cy: shape.project(m.x, m.z)[1], r: 1.8, class: 'buoy' }));
   const far = new Map();
   for (const b of race.traffic?.boats ?? []) {
     const dot = el('circle', { r: 1.8, class: 'boat' });
@@ -1271,6 +1281,30 @@ function sprintHint(boat, dt) {
   if (!ahead) return;
   show(phone.matches ? 'Tap Sprint to catch their wash' : 'Hold Shift to sprint onto their wash', { small: true, hold: 2.5 });
   hints = { left: hints.left - 1, wait: 30 };
+}
+
+// Coming up to a turn or a split (a course file's `cues`): which way, with an
+// arrow, for a few seconds. And a gate missed (race.js): which way to go back,
+// until you have.
+const TURN = { left: '\u21b0', right: '\u21b1', either: '\u21c5' };
+let cueNext = 0;
+let cueTimer = 0;
+function showCue(course, s, dt) {
+  const list = course.scenery?.cues ?? [];
+  cueTimer -= dt;
+  while (list[cueNext] && s > list[cueNext].s + 60) cueNext++;
+  if (list[cueNext] && s > list[cueNext].s) {
+    const c = list[cueNext++];
+    els.cueArrow.textContent = TURN[c.turn] ?? '';
+    els.cueText.textContent = c.text;
+    els.cue.className = `on ${c.turn}`;
+    cueTimer = 5;
+    tone({ freq: 660, to: 880, duration: 0.12, type: 'sine', gain: 0.06 });
+  }
+  if (cueTimer <= 0) els.cue.classList.remove('on');
+  const missed = race.player.missed;
+  els.missed.hidden = !missed;
+  if (missed) els.missed.textContent = `Missed the course: go back and go ${missed.label}`;
 }
 
 function showPlace(course, s, dt) {
