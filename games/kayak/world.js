@@ -5,7 +5,8 @@
 // instead of the made-up ones. Pure, no GPU.
 import { waterMap, SHORE_SEARCH } from './water.js';
 import { MeshBuilder } from './meshes.js';
-import { locate, pointAt, widthAt } from './course.js';
+import { locate, pointAt, widthAt, POST } from './course.js';
+import { createAnglers, SNAG } from './anglers.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
@@ -139,8 +140,10 @@ export function buildWorld(course, seed = 1) {
     }
   }
 
+  const tatty = mulberry32(seed + 101); // its own draws, so the rest of the world stays as it was
   river.moorings.forEach((boat, k) => {
-    if (boat.kind === 'cruiser' || boat.kind === 'trip-boat') cruiser(m, river, boat, rand);
+    if (boat.kind === 'tatty') tattyCruiser(m, river, boat, tatty);
+    else if (boat.kind === 'cruiser' || boat.kind === 'trip-boat') cruiser(m, river, boat, rand);
     else narrowboat(m, river, boat, PAINT[k % PAINT.length]);
   });
   for (const b of river.bridges) {
@@ -501,6 +504,46 @@ function realScenery(m, course, real, rand) {
   for (const line of real.railways) railway(m, course, line);
   for (const lock of real.locks) lockGates(m, lock);
   for (const weir of real.weirs) weirSill(m, weir);
+  for (const [x, z] of real.posts ?? []) post(m, x, z);
+  createAnglers({ scenery: { ...real, river: course } }).forEach((a, k) => angler(m, course, a, k));
+}
+
+// A tall, weathered concrete post standing in the water, green at the waterline.
+function post(m, x, z) {
+  const h = 3.6 + ((Math.abs(x * 13.7 + z * 7.1) % 1) * 0.9);
+  const r = POST / 2;
+  m.box([x - r, -1.5, z - r], [x + r, 0.5, z + r], POSTS.green);
+  m.box([x - r, 0.5, z - r], [x + r, h, z + r], POSTS.concrete);
+  m.box([x - r - 0.04, h - 0.25, z - r - 0.04], [x + r + 0.04, h, z + r + 0.04], POSTS.cap);
+}
+
+// Someone fishing from the bank: on a stool under a green umbrella, a rod out
+// over the water and a line down to a bright float (anglers.js has the line).
+function angler(m, course, a, k) {
+  const g = ground(course, a.seat.x, a.seat.z);
+  const y = Math.max(1, g.y); // on top of the wall where there's one (embankment: 1 m)
+  const fwd = [-a.out[0], -a.out[1]]; // facing the water
+  const right = [-fwd[1], fwd[0]];
+  const origin = [a.seat.x, y, a.seat.z];
+  const at = (x, h, z) => [origin[0] + right[0] * x + fwd[0] * z, y + h, origin[2] + right[1] * x + fwd[1] * z];
+  const box = (xr, yr, zr, color) => orientedBox(m, origin, right, fwd, xr, yr, zr, color);
+  const coat = ANGLER.coats[k % ANGLER.coats.length];
+  box([-0.25, 0.25], [0, 0.45], [-0.25, 0.25], ANGLER.stool);
+  box([-0.22, 0.22], [0.45, 1.1], [-0.15, 0.15], coat);
+  box([-0.18, 0.18], [0.25, 0.5], [0.15, 0.6], ANGLER.trousers); // thighs
+  box([-0.18, 0.18], [0, 0.5], [0.5, 0.65], ANGLER.trousers);
+  m.sphere(at(0, 1.27, 0), 0.15, ANGLER.skin, 3, 6);
+  box([-0.17, 0.17], [1.35, 1.45], [-0.17, 0.2], ANGLER.hat);
+  // The umbrella behind, tipped back, and a tackle box.
+  m.cylinder(at(0, 0, -0.9), 0.03, 2.1, 4, ANGLER.pole);
+  m.cone(at(0, 1.6, -0.9), 1.4, 0.55, 8, ANGLER.brolly);
+  box([0.4, 0.85], [0, 0.35], [-0.2, 0.2], ANGLER.tackle);
+  // The rod, from the hands out over the water, and the line to the float.
+  const tip = [a.tip.x, SNAG.tip[1], a.tip.z];
+  beam(m, at(0.15, 0.9, 0.35), tip, 0.025, ANGLER.rod);
+  beam(m, tip, [a.float.x, SNAG.float, a.float.z], 0.02, ANGLER.line);
+  m.cylinder([a.float.x, -0.05, a.float.z], 0.06, 0.3, 5, ANGLER.float);
+  m.sphere([a.float.x, 0.3, a.float.z], 0.07, COLORS.white, 2, 5);
 }
 
 function inside(poly, x, z) {
@@ -649,8 +692,11 @@ function facing(course, ring, cx, cz, g) {
   const xs = ring.map(([x, z]) => (x - cx) * right[0] + (z - cz) * right[1]);
   const zs = ring.map(([x, z]) => (x - cx) * fwd[0] + (z - cz) * fwd[1]);
   const origin = [cx, g.y, cz];
+  const toWater = len - widthAt(course, locate(course, cx, cz).s).half;
   return {
-    origin, right, fwd, toWater: len - widthAt(course, locate(course, cx, cz).s).half,
+    origin, right, fwd, toWater,
+    // Where the water starts in front: the mapped bank where there is one.
+    edge: course.land?.rings ? Math.min(toWater, course.land.shore(cx, cz)) : toWater,
     along: [Math.min(...xs), Math.max(...xs)], depth: [Math.min(...zs), Math.max(...zs)],
     at: (x, y, z) => [cx + right[0] * x + fwd[0] * z, g.y + y, cz + right[1] * x + fwd[1] * z],
     box: (m, xr, yr, zr, color) => orientedBox(m, origin, right, fwd, xr, yr, zr, color),
@@ -668,6 +714,29 @@ const CLUB = {
   board: [0.95, 0.95, 0.93],
   hard: [0.74, 0.72, 0.67],
   piling: [0.45, 0.41, 0.34],
+  slate: [0.24, 0.25, 0.27],
+  blue: [0.1, 0.24, 0.6],
+  stained: [0.42, 0.45, 0.36],
+  pontoon: [0.62, 0.62, 0.6],
+  glazing: [0.22, 0.3, 0.36],
+  balcony: [0.62, 0.72, 0.76],
+};
+const POSTS = { concrete: [0.6, 0.59, 0.55], cap: [0.5, 0.49, 0.46], green: [0.3, 0.34, 0.24] };
+const ANGLER = {
+  coats: [[0.22, 0.32, 0.2], [0.3, 0.3, 0.32], [0.45, 0.38, 0.22]], trousers: [0.2, 0.22, 0.2], skin: [0.85, 0.66, 0.52],
+  hat: [0.25, 0.3, 0.2], stool: [0.2, 0.3, 0.18], pole: [0.3, 0.3, 0.3], brolly: [0.2, 0.36, 0.2], tackle: [0.75, 0.75, 0.7],
+  rod: [0.12, 0.12, 0.12], line: [0.92, 0.92, 0.85], float: [0.98, 0.35, 0.05],
+};
+const TATTY = {
+  hulls: [[0.88, 0.85, 0.74], [0.82, 0.8, 0.72], [0.9, 0.9, 0.86], [0.78, 0.8, 0.82]],
+  strakes: [[0.45, 0.2, 0.15], [0.2, 0.3, 0.45], [0.35, 0.33, 0.3]],
+  tarps: [[0.25, 0.42, 0.25], [0.22, 0.35, 0.55], [0.55, 0.55, 0.52], [0.6, 0.5, 0.3]],
+  cabin: [0.84, 0.82, 0.74], rust: [0.5, 0.28, 0.14], flag: [0.75, 0.12, 0.12], dinghy: [0.85, 0.5, 0.15],
+};
+const GREY = { wall: [0.76, 0.77, 0.76], shutter: [0.84, 0.85, 0.84], seam: [0.6, 0.61, 0.6], roof: [0.55, 0.57, 0.58], launch: [0.12, 0.3, 0.75] };
+const VILLA = {
+  board: [0.56, 0.63, 0.7], shadow: [0.48, 0.54, 0.6], slate: [0.3, 0.32, 0.36], coping: [0.85, 0.83, 0.78],
+  urn: [0.8, 0.76, 0.68], plant: [0.72, 0.62, 0.25], window: [0.55, 0.65, 0.72],
 };
 
 // Reading Rowing Club: a long white clubhouse under a big red hipped roof with
@@ -706,22 +775,30 @@ function rowingClub(m, course, f) {
 }
 
 // Reading Canoe Club: a two-storey red-brick boathouse with roller doors, a
-// white-railed balcony, its name over the door, boats racked outside, and a
-// sheet-piled river wall.
+// glass door under its name (blue on a white board), a balcony with white
+// railings under the eaves of a dark hipped roof on brick pillars, boats racked
+// outside, a grass bank and wide concrete steps down to a grey pontoon.
 function canoeClub(m, course, f) {
   const half = Math.min(12, (f.along[1] - f.along[0]) / 2);
-  const [back, front] = [Math.max(f.depth[0], -6), Math.min(f.depth[1], 4)];
+  const front = Math.min(f.depth[1], f.edge - 6); // about 6 m of bank and steps in front
+  const back = Math.max(f.depth[0], front - 10);
   f.box(m, [-half, half], [-1, 6.6], [back, front - 2.2], CLUB.brick);
   f.box(m, [-half, half], [-1, 3.2], [front - 2.2, front], CLUB.brick);
   f.box(m, [-half, half], [3.2, 3.5], [front - 2.2, front + 0.1], CLUB.band);
-  for (const x of [-half + 1, -half / 3 + 0.5, half / 3]) f.box(m, [x, x + half / 2 - 1], [0, 2.8], [front, front + 0.05], CLUB.door);
+  for (const x of [-half + 1, half / 3]) f.box(m, [x, x + half / 2 - 1], [0, 2.8], [front, front + 0.05], CLUB.door);
+  // The glass door, white-framed, under the name.
+  f.box(m, [-half / 3 + 0.5, -half / 3 + 2.7], [0, 2.4], [front, front + 0.05], COLORS.white);
+  f.box(m, [-half / 3 + 0.65, -half / 3 + 2.55], [0.1, 2.25], [front + 0.05, front + 0.08], COLORS.glass);
   f.box(m, [-half + 1, half - 1], [4.2, 5.6], [front - 2.2, front - 2.15], CLUB.dark);
   f.box(m, [-half, half], [4.4, 4.5], [front, front + 0.1], COLORS.white);
   for (let x = -half; x <= half; x += 1.2) f.box(m, [x, x + 0.06], [3.5, 4.4], [front, front + 0.06], COLORS.white);
-  f.box(m, [-half, half], [6.6, 6.9], [back, front - 2.1], CLUB.band);
-  // The name, on a white board over the doors.
+  // Brick pillars holding the eaves over the balcony, and the roof.
+  for (const x of [-half, -0.3, half - 0.6]) f.box(m, [x, x + 0.6], [3.5, 6.6], [front - 0.6, front], CLUB.brick);
+  f.box(m, [-half - 0.4, half + 0.4], [6.6, 6.9], [back - 0.4, front + 0.4], COLORS.white);
+  roof(m, f, half + 0.6, [back - 0.6, front + 0.6], 6.9, 2.6, CLUB.slate);
+  // The name, blue on a white board over the doors.
   f.box(m, [-6.6, 6.6], [2.85, 3.2], [front + 0.06, front + 0.1], CLUB.board);
-  sign(m, f, 'READING CANOE CLUB', 0, 2.88, front + 0.12, null, CLUB.dark, 0.06);
+  sign(m, f, 'READING CANOE CLUB', 0, 2.88, front + 0.12, null, CLUB.blue, 0.06);
   // Kayaks and canoes on a rack by the wall, in club colours.
   const colours = [[0.9, 0.2, 0.15], [0.1, 0.45, 0.8], [0.95, 0.75, 0.1], [0.15, 0.6, 0.3], [0.9, 0.45, 0.1], [0.85, 0.85, 0.85]];
   for (let tier = 0; tier < 3; tier++) {
@@ -731,14 +808,161 @@ function canoeClub(m, course, f) {
     }
   }
   f.box(m, [half + 1.3, half + 3.3], [0, 2.2], [front - 4.6, front - 4.4], CLUB.piling);
-  // The river wall in front: dark timber and steel piling, a ladder.
-  const water = front + f.toWater;
-  f.box(m, [-half - 6, half + 8], [-f.origin[1] - 0.6, 0.3], [water - 0.3, water], CLUB.piling);
-  f.box(m, [-half - 6, half + 8], [-f.origin[1] - 0.6, 0.3], [front, water - 0.3], CLUB.hard);
-  for (const y of [0.1, 0.5, 0.9]) f.box(m, [-half + 2, -half + 2.6], [y, y + 0.05], [water, water + 0.1], COLORS.white);
+  // In front: a grass bank on the left and concrete steps down to the water on
+  // the right, a piled wall along the edge, and the pontoon.
+  const water = f.edge;
+  const sea = -f.origin[1]; // the water's level, from the ground at the club
+  f.box(m, [-half - 6, half + 8], [sea - 0.6, sea + 0.5], [water - 0.4, water], CLUB.piling);
+  const bank = [f.at(-half - 6, 0.1, front), f.at(-2, 0.1, front), f.at(-2, sea + 0.5, water - 0.4), f.at(-half - 6, sea + 0.5, water - 0.4)];
+  m.tri(bank[0], bank[1], bank[2], COLORS.grass);
+  m.tri(bank[0], bank[2], bank[3], COLORS.grass);
+  for (const x of [-half - 3, -half + 1.5, -6]) m.sphere(f.at(x, (sea + 0.6) / 2, (front + water) / 2), 1.3, LEAVES[1], 3, 6);
+  const steps = 8;
+  for (let k = 0; k < steps; k++) {
+    const [z0, z1] = [k, k + 1].map((j) => front + ((water - 0.4 - front) * j) / steps);
+    const top = 0.3 + ((sea + 0.5 - 0.3) * (k + 1)) / steps;
+    f.box(m, [-2, half + 8], [sea - 0.6, top], [z0, z1], k === steps - 1 ? CLUB.stained : CLUB.hard);
+  }
+  for (const y of [0.1, 0.5, 0.9]) f.box(m, [-half + 2, -half + 2.6], [sea + y, sea + y + 0.05], [water, water + 0.1], COLORS.white);
+  f.box(m, [-1, half + 6], [sea - 0.1, sea + 0.28], [water + 0.2, water + 2.8], CLUB.pontoon);
 }
 
-const LANDMARKS = { 'rowing-club': rowingClub, 'canoe-club': canoeClub };
+// A tall red-brick boathouse on the water (upstream of the canoe club, on the
+// same bank): an open boat dock on the ground floor, a white first-floor slab
+// and a glass balcony, another on the floor above, a steep dark gable to the
+// river with white bargeboards, and white spiral stairs at both ends.
+function spiralBoathouse(m, course, f) {
+  const half = Math.min(5.5, Math.max(4.5, (f.along[1] - f.along[0]) / 2));
+  const front = f.edge; // its dock opens onto the water
+  const back = Math.max(f.depth[0], front - 11);
+  const sea = -f.origin[1];
+  // The dock: brick piers and a back wall, dark inside.
+  f.box(m, [-half, half], [sea - 0.5, 3.2], [back, front - 7], CLUB.brick);
+  f.box(m, [-half + 1.4, half - 1.4], [sea - 0.4, 3], [front - 7, front - 0.3], CLUB.dark);
+  for (const e of [-1, 1]) f.box(m, e < 0 ? [-half, -half + 1.4] : [half - 1.4, half], [sea - 0.5, 3.2], [front - 7, front], CLUB.brick);
+  f.box(m, [-half + 1.4, half - 1.4], [sea - 0.3, sea + 0.3], [front - 0.4, front], [0.88, 0.88, 0.86]); // the dock's sill
+  // The floors above, each with a white slab and a glass balcony to the river.
+  for (const [y0, y1, deep] of [[3.2, 6.4, 0], [6.4, 9.2, 1.2]]) {
+    f.box(m, [-half - 0.3, half + 0.3], [y0, y0 + 0.35], [back - 0.3, front + 1.3], COLORS.white);
+    f.box(m, [-half, half], [y0 + 0.35, y1], [back, front - 1 - deep], CLUB.brick);
+    f.box(m, [-half + 1, half - 1], [y0 + 0.6, y1 - 0.3], [front - 1 - deep, front - 0.95 - deep], CLUB.glazing);
+    f.box(m, [-half - 0.3, half + 0.3], [y0 + 0.35, y0 + 1.4], [front + 1.2, front + 1.3], CLUB.balcony);
+  }
+  // The gable to the river: dark roof, a big window in the end, white bargeboards.
+  const [ey, rise] = [9.2, 4.6];
+  const z0 = back - 0.4;
+  const z1 = front - 1.2 + 0.4;
+  const eaves = (x, z) => f.at(x, ey, z);
+  const ridge = (z) => f.at(0, ey + rise, z);
+  for (const e of [-1, 1]) {
+    const o = e * (half + 0.5);
+    m.tri(eaves(o, z0), eaves(o, z1), ridge(z1), CLUB.slate);
+    m.tri(eaves(o, z0), ridge(z1), ridge(z0), CLUB.slate);
+    m.tri(eaves(o, z1), eaves(o, z0), ridge(z0), CLUB.slate); // and its underside
+    m.tri(eaves(o, z1), ridge(z0), ridge(z1), CLUB.slate);
+    beam(m, f.at(o, ey, z1 + 0.05), f.at(0, ey + rise, z1 + 0.05), 0.12, COLORS.white);
+  }
+  for (const [z, e] of [[front - 2.2, 1], [back, -1]]) {
+    m.triFacing(f.at(-half, ey, z), f.at(half, ey, z), f.at(0, ey + rise - 0.3, z), CLUB.brick, [f.fwd[0] * e, 0, f.fwd[1] * e]);
+  }
+  m.triFacing(f.at(-1.8, ey + 0.3, front - 2.15), f.at(1.8, ey + 0.3, front - 2.15), f.at(0, ey + 2.9, front - 2.15), CLUB.glazing, [f.fwd[0], 0, f.fwd[1]]);
+  // White spiral stairs at both ends, from the dock up to the first floor.
+  for (const e of [-1, 1]) {
+    const c = [e * (half + 1.1), front - 0.9];
+    m.cylinder(f.at(c[0], sea, c[1]), 0.08, 6.6 - sea, 5, COLORS.white);
+    let last = null;
+    for (let k = 0; k < 16; k++) {
+      const a = k * 0.55 * e;
+      const y = sea + 0.3 + (k * (6.4 - sea)) / 16;
+      const tip = [c[0] + Math.cos(a) * 0.95, c[1] + Math.sin(a) * 0.95];
+      beam(m, f.at(c[0], y, c[1]), f.at(tip[0], y, tip[1]), 0.16, COLORS.white);
+      const rail = f.at(tip[0], y + 0.9, tip[1]);
+      if (last) beam(m, last, rail, 0.03, COLORS.white);
+      last = rail;
+    }
+  }
+}
+
+// A long two-storey boathouse in pale grey (just upstream of the spiral one):
+// roller shutters below, an open bay where a launch is kept, a balcony with a
+// white rail on white pillars above, a grey metal roof, and a blue launch.
+function greyBoathouse(m, course, f) {
+  const half = Math.min(12, Math.max(9, (f.along[1] - f.along[0]) / 2));
+  const front = Math.min(f.depth[1], f.edge - 1.5);
+  const back = Math.max(f.depth[0], front - 10);
+  const sea = -f.origin[1];
+  const split = half * 0.2; // shutters to the left of it, the open bay to the right
+  f.box(m, [-half, half], [-1, 3], [back, front - 2.5], GREY.wall);
+  f.box(m, [-half, split], [-1, 3], [front - 2.5, front], GREY.wall);
+  f.box(m, [split, half], [-1, 2.9], [front - 2.5, front - 2.4], CLUB.dark);
+  const doors = 3;
+  for (let k = 0; k < doors; k++) {
+    const x = -half + 0.6 + (k * (split + half - 0.6)) / doors;
+    f.box(m, [x, x + (split + half) / doors - 1], [0, 2.6], [front, front + 0.05], GREY.shutter);
+    for (let y = 0.3; y < 2.6; y += 0.3) f.box(m, [x, x + (split + half) / doors - 1], [y, y + 0.03], [front + 0.05, front + 0.07], GREY.seam);
+  }
+  // The upper floor runs out over the bay on white pillars, with a balcony.
+  f.box(m, [-half, half], [3, 3.3], [back, front], COLORS.white);
+  for (let x = split + 0.2; x <= half; x += (half - split) / 2) f.box(m, [x - 0.4, x - 0.1], [-0.3, 3], [front - 0.4, front - 0.1], COLORS.white);
+  f.box(m, [-half, half], [3.3, 6.2], [back, front - 1.6], GREY.wall);
+  for (let x = -half + 1.2; x < half - 1.6; x += 3.2) f.box(m, [x, x + 1.6], [4, 5.5], [front - 1.6, front - 1.55], CLUB.dark);
+  f.box(m, [-half, half], [4.2, 4.3], [front - 0.1, front], COLORS.white);
+  for (let x = -half; x <= half; x += 2) f.box(m, [x, x + 0.08], [3.3, 4.2], [front - 0.1, front], COLORS.white);
+  f.box(m, [-3, 3], [3.6, 4.1], [front + 0.01, front + 0.04], COLORS.white); // a banner on the rail
+  roof(m, f, half + 0.5, [back - 0.5, front + 0.3], 6.2, 1.8, GREY.roof);
+  // The landing in front, and a blue launch alongside.
+  f.box(m, [-half - 2, half + 4], [sea - 0.5, sea + 0.4], [front, f.edge], CLUB.hard);
+  f.box(m, [split + 1, half + 1], [sea - 0.2, sea + 0.55], [f.edge + 0.4, f.edge + 2.4], GREY.launch);
+  f.box(m, [split + 1.3, half + 0.7], [sea + 0.55, sea + 0.75], [f.edge + 0.6, f.edge + 2.2], COLORS.white);
+}
+
+// A grand riverside house well up the reach (by St Mary's Island): grey-blue
+// clapboard, white corner boards, bands and window frames, a slate roof with
+// dormers, and in front a long stone quay with white bollards and stone urns,
+// a white summerhouse and a white timber tower.
+function riversideVilla(m, course, f) {
+  const half = Math.max(6.5, (f.along[1] - f.along[0]) / 2);
+  const front = Math.min(f.depth[1], f.edge - 6);
+  const back = Math.min(Math.max(f.depth[0], front - 10), front - 8);
+  f.box(m, [-half, half], [-1, 6.2], [back, front], VILLA.board);
+  for (let y = 0.4; y < 6.1; y += 0.35) f.box(m, [-half - 0.02, half + 0.02], [y, y + 0.04], [front, front + 0.03], VILLA.shadow);
+  for (const y of [-0.2, 3, 6]) f.box(m, [-half - 0.1, half + 0.1], [y, y + 0.25], [back - 0.1, front + 0.1], COLORS.white);
+  for (const x of [-half - 0.1, half - 0.25]) f.box(m, [x, x + 0.35], [-0.2, 6.2], [front - 0.1, front + 0.12], COLORS.white);
+  for (const y of [0.8, 3.8]) {
+    for (let x = -half + 1.2; x < half - 1.4; x += 2.6) {
+      f.box(m, [x, x + 1.4], [y, y + 1.6], [front, front + 0.08], COLORS.white);
+      f.box(m, [x + 0.12, x + 1.28], [y + 0.12, y + 1.48], [front + 0.08, front + 0.1], COLORS.glass);
+    }
+  }
+  roof(m, f, half + 0.4, [back - 0.4, front + 0.4], 6.2, 3.2, VILLA.slate);
+  for (const x of [-half / 2, half / 2]) {
+    f.box(m, [x - 0.8, x + 0.8], [6.6, 8], [front - 1.4, front - 0.6], COLORS.white);
+    f.box(m, [x - 0.55, x + 0.55], [6.8, 7.8], [front - 0.6, front - 0.58], COLORS.glass);
+  }
+  // The quay: a stone edge to the water, white bollards and stone urns along it.
+  const sea = -f.origin[1];
+  const [q0, q1] = [-half - 14, half + 14];
+  f.box(m, [q0, q1], [sea - 0.8, sea + 0.7], [f.edge - 1.2, f.edge], COLORS.stone);
+  f.box(m, [q0, q1], [sea + 0.7, sea + 0.85], [f.edge - 1.3, f.edge + 0.1], VILLA.coping);
+  for (let x = q0 + 1; x <= q1 - 1; x += 3) {
+    f.box(m, [x - 0.15, x + 0.15], [sea + 0.85, sea + 1.5], [f.edge - 0.7, f.edge - 0.4], COLORS.white);
+    if (Math.round((x - q0) / 3) % 3 === 1) {
+      m.sphere(f.at(x + 1.5, sea + 1.4, f.edge - 0.6), 0.4, VILLA.urn, 3, 6);
+      m.sphere(f.at(x + 1.5, sea + 1.95, f.edge - 0.6), 0.45, VILLA.plant, 3, 6);
+    }
+  }
+  // The white summerhouse, and the tower beyond it.
+  const sx = half + 5;
+  m.cylinder(f.at(sx, sea + 0.85, f.edge - 4), 1.7, 2.6, 8, COLORS.white);
+  m.cylinder(f.at(sx, sea + 1.3, f.edge - 4), 1.72, 1.5, 8, VILLA.window);
+  m.cone(f.at(sx, sea + 3.45, f.edge - 4), 2, 1.3, 8, VILLA.slate);
+  const tx = half + 10;
+  for (const [dx, dz] of [[-1.2, -1.2], [1.2, -1.2], [1.2, 1.2], [-1.2, 1.2]]) f.box(m, [tx + dx - 0.12, tx + dx + 0.12], [sea + 0.85, sea + 6.5], [f.edge - 5 + dz - 0.12, f.edge - 5 + dz + 0.12], COLORS.white);
+  for (const y of [2.6, 4.4, 6.3]) f.box(m, [tx - 1.4, tx + 1.4], [sea + y, sea + y + 0.2], [f.edge - 6.4, f.edge - 3.6], COLORS.white);
+  m.cone(f.at(tx, sea + 6.5, f.edge - 5), 2.1, 1.6, 4, COLORS.white);
+}
+
+const LANDMARKS = { 'rowing-club': rowingClub, 'canoe-club': canoeClub, 'spiral-boathouse': spiralBoathouse, 'grey-boathouse': greyBoathouse, 'riverside-villa': riversideVilla };
 
 // A hipped roof over x in [-half, half], z in [z0, z1], from eaves at `y` up `rise`.
 function roof(m, f, half, [z0, z1], y, rise, color) {
@@ -832,6 +1056,49 @@ function cruiser(m, course, { s, length, side, kind }, rand) {
     const y = 0.9 + d * 1.9;
     orientedBox(m, origin, right, fwd, [-beamW + 0.3, beamW - 0.3], [y, y + 1.5], [-half + 1, half - 4 - d * 2], COLORS.white);
     orientedBox(m, origin, right, fwd, [-beamW + 0.28, beamW - 0.28], [y + 0.5, y + 1.15], [-half + 1.5, half - 4.5 - d * 2], COLORS.glass);
+  }
+}
+
+// A tired old cruiser (below Caversham Bridge): yellowed and faded, a tarp
+// over the cockpit or the whole cabin, rust under the rubbing strake, a flag
+// at the stern, and now and then a dinghy alongside.
+function tattyCruiser(m, course, { s, length, side }, rand) {
+  const c = pointAt(course, s);
+  const w = widthAt(course, s).half;
+  const beamW = 1.6;
+  const right = [-c.tz, c.tx];
+  const fwd = [c.tx, c.tz];
+  const origin = [c.x + right[0] * side * (w - beamW), 0, c.z + right[1] * side * (w - beamW)];
+  const half = length / 2;
+  const at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
+  const box = (xr, yr, zr, color) => orientedBox(m, origin, right, fwd, xr, yr, zr, color);
+  const hull = TATTY.hulls[Math.floor(rand() * TATTY.hulls.length)];
+  box([-beamW, beamW], [-0.3, 0.85], [-half, half - 2], hull);
+  box([-beamW - 0.01, beamW + 0.01], [0.5, 0.62], [-half, half - 2], TATTY.strakes[Math.floor(rand() * TATTY.strakes.length)]);
+  for (let z = -half + 1; z < half - 3; z += 1.5 + rand() * 2) {
+    if (rand() < 0.5) box([-side * beamW - 0.03, -side * beamW + 0.03], [0, 0.5], [z, z + 0.15], TATTY.rust); // on the river side
+  }
+  for (const e of [-1, 1]) {
+    m.triFacing(at(e * beamW, -0.3, half - 2), at(e * beamW, 0.85, half - 2), at(0, 0.95, half), hull, [right[0] * e, 0, right[1] * e]);
+    m.triFacing(at(e * beamW, -0.3, half - 2), at(0, -0.3, half - 0.6), at(0, 0.95, half), hull, [right[0] * e, 0, right[1] * e]);
+  }
+  m.triFacing(at(-beamW, 0.85, half - 2), at(beamW, 0.85, half - 2), at(0, 0.95, half), hull, [0, 1, 0]);
+  const tarp = TATTY.tarps[Math.floor(rand() * TATTY.tarps.length)];
+  if (rand() < 0.4) {
+    // Covered from bow to stern, sagging between the stanchions.
+    box([-beamW + 0.15, beamW - 0.15], [0.85, 1.9], [-half + 0.5, half - 2.5], tarp);
+    box([-beamW + 0.4, beamW - 0.4], [1.9, 2.15], [-half + 0.8, half - 2.8], tarp.map((v) => v * 0.85));
+  } else {
+    box([-beamW + 0.3, beamW - 0.3], [0.85, 2.2], [-half / 3, half - 3.5], TATTY.cabin);
+    box([-beamW + 0.28, beamW - 0.28], [1.35, 1.9], [-half / 3 + 0.4, half - 4], COLORS.glass);
+    box([-beamW + 0.2, beamW - 0.2], [0.85, 1.7], [-half + 0.4, -half / 3], tarp); // the cockpit cover
+  }
+  // A flag at the stern; sometimes a dinghy tied alongside on the river side.
+  m.cylinder(at(0, 0.85, -half + 0.3), 0.03, 1.6, 4, COLORS.white);
+  box([-0.02, 0.02], [1.9, 2.4], [-half + 0.3, -half + 1.1], TATTY.flag);
+  if (rand() < 0.35) {
+    const x = -side * (beamW + 0.9);
+    box([x - 0.6, x + 0.6], [-0.15, 0.3], [-1.4, 1.4], TATTY.dinghy);
   }
 }
 

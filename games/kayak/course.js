@@ -225,7 +225,8 @@ export function raceRiver(km = 6, warp = 4) {
 }
 
 // Beam of each kind of moored boat, metres.
-const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6 };
+export const POST = 0.7; // a post standing in the water, metres square (world.js draws it)
+const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6, tatty: 3.4 };
 
 // A real river from a course file (made by apps/web/scripts/courses, see
 // docs/features/game-courses-from-video.md): its line and widths in true metres,
@@ -251,7 +252,9 @@ export function courseFromFile(data) {
     width: along(data.line, data.width), start: data.start, finish: data.finish, warp: data.warp, speedup: data.speedup,
     moorings, bridges: data.bridges,
   });
-  const shore = data.water?.length ? shoreOf(waterMap(data.water), mooringBoxes(river, moorings)) : null;
+  // Moored boats and posts in the water are solid.
+  const posts = (data.posts ?? []).map(([x, z]) => ({ x, z, ux: 1, uz: 0, half: POST / 2, beam: POST }));
+  const shore = data.water?.length ? shoreOf(waterMap(data.water), [...mooringBoxes(river, moorings), ...posts]) : null;
   if (!data.route) return { ...river, shore, scenery: { ...data, river } };
   const { line, left, right, start, finish } = data.route;
   const [l, r] = [along(line, left), along(line, right)];

@@ -8,6 +8,7 @@
 import { createBoat, step, bounceOffBank, bounceOffShore, wrap, steadyBeat, BOAT } from './sim.js';
 import { locate, pointAt, headingAt, widthAt, roomAhead } from './course.js';
 import { createBirds, stepBirds, swansAhead } from './birds.js';
+import { createAnglers, snagLines, linesAhead } from './anglers.js';
 import { createTraffic, moveTraffic, trafficHits, trafficWash, trafficWarnings, trafficNear } from './traffic.js';
 
 const BOW = 3.3; // hull ends, metres from the boat's origin (see meshes.kayakMesh)
@@ -62,6 +63,7 @@ export function createRace(course, { rivals = [], seed = 1, you = {}, birds = tr
       : massRace(course, { rivals, seed, you, birds });
   race.traffic = traffic ? createTraffic(course, seed) : null;
   race.gates = [...(course.scenery?.gates ?? [])].sort((a, b) => a.s - b.s);
+  race.anglers = createAnglers(course);
   return race;
 }
 
@@ -279,7 +281,7 @@ function starter(race, dt) {
 }
 
 // One fixed step. `input` drives the player. Returns { events, splashes }:
-// the player's events ('stroke', 'weak', 'capsize', 'remount', 'bank', 'bump',
+// the player's events ('stroke', 'weak', 'capsize', 'remount', 'bank', 'bump', 'line',
 // 'finish') and the starter's calls ('line-up', 'nudge', 'ready', 'go', 'hold'), and
 // how far away each rival stroke was, for the sound of the pack.
 export function stepRace(race, dt, input) {
@@ -320,6 +322,8 @@ export function stepRace(race, dt, input) {
     r.boat.roll = (r.boat.hull.capsize + 0.05) * (Math.sign(r.boat.roll) || 1);
     if (r === player) events.push('swan');
   }
+  // Paddling across a fishing line pulls you up short.
+  for (const { racer } of snagLines(race.anglers ?? [], racers)) if (racer === player) events.push('line');
   // So does running into another boat, or its oars; and the cox of an eight
   // coming up behind you shouts in time to move over.
   if (race.traffic && going) {
@@ -503,10 +507,12 @@ function think(r, race) {
   // cutting across in front of one), unless the bank is in the way and there's
   // still time to go round the other side.
   // Other boats on the river are passed the same way (and an eight coming up
-  // behind is let by), each as wide as its oars or hull reach.
+  // behind is let by), each as wide as its oars or hull reach; and an angler's
+  // line, from the float in to the bank.
   const swans = [
     ...swansAhead(race.birds, r, course, 30 * k).map((b) => ({ ...b, half: 2.6 })),
     ...(race.traffic ? trafficNear(race.traffic, r, course).map((b) => ({ ...b, half: b.out + 1.5 })) : []),
+    ...linesAhead(race.anglers ?? [], r, course, 30 * k),
   ];
   const fits = (x) => x >= -(room.left - 2.2) && x <= room.right - 2.2;
   const blocks = [];
