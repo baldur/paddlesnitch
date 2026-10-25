@@ -35,7 +35,7 @@ final class SignInTests: AppTestCase {
         tab("You").tap()
         XCTAssertTrue(element("signed-in-as").waitForExistence(timeout: 10))
         XCTAssertTrue(text(containing: "Pat").exists)
-        XCTAssertTrue(app.buttons["Account settings"].exists)
+        XCTAssertTrue(app.buttons["Account"].exists)
     }
 
     func testSigningOutGoesBackToTheSamples() {

@@ -19,16 +19,18 @@ public final class AccountModel {
         case signedIn(User)
     }
 
-    public private(set) var state: State = .signedOut
+    public internal(set) var state: State = .signedOut
+    /// The account was just deleted here: the signed-out You tab says so.
+    public internal(set) var accountDeleted = false
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
     public private(set) var client: PaddleClient
     public var user: User? {
         if case .signedIn(let user) = state { user } else { nil }
     }
 
-    private let anonymous: PaddleClient
-    private let session: TokenSession
-    private let profile: ProfileStore
+    let anonymous: PaddleClient
+    let session: TokenSession
+    let profile: ProfileStore
 
     public init(
         baseURL: URL, transport: any HTTPTransport, app: String, tokens: any TokenStore,
@@ -104,6 +106,7 @@ public final class AccountModel {
     public func signOut() async {
         let refreshToken = await session.signOut()
         profile.clear()
+        removeDownloadedData()
         state = .signedOut
         if let refreshToken {
             _ = try? await anonymous.send(Endpoints.authLogout, RefreshToken(refreshToken: refreshToken))
@@ -116,6 +119,7 @@ public final class AccountModel {
             id: answer.id, email: answer.email, displayName: answer.displayName, needsTerms: answer.needsTerms == true)
         try await session.signedIn(idToken: answer.idToken, refreshToken: answer.refreshToken)
         profile.save(user)
+        accountDeleted = false
         state = .signedIn(user)
     }
 

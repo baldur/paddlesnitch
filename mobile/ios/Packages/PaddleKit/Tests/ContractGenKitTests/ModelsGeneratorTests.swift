@@ -126,7 +126,21 @@ import Testing
                     #"{"POST /att/api/auth/otp-verify":{"input":"Login","output":"SignIn","errors":[400,500]}}"#.utf8)
             )["Endpoints.swift"])
         #expect(swift.contains("public static let authOtpVerify = Endpoint<Login, SignIn>("))
-        #expect(swift.contains(#"method: "POST", path: "/att/api/auth/otp-verify", errorStatuses: [400, 500])"#))
+        #expect(
+            swift.contains(
+                #"method: "POST", path: "/att/api/auth/otp-verify", auth: .public, errorStatuses: [400, 500])"#))
+    }
+
+    /// `"auth": "user"` routes send the Bearer token; no `auth` is public.
+    @Test func aRoutesAuthIsCarried() throws {
+        let swift = try #require(
+            try ModelsGenerator.generate(
+                schemas: ["Ok.schema.json": Data(Self.object(field: "ok").utf8)],
+                procedures: noProcedures,
+                rest: Data(
+                    #"{"POST /api/account/export":{"auth":"user","input":null,"output":"Ok","errors":[401]}}"#.utf8)
+            )["Endpoints.swift"])
+        #expect(swift.contains(#"path: "/api/account/export", auth: .user, errorStatuses: [401])"#))
     }
 
     /// One path, several methods (GET, POST, DELETE /api/account/contact):

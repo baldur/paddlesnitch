@@ -36,6 +36,10 @@ public actor TokenSession {
         self.idToken = idToken
     }
 
+    /// The refresh token, kept: deleting the account sends it to be revoked
+    /// and forgets it only once that's done.
+    public var refreshToken: String? { store.load() }
+
     /// The refresh token to revoke on signing out, then forget everything.
     public func signOut() -> String? {
         let refreshToken = store.load()

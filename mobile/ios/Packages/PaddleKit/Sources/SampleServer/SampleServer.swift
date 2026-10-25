@@ -23,6 +23,16 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     private var _requests: [URLRequest] = []
     private var revoked: Set<String> = []
     private var _refusesRefresh = false
+    private var _termsAccepted = true
+    private var _failsAccountDelete = false
+    /// Make `DELETE /api/account` fail, as when the server is down.
+    public var failsAccountDelete: Bool {
+        get { lock.withLock { _failsAccountDelete } }
+        set { lock.withLock { _failsAccountDelete = newValue } }
+    }
+    /// Where the sample export's link points: served here, as the real link
+    /// is served by the bucket.
+    public static let exportPath = "/sample-exports/paddlesnitch-data.json"
     /// Make the refresh route turn every token down, as after a password reset.
     public var refusesRefresh: Bool {
         get { lock.withLock { _refusesRefresh } }
@@ -67,6 +77,12 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         if path == "/paddles/api/analyse" {
             return analyse(request)
         }
+        if path == "/api/account" || path.hasPrefix("/api/account/") {
+            return try account(path: path, request: request)
+        }
+        if path == Self.exportPath {
+            return (200, Data(#"{"account":{"email":"pat@example.com"},"paddles":[]}"#.utf8))
+        }
         return (404, Data(#"{"error":"Not found"}"#.utf8))
     }
 
@@ -76,6 +92,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         case "/att/api/auth/login":
             let login = try JSONDecoder().decode(Login.self, from: body)
             guard login.password == Self.password else { return (401, try fixture("auth.error")) }
+            lock.withLock { _termsAccepted = login.email != Self.needsTermsEmail }
             return (200, try fixture(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
         case "/att/api/auth/strava/app-token":
             // A code from `stravaBrowser` carries its challenge, so this checks
@@ -162,6 +179,44 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             return (200, trpc(try JSONEncoder.paddlesnitch.encode(paddle)))
         }
         return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
+    }
+
+    /// The account routes (mobile/contract/README.md, "Account"), from the
+    /// account.* fixtures.
+    private func account(path: String, request: URLRequest) throws -> (Int, Data) {
+        guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
+            return (401, try fixture("account.error"))
+        }
+        switch (request.httpMethod ?? "GET", path) {
+        case ("GET", "/api/account/tos"):
+            guard lock.withLock({ _termsAccepted }) else { return (200, try fixture("account.tos")) }
+            let accepted = TosStatus(
+                acceptances: [
+                    TosAcceptance(acceptedAt: Date(timeIntervalSince1970: 1_788_000_000), version: Constants.tosVersion)
+                ],
+                accepted: true, currentVersion: Constants.tosVersion)
+            return (200, try JSONEncoder.paddlesnitch.encode(accepted))
+        case ("POST", "/api/account/tos"):
+            let accept = try JSONDecoder().decode(TosAccept.self, from: request.httpBody ?? Data())
+            guard accept.version == Constants.tosVersion else {
+                return (
+                    422, Data(#"{"error":"The Terms of Service have changed. Update the app to accept them."}"#.utf8)
+                )
+            }
+            lock.withLock { _termsAccepted = true }
+            return (200, try fixture("account.tos-accepted"))
+        case ("POST", "/api/account/export"):
+            return (200, Data(#"{"url":"\#(Self.exportPath)"}"#.utf8))
+        case ("DELETE", "/api/account"):
+            if lock.withLock({ _failsAccountDelete }) {
+                return (500, Data(#"{"error":"Couldn't delete the account."}"#.utf8))
+            }
+            let body = try JSONDecoder().decode(DeleteAccount.self, from: request.httpBody ?? Data())
+            if let token = body.refreshToken { _ = lock.withLock { revoked.insert(token) } }
+            return (200, Data(#"{"ok":true}"#.utf8))
+        default:
+            return (404, Data(#"{"error":"Not found"}"#.utf8))
+        }
     }
 
     /// Adding a paddle from a file. The file's name picks the answer: one with

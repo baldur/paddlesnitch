@@ -9,6 +9,7 @@ struct RootView: View {
     let account: AccountModel
     let samples: SamplePaddles
     @State private var signingIn = false
+    @State private var termsOpen = false
     @State private var selectedTab = "paddles"
     @State private var adding: AddPaddleModel
 
@@ -29,7 +30,8 @@ struct RootView: View {
             // under the closing sign-in sheet crashed UIKit on iOS 17.
             PaddleListView(
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
-                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true }, adding: adding,
+                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
+                openTerms: { termsOpen = true }, adding: adding,
                 openFile: { url in Task { await open(url) } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
@@ -48,6 +50,24 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $signingIn) {
             SignInView(account: account)
+        }
+        .sheet(isPresented: $termsOpen) {
+            NavigationStack {
+                List {
+                    Section {
+                        TermsView(account: account, accepted: { termsOpen = false })
+                    } header: {
+                        Text("Terms of Service").font(.plexSans(.subheadline, weight: .medium))
+                            .foregroundStyle(Palette.muted).textCase(nil)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(Palette.bg)
+                .navigationTitle("Terms of Service")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { termsOpen = false } } }
+            }
+            .preferredColorScheme(.dark)
         }
     }
 
