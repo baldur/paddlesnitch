@@ -128,6 +128,20 @@ public enum Format {
     }
 
     /// Why a paddle has no route, as the web's paddle page says it.
+    /// About how many strokes, as the web's `roundStrokes`: to the hundred
+    /// from 1,000, with commas. 12345 → "12,300".
+    public static func strokes(_ count: Double) -> String {
+        let near: (Double) -> Double = { $0.rounded(.toNearestOrAwayFromZero) }
+        let rounded = Int(count >= 1000 ? near(count / 100) * 100 : near(count))
+        var digits = Array(String(rounded))
+        var index = digits.count - 3
+        while index > 0 {
+            digits.insert(",", at: index)
+            index -= 3
+        }
+        return String(digits)
+    }
+
     public static func noPaddleMessage(_ reason: NoPaddleReason, hasMotion: Bool) -> String {
         let motion = hasMotion ? " The boat motion was." : ""
         switch reason {
