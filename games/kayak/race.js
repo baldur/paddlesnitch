@@ -8,6 +8,7 @@
 import { createBoat, step, bounceOffBank, wrap, steadyBeat, BOAT } from './sim.js';
 import { locate, pointAt, headingAt, widthAt, roomAhead } from './course.js';
 import { createBirds, stepBirds, swansAhead } from './birds.js';
+import { createTraffic, moveTraffic, trafficHits, trafficWash, trafficWarnings, trafficNear } from './traffic.js';
 
 const BOW = 3.3; // hull ends, metres from the boat's origin (see meshes.kayakMesh)
 const STERN = 1.9;
@@ -50,13 +51,20 @@ const JUMP = 1; // metres over the line that count as jumping the start
 const ON_LINE = 2.5; // a bow this close behind the line is on it
 
 // you: the player's { power, endurance, hull }. birds: swans and ducks on the
-// water (a course file's `birds` say where they crowd). format: 'mass' (the
+// water (a course file's `birds` say where they crowd). traffic: other boats
+// on the river (traffic.js). format: 'mass' (the
 // starter, everyone on the line) or 'interval' (a time trial: see below).
 // live: a race against other people ({ players: [{ id, name }], you, host }),
 // whose boats are driven over the network (main.js, live.js), not by think().
-export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, format = 'mass', live = null } = {}) {
-  if (live) return liveRace(course, { seed, you, birds, live });
-  if (format === 'interval') return intervalRace(course, { rivals, seed, you, birds });
+export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, traffic = true, format = 'mass', live = null } = {}) {
+  const race = live ? liveRace(course, { seed, you, birds, live })
+    : format === 'interval' ? intervalRace(course, { rivals, seed, you, birds })
+      : massRace(course, { rivals, seed, you, birds });
+  race.traffic = traffic ? createTraffic(course, seed) : null;
+  return race;
+}
+
+function massRace(course, { rivals, seed, you, birds }) {
   const rand = mulberry32(seed);
   const solo = !rivals.length;
   // The rivals take the line, leaving two gaps (never at the very edge).
@@ -282,6 +290,7 @@ export function stepRace(race, dt, input) {
   const splashes = [];
   let events = [];
 
+  if (race.traffic && going) moveTraffic(race.traffic, race.time);
   const washes = racers.map((r) => totalWash(r, racers));
   racers.forEach((r, i) => {
     if (r.remote) {
@@ -293,7 +302,8 @@ export function stepRace(race, dt, input) {
     // Until you're let go in a time trial, only your balance counts.
     const intent = r.ai ? think(r, race) : released(race, r) ? { ...input } : { ...input, strokes: [], sprint: false };
     r.draft = washes[i].draft;
-    const result = step(r.boat, dt, { ...intent, draft: r.draft, rock: washes[i].rock });
+    const rock = washes[i].rock + (race.traffic ? trafficWash(race.traffic, r.boat) : 0);
+    const result = step(r.boat, dt, { ...intent, draft: r.draft, rock });
     // Holding water on the line (but you can paddle up to it from behind).
     if ((!going && bowAt(r) > race.start.line - 4) || !released(race, r)) r.boat.speed *= Math.exp(-0.6 * dt);
     r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);
@@ -307,6 +317,15 @@ export function stepRace(race, dt, input) {
   for (const r of stepBirds(race.birds, racers, course, dt)) {
     r.boat.roll = (r.boat.hull.capsize + 0.05) * (Math.sign(r.boat.roll) || 1);
     if (r === player) events.push('swan');
+  }
+  // So does running into another boat, or its oars; and the cox of an eight
+  // coming up behind you shouts in time to move over.
+  if (race.traffic && going) {
+    for (const { racer: r, boat } of trafficHits(race.traffic, racers)) {
+      r.boat.roll = (r.boat.hull.capsize + 0.05) * (Math.sign(r.boat.roll) || 1);
+      if (r === player) events.push(`hit-${boat.kind}`);
+    }
+    for (const w of trafficWarnings(race.traffic, player)) events.push(`behind-${w.side}`);
   }
 
   for (let i = 0; i < racers.length; i++) {
@@ -462,16 +481,25 @@ function think(r, race) {
   // each group is passed as one, on the side we're already on (there's no
   // cutting across in front of one), unless the bank is in the way and there's
   // still time to go round the other side.
-  const swans = swansAhead(race.birds, r, course, 30 * k);
+  // Other boats on the river are passed the same way (and an eight coming up
+  // behind is let by), each as wide as its oars or hull reach.
+  const swans = [
+    ...swansAhead(race.birds, r, course, 30 * k).map((b) => ({ ...b, half: 2.6 })),
+    ...(race.traffic ? trafficNear(race.traffic, r, course).map((b) => ({ ...b, half: b.out + 1.5 })) : []),
+  ];
   const fits = (x) => x >= -(room.left - 2.2) && x <= room.right - 2.2;
   const blocks = [];
-  for (const b of [...swans].sort((a, c) => a.lateral - c.lateral)) {
+  for (const b of [...swans].sort((a, c) => a.lateral - a.half - (c.lateral - c.half))) {
     const last = blocks.at(-1);
-    if (last && b.lateral - 2.6 < last.hi) Object.assign(last, { hi: b.lateral + 2.6, near: Math.min(last.near, b.s - loc.s) });
-    else blocks.push({ lo: b.lateral - 2.6, hi: b.lateral + 2.6, near: b.s - loc.s });
+    if (last && b.lateral - b.half < last.hi) Object.assign(last, { hi: Math.max(last.hi, b.lateral + b.half), near: Math.min(last.near, b.s - loc.s), pass: last.pass ?? b.pass });
+    else blocks.push({ lo: b.lateral - b.half, hi: b.lateral + b.half, near: b.s - loc.s, pass: b.pass });
   }
   const block = blocks.find((b) => lateral > b.lo && lateral < b.hi);
-  if (block) {
+  if (block?.pass) {
+    // A boat: by the rule of the river, unless there's no room that side.
+    const [mine, other] = block.pass > 0 ? [block.hi, block.lo] : [block.lo, block.hi];
+    lateral = fits(mine) || !fits(other) ? mine : other;
+  } else if (block) {
     const [mine, other] = loc.lateral < (block.lo + block.hi) / 2 ? [block.lo, block.hi] : [block.hi, block.lo];
     lateral = fits(mine) || block.near < 15 * k ? mine : other;
   }
@@ -482,9 +510,9 @@ function think(r, race) {
     ai.next = race.time + ai.interval * (1 + (race.rand() - 0.5) * 0.05);
   }
 
-  // Look nearer ahead to swerve round a swan.
-  const swerve = swans.some((b) => b.s - loc.s < 15 * k);
-  return { strokes, sprint, rudder: steer(r, course, lateral, (swerve ? 10 : 18) * Math.sqrt(k)), lean };
+  // Look nearer ahead to swerve round a swan, or to get out of a boat's way.
+  const swerve = swans.some((b) => b.pass || b.s - loc.s < 15 * k);
+  return { strokes, sprint, rudder: steer(r, course, lateral, (swerve ? 7 : 18) * Math.sqrt(k)), lean };
 }
 
 // Rudder towards a point `ahead` metres down the river, `lateral` off the middle.

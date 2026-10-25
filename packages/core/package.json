@@ -24,7 +24,8 @@
     "./catalogue": "./src/catalogue.ts",
     "./buddies": "./src/buddies.ts",
     "./admin": "./src/admin.ts",
-    "./games": "./src/games.ts"
+    "./games": "./src/games.ts",
+    "./observe": "./src/observe.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1152.0",

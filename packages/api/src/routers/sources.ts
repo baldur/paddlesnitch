@@ -44,7 +44,7 @@ export const sourcesRouter = router({
 
   importStravaPaddle: protectedProcedure
     .input(z.object({ id: z.number().int().positive(), sport: z.string().max(40), startDate: z.string().datetime() }))
-    .mutation(({ ctx, input }) => importStravaActivity(ctx.user.id, input.id, { sport: input.sport, startDate: input.startDate })),
+    .mutation(({ ctx, input }) => importStravaActivity(ctx.user.id, input.id, { sport: input.sport, startDate: input.startDate }, ctx.client)),
 
   stravaHistoryDone: protectedProcedure.mutation(async ({ ctx }) => {
     await markStravaHistoryImported(ctx.user.id)
