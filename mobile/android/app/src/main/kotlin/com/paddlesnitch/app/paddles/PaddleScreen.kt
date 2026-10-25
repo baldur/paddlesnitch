@@ -66,8 +66,12 @@ fun PaddlesHost(
     action: (@Composable () -> Unit)? = null,
     notice: (@Composable () -> Unit)? = null,
     map: MapSlot = routeMap,
+    /** A paddle to open from a link (Incoming.OpenPaddle); [onOpened] says it's done. */
+    openPaddle: String? = null,
+    onOpened: () -> Unit = {},
 ) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(openPaddle) { if (openPaddle != null) { open = openPaddle; onOpened() } }
     val listState = rememberLazyListState()
     val id = open
     if (id == null) {

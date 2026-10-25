@@ -14,16 +14,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Opens the system file picker; adds a file another app handed over. */
+class AddPaddle(val pick: () -> Unit, val add: (Uri) -> Unit)
+
 /**
  * "Add a paddle from a file": the system file picker (Drive, Downloads, a
- * watch app's export…), then the website's upload. Returns what opens the picker.
+ * watch app's export…) or a file opened with or shared to the app, then the
+ * website's upload.
  */
 @Composable
-fun rememberAddPaddle(api: Api, onBusy: (Boolean) -> Unit, onDone: (Result<Analysed>) -> Unit): () -> Unit {
+fun rememberAddPaddle(api: Api, onBusy: (Boolean) -> Unit, onDone: (Result<Analysed>) -> Unit): AddPaddle {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    val add: (Uri) -> Unit = { uri ->
         scope.launch {
             onBusy(true)
             onDone(runCatching {
@@ -33,15 +36,16 @@ fun rememberAddPaddle(api: Api, onBusy: (Boolean) -> Unit, onDone: (Result<Analy
             onBusy(false)
         }
     }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) add(uri) }
     // Watch and phone apps label these files inconsistently, so any file can be picked; the server says if it can't read one.
-    return { pick.launch(arrayOf("*/*")) }
+    return AddPaddle(pick = { pick.launch(arrayOf("*/*")) }, add = add)
 }
 
 private fun read(context: Context, uri: Uri): Pair<String, ByteArray> {
     val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
         if (it.moveToFirst()) it.getString(0) else null
     } ?: uri.lastPathSegment ?: "paddle"
-    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Couldn’t open that file.")
+    val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: error("Couldn’t open that file. Please share it again.")
     return name to bytes
 }
 

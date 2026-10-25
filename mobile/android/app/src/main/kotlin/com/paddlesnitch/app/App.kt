@@ -1,5 +1,7 @@
 package com.paddlesnitch.app
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import androidx.browser.customtabs.CustomTabsClient
+import androidx.browser.customtabs.CustomTabsIntent
 import com.paddlesnitch.app.account.AccountScreen
 import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.Api
@@ -52,10 +56,10 @@ import kotlinx.coroutines.withContext
 
 /**
  * Signed out: the sample paddles and a way in. Signed in: your own paddles.
- * [returned] carries links back into the app (Strava sign-in) from MainActivity.
+ * [incoming] carries what links and other apps ask for (Incoming.kt) from MainActivity.
  */
 @Composable
-fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
+fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     val context = LocalContext.current
     val api = remember { Api(BuildConfig.API_BASE_URL, KeystoreTokenStore(context), BuildConfig.VERSION_NAME) }
     val sample = remember {
@@ -69,10 +73,20 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
-    val back by returned.collectAsState()
-    LaunchedEffect(back) {
-        back?.takeIf { it.scheme == StravaSignIn.SCHEME }?.let { stravaReturn = it; signingIn = true }
-        returned.value = null
+    // A paddle to open or a file to add, kept through signing in.
+    var pending by rememberSaveable { mutableStateOf<Incoming?>(null) }
+    val arrived by incoming.collectAsState()
+    LaunchedEffect(arrived) {
+        when (val it = arrived) {
+            is Incoming.StravaReturn -> { stravaReturn = Uri.parse(it.uri); signingIn = true }
+            is Incoming.OpenOnWeb -> openInBrowser(context, it.url)
+            is Incoming.OpenPaddle, is Incoming.AddFile -> {
+                pending = it; inAccount = false; settingUpTracker = false
+                if (!signedIn) signingIn = true
+            }
+            null -> {}
+        }
+        incoming.value = null
     }
 
     Scaffold { inner ->
@@ -81,7 +95,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
             signingIn -> {
                 BackHandler { signingIn = false }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
-                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
+                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false; pending = null }, modifier = m)
             }
             signedIn && settingUpTracker -> {
                 BackHandler { settingUpTracker = false }
@@ -92,7 +106,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
                 AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false; inAccount = false },
                     onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
             }
-            signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
+            signedIn -> MyPaddles(api, needsTerms, pending, onPendingHandled = { pending = null }, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
             else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
@@ -101,7 +115,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
 }
 
 @Composable
-private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier) {
+private fun MyPaddles(api: Api, needsTerms: Boolean, pending: Incoming?, onPendingHandled: () -> Unit, onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -119,12 +133,16 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
         added = addedMessage(result)
         if (result.isSuccess) attempt++
     }
+    LaunchedEffect(pending) {
+        if (pending is Incoming.AddFile) { addPaddle.add(Uri.parse(pending.uri)); onPendingHandled() }
+    }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount) { Text("Account") } }
     val current = list
     when {
-        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier, action = {
+        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
+            openPaddle = (pending as? Incoming.OpenPaddle)?.id, onOpened = onPendingHandled, action = {
             Row {
-                TextButton(onClick = addPaddle, enabled = !adding) { Text("Add a file") }
+                TextButton(onClick = addPaddle.pick, enabled = !adding) { Text("Add a file") }
                 account()
             }
         }, notice = if (needsTerms || adding || added != null) ({
@@ -148,4 +166,21 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
 
 private suspend fun readSample(context: android.content.Context, file: String): AnalysisSession = withContext(Dispatchers.IO) {
     context.assets.open(file).bufferedReader().use { ApiJson.decodeFromString(AnalysisSession.serializer(), it.readText()) }
+}
+
+/**
+ * A paddlesnitch.com page the app has no screen for. The browser is named, since
+ * an unnamed link to paddlesnitch.com/paddles/… would come straight back here.
+ */
+private fun openInBrowser(context: Context, url: String) {
+    val uri = Uri.parse(url)
+    runCatching {
+        val tabs = CustomTabsIntent.Builder().build()
+        val browser = CustomTabsClient.getPackageName(context, null)
+        if (browser != null) { tabs.intent.setPackage(browser); tabs.launchUrl(context, uri) }
+        else context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
+            selector = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+    }
 }
