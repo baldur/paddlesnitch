@@ -17,7 +17,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /** Something to tell the person, in the server's own words when it gave some. */
-class ApiFailure(message: String, val status: Int = 0) : Exception(message)
+/** [generic]: the server said nothing we can show, so the caller's own words ([shown]) say what failed. */
+class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false) : Exception(message)
+
+/** What to show for a failure: the server's or the app's own words, else [fallback]. Never a status code. */
+fun Throwable.shown(fallback: String): String = if (this is ApiFailure && generic) fallback else message ?: fallback
 
 /** The session ended (the refresh token expired or was revoked): sign in again. */
 class SignedOut : Exception("Please sign in again.")
@@ -166,9 +170,9 @@ class Api(
     private fun error(res: Answer): ApiFailure {
         // Sign-in refusals are the contract's ApiError; tRPC's errors are shaped differently.
         val said = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body).error }.getOrNull()
-        // A request over the server's 6 MB limit is refused before our code sees it.
-        if (said == null && res.code == 413) return ApiFailure("That file is too big to upload. Try the FIT file, or zip it first.", 413)
-        return ApiFailure(said ?: "Something went wrong (${res.code}). Please try again.", res.code)
+        // A request over ~4.6 MB is refused before our code sees it (prepareUpload stops short of that).
+        if (said == null && res.code == 413) return ApiFailure(com.paddlesnitch.app.paddles.TOO_BIG, 413)
+        return if (said != null) ApiFailure(said, res.code) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
     }
 
     private fun str(s: String) = kotlinx.serialization.json.JsonPrimitive(s).toString()

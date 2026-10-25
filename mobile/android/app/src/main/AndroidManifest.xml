@@ -13,6 +13,19 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
 
+    <!-- Android 11+ hides other apps unless asked: these find the browser that
+         openInBrowser (App.kt) names, so a link the app claims doesn't come back here. -->
+    <queries>
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
@@ -35,6 +48,35 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.paddlesnitch.app" />
+            </intent-filter>
+            <!-- paddlesnitch.com/paddles/… links open here (App Links, verified by
+                 /.well-known/assetlinks.json; the release key only). Incoming.kt opens
+                 one paddle and sends the website's other /paddles pages back to the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="paddlesnitch.com" />
+                <data android:pathPrefix="/paddles/" />
+            </intent-filter>
+            <!-- A GPS file opened with ("Open with") or shared to the app: what the
+                 website's upload takes (.gpx .fit .tcx .csv .zip). Watch and file apps
+                 label these loosely, hence octet-stream and plain XML too. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/gpx+xml" />
+                <data android:mimeType="application/vnd.garmin.tcx+xml" />
+                <data android:mimeType="application/vnd.ant.fit" />
+                <data android:mimeType="application/fit" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
     </application>

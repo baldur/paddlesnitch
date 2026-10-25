@@ -23,11 +23,13 @@ import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.paddlesnitch.app.api.AnalysisSession
+import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.ui.PaddlesnitchTheme
 import com.paddlesnitch.app.ui.PsColor
 import java.io.File
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -103,6 +105,28 @@ class PaddleScreensTest {
         openRiver()
         compose.onNodeWithText("Efforts and rests").assertExists()
         compose.onNodeWithText("Writing your summary…").assertDoesNotExist()
+    }
+
+    @Test
+    fun aLinkOpensItsPaddle() {
+        var opened = false
+        show { PaddlesHost(list, sample = true, load = { paddle(it) }, map = fakeMap, openPaddle = "pdl-river", onOpened = { opened = true }) }
+        compose.onNodeWithText("← Paddles").assertExists()
+        assertTrue(opened)
+    }
+
+    @Test
+    fun aPaddleThatIsntThereSaysSoWithoutTryAgain() {
+        show { PaddlesHost(list, sample = true, load = { throw ApiFailure("Not found", 404) }, map = fakeMap, openPaddle = "gone") }
+        compose.onNodeWithText("We can’t find this paddle.").assertExists()
+        compose.onNodeWithText("Try again").assertDoesNotExist()
+    }
+
+    @Test
+    fun aPaddleThatWontLoadCanBeTriedAgain() {
+        show { PaddlesHost(list, sample = true, load = { throw ApiFailure("Couldn’t finish that. Please try again.", 500, generic = true) }, map = fakeMap, openPaddle = "x") }
+        compose.onNodeWithText("Couldn’t open this paddle. Please try again.").assertExists()
+        compose.onNodeWithText("Try again").assertExists()
     }
 
     @Test
