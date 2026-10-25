@@ -6,6 +6,7 @@
 import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { getActivitySport, getActivityStreams, streamsToTrack, isWaterSport, StravaRateLimited } from '@paddlesnitch/core/strava'
 import { analyseAndSave } from './pipeline'
+import { logAction, type Client } from '@paddlesnitch/core/observe'
 
 export type ImportOutcome =
   | { status: 'imported' | 'duplicate'; sessionId: string }
@@ -17,7 +18,24 @@ export type ImportOutcome =
  * owner's own activity is ever fetched (their token), so a wrong hint can at
  * worst import one of their own non-paddling activities.
  */
-export async function importStravaActivity(userId: string, activityId: number, known?: { sport: string; startDate: string }): Promise<ImportOutcome> {
+export async function importStravaActivity(
+  userId: string, activityId: number, known?: { sport: string; startDate: string }, client?: Client,
+): Promise<ImportOutcome> {
+  // One `strava_import` action line per activity. A skip (not a paddle, no
+  // track, Strava's rate limit, no connection) is expected, not a failure.
+  try {
+    const outcome = await importOnce(userId, activityId, known)
+    logAction('strava_import', outcome.status === 'skipped' ? 'rejected' : 'ok', {
+      client, reason: outcome.status === 'skipped' ? outcome.reason : outcome.status,
+    })
+    return outcome
+  } catch (e) {
+    logAction('strava_import', 'fail', { client, reason: 'threw' })
+    throw e
+  }
+}
+
+async function importOnce(userId: string, activityId: number, known?: { sport: string; startDate: string }): Promise<ImportOutcome> {
   const tokens = await getValidStravaTokens(userId)
   if (!tokens) return { status: 'skipped', reason: 'no_tokens' }
 

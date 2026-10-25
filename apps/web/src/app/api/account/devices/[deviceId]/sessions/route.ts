@@ -3,6 +3,7 @@ import { getRequestUser } from '@/lib/auth'
 import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts } from '@/lib/devices'
 import { handleSessionUpload } from '@/lib/session-upload'
 import { reportedFirmware, reportedModel } from '@/lib/device-route'
+import { withAction } from '@/lib/action'
 
 // POST /api/account/devices/[deviceId]/sessions — AUTHENTICATED (browser).
 // The owner's browser relaying a recording it read off the tracker over
@@ -11,7 +12,7 @@ import { reportedFirmware, reportedModel } from '@/lib/device-route'
 // is the tracker's own (lib/session-upload.ts): same pieces, compression,
 // duplicate checks. The answer carries a receipt the tracker checks before it
 // marks the recording sent.
-export async function POST(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
+async function post(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { deviceId } = await params
@@ -37,6 +38,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ deviceI
 // The pieces of X the server already holds from a sync that broke off, so the
 // page sends only the rest: { parts: [1, 2, …] }. Empty once the file has been
 // put together (its pieces are cleared), and for a file never started.
+// A tracker recording relayed by the owner's phone over Bluetooth is a tracker
+// sync too; its client is the phone's browser or app.
+export const POST = withAction('device_sync', post)
+
 export async function GET(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

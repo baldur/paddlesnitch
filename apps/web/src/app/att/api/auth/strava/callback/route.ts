@@ -19,6 +19,7 @@ import { setAuthCookies } from '@/lib/auth'
 import { canonicalBaseUrl, safeNext } from '@/lib/url'
 import { syntheticEmailFor } from '@/lib/strava-account'
 import { APP_RETURN_URL, createAppCode, isChallenge } from '@/lib/app-signin'
+import { clientOf, logAction } from '@paddlesnitch/core/observe'
 
 // Strava OAuth callback for the SIGN-IN flow. This is what runs after the
 // user approves the authorize page from /att/api/auth/strava/init.
@@ -51,8 +52,14 @@ export async function GET(req: NextRequest) {
     res.cookies.set('strava_signin_app', '', { path: '/', maxAge: 0 })
     return res
   }
-  const fail = (errKey: string) =>
-    clearCookies(NextResponse.redirect(forApp ? `${APP_RETURN_URL}?error=${errKey}` : new URL(`/signin?error=${errKey}`, base)))
+  // Every way out is one sign_in action line. Turning Strava down, or a stale
+  // state cookie (an old tab, a double click), is the user's doing, not ours.
+  const client = clientOf(req.headers)
+  const fail = (errKey: string) => {
+    const expected = errKey === 'strava_denied' || errKey === 'strava_state_mismatch'
+    logAction('sign_in', expected ? 'rejected' : 'fail', { client, reason: errKey })
+    return clearCookies(NextResponse.redirect(forApp ? `${APP_RETURN_URL}?error=${errKey}` : new URL(`/signin?error=${errKey}`, base)))
+  }
 
   if (errorFromStrava) return fail('strava_denied')
   if (!code || !stateFromStrava || !stateCookie || stateFromStrava !== stateCookie) {
@@ -157,6 +164,7 @@ export async function GET(req: NextRequest) {
   if (forApp) {
     await putStravaTokens(userId, tokens)
     const appCode = await createAppCode(cognitoEmail, userId, appChallenge)
+    logAction('sign_in', 'ok', { client, reason: 'strava-app' })
     return clearCookies(NextResponse.redirect(`${APP_RETURN_URL}?code=${appCode}`))
   }
 
@@ -182,5 +190,6 @@ export async function GET(req: NextRequest) {
   const accepted = user ? await hasAcceptedCurrent(user.id) : true
   const res = NextResponse.redirect(new URL(accepted ? next : termsAcceptPath(next), base))
   setAuthCookies(res.cookies, signInResult.idToken, signInResult.refreshToken)
+  logAction('sign_in', 'ok', { client, reason: 'strava' })
   return clearCookies(res)
 }

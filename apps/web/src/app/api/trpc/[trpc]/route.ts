@@ -5,6 +5,7 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter } from '@paddlesnitch/api'
 import { getRequestUser } from '@/lib/auth'
+import { clientOf, isServerErrorCode } from '@paddlesnitch/core/observe'
 
 function handler(req: Request) {
   return fetchRequestHandler({
@@ -13,7 +14,13 @@ function handler(req: Request) {
     router: appRouter,
     // Mobile sends `Authorization: Bearer <Cognito ID token>`; web sends the tt_id
     // cookie. Never a device token.
-    createContext: async () => ({ user: await getRequestUser(req) }),
+    createContext: async () => ({ user: await getRequestUser(req), client: clientOf(req.headers) }),
+    // The API-call line (packages/api/src/trpc.ts) counts the error; this keeps
+    // the stack trace in the log for whoever fixes it. Callers' mistakes aren't
+    // ours, so they stay out of the error log.
+    onError: ({ error, path }) => {
+      if (isServerErrorCode(error.code)) console.error(`[trpc] ${path ?? '?'} ${error.code}`, error.cause ?? error)
+    },
   })
 }
 
