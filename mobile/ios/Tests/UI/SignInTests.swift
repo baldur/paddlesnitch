@@ -7,6 +7,19 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
     }
 
+    func testSigningInWithStravaShowsYourPaddles() {
+        let notice = app.buttons["sample-notice-action"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        notice.tap()
+        let strava = app.buttons["strava-sign-in"]
+        XCTAssertTrue(strava.waitForExistence(timeout: 10))
+        XCTAssertEqual(strava.label, "Connect with Strava")
+        if !strava.isHittable { app.swipeUp() }
+        strava.tap()
+        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "still showing the samples")
+        XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
+    }
+
     func testAWrongPasswordShowsTheServersWords() {
         signIn(password: "wrong")
         XCTAssertTrue(text(containing: "That email and password don’t match.").waitForExistence(timeout: 10))

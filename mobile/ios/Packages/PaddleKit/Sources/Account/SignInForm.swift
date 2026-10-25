@@ -59,15 +59,36 @@ public final class SignInForm {
             }
             password = ""
             return true
-        } catch PaddleAPIError.rejected(let message, _, _) {
-            error = message
-        } catch is TokenStoreError {
-            error = "Signed in, but this iPhone wouldn't keep you signed in. Try again."
-        } catch is URLError {
-            error = "Can't reach paddlesnitch. Check your connection and try again."
         } catch {
-            self.error = "Something went wrong. Try again in a moment."
+            self.error = Self.message(for: error)
         }
         return false
+    }
+
+    /// Signs in with Strava. True once signed in; closing the sign-in page
+    /// (`CancellationError`) leaves no error.
+    @discardableResult
+    public func signInWithStrava(to account: AccountModel, browser: (URL) async throws -> URL) async -> Bool {
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            try await account.signInWithStrava(browser: browser)
+            return true
+        } catch is CancellationError {
+        } catch {
+            self.error = Self.message(for: error)
+        }
+        return false
+    }
+
+    static func message(for error: any Error) -> String {
+        switch error {
+        case PaddleAPIError.rejected(let message, _, _): message
+        case let strava as StravaSignInError: strava.message
+        case is TokenStoreError: "Signed in, but this iPhone wouldn't keep you signed in. Try again."
+        case is URLError: "Can't reach paddlesnitch. Check your connection and try again."
+        default: "Something went wrong. Try again in a moment."
+        }
     }
 }
