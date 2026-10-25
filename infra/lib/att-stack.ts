@@ -289,17 +289,18 @@ export class AttStack extends cdk.Stack {
         requireSymbols: false,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      // Send all Cognito-originated emails (password reset code, OTP code,
-      // any future verification) from noreply@paddlesnitch.com via SES.
-      // DKIM, MAIL FROM (mail.paddlesnitch.com), and DMARC are all aligned —
-      // recipients see legitimate transactional mail.
-      email: cognito.UserPoolEmail.withSES({
-        fromEmail: 'noreply@paddlesnitch.com',
-        fromName: 'paddlesnitch.com',
-        sesRegion: 'eu-west-1',
-        sesVerifiedDomain: 'paddlesnitch.com',
-        replyTo: 'privacy@paddlesnitch.com',
-      }),
+      // Cognito's own email sender (2026-10-25), not SES: the SES account is
+      // still in the sandbox (#23), which silently dropped every password-reset
+      // code to an unverified address. Cognito's sender isn't limited by that
+      // (50 emails a day, from no-reply@verificationemail.com, unbranded).
+      // Changing this updates the pool in place. Once SES production access
+      // lands, switch back to:
+      //   cognito.UserPoolEmail.withSES({ fromEmail: 'noreply@paddlesnitch.com',
+      //     fromName: 'paddlesnitch.com', sesRegion: 'eu-west-1',
+      //     sesVerifiedDomain: 'paddlesnitch.com', replyTo: 'privacy@paddlesnitch.com' })
+      // and set RESET_EMAIL back to EMAIL_DELIVERY (apps/web/src/lib/email-delivery.ts).
+      // The OTP sign-in Lambda sends through SES itself and is unaffected.
+      email: cognito.UserPoolEmail.withCognito('privacy@paddlesnitch.com'),
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       // Every S3 key is a user's Cognito sub, and a recreated pool issues new
       // subs, so losing the pool orphans all data. RETAIN covers CloudFormation;

@@ -8,3 +8,12 @@
 // instead. Flip it to true once `aws sesv2 get-account` shows
 // ProductionAccessEnabled: true.
 export const EMAIL_DELIVERY = false
+
+// Password-reset codes are different: Cognito sends those itself (forgot
+// password), and since 2026-10-25 the user pool uses Cognito's own email
+// sender instead of SES (infra/lib/att-stack.ts), which the SES sandbox doesn't
+// limit: 50 emails a day, from no-reply@verificationemail.com. So reset works
+// for everyone. Sign-in codes stay off: our CreateAuthChallenge Lambda sends
+// those through SES. Move the pool back to SES (and drop this) once SES
+// production access lands.
+export const RESET_EMAIL = true
