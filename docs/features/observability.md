@@ -11,7 +11,7 @@ and it can be built now without getting in the way of the app work.
 
 ## Where we are
 
-- **Three dashboards**, all in `infra/lib/att-stack.ts`:
+- **Three dashboards**, all in `infra/lib/dashboards.ts` (moved out of `att-stack.ts` in O1a):
   - `paddlesnitch-app`: product events, pageviews, campaigns, server Lambda health
   - `paddlesnitch-firmware`: OTA rollout, boots, crashes, devices by version
   - `paddlesnitch-performance`: TTFB from the perf check, real server time, cold starts, CloudFront errors
