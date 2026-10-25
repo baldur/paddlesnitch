@@ -336,6 +336,18 @@ export async function findUserBySub(sub: string): Promise<UserSummary | null> {
   }
 }
 
+// Whether an account with this sub exists. Unlike findUserBySub it never
+// answers "no" on an error: it throws. Use it where "no" leads to deleting
+// something (scripts/strava-index-cleanup.ts).
+export async function userExistsBySub(sub: string): Promise<boolean> {
+  const res = await makeClient().send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  return (res.Users?.length ?? 0) > 0
+}
+
 // Create a Cognito user for a Strava sign-in where no pre-existing account
 // was found. We never want the user to see Cognito's invitation email
 // (MessageAction=SUPPRESS) and we set a random permanent password they
