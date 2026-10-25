@@ -1,22 +1,30 @@
 // The CloudWatch dashboards and their URL outputs (docs/features/observability.md).
 // Kept out of att-stack.ts so dashboard work doesn't collide with the rest of
 // the stack. Constructs are created on the stack itself with their original
-// ids, so moving them here changed nothing in the deployed template.
+// ids, so the move out of att-stack.ts changed nothing in the template.
+//
+// Three dashboards, the free allowance (each one after that is $3/month):
+//   paddlesnitch-health    — open this first: alarms, errors, key actions, use, web
+//   paddlesnitch-api       — the server in depth: procedures, actions, speed, email
+//   paddlesnitch-firmware  — the trackers
+// Platform (web / android / ios / tracker) is a column in the Logs Insights
+// tables, not a dashboard of its own.
 import * as cdk from 'aws-cdk-lib'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 
-export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
+export function addDashboards(stack: cdk.Stack, { serverFn, distribution, alarms }: {
   serverFn: lambda.IFunction
   distribution: cloudfront.IDistribution
+  alarms: cloudwatch.IAlarm[]
 }) {
   // ---------------------------------------------------------------------------
-  // CloudWatch dashboard — product events (EMF) + server health
+  // Shared metrics and the server log group
   // ---------------------------------------------------------------------------
-  // The product-event metrics are created automatically from the EMF log lines
-  // emitMetric() writes (src/lib/metrics.ts). They populate once events fire;
-  // referencing them here before any data exists is fine.
+  // Product events are EMF lines from emitMetric() (src/lib/metrics.ts); the
+  // API-call and action lines come from @paddlesnitch/core/observe. They all
+  // populate once something happens; referencing them earlier is fine.
   const EVENT_NAMESPACE = 'Paddlesnitch/App'
   const eventNames = ['pageview', 'signup', 'login', 'upload', 'trial_create', 'course_create']
   const eventMetric = (event: string, period: cdk.Duration) =>
@@ -28,21 +36,138 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
       period,
       label: event,
     })
+  const sum = (namespace: string, metricName: string, period: cdk.Duration, label: string, dimensionsMap?: Record<string, string>) =>
+    new cloudwatch.Metric({ namespace, metricName, dimensionsMap, statistic: 'Sum', period, label })
+  const actionNames = ['sign_in', 'upload', 'analyse', 'device_sync', 'strava_import']
 
+  // Logs Insights over the server Lambda's log group (where every EMF line is
+  // written). Referenced by NAME so we don't create/adopt a LogGroup resource
+  // (which could clash with the one Lambda auto-creates on first run).
+  const serverLogGroup = `/aws/lambda/${serverFn.functionName}`
+  const table = (title: string, queryLines: string[], width: number, height = 6) =>
+    new cloudwatch.LogQueryWidget({ title, logGroupNames: [serverLogGroup], view: cloudwatch.LogQueryVisualizationType.TABLE, queryLines, width, height })
+  const consoleUrl = (name: string) =>
+    `https://${stack.region}.console.aws.amazon.com/cloudwatch/home?region=${stack.region}#dashboards/dashboard/${name}`
+
+  // ---------------------------------------------------------------------------
+  // paddlesnitch-health: is anything broken right now, and are people using it?
+  // ---------------------------------------------------------------------------
   const dashboard = new cloudwatch.Dashboard(stack, 'AppDashboard', {
-    dashboardName: 'paddlesnitch-app',
-    defaultInterval: cdk.Duration.days(30),
+    dashboardName: 'paddlesnitch-health',
+    defaultInterval: cdk.Duration.days(7),
   })
 
   dashboard.addWidgets(
-    new cloudwatch.GraphWidget({
-      title: 'Product events / day',
-      left: eventNames.map(e => eventMetric(e, cdk.Duration.days(1))),
-      width: 24,
-      height: 8,
+    new cloudwatch.AlarmStatusWidget({ title: 'Alarms', alarms, width: 16, height: 6 }),
+    new cloudwatch.TextWidget({
+      width: 8, height: 6,
+      markdown: [
+        '### Deep dives',
+        `- [API, actions, speed, email](${consoleUrl('paddlesnitch-api')})`,
+        `- [Trackers and firmware](${consoleUrl('paddlesnitch-firmware')})`,
+        '',
+        '### App store crash consoles',
+        '- [Google Play: Android vitals](https://play.google.com/console)',
+        '- [App Store Connect: crashes](https://appstoreconnect.apple.com)',
+        '',
+        'Spec: docs/features/observability.md',
+      ].join('\n'),
     }),
   )
 
+  // Zero tolerance: every number here should read 0.
+  dashboard.addWidgets(
+    new cloudwatch.SingleValueWidget({
+      title: 'Errors in the selected range (all should be 0)',
+      metrics: [
+        sum('Paddlesnitch/Api', 'ServerErrors', cdk.Duration.days(1), 'API server errors'),
+        sum('Paddlesnitch/Actions', 'Failures', cdk.Duration.days(1), 'failed actions'),
+        sum('Paddlesnitch/Alerts', 'ServerErrorLines', cdk.Duration.days(1), 'errors logged'),
+        serverFn.metricErrors({ statistic: 'Sum', period: cdk.Duration.days(1), label: 'server crashes' }),
+        eventMetric('crash_report', cdk.Duration.days(1)).with({ label: 'app crashes' }),
+        eventMetric('client_error', cdk.Duration.days(1)).with({ label: 'browser errors' }),
+      ],
+      width: 24, height: 4,
+      setPeriodToTimeRange: true,
+    }),
+  )
+
+  dashboard.addWidgets(
+    new cloudwatch.GraphWidget({
+      title: 'API calls (left) and server errors (right) / hour',
+      left: [sum('Paddlesnitch/Api', 'Calls', cdk.Duration.hours(1), 'calls')],
+      right: [sum('Paddlesnitch/Api', 'ServerErrors', cdk.Duration.hours(1), 'server errors')],
+      width: 12, height: 6,
+    }),
+    table('API by platform', [
+      'filter kind = "api_call"',
+      'stats count(*) as calls, sum(ServerErrors) as serverErrors, pct(ms, 95) as p95ms by platform',
+      'sort calls desc',
+    ], 12),
+  )
+
+  dashboard.addWidgets(
+    new cloudwatch.GraphWidget({
+      title: 'Key actions / day (left), failures (right)',
+      left: actionNames.map(a => sum('Paddlesnitch/Actions', 'Attempts', cdk.Duration.days(1), a, { Action: a })),
+      right: [sum('Paddlesnitch/Actions', 'Failures', cdk.Duration.days(1), 'failures')],
+      width: 12, height: 6,
+    }),
+    table('Key actions by outcome and platform', [
+      'filter kind = "action"',
+      'stats count(*) as n by Action, outcome, platform',
+      'sort Action asc, n desc',
+    ], 12),
+  )
+
+  dashboard.addWidgets(
+    table('Sessions by platform (distinct)', [
+      'filter Event = "pageview" or Event = "app_open"',
+      'stats count_distinct(sid) as sessions, count(*) as events by platform',
+      'sort sessions desc',
+    ], 8),
+    new cloudwatch.GraphWidget({
+      title: 'Product events / day',
+      left: eventNames.map(e => eventMetric(e, cdk.Duration.days(1))),
+      width: 16, height: 6,
+    }),
+  )
+
+  // The apps: crashes by signature, and which versions people are on.
+  dashboard.addWidgets(
+    table('App crashes by signature', [
+      'filter Event = "crash_report"',
+      'stats count(*) as crashes, latest(@timestamp) as last by platform, crashedVersion, signature',
+      'sort crashes desc',
+      'limit 20',
+    ], 12),
+    table('App versions in use (app opens)', [
+      'filter Event = "app_open"',
+      'stats count(*) as opens by platform, appVersion',
+      'sort opens desc',
+      'limit 20',
+    ], 12),
+  )
+
+  dashboard.addWidgets(
+    new cloudwatch.SingleValueWidget({
+      title: 'Trackers in the selected range',
+      metrics: [
+        sum('Paddlesnitch/Firmware', 'DeviceSeen', cdk.Duration.days(1), 'heartbeats'),
+        sum('Paddlesnitch/Firmware', 'DeviceCrash', cdk.Duration.days(1), 'crashes'),
+      ],
+      width: 8, height: 6,
+      setPeriodToTimeRange: true,
+    }),
+    table('Browser errors from our own scripts', [
+      'filter Event = "client_error"',
+      'stats count(*) as n, latest(@timestamp) as last by message, path',
+      'sort n desc',
+      'limit 20',
+    ], 16),
+  )
+
+  // ---- the web site (what used to be paddlesnitch-app) --------------------
   dashboard.addWidgets(
     new cloudwatch.SingleValueWidget({
       title: 'Events — selected time range (totals)',
@@ -53,9 +178,9 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
     }),
   )
 
-  // Finer-grained, behaviour-oriented views over the same EMF data. Pageviews
-  // arrive in batches (client capture flushes ~15s / on tab-hide), so an hourly
-  // series makes recent/sparse traffic visible where the daily one hides it.
+  // Pageviews arrive in batches (client capture flushes ~15s / on tab-hide),
+  // so an hourly series makes recent/sparse traffic visible where the daily
+  // one hides it.
   dashboard.addWidgets(
     new cloudwatch.GraphWidget({
       title: 'Pageviews & key events / hour',
@@ -65,36 +190,18 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
     }),
   )
 
-  // Logs Insights over the server Lambda's log group (where emitMetric writes
-  // the EMF lines). Referenced by NAME so we don't create/adopt a LogGroup
-  // resource (which could clash with the one Lambda auto-creates on first run).
-  const serverLogGroup = `/aws/lambda/${serverFn.functionName}`
   dashboard.addWidgets(
-    new cloudwatch.LogQueryWidget({
-      title: 'Pageviews by path (what people look at)',
-      logGroupNames: [serverLogGroup],
-      view: cloudwatch.LogQueryVisualizationType.TABLE,
-      queryLines: [
-        'filter Event = "pageview"',
-        'stats count(*) as views by path',
-        'sort views desc',
-        'limit 30',
-      ],
-      width: 12,
-      height: 8,
-    }),
-    new cloudwatch.LogQueryWidget({
-      title: 'Events by type + distinct sessions',
-      logGroupNames: [serverLogGroup],
-      view: cloudwatch.LogQueryVisualizationType.TABLE,
-      queryLines: [
-        'filter ispresent(Event)',
-        'stats count(*) as events, count_distinct(sid) as sessions by Event',
-        'sort events desc',
-      ],
-      width: 12,
-      height: 8,
-    }),
+    table('Pageviews by path (what people look at)', [
+      'filter Event = "pageview"',
+      'stats count(*) as views by path',
+      'sort views desc',
+      'limit 30',
+    ], 12, 8),
+    table('Events by type + distinct sessions', [
+      'filter ispresent(Event)',
+      'stats count(*) as events, count_distinct(sid) as sessions by Event',
+      'sort events desc',
+    ], 12, 8),
   )
 
   // Marketing campaigns (?campaign=<id> landings): visits → button clicks →
@@ -104,34 +211,11 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
   // is someone updating theirs). Visitors = distinct browser tabs; the
   // server-side sign-up has none.
   dashboard.addWidgets(
-    new cloudwatch.LogQueryWidget({
-      title: 'Campaigns: visits → button clicks → sign-ups',
-      logGroupNames: [serverLogGroup],
-      view: cloudwatch.LogQueryVisualizationType.TABLE,
-      queryLines: [
-        'filter ispresent(campaign)',
-        'stats count(*) as events, count_distinct(sid) as visitors by campaign, Event, repeat',
-        'sort campaign asc, events desc',
-      ],
-      width: 24,
-      height: 6,
-    }),
-  )
-
-  dashboard.addWidgets(
-    new cloudwatch.GraphWidget({
-      title: 'Server Lambda — invocations & errors / hour',
-      left: [serverFn.metricInvocations({ statistic: 'Sum', period: cdk.Duration.hours(1) })],
-      right: [serverFn.metricErrors({ statistic: 'Sum', period: cdk.Duration.hours(1) })],
-      width: 12,
-      height: 6,
-    }),
-    new cloudwatch.GraphWidget({
-      title: 'Server Lambda — duration p95 (ms)',
-      left: [serverFn.metricDuration({ statistic: 'p95', period: cdk.Duration.hours(1) })],
-      width: 12,
-      height: 6,
-    }),
+    table('Campaigns: visits → button clicks → sign-ups', [
+      'filter ispresent(campaign)',
+      'stats count(*) as events, count_distinct(sid) as visitors by campaign, Event, repeat',
+      'sort campaign asc, events desc',
+    ], 24),
   )
 
   // ---------------------------------------------------------------------------
@@ -299,12 +383,13 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
   )
 
   // ---------------------------------------------------------------------------
-  // Performance dashboard: the scheduled check's page timings (the same pages
-  // every run, so a line is a trend) next to what real visitors got from the
-  // server Lambda, and CloudFront's error rate.
+  // paddlesnitch-api: the server in depth. What failed, for whom, how fast, plus
+  // the scheduled check's page timings (the same pages every run, so a line is
+  // a trend), CloudFront's error rate, and email. (It replaced
+  // paddlesnitch-performance; the construct id stays PerfDashboard.)
   // ---------------------------------------------------------------------------
   const perfDashboard = new cloudwatch.Dashboard(stack, 'PerfDashboard', {
-    dashboardName: 'paddlesnitch-performance',
+    dashboardName: 'paddlesnitch-api',
     defaultInterval: cdk.Duration.days(14),
   })
   // Kept in step with PAGES in apps/web/scripts/perf.ts (perf-setup.test.ts).
@@ -375,17 +460,65 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution }: {
       width: 12, height: 6,
     }),
   )
+  perfDashboard.addWidgets(
+    table('Failed API calls by procedure and code (server errors and caller mistakes)', [
+      'filter kind = "api_call" and ispresent(code)',
+      'stats count(*) as n, sum(ServerErrors) as serverErrors, latest(@timestamp) as last by path, code, platform',
+      'sort serverErrors desc, n desc',
+      'limit 30',
+    ], 12, 8),
+    table('Slowest procedures', [
+      'filter kind = "api_call"',
+      'stats count(*) as calls, pct(ms, 50) as p50ms, pct(ms, 95) as p95ms, max(ms) as maxMs by path',
+      'sort p95ms desc',
+      'limit 20',
+    ], 12, 8),
+  )
+  perfDashboard.addWidgets(
+    table('Key actions that did not work: reason, platform, version', [
+      'filter kind = "action" and outcome != "ok"',
+      'stats count(*) as n, latest(@timestamp) as last by Action, outcome, reason, platform, appVersion',
+      'sort n desc',
+      'limit 30',
+    ], 12, 8),
+    // The same grouping the zero-tolerance clean-up used: every line the
+    // server logged at ERROR, by its first 140 characters.
+    table('Errors logged, grouped', [
+      'filter @message like /\\tERROR\\t|Task timed out/',
+      'parse @message /\\tERROR\\t(?<msg>.{0,140})/',
+      'stats count(*) as n, latest(@timestamp) as last by coalesce(msg, substr(@message, 0, 140)) as message',
+      'sort n desc',
+      'limit 20',
+    ], 12, 8),
+  )
+  perfDashboard.addWidgets(
+    new cloudwatch.GraphWidget({
+      title: 'Server Lambda — invocations & errors / hour',
+      left: [serverFn.metricInvocations({ statistic: 'Sum', period: cdk.Duration.hours(1) })],
+      right: [serverFn.metricErrors({ statistic: 'Sum', period: cdk.Duration.hours(1) })],
+      width: 12,
+      height: 6,
+    }),
+    // Account-level SES numbers (no dimensions), and our own sign-ins.
+    new cloudwatch.GraphWidget({
+      title: 'Email / day: sent, delivered, bounced, complained, rejected',
+      left: ['Send', 'Delivery', 'Bounce', 'Complaint', 'Reject'].map(m => sum('AWS/SES', m, cdk.Duration.days(1), m)),
+      width: 12,
+      height: 6,
+    }),
+  )
+
   new cdk.CfnOutput(stack, 'PerfDashboardUrl', {
-    value: `https://${stack.region}.console.aws.amazon.com/cloudwatch/home?region=${stack.region}#dashboards/dashboard/paddlesnitch-performance`,
-    description: 'CloudWatch dashboard for page speed',
+    value: consoleUrl('paddlesnitch-api'),
+    description: 'CloudWatch dashboard for the server in depth: API, actions, speed, email',
   })
 
   new cdk.CfnOutput(stack, 'DashboardUrl', {
-    value: `https://${stack.region}.console.aws.amazon.com/cloudwatch/home?region=${stack.region}#dashboards/dashboard/paddlesnitch-app`,
-    description: 'CloudWatch dashboard for product events + server health',
+    value: consoleUrl('paddlesnitch-health'),
+    description: 'CloudWatch dashboard to open first: alarms, errors, key actions, use, web',
   })
   new cdk.CfnOutput(stack, 'FirmwareDashboardUrl', {
-    value: `https://${stack.region}.console.aws.amazon.com/cloudwatch/home?region=${stack.region}#dashboards/dashboard/paddlesnitch-firmware`,
+    value: consoleUrl('paddlesnitch-firmware'),
     description: 'CloudWatch dashboard for firmware rollout (offers, boots, failures)',
   })
 }

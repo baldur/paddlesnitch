@@ -1,6 +1,6 @@
 # Testing tracker setup on a real tracker
 
-The app's tracker screen (Paddles → **Tracker**) pairs a tracker, adds it to
+The app's tracker screen (Paddles → **Account** → **Set up or sync a tracker**) pairs a tracker, adds it to
 your account, gives it WiFi and syncs its recordings over Bluetooth. Every
 step is tested against a fake tracker (`app/src/test/.../tracker/`), but not
 yet against real hardware. This is the check, about 15 minutes.
@@ -30,7 +30,7 @@ yet against real hardware. This is the check, about 15 minutes.
 | # | Do | You should see |
 |---|---|---|
 | 1 | On the tracker: Settings > Network, tap to page 2 (Bluetooth), hold | Tracker: `BLUETOOTH ON`, then `PT-xxx - 0 paired` |
-| 2 | In the app, signed in: Paddles → **Tracker** | "Your tracker", the two steps, **Find my tracker** |
+| 2 | In the app, signed in: Paddles → **Account** → **Set up or sync a tracker** | "Your tracker", the two steps, **Find my tracker** |
 | 3 | Press **Find my tracker** | First time only: Android asks to allow **Nearby devices**. Allow. Then the system sheet lists `PT-xxx` |
 | 4 | Choose `PT-xxx` | "Connecting to the tracker…", then "Pairing…" with how to pair |
 | 5 | Phone shows a "Pair with PT-xxx?" dialog with a 6-digit number; the tracker shows "Pair over Bluetooth?" and the same number. Tap **Pair** on the phone, **hold** on the tracker | Within a few seconds: the tracker's card (recordings waiting, account, firmware, ID) and three sections |
@@ -39,7 +39,7 @@ yet against real hardware. This is the check, about 15 minutes.
 | 8 | Same with the right password | "The tracker joined your WiFi." |
 | 9 | **Sync now** | "Asking the tracker what it has…", then "Recording 1 of N · piece k of m", then "N recordings sent." The tracker's Sync screen shows them uploaded; Paddles shows the paddle within a minute |
 | 10 | **Sync now** again | "Nothing new to send." |
-| 11 | **Done**, then **Tracker** again → **Connect to PT-xxx** | Connects straight away (no sheet, no pairing number), card shows "None waiting" |
+| 11 | **Done**, then **Set up or sync a tracker** again → **Connect to PT-xxx** | Connects straight away (no sheet, no pairing number), card shows "None waiting" |
 
 Worth trying too, each should say what to do in words:
 

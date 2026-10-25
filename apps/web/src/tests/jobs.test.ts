@@ -62,6 +62,24 @@ describe('a job', () => {
     expect(await getJson(key.replace('jobs/', 'jobs-failed/'))).toMatchObject({ attempts: MAX_ATTEMPTS, lastError: 'Strava had a moment', payload: { deviceSessionId: 's1' } })
   })
 
+  it('only the attempt that gives up is logged as an error; a retried attempt is a warning', async () => {
+    // console.error means "we broke something" and trips the zero-tolerance
+    // alarm (docs/features/observability.md); a retry is what backoff is for.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    made.fail = 99
+    const key = await job()
+    let now = Date.now()
+    for (let a = 1; a <= MAX_ATTEMPTS; a++) {
+      await runJob(key, now)
+      now += 2 ** a * MIN
+      expect(error).toHaveBeenCalledTimes(a === MAX_ATTEMPTS ? 1 : 0)
+    }
+    expect(warn).toHaveBeenCalledTimes(MAX_ATTEMPTS - 1)
+    expect(String(error.mock.calls[0][0])).toContain(`attempt ${MAX_ATTEMPTS} failed, giving up`)
+    error.mockRestore(); warn.mockRestore()
+  })
+
   it('a retry that works is done', async () => {
     made.fail = 1
     const key = await job()

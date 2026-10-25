@@ -16,5 +16,11 @@
     "auth": "user",
     "input": "ById",
     "output": "AnalysisSession"
+  },
+  "paddles.writeSummary": {
+    "kind": "mutation",
+    "auth": "user",
+    "input": "ById",
+    "output": "AnalysisSession"
   }
 }
