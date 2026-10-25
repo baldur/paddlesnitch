@@ -162,24 +162,75 @@ const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
 const WebPage = named('WebPage', z.object({ url: z.string() }))
 const StravaAppToken = named('StravaAppToken', z.object({ code: z.string(), verifier: z.string() }))
 
-/** `input: null` is a multipart upload (`file`), described in mobile/contract/README.md. */
-type Rest = { input: z.ZodType | null; output: z.ZodType; errors: number[] }
+// ---- Account (C5): the website's /api/account routes, called with Authorization: Bearer ----
+
+const TosAcceptance = named('TosAcceptance', z.object({ version: z.string(), acceptedAt: timestamp() }))
+/** Whether the person has accepted the current Terms (`currentVersion`). */
+export const TosStatus = named('TosStatus', z.object({
+  currentVersion: z.string(),
+  accepted: z.boolean(),
+  acceptances: z.array(TosAcceptance),
+}))
+const TosAccept = named('TosAccept', z.object({ version: z.string() }))
+export const TosAccepted = named('TosAccepted', z.object({ acceptances: z.array(TosAcceptance) }))
+/** A short-lived link to the file; relative (to the site) only in local dev. */
+export const DownloadLink = named('DownloadLink', z.object({ url: z.string() }))
+const DeleteAccount = named('DeleteAccount', z.object({
+  // The app's refresh token, so it stops working at once.
+  refreshToken: z.string().optional(),
+}))
+/** Public profile: off by default; `handle` is missing until one is claimed. */
+export const ProfileSettings = named('ProfileSettings', z.object({ public: z.boolean(), handle: z.string().optional() }))
+const ProfileVisibility = named('ProfileVisibility', z.object({ public: z.boolean() }))
+/** Sent as the query string: `?check=<handle>`. */
+const HandleCheck = named('HandleCheck', z.object({ check: z.string() }))
+/** `slug` is the handle as it would be saved; `reason` says why it can't be. */
+export const HandleAvailability = named('HandleAvailability', z.object({
+  available: z.boolean(),
+  slug: z.string().optional(),
+  reason: z.string().optional(),
+}))
+const HandleClaim = named('HandleClaim', z.object({ handle: z.string() }))
+/** The contact email, for accounts made through Strava (whose own email is a placeholder). */
+export const Contact = named('Contact', z.object({
+  contact: z.object({ email: z.string().optional(), addedAt: timestamp().optional() }).nullable(),
+}))
+const ContactEmail = named('ContactEmail', z.object({ email: z.string() }))
 
 /**
- * The REST routes the apps call to sign in, by "<METHOD> <path>". Send
+ * `input: null` is a multipart upload (`file`) on POST and nothing on GET or
+ * DELETE; a GET's input goes in the query string. `auth: 'user'` needs
+ * `Authorization: Bearer <ID token>`. See mobile/contract/README.md.
+ */
+type Rest = { auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodType; errors: number[] }
+
+/**
+ * The REST routes the apps call (signing in, uploads, the account), by "<METHOD> <path>". Send
  * `x-paddlesnitch-app: <platform>/<version>` on each. Every status in `errors`
  * answers with an ApiError.
  */
 export const restRoutes = {
-  'POST /att/api/auth/login': { input: Login, output: SignIn, errors: [400, 401, 500] },
-  'POST /att/api/auth/otp-request': { input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
-  'POST /att/api/auth/otp-verify': { input: OtpVerify, output: SignIn, errors: [400, 500] },
-  'POST /att/api/auth/signup': { input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
-  'POST /att/api/auth/strava/app-token': { input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
-  'POST /att/api/auth/web-code': { input: WebPageFor, output: WebPage, errors: [401] },
-  'POST /paddles/api/analyse': { input: null, output: Analysed, errors: [400, 401, 422, 500] },
-  'POST /att/api/auth/refresh': { input: RefreshToken, output: Refreshed, errors: [401] },
-  'POST /att/api/auth/logout': { input: RefreshToken, output: Ok, errors: [] },
+  'POST /att/api/auth/login': { auth: 'public', input: Login, output: SignIn, errors: [400, 401, 500] },
+  'POST /att/api/auth/otp-request': { auth: 'public', input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
+  'POST /att/api/auth/otp-verify': { auth: 'public', input: OtpVerify, output: SignIn, errors: [400, 500] },
+  'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
+  'POST /att/api/auth/strava/app-token': { auth: 'public', input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
+  'POST /att/api/auth/web-code': { auth: 'user', input: WebPageFor, output: WebPage, errors: [401] },
+  'POST /paddles/api/analyse': { auth: 'user', input: null, output: Analysed, errors: [400, 401, 422, 500] },
+  'POST /att/api/auth/refresh': { auth: 'public', input: RefreshToken, output: Refreshed, errors: [401] },
+  'POST /att/api/auth/logout': { auth: 'public', input: RefreshToken, output: Ok, errors: [] },
+  'GET /api/account/tos': { auth: 'user', input: null, output: TosStatus, errors: [401] },
+  'POST /api/account/tos': { auth: 'user', input: TosAccept, output: TosAccepted, errors: [401, 422] },
+  'POST /api/account/export': { auth: 'user', input: null, output: DownloadLink, errors: [401] },
+  'DELETE /api/account': { auth: 'user', input: DeleteAccount, output: Ok, errors: [401] },
+  'GET /api/account/profile': { auth: 'user', input: null, output: ProfileSettings, errors: [401] },
+  'PATCH /api/account/profile': { auth: 'user', input: ProfileVisibility, output: ProfileSettings, errors: [400, 401] },
+  'GET /api/account/handle': { auth: 'user', input: HandleCheck, output: HandleAvailability, errors: [401] },
+  'PUT /api/account/handle': { auth: 'user', input: HandleClaim, output: ProfileSettings, errors: [400, 401] },
+  'DELETE /api/account/handle': { auth: 'user', input: null, output: ProfileSettings, errors: [401] },
+  'GET /api/account/contact': { auth: 'user', input: null, output: Contact, errors: [401] },
+  'POST /api/account/contact': { auth: 'user', input: ContactEmail, output: Contact, errors: [400, 401] },
+  'DELETE /api/account/contact': { auth: 'user', input: null, output: Ok, errors: [401] },
 } satisfies Record<string, Rest>
 
 type Procedure = { kind: 'query' | 'mutation'; auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodType }
@@ -229,7 +280,7 @@ export function apiContractFiles(): Record<string, string> {
     kind: p.kind, auth: p.auth, input: p.input ? idOf(p.input) : null, output: idOf(p.output),
   }])))
   files['rest.json'] = json(Object.fromEntries(Object.entries(restRoutes).map(([route, r]) => [route, {
-    input: r.input ? idOf(r.input) : null, output: idOf(r.output), errors: r.errors,
+    auth: r.auth, input: r.input ? idOf(r.input) : null, output: idOf(r.output), errors: r.errors,
   }])))
   return files
 }

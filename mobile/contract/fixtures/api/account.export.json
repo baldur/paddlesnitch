@@ -1,0 +1,3 @@
+{
+  "url": "https://paddlesnitch-data-prod.s3.eu-west-1.amazonaws.com/exports/u-example/abc123.json?X-Amz-Expires=300&X-Amz-Signature=example"
+}

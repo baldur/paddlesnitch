@@ -68,7 +68,7 @@ describe('Terms of Service — signup gating', () => {
     const idToken = setCookie.match(/tt_id=([^;]+)/)?.[1] ?? ''
     mockAuth(idToken)
 
-    const meTos = await (await getMyTos()).json()
+    const meTos = await (await getMyTos(new Request('http://x'))).json()
     expect(meTos.accepted).toBe(true)
     expect(meTos.currentVersion).toBe(CURRENT_TOS_VERSION)
     expect(meTos.acceptances).toEqual(
@@ -85,7 +85,7 @@ describe('Terms of Service — current acceptance status', () => {
     // the route's ToS gate — so the user exists without a consent record.
     const u = await makeUser('Bare')
     mockAuth(u.idToken)
-    const res = await getMyTos()
+    const res = await getMyTos(new Request('http://x'))
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.accepted).toBe(false)
@@ -93,7 +93,7 @@ describe('Terms of Service — current acceptance status', () => {
 
   it('an unauthenticated request gets 401', async () => {
     mockAuth(null)
-    const res = await getMyTos()
+    const res = await getMyTos(new Request('http://x'))
     expect(res.status).toBe(401)
   })
 

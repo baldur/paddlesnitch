@@ -41,13 +41,20 @@ enum Contract {
         return object.keys.sorted()
     }
 
-    /// The REST route a fixture answers: `auth.login[.case]` is
-    /// `… /api/auth/login`. `auth.error` belongs to no single route.
-    static func route(forFixture name: String) -> String? {
+    /// The REST routes a fixture may answer, GET first: `auth.login[.case]`
+    /// is `… /api/auth/login`; `account.<route>[-<what>][.case]` is any
+    /// method on `/api/account/<route>` (`account.tos-accepted` is the POST's
+    /// answer). `auth.error` belongs to no single route.
+    static func routes(forFixture name: String) -> [String] {
         let parts = name.split(separator: ".").map(String.init)
-        guard parts.count >= 2 else { return nil }
-        let suffix = "/api/\(parts[0])/\(parts[1])"
-        return restRoutes.first { $0.hasSuffix(suffix) }
+        guard parts.count >= 2 else { return [] }
+        let base = parts[1].split(separator: "-").first.map(String.init) ?? parts[1]
+        for route in [parts[1], base] {
+            let path = "/api/\(parts[0])/\(route)"
+            let matches = restRoutes.filter { $0.hasSuffix(" " + path) || $0.hasSuffix("/att" + path) }
+            if !matches.isEmpty { return matches.sorted { $0.hasPrefix("GET ") && !$1.hasPrefix("GET ") } }
+        }
+        return []
     }
 
     /// An error answer: every one carries `error` (contract README).

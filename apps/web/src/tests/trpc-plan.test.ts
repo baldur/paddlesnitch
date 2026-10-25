@@ -191,7 +191,7 @@ describe('plans and your account', () => {
     const me = await makeUser('Me')
     const saved = await as(me).plan.save(DW)
     signInAs(me.idToken)
-    const body = JSON.parse(await (await exportData()).text())
+    const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
     expect(body.account.plans).toEqual([saved])
   })
 
@@ -201,7 +201,7 @@ describe('plans and your account', () => {
     const { shareId } = await as(me).plan.share({ id: saved.id })
     expect(await listKeys(`users/${me.id}/plans/`)).toHaveLength(1)
     signInAs(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
     expect(await listKeys(`users/${me.id}/plans/`)).toEqual([])
     expect(await getJson(`plans/shared/${shareId}.json`)).toBeNull()
     await expect(anon.plan.shared({ shareId: shareId! })).rejects.toMatchObject({ code: 'NOT_FOUND' })

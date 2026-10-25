@@ -62,7 +62,7 @@ describe('erasure', () => {
     await plant(trial.id, me.id, 'mine'); await indexEntry('mine', trial.id, me.id)
     await plant(trial.id, other.id, 'theirs'); await indexEntry('theirs', trial.id, other.id)
     vi.mocked(cookies).mockResolvedValue({ get: (n: string) => (n === 'tt_id' ? { name: n, value: me.idToken } : undefined) } as never)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
     expect(await getJson('entry-ids/mine.json')).toBeNull()
     expect(await getJson('entry-ids/theirs.json')).toEqual({ trialId: trial.id, userId: other.id })
   })

@@ -30,14 +30,14 @@ describe('GET /api/account/contact', () => {
   it('returns null when the user has never set a contact', async () => {
     const u = await makeUser('Bare')
     mockAuth(u.idToken)
-    const res = await GET()
+    const res = await GET(new Request('http://x'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ contact: null })
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockAuth(null)
-    const res = await GET()
+    const res = await GET(new Request('http://x'))
     expect(res.status).toBe(401)
   })
 })
@@ -90,16 +90,16 @@ describe('DELETE /api/account/contact', () => {
     const u = await makeUser('Clearer')
     mockAuth(u.idToken)
     await POST(jsonReq('POST', { email: 'me@example.com' }))
-    const del = await DELETE()
+    const del = await DELETE(new Request('http://x'))
     expect(del.status).toBe(200)
     mockAuth(u.idToken)
-    const after = await (await GET()).json()
+    const after = await (await GET(new Request('http://x'))).json()
     expect(after.contact).toBeNull()
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockAuth(null)
-    const res = await DELETE()
+    const res = await DELETE(new Request('http://x'))
     expect(res.status).toBe(401)
   })
 })

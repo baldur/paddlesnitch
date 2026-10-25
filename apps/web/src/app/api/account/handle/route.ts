@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { claimHandle, releaseHandle, normaliseHandle, getHandleOwner } from '@/lib/profile'
 
 // GET /api/account/handle?check=<handle>
 // Availability check for the claim UI. { available, reason? }. Mine = available
 // (re-claiming your own handle is a no-op).
 export async function GET(req: NextRequest) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const raw = req.nextUrl.searchParams.get('check') ?? ''
   const norm = normaliseHandle(raw)
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
 // PUT /api/account/handle { handle } — claim or change.
 export async function PUT(req: NextRequest) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const result = await claimHandle(user.id, body.handle)
@@ -27,8 +27,8 @@ export async function PUT(req: NextRequest) {
 }
 
 // DELETE /api/account/handle — give up the handle.
-export async function DELETE() {
-  const user = await getAuthUser()
+export async function DELETE(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return NextResponse.json(await releaseHandle(user.id))
 }

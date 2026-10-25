@@ -28,7 +28,7 @@ describe('/api/account/handle', () => {
     mockAuth(null)
     expect((await checkHandle(checkReq('foo'))).status).toBe(401)
     expect((await putHandle(putReq('foo'))).status).toBe(401)
-    expect((await deleteHandle()).status).toBe(401)
+    expect((await deleteHandle(new Request('http://x'))).status).toBe(401)
   })
 
   it('claims, reports availability, and rejects a taken handle', async () => {
@@ -58,7 +58,7 @@ describe('/api/account/handle', () => {
     const u = await makeUser()
     mockAuth(u.idToken)
     await putHandle(putReq('letmego'))
-    const released = await deleteHandle()
+    const released = await deleteHandle(new Request('http://x'))
     expect(released.status).toBe(200)
     expect((await released.json()).handle).toBeUndefined()
     // Now available again.

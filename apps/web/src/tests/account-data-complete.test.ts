@@ -83,7 +83,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     const shared = await shareSession(me.id, 'p1')
 
     signInAs(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     expect(await listKeys(`analysis/${me.id}/`)).toEqual([])
     expect(await getSharedSession(shared!.shareId)).toBeNull()
@@ -100,7 +100,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     await derived({ name: 'recording-report', owner: other.id, inputs: ['x'] }, async () => ({ roll: 4 }))
 
     signInAs(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     expect(await listKeys(`derived/u/${me.id}/`)).toEqual([])
     expect(await listKeys(`derived/u/${other.id}/`)).toHaveLength(1)
@@ -116,7 +116,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     await storeDeviceMotion('AABBCCDD', me.id, 'track_001.csv', 'ms,ax\n1,0\n', 1)
 
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     expect(await listUserDevices(me.id)).toEqual([])
     expect(await listKeys('devices/AABBCCDD/')).toEqual([])
@@ -139,7 +139,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     )
 
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     const left = await listKeys('devices/AABBCCDD/')
     expect(left.some(k => k.includes('/uploads/old.csv'))).toBe(true)
@@ -153,7 +153,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     await putAthleteIndex(777, me.id)
 
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     expect(await getUserIdByAthleteId(777)).toBeNull()
   })
@@ -165,7 +165,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     await putJson('feedback-contacts/2.json', { issueNumber: 2, userId: other.id, email: other.email })
 
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     expect(await listKeys('feedback-contacts/')).toEqual(['feedback-contacts/2.json'])
   })
@@ -178,7 +178,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     const token = await getInviteToken(me.id)
 
     signInAs(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     expect(await listBuddies(buddy.id)).toEqual([])
     expect(await listIncomingRequests(asked.id)).toEqual([])
@@ -201,7 +201,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     })
 
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     expect((await getGroup('g1'))!.adminUserIds).toEqual([])
     expect((await getGroup('g2'))!.memberUserIds).toEqual([])
@@ -220,7 +220,7 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     for (const g of ['with-admin', 'members-only', 'just-me']) await addUserToGroupIndex(me.id, g)
 
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     const a = await getGroup('with-admin')
     expect(a!.ownerId).toBe(admin.id)
@@ -254,7 +254,7 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     await putJson('feedback-contacts/6.json', { issueNumber: 6, userId: owner.id, email: owner.email })
 
     signInAs(me.idToken)
-    const text = await (await exportData()).text()
+    const text = await (await exportData(new Request('http://x'))).text()
     const body = JSON.parse(text)
 
     expect(body.paddles.map((p: { id: string }) => p.id)).toEqual(['p1'])
@@ -280,7 +280,7 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     const { requestBuddy, acceptRequest } = await import('@paddlesnitch/core/buddies')
     await requestBuddy(me.id, buddy.id); await acceptRequest(buddy.id, me.id)
     signInAs(me.idToken)
-    const text = await (await exportData()).text()
+    const text = await (await exportData(new Request('http://x'))).text()
     const body = JSON.parse(text)
     expect(body.buddies.buddies.map((b: { userId: string }) => b.userId)).toEqual([buddy.id])
     expect(body.buddies.sharing).toEqual({ paddles: true })
@@ -294,7 +294,7 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     await pairTracker(stranger.id, '11223344')
 
     signInAs(me.idToken)
-    const body = JSON.parse(await (await exportData()).text())
+    const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
     expect(body.paddles).toEqual([])
     expect(body.trackers).toEqual([])
   })

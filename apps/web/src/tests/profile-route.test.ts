@@ -29,19 +29,19 @@ function patchReq(body: unknown) {
 describe('GET/PATCH /api/account/profile', () => {
   it('returns 401 when not signed in', async () => {
     mockAuth(null)
-    expect((await getProfile()).status).toBe(401)
+    expect((await getProfile(new Request('http://x'))).status).toBe(401)
     expect((await patchProfile(patchReq({ public: true }))).status).toBe(401)
   })
 
   it('defaults to private then flips public', async () => {
     const u = await makeUser()
     mockAuth(u.idToken)
-    expect(await (await getProfile()).json()).toEqual({ public: false })
+    expect(await (await getProfile(new Request('http://x'))).json()).toEqual({ public: false })
 
     const patched = await patchProfile(patchReq({ public: true }))
     expect(patched.status).toBe(200)
     expect(await patched.json()).toEqual({ public: true })
-    expect(await (await getProfile()).json()).toEqual({ public: true })
+    expect(await (await getProfile(new Request('http://x'))).json()).toEqual({ public: true })
   })
 
   it('rejects a non-boolean public value', async () => {

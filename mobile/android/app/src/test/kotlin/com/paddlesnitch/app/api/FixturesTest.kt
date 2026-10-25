@@ -17,6 +17,9 @@ class FixturesTest {
             "me" to Me.serializer(), "paddles.list" to PaddleList.serializer(), "paddles.get" to AnalysisSession.serializer(), "paddles.writeSummary" to AnalysisSession.serializer(),
             "auth.login" to SignIn.serializer(), "auth.refresh" to Refreshed.serializer(),
             "auth.error" to ApiError.serializer(), "auth.otp-verify.retry" to ApiError.serializer(),
+            "account.tos" to TosStatus.serializer(), "account.tos-accepted" to TosAccepted.serializer(), "account.export" to DownloadLink.serializer(),
+            "account.profile" to ProfileSettings.serializer(), "account.handle-check" to HandleAvailability.serializer(),
+            "account.contact" to Contact.serializer(), "account.error" to ApiError.serializer(),
         )
         val names = dir.list()!!.filter { it.endsWith(".json") }
         assertTrue(names.size >= 7)

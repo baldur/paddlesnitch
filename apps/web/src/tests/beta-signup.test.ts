@@ -109,7 +109,7 @@ describe('beta applications are covered by delete and export', () => {
     const me = await makeUser('Me')
     await post({ ...good, email: me.email })
     signInAs(me.idToken)
-    const body = JSON.parse(await (await exportData()).text())
+    const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
     expect(body.betaApplication).toMatchObject({ email: me.email, sport: 'kayak' })
   })
 
@@ -118,7 +118,7 @@ describe('beta applications are covered by delete and export', () => {
     await post({ ...good, email: me.email })
     await post({ ...good, email: 'someone.else@example.com' })
     signInAs(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
     expect(await getBetaApplication(me.email)).toBeNull()
     expect(await getBetaApplication('someone.else@example.com')).not.toBeNull()
   })
