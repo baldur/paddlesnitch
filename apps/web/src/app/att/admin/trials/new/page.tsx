@@ -16,7 +16,7 @@ import type { CourseMetadata } from '@/lib/types'
 function NewTrialForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // Derive directly from searchParams — see CLAUDE.md (useSearchParams anti-pattern note).
+  // Derive directly from searchParams — see apps/web/CLAUDE.md (useSearchParams anti-pattern note).
   const presetCourseId = searchParams.get('courseId') ?? ''
 
   const [courses, setCourses] = useState<CourseMetadata[] | null>(null)

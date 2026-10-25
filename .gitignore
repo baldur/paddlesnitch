@@ -68,8 +68,9 @@ playwright-report/
 test-results/
 /playwright/.cache/
 
-# Agent worktrees + local scratch
-.claude/
+# Agent worktrees + local scratch (but the agent briefs are shared: docs/agents.md)
+.claude/*
+!.claude/agents/
 paddle-map-*.html
 
 # River planner ingest cache (scripts/waterways/build-region.ts)

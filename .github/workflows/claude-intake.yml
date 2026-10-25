@@ -73,7 +73,8 @@ jobs:
 
             Steps:
               1. Read .intake-issue.json.
-              2. Read CLAUDE.md at the repo root, then the code the issue is about.
+              2. Read CLAUDE.md at the repo root and apps/web/CLAUDE.md, then the
+                 code the issue is about (and the CLAUDE.md in its folder).
               3. Your FINAL message is posted verbatim as the comment, so make
                  it only the comment text (markdown), nothing before or after:
                  - If it needs a product decision or is ambiguous: one concise,

@@ -72,10 +72,16 @@ test('the course map fits the course, long side along the course, north up, star
 // The close-up map follows you, ahead up, so the next bend shows the way you'll
 // meet it: the open water as a strip, and the start and finish across it.
 test('the close-up map: the water round you, ahead up the map', async () => {
-  const course = await fromFile('loop');
+  // On a real river, the mapped water (islands as holes) and the racing line through it.
+  const real = closeUp(await fromFile('loop'));
+  assert.equal(real.rule, 'evenodd');
+  assert.ok(real.water.split('Z').filter(Boolean).length > 10, 'every ring of the water');
+  assert.ok(real.line.split('L').length > 1000, 'the racing line');
+  const course = raceRiver();
   const near = closeUp(course);
-  // One small shape per stretch of river, each wound the same way, so where the
-  // river passes itself (the loop's way out and back) the water stays filled.
+  assert.equal(near.rule, 'nonzero');
+  // On a made-up one, a small shape per stretch of river, each wound the same
+  // way, so where the river passes itself the water stays filled.
   const quads = near.water.split('Z').filter(Boolean).map((q) => q.split(/[ML]/).filter(Boolean).map((xy) => xy.split(' ').map(Number)));
   assert.ok(quads.length > 100);
   for (const q of quads) {

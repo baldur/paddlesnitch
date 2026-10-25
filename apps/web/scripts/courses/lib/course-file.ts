@@ -83,8 +83,12 @@ export function sides(edges: Array<{ left: number | null; right: number | null }
 export function routePlaces(shapes: Array<{ name: string; shape: XZ[] }>, list: Landmark[], line: XZ[], [start, finish]: [number, number], maxM = 120, apart = 250): CourseFile['places'] {
   const cum = cumulative(line)
   const out: CourseFile['places'] = []
+  const headingAt = (i: number) => {
+    const [a, b] = [line[Math.max(0, i - 1)], line[Math.min(line.length - 1, i + 1)]]
+    return (Math.atan2(b[0] - a[0], -(b[1] - a[1])) * 180) / Math.PI
+  }
   for (const p of list) {
-    const { name, label } = typeof p === 'string' ? { name: p, label: p } : p
+    const { name, label, heading } = typeof p === 'string' ? { name: p, label: p, heading: undefined } : p
     const points = shapes.filter((t) => t.name === name).flatMap((t) => t.shape)
     if (!points.length) continue
     const d = line.map((q) => Math.min(...points.map((r) => Math.hypot(q[0] - r[0], q[1] - r[1]))))
@@ -103,6 +107,7 @@ export function routePlaces(shapes: Array<{ name: string; shape: XZ[] }>, list: 
       while (d[i] > d[pass.at] + 25) i++
       const s = cum[i]
       if (s > finish || cum[pass.to] < start) continue
+      if (heading !== undefined && Math.abs(((headingAt(pass.at) - heading + 540) % 360) - 180) > 90) continue
       out.push({ s: r1(Math.max(s, start + 5)), name: label })
     }
   }
@@ -163,7 +168,8 @@ const kindOfBuilding = (tags: Record<string, string>): CourseFile['buildings'][n
     : ['house', 'detached', 'semidetached_house', 'terrace', 'residential', 'bungalow', 'yes'].includes(tags.building) ? 'house'
     : 'other'
 
-export type Landmark = string | { name: string; label: string }
+// heading (degrees): only where the line passes it going that way (within 90 degrees).
+export type Landmark = string | { name: string; label: string; heading?: number }
 /** Where swans and ducks crowd: `count` of them within `spread` metres of the river beside `near` (an OSM name). */
 export type Flock = { near: string; count: number; spread: number }
 

@@ -123,8 +123,10 @@ jobs:
             Determine the number from the event context. ALWAYS post exactly one
             such comment before you finish — even if it's just a short status.
 
-            FIRST read CLAUDE.md at the repo root — it is the source of truth for
-            conventions you MUST follow (test-first; `pnpm test` AND `pnpm build`
+            FIRST read CLAUDE.md at the repo root, then the CLAUDE.md in the area
+            you change (apps/web/CLAUDE.md for the site, packages/*/CLAUDE.md,
+            infra/CLAUDE.md) — they are the source of truth for conventions you
+            MUST follow (test-first; `pnpm test` AND `pnpm build`
             must both pass before you push anything; match existing style; the
             commit-message trailer used in recent commits).
 
