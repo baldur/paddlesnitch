@@ -16,9 +16,6 @@ struct AccountView: View {
     @State private var downloaded: SharedFile?
     @State private var downloadFailure: String?
     @State private var confirmingDelete = false
-    @State private var confirmText = ""
-    @State private var deleting = false
-    @State private var deleteFailure: String?
     @State private var webPage: YouView.WebPage?
 
     struct SharedFile: Identifiable {
@@ -75,19 +72,13 @@ struct AccountView: View {
             if !termsChanged { termsSection }
             Section {
                 Button(role: .destructive) {
-                    confirmText = ""
                     confirmingDelete = true
                 } label: {
-                    HStack {
-                        Text(deleting ? "Deleting…" : "Delete my account").foregroundStyle(Palette.red)
-                        Spacer()
-                        if deleting { ProgressView().tint(Palette.muted).accessibilityHidden(true) }
-                    }
+                    Text("Delete my account").foregroundStyle(Palette.red)
                 }
-                .disabled(deleting)
                 .font(.plexSans(.body))
                 .listRowBackground(Palette.surface)
-                helper(deleteFailure ?? Self.deleteSummary, failed: deleteFailure != nil)
+                helper(Self.deleteSummary, failed: false)
             } header: {
                 header("Delete account")
             }
@@ -104,17 +95,12 @@ struct AccountView: View {
         .sheet(item: $webPage) { page in
             SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)).ignoresSafeArea()
         }
-        // As the website: type DELETE, then "Delete for good".
-        .alert("Delete your account?", isPresented: $confirmingDelete) {
-            TextField("DELETE", text: $confirmText)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-            Button("Delete for good", role: .destructive) { Task { await delete() } }
-                .disabled(confirmText != "DELETE")
-                .accessibilityIdentifier("confirm-delete-account")
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(Self.deleteExplained + "\n\nType DELETE to confirm. There is no undo.")
+        .sheet(isPresented: $confirmingDelete) {
+            DeleteAccountView(account: account) {
+                confirmingDelete = false
+                // Back to You, which now says the account is deleted.
+                dismiss()
+            }
         }
     }
 
@@ -135,19 +121,6 @@ struct AccountView: View {
         } catch {
             downloadFailure = Self.failure("Couldn't download your data.", error)
             AccessibilityNotification.Announcement(downloadFailure ?? "").post()
-        }
-    }
-
-    private func delete() async {
-        deleting = true
-        defer { deleting = false }
-        do {
-            try await account.deleteAccount()
-            // Back to You, which now says the account is deleted.
-            dismiss()
-        } catch {
-            deleteFailure = Self.failure("Couldn't delete your account.", error)
-            AccessibilityNotification.Announcement(deleteFailure ?? "").post()
         }
     }
 
@@ -297,4 +270,83 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// Deleting the account, as the website: what goes, type DELETE, then
+/// "Delete for good". A sheet, not an alert: on iOS 17 an alert's button
+/// didn't follow its text field and did nothing when tapped.
+struct DeleteAccountView: View {
+    let account: AccountModel
+    let deleted: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmText = ""
+    @State private var deleting = false
+    @State private var failure: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(AccountView.deleteExplained)
+                        .font(.plexSans(.body))
+                        .foregroundStyle(Palette.fg)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Type DELETE to confirm. There is no undo.")
+                            .font(.plexSans(.subheadline, weight: .medium))
+                            .foregroundStyle(Palette.fg)
+                        TextField("", text: $confirmText)
+                            .font(.plexSans(.body))
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .background(Palette.surface)
+                            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.borderStrong))
+                            .accessibilityLabel("Type DELETE to confirm")
+                            .accessibilityIdentifier("confirm-delete-text")
+                    }
+                    if let failure {
+                        Text(failure).font(.plexSans(.body)).foregroundStyle(Palette.red)
+                            .accessibilityIdentifier("delete-error")
+                    }
+                    Button(role: .destructive) {
+                        Task { await delete() }
+                    } label: {
+                        Text(deleting ? "Deleting…" : "Delete for good")
+                            .font(.plexSans(.body, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    // Red words on a faint red, as the website's danger
+                    // button: white on this red is too faint to read.
+                    .buttonStyle(.bordered)
+                    .tint(Palette.red)
+                    .disabled(confirmText != "DELETE" || deleting)
+                    .accessibilityIdentifier("confirm-delete-account")
+                }
+                .padding(16)
+            }
+            .background(Palette.bg)
+            .navigationTitle("Delete your account?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(deleting)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .interactiveDismissDisabled(deleting)
+    }
+
+    private func delete() async {
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await account.deleteAccount()
+            deleted()
+        } catch {
+            failure = AccountView.failure("Couldn't delete your account.", error)
+            AccessibilityNotification.Announcement(failure ?? "").post()
+        }
+    }
 }

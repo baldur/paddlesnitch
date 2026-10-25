@@ -25,6 +25,10 @@ isn't obvious from the code.
   short; put long text in an alert message or its own scrolling screen.
   `LargeTextTests.checkWholeScreen(last:)` scrolls until a screen's last row is
   readable, so a blank list fails.
-- A SwiftUI alert's `TextField` keeps no accessibility identifier; find it as
-  `app.alerts.textFields.firstMatch`. Since iOS 26 a `confirmationDialog` is a
-  popover with no Cancel button; an `.alert` always has one.
+- Don't gate an alert's button on its `TextField`: on iOS 17 the button's
+  `.disabled` doesn't follow the field, and tapping it does nothing (seen on
+  CI, fine on iOS 27). Use a sheet you control (DeleteAccountView). An
+  alert's `TextField` also keeps no accessibility identifier. Since iOS 26 a
+  `confirmationDialog` is a popover with no Cancel button.
+- Run the UI tests on iOS 17 too when a screen is new: CI does, and the two
+  differ (alerts, dialogs, tab bars). There's no iOS 17 simulator on this Mac.

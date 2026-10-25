@@ -47,8 +47,7 @@ final class AccountTests: AppTestCase {
         let forGood = app.buttons["confirm-delete-account"].firstMatch
         XCTAssertTrue(forGood.waitForExistence(timeout: 10), "asks before deleting")
         XCTAssertFalse(forGood.isEnabled, "not until DELETE is typed, as on the website")
-        // An alert's field keeps no identifier: it's the alert's only one.
-        let field = app.alerts.textFields.firstMatch
+        let field = app.textFields["confirm-delete-text"]
         field.tap()
         field.typeText("DELETE")
         XCTAssertTrue(forGood.isEnabled)
