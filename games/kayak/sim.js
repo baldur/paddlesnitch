@@ -36,6 +36,15 @@ export const BOAT = {
   flowTime: 20,
   flowRhythm: 0.8,
 
+  // Back strokes: to brake, back off a bank or the start line, or turn on the
+  // spot. Each pushes `backImpulse` backwards (so it brakes first), up to
+  // `backMax` astern, where the boat drags `backDrag` times more (stern first),
+  // and swings the bow towards its side, `backYaw` times as hard as a forward stroke does.
+  backImpulse: 0.35,
+  backMax: 1.5,
+  backDrag: 2,
+  backYaw: 4,
+
   // Steering: the rudder needs speed to bite; strokes nudge the bow.
   rudder: 0.16, // target yaw rate per m/s of speed
   rudderMaxSpeed: 6,
@@ -121,10 +130,10 @@ export function createBoat({ x = 0, z = 0, heading = 0, power = 1, endurance = 1
   };
 }
 
-// input: { strokes: ['left' | 'right', ...], rudder: -1..1, lean: -1..1,
-//          draft: 0..1, rock: 0..1 } (draft and rock come from race.js's wash())
+// input: { strokes: ['left' | 'right' | 'back-left' | 'back-right', ...],
+//          rudder: -1..1, lean: -1..1, draft: 0..1, rock: 0..1 } (draft and rock come from race.js's wash())
 // Returns the events that happened, for sound and the HUD:
-// 'stroke' | 'weak' | 'capsize' | 'remount'.
+// 'stroke' | 'weak' | 'back' | 'capsize' | 'remount'.
 export function step(boat, dt, input) {
   const H = boat.hull;
   const events = [];
@@ -134,7 +143,7 @@ export function step(boat, dt, input) {
     boat.swim -= dt;
     boat.speed *= Math.exp(-3 * dt);
     if (boat.swim <= 0) {
-      Object.assign(boat, { swim: 0, roll: 0, rollRate: 0, yawRate: 0, lastSide: null, rhythm: 0, flow: 0, beat: null });
+      Object.assign(boat, { swim: 0, roll: 0, rollRate: 0, yawRate: 0, lastSide: null, rhythm: 0, flow: 0, beat: null, lastGap: Infinity });
       events.push('remount');
     }
     move(boat, dt);
@@ -142,7 +151,8 @@ export function step(boat, dt, input) {
   }
 
   for (const side of input.strokes ?? []) {
-    if (boat.time - boat.lastStroke >= H.minGap) events.push(stroke(boat, side));
+    if (boat.time - boat.lastStroke < H.minGap) continue;
+    events.push(side.startsWith('back-') ? backStroke(boat, side.slice(5)) : stroke(boat, side));
   }
 
   // A sprint lasts until a stroke at the comfortable beat or slower, or a pause.
@@ -151,20 +161,23 @@ export function step(boat, dt, input) {
   boat.flow = boat.rhythm >= H.flowRhythm
     ? Math.min(1, boat.flow + dt / H.flowTime)
     : Math.max(0, boat.flow - dt / 3);
-  const drag = 1 - H.draft * (input.draft ?? 0);
-  boat.speed = Math.max(0, boat.speed - drag * (H.drag * boat.speed ** 2 + H.linearDrag * boat.speed) * dt);
+  // Drag, against the way the boat is going (more going backwards), never past a standstill.
+  const drag = (1 - H.draft * (input.draft ?? 0)) * (boat.speed < 0 ? H.backDrag : 1);
+  const slow = drag * (H.drag * boat.speed ** 2 + H.linearDrag * Math.abs(boat.speed)) * dt;
+  boat.speed = boat.speed > 0 ? Math.max(0, boat.speed - slow) : Math.min(0, boat.speed + slow);
 
   // Lose the beat: by pausing, and by leaning on the rudder.
   if (boat.beat && boat.time - boat.lastStroke > boat.beat * 1.6) boat.rhythm = Math.max(0, boat.rhythm - 0.6 * dt);
-  const bite = Math.min(boat.speed, H.rudderMaxSpeed);
-  boat.steer = Math.abs(input.rudder ?? 0) * Math.min(1, bite / 2);
+  // Going backwards the rudder works the other way round, as on a real boat.
+  const bite = Math.max(-H.backMax, Math.min(boat.speed, H.rudderMaxSpeed));
+  boat.steer = Math.abs(input.rudder ?? 0) * Math.min(1, Math.abs(bite) / 2);
   boat.rhythm = Math.max(0, boat.rhythm - H.steerCost * boat.steer * dt);
   const target = (input.rudder ?? 0) * H.rudder * bite;
   boat.yawRate += (target - boat.yawRate) * Math.min(1, H.yawResponse * dt);
   boat.heading += boat.yawRate * dt;
 
   const braced = boat.time - boat.paddle.at < H.strokeTime;
-  const stability = H.stabilityStill + H.stabilitySpeed * Math.min(boat.speed / H.stableSpeed, 1);
+  const stability = H.stabilityStill + H.stabilitySpeed * Math.min(Math.abs(boat.speed) / H.stableSpeed, 1);
   const accel = H.tip * Math.sin(boat.roll)
     - stability * boat.roll
     - (H.rollDamp + (braced ? H.brace : 0)) * boat.rollRate
@@ -221,6 +234,24 @@ function stroke(boat, side) {
   boat.strokeTimes.push(boat.time);
   while (boat.strokeTimes[0] < boat.time - 6) boat.strokeTimes.shift();
   return quality < 0.6 ? 'weak' : 'stroke';
+}
+
+// A back stroke on `side`: pushes the boat backwards (braking first) and
+// swings the bow towards that side. It breaks your beat, costs no stamina,
+// and doesn't count in the stroke rate.
+function backStroke(boat, side) {
+  const H = boat.hull;
+  const dir = side === 'left' ? -1 : 1; // a left back stroke swings the bow left
+  boat.speed = Math.max(-H.backMax, boat.speed - H.backImpulse * boat.power);
+  boat.yawRate += dir * H.strokeYaw * H.backYaw;
+  boat.rollRate += dir * H.strokeRoll;
+  boat.rhythm = Math.max(0, boat.rhythm - 0.2);
+  boat.beat = null;
+  boat.lastGap = Infinity;
+  boat.lastSide = null;
+  boat.lastStroke = boat.time;
+  boat.paddle = { side, at: boat.time, back: true };
+  return 'back';
 }
 
 // The comfortable beat: quicker than this only pays while sprinting. Fitter

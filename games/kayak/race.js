@@ -201,7 +201,7 @@ function intervalRace(course, { rivals, seed, you, birds }) {
 }
 
 // Whether a racer has been let go (always, in a mass start once the horn's gone).
-const released = (race, r) => race.format !== 'interval' || race.time >= r.release;
+export const released = (race, r) => race.format !== 'interval' || race.time >= r.release;
 
 // Lets boats go at their times, starts their clocks on the line, and counts
 // you down to yours.

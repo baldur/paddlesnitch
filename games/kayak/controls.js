@@ -5,7 +5,8 @@
 // steering wheel shifts your weight that way (lean), from the motion sensors.
 // Pushing one side of it away from you works the rudder (the gyroscope: push
 // the right side forward to go left). Each touch strokes on its side of the
-// screen, and sliding a finger that's down sideways works the rudder too.
+// screen, a thumb swiped down takes a back stroke on its side, and sliding a
+// finger that's down sideways works the rudder too.
 // The phone's angle comes from the fused orientation sensor where there is
 // one (steady, and blind to the jolt of each tap), else from the raw
 // accelerometer. Without either (no permission, or a page not served over
@@ -16,6 +17,7 @@ import { BUTTON } from '../shared/input.js';
 export const KEYS = {
   strokeLeft: 'ArrowLeft',
   strokeRight: 'ArrowRight',
+  back: 'ArrowDown', // held: the stroke keys take back strokes
   leanLeft: 'KeyA',
   leanRight: 'KeyD',
   rudderLeft: 'KeyQ',
@@ -34,6 +36,11 @@ const TILT_DEAD = 0.03;
 export const TILT_REFLEX = 0.45; // lean against the roll rate, as your hips would: see main.js
 export const TILT_SETTLE = 15; // seconds for a new way of holding the phone to become level
 const DRAG_FULL = 0.14; // share of the screen width to slide for full rudder
+// A touch is a forward stroke when the finger lifts, slides sideways (to
+// steer) or stays down TAP_WAIT ms; slid down SWIPE_DOWN of the screen's
+// height first, it's a back stroke.
+const TAP_WAIT = 150;
+const SWIPE_DOWN = 0.05;
 // Pushing a side of the phone forward: how far it's turned (radians, about the
 // screen's upright axis) before the rudder starts, and for full rudder. Where
 // you hold it becomes straight ahead again over TWIST_SETTLE seconds, so the
@@ -50,6 +57,7 @@ export class Controls {
   #pad = null;
   #touching = false;
   #fingers = new Map(); // pointerId -> x where it came down
+  #touches = new Map(); // pointerId -> { side, x, y, at } until its stroke is taken
   #dragRudder = 0;
   #tilt = { on: false, zero: null, flip: 1, lean: 0, at: null, fused: null };
   #twist = { angle: 0, at: null };
@@ -60,29 +68,39 @@ export class Controls {
     addEventListener('keydown', (e) => {
       if (Object.values(KEYS).flat().includes(e.code)) e.preventDefault();
       if (e.repeat) return;
-      if (e.code === KEYS.strokeLeft) this.#strokes.push('left');
-      if (e.code === KEYS.strokeRight) this.#strokes.push('right');
+      const back = this.#held.has(KEYS.back) ? 'back-' : '';
+      if (e.code === KEYS.strokeLeft) this.#strokes.push(`${back}left`);
+      if (e.code === KEYS.strokeRight) this.#strokes.push(`${back}right`);
       this.#held.add(e.code);
     });
     addEventListener('keyup', (e) => this.#held.delete(e.code));
     addEventListener('blur', () => this.#held.clear());
 
-    // Touch: tap the left or right half of the screen to stroke on that side;
-    // slide a finger that's down to steer.
+    // Touch: tap the left or right half of the screen to stroke on that side,
+    // swipe down for a back stroke; slide a finger that's down to steer.
     target.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       this.#touching = true;
       const rect = target.getBoundingClientRect();
-      this.#strokes.push(e.clientX - rect.left < rect.width / 2 ? 'left' : 'right');
+      const side = e.clientX - rect.left < rect.width / 2 ? 'left' : 'right';
+      this.#touches.set(e.pointerId, { side, x: e.clientX, y: e.clientY, at: performance.now(), height: rect.height });
       this.#fingers.set(e.pointerId, e.clientX);
     });
     target.addEventListener('pointermove', (e) => {
+      const t = this.#touches.get(e.pointerId);
+      if (t) {
+        const [dx, dy] = [e.clientX - t.x, e.clientY - t.y];
+        if (dy > t.height * SWIPE_DOWN && dy > Math.abs(dx)) this.#touchStroke(e.pointerId, `back-${t.side}`);
+        else if (Math.abs(dx) > 8) this.#touchStroke(e.pointerId, t.side);
+      }
       if (!this.#fingers.has(e.pointerId)) return;
       const dx = e.clientX - this.#fingers.get(e.pointerId);
       const full = target.getBoundingClientRect().width * DRAG_FULL;
       this.#dragRudder = clamp(Math.sign(dx) * Math.max(0, Math.abs(dx) - 8) / full);
     });
     const lift = (e) => {
+      const t = this.#touches.get(e.pointerId);
+      if (t) this.#touchStroke(e.pointerId, t.side);
       this.#fingers.delete(e.pointerId);
       if (!this.#fingers.size) this.#dragRudder = 0;
     };
@@ -191,6 +209,11 @@ export class Controls {
     t.at = now;
   }
 
+  #touchStroke(id, stroke) {
+    this.#touches.delete(id);
+    this.#strokes.push(stroke);
+  }
+
   // The gyroscope: how far the phone has been turned about the screen's upright
   // axis, as pushing one side of it away from you does.
   #twisted(rate, interval) {
@@ -219,8 +242,10 @@ export class Controls {
       const now = this.#pad.buttons.map((b) => b.value > 0.5 || b.pressed);
       now.forEach((down, i) => { if (down && !prev[i]) pressed.add(i); });
       this.#prev.set(this.#pad.index, now);
-      if (pressed.has(PAD.LT) || pressed.has(PAD.LB)) this.#strokes.push('left');
-      if (pressed.has(PAD.RT) || pressed.has(PAD.RB)) this.#strokes.push('right');
+      if (pressed.has(PAD.LT)) this.#strokes.push('left');
+      if (pressed.has(PAD.RT)) this.#strokes.push('right');
+      if (pressed.has(PAD.LB)) this.#strokes.push('back-left');
+      if (pressed.has(PAD.RB)) this.#strokes.push('back-right');
     }
     const target = (this.#held.has(KEYS.leanRight) ? 1 : 0) - (this.#held.has(KEYS.leanLeft) ? 1 : 0);
     const step = KEY_LEAN_RATE * dt;
@@ -235,6 +260,9 @@ export class Controls {
       return Math.abs(v) > DEADZONE ? v : 0;
     };
     const keyRudder = (this.#held.has(KEYS.rudderRight) ? 1 : 0) - (this.#held.has(KEYS.rudderLeft) ? 1 : 0);
+    // A thumb held still is a forward stroke once it's clearly not a swipe.
+    const now = performance.now();
+    for (const [id, t] of this.#touches) if (now - t.at >= TAP_WAIT) this.#touchStroke(id, t.side);
     const strokes = this.#strokes;
     this.#strokes = [];
     this.rudder = clamp(keyRudder + axis(0) + this.#dragRudder + this.twistRudder);
@@ -247,6 +275,7 @@ export class Controls {
 
   clear() {
     this.#strokes = [];
+    this.#touches.clear();
   }
 
   rumble(strength = 0.4, duration = 60) {
