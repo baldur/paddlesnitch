@@ -1,5 +1,6 @@
 package com.paddlesnitch.app
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,14 +33,20 @@ import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.KeystoreTokenStore
+import com.paddlesnitch.app.auth.PrefsVerifierStore
+import com.paddlesnitch.app.auth.StravaSignIn
 import com.paddlesnitch.app.auth.SignInScreen
 import com.paddlesnitch.app.paddles.PaddlesScreen
 import com.paddlesnitch.app.ui.PsColor
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-/** Signed out: the sample paddles and a way in. Signed in: your own paddles. */
+/**
+ * Signed out: the sample paddles and a way in. Signed in: your own paddles.
+ * [returned] carries links back into the app (Strava sign-in) from MainActivity.
+ */
 @Composable
-fun App() {
+fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
     val context = LocalContext.current
     val api = remember { Api(BuildConfig.API_BASE_URL, KeystoreTokenStore(context), BuildConfig.VERSION_NAME) }
     val sample = remember {
@@ -48,13 +56,21 @@ fun App() {
     var signingIn by rememberSaveable { mutableStateOf(false) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
+    var stravaReturn by remember { mutableStateOf<Uri?>(null) }
+    val back by returned.collectAsState()
+    LaunchedEffect(back) {
+        back?.takeIf { it.scheme == StravaSignIn.SCHEME }?.let { stravaReturn = it; signingIn = true }
+        returned.value = null
+    }
 
     Scaffold { inner ->
         val m = Modifier.padding(inner)
         when {
             signingIn -> {
                 BackHandler { signingIn = false }
-                SignInScreen(api, onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
+                SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
+                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
             }
             signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onSignOut = { scope.launch { api.signOut(); signedIn = false } }, modifier = m)
             else -> PaddlesScreen(sample, sample = true, modifier = m, action = {

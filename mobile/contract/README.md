@@ -64,7 +64,7 @@ every API call.
 
 The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
 `Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
-`RefreshToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
+`RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
 output and the statuses that answer an `ApiError`. Golden answers:
 `fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
 just accepted the Terms).
@@ -75,8 +75,21 @@ just accepted the Terms).
 | `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
 | `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 201, as login; 422 if `acceptedTosVersion` isn't current |
+| `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
+
+**Strava.** Make a PKCE verifier (32 random bytes, base64url without padding)
+and its challenge (`base64url(sha256(verifier))`, 43 characters). Open
+`/att/api/auth/strava/init?challenge=<challenge>` in the system's in-app
+browser (Android Custom Tab, iOS `ASWebAuthenticationSession` with callback
+scheme `com.paddlesnitch.app`). It ends on
+`com.paddlesnitch.app:/signin/strava?code=<code>` (or `?error=<key>`, the same
+keys the website's `/signin?error=` shows). Swap the code and the verifier at
+`strava/app-token` within 5 minutes; a code works once, and a wrong verifier
+spends it. The app's own scheme, not an app link, so it works in debug builds
+and on iPhone before the Apple team ID exists; the verifier is what makes a
+code caught by another app useless (RFC 8252).
 
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that
