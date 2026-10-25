@@ -94,7 +94,7 @@ class ApiTest {
         tokens.save("id-1", "r-1")
         answer(413, "Request Entity Too Large")
         val e = runCatching { api.upload("big.gpx", ByteArray(10)) }.exceptionOrNull() as ApiFailure
-        assertEquals("That file is too big to upload. Try the FIT file, or zip it first.", e.message)
+        assertEquals(com.paddlesnitch.app.paddles.TOO_BIG, e.message) // the website's words
     }
 
     @Test fun aPendingSummaryIsWrittenByATrpcMutation() = runTest {

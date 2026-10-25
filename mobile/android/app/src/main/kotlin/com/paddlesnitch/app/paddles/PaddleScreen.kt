@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.paddlesnitch.app.api.AnalysisSession
+import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.ui.PsColor
 
@@ -89,7 +90,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     var attempt by remember(id) { mutableIntStateOf(0) }
     LaunchedEffect(id, attempt) {
         error = null
-        val session = runCatching { load(id) }.onFailure { error = it.message ?: "Couldn’t open this paddle." }.getOrNull() ?: return@LaunchedEffect
+        val session = runCatching { load(id) }.onFailure { error = if ((it as? ApiFailure)?.status == 404) "We can’t find this paddle." else it.message ?: "Couldn’t open this paddle." }.getOrNull() ?: return@LaunchedEffect
         detail = PaddleDetail(session)
         // The page shows at once; the summary follows when it's written.
         if (session.insightPending == true && writeSummary != null) {

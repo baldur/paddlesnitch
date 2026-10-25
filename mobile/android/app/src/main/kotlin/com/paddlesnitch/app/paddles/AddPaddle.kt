@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.paddlesnitch.app.api.Analysed
 import com.paddlesnitch.app.api.Api
+import com.paddlesnitch.app.api.ApiFailure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,7 +31,7 @@ fun rememberAddPaddle(api: Api, onBusy: (Boolean) -> Unit, onDone: (Result<Analy
         scope.launch {
             onBusy(true)
             onDone(runCatching {
-                val (name, bytes) = withContext(Dispatchers.IO) { read(context, uri) }
+                val (name, bytes) = withContext(Dispatchers.IO) { read(context, uri).let { (n, b) -> prepareUpload(n, b) } }
                 api.upload(name, bytes)
             })
             onBusy(false)
@@ -47,6 +48,21 @@ private fun read(context: Context, uri: Uri): Pair<String, ByteArray> {
     } ?: uri.lastPathSegment ?: "paddle"
     val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: error("Couldn’t open that file. Please share it again.")
     return name to bytes
+}
+
+/** What one upload may weigh (a request to the server is at most ~4.6 MB), as the website's trace-upload.ts. */
+const val MAX_UPLOAD_BYTES = 4_400_000
+private const val COMPRESS_FROM_BYTES = 1_000_000
+const val TOO_BIG = "That file is too big to upload. Export the activity as FIT, which is much smaller, or as a Garmin .zip."
+
+/** The file to send: a GPX, TCX or CSV of 1 MB or more gzipped (the server unpacks .gz); too big to send even then fails. */
+fun prepareUpload(name: String, bytes: ByteArray): Pair<String, ByteArray> {
+    val compressible = name.substringAfterLast('.', "").lowercase() in setOf("gpx", "tcx", "csv")
+    val out = if (compressible && bytes.size >= COMPRESS_FROM_BYTES) {
+        "$name.gz" to java.io.ByteArrayOutputStream().also { o -> java.util.zip.GZIPOutputStream(o).use { it.write(bytes) } }.toByteArray()
+    } else name to bytes
+    if (out.second.size > MAX_UPLOAD_BYTES) throw ApiFailure(TOO_BIG, 413)
+    return out
 }
 
 /** What to say after an upload. */

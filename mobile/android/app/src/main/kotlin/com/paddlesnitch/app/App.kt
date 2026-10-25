@@ -173,14 +173,9 @@ private suspend fun readSample(context: android.content.Context, file: String): 
  * an unnamed link to paddlesnitch.com/paddles/… would come straight back here.
  */
 private fun openInBrowser(context: Context, url: String) {
-    val uri = Uri.parse(url)
-    runCatching {
-        val tabs = CustomTabsIntent.Builder().build()
-        val browser = CustomTabsClient.getPackageName(context, null)
-        if (browser != null) { tabs.intent.setPackage(browser); tabs.launchUrl(context, uri) }
-        else context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
-            selector = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        })
-    }
+    val browser = CustomTabsClient.getPackageName(context, null)
+        ?: context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)?.activityInfo?.packageName
+            ?.takeIf { it != context.packageName && it != "android" } // "android" is the chooser
+        ?: return
+    runCatching { CustomTabsIntent.Builder().build().apply { intent.setPackage(browser) }.launchUrl(context, Uri.parse(url)) }
 }

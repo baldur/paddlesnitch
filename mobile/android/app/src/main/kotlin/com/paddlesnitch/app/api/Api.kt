@@ -166,8 +166,8 @@ class Api(
     private fun error(res: Answer): ApiFailure {
         // Sign-in refusals are the contract's ApiError; tRPC's errors are shaped differently.
         val said = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body).error }.getOrNull()
-        // A request over the server's 6 MB limit is refused before our code sees it.
-        if (said == null && res.code == 413) return ApiFailure("That file is too big to upload. Try the FIT file, or zip it first.", 413)
+        // A request over ~4.6 MB is refused before our code sees it (prepareUpload stops short of that).
+        if (said == null && res.code == 413) return ApiFailure(com.paddlesnitch.app.paddles.TOO_BIG, 413)
         return ApiFailure(said ?: "Something went wrong (${res.code}). Please try again.", res.code)
     }
 
