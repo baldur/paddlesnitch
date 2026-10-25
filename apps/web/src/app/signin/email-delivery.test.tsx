@@ -12,7 +12,7 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/components/strava/StravaButton', () => ({ default: () => null }))
 
-import { EMAIL_DELIVERY } from '@/lib/email-delivery'
+import { EMAIL_DELIVERY, RESET_EMAIL } from '@/lib/email-delivery'
 import AuthPage from './page'
 import ForgotPasswordPage from './forgot/page'
 
@@ -34,9 +34,12 @@ describe('sign-in while the site cannot send email', () => {
     expect(container.textContent).toContain('Create account')
     expect(container.textContent).not.toContain('Email code')
   })
-  it('explains how to get a password reset instead of sending a code', async () => {
+  // Reset codes come from Cognito's own sender, which the SES sandbox
+  // doesn't limit (infra/lib/att-stack.ts), so forgot password works.
+  it('still offers a password reset by email: Cognito sends those codes', async () => {
+    expect(RESET_EMAIL).toBe(true)
     await mount(<ForgotPasswordPage />)
-    expect(container.textContent).toContain("We can't email reset codes yet")
-    expect(container.querySelector('input[type="email"]')).toBeNull()
+    expect(container.textContent).not.toContain("We can't email reset codes yet")
+    expect(container.querySelector('input[type="email"]')).not.toBeNull()
   })
 })

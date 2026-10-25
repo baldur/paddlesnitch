@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { EMAIL_DELIVERY } from '@/lib/email-delivery'
+import { RESET_EMAIL } from '@/lib/email-delivery'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMountedAt } from '@/lib/use-mounted-at'
@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
   // We can't email a reset code to most people yet (lib/email-delivery.ts):
   // say so plainly and offer the way that works, instead of sending a code
   // that never arrives.
-  if (!EMAIL_DELIVERY) return <NoEmailReset />
+  if (!RESET_EMAIL) return <NoEmailReset />
 
   return (
     <Page width="narrow" className="max-w-md">

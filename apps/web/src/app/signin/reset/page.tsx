@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { Field, inputClass } from '@paddlesnitch/ui/Form'
 import { buttonClass } from '@paddlesnitch/ui/Button'
-import { EMAIL_DELIVERY } from '@/lib/email-delivery'
+import { RESET_EMAIL } from '@/lib/email-delivery'
 import NoEmailReset from '../NoEmailReset'
 
 // Step 2 of password reset: user pastes the emailed code + picks a new password.
@@ -42,7 +42,7 @@ function ResetForm() {
     }
   }
 
-  if (!EMAIL_DELIVERY) return <NoEmailReset />
+  if (!RESET_EMAIL) return <NoEmailReset />
 
   return (
     <Page width="narrow" className="max-w-md">
