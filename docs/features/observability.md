@@ -1,7 +1,6 @@
 # Observability: dashboards and error notices
 
-📝 **Spec, decisions made 2026-10-25.** Nothing built yet. The owner's answers
-are under [Decisions](#decisions).
+🚧 **O1 built 2026-10-25** (server telemetry, the three dashboards, zero-tolerance alarms); O2 ingest in #671; the digest and the apps' crash reports next. The owner's answers are under [Decisions](#decisions).
 
 One place to see whether paddlesnitch is healthy as a product, deeper views
 for each part, and **close to zero tolerance for errors**: every real error is
@@ -257,7 +256,7 @@ Two channels, both through the existing `paddlesnitch-alerts` topic:
 | `paddlesnitch-action-failed` | **≥ 1** `fail` on any action in 15 min | New. One alarm over the sum of the five `fail` metrics; the email names the action via the digest and the dashboard |
 | `paddlesnitch-app-crashes` | **≥ 1** crash report in 15 min, either platform | New in O3 |
 | `paddlesnitch-browser-errors` | **≥ 1** `client_error` from **our own scripts** in 15 min | New. Errors from browser extensions and third-party scripts (another origin, or `Script error.` with no source) are dropped at capture, so they can't trip it |
-| `paddlesnitch-server-errors` (existing) | Tightened from > 5 an hour to **≥ 1** `ERROR` line in 15 min | Only after the clean-up below. It catches what the API alarm can't see (REST routes, background jobs) |
+| `paddlesnitch-server-errors` (existing) | Tightened from > 5 an hour to **≥ 1** `ERROR` line in 15 min | Tightened after the clean-up below. It catches what the API alarm can't see (REST routes, background jobs) |
 | The other seven existing alarms | unchanged | Crashes, throttles, near-timeouts, tracker boot failures and crashes, SES bounce and complaint rates |
 
 ### Getting to zero first (start of O1)
@@ -277,6 +276,27 @@ thresholds go to ≥ 1:
 The rule from then on: **`console.error` means "we broke something and want to
 hear about it"**. Expected failures use `console.warn`. This goes in CLAUDE.md
 as a convention.
+
+### Clean-up result (2026-10-25)
+
+Logs Insights over the last 30 days of the server, jobs, game relay and image
+Lambdas (109 MB scanned): **no application `console.error` lines at all**. Every
+error belonged to two incidents, both already fixed:
+
+- **2026-10-21 19:04–20:16 UTC, server down for 72 minutes.** Deploy `ae2178c`
+  shipped an incomplete OpenNext server bundle (`Cannot find module
+  '@swc/helpers/…'`, 162 failed starts, 44 failed job sweeps). The existing
+  crash alarm fired. Fixed by the next deploy, and #579 now stops a deploy whose
+  server bundle is incomplete.
+- **2026-10-23 08:21 UTC, one response over Lambda's 6 MB limit** (413, river
+  planner data). Fixed the same day by serving the overview in chunks (#607).
+
+Also seen: an AWS SDK Node-version warning (gone since 2026-09-29), and bots
+calling `/_next/image` with no URL (the image Lambda's own log group; it doesn't
+reach the server alarm).
+
+One code change came out of it: a background job attempt that will be retried
+now logs `console.warn`; only the attempt that gives up logs `console.error`.
 
 ### Daily digest (O2)
 

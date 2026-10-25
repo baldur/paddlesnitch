@@ -1018,9 +1018,6 @@ export class AttStack extends cdk.Stack {
       description: 'Run `aws ses set-active-receipt-rule-set --rule-set-name <this> --region eu-west-1` once to activate.',
     })
 
-    // CloudWatch dashboards: infra/lib/dashboards.ts
-    addDashboards(this, { serverFn, distribution })
-
 
     // ---------------------------------------------------------------------------
     // Outputs
@@ -1038,9 +1035,11 @@ export class AttStack extends cdk.Stack {
     const alerts = new sns.Topic(this, 'AlertsTopic', { topicName: 'paddlesnitch-alerts' })
     alerts.addSubscription(new snsSubs.EmailSubscription(alertEmail))
     const notify = new cwActions.SnsAction(alerts)
+    const allAlarms: cloudwatch.Alarm[] = []   // shown on the health dashboard
     const alarm = (id: string, props: cloudwatch.AlarmProps) => {
       const a = new cloudwatch.Alarm(this, id, { treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING, ...props })
       a.addAlarmAction(notify)
+      allAlarms.push(a)
       return a
     }
 
@@ -1076,11 +1075,14 @@ export class AttStack extends cdk.Stack {
       })
       return new cloudwatch.Metric({ namespace: 'Paddlesnitch/Alerts', metricName, statistic: 'Sum', period: cdk.Duration.hours(1) })
     }
+    // Zero tolerance (docs/features/observability.md): console.error means
+    // "we broke something", so one line is worth an email. Expected failures
+    // log with console.warn, which this doesn't count.
     alarm('ServerErrorLogAlarm', {
       alarmName: 'paddlesnitch-server-errors',
-      alarmDescription: 'More than 5 errors logged by the web server in an hour.',
-      metric: logCount('ServerErrorFilter', logs.FilterPattern.anyTerm('ERROR', 'Task timed out'), 'ServerErrorLines'),
-      threshold: 5, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+      alarmDescription: 'The web server logged an error (console.error, or a timeout). Open paddlesnitch-api → "Errors logged, grouped".',
+      metric: logCount('ServerErrorFilter', logs.FilterPattern.anyTerm('ERROR', 'Task timed out'), 'ServerErrorLines').with({ period: cdk.Duration.minutes(15) }),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
     })
     alarm('FirmwareBootFailedAlarm', {
       alarmName: 'paddlesnitch-tracker-boot-failed',
@@ -1132,6 +1134,36 @@ export class AttStack extends cdk.Stack {
     })
     // SES checks it may publish when the destination is created.
     sesEvents.node.addDependency(alerts)
+
+    // Zero tolerance on what users meet (docs/features/observability.md): the
+    // first one in a 15-minute window emails; a burst is one email. The lines
+    // come from @paddlesnitch/core/observe and /att/api/track as EMF.
+    const count15 = (namespace: string, metricName: string, dimensionsMap?: Record<string, string>) =>
+      new cloudwatch.Metric({ namespace, metricName, dimensionsMap, statistic: 'Sum', period: cdk.Duration.minutes(15) })
+    const firstOne = { threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1 }
+    alarm('ApiErrorsAlarm', {
+      alarmName: 'paddlesnitch-api-errors',
+      alarmDescription: 'An API call failed on our side (INTERNAL_SERVER_ERROR, TIMEOUT, ...). Caller mistakes never count. Open paddlesnitch-api → "Failed API calls".',
+      metric: count15('Paddlesnitch/Api', 'ServerErrors'), ...firstOne,
+    })
+    alarm('ActionFailedAlarm', {
+      alarmName: 'paddlesnitch-action-failed',
+      alarmDescription: 'A key action (sign in, upload, analyse, tracker sync, Strava import) failed on our side. A refused input is not a failure. Open paddlesnitch-api → "Key actions that did not work".',
+      metric: count15('Paddlesnitch/Actions', 'Failures'), ...firstOne,
+    })
+    alarm('AppCrashAlarm', {
+      alarmName: 'paddlesnitch-app-crashes',
+      alarmDescription: 'The Android or iPhone app reported a crash (sent on its next start). Open paddlesnitch-health → "App crashes by signature".',
+      metric: count15('Paddlesnitch/App', 'Count', { Event: 'crash_report' }), ...firstOne,
+    })
+    alarm('BrowserErrorAlarm', {
+      alarmName: 'paddlesnitch-browser-errors',
+      alarmDescription: 'A browser hit an error in our own scripts (extensions and other sites are filtered out). Open paddlesnitch-health → "Browser errors".',
+      metric: count15('Paddlesnitch/App', 'Count', { Event: 'client_error' }), ...firstOne,
+    })
+
+    // CloudWatch dashboards: infra/lib/dashboards.ts
+    addDashboards(this, { serverFn, distribution, alarms: allAlarms })
 
     // A runaway bill (a loop, or someone driving Bedrock/SES). Budgets are
     // free. Account-wide, because the account is shared and the `project` tag
