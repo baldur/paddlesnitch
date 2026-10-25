@@ -163,8 +163,14 @@ Reuses what the browser already proved
   wait for P5; PKCE is what makes an intercepted code useless (RFC 8252).
   `apple-app-site-association` (for `webcredentials`, saved passwords) still
   waits for the team ID. How to call it: `mobile/contract/README.md`.
-- **Signed-in website pages from the apps:** proposal is a one-time code
-  handed to the in-app browser, which a web route turns into the usual cookies.
+- **Signed-in website pages from the apps ✅ (2026-10-25, C4):** the app
+  `POST /att/api/auth/web-code {next}` with its Bearer token and gets
+  `{url}`, which it opens in the in-app browser: `GET /att/api/auth/web-code?code=…&next=…`
+  swaps the code (one minute, one use, stored hashed at `auth/web-codes/`) for
+  the website's cookies by `CUSTOM_AUTH` and goes on to `next`. A spent or
+  late code lands on `/signin?error=app_link_expired&next=…`, so signing in by
+  hand still gets there. Used by the apps' Account screen for everything the
+  website still does (details, Strava, devices, your data, delete account).
 - **Phone devices** on the relay route (above).
 - **Minimum supported app version**, per platform. Below it the app asks the
   user to update.
@@ -257,7 +263,8 @@ They run in parallel and meet only at this contract.
 
 ## Open questions (shared)
 
-1. **Signed-in website pages:** one-time code → cookies, or something else.
+1. ~~**Signed-in website pages:**~~ built as the proposed one-time code →
+   cookies (C4 above); say if you'd rather something else.
 2. **Phone stroke rate:** usable from a phone in a bag or on a deck mount?
    Each platform's spike reports.
 3. **Sign in with Apple.** App Review guideline 4.8: an app offering a

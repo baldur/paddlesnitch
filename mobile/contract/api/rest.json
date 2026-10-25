@@ -44,6 +44,13 @@
       500
     ]
   },
+  "POST /att/api/auth/web-code": {
+    "input": "WebPageFor",
+    "output": "WebPage",
+    "errors": [
+      401
+    ]
+  },
   "POST /att/api/auth/refresh": {
     "input": "RefreshToken",
     "output": "Refreshed",
