@@ -21,13 +21,14 @@ public enum FailureMessage {
         case PaddleAPIError.signedOut:
             "Sign in again to see your paddles."
         case PaddleAPIError.notFound:
-            "This paddle isn't there any more."
+            "We can't find this paddle."
         case PaddleAPIError.rejected(let message, _, _):
             message
         case is URLError:
-            "Can't reach paddlesnitch. Check your connection and try again."
+            "Couldn't reach paddlesnitch. Check your connection and try again."
         default:
-            "Something went wrong. Try again in a moment."
+            // Under a "Couldn't load …" title, or after "Couldn't refresh".
+            "Please try again in a moment."
         }
     }
 }

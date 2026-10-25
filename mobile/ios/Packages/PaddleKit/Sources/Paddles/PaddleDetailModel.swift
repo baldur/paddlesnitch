@@ -5,6 +5,8 @@ import PaddleAPI
 @MainActor @Observable
 public final class PaddleDetailModel {
     public private(set) var state: Loadable<PaddleSummary> = .loading
+    /// The paddle isn't there (deleted, or never was): trying again won't help.
+    public private(set) var gone = false
     public let id: String
     private let source: any PaddlesSource
 
@@ -18,9 +20,11 @@ public final class PaddleDetailModel {
         do {
             paddle = try await source.paddle(id: id)
         } catch {
+            gone = (error as? PaddleAPIError) == .notFound
             state = .failed(FailureMessage.of(error))
             return
         }
+        gone = false
         state = .loaded(PaddleSummary(paddle))
         if paddle.insightPending == true { await writeSummary(paddle) }
     }
