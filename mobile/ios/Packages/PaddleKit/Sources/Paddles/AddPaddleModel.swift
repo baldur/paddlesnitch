@@ -19,9 +19,28 @@ public final class AddPaddleModel {
         case waitingForSignIn(fileName: String)
         case adding(fileName: String)
         case done(Outcome)
+
+        /// The card's words: also what VoiceOver reads out.
+        public var announcement: String? {
+            switch self {
+            case .idle: nil
+            // A file with no name gets plain words, never a made-up one.
+            case .waitingForSignIn(let name): name.isEmpty ? "Sign in to add this paddle." : "Sign in to add \(name)."
+            case .adding(let name): name.isEmpty ? "Adding your paddle…" : "Adding \(name)…"
+            case .done(let outcome): outcome.message
+            }
+        }
     }
 
     public private(set) var state: State = .idle
+
+    /// A second file waits until this one is in.
+    public var isAdding: Bool {
+        if case .adding = state { true } else { false }
+    }
+
+    /// What the card says, for VoiceOver to read out when it changes.
+    public var announcement: String? { state.announcement }
 
     private let upload: @Sendable (String, Data) async throws -> Analysed
     private var waiting: (name: String, data: Data)?
@@ -39,8 +58,10 @@ public final class AddPaddleModel {
         waiting = nil
         state = .adding(fileName: fileName)
         do {
-            let added = try await upload(fileName, data)
-            let message = added.duplicate == true ? "That paddle was already there." : "Paddle added."
+            // Gzip off the main thread: a long GPX can be tens of MB.
+            let file = try await Task.detached { try UploadFile.prepare(name: fileName, data: data) }.value
+            let added = try await upload(file.name, file.data)
+            let message = added.duplicate == true ? "You've already added this paddle." : "Paddle added."
             state = .done(Outcome(message: message, paddleID: added.id, failed: false))
         } catch {
             state = .done(Outcome(message: Self.message(for: error), paddleID: nil, failed: true))
@@ -66,7 +87,7 @@ public final class AddPaddleModel {
     static func message(for error: any Error) -> String {
         switch error {
         case PaddleAPIError.rejected(let message, _, _): message
-        case PaddleAPIError.tooLarge: "That file is too big to add. Zip it and try again."
+        case PaddleAPIError.tooLarge: UploadFile.tooBigMessage
         case PaddleAPIError.signedOut: "Sign in again to add a paddle."
         case is URLError: "Couldn't reach paddlesnitch. Check your connection and try again."
         default: "Couldn't add that paddle. Please try again."

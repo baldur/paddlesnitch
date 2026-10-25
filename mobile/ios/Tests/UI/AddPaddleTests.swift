@@ -7,12 +7,12 @@ import XCTest
 final class AddPaddleTests: AppTestCase {
     func testSignedOutTheListDoesNotOfferToAddAFile() {
         XCTAssertTrue(element("sample-notice").waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["Add a file"].exists)
+        XCTAssertFalse(app.buttons["Add paddle"].exists)
     }
 
     func testSignedInTheListOffersToAddAFile() {
         signInAndWait()
-        XCTAssertTrue(app.buttons["Add a file"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Add paddle"].waitForExistence(timeout: 10))
     }
 
     func testAFileOpenedWhileSignedOutIsAddedAfterSignIn() {
@@ -29,19 +29,29 @@ final class AddPaddleTests: AppTestCase {
         XCTAssertTrue(text(containing: "PACE").waitForExistence(timeout: 10), "opens the new paddle")
     }
 
+    func testClosingTheSignInCardForgetsTheFile() {
+        relaunch(opening: "Morning.gpx", reset: true)
+        XCTAssertTrue(element("add-notice").waitForExistence(timeout: 10))
+        app.buttons["add-notice-close"].tap()
+        XCTAssertTrue(element("add-notice").waitForNonExistence(timeout: 5))
+        signInAndWait()
+        XCTAssertFalse(text(containing: "Paddle added.").waitForExistence(timeout: 3), "nothing was added")
+    }
+
     func testAFileThatWasAlreadyThereSaysSo() {
         signInAndWait()
         relaunch(opening: "duplicate.gpx", reset: false)
-        XCTAssertTrue(text(containing: "That paddle was already there.").waitForExistence(timeout: 15))
-        XCTAssertEqual(app.buttons["add-notice-action"].label, "Open it")
+        XCTAssertTrue(text(containing: "You've already added this paddle.").waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons["add-notice-action"].label, "Open paddle")
     }
 
     func testAFileTheServerCannotReadSaysWhy() {
         signInAndWait()
         relaunch(opening: "unreadable.gpx", reset: false)
         XCTAssertTrue(text(containing: "That file has too few GPS points to analyse.").waitForExistence(timeout: 15))
-        app.buttons["add-notice-action"].tap()
-        XCTAssertTrue(element("add-notice").waitForNonExistence(timeout: 5), "OK puts it away")
+        XCTAssertFalse(app.buttons["add-notice-action"].exists, "a failure only closes")
+        app.buttons["add-notice-close"].tap()
+        XCTAssertTrue(element("add-notice").waitForNonExistence(timeout: 5), "Close puts it away")
     }
 
     func testTheOutcomePassesTheAccessibilityAudit() throws {

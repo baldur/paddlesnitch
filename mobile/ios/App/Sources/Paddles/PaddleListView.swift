@@ -37,13 +37,10 @@ struct PaddleListView: View {
         _model = State(initialValue: PaddleListModel(source: source))
     }
 
-    /// The files the website reads (mobile/contract/README.md): GPX, FIT,
-    /// TCX, CSV (the tracker's, SpeedCoach), or a zip of one. The first three
-    /// are declared in Info.plist (project.yml).
-    static let fileTypes: [UTType] = [
-        UTType(importedAs: "com.topografix.gpx"), UTType(importedAs: "com.garmin.fit"),
-        UTType(importedAs: "com.garmin.tcx"), .commaSeparatedText, .zip,
-    ]
+    /// Any file: watch and phone apps often save FIT or GPX with no declared
+    /// type, which a narrower list would grey out. The server says why it
+    /// can't read one. ("Open in" from other apps is narrower: project.yml.)
+    static let fileTypes: [UTType] = [.data]
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -60,8 +57,9 @@ struct PaddleListView: View {
                 .toolbar {
                     if !isSample {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Add a file") { choosingFile = true }
+                            Button("Add paddle") { choosingFile = true }
                                 .font(.plexSans(.body))
+                                .disabled(adding.isAdding)
                         }
                     }
                 }
@@ -73,6 +71,8 @@ struct PaddleListView: View {
         .onChange(of: adding.state) { _, state in
             // A paddle added: show it in the list.
             if case .done(let outcome) = state, !outcome.failed { Task { await model.load() } }
+            // The card appears away from VoiceOver's focus: read it out.
+            if let words = state.announcement { AccessibilityNotification.Announcement(words).post() }
         }
         .task(id: sourceID) {
             // Signed in or out: back to the top, and load the other paddles.
@@ -173,34 +173,51 @@ extension PaddleListView {
         switch adding.state {
         case .idle:
             EmptyView()
-        case .waitingForSignIn(let name):
-            addCard("Sign in to add \(name).", action: "Sign in", run: signIn)
-        case .adding(let name):
-            addCard("Adding \(name)…", action: nil, run: {})
+        case .waitingForSignIn:
+            addCard(adding.announcement ?? "", action: "Sign in", run: signIn)
+        case .adding:
+            addCard(adding.announcement ?? "", busy: true)
         case .done(let outcome):
             if let id = outcome.paddleID {
-                addCard(outcome.message, failed: outcome.failed, action: "Open it") {
+                addCard(outcome.message, action: "Open paddle") {
                     adding.dismiss()
                     path = []
                     openedID = id
                 }
             } else {
-                addCard(outcome.message, failed: outcome.failed, action: "OK") { adding.dismiss() }
+                addCard(outcome.message, failed: true)
             }
         }
     }
 
-    fileprivate func addCard(_ text: String, failed: Bool = false, action: String?, run: @escaping () -> Void)
-        -> some View
-    {
+    /// Every card but "Adding…" can be closed, which forgets the file.
+    fileprivate func addCard(
+        _ text: String, failed: Bool = false, busy: Bool = false, action: String? = nil, run: @escaping () -> Void = {}
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                if action == nil { ProgressView().tint(Palette.muted) }
-                Text(text)
-                    .font(.plexSans(.subheadline))
-                    .foregroundStyle(failed ? Palette.red : Palette.fg)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("add-notice")
+            HStack(alignment: .top, spacing: 8) {
+                HStack(spacing: 8) {
+                    if busy { ProgressView().tint(Palette.muted) }
+                    Text(text)
+                        .font(.plexSans(.subheadline))
+                        .foregroundStyle(failed ? Palette.red : Palette.fg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("add-notice")
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                if !busy {
+                    Button {
+                        adding.dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.plexSans(.subheadline, weight: .semibold))
+                            .foregroundStyle(Palette.muted)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Close")
+                    .accessibilityIdentifier("add-notice-close")
+                }
             }
             if let action {
                 Button(action: run) {
@@ -217,7 +234,9 @@ extension PaddleListView {
         .overlay(RoundedRectangle(cornerRadius: Radius.sheet).stroke(Palette.borderStrong))
         .clipShape(RoundedRectangle(cornerRadius: Radius.sheet))
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.vertical, 8)
+        // Rows mustn't show through the gaps around the card.
+        .background(Palette.bg)
     }
 
     /// A notice with one action. `id` marks the text, and `id-action` the

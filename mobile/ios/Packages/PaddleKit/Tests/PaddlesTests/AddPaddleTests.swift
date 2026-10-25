@@ -38,7 +38,8 @@ actor FakeUploads {
         let adding = model(FakeUploads(.success(Analysed(duplicate: true, id: "pdl-old"))))
         await adding.add(fileName: "Morning.gpx", data: file, signedIn: true)
         #expect(
-            adding.state == .done(.init(message: "That paddle was already there.", paddleID: "pdl-old", failed: false)))
+            adding.state
+                == .done(.init(message: "You've already added this paddle.", paddleID: "pdl-old", failed: false)))
     }
 
     @Test func aFileTheServerCannotReadSaysWhyInItsWords() async {
@@ -54,7 +55,9 @@ actor FakeUploads {
         #expect(
             adding.state
                 == .done(
-                    .init(message: "That file is too big to add. Zip it and try again.", paddleID: nil, failed: true)))
+                    .init(
+                        message: UploadFile.tooBigMessage, paddleID: nil,
+                        failed: true)))
     }
 
     @Test func anOutageSaysCouldntAndToTryAgain() async {
@@ -105,5 +108,40 @@ actor FakeUploads {
         #expect(
             adding.state
                 == .done(.init(message: "Couldn't open that file. Please try again.", paddleID: nil, failed: true)))
+    }
+
+    @Test func isAddingOnlyWhileTheUploadRuns() async {
+        let adding = model(FakeUploads(.success(Analysed(id: "pdl-new"))))
+        #expect(!adding.isAdding)
+        await adding.add(fileName: "Morning.gpx", data: file, signedIn: true)
+        #expect(!adding.isAdding)
+    }
+
+    /// The card appears away from VoiceOver's focus, so each step is read out.
+    @Test func eachStepHasWordsForVoiceOver() async {
+        let adding = model(FakeUploads(.success(Analysed(id: "pdl-new"))))
+        #expect(adding.announcement == nil)
+        await adding.add(fileName: "Morning.gpx", data: file, signedIn: false)
+        #expect(adding.announcement == "Sign in to add Morning.gpx.")
+        await adding.signedIn()
+        #expect(adding.announcement == "Paddle added.")
+        #expect(AddPaddleModel.State.adding(fileName: "Morning.gpx").announcement == "Adding Morning.gpx…")
+    }
+
+    @Test func aBigTraceIsSentGzippedAndAFileTooBigIsNeverSent() async {
+        let uploads = FakeUploads(.success(Analysed(id: "pdl-new")))
+        let adding = model(uploads)
+        let long = Data(String(repeating: "<trkpt lat=\"51.4\" lon=\"-0.9\"/>\n", count: 40_000).utf8)
+        await adding.add(fileName: "Long.gpx", data: long, signedIn: true)
+        #expect(await uploads.sent == ["Long.gpx.gz"])
+
+        await adding.add(fileName: "Huge.fit", data: Data(count: 4_400_001), signedIn: true)
+        #expect(await uploads.sent == ["Long.gpx.gz"], "not sent")
+        #expect(adding.state == .done(.init(message: UploadFile.tooBigMessage, paddleID: nil, failed: true)))
+    }
+
+    @Test func aFileWithNoNameGetsPlainWords() {
+        #expect(AddPaddleModel.State.waitingForSignIn(fileName: "").announcement == "Sign in to add this paddle.")
+        #expect(AddPaddleModel.State.adding(fileName: "").announcement == "Adding your paddle…")
     }
 }
