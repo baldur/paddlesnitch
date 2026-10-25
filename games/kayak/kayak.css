@@ -98,6 +98,31 @@ header button {
 #near .rival { fill: #facc15; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
 #near .friend { fill: #38bdf8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
 #near .you { fill: #f43f5e; stroke: #fff; stroke-width: 1; }
+#near .boat rect { fill: #d4d4d8; stroke: rgb(0 0 0 / 0.5); stroke-width: 0.5; }
+#near .boat .oars { stroke: #d4d4d8; stroke-width: 0.6; }
+#map .boat { fill: #d4d4d8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.6; }
+
+/* An eight coming up behind: an arrow at the bottom of the screen on its side,
+   pointing up the way it's going. */
+#behind {
+  position: absolute;
+  bottom: 7rem;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  background: rgb(220 38 38 / 0.85);
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 0.95rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#behind::before { content: "\2191  "; }
+#behind.on { opacity: 1; animation: behind 0.8s ease-in-out infinite alternate; }
+#behind.left { left: 16px; }
+#behind.right { right: 16px; }
+@keyframes behind { to { translate: 0 -8px; } }
+@media (prefers-reduced-motion: reduce) { #behind.on { animation: none; } }
 
 .hud-bottom {
   position: absolute;

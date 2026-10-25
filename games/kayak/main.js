@@ -9,7 +9,8 @@ import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld } from './world.js';
-import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
+import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
+import { TRAFFIC } from './traffic.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
@@ -61,7 +62,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'behind', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -90,6 +91,9 @@ let placeNext = 0; // the next landmark to name (showPlace)
 let placeTimer = 0;
 let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprintHint)
 let hitSwan = -Infinity; // race time the player last paddled into a swan
+let hitBoat = { kind: null, time: -Infinity }; // and into another boat
+let behindTimer = 0; // hides the arrow for an eight coming up behind
+let engineTimer = 0; // the next burst of a motorboat's engine
 const BIRDS_DRAWN = 64; // of each kind
 
 // --- race flow ---------------------------------------------------------------
@@ -729,6 +733,14 @@ const sounds = {
     noise({ freq: 900, to: 400, q: 1, duration: 0.15, gain: 0.08 });
   },
 };
+// Running into another boat: a crack of oars, or a thump on a hull.
+for (const kind of Object.keys(TRAFFIC)) {
+  sounds[`hit-${kind}`] = () => {
+    tone({ freq: TRAFFIC[kind].oars ? 900 : 140, to: TRAFFIC[kind].oars ? 500 : 80, duration: 0.12, type: 'square', gain: 0.12 });
+    noise({ freq: 1200, to: 500, q: 0.9, duration: 0.2, gain: 0.12 });
+  };
+}
+const HIT = { sculler: "You hit a sculler's oars!", eight: 'You hit an eight!', cruiser: 'You hit a cruiser!', motorboat: 'You hit a motorboat!' };
 
 // The starter's voice, through the browser's own speech synthesis. Asking for
 // the voices early saves a stall on the first call.
@@ -748,8 +760,10 @@ function react({ events, splashes }) {
     if (e === 'stroke') controls.rumble(0.25, 40);
     if (e === 'weak') show('Weak stroke', { small: true, hold: 0.5 });
     if (e === 'swan') hitSwan = race.time;
+    if (e.startsWith('hit-')) hitBoat = { kind: e.slice(4), time: race.time };
     if (e === 'capsize') {
-      show(race.time - hitSwan < 0.5 ? 'You hit a swan!' : 'Capsized!', { hold: race.player.boat.hull.swimTime - 0.5 });
+      const why = race.time - hitSwan < 0.5 ? 'You hit a swan!' : race.time - hitBoat.time < 0.5 ? HIT[hitBoat.kind] : 'Capsized!';
+      show(why, { hold: race.player.boat.hull.swimTime - 0.5 });
       controls.rumble(1, 400);
     }
     if (e === 'bank') controls.rumble(0.8, 150);
@@ -768,6 +782,16 @@ function react({ events, splashes }) {
       show(String(n), { hold: 0.7 });
     }
     if (e === 'hold') say('Hold it! Hold the line!');
+    // The cox of an eight coming up behind you: they're on that side, so move the other way.
+    if (e.startsWith('behind-')) {
+      const side = e.slice(7);
+      say(`Kayak! Eight coming through on your ${side}!`);
+      show(`An eight is coming up behind you, on your ${side}: move ${side === 'left' ? 'right' : 'left'}`, { small: true, hold: 4 });
+      els.behind.className = `on ${side}`;
+      clearTimeout(behindTimer);
+      behindTimer = setTimeout(() => { els.behind.className = ''; }, 6000);
+      controls.rumble(0.5, 250);
+    }
     if (e === 'line-up') show(race.start.holds ? 'Come back up to the line' : race.racers.length > 1 ? 'Paddle up into a gap on the line' : 'Wait for the horn', { small: true, hold: 3 });
     if (e === 'nudge') show('Paddle up to the line and stop', { small: true, hold: 3 });
     if (e === 'ready') show('Are you ready?', { small: true, hold: 1 });
@@ -938,6 +962,51 @@ function limb(model, from, to) {
   return multiply(model, basis(a.map((v) => v * 0.075), b.map((v) => v * 0.075), d, from));
 }
 
+// The other boats on the river (traffic.js), rowers' oars swinging: the blade
+// in the water through the drive, back up and over on the recovery.
+const STROKE = { sculler: 0.38, eight: 0.5 }; // strokes a second
+function oarFrom(model, from, to) {
+  const d = to.map((v, i) => v - from[i]);
+  const n = normalize(d);
+  const a = normalize([-n[2], 0, n[0]]);
+  const b = [n[1] * a[2] - n[2] * a[1], n[2] * a[0] - n[0] * a[2], n[0] * a[1] - n[1] * a[0]];
+  return multiply(model, basis(a, b, d, from));
+}
+function placeTraffic() {
+  const where = Object.fromEntries(Object.keys(TRAFFIC).map((k) => [k, []]));
+  const oars = [];
+  for (const b of race.traffic?.boats ?? []) {
+    if (!b.on) continue;
+    const f = [Math.sin(b.heading), 0, -Math.cos(b.heading)];
+    const model = basis([-f[2], 0, f[0]], [0, 1, 0], f.map((v) => -v), [b.x, 0.03 * Math.sin(race.time * 1.3 + b.phase), b.z]);
+    where[b.kind].push(model);
+    if (!ROWLOCKS[b.kind]) continue;
+    const p = (race.time * STROKE[b.kind] + b.phase) % 1;
+    const drive = p < 0.4;
+    const angle = drive ? 0.6 - 1.1 * smooth(p / 0.4) : -0.5 + 1.1 * smooth((p - 0.4) / 0.6);
+    const len = TRAFFIC[b.kind].oars[2] - ROWLOCKS[b.kind][0][1];
+    for (const [side, x, z] of ROWLOCKS[b.kind]) {
+      const from = [side * x, 0.2, z];
+      oars.push(oarFrom(model, from, [side * (x + len * Math.cos(angle)), drive ? -0.05 : 0.3, z - len * Math.sin(angle)]));
+    }
+  }
+  for (const [kind, list] of Object.entries(where)) renderer.place(meshes.traffic[kind], list);
+  renderer.place(meshes.oar, oars);
+}
+
+// A motorboat's engine: a low rumble, louder as it comes by.
+function engines(dt) {
+  engineTimer -= dt;
+  if (engineTimer > 0 || !race.traffic) return;
+  engineTimer = 0.22;
+  const me = race.player.boat;
+  for (const b of race.traffic.boats) {
+    if (!b.on || b.kind !== 'motorboat') continue;
+    const d = Math.hypot(b.x - me.x, b.z - me.z);
+    if (d < 90) noise({ freq: 110, to: 95, q: 1.5, duration: 0.3, gain: 0.07 * (1 - d / 90), type: 'lowpass' });
+  }
+}
+
 function placeRacers() {
   const paddles = new Map([...meshes.paddles.values()].map((m) => [m, []])); // mesh -> where
   const hold = (r, matrix) => {
@@ -981,6 +1050,7 @@ function placeRacers() {
 
 function render(time) {
   placeRacers();
+  placeTraffic();
   const boat = race.player.boat;
   const fr = boatFrame(boat);
 
@@ -1007,10 +1077,17 @@ function render(time) {
   frameData.set([0.3, 0.52, 0.84, race.course.scenery ? 0.8 : 0], 36); // w: cloud cover, on a real river's English sky
   frameData.set([0.78, 0.85, 0.9, 0.0016], 40);
   frameData.set(race.course.scenery ? THAMES : WATER, 44);
-  for (let i = 0; i < 16; i++) {
-    const b = race.racers[i]?.boat;
-    frameData.set(b && b.swim <= 0 ? [b.x, b.z, b.heading, b.speed] : [0, 0, 0, 0], 48 + i * 4);
+  // Wakes, for the racers and then the nearest other boats (placed so their bow
+  // is where a kayak's would be, which is what the water shader expects).
+  const wakes = race.racers.map((r) => r.boat).filter((b) => b.swim <= 0).map((b) => [b.x, b.z, b.heading, b.speed]);
+  const near = (race.traffic?.boats ?? []).filter((b) => b.on)
+    .sort((a, c) => Math.hypot(a.x - boat.x, a.z - boat.z) - Math.hypot(c.x - boat.x, c.z - boat.z));
+  for (const b of near) {
+    const T = TRAFFIC[b.kind];
+    const ahead = T.length / 2 - 3.3;
+    wakes.push([b.x + Math.sin(b.heading) * ahead, b.z - Math.cos(b.heading) * ahead, b.heading, T.speed * (T.wash > 0.5 ? 2 : 1.2)]);
   }
+  for (let i = 0; i < 16; i++) frameData.set(wakes[i] ?? [0, 0, 0, 0], 48 + i * 4);
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
   const c = pointAt(race.course, race.player.loc.s);
@@ -1022,7 +1099,7 @@ function render(time) {
     list.push(kayakFor(r));
     if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
-  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck);
+  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar);
   renderer.draw(frameData, list);
 }
 
@@ -1061,6 +1138,7 @@ function showTilt(dt) {
 
 function updateHud(dt) {
   showTilt(dt);
+  if (state === 'racing') engines(dt);
   if (flashTimer > 0) {
     flashTimer -= dt;
     if (flashTimer <= 0) flash.classList.remove('show');
@@ -1114,6 +1192,16 @@ function drawMap() {
   const line = ([x1, y1, x2, y2], cls) => el('line', { x1, y1, x2, y2, class: cls });
   const world = el('g', {});
   world.append(el('path', { d: water.water, class: 'water' }), line(water.start, 'start'), line(water.finish, 'finish'));
+  // The other boats: their hulls to scale, and a rowing boat's oars across.
+  const boats = new Map();
+  for (const b of race.traffic?.boats ?? []) {
+    const T = TRAFFIC[b.kind];
+    const g = el('g', { class: 'boat' });
+    g.append(el('rect', { x: -Math.max(T.hull, 0.6), y: -T.length / 2, width: 2 * Math.max(T.hull, 0.6), height: T.length, rx: 0.6 }));
+    if (T.oars) g.append(line([-T.oars[2], 0, T.oars[2], 0], 'oars'));
+    world.append(g);
+    boats.set(b, g);
+  }
   const near = new Map();
   for (const r of race.racers.filter((x) => x !== race.player)) {
     const dot = el('circle', { r: 3, class: r.remote ? 'friend' : 'rival' });
@@ -1126,6 +1214,12 @@ function drawMap() {
   els.map.style.aspectRatio = `${shape.width} / ${shape.height}`;
   els.map.classList.toggle('tall', shape.height > shape.width);
   els.map.replaceChildren(el('path', { d: shape.d, class: 'line' }), tick(shape.start, 'start'), tick(shape.finish, 'finish'));
+  const far = new Map();
+  for (const b of race.traffic?.boats ?? []) {
+    const dot = el('circle', { r: 1.8, class: 'boat' });
+    els.map.append(dot);
+    far.set(b, dot);
+  }
   const dots = new Map();
   // Others first, so you're drawn on top.
   for (const r of [...race.racers.filter((x) => x !== race.player), race.player]) {
@@ -1133,7 +1227,7 @@ function drawMap() {
     els.map.append(dot);
     dots.set(r, dot);
   }
-  map = { project: shape.project, dots, world, near };
+  map = { project: shape.project, dots, world, near, boats, far };
 }
 
 function moveMap() {
@@ -1145,6 +1239,17 @@ function moveMap() {
     dot.style.opacity = r.finish !== null && r !== race.player ? 0.4 : 1;
   }
   map.world.setAttribute('transform', follow(race.player.boat));
+  for (const [b, g] of map.boats) {
+    g.style.display = b.on ? '' : 'none';
+    if (b.on) g.setAttribute('transform', `translate(${b.x.toFixed(1)} ${b.z.toFixed(1)}) rotate(${headingDegrees(b.heading).toFixed(0)})`);
+  }
+  for (const [b, dot] of map.far) {
+    dot.style.display = b.on ? '' : 'none';
+    if (!b.on) continue;
+    const [x, y] = map.project(b.x, b.z);
+    dot.setAttribute('cx', x.toFixed(1));
+    dot.setAttribute('cy', y.toFixed(1));
+  }
   for (const [r, dot] of map.near) {
     dot.setAttribute('cx', r.boat.x.toFixed(1));
     dot.setAttribute('cy', r.boat.z.toFixed(1));
@@ -1312,6 +1417,8 @@ try {
   meshes = {
     worlds: new Map(),
     paddles: new Map(),
+    traffic: { sculler: renderer.createMesh(scullerMesh(), 8), eight: renderer.createMesh(eightMesh(), 8), cruiser: renderer.createMesh(cruiserMesh(), 8), motorboat: renderer.createMesh(motorboatMesh(), 8) },
+    oar: renderer.createMesh(oarMesh(), 128),
     kayaks: new Map(),
     swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
     duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),
