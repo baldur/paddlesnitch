@@ -20,7 +20,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`profile-routes.md`](profile-routes.md) | ✅ | Platform-level profile/account routes (account is now `/account`) |
 | [`strava-auto-import.md`](strava-auto-import.md) | ✅ live 2026-10-09 | Strava webhook auto-import |
 | [`device-uplink.md`](device-uplink.md) + [`device-data.md`](device-data.md) | ✅ 2026-09 | Tracker pairing, chunked upload, what the data contains |
-| [`device-ota-and-auth.md`](device-ota-and-auth.md) | ✅ built; rollback seen on hardware | Firmware OTA; every merge to `main` promotes |
+| [`device-ota-and-auth.md`](device-ota-and-auth.md) | ✅ built; rollback seen on hardware | Firmware OTA; every merge to `main` promotes to beta, then the flip to stable |
 | [`device-screen-map.md`](device-screen-map.md) | 📋 reference | Tracker screens and the web pages they lead to |
 | [`qr-onboarding.md`](qr-onboarding.md) | Phase 1 built | Scan to join WiFi, scan to add a tracker |
 | [`waterways-netherlands.md`](waterways-netherlands.md) | 🚧 N1–N4 + water boards 2026-10-21 | Netherlands: N1 network (OSM, same dataset) and Rijkswaterstaat locks/slipways (`rws-fis`, CC0) built; phases N2–N5; four owner questions |
