@@ -14,6 +14,7 @@ import {
   adminCreateUserForStrava,
   customAuthSignIn,
   verifyIdToken,
+  userExistsBySub,
 } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
 import { canonicalBaseUrl, safeNext } from '@/lib/url'
@@ -119,6 +120,12 @@ export async function GET(req: NextRequest) {
       cognitoEmail = existing.email
       userId = existing.sub
     } else {
+      // findUserBySub also answers null on any error. Confirm with the strict
+      // lookup before re-pointing a link, or a Cognito hiccup would move a
+      // live person's Strava to a new, empty account.
+      let gone: boolean
+      try { gone = !(await userExistsBySub(linkedUserId)) } catch { gone = false }
+      if (!gone) return fail('strava_signin_failed')
       // The linked Cognito user genuinely no longer exists (deleted account).
       // Drop the stale link and create a fresh synth-email account.
       console.warn(`[strava signin] athlete ${profile.id} linked to missing user ${linkedUserId}; relinking`)

@@ -345,7 +345,10 @@ export async function userExistsBySub(sub: string): Promise<boolean> {
     Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
     Limit: 1,
   }))
-  return (res.Users?.length ?? 0) > 0
+  if (res.Users?.length) return true
+  // An exact sub filter never pages; an empty page with more to come isn't a "no".
+  if (res.PaginationToken) throw new Error('userExistsBySub: unexpected pagination')
+  return false
 }
 
 // Create a Cognito user for a Strava sign-in where no pre-existing account
