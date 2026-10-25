@@ -14,16 +14,17 @@ const STERN = 1.9;
 const HULL = 0.25; // half a hull's width at the waterline
 
 // A few birds anywhere on the course, and crowds where it says (`hotspots`:
-// [{ s, count, spread }], from a course file's `birds`). `rand` is the race's.
+// [{ s, count, spread, lateral? }], from a course file's `birds`; `lateral`
+// for a crowd off the racing line, kept to the real water). `rand` is the race's.
 export function createBirds(course, rand, hotspots = []) {
   const birds = [];
-  const add = (kind, s, lateral) => {
+  const add = (kind, s, lateral, away = false) => {
     const c = pointAt(course, s);
     const loc = locate(course, c.x - c.tz * lateral, c.z + c.tx * lateral);
     birds.push({
       kind, x: c.x - c.tz * lateral, z: c.z + c.tx * lateral,
       heading: rand() * Math.PI * 2, speed: 0, phase: rand() * 10,
-      loc, fly: 0, gone: false, huff: 0,
+      loc, fly: 0, gone: false, huff: 0, away, // away: off the racing line, kept to the real water
     });
   };
   const spot = (s) => (rand() - 0.5) * 2 * Math.max(0, widthAt(course, s).half - 2.5);
@@ -38,6 +39,20 @@ export function createBirds(course, rand, hotspots = []) {
   }
   for (const h of hotspots) {
     for (let k = 0; k < h.count; k++) {
+      if (h.lateral !== undefined) {
+        // Round a point off the line: anywhere on the water within the spread.
+        for (let tries = 0; tries < 20; tries++) {
+          // Spread along the river; across it, they keep near their spot (in front of a boathouse, say).
+          const [s, lateral] = [h.s + (rand() - 0.5) * 2 * h.spread, h.lateral + (rand() - 0.5) * 2 * Math.min(h.spread, 8)];
+          const c = pointAt(course, s);
+          const [x, z] = [c.x - c.tz * lateral, c.z + c.tx * lateral];
+          // With room round it: 2 m of water every way.
+          if (course.shore && [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => course.shore.dry(x + dx, z + dz))) continue;
+          add(rand() < 0.75 ? 'swan' : 'duck', s, lateral, true);
+          break;
+        }
+        continue;
+      }
       const s = Math.max(course.start + 30, Math.min(course.finish - 30, h.s + (rand() - 0.5) * 2 * h.spread));
       add(rand() < 0.75 ? 'swan' : 'duck', s, spot(s));
     }
@@ -85,11 +100,15 @@ export function stepBirds(birds, racers, course, dt) {
       speed = B.shuffle * (b.kind === 'duck' ? k : 1);
       if (b.kind === 'duck' && threat.d < (B.wary / 2) * k) b.fly = dt;
     }
-    // Stay on the water: turn back towards the middle near a bank.
+    // Stay on the water: turn back towards the middle near a bank (one off
+    // the racing line turns back from the real bank, so it stays out there).
     b.loc = locate(course, b.x, b.z, b.loc.i);
     const w = widthAt(course, b.loc.s);
     const side = Math.sign(b.loc.lateral);
-    if (Math.abs(b.loc.lateral) > w.half - 1.5) want = heading(b.loc.tz * side, -b.loc.tx * side);
+    if (b.away && course.shore) {
+      const f = [Math.sin(b.heading), -Math.cos(b.heading)];
+      if (course.shore.dry(b.x + f[0] * 1.5, b.z + f[1] * 1.5)) want = b.heading + Math.PI;
+    } else if (Math.abs(b.loc.lateral) > w.half - 1.5) want = heading(b.loc.tz * side, -b.loc.tx * side);
     b.heading += wrap(want - b.heading) * Math.min(1, 3 * dt);
     b.speed += (speed - b.speed) * Math.min(1, 2 * dt);
     move(b, dt);

@@ -100,7 +100,13 @@ question 1).
 ## Recording contract (both phones)
 
 - Output is the tracker's CSV + `_i10.csv` sidecar, byte-compatible with what
-  `describeDeviceData` and `parseTrace` accept. A golden fixture holds a short
+  `describeDeviceData` and `parseTrace` accept. **The apps don't write it
+  themselves:** the shared C recorder core (`recorder-core/`, also used by the
+  tracker and the server) turns sensor samples into those lines and into the
+  live values on the recording screen. Each app writes only the sensor adapter
+  (units, axes, timestamps) and the file. This is the one place the apps share
+  code, not just a contract (owner, 2026-10-25). See
+  [`on-device-metrics.md`](on-device-metrics.md). A golden fixture holds a short
   phone recording each app must reproduce from recorded sensor input.
 - **Never lose a paddle:** every fix is appended and flushed as it arrives; a
   killed app resumes and says "recording recovered, gap 0:42".
