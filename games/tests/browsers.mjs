@@ -119,6 +119,16 @@ async function play(c, page, errors) {
   // Paddle at about a racing rate: alternate sides, a stroke every 0.7 s of
   // race time. Race time, not real time: with software graphics (CI) a frame
   // can take a second, and the game slows its clock to match.
+  // The best speed reached while paddling: the test doesn't steer, so on a
+  // winding course the boat can reach a bank (and stop) by the last stroke.
+  await page.evaluate(() => {
+    window.__best = 0;
+    const tick = () => {
+      window.__best = Math.max(window.__best, window.kayak.boat.speed);
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
   const { width, height } = page.viewportSize();
   for (let i = 0; i < 12; i++) {
     if (c.touch) await page.touchscreen.tap(i % 2 ? width * 0.8 : width * 0.2, height * 0.6);
@@ -126,7 +136,7 @@ async function play(c, page, errors) {
     const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
     await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
   }
-  const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.kayak.boat.speed, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
+  const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.__best, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
   if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
