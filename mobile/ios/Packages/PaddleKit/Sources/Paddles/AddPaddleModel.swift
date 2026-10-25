@@ -24,12 +24,17 @@ public final class AddPaddleModel {
         public var announcement: String? {
             switch self {
             case .idle: nil
-            // A file with no name gets plain words, never a made-up one.
-            case .waitingForSignIn(let name): name.isEmpty ? "Sign in to add this paddle." : "Sign in to add \(name)."
-            case .adding(let name): name.isEmpty ? "Adding your paddle…" : "Adding \(name)…"
+            // A file with no name gets plain words, never a made-up one; so
+            // does a long one, which at the largest text sizes would fill
+            // half the screen.
+            case .waitingForSignIn(let name):
+                Self.shows(name) ? "Sign in to add \(name)." : "Sign in to add this paddle."
+            case .adding(let name): Self.shows(name) ? "Adding \(name)…" : "Adding your paddle…"
             case .done(let outcome): outcome.message
             }
         }
+
+        static func shows(_ name: String) -> Bool { !name.isEmpty && name.count <= 30 }
     }
 
     public private(set) var state: State = .idle

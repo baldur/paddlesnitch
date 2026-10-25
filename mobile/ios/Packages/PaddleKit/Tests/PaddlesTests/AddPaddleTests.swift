@@ -140,6 +140,18 @@ actor FakeUploads {
         #expect(adding.state == .done(.init(message: UploadFile.tooBigMessage, paddleID: nil, failed: true)))
     }
 
+    @Test func aLongFileNameGetsPlainWords() {
+        let long = "Thames from Reading to Henley, Sunday.gpx"
+        #expect(AddPaddleModel.State.waitingForSignIn(fileName: long).announcement == "Sign in to add this paddle.")
+        #expect(AddPaddleModel.State.adding(fileName: long).announcement == "Adding your paddle…")
+        #expect(
+            AddPaddleModel.State.adding(fileName: "Sunday morning on the Thames.gpx").announcement
+                == "Adding your paddle…")
+        #expect(
+            AddPaddleModel.State.adding(fileName: "Sunday on the Thames.gpx").announcement
+                == "Adding Sunday on the Thames.gpx…")
+    }
+
     @Test func aFileWithNoNameGetsPlainWords() {
         #expect(AddPaddleModel.State.waitingForSignIn(fileName: "").announcement == "Sign in to add this paddle.")
         #expect(AddPaddleModel.State.adding(fileName: "").announcement == "Adding your paddle…")
