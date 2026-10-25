@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "HandleAvailability.schema.json",
+  "type": "object",
+  "properties": {
+    "available": {
+      "type": "boolean"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "available"
+  ]
+}

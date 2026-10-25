@@ -77,8 +77,9 @@ every API call.
 
 The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
 `Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
-`RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
-output and the statuses that answer an `ApiError`. Golden answers:
+`RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its
+`auth` (`user` = send `Authorization: Bearer`), input, output and the statuses
+that answer an `ApiError`. Golden answers:
 `fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
 just accepted the Terms).
 
@@ -116,6 +117,33 @@ so send the real time. `needsTerms: true` means an older account must accept
 the current Terms before going on (the website's flow; the apps open it).
 Every error answer has a human-readable `error`.
 
+## Account
+
+The Account screens (phase C5) call the website's `/api/account` routes with
+`Authorization: Bearer` and no cookie. JSON in, JSON out; a GET's input goes in
+the query string. Every refusal is an `ApiError`, and 401 means the ID token
+is missing or expired: refresh it and try once more. Types are in `rest.json`;
+golden answers are `fixtures/api/account.*.json`.
+
+| Call | Body | Answer |
+|---|---|---|
+| `GET /api/account/tos` | | `{currentVersion, accepted, acceptances[]}` |
+| `POST /api/account/tos` | `{version}`: `api/constants.json` `tosVersion` | `{acceptances[]}`; 422 if the version isn't current (the app is out of date) |
+| `POST /api/account/export` | | `{url}`: a link to the whole file, valid 5 minutes, any size. Download it at once and hand it to the save dialog or share sheet. In local dev the link is relative to the site |
+| `DELETE /api/account` | `{refreshToken}` | `{ok: true}`: everything is erased and the refresh token stops working. Drop the stored tokens and go to sign-in |
+| `GET /api/account/profile` | | `{public, handle?}` |
+| `PATCH /api/account/profile` | `{public}` | as GET |
+| `GET /api/account/handle?check=<handle>` | | `{available, slug?}` or `{available: false, reason}`: show `reason` as it is |
+| `PUT /api/account/handle` | `{handle}` | as profile; 400 with the reason if it's taken or not allowed |
+| `DELETE /api/account/handle` | | as profile, without `handle` |
+| `GET /api/account/contact` | | `{contact: {email, addedAt} \| null}`: a contact email, for accounts made through Strava |
+| `POST /api/account/contact` | `{email}` | as GET; 400 if it doesn't look like an email |
+| `DELETE /api/account/contact` | | `{ok: true}` |
+
+Your name and sign-in email come from `me`. Trackers (`/api/account/devices…`)
+take the Bearer token already; their schemas come next in C5, then forgot
+password and Strava.
+
 ## fixtures/api/
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
@@ -130,6 +158,11 @@ Sign-in answers are `auth.<route>[.<case>].json`: the answer of
 wrong code with tries left). `auth.error.json` is the refusal every sign-in
 route shares. So far: `auth.login`, `auth.login.needs-terms`,
 `auth.otp-verify.retry`, `auth.refresh`, `auth.error`.
+
+Account answers are `account.<route>[-<what>][.<case>].json`: `account.tos`,
+`account.tos-accepted`, `account.export`, `account.profile`(`.private`),
+`account.handle-check`(`.taken`), `account.contact`(`.none`), and
+`account.error` (the 401 every account route shares).
 
 `paddles.list` is the Paddles screen as the website draws it, worked out on the
 server: one card per outing (`pdl-river-watch`, the same outing from Strava,

@@ -29,7 +29,7 @@ struct PaddlesnitchApp: App {
     /// whose summaries are still to be written.
     private static func makeAccount(fixtures: URL) -> AccountModel {
         let arguments = ProcessInfo.processInfo.arguments
-        let sample = arguments.contains("-SampleServer")
+        let sample = usesSampleServer
         let tokens = KeychainTokenStore(service: "com.paddlesnitch.app.refresh-token" + (sample ? ".sample" : ""))
         let profile = ProfileStore(key: "signed-in-user" + (sample ? ".sample" : ""))
         if arguments.contains("-ResetAccount") {
@@ -44,6 +44,8 @@ struct PaddlesnitchApp: App {
             baseURL: baseURL, transport: transport, app: "ios/\(YouView.shortVersion)", tokens: tokens,
             profile: profile)
     }
+
+    static var usesSampleServer: Bool { ProcessInfo.processInfo.arguments.contains("-SampleServer") }
 
     static var baseURL: URL {
         #if DEBUG

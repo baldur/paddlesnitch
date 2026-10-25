@@ -48,11 +48,16 @@ Each recording's fixes are placed on the line and split into **passes** at each 
 What the frames show, **tied to places, not to the course**: each item has `at` (or `from`/`to`) as lat/lng, the camera's `heading`, `side` (left/right of travel at that heading), and `frame` naming the evidence. Kinds used so far:
 
 - `bank`, with `cover`: `park`, `trees`, `gardens` or `wild`.
-- `moorings`, with `boats`: `cruiser`, `narrowboat`, `trip-boat` or `mixed`.
+- `moorings`, with `boats`: `cruiser`, `narrowboat`, `trip-boat`, `tatty` (tired old cruisers: tarps, faded paint, flags) or `mixed`.
 - `buildings`, with `style: 'flats'`.
 - `bridge`, with `style` (`cable-stayed` or `concrete-arch`) and `mast`.
 - `railway`.
 - `wall`: a quay or revetment at the water's edge.
+- `landmark`, with `style`: an unnamed building to draw as a bespoke model, given by a point beside it (`at`): the nearest OSM footprint within 40 m gets the style. Named buildings use `styles` in `course.json` instead.
+- `posts`, with `points` (lat/lng each): posts standing in the water. Solid in the game.
+- `anglers`, with `count` and a stretch (`from`/`to`, `side`): people fishing from that bank, spread along it.
+
+**Owner's spots (2026-10-25).** The owner gave GPS points for things to make more recognisable. Finding them in the footage: take each recording's `track.json` (from `course:ingest`), find the fixes within ~40 m of the point, one per pass, and pull flat views from the 360 at that moment towards the point (ffmpeg `v360` as `frames.ts` does, a narrow `h_fov` to zoom). From those came the posts off St Mary's Island, the riverside villa, the spiral-stair and grey boathouses, the canoe club's details, the tatty cruisers below Caversham Bridge and the anglers on the Promenade.
 
 A course can use another's observations (`observations` in `course.json`): the Time Trial Loop uses Reading's, placed on its own river line.
 
@@ -68,7 +73,8 @@ Combines the river and the observations into what the game draws:
 - `banks` (cover per stretch), `walls`, `moorings` (rows of boats filling each observed stretch), `bridges` (one per crossing cluster, under the bridge's own OSM name, styled from the observations).
 - `places`: the landmarks named on screen as you pass them, from the course's `places` list of OSM names (optionally relabelled, or `{ label, at }` for a point of your own) in `course.json`. On the river line each is named where the line comes nearest; on a route, once each time the route goes by, as you come up to it.
 - `birds`: where swans crowd (`{ near: <OSM name>, count, spread }`).
-- `styles`: OSM building names drawn as bespoke models (`rowing-club`, `canoe-club`), modelled from the frames.
+- `styles`: OSM building names drawn as bespoke models (`rowing-club`, `canoe-club`), modelled from the frames; `landmark` observations add more by position (`spiral-boathouse`, `grey-boathouse`, `riverside-villa`).
+- `posts` (x, z each) and `anglers` (`{ s, side }` on the river line), from those observations.
 - `water`, and `route` (its line every 5 m and the open water each side, smoothed per side).
 - OSM `buildings` (footprints with heights; `building:levels` when mapped), `woods`, single `trees`, `railways`, `locks` and `weirs`.
 
@@ -92,12 +98,16 @@ Serves `games/`, plays the course in Chrome with `#debug`, puts the boat at each
   - locks and weirs, when they're on the line;
   - land shaped by the mapped water: strips out from the river line whose points dip under the surface wherever the outlines say it's water, so islands and side channels appear (extra rows round water behind an island; far rows every 12 m);
   - quays and revetments (`walls`), pontoons in front of boathouses near the water, windows on the walls that face the river;
-  - bespoke landmarks (`styles`): Reading Rowing Club (white clubhouse, red hipped roof and cupola, balcony and stairs, flag, a hard down to the water) and Reading Canoe Club (red-brick boathouse, white-railed balcony, roller doors, kayak racks, river wall), each with its name in blocky letters; trees keep clear so they're seen from the water;
+  - bespoke landmarks (`styles`): Reading Rowing Club (white clubhouse, red hipped roof and cupola, balcony and stairs, flag, a hard down to the water) and Reading Canoe Club (red-brick boathouse, a dark hipped roof over a white-railed balcony on brick pillars, roller doors, a glass door under its name in blue on white, kayak racks, a grass bank and wide concrete steps down to a grey pontoon), each with its name in blocky letters; and three the owner pointed out: the tall red-brick boathouse with white spiral stairs, the long grey two-storey boathouse beside it, and the grey-blue clapboard villa by St Mary's Island with its quay, urns, summerhouse and white tower. Trees keep clear so they're seen from the water. A model stands where the mapped bank is (`facing()`'s `edge`: the nearer of the river line's width and the mapped shore);
+  - tall concrete posts in the water off St Mary's Island (solid: in `course.shore` with the moored boats);
+  - tatty cruisers below Caversham Bridge (their own random draws, so the rest of the world is unchanged);
+  - anglers on the Promenade's wall, under green umbrellas, each with a rod and a line out to an orange float (`anglers.js`; see below);
   - bridges that span all the water they cross (Caversham Bridge reaches over Piper's Island's north channel, with a pier on the island);
   - a cloudy sky;
   - the ends closed off 320 m deep so the water plane doesn't show past them.
 - **Size:** Reading about 335k triangles, the loop about 150k, against the made-up race's 98k. The test caps Reading at 400k.
 - **Named places:** the HUD names each landmark in `places` as you come up to it, one at a time.
+- **Anglers** (`anglers.js`, pure, tested): paddle across the low end of a line (where it's below head height; nearer the bank you pass under the rod) and it snags you once: the boat keeps a quarter of its speed, the angler shouts "Oi! Mind my line!" and the screen says so. Lines reach 7 to 11 m out, never more than 45% of the way across. The rivals pass them on the float's side, as they pass a boat. Fixed by the course, no randomness, so live races agree.
 - **Swans and ducks** (`birds.js`), on every course: swans drift and barely move aside, so you steer round them or capsize; ducks fly off. Crowds by Reading Rowing Club.
 
 ### The Time Trial Loop
@@ -117,7 +127,9 @@ It's a time trial with **interval starts**: boats wait in two columns by the ban
 
 ### Changing a route (`route.ts`, pure `lib/route.ts`, tested)
 
-`course:route <id>` rebuilds a course file's route from `course.json` without the downloads or the footage, from the river line and mapped water already in the file: the legs (`along` the river line between two points, or points to go through), moved off any land, corners rounded to 12 m where there's water for it, the open water either side from the mapped shore; and what's placed along the route: `places` (names found where the file's previous route named them; a label `at` a point; `heading` to name it only on the pass going that way), `birds` (`near` a name, or `at` a point off the line: kept to the real water), `gates` and `cues` (`at` a point, `heading` for the pass), and `marks` (buoys, 4 m out from the nearest shore to `at`). Run it after `course:build` for a course with a route (`course:build` doesn't know these).
+`course:route <id>` rebuilds a course file's route from `course.json` without the downloads or the footage, from the river line and mapped water already in the file: the legs (`along` the river line between two points, or points to go through), moved off any land, corners rounded to 12 m where there's water for it, the open water either side from the mapped shore; and what's placed along the route: `places` (names found where the file's previous route named them; a label `at` a point; `heading` to name it only on the pass going that way), `birds` (`near` a name, or `at` a point off the line: kept to the real water), `gates` and `cues` (`at` a point, `heading` for the pass), and `marks` (buoys, 4 m out from the nearest shore to `at`). Run it after `course:build` for a course with a route (`course:build` doesn't know these, and skips flocks given `at` a point).
+
+**Rebuilding is reproducible** (checked 2026-10-25): with the cache in `apps/web/.cache/courses/` (the `<rec>/track.json` files and `<id>/river.json`; copy them from the worktree that ran `course:river` if yours has none), `course:build reading` gives the committed file byte for byte, and `course:build loop` then `course:route loop` gives it apart from a place name moving a few metres (route names a place where the previous file's route did, so each run can nudge it). Add new observations at the end of `observations.json`: moorings take random draws in order, so an item added earlier would reshuffle every row after it.
 
 ## Adding a course
 

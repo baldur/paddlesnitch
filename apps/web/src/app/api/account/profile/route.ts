@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { getProfileSettings, setProfilePublic } from '@/lib/profile'
 
 // GET /api/account/profile — the viewer's profile visibility setting.
-export async function GET() {
-  const user = await getAuthUser()
+export async function GET(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return NextResponse.json(await getProfileSettings(user.id))
 }
@@ -12,7 +12,7 @@ export async function GET() {
 // PATCH /api/account/profile { public: boolean } — opt in/out of a public
 // profile. Profiles are private by default; this is the only way to flip it.
 export async function PATCH(req: NextRequest) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   if (typeof body.public !== 'boolean') {

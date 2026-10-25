@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { getAuthUser, clearAuthCookies } from '@/lib/auth'
+import { getRequestUser, clearAuthCookies } from '@/lib/auth'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { unindexEntries } from '@/lib/entries'
 import { deleteUser, revoke } from '@/lib/cognito'
@@ -36,8 +36,8 @@ import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 //   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent.
-export async function DELETE() {
-  const user = await getAuthUser()
+export async function DELETE(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
@@ -137,8 +137,11 @@ export async function DELETE() {
 
   // 7. Revoke any active refresh token then delete the Cognito user.
   //    Order matters: if Cognito delete fails we want their session still revoked.
+  //    An app has no cookie: it may send its refresh token as { refreshToken }.
   const cookieStore = await cookies()
+  const body = await req.json().catch(() => ({})) as { refreshToken?: unknown }
   const refreshToken = cookieStore.get('tt_refresh')?.value
+    ?? (typeof body.refreshToken === 'string' ? body.refreshToken : undefined)
   if (refreshToken) await revoke(refreshToken)
   await deleteUser(user.email)
 

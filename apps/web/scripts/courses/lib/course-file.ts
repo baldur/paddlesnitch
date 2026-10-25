@@ -9,6 +9,7 @@ type Place = { at: LatLng; heading: number; frame?: string }
 export type Observation = {
   kind: string; side?: 'left' | 'right'; note?: string
   name?: string; style?: string; mast?: 'left' | 'right'; cover?: string; boats?: string
+  count?: number; points?: LatLng[] // anglers along a stretch; posts in the water
 } & (Place | { from: Place; to: Place })
 
 export type Cover = 'park' | 'trees' | 'gardens' | 'wild'
@@ -19,7 +20,7 @@ export type CourseFile = {
   banks: Array<{ side: -1 | 1; from: number; to: number; cover: Cover }>
   walls: Array<{ side: -1 | 1; from: number; to: number }>
   bridges: Array<{ s: number; name?: string; style: string; mast?: -1 | 1 }>
-  moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' }>
+  moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' | 'tatty' }>
   buildings: Array<{ shape: XZ[]; height: number; kind: 'house' | 'flats' | 'boathouse' | 'other'; style?: string }>
   woods: XZ[][]
   trees: XZ[]
@@ -28,6 +29,10 @@ export type CourseFile = {
   weirs: XZ[][]
   places: Array<{ s: number; name: string }>
   birds: Array<{ s: number; count: number; spread: number }>
+  /** Posts standing in the water (solid). */
+  posts?: XZ[]
+  /** People fishing from the bank, a line out into the water each. */
+  anglers?: Array<{ s: number; side: -1 | 1 }>
   /** The water's outlines (rings of the river's areas and its islands), to shape the land. */
   water: XZ[][]
   /** A racing line that isn't `line` (a loop, round islands): every 5 m, with the open water each side. */
@@ -142,7 +147,7 @@ function mulberry32(seed: number) {
   }
 }
 
-const BOATS = { cruiser: [8, 12], narrowboat: [17, 21], 'trip-boat': [24, 26] } as const
+const BOATS = { cruiser: [8, 12], narrowboat: [17, 21], 'trip-boat': [24, 26], tatty: [7, 11] } as const
 
 /** A row of moored boats filling a stretch of bank, or one or two at a spot. */
 export function mooringRow(from: number, to: number, side: -1 | 1, boats: string, rand: () => number): CourseFile['moorings'] {
@@ -199,6 +204,8 @@ export function courseFile(input: {
   water?: XZ[][]
   route?: { line: XZ[]; edges: Array<{ left: number | null; right: number | null }>; start: number; finish: number }
   place: (at: LatLng, heading: number) => { s: number; same: boolean }
+  /** Map coordinates to the file's metres: for things placed by a point (landmarks, posts). */
+  toXZ?: (at: LatLng) => XZ
 }): CourseFile {
   const rand = mulberry32(7)
   const sideOf = (o: Observation, p: { same: boolean }): -1 | 1 => ((o.side === 'left') === p.same ? -1 : 1)
@@ -216,6 +223,9 @@ export function courseFile(input: {
   const walls: CourseFile['walls'] = []
   const moorings: CourseFile['moorings'] = []
   const flats: Array<{ from: number; to: number; side: -1 | 1 }> = []
+  const marked: Array<{ at: XZ; style: string }> = [] // an unnamed building given a bespoke model
+  const posts: XZ[] = []
+  const anglers: NonNullable<CourseFile['anglers']> = []
   const styles = new Map<string, { style: string; mast?: -1 | 1 }>()
   for (const o of input.observations) {
     if (o.kind === 'bridge' && typeof o.name === 'string') {
@@ -230,16 +240,31 @@ export function courseFile(input: {
     else if (o.kind === 'wall') walls.push({ side: sp.side, from: r1(sp.from), to: r1(sp.to) })
     else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand))
     else if (o.kind === 'buildings' && o.style === 'flats') flats.push(sp)
+    else if (o.kind === 'landmark' && 'at' in o && o.style && input.toXZ) marked.push({ at: input.toXZ(o.at), style: o.style })
+    else if (o.kind === 'posts' && input.toXZ) posts.push(...(o.points ?? []).map((p) => pts([input.toXZ!(p)])[0]))
+    else if (o.kind === 'anglers') {
+      // Evenly along the stretch, each nudged a little.
+      const n = o.count ?? 1
+      for (let k = 0; k < n; k++) anglers.push({ s: r1(sp.from + ((k + 0.3 + rand() * 0.4) / n) * (sp.to - sp.from)), side: sp.side })
+    }
   }
 
-  const buildings = input.things
-    .filter((t) => (t.kind === 'building' || t.kind === 'boathouse') && t.shape && t.shape.length >= 4 && Math.abs(t.lateral) < 200)
+  // A point beside a building marks the nearest one (its footprint's middle within 40 m).
+  const middle = (shape: XZ[]): XZ => [shape.reduce((a, p) => a + p[0], 0) / shape.length, shape.reduce((a, p) => a + p[1], 0) / shape.length]
+  const kept = input.things.filter((t) => (t.kind === 'building' || t.kind === 'boathouse') && t.shape && t.shape.length >= 4 && Math.abs(t.lateral) < 200)
+  const styleAt = new Map<RiverThing, string>()
+  for (const m of marked) {
+    const d = (t: RiverThing) => { const c = middle(t.shape!); return Math.hypot(c[0] - m.at[0], c[1] - m.at[1]) }
+    const best = kept.reduce<RiverThing | null>((a, t) => (d(t) < 40 && (!a || d(t) < d(a)) ? t : a), null)
+    if (best) styleAt.set(best, m.style)
+  }
+  const buildings = kept
     .map((t) => {
       let kind = kindOfBuilding(t.tags)
       if (kind !== 'boathouse' && flats.some((f) => t.s >= f.from - 30 && t.s <= f.to + 30 && Math.sign(t.lateral) === f.side)) kind = 'flats'
       const levels = Number(t.tags['building:levels'])
       const height = Number.isFinite(levels) && levels > 0 ? levels * 3 + 1 : HEIGHTS[kind]
-      const style = t.name ? input.styles?.[t.name] : undefined
+      const style = (t.name ? input.styles?.[t.name] : undefined) ?? styleAt.get(t)
       return { shape: pts(thin(t.shape!, 12)), height, kind, ...(style ? { style } : {}) }
     })
 
@@ -271,6 +296,8 @@ export function courseFile(input: {
       birds: (input.birds ?? []).flatMap((b) => places(input.things, [b.near], [input.start, input.finish]).map((p) => ({ s: p.s, count: b.count, spread: b.spread }))),
     }),
     water: (input.water ?? []).map(pts),
+    ...(posts.length ? { posts } : {}),
+    ...(anglers.length ? { anglers: anglers.sort((a, b) => a.s - b.s) } : {}),
   }
 }
 
@@ -281,7 +308,8 @@ function routeExtras(input: Parameters<typeof courseFile>[0], route: NonNullable
   return {
     route: { line: pts(route.line), ...sides(route.edges), start: r1(route.start), finish: r1(route.finish) },
     places: routePlaces(shapes, input.places ?? [], route.line, ends),
-    birds: (input.birds ?? []).flatMap((b) => routePlaces(shapes, [b.near], route.line, ends).slice(0, 1).map((p) => ({ s: p.s, count: b.count, spread: b.spread }))),
+    // A flock given by a point (no `near`) is placed by course:route.
+    birds: (input.birds ?? []).filter((b) => b.near).flatMap((b) => routePlaces(shapes, [b.near], route.line, ends).slice(0, 1).map((p) => ({ s: p.s, count: b.count, spread: b.spread }))),
   }
 }
 

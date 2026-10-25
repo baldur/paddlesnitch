@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { getTosConsent, recordAcceptance, hasAcceptedCurrent } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 
 // GET /api/account/tos
 // Whether the authenticated viewer has accepted the current ToS version.
 // 401 for unauthenticated requests.
-export async function GET() {
-  const user = await getAuthUser()
+export async function GET(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const accepted = await hasAcceptedCurrent(user.id)
   const rec = await getTosConsent(user.id)
@@ -23,7 +23,7 @@ export async function GET() {
 // omitted). 422 if the version doesn't match the current one — we don't
 // let users pre-accept future versions.
 export async function POST(req: NextRequest) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))

@@ -1,15 +1,18 @@
 import Account
+import AuthenticationServices
 import DesignSystem
+import SampleServer
 import SwiftUI
 
 /// Sign in or create an account: the same fields, checks and words as the
-/// Android app and the website's /signin. The email code waits for email
-/// delivery, as on the website.
+/// Android app and the website's /signin: password sign-in, sign-up and
+/// Strava. The email code waits for email delivery, as on the website.
 struct SignInView: View {
     let account: AccountModel
     @State private var form = SignInForm()
     @State private var web: URL?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @FocusState private var focus: Field?
 
     enum Field: Hashable {
@@ -76,6 +79,7 @@ struct SignInView: View {
                             .foregroundStyle(Palette.primaryText)
                             .frame(minHeight: 44)
                     }
+                    strava
                 }
                 .padding(16)
             }
@@ -92,6 +96,29 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    /// Strava's own button, unaltered (their brand guidelines).
+    private var strava: some View {
+        VStack(spacing: 12) {
+            Divider().overlay(Palette.border)
+            Text("Or use your Strava account")
+                .font(.plexSans(.body))
+                .foregroundStyle(Palette.muted)
+            Button(action: signInWithStrava) {
+                Image("ConnectWithStrava").resizable().scaledToFit().frame(height: 48)
+            }
+            .buttonStyle(.plain)
+            .disabled(form.busy)
+            .accessibilityLabel("Connect with Strava")
+            .accessibilityIdentifier("strava-sign-in")
+            Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.")
+                .font(.plexSans(.subheadline))
+                .foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var terms: some View {
@@ -135,6 +162,28 @@ struct SignInView: View {
         focus = nil
         Task {
             if await form.submit(to: account) { dismiss() }
+        }
+    }
+}
+
+extension SignInView {
+    private func signInWithStrava() {
+        focus = nil
+        Task {
+            if await form.signInWithStrava(to: account, browser: openStrava) { dismiss() }
+        }
+    }
+
+    /// The system's sign-in browser, which shares Safari's cookies: someone
+    /// signed in to Strava there needn't sign in again. The sample server
+    /// answers at once.
+    private func openStrava(_ start: URL) async throws -> URL {
+        if PaddlesnitchApp.usesSampleServer { return SampleServer.stravaBrowser(start) }
+        do {
+            return try await webAuthenticationSession.authenticate(
+                using: start, callbackURLScheme: StravaSignIn.callbackScheme, preferredBrowserSession: .shared)
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            throw CancellationError()
         }
     }
 }

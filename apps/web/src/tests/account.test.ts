@@ -41,7 +41,7 @@ function uploadReq(trialId: string, file: File) {
 describe('GET /api/account/export', () => {
   it('returns 401 when not signed in', async () => {
     mockAuth(null)
-    const res = await exportData()
+    const res = await exportData(new Request('http://x'))
     expect(res.status).toBe(401)
   })
 
@@ -54,7 +54,7 @@ describe('GET /api/account/export', () => {
     const gpx = makeGpxBuffer(makeTestTrack())
     await upload(uploadReq(trial.id, new File([gpx], 'r.gpx')), { params: Promise.resolve({ trialId: trial.id }) })
 
-    const res = await exportData()
+    const res = await exportData(new Request('http://x'))
     expect(res.status).toBe(200)
     expect(res.headers.get('content-disposition')).toContain('attachment')
     expect(res.headers.get('content-disposition')).toContain(user.id)
@@ -74,7 +74,7 @@ describe('GET /api/account/export', () => {
     const strangerCourse = await makeCourse(stranger.id)
 
     mockAuth(me.idToken)
-    const res = await exportData()
+    const res = await exportData(new Request('http://x'))
     const body = JSON.parse(await res.text())
     expect(body.ownedCourses).toHaveLength(0)
     // sanity: the stranger's course exists in storage
@@ -93,7 +93,7 @@ describe('GET /api/account/export', () => {
     await plantFailedUpload(trial.id, stranger.id)
 
     mockAuth(me.idToken)
-    const body = JSON.parse(await (await exportData()).text())
+    const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
     expect(body.failedUploads).toHaveLength(1)
     expect(body.failedUploads[0].userId).toBe(me.id)
   })
@@ -102,7 +102,7 @@ describe('GET /api/account/export', () => {
 describe('DELETE /api/account', () => {
   it('returns 401 when not signed in', async () => {
     mockAuth(null)
-    const res = await deleteAccount()
+    const res = await deleteAccount(new Request('http://x'))
     expect(res.status).toBe(401)
   })
 
@@ -112,7 +112,7 @@ describe('DELETE /api/account', () => {
     const trial = await makeTrial(course.id, user.id, 'open')
 
     mockAuth(user.idToken)
-    const res = await deleteAccount()
+    const res = await deleteAccount(new Request('http://x'))
     expect(res.status).toBe(200)
 
     expect(await getJson(`courses/${course.id}/metadata.json`)).toBeNull()
@@ -134,7 +134,7 @@ describe('DELETE /api/account', () => {
     }
 
     mockAuth(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     expect(await getJson(`trials/${trial.id}/metadata.json`)).not.toBeNull()
     expect(await getJson(`courses/${course.id}/metadata.json`)).not.toBeNull()
@@ -151,7 +151,7 @@ describe('DELETE /api/account', () => {
     const trial = await makeTrial(course.id, me.id, 'open', { groupId: 'g1' })
 
     mockAuth(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     expect(await getJson(`trials/${trial.id}/metadata.json`)).not.toBeNull()
     expect(await getJson(`courses/${course.id}/metadata.json`)).not.toBeNull()
@@ -160,7 +160,7 @@ describe('DELETE /api/account', () => {
   it('clears tt_id and tt_refresh on the response', async () => {
     const user = await makeUser('Owner')
     mockAuth(user.idToken)
-    const res = await deleteAccount()
+    const res = await deleteAccount(new Request('http://x'))
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toMatch(/tt_id=;|tt_id=.*Max-Age=0/i)
     expect(setCookie).toMatch(/tt_refresh=;|tt_refresh=.*Max-Age=0/i)
@@ -183,7 +183,7 @@ describe('DELETE /api/account', () => {
 
     // Me deletes their account.
     mockAuth(me.idToken)
-    const del = await deleteAccount()
+    const del = await deleteAccount(new Request('http://x'))
     expect(del.status).toBe(200)
 
     // Organiser's trial and course are still there.
@@ -208,7 +208,7 @@ describe('DELETE /api/account', () => {
     const strangerKey = await plantFailedUpload(trial.id, organiser.id)
 
     mockAuth(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     // Me's failed-upload track is gone; the organiser's trial + their own
     // failed upload survive.
@@ -225,7 +225,7 @@ describe('DELETE /api/account', () => {
     expect(await getJson(`usernames/gone-soon.json`)).not.toBeNull()
     expect(await listKeys(`users/${me.id}/`)).not.toHaveLength(0)
 
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
     // Handle index released and the whole users/{id}/ prefix gone.
     expect(await getJson(`usernames/gone-soon.json`)).toBeNull()
@@ -238,7 +238,7 @@ describe('DELETE /api/account', () => {
     const strangerCourse = await makeCourse(stranger.id)
 
     mockAuth(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     // Stranger's course should still be there.
     expect(await getJson(`courses/${strangerCourse.id}/metadata.json`)).not.toBeNull()
@@ -251,7 +251,7 @@ describe('DELETE /api/account', () => {
     await makeCourse(stranger.id)
 
     mockAuth(me.idToken)
-    await deleteAccount()
+    await deleteAccount(new Request('http://x'))
 
     mockAuth(null)
     const res = await listCourses(new NextRequest('http://x/att/api/courses'))

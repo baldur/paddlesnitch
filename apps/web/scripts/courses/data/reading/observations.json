@@ -430,6 +430,70 @@
         "heading": 305,
         "frame": "0095-p1-00500-behind"
       }
+    },
+    {
+      "kind": "posts",
+      "at": [51.46938443, -1.00532164],
+      "heading": 253,
+      "frame": "0093-p0 t=752",
+      "points": [[51.4693844, -1.0053216], [51.4693936, -1.005281], [51.4694059, -1.0052268]],
+      "note": "three tall, weathered concrete posts standing in the water off St Mary's Island, about 4 m high (pointed out by the owner)"
+    },
+    {
+      "kind": "landmark",
+      "style": "riverside-villa",
+      "at": [51.47005347, -1.00318771],
+      "heading": 235,
+      "frame": "0093-p0 t=677",
+      "note": "grey-blue clapboard house with white trim behind a long stone quay: white bollards, stone urns, a white summerhouse and a white tower (pointed out by the owner)"
+    },
+    {
+      "kind": "landmark",
+      "style": "spiral-boathouse",
+      "at": [51.46827043, -0.98562223],
+      "heading": 281,
+      "frame": "0093-p0 t=160",
+      "note": "tall red-brick boathouse: an open boat dock under a white first floor, glass balconies, a steep dark gable, white spiral stairs at both ends (pointed out by the owner)"
+    },
+    {
+      "kind": "landmark",
+      "style": "grey-boathouse",
+      "at": [51.4683523, -0.98663074],
+      "heading": 275,
+      "frame": "0093-p0 t=187",
+      "note": "long two-storey boathouse in pale grey: roller shutters below, a balcony on white pillars above, grey metal roof, a blue launch alongside (pointed out by the owner)"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "tatty",
+      "from": {
+        "at": [51.4653, -0.97685],
+        "heading": 132,
+        "frame": "0095-p0 t=4254"
+      },
+      "to": {
+        "at": [51.46488, -0.97595],
+        "heading": 132,
+        "frame": "0095-p0 t=4254"
+      },
+      "note": "tired old cruisers below Caversham Bridge: tarps, faded paint, a flag (pointed out by the owner)"
+    },
+    {
+      "kind": "anglers",
+      "side": "left",
+      "count": 3,
+      "from": {
+        "at": [51.46776, -0.98395],
+        "heading": 283,
+        "frame": "0093-p1 t=3488"
+      },
+      "to": {
+        "at": [51.468, -0.9857],
+        "heading": 283,
+        "frame": "0093-p1 t=3488"
+      },
+      "note": "people often fish from the Promenade's stone wall here: mind their lines (pointed out by the owner)"
     }
   ]
 }

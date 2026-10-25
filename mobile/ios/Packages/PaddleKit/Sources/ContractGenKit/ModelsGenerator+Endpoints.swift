@@ -56,8 +56,18 @@ extension ModelsGenerator {
         return Naming.lowerCamel(afterAPI.replacingOccurrences(of: "/", with: "-"))
     }
 
+    /// `endpointName`, with the method in front (`getAccountContact`) when
+    /// it isn't a POST or another method shares the path; a lone POST keeps
+    /// the plain name, as every route had before.
+    static func endpointName(method: String, path: String, pathIsShared: Bool) -> String {
+        let name = endpointName(path)
+        guard method != "POST" || pathIsShared else { return name }
+        return method.lowercased() + Naming.upperCamel(name)
+    }
+
     private static func endpointEntries(_ data: Data, known: Set<String>) throws -> [EndpointEntry] {
         let routes = try JSONDecoder().decode([String: JSON].self, from: data).sorted(by: { $0.key < $1.key })
+        let paths = routes.map { $0.key.split(separator: " ", maxSplits: 1).last.map(String.init) ?? $0.key }
         return try routes.map { route, spec in
             let parts = route.split(separator: " ", maxSplits: 1).map(String.init)
             guard parts.count == 2, let output = spec["output"]?.string else {
@@ -71,7 +81,10 @@ extension ModelsGenerator {
                 if case .number(let status) = value { Int(status) } else { nil }
             }
             return EndpointEntry(
-                method: parts[0], path: parts[1], swiftName: endpointName(parts[1]), input: input ?? "NoInput",
+                method: parts[0], path: parts[1],
+                swiftName: endpointName(
+                    method: parts[0], path: parts[1], pathIsShared: paths.filter { $0 == parts[1] }.count > 1),
+                input: input ?? "NoInput",
                 output: output, errors: errors)
         }
     }

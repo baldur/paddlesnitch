@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { putObject, presignGetUrl, usesLocalStorage } from '@/lib/storage'
 import { buildAccountExport, exportFilename } from '@/lib/account-export'
 
@@ -15,8 +15,8 @@ import { buildAccountExport, exportFilename } from '@/lib/account-export'
 // account erasure) and the answer is a link valid for five minutes, from which
 // S3 serves the download, of any size. Local dev has no S3, so there the link
 // is the GET.
-export async function GET() {
-  const user = await getAuthUser()
+export async function GET(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return new NextResponse(JSON.stringify(await buildAccountExport(user), null, 2), {
     status: 200,
@@ -27,8 +27,8 @@ export async function GET() {
   })
 }
 
-export async function POST() {
-  const user = await getAuthUser()
+export async function POST(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (usesLocalStorage()) return NextResponse.json({ url: '/api/account/export' })
   const key = `exports/${user.id}/${nanoid()}.json`

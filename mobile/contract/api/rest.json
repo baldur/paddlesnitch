@@ -1,5 +1,6 @@
 {
   "POST /att/api/auth/login": {
+    "auth": "public",
     "input": "Login",
     "output": "SignIn",
     "errors": [
@@ -9,6 +10,7 @@
     ]
   },
   "POST /att/api/auth/otp-request": {
+    "auth": "public",
     "input": "OtpRequest",
     "output": "OtpSession",
     "errors": [
@@ -18,6 +20,7 @@
     ]
   },
   "POST /att/api/auth/otp-verify": {
+    "auth": "public",
     "input": "OtpVerify",
     "output": "SignIn",
     "errors": [
@@ -26,6 +29,7 @@
     ]
   },
   "POST /att/api/auth/signup": {
+    "auth": "public",
     "input": "Signup",
     "output": "SignIn",
     "errors": [
@@ -36,6 +40,7 @@
     ]
   },
   "POST /att/api/auth/strava/app-token": {
+    "auth": "public",
     "input": "StravaAppToken",
     "output": "SignIn",
     "errors": [
@@ -45,6 +50,7 @@
     ]
   },
   "POST /att/api/auth/web-code": {
+    "auth": "user",
     "input": "WebPageFor",
     "output": "WebPage",
     "errors": [
@@ -52,6 +58,7 @@
     ]
   },
   "POST /paddles/api/analyse": {
+    "auth": "user",
     "input": null,
     "output": "Analysed",
     "errors": [
@@ -62,6 +69,7 @@
     ]
   },
   "POST /att/api/auth/refresh": {
+    "auth": "public",
     "input": "RefreshToken",
     "output": "Refreshed",
     "errors": [
@@ -69,8 +77,109 @@
     ]
   },
   "POST /att/api/auth/logout": {
+    "auth": "public",
     "input": "RefreshToken",
     "output": "Ok",
     "errors": []
+  },
+  "GET /api/account/tos": {
+    "auth": "user",
+    "input": null,
+    "output": "TosStatus",
+    "errors": [
+      401
+    ]
+  },
+  "POST /api/account/tos": {
+    "auth": "user",
+    "input": "TosAccept",
+    "output": "TosAccepted",
+    "errors": [
+      401,
+      422
+    ]
+  },
+  "POST /api/account/export": {
+    "auth": "user",
+    "input": null,
+    "output": "DownloadLink",
+    "errors": [
+      401
+    ]
+  },
+  "DELETE /api/account": {
+    "auth": "user",
+    "input": "DeleteAccount",
+    "output": "Ok",
+    "errors": [
+      401
+    ]
+  },
+  "GET /api/account/profile": {
+    "auth": "user",
+    "input": null,
+    "output": "ProfileSettings",
+    "errors": [
+      401
+    ]
+  },
+  "PATCH /api/account/profile": {
+    "auth": "user",
+    "input": "ProfileVisibility",
+    "output": "ProfileSettings",
+    "errors": [
+      400,
+      401
+    ]
+  },
+  "GET /api/account/handle": {
+    "auth": "user",
+    "input": "HandleCheck",
+    "output": "HandleAvailability",
+    "errors": [
+      401
+    ]
+  },
+  "PUT /api/account/handle": {
+    "auth": "user",
+    "input": "HandleClaim",
+    "output": "ProfileSettings",
+    "errors": [
+      400,
+      401
+    ]
+  },
+  "DELETE /api/account/handle": {
+    "auth": "user",
+    "input": null,
+    "output": "ProfileSettings",
+    "errors": [
+      401
+    ]
+  },
+  "GET /api/account/contact": {
+    "auth": "user",
+    "input": null,
+    "output": "Contact",
+    "errors": [
+      401
+    ]
+  },
+  "POST /api/account/contact": {
+    "auth": "user",
+    "input": "ContactEmail",
+    "output": "Contact",
+    "errors": [
+      400,
+      401
+    ]
+  },
+  "DELETE /api/account/contact": {
+    "auth": "user",
+    "input": null,
+    "output": "Ok",
+    "errors": [
+      401
+    ]
   }
 }
