@@ -10,10 +10,16 @@ public enum Endpoints {
         method: "DELETE", path: "/api/account", errorStatuses: [401])
     public static let deleteAccountContact = Endpoint<NoInput, Ok>(
         method: "DELETE", path: "/api/account/contact", errorStatuses: [401])
+    public static let deleteAccountDevices = Endpoint<TrackerId, Ok>(
+        method: "DELETE", path: "/api/account/devices", errorStatuses: [401, 404])
     public static let deleteAccountHandle = Endpoint<NoInput, ProfileSettings>(
         method: "DELETE", path: "/api/account/handle", errorStatuses: [401])
     public static let getAccountContact = Endpoint<NoInput, Contact>(
         method: "GET", path: "/api/account/contact", errorStatuses: [401])
+    public static let getAccountDevices = Endpoint<NoInput, TrackerList>(
+        method: "GET", path: "/api/account/devices", errorStatuses: [401])
+    public static let getAccountDevicesSessions = Endpoint<NoInput, RecordingList>(
+        method: "GET", path: "/api/account/devices/sessions", errorStatuses: [401])
     public static let getAccountHandle = Endpoint<HandleCheck, HandleAvailability>(
         method: "GET", path: "/api/account/handle", errorStatuses: [401])
     public static let getAccountProfile = Endpoint<NoInput, ProfileSettings>(
@@ -36,6 +42,10 @@ public enum Endpoints {
         method: "POST", path: "/att/api/auth/otp-request", errorStatuses: [400, 429, 500])
     public static let authOtpVerify = Endpoint<OtpVerify, SignIn>(
         method: "POST", path: "/att/api/auth/otp-verify", errorStatuses: [400, 500])
+    public static let authPasswordResetConfirm = Endpoint<ResetConfirm, ResetDone>(
+        method: "POST", path: "/att/api/auth/password-reset/confirm", errorStatuses: [400])
+    public static let authPasswordResetRequest = Endpoint<ResetRequest, Ok>(
+        method: "POST", path: "/att/api/auth/password-reset/request", errorStatuses: [400])
     public static let authRefresh = Endpoint<RefreshToken, Refreshed>(
         method: "POST", path: "/att/api/auth/refresh", errorStatuses: [401])
     public static let authSignup = Endpoint<Signup, SignIn>(
@@ -56,8 +66,11 @@ public enum Endpoints {
         switch route {
         case "DELETE /api/account": try decoder.decode(Ok.self, from: data)
         case "DELETE /api/account/contact": try decoder.decode(Ok.self, from: data)
+        case "DELETE /api/account/devices": try decoder.decode(Ok.self, from: data)
         case "DELETE /api/account/handle": try decoder.decode(ProfileSettings.self, from: data)
         case "GET /api/account/contact": try decoder.decode(Contact.self, from: data)
+        case "GET /api/account/devices": try decoder.decode(TrackerList.self, from: data)
+        case "GET /api/account/devices/sessions": try decoder.decode(RecordingList.self, from: data)
         case "GET /api/account/handle": try decoder.decode(HandleAvailability.self, from: data)
         case "GET /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "GET /api/account/tos": try decoder.decode(TosStatus.self, from: data)
@@ -69,6 +82,8 @@ public enum Endpoints {
         case "POST /att/api/auth/logout": try decoder.decode(Ok.self, from: data)
         case "POST /att/api/auth/otp-request": try decoder.decode(OtpSession.self, from: data)
         case "POST /att/api/auth/otp-verify": try decoder.decode(SignIn.self, from: data)
+        case "POST /att/api/auth/password-reset/confirm": try decoder.decode(ResetDone.self, from: data)
+        case "POST /att/api/auth/password-reset/request": try decoder.decode(Ok.self, from: data)
         case "POST /att/api/auth/refresh": try decoder.decode(Refreshed.self, from: data)
         case "POST /att/api/auth/signup": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/strava/app-token": try decoder.decode(SignIn.self, from: data)

@@ -12,23 +12,27 @@ import Testing
         #expect(Contract.fixtureNames.count >= 6)
     }
 
-    /// A tRPC fixture decodes as its procedure's output. A REST fixture
-    /// decodes as its route's answer, or, if it carries `error`, as the
-    /// `ApiError` that route can answer with.
+    /// index.json names every fixture, and only fixtures that exist.
+    @Test func theIndexDescribesEveryFixture() {
+        #expect(Set(Contract.index.keys) == Set(Contract.fixtureNames))
+    }
+
+    /// Each fixture decodes as the type index.json gives it: its call's
+    /// answer, or the `ApiError` a refusal is.
     @Test(arguments: Contract.fixtureNames)
     func everyFixtureDecodesAsItsAnswer(name: String) throws {
+        let entry = try #require(Contract.index[name], "\(name) isn't in index.json")
         let data = try Contract.fixture(name)
-        if let path = Contract.procedure(forFixture: name) {
-            _ = try Procedures.decodeOutput(of: path, from: data, using: decoder)
-        } else if Contract.isErrorAnswer(name) {
-            #expect(name.hasPrefix("auth.") || name.hasPrefix("account."), "an error answer for no known routes")
+        if entry.schema == "ApiError" {
             _ = try decoder.decode(ApiError.self, from: data)
-        } else {
-            let routes = Contract.routes(forFixture: name)
-            try #require(!routes.isEmpty, "\(name) matches no procedure or route")
-            let decodes = routes.contains { (try? Endpoints.decodeOutput(of: $0, from: data, using: decoder)) != nil }
-            #expect(decodes, "\(name) decodes as no answer of \(routes)")
+            return
         }
+        let call = try #require(entry.call, "\(name) answers no call")
+        let decoded: any Sendable =
+            call.contains(" ")
+            ? try Endpoints.decodeOutput(of: call, from: data, using: decoder)
+            : try Procedures.decodeOutput(of: call, from: data, using: decoder)
+        #expect(String(describing: type(of: decoded)) == entry.schema, "\(name)")
     }
 
     @Test func aSignInCarriesTheTokensAndNeedsTermsDefaultsToNo() throws {
@@ -47,7 +51,7 @@ import Testing
 
     @Test(arguments: Contract.procedurePaths)
     func everyProcedureHasAFixture(path: String) {
-        #expect(Contract.fixtureNames.contains { Contract.procedure(forFixture: $0) == path })
+        #expect(Contract.index.values.contains { $0.call == path })
     }
 
     @Test func signedInMeHasTheUser() throws {

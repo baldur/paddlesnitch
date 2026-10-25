@@ -82,6 +82,22 @@
     "output": "Ok",
     "errors": []
   },
+  "POST /att/api/auth/password-reset/request": {
+    "auth": "public",
+    "input": "ResetRequest",
+    "output": "Ok",
+    "errors": [
+      400
+    ]
+  },
+  "POST /att/api/auth/password-reset/confirm": {
+    "auth": "public",
+    "input": "ResetConfirm",
+    "output": "ResetDone",
+    "errors": [
+      400
+    ]
+  },
   "GET /api/account/tos": {
     "auth": "user",
     "input": null,
@@ -178,6 +194,31 @@
     "auth": "user",
     "input": null,
     "output": "Ok",
+    "errors": [
+      401
+    ]
+  },
+  "GET /api/account/devices": {
+    "auth": "user",
+    "input": null,
+    "output": "TrackerList",
+    "errors": [
+      401
+    ]
+  },
+  "DELETE /api/account/devices": {
+    "auth": "user",
+    "input": "TrackerId",
+    "output": "Ok",
+    "errors": [
+      401,
+      404
+    ]
+  },
+  "GET /api/account/devices/sessions": {
+    "auth": "user",
+    "input": null,
+    "output": "RecordingList",
     "errors": [
       401
     ]

@@ -64,8 +64,15 @@ file name's extension picks the parser). In `rest.json` its `input` is `null`
 for that reason. The answer is the whole analysis; the apps need only
 `Analysed`: the paddle's `id`, and `duplicate: true` when that paddle was
 already there (the existing one is returned, nothing is added). 422 is a file
-that can't be read, with the reason in `error`; the server refuses anything
-over 6 MB (413, not an `ApiError`).
+that can't be read, with the reason in `error`.
+
+**Size:** a request can be at most about 4.6 MB (AWS's limit, before our code
+runs: the answer is a 413 that is not an `ApiError`). Do what the website does
+(`apps/web/src/lib/trace-upload.ts`): gzip a GPX, TCX or CSV file of 1 MB or
+more and send it as `<name>.gz` (the server unpacks it; text traces shrink
+about ten times), and stop anything still over 4,400,000 bytes on the phone
+with the website's words: "That file is too big to upload. Export the activity
+as FIT, which is much smaller, or as a Garmin .zip." Treat a 413 the same way.
 
 ## Signing in
 
@@ -92,6 +99,8 @@ just accepted the Terms).
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
+| `POST /att/api/auth/password-reset/request` | `{email, website: "", elapsedMs}` | `{ok: true}` whether or not the account exists (it never says); if it does, a 6-digit code goes to that email |
+| `POST /att/api/auth/password-reset/confirm` | `{email, code, password}` | `{ok: true, signedIn: true, idToken, refreshToken}`: signed in with the new password (then ask `me` for the name). `signedIn: false` = set, but sign in again. 400 with `error` for a wrong or expired code or a weak password |
 
 **Website pages, signed in.** For a page only the website has (account
 details, delete account…), `POST /att/api/auth/web-code {next: "/account#delete"}`
@@ -139,12 +148,21 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/contact` | | `{contact: {email, addedAt} \| null}`: a contact email, for accounts made through Strava |
 | `POST /api/account/contact` | `{email}` | as GET; 400 if it doesn't look like an email |
 | `DELETE /api/account/contact` | | `{ok: true}` |
+| `GET /api/account/devices` | | `{devices: Tracker[], stableVersion}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash |
+| `DELETE /api/account/devices` | `{deviceId}` | `{ok: true}`: removed; it stops syncing and can be added again. Its recordings and paddles stay. 404 if it isn't this person's |
+| `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId` |
 
-Your name and sign-in email come from `me`. Trackers (`/api/account/devices…`)
-take the Bearer token already; their schemas come next in C5, then forgot
-password and Strava.
+Your name and sign-in email come from `me`. Adding a tracker and syncing it
+are in `fixtures/tracker/README.md`. Forgot password is under Signing in. Strava comes next in C5.
 
 ## fixtures/api/
+
+**`index.json` says what each fixture is:** file name → `{call, schema}`.
+`call` is a tRPC path or a `"<METHOD> <path>"` from `rest.json` (`null` for a
+refusal every route in a group shares), and `schema` is the type to decode it
+as: the call's output, or `ApiError` for a refusal. `fits: false` marks the one
+fixture that deliberately breaks its schema (rule 2). Read this instead of
+working it out from the file name; `pnpm test` keeps it complete.
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
 `me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`), `paddles.writeSummary` (`pdl-river` with its summary written),
@@ -161,7 +179,8 @@ route shares. So far: `auth.login`, `auth.login.needs-terms`,
 
 Account answers are `account.<route>[-<what>][.<case>].json`: `account.tos`,
 `account.tos-accepted`, `account.export`, `account.profile`(`.private`),
-`account.handle-check`(`.taken`), `account.contact`(`.none`), and
+`account.handle-check`(`.taken`), `account.contact`(`.none`),
+`account.devices`(`.none`), `account.devices-sessions`, and
 `account.error` (the 401 every account route shares).
 
 `paddles.list` is the Paddles screen as the website draws it, worked out on the

@@ -25,8 +25,18 @@ import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as getProfile, PATCH as setProfile } from '@/app/api/account/profile/route'
 import { GET as checkHandle, PUT as claimHandle, DELETE as releaseHandle } from '@/app/api/account/handle/route'
 import { GET as getContact, POST as setContact, DELETE as clearContact } from '@/app/api/account/contact/route'
+import { GET as listTrackers, DELETE as removeTracker } from '@/app/api/account/devices/route'
+import { GET as listRecordings } from '@/app/api/account/devices/sessions/route'
+import { POST as link } from '@/app/api/account/devices/link/route'
+import { POST as claim } from '@/app/api/devices/claim/route'
+import { POST as token } from '@/app/api/devices/token/route'
+import { POST as upload } from '@/app/api/devices/sessions/route'
+import type { deviceList } from '@/lib/device-list'
+import type { DeviceSessionMeta } from '@/lib/devices'
+import { provedPoll } from './device-proof'
 import {
   restRoutes, ApiError, Ok, TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact,
+  TrackerList, RecordingList,
 } from '@paddlesnitch/api/contract'
 
 let dataDir: string
@@ -80,7 +90,7 @@ const calls = (): Call[] => [
 
 describe('the account routes the apps call', () => {
   it('every account route in rest.json is tested here', () => {
-    const tested = new Set([...calls().map(([r]) => r), 'DELETE /api/account'])
+    const tested = new Set([...calls().map(([r]) => r), ...trackerRoutes, 'DELETE /api/account'])
     for (const route of Object.keys(restRoutes).filter(r => r.includes('/api/account'))) expect(tested.has(route as never), route).toBe(true)
   })
 
@@ -172,5 +182,86 @@ describe('what the Account screens do', () => {
     await fits(Ok, await deleteAccount(req('DELETE', '/api/account', undefined, { refreshToken: 'someone-elses' })))
     expect(revoke).toHaveBeenCalledTimes(1)
     expect(revoke).toHaveBeenCalledWith(pat.refreshToken)
+  })
+})
+
+// ---- Trackers ----
+
+// The tracker list and recordings answer what the website's code builds; these
+// fail `pnpm typecheck` if the contract and that code stop matching anywhere,
+// nested fields included. `Norm` makes optional and `| undefined` alike (the
+// list spreads its optional fields in as `undefined`).
+type Norm<T> = T extends object ? { [K in keyof T]-?: Norm<Exclude<T[K], undefined>> } : T
+type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+const check = <T extends true>() => undefined as unknown as T
+check<Same<Norm<z.infer<typeof TrackerList>>, Norm<Awaited<ReturnType<typeof deviceList>>>>>()
+// The stored metadata, less the owner's own id (unnamed fields are allowed).
+check<Same<Norm<z.infer<typeof RecordingList>['sessions'][number]>, Norm<Omit<DeviceSessionMeta, 'userId'>>>>()
+
+const trackerRoutes = ['GET /api/account/devices', 'DELETE /api/account/devices', 'GET /api/account/devices/sessions']
+const DEVICE = 'C0FFEE01'
+const CSV = [
+  'timestamp,lat,lon,tx_seq,battery',
+  '2026-09-05T09:00:00Z,51.4600,-0.9300,1,4.05',
+  '2026-09-05T09:00:01Z,51.4601,-0.9301,2,4.05',
+  '2026-09-05T09:00:02Z,51.4602,-0.9302,3,4.04',
+].join('\n')
+
+const tokenOf = new Map<string, string>()
+/** Pairs a tracker as the real one does (the app adds it with its Bearer token), then it uploads one recording. */
+async function trackerWithRecording(owner: TestUser) {
+  const post = (url: string, body: unknown, bearer?: string) => new NextRequest(`http://x${url}`, {
+    method: 'POST', body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) },
+  })
+  const { claimCode, claimSecret } = await (await claim(post('/api/devices/claim', { deviceId: DEVICE, model: 'tbeam', firmware: '0.19.3' }))).json()
+  expect((await link(post('/api/account/devices/link', { claimCode }, owner.idToken))).status).toBe(200)
+  const { deviceToken } = await (await token(post('/api/devices/token', await provedPoll(DEVICE, claimSecret)))).json()
+  tokenOf.set(DEVICE, deviceToken)
+  const res = await upload(new Request('http://x/api/devices/sessions?filename=track_0001.csv', {
+    method: 'POST', body: CSV, headers: { authorization: `Bearer ${deviceToken}`, 'content-type': 'text/csv' },
+  }))
+  expect(res.status).toBe(201)
+}
+
+describe('trackers in the apps', () => {
+  it('list the trackers and their recordings with only the Bearer token, as the contract says', async () => {
+    await trackerWithRecording(pat)
+    const list = await fits(TrackerList, await listTrackers(req('GET', '/api/account/devices', pat.idToken)))
+    expect(list.devices).toMatchObject([{ deviceId: DEVICE, firmware: '0.19.3' }])
+    expect(list.devices[0]).not.toHaveProperty('tokenHash')
+    const recs = await fits(RecordingList, await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken)))
+    expect(recs.sessions).toMatchObject([{ deviceId: DEVICE, filename: 'track_0001.csv', points: 3 }])
+  })
+
+  it('recordings come newest upload first (not newest paddle)', async () => {
+    await trackerWithRecording(pat)
+    // An older paddle, synced later, comes first.
+    const older = CSV.replaceAll('2026-09-05', '2026-08-01')
+    expect((await upload(new Request('http://x/api/devices/sessions?filename=track_0000.csv', {
+      method: 'POST', body: older, headers: { authorization: `Bearer ${tokenOf.get(DEVICE)}`, 'content-type': 'text/csv' },
+    }))).status).toBe(201)
+    const { sessions } = await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()
+    expect(sessions.map((r: { filename: string }) => r.filename)).toEqual(['track_0000.csv', 'track_0001.csv'])
+  })
+
+  it('remove a tracker: gone from the list, its recordings stay; someone else\'s is 404', async () => {
+    await trackerWithRecording(pat)
+    const sam = await makeUser('Sam')
+    await fits(ApiError, await removeTracker(req('DELETE', '/api/account/devices', sam.idToken, { deviceId: DEVICE })), 404)
+    await fits(Ok, await removeTracker(req('DELETE', '/api/account/devices', pat.idToken, { deviceId: DEVICE })))
+    expect((await (await listTrackers(req('GET', '/api/account/devices', pat.idToken))).json()).devices).toEqual([])
+    expect((await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()).sessions).toHaveLength(1)
+  })
+
+  it('refuse no sign-in, and a bad Bearer token beside a live cookie', async () => {
+    const tracker = [
+      (t?: string) => listTrackers(req('GET', '/api/account/devices', t)),
+      (t?: string) => removeTracker(req('DELETE', '/api/account/devices', t, { deviceId: DEVICE })),
+      (t?: string) => listRecordings(req('GET', '/api/account/devices/sessions', t)),
+    ]
+    for (const call of tracker) await fits(ApiError, await call(), 401)
+    jar({ tt_id: pat.idToken })
+    for (const call of tracker) expect((await call('not-a-jwt')).status).toBe(401)
   })
 })

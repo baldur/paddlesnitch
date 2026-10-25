@@ -1,0 +1,111 @@
+{
+  "account.contact.json": {
+    "call": "GET /api/account/contact",
+    "schema": "Contact"
+  },
+  "account.contact.none.json": {
+    "call": "GET /api/account/contact",
+    "schema": "Contact"
+  },
+  "account.devices-sessions.json": {
+    "call": "GET /api/account/devices/sessions",
+    "schema": "RecordingList"
+  },
+  "account.devices.json": {
+    "call": "GET /api/account/devices",
+    "schema": "TrackerList"
+  },
+  "account.devices.none.json": {
+    "call": "GET /api/account/devices",
+    "schema": "TrackerList"
+  },
+  "account.error.json": {
+    "call": null,
+    "schema": "ApiError"
+  },
+  "account.export.json": {
+    "call": "POST /api/account/export",
+    "schema": "DownloadLink"
+  },
+  "account.handle-check.json": {
+    "call": "GET /api/account/handle",
+    "schema": "HandleAvailability"
+  },
+  "account.handle-check.taken.json": {
+    "call": "GET /api/account/handle",
+    "schema": "HandleAvailability"
+  },
+  "account.profile.json": {
+    "call": "GET /api/account/profile",
+    "schema": "ProfileSettings"
+  },
+  "account.profile.private.json": {
+    "call": "GET /api/account/profile",
+    "schema": "ProfileSettings"
+  },
+  "account.tos-accepted.json": {
+    "call": "POST /api/account/tos",
+    "schema": "TosAccepted"
+  },
+  "account.tos.json": {
+    "call": "GET /api/account/tos",
+    "schema": "TosStatus"
+  },
+  "auth.error.json": {
+    "call": null,
+    "schema": "ApiError"
+  },
+  "auth.login.json": {
+    "call": "POST /att/api/auth/login",
+    "schema": "SignIn"
+  },
+  "auth.login.needs-terms.json": {
+    "call": "POST /att/api/auth/login",
+    "schema": "SignIn"
+  },
+  "auth.otp-verify.retry.json": {
+    "call": "POST /att/api/auth/otp-verify",
+    "schema": "ApiError"
+  },
+  "auth.password-reset-confirm.json": {
+    "call": "POST /att/api/auth/password-reset/confirm",
+    "schema": "ResetDone"
+  },
+  "auth.refresh.json": {
+    "call": "POST /att/api/auth/refresh",
+    "schema": "Refreshed"
+  },
+  "me.signed-in.json": {
+    "call": "me",
+    "schema": "Me"
+  },
+  "me.signed-out.json": {
+    "call": "me",
+    "schema": "Me"
+  },
+  "paddles.get.json": {
+    "call": "paddles.get",
+    "schema": "AnalysisSession"
+  },
+  "paddles.get.motion-only.json": {
+    "call": "paddles.get",
+    "schema": "AnalysisSession"
+  },
+  "paddles.get.strava.json": {
+    "call": "paddles.get",
+    "schema": "AnalysisSession"
+  },
+  "paddles.get.unknown-values.json": {
+    "call": "paddles.get",
+    "schema": "AnalysisSession",
+    "fits": false
+  },
+  "paddles.list.json": {
+    "call": "paddles.list",
+    "schema": "PaddleList"
+  },
+  "paddles.writeSummary.json": {
+    "call": "paddles.writeSummary",
+    "schema": "AnalysisSession"
+  }
+}

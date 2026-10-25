@@ -2,6 +2,9 @@ package com.paddlesnitch.app.api
 
 import java.io.File
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.serializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,21 +14,18 @@ class FixturesTest {
     private val dir = File("../../contract/fixtures/api")
     private fun <T> read(name: String, serializer: KSerializer<T>): T = ApiJson.decodeFromString(serializer, dir.resolve(name).readText())
 
+    // fixtures/api/index.json says which model each golden answer is (pnpm test keeps it complete).
     @Test
     fun everyFixtureHasAModelAndDecodes() {
-        val byProcedure = mapOf(
-            "me" to Me.serializer(), "paddles.list" to PaddleList.serializer(), "paddles.get" to AnalysisSession.serializer(), "paddles.writeSummary" to AnalysisSession.serializer(),
-            "auth.login" to SignIn.serializer(), "auth.refresh" to Refreshed.serializer(),
-            "auth.error" to ApiError.serializer(), "auth.otp-verify.retry" to ApiError.serializer(),
-            "account.tos" to TosStatus.serializer(), "account.tos-accepted" to TosAccepted.serializer(), "account.export" to DownloadLink.serializer(),
-            "account.profile" to ProfileSettings.serializer(), "account.handle-check" to HandleAvailability.serializer(),
-            "account.contact" to Contact.serializer(), "account.error" to ApiError.serializer(),
-        )
-        val names = dir.list()!!.filter { it.endsWith(".json") }
+        val index = ApiJson.parseToJsonElement(dir.resolve("index.json").readText()).jsonObject
+        val names = dir.list()!!.filter { it.endsWith(".json") && it != "index.json" }
         assertTrue(names.size >= 7)
-        for (name in names) {
-            val procedure = byProcedure.keys.filter { name.startsWith("$it.") }.maxBy { it.length }
-            read(name, byProcedure.getValue(procedure))
+        assertEquals("every fixture is in index.json and every entry has a file", names.toSet(), index.keys)
+        for ((name, entry) in index) {
+            val schema = entry.jsonObject.getValue("schema").jsonPrimitive.content
+            val model = runCatching { serializer(Class.forName("com.paddlesnitch.app.api.$schema")) }
+                .getOrElse { throw AssertionError("$name: no generated model $schema", it) }
+            runCatching { read(name, model) }.getOrElse { throw AssertionError("$name doesn't decode as $schema", it) }
         }
     }
 

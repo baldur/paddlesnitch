@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ResetConfirm.schema.json",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "password": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "email",
+    "code",
+    "password"
+  ]
+}
