@@ -701,6 +701,7 @@ The full reference (pairing, uploads, OTA, fleet, Bluetooth, crash reports, the 
 - **Tracker pages speak to paddlers**; engineering detail sits under Technical details (`src/lib/tracker-copy.ts`). Guide drawings (`src/lib/tracker-screens.ts`) must match the firmware's text; `tracker-screens.test.ts` says which to update.
 - **Platform admin is `ADMIN_USER_IDS`**; unset means nobody. Admin API routes stay out of `proxy.ts`.
 - **Changing `ble_about.h`, `BLE_LAYOUT`, `UPLOAD_CHUNK`, `tracker-ble.ts` or `uploadReceipt`** means updating `mobile/contract/fixtures/tracker/` (`tracker-ble.fixtures.test.ts` fails otherwise).
+- **A merge releases firmware to beta, not stable.** Stable is a manual flip, refused until a tracker has reported a good start (`firmware-release.yml` header). When OTA "didn't update", check `firmware/channels/` first.
 - **Debugging a tracker: read "Debugging the device" in the reference before theorising.** `n=0` during a sync is deliberate.
 
 ### Games
