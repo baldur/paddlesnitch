@@ -5,7 +5,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,9 +60,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.paddlesnitch.app.BuildConfig
 import com.paddlesnitch.app.api.AccountApi
+import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.AuthUser
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.shown
+import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -100,6 +105,10 @@ fun clearExport(context: Context) { exportFile(context).delete() }
 fun AccountScreen(
     api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Back from signing in again to delete: open Delete account at once. */
+    resumeDelete: Boolean = false, onDeleteResumed: () -> Unit = {},
+    /** Sign out and in again (Strava when [strava]), then come back with [resumeDelete]. */
+    onSignInAgain: (userId: String, email: String?, strava: Boolean) -> Unit = { _, _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -150,7 +159,8 @@ fun AccountScreen(
         Divider()
         YourData(api, ::act)
         Divider()
-        DeleteAccount(api, ::act, onDeleted)
+        DeleteAccount(api, ::act, resumeDelete, onDeleteResumed,
+            onSignInAgain = { val strava = isPlaceholderEmail(u.email); onSignInAgain(u.id, u.email.takeUnless { strava }, strava) }, onDeleted)
     }
 }
 
@@ -303,33 +313,76 @@ private fun YourData(api: AccountApi, act: Act) {
     Message(message, red = failed, tag = "data-message")
 }
 
+/** What the Delete account section shows. */
+private enum class Deleting { No, Checking, NeedsSignIn, Confirming }
+
+internal const val RECENT_SIGN_IN = "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
+
+/**
+ * Deleting needs a sign-in from the last 10 minutes (mobile/contract/README.md § Account):
+ * ask the server first, and if it's too old offer [onSignInAgain], which comes back here with [resume].
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DeleteAccount(api: AccountApi, act: Act, onDeleted: () -> Unit) {
-    var confirming by remember { mutableStateOf(false) }
+private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed: () -> Unit, onSignInAgain: () -> Unit, onDeleted: () -> Unit) {
+    var state by remember { mutableStateOf(Deleting.No) }
     var typed by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
-    Section("Delete account")
-    Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes to one of its admins or members. This happens at once and can't be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
-    if (!confirming) {
-        OutlinedButton(onClick = { confirming = true; typed = ""; message = null }, colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.red)) { Text("Delete my account") }
-        return
+    val signInFocus = remember { FocusRequester() }
+    val view = remember { BringIntoViewRequester() }
+    fun check() {
+        state = Deleting.Checking; typed = ""; message = null
+        act("Couldn’t check your sign-in. Please try again.", { message = it; state = Deleting.No }) {
+            state = if (api.accountStatus().recentSignIn) Deleting.Confirming else Deleting.NeedsSignIn
+        }
     }
-    // Inline, as on the website: the words to type sit above the field and the button they unlock.
-    Text("Type DELETE to confirm. There is no undo.")
-    OutlinedTextField(typed, { typed = it }, label = { Text("Confirm") }, singleLine = true,
-        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("delete-confirm"),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false))
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(enabled = typed == "DELETE" && !working, colors = ButtonDefaults.buttonColors(containerColor = PsColor.red, contentColor = PsColor.bg), onClick = {
-            working = true; message = null
-            act("Couldn’t delete your account. Please try again.", { message = it; working = false }) { api.deleteAccount(); onDeleted() }
-        }) { Text(if (working) "Deleting…" else "Delete for good") }
-        TextButton(enabled = !working, colors = linkColors(), onClick = { confirming = false; typed = "" }) { Text("Cancel") }
+    // Back from signing in again: straight to the check, and the section in view.
+    LaunchedEffect(resume) { if (resume) { onResumed(); check(); runCatching { view.bringIntoView() } } }
+    Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Section("Delete account")
+        Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes to one of its admins or members. This happens at once and can't be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
+        // Always in the layout, so TalkBack reads the notice when it appears.
+        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (state == Deleting.NeedsSignIn) Notice(RECENT_SIGN_IN)
+        }
+        when (state) {
+            Deleting.No, Deleting.Checking ->
+                OutlinedButton(enabled = state == Deleting.No, onClick = ::check, colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.red)) {
+                    Text(if (state == Deleting.Checking) "Checking…" else "Delete my account")
+                }
+            Deleting.NeedsSignIn -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() },
+                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
+                TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
+                LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
+            }
+            Deleting.Confirming -> {
+                // Inline, as on the website: the words to type sit above the field and the button they unlock.
+                Text("Type DELETE to confirm. There is no undo.")
+                OutlinedTextField(typed, { typed = it }, label = { Text("Confirm") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("delete-confirm"),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false))
+                LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(enabled = typed == "DELETE" && !working, colors = ButtonDefaults.buttonColors(containerColor = PsColor.red, contentColor = PsColor.bg), onClick = {
+                        working = true; message = null
+                        act("Couldn’t delete your account. Please try again.", { message = it; working = false }) {
+                            try { api.deleteAccount(); onDeleted() } catch (e: ApiFailure) {
+                                if (!e.reauth) throw e
+                                // The 10 minutes ran out while they typed: the same step as before, not an error.
+                                working = false; state = Deleting.NeedsSignIn
+                            }
+                        }
+                    }) { Text(if (working) "Deleting…" else "Delete for good") }
+                    TextButton(enabled = !working, colors = linkColors(), onClick = { state = Deleting.No; typed = "" }) { Text("Cancel") }
+                }
+            }
+        }
+        Message(message, red = true, tag = "delete-message")
     }
-    Message(message, red = true)
 }
 
 @Composable

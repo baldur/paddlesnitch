@@ -18,7 +18,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 /** Something to tell the person, in the server's own words when it gave some. */
 /** [generic]: the server said nothing we can show, so the caller's own words ([shown]) say what failed. */
-class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false) : Exception(message)
+/** [reauth]: the server wants a sign-in from the last few minutes first (deleting the account). */
+class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false, val reauth: Boolean = false) : Exception(message)
 
 /** What to show for a failure: the server's or the app's own words, else [fallback]. Never a status code. */
 fun Throwable.shown(fallback: String): String =
@@ -37,6 +38,8 @@ interface AccountApi {
     suspend fun contact(): Contact
     suspend fun setContact(email: String): Contact
     suspend fun removeContact(): Ok
+    /** Whether this session's sign-in is recent enough to delete the account. */
+    suspend fun accountStatus(): AccountStatus
     suspend fun deleteAccount()
     suspend fun exportAccount(into: java.io.File): String
     suspend fun signedInPage(next: String): String
@@ -113,6 +116,8 @@ class Api(
     override suspend fun contact(): Contact = account("GET", "api/account/contact", null, Contact.serializer())
     override suspend fun setContact(email: String): Contact = account("POST", "api/account/contact", """{"email":${str(email)}}""", Contact.serializer())
     override suspend fun removeContact(): Ok = account("DELETE", "api/account/contact", null, Ok.serializer())
+
+    override suspend fun accountStatus(): AccountStatus = account("GET", "api/account", null, AccountStatus.serializer())
 
     /** Erases the account; the refresh token stops working, so the stored tokens go too. */
     override suspend fun deleteAccount() {
@@ -239,10 +244,11 @@ class Api(
 
     private fun error(res: Answer): ApiFailure {
         // Sign-in refusals are the contract's ApiError; tRPC's errors are shaped differently.
-        val said = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body).error }.getOrNull()
+        val error = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body) }.getOrNull()
+        val said = error?.error
         // A request over ~4.6 MB is refused before our code sees it (prepareUpload stops short of that).
         if (said == null && res.code == 413) return ApiFailure(com.paddlesnitch.app.paddles.TOO_BIG, 413)
-        return if (said != null) ApiFailure(said, res.code) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
+        return if (said != null) ApiFailure(said, res.code, reauth = error.reauth == true) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
     }
 
     private fun str(s: String) = kotlinx.serialization.json.JsonPrimitive(s).toString()
