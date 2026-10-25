@@ -3,6 +3,16 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- The tracker (docs/features/android-app.md, "Pairing and syncing the
+         tracker"). CompanionDeviceManager does the finding, so no scan and no
+         location permission: Android 12+ ask only to connect; 10-11 need the
+         old install-time Bluetooth permissions. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
@@ -12,10 +22,19 @@
         android:theme="@style/Theme.Paddlesnitch">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Strava sign-in comes back here from the Custom Tab (auth/StravaSignIn.kt).
+                 singleTask brings this activity back and closes the tab. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.paddlesnitch.app" />
             </intent-filter>
         </activity>
     </application>

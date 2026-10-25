@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { authorizeUrl } from '@/lib/strava'
 import { canonicalBaseUrl, safeNext } from '@/lib/url'
 import { getAuthUser } from '@/lib/auth'
+import { APP_RETURN_URL, isChallenge } from '@/lib/app-signin'
 
 // Sign in with Strava. Differs from /att/api/strava/connect (which requires
 // an existing session) in two ways: this route is callable without auth, and
@@ -13,6 +14,13 @@ export async function GET(req: NextRequest) {
   // Preserve the `next` query param so we can bounce the user back to where
   // they were trying to go after sign-in.
   const next = safeNext(req.nextUrl.searchParams.get('next'))
+  // A phone app signing in (lib/app-signin.ts) sends its PKCE challenge. It
+  // needs tokens of its own, so a website session in the same browser doesn't
+  // short-circuit the round-trip.
+  const challenge = req.nextUrl.searchParams.get('challenge')
+  if (challenge !== null && !isChallenge(challenge)) {
+    return NextResponse.json({ error: 'Bad challenge.' }, { status: 400 })
+  }
 
   // If the visitor is already signed in, the Strava OAuth round-trip is
   // useless and prone to failure (an expired or single-use authorization
@@ -20,7 +28,7 @@ export async function GET(req: NextRequest) {
   // they're already authenticated — reported in #55). Just bounce them to
   // `next`. Users who want to LINK Strava to their account should use the
   // connect button on /account, which has its own flow.
-  const existingUser = await getAuthUser()
+  const existingUser = challenge ? null : await getAuthUser()
   if (existingUser) {
     return NextResponse.redirect(new URL(next, base))
   }
@@ -34,7 +42,7 @@ export async function GET(req: NextRequest) {
   // The sign-in flow can't recover from that without re-consent.
   const url = await authorizeUrl(state, redirectUri, 'force')
   if (!url) {
-    return NextResponse.redirect(new URL(`/signin?error=strava_not_configured`, base))
+    return NextResponse.redirect(challenge ? `${APP_RETURN_URL}?error=strava_not_configured` : new URL(`/signin?error=strava_not_configured`, base))
   }
 
   const res = NextResponse.redirect(url)
@@ -49,5 +57,7 @@ export async function GET(req: NextRequest) {
   }
   res.cookies.set('strava_signin_state', state, cookieOpts)
   res.cookies.set('strava_signin_next', next, cookieOpts)
+  // Always set, so a stale app challenge never turns a website sign-in into an app one.
+  res.cookies.set('strava_signin_app', challenge ?? '', { ...cookieOpts, maxAge: challenge ? 600 : 0 })
   return res
 }

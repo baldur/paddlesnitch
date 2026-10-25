@@ -12,10 +12,14 @@ export type MetricEvent =
   | 'course_create'
   | 'campaign_cta'     // a campaign landing's main button (e.g. CLICK TO SNITCH)
   | 'campaign_signup'  // server: an application from a campaign landing was saved
+  // Operational (docs/features/observability.md):
+  | 'app_open'         // an app started (crash rate = crash_report ÷ app_open)
+  | 'crash_report'     // an app crashed; sent on its next start
+  | 'client_error'     // a browser error from our own scripts
 
 export const METRIC_EVENTS: readonly MetricEvent[] = [
   'pageview', 'signup', 'login', 'upload', 'trial_create', 'course_create',
-  'campaign_cta', 'campaign_signup',
+  'campaign_cta', 'campaign_signup', 'app_open', 'crash_report', 'client_error',
 ]
 
 export function isMetricEvent(v: unknown): v is MetricEvent {

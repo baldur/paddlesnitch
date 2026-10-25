@@ -1,0 +1,9 @@
+{
+  "linkBegin": { "op": "begin" },
+  "linkCommit": { "op": "commit", "tokenHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" },
+  "wifi": { "ssid": "Boathouse", "pass": "s3cret pass" },
+  "syncList": { "op": "list" },
+  "syncPiece": { "op": "piece", "name": "track_20261005_061002.csv", "part": 1 },
+  "syncDone": { "op": "done", "name": "track_20261005_061002_i10.csv", "receipt": "34b07d3d07be33746cddd72a3150207d901d9be08504948f2203a7c16cb53329" },
+  "dataSeek": { "op": "seek", "offset": 1500 }
+}

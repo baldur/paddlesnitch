@@ -1,0 +1,12 @@
+{
+  "headers": { "x-paddlesnitch-app": "android/1.0.3 (42)", "Content-Type": "application/json" },
+  "body": {
+    "sid": "b6f1c0de-4a1e-4c55-9d3e-0f5a2a7c9e11",
+    "events": [
+      { "event": "app_open", "t": "{{now}}", "path": "app:paddles" }
+    ]
+  },
+  "emits": [
+    { "Event": "app_open", "platform": "android", "appVersion": "1.0.3", "build": "42", "path": "app:paddles" }
+  ]
+}

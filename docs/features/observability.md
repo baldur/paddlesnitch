@@ -1,7 +1,6 @@
 # Observability: dashboards and error notices
 
-📝 **Spec, decisions made 2026-10-25.** Nothing built yet. The owner's answers
-are under [Decisions](#decisions).
+🚧 **O1 + O2 built 2026-10-25**: server telemetry, the three dashboards, zero-tolerance alarms, app/browser ingest, the contract, and the daily digest. Next is O3: the apps send `app_open` and crash reports. The owner's answers are under [Decisions](#decisions).
 
 One place to see whether paddlesnitch is healthy as a product, deeper views
 for each part, and **close to zero tolerance for errors**: every real error is
@@ -106,11 +105,14 @@ It answers two questions: is anything broken right now, and are people using it?
 
 ### Which client sent a request
 
-Every app request carries one header:
+The apps already send one header on their calls: `x-paddlesnitch-app`, which
+the sign-in routes use to answer with tokens instead of cookies (mobile C2).
+Observability **reuses it**, so there's no second header. Android already sends
+it on every request; iOS needs to send it on every request, not just sign-in.
 
 ```
-X-Paddlesnitch-Client: android/1.0.3 (42)
-X-Paddlesnitch-Client: ios/1.0.0 (7)
+x-paddlesnitch-app: android/0.1.0
+x-paddlesnitch-app: ios/1.0.0 (7)
 ```
 
 `<platform>/<version> (<build>)`. One pure helper, `clientOf(headers)` in
@@ -188,7 +190,7 @@ watches total `Failures`. The platform split is a Logs Insights widget.
 
 `POST /att/api/track` keeps its batch format and gains:
 
-- **App acceptance.** A request with a valid `X-Paddlesnitch-Client` app header
+- **App acceptance.** A request with a valid `x-paddlesnitch-app` app header
   is accepted without an Origin. That's spoofable, just like Origin is today,
   so it's the same honest limit: the allowlist and the per-request caps are what
   stop abuse, not the header.
@@ -214,7 +216,15 @@ The same pattern the trackers use for crash reports (a coredump summary sent to 
   exception message (it can hold user data).
 - `signature` = the exception type plus the top frame, so the dashboard can
   group identical crashes.
-- Crash rate = crash reports ÷ `app_open`, by platform and version.
+- Crash rate = crash reports ÷ `app_open`, by platform and version (Logs
+  Insights). The alarm watches the plain `crash_report` count, so no
+  `Platform` metric dimension is needed.
+- The exact rules for the apps are in
+  [`mobile/contract/telemetry.md`](../../mobile/contract/telemetry.md), with
+  fixtures that `pnpm test` replays against the endpoint. The server keeps only
+  the fixed fields: frames that look like a path or a message are dropped, and
+  the app's `appVersion` prop is stored as `crashedVersion` (the crashed
+  version can be older than the reporting one).
 
 Native crashes (ANR, out-of-memory, crashes in native code) don't reach this.
 **Google Play's Android vitals and Apple's App Store Connect crash pages** cover
@@ -246,7 +256,7 @@ Two channels, both through the existing `paddlesnitch-alerts` topic:
 | `paddlesnitch-action-failed` | **≥ 1** `fail` on any action in 15 min | New. One alarm over the sum of the five `fail` metrics; the email names the action via the digest and the dashboard |
 | `paddlesnitch-app-crashes` | **≥ 1** crash report in 15 min, either platform | New in O3 |
 | `paddlesnitch-browser-errors` | **≥ 1** `client_error` from **our own scripts** in 15 min | New. Errors from browser extensions and third-party scripts (another origin, or `Script error.` with no source) are dropped at capture, so they can't trip it |
-| `paddlesnitch-server-errors` (existing) | Tightened from > 5 an hour to **≥ 1** `ERROR` line in 15 min | Only after the clean-up below. It catches what the API alarm can't see (REST routes, background jobs) |
+| `paddlesnitch-server-errors` (existing) | Tightened from > 5 an hour to **≥ 1** `ERROR` line in 15 min | Tightened after the clean-up below. It catches what the API alarm can't see (REST routes, background jobs) |
 | The other seven existing alarms | unchanged | Crashes, throttles, near-timeouts, tracker boot failures and crashes, SES bounce and complaint rates |
 
 ### Getting to zero first (start of O1)
@@ -267,19 +277,47 @@ The rule from then on: **`console.error` means "we broke something and want to
 hear about it"**. Expected failures use `console.warn`. This goes in CLAUDE.md
 as a convention.
 
-### Daily digest (O2)
+### Clean-up result (2026-10-25)
 
-A small scheduled Lambda (07:00 UK time) runs a few Logs Insights queries over
-the last 24 hours and emails the result through the alerts topic:
+Logs Insights over the last 30 days of the server, jobs, game relay and image
+Lambdas (109 MB scanned): **no application `console.error` lines at all**. Every
+error belonged to two incidents, both already fixed:
 
-- server errors grouped by procedure/route and code, with counts and first/last
-  time
-- failed actions by action, reason and platform
-- app crash signatures by platform and version (O3)
-- browser errors by message and path
-- new app versions seen for the first time
-- a one-line "all clear" when everything is zero, so silence never means "the
-  digest broke"
+- **2026-10-21 19:04–20:16 UTC, server down for 72 minutes.** Deploy `ae2178c`
+  shipped an incomplete OpenNext server bundle (`Cannot find module
+  '@swc/helpers/…'`, 162 failed starts, 44 failed job sweeps). The existing
+  crash alarm fired. Fixed by the next deploy, and #579 now stops a deploy whose
+  server bundle is incomplete.
+- **2026-10-23 08:21 UTC, one response over Lambda's 6 MB limit** (413, river
+  planner data). Fixed the same day by serving the overview in chunks (#607).
+
+Also seen: an AWS SDK Node-version warning (gone since 2026-09-29), and bots
+calling `/_next/image` with no URL (the image Lambda's own log group; it doesn't
+reach the server alarm).
+
+One code change came out of it: a background job attempt that will be retried
+now logs `console.warn`; only the attempt that gives up logs `console.error`.
+
+### Daily digest
+
+`ErrorDigestFn` (`infra/lambdas/error-digest/`), run by EventBridge at
+**07:00 UTC** (07:00 or 08:00 in the UK). It runs seven Logs Insights queries
+over the server's log group and publishes one email to the alerts topic:
+
+- errors the server logged, grouped by message
+- API calls that failed on our side, by procedure, code and platform
+- key actions that failed, by action, reason and platform
+- app crashes by platform, crashed version and signature
+- browser errors by message and page
+- activity (API calls, key actions), so a quiet day is visibly quiet, not empty
+- app versions seen for the first time in the last day (from a 14-day look-back)
+
+The subject is `paddlesnitch 2026-10-25: all clear` or `…: 4 errors`. A day
+with no errors still sends the all-clear line, and `paddlesnitch-digest-failed`
+alarms if the digest itself fails, so a missing email never reads as a quiet
+day. Queries and formatting are pure (`digest.mjs`, tested in
+`error-digest.test.ts`); `index.mjs` only runs them. All seven queries were
+run against production when this was written.
 
 ### Later: automatic rollback
 
@@ -305,7 +343,7 @@ quiet window. It's not part of this spec. It's what the zero bar makes possible.
 | Item | Roughly |
 |---|---|
 | Dashboards: three until the apps ship (all within the free three), then `-mobile` | $0, then $3/month |
-| ~18 new custom metrics (API calls + server errors, action attempts + failures per action and in total = 12, app crashes ×2, app opens ×2) at $0.30 | $5–6/month |
+| ~17 new custom metrics (API calls + server errors; action attempts + failures, per action and in total = 12; `app_open`, `crash_report`, `client_error` as `Event` counts) at $0.30 | $5/month |
 | ~4 new alarms at $0.10 | under $1/month |
 | Digest Lambda (once a day) + its Logs Insights queries (scanning a day of logs) | pennies |
 | Extra log lines (one per API call) | well under $1/month at today's traffic |
@@ -317,8 +355,8 @@ About **$6/month** now, **$9/month** once the mobile dashboard exists.
 
 | Phase | What | Touches the apps? |
 |---|---|---|
-| **O1: server, now** | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · action lines on the five actions. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and action alarms at ≥ 1 · tighten `server-errors` | No |
-| **O2: contract, ingest, digest** | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture + alarm · the daily digest | No. Only the contract is written for them |
+| **O1: server** ✅ | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · action lines on the five actions. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and action alarms at ≥ 1 · tighten `server-errors` | No |
+| **O2: contract, ingest, digest** ✅ | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture + alarm · the daily digest | No. Only the contract is written for them |
 | **O3: apps adopt** | Android sends the header (one line in its HTTP client) and `app_open`, then crash reports · `paddlesnitch-mobile` + the crash alarm | Yes, when the app agent is ready |
 | **iOS** | Follows the same contract. Nothing new server-side | Yes, when the iPhone app is built |
 | **Later** | Automatic rollback on a post-deploy alarm | No |

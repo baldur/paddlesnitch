@@ -1,0 +1,11 @@
+{
+  "token": "dGhpcy1pcy1hLXNhbXBsZS10b2tlbi1ub3QtYS1yZWFsLW9uZQ",
+  "tokenHash": "d88473025c65ecf9bf74b070e77ce831f476f140688cb34cbf990d2318733fd3",
+  "deviceId": "435AC17C",
+  "cases": [
+    { "upload": "track_20261005_061002_imu.csv", "message": "ps-receipt:v1|435AC17C|track_20261005_061002_imu.csv",
+      "receipt": "34b07d3d07be33746cddd72a3150207d901d9be08504948f2203a7c16cb53329" },
+    { "upload": "track_20261005_061002.csv", "message": "ps-receipt:v1|435AC17C|track_20261005_061002.csv",
+      "receipt": "2c9be99b6681b16fa7e41f8371aaaa1f55fa8e4a04452103f1e0c499c86412bd" }
+  ]
+}

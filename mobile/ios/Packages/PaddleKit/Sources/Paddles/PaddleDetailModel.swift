@@ -90,7 +90,7 @@ public struct PaddleSummary: Hashable, Sendable {
             Stat(label: "PADDLING", value: Format.clock(result.durationS), sub: "from the boat's motion"),
             Stat(label: "DISTANCE", value: Format.dash, sub: "no GPS"),
             strokeRate(result),
-            Stat(label: "STROKES", value: "\(noGps.strokes)", sub: "about"),
+            Stat(label: "STROKES", value: Format.strokes(Double(noGps.strokes)), sub: "about"),
         ]
     }
 

@@ -64,6 +64,60 @@ class ApiTest {
         assertEquals("""{"id":"pdl-river"}""", server.takeRequest().url.queryParameter("input"))
     }
 
+    @Test fun aFileIsUploadedLikeTheWebsitesFormWithTheBearerToken() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(200, """{"id":"pdl-new","distanceKm":4.2,"source":{"type":"file"}}""")
+        val added = api.upload("Morning paddle.fit", byteArrayOf(1, 2, 3))
+        assertEquals("pdl-new", added.id)
+        assertNull(added.duplicate)
+        val req = server.takeRequest()
+        assertEquals("/paddles/api/analyse", req.url.encodedPath)
+        assertEquals("Bearer id-1", req.headers["Authorization"])
+        assertTrue(req.headers["Content-Type"]!!.startsWith("multipart/form-data"))
+        assertTrue(req.body!!.utf8().contains("""name="file"; filename="Morning paddle.fit""""))
+    }
+
+    @Test fun anUploadThatIsAlreadyThereSaysSo() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(200, """{"id":"pdl-river","duplicate":true}""")
+        assertEquals(true, api.upload("a.gpx", byteArrayOf(1)).duplicate)
+    }
+
+    @Test fun anUnreadableFileGivesTheServersReason() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(422, """{"error":"That file has too few GPS points to analyse."}""")
+        val e = runCatching { api.upload("a.gpx", byteArrayOf(1)) }.exceptionOrNull() as ApiFailure
+        assertEquals("That file has too few GPS points to analyse.", e.message)
+    }
+
+    @Test fun aFileOverTheServersLimitSaysWhatToDo() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(413, "Request Entity Too Large")
+        val e = runCatching { api.upload("big.gpx", ByteArray(10)) }.exceptionOrNull() as ApiFailure
+        assertEquals("That file is too big to upload. Try the FIT file, or zip it first.", e.message)
+    }
+
+    @Test fun aPendingSummaryIsWrittenByATrpcMutation() = runTest {
+        tokens.save("id-1", "r-1")
+        trpc(File("../../contract/fixtures/api/paddles.get.json").readText())
+        api.writeSummary("pdl-river")
+        val req = server.takeRequest()
+        assertEquals("POST", req.method)
+        assertEquals("/api/trpc/paddles.writeSummary", req.url.encodedPath)
+        assertEquals("""{"id":"pdl-river"}""", req.body!!.utf8())
+        assertEquals("Bearer id-1", req.headers["Authorization"])
+    }
+
+    @Test fun aWebsitePageOpensSignedInThroughALinkTheServerMakes() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(200, """{"url":"https://paddlesnitch.com/att/api/auth/web-code?code=abc&next=%2Faccount"}""")
+        assertEquals("https://paddlesnitch.com/att/api/auth/web-code?code=abc&next=%2Faccount", api.signedInPage("/account#delete"))
+        val req = server.takeRequest()
+        assertEquals("/att/api/auth/web-code", req.url.encodedPath)
+        assertEquals("Bearer id-1", req.headers["Authorization"])
+        assertEquals("""{"next":"/account#delete"}""", req.body!!.utf8())
+    }
+
     @Test fun anExpiredTokenIsRefreshedOnceAndTheCallRetried() = runTest {
         tokens.save("old", "r-1")
         answer(401, """{"error":{"message":"UNAUTHORIZED"}}""")

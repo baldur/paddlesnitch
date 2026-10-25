@@ -36,8 +36,16 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
-      - name: Unit tests
-        run: ./gradlew --no-configuration-cache :app:testDebugUnitTest
+      # Unit tests, the Compose UI tests (Robolectric) and the screenshot
+      # goldens in app/src/test/screenshots (Roborazzi), which fail on any change.
+      - name: Unit, UI and screenshot tests
+        run: ./gradlew --no-configuration-cache :app:verifyRoborazziDebug
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: screenshot-diffs
+          path: mobile/android/app/build/outputs/roborazzi
+          retention-days: 14
       - name: Debug APK
         run: ./gradlew --no-configuration-cache :app:assembleDebug
       - uses: actions/upload-artifact@v7

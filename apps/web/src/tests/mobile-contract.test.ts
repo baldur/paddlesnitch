@@ -145,7 +145,7 @@ describe('the HTTP form the apps speak', () => {
 describe('fixtures/api', () => {
   const fixture = (name: string) => JSON.parse(readFileSync(path.join(CONTRACT, 'fixtures/api', name), 'utf8'))
   const schemaFor: Record<string, z.ZodType> = {
-    me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession,
+    me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession, 'paddles.writeSummary': AnalysisSession,
     // Sign-in (REST): named after the route, or `auth.error` / `.retry` for refusals.
     'auth.login': SignIn, 'auth.refresh': Refreshed, 'auth.error': ApiError, 'auth.otp-verify.retry': ApiError,
   }

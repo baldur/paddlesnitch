@@ -127,6 +127,14 @@ public enum Format {
         value == value.rounded() && abs(value) < 1e15 ? String(Int(value)) : String(value)
     }
 
+    /// About how many strokes, as the web's `roundStrokes`: to the hundred
+    /// from 1,000, with commas. 12345 → "12,300".
+    public static func strokes(_ count: Double) -> String {
+        let near: (Double) -> Double = { $0.rounded(.toNearestOrAwayFromZero) }
+        let rounded = Int(count >= 1000 ? near(count / 100) * 100 : near(count))
+        return rounded.formatted(.number.locale(Locale(identifier: "en_US")))
+    }
+
     /// Why a paddle has no route, as the web's paddle page says it.
     public static func noPaddleMessage(_ reason: NoPaddleReason, hasMotion: Bool) -> String {
         let motion = hasMotion ? " The boat motion was." : ""

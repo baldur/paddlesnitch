@@ -10,7 +10,9 @@ and neither app's source is ever the reference.
 | `api/` | JSON Schema (draft-07) for every procedure the apps call, plus `procedures.json` | `pnpm mobile:contract`, from `packages/api/src/contract.ts` |
 | `tokens/` | Colours, radii and font families | `pnpm mobile:contract`, from `packages/ui/src/tokens.css` |
 | `fixtures/api/` | Golden answers per procedure, which both apps must decode | By hand, from synthetic paddles run through the real analysis; checked against the schemas by `pnpm test` |
-| `fixtures/` (rest) | Recording CSV, tracker Bluetooth protocol, receipts | Phase C3 (not yet) |
+| `fixtures/tracker/` | The tracker's Bluetooth protocol: UUIDs, layout, what each item replies, what each write sends, DATA pages, upload receipts, the waits | By hand, from `firmware/include/ble_about.h`, `firmware/src/ble.cpp` and the website's `lib/tracker-ble.ts`; checked against all three by `pnpm test`. See its README |
+| `telemetry.md` + `fixtures/telemetry/` | The `x-paddlesnitch-app` header on every request, `app_open`, and crash reports sent on the next start | By hand; replayed against the real endpoint by `pnpm test` |
+| `fixtures/` (rest) | Recording CSV | Phase C3 (not yet) |
 
 **Don't edit `api/` or `tokens/` by hand.** Change the source, run
 `pnpm mobile:contract`, commit the result. `pnpm test` fails while they differ.
@@ -54,6 +56,17 @@ error     4xx/5xx  { "error": { "message": …, "code": …, "data": { "code": "
 
 A query with no input omits `?input=`.
 
+## Adding a paddle from a file
+
+`POST /paddles/api/analyse` with `Authorization: Bearer`, as `multipart/form-data`
+with one part, `file` (GPX, FIT, TCX, CSV, SpeedCoach CSV, or a zip of one; the
+file name's extension picks the parser). In `rest.json` its `input` is `null`
+for that reason. The answer is the whole analysis; the apps need only
+`Analysed`: the paddle's `id`, and `duplicate: true` when that paddle was
+already there (the existing one is returned, nothing is added). 422 is a file
+that can't be read, with the reason in `error`; the server refuses anything
+over 6 MB (413, not an `ApiError`).
+
 ## Signing in
 
 REST, not tRPC. Send `x-paddlesnitch-app: <platform>/<version>` (e.g.
@@ -64,7 +77,7 @@ every API call.
 
 The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
 `Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
-`RefreshToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
+`RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its input,
 output and the statuses that answer an `ApiError`. Golden answers:
 `fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
 just accepted the Terms).
@@ -75,8 +88,26 @@ just accepted the Terms).
 | `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
 | `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 201, as login; 422 if `acceptedTosVersion` isn't current |
+| `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
+
+**Website pages, signed in.** For a page only the website has (account
+details, delete account…), `POST /att/api/auth/web-code {next: "/account#delete"}`
+with the Bearer token answers `{url}`; open it in the in-app browser within a
+minute. It works once and signs the website in as the app's person.
+
+**Strava.** Make a PKCE verifier (32 random bytes, base64url without padding)
+and its challenge (`base64url(sha256(verifier))`, 43 characters). Open
+`/att/api/auth/strava/init?challenge=<challenge>` in the system's in-app
+browser (Android Custom Tab, iOS `ASWebAuthenticationSession` with callback
+scheme `com.paddlesnitch.app`). It ends on
+`com.paddlesnitch.app:/signin/strava?code=<code>` (or `?error=<key>`, the same
+keys the website's `/signin?error=` shows). Swap the code and the verifier at
+`strava/app-token` within 5 minutes; a code works once, and a wrong verifier
+spends it. The app's own scheme, not an app link, so it works in debug builds
+and on iPhone before the Apple team ID exists; the verifier is what makes a
+code caught by another app useless (RFC 8252).
 
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that
@@ -88,7 +119,7 @@ Every error answer has a human-readable `error`.
 ## fixtures/api/
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
-`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`),
+`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`), `paddles.writeSummary` (`pdl-river` with its summary written),
 `paddles.get.strava` (`pdl-strava`), `paddles.get.motion-only` (`pdl-motion`, a
 paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
 (rule 2; deliberately does **not** fit the schema). The paddles are synthetic.

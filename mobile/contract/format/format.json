@@ -312,5 +312,39 @@
       },
       "out": "Too short to be a paddle: the boat moved 12 m, and a paddle needs 100 m."
     }
+  ],
+  "roundStrokes": [
+    {
+      "in": 0,
+      "out": "0"
+    },
+    {
+      "in": 7,
+      "out": "7"
+    },
+    {
+      "in": 999,
+      "out": "999"
+    },
+    {
+      "in": 1000,
+      "out": "1,000"
+    },
+    {
+      "in": 1049,
+      "out": "1,000"
+    },
+    {
+      "in": 1050,
+      "out": "1,100"
+    },
+    {
+      "in": 12345,
+      "out": "12,300"
+    },
+    {
+      "in": 1234567,
+      "out": "1,234,600"
+    }
   ]
 }

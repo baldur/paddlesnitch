@@ -2,6 +2,7 @@ package com.paddlesnitch.app.api
 
 import com.paddlesnitch.app.auth.TokenStore
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,6 +11,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -29,7 +31,8 @@ class Api(
     baseUrl: String,
     private val tokens: TokenStore,
     private val appVersion: String,
-    private val http: OkHttpClient = OkHttpClient(),
+    // Analysing an upload fetches the weather and river flow, so allow it a minute.
+    private val http: OkHttpClient = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
 ) {
     private val base = baseUrl.trimEnd('/').toHttpUrl()
     private val refreshing = Mutex()
@@ -43,6 +46,13 @@ class Api(
     suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignIn =
         signIn("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}""")
 
+    /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
+    fun stravaStartUrl(challenge: String): String =
+        base.newBuilder().encodedPath("/att/api/auth/strava/init").addQueryParameter("challenge", challenge).build().toString()
+
+    suspend fun stravaSignIn(code: String, verifier: String): SignIn =
+        signIn("/att/api/auth/strava/app-token", """{"code":${str(code)},"verifier":${str(verifier)}}""")
+
     suspend fun signOut() {
         val refresh = tokens.refreshToken
         tokens.clear()
@@ -50,9 +60,37 @@ class Api(
         if (refresh != null) runCatching { post("/att/api/auth/logout", """{"refreshToken":${str(refresh)}}""") }
     }
 
+    /**
+     * A website page that needs the website's sign-in (`next` is a path like
+     * "/account#delete"), as a link that opens it already signed in: it carries
+     * a one-minute, one-use code the website swaps for its cookies.
+     */
+    suspend fun signedInPage(next: String): String {
+        val url = base.newBuilder().addPathSegments("att/api/auth/web-code").build()
+        val body = """{"next":${str(next)}}""".toRequestBody(jsonType)
+        return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(body).build() }, WebPage.serializer()).url
+    }
+
     suspend fun me(): Me = query("me", Me.serializer())
     suspend fun paddles(): PaddleList = query("paddles.list", PaddleList.serializer())
     suspend fun paddle(id: String): AnalysisSession = query("paddles.get", AnalysisSession.serializer(), """{"id":${str(id)}}""")
+    /** Writes a paddle's pending coach summary (can take a few seconds); the paddle as it is when already written. */
+    suspend fun writeSummary(id: String): AnalysisSession = mutation("paddles.writeSummary", AnalysisSession.serializer(), """{"id":${str(id)}}""")
+
+    /**
+     * A REST call as the signed-in person (`Authorization: Bearer`), for the
+     * routes the app shares with the website: tracker setup and sync.
+     * POST when there's a body, else GET.
+     */
+    suspend fun rest(path: String, query: Map<String, String> = emptyMap(), body: ByteArray? = null, type: String = "application/json", headers: Map<String, String> = emptyMap()): Answer {
+        val url = base.newBuilder().addPathSegments(path.trimStart('/')).apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
+        return authorized { token ->
+            Request.Builder().url(url).header(AUTH, "Bearer $token").apply {
+                headers.forEach { (k, v) -> header(k, v) }
+                if (body != null) post(body.toRequestBody(type.toMediaType()))
+            }.build()
+        }
+    }
 
     private suspend fun signIn(path: String, body: String): SignIn {
         val answer = read(post(path, body), SignIn.serializer())
@@ -60,10 +98,27 @@ class Api(
         return answer
     }
 
+    /** Analyse and save a recording (GPX, FIT, TCX, CSV, or a zip of one), as the website's upload does. */
+    suspend fun upload(fileName: String, bytes: ByteArray): Analysed {
+        val url = base.newBuilder().addPathSegments("paddles/api/analyse").build()
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", fileName, bytes.toRequestBody("application/octet-stream".toMediaType())).build()
+        return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(body).build() }, Analysed.serializer())
+    }
+
     /** A tRPC query: GET /api/trpc/<path>?input=<json>, answer {result:{data}}. */
     private suspend fun <T> query(path: String, out: KSerializer<T>, input: String? = null): T {
         val url = base.newBuilder().addPathSegments("api/trpc/$path").apply { if (input != null) addQueryParameter("input", input) }.build()
-        val res = authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").build() }
+        return data(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").build() }, out)
+    }
+
+    /** A tRPC mutation: POST /api/trpc/<path> with the input as the body. */
+    private suspend fun <T> mutation(path: String, out: KSerializer<T>, input: String): T {
+        val url = base.newBuilder().addPathSegments("api/trpc/$path").build()
+        return data(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(input.toRequestBody(jsonType)).build() }, out)
+    }
+
+    private fun <T> data(res: Answer, out: KSerializer<T>): T {
         if (!res.ok) throw error(res)
         val data = ApiJson.parseToJsonElement(res.body).jsonObject.getValue("result").jsonObject.getValue("data")
         return ApiJson.decodeFromJsonElement(out, data)
@@ -93,7 +148,7 @@ class Api(
         call(Request.Builder().url(base.newBuilder().addPathSegments(path.trimStart('/')).build()).post(body.toRequestBody(jsonType)).build())
 
     /** An answer read in full, so nothing touches the network on the caller's (main) thread. */
-    private class Answer(val code: Int, val body: String) { val ok get() = code in 200..299 }
+    class Answer(val code: Int, val body: String) { val ok get() = code in 200..299 }
 
     private suspend fun call(req: Request): Answer = withContext(Dispatchers.IO) {
         try {
@@ -111,6 +166,8 @@ class Api(
     private fun error(res: Answer): ApiFailure {
         // Sign-in refusals are the contract's ApiError; tRPC's errors are shaped differently.
         val said = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body).error }.getOrNull()
+        // A request over the server's 6 MB limit is refused before our code sees it.
+        if (said == null && res.code == 413) return ApiFailure("That file is too big to upload. Try the FIT file, or zip it first.", 413)
         return ApiFailure(said ?: "Something went wrong (${res.code}). Please try again.", res.code)
     }
 
