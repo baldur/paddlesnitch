@@ -98,6 +98,16 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     expect(cognito.customAuthSignIn).not.toHaveBeenCalled()
   })
 
+  it('an unlinked athlete whose Strava email matches an account that signs in with Google is told to use Google, and not linked', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue(null)
+    vi.mocked(strava.getAthleteProfile).mockResolvedValue({ id: 555, firstname: 'Bal', lastname: 'G', email: 'Pat@Example.com' } as never)
+    vi.mocked(cognito.findUserByEmail).mockResolvedValue({ sub: 'google-sub', email: 'pat@example.com', displayName: 'Pat', google: true } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_use_google')
+    expect(cognito.findUserByEmail).toHaveBeenCalledWith('pat@example.com')
+    expect(stravaStorage.putAthleteIndex).not.toHaveBeenCalled()
+  })
+
   it('creates a fresh account only when the athlete is NOT linked', async () => {
     vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue(null)
     vi.mocked(cognito.adminCreateUserForStrava).mockResolvedValue({ sub: 'new-sub' } as never)

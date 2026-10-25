@@ -40,11 +40,10 @@ export async function handler(event, deps = { usersWithEmail }) {
     if (String(attrs.email_verified).toLowerCase() !== 'true') throw new Error('EMAIL_UNVERIFIED')
   }
   if (!email) return event
+  // Any confirmed account with this email blocks, a Google one included:
+  // PreSignUp only runs when Cognito is about to make a NEW user, so a Google
+  // account already holding the email is a different Google identity.
   const existing = (await deps.usersWithEmail(event.userPoolId, email)).filter(u => u.UserStatus !== 'UNCONFIRMED')
-  // A Google user signing in again is the same Cognito user (keyed by Google's
-  // id), so only another kind of account blocks a Google sign-up; every
-  // existing account blocks an email or Strava sign-up.
-  const blocking = google ? existing.filter(u => u.UserStatus !== 'EXTERNAL_PROVIDER') : existing
-  if (blocking.length) throw new Error('ACCOUNT_EXISTS')
+  if (existing.length) throw new Error('ACCOUNT_EXISTS')
   return event
 }

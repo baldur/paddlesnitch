@@ -92,7 +92,8 @@ export async function GET(req: NextRequest) {
   // 'unknown' → "Could not create an account from your Strava profile"). `||`
   // treats '' as "no email" and falls back to the synthetic address.
   const hasRealEmail = !!profile.email
-  const accountEmail = profile.email || syntheticEmailFor(profile.id)
+  // Lowercased: emails are compared exactly (one account per email, #697).
+  const accountEmail = (profile.email || syntheticEmailFor(profile.id)).trim().toLowerCase()
 
   // 2. Find or create the matching Cognito user.
   //    Priority:
@@ -142,6 +143,8 @@ export async function GET(req: NextRequest) {
     // email. The synth path skips straight to creation — there can be
     // no pre-existing account with that synthesised address.
     const existing = hasRealEmail ? await findUserByEmail(accountEmail) : null
+    // An account that signs in with Google can't be signed in by email here.
+    if (existing?.google) return fail('strava_use_google')
     if (existing) {
       cognitoEmail = existing.email
       userId = existing.sub

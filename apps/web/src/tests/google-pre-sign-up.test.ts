@@ -31,8 +31,8 @@ describe('PreSignUp: one account per email', () => {
     }
   })
 
-  it('a Google user signing in again is not a second account', async () => {
-    expect(await handler(event(GOOGLE), withUsers([{ UserStatus: 'EXTERNAL_PROVIDER' }]))).toBeTruthy()
+  it('a second Google identity with the same email is refused too (PreSignUp runs only for new users)', async () => {
+    await expect(handler(event(GOOGLE), withUsers([{ UserStatus: 'EXTERNAL_PROVIDER' }]))).rejects.toThrow('ACCOUNT_EXISTS')
   })
 
   it('half-made accounts (never confirmed) block nobody', async () => {

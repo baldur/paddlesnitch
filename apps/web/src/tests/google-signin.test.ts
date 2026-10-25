@@ -233,3 +233,14 @@ describe('the server\'s own sign-in checks it got the account it meant', () => {
     expect(sent).toContain('RevokeTokenCommand')
   })
 })
+
+describe('an email two accounts share resolves to nobody', () => {
+  it('findUserByEmail refuses to pick one, and ignores half-made accounts', async () => {
+    const attrs = (sub: string) => [{ Name: 'sub', Value: sub }, { Name: 'email', Value: 'v@example.com' }]
+    const spy = vi.spyOn(CognitoIdentityProviderClient.prototype, 'send')
+    spy.mockResolvedValueOnce({ Users: [{ Username: 'a', UserStatus: 'CONFIRMED', Attributes: attrs('a') }, { Username: 'Google_1', UserStatus: 'EXTERNAL_PROVIDER', Attributes: attrs('b') }] } as never)
+    expect(await findUserByEmail('v@example.com')).toBeNull()
+    spy.mockResolvedValueOnce({ Users: [{ Username: 'a', UserStatus: 'CONFIRMED', Attributes: attrs('a') }, { Username: 'x', UserStatus: 'UNCONFIRMED', Attributes: attrs('x') }] } as never)
+    expect(await findUserByEmail('v@example.com')).toMatchObject({ sub: 'a' })
+  })
+})

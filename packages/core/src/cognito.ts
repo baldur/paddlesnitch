@@ -336,16 +336,23 @@ function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array
 export async function findUserByEmail(email: string): Promise<UserSummary | null> {
   const client = makeClient()
   // ListUsers with a filter expression is the supported way to search by
-  // attribute. We limit to 1 — emails are alias-unique so there's never
-  // more than one match in a well-formed pool.
+  // attribute. One account per email is the rule (PreSignUp, #697), but a
+  // Google account's email can change on a later sign-in, so two accounts can
+  // still share one: then nobody is returned rather than whichever comes first
+  // (an invitation must never reach the wrong person). Half-made (UNCONFIRMED)
+  // accounts can't be signed into and don't count.
   const res = await client.send(new ListUsersCommand({
     UserPoolId: USER_POOL_ID,
     Filter: `email = "${email.replace(/"/g, '\\"')}"`,
-    Limit: 1,
+    Limit: 10,
   }))
-  const user = res.Users?.[0]
-  if (!user) return null
-  return userSummaryFromAttributes(user)
+  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  if (users.length > 1) {
+    console.warn('[cognito] findUserByEmail: more than one account has this email; refusing to pick one')
+    return null
+  }
+  if (!users[0]) return null
+  return userSummaryFromAttributes(users[0])
 }
 
 // Look up a user by their Cognito sub. Used by the trial-invitation UI
