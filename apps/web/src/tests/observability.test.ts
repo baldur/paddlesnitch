@@ -10,7 +10,8 @@ import { readFileSync } from 'fs'
 
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined, set: () => {} }) }))
 
-import { clientOf, apiCallEmf, actionEmf } from '@paddlesnitch/core/observe'
+import { clientOf, apiCallEmf, actionEmf, CLIENT_HEADER } from '@paddlesnitch/core/observe'
+import { APP_HEADER } from '@paddlesnitch/core/auth'
 import { withAction, outcomeOfStatus } from '@/lib/action'
 import { GET as trpcGet } from '@/app/api/trpc/[trpc]/route'
 import { createCaller } from '@paddlesnitch/api'
@@ -38,8 +39,13 @@ const ofKind = (kind: string) => lines.filter(l => l.kind === kind)
 
 describe('which client sent a request', () => {
   it('reads the app header: platform, version and build', () => {
-    expect(clientOf(headers({ 'X-Paddlesnitch-Client': 'android/1.0.3 (42)' }))).toEqual({ platform: 'android', version: '1.0.3', build: '42' })
-    expect(clientOf(headers({ 'x-paddlesnitch-client': 'ios/1.0.0' }))).toEqual({ platform: 'ios', version: '1.0.0' })
+    expect(clientOf(headers({ 'x-paddlesnitch-app': 'android/1.0.3 (42)' }))).toEqual({ platform: 'android', version: '1.0.3', build: '42' })
+    expect(clientOf(headers({ 'x-paddlesnitch-app': 'ios/1.0.0' }))).toEqual({ platform: 'ios', version: '1.0.0' })
+  })
+
+  it('is the header the apps already send for sign-in, not a second one', () => {
+    expect(CLIENT_HEADER).toBe(APP_HEADER)
+    expect(clientOf(headers({ 'x-paddlesnitch-app': 'android/0.1.0' }))).toEqual({ platform: 'android', version: '0.1.0' })
   })
 
   it('no header is the web site', () => {
@@ -48,7 +54,7 @@ describe('which client sent a request', () => {
 
   it('a junk header is "other", so it cannot add values to the dashboards', () => {
     for (const junk of ['windows/1.0', 'android', 'android/1.0.3 (42) extra', 'android/<script>', `android/${'9'.repeat(40)}`, ''])
-      expect(clientOf(headers({ 'X-Paddlesnitch-Client': junk }))).toEqual({ platform: 'other' })
+      expect(clientOf(headers({ 'x-paddlesnitch-app': junk }))).toEqual({ platform: 'other' })
   })
 })
 
@@ -92,7 +98,7 @@ describe('tRPC over HTTP logs one line per call', () => {
     trpcGet(new Request(`http://localhost/api/trpc/${proc}?input=${encodeURIComponent(JSON.stringify(input))}`, { headers: h }))
 
   it('a working call from the Android app: ok, with platform and version', async () => {
-    const res = await call('games.leaderboard', { course: 'race' }, { 'X-Paddlesnitch-Client': 'android/1.0.3 (42)' })
+    const res = await call('games.leaderboard', { course: 'race' }, { 'x-paddlesnitch-app': 'android/1.0.3 (42)' })
     expect(res.status).toBe(200)
     expect(ofKind('api_call')).toEqual([expect.objectContaining({
       path: 'games.leaderboard', type: 'query', ok: true, ServerErrors: 0, platform: 'android', appVersion: '1.0.3', build: '42',
@@ -126,7 +132,7 @@ describe('actions from routes', () => {
 
   it('logs one line per request, with the status as the reason when it did not work', async () => {
     const wrapped = withAction('upload', async (_r: Request, status: number) => new Response(null, { status }))
-    await wrapped(req({ 'X-Paddlesnitch-Client': 'ios/1.0.0' }), 201)
+    await wrapped(req({ 'x-paddlesnitch-app': 'ios/1.0.0' }), 201)
     await wrapped(req(), 422)
     await wrapped(req(), 500)
     expect(ofKind('action').map(l => [l.Action, l.outcome, l.reason, l.platform])).toEqual([

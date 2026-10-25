@@ -1,0 +1,33 @@
+{
+  "headers": { "x-paddlesnitch-app": "android/1.0.4 (43)", "Content-Type": "application/json" },
+  "body": {
+    "sid": "b6f1c0de-4a1e-4c55-9d3e-0f5a2a7c9e11",
+    "events": [
+      {
+        "event": "crash_report",
+        "t": "{{now}}",
+        "props": {
+          "type": "java.lang.IllegalStateException",
+          "frames": "com.paddlesnitch.paddles.PaddleScreen.render:212|com.paddlesnitch.paddles.PaddleViewModel.load:88|androidx.compose.runtime.Recomposer.run:1234",
+          "appVersion": "1.0.3",
+          "build": "42",
+          "os": "Android 14"
+        }
+      }
+    ]
+  },
+  "emits": [
+    {
+      "Event": "crash_report",
+      "platform": "android",
+      "appVersion": "1.0.4",
+      "build": "43",
+      "type": "java.lang.IllegalStateException",
+      "signature": "java.lang.IllegalStateException @ com.paddlesnitch.paddles.PaddleScreen.render:212",
+      "frames": "com.paddlesnitch.paddles.PaddleScreen.render:212|com.paddlesnitch.paddles.PaddleViewModel.load:88|androidx.compose.runtime.Recomposer.run:1234",
+      "crashedVersion": "1.0.3",
+      "crashedBuild": "42",
+      "os": "Android 14"
+    }
+  ]
+}

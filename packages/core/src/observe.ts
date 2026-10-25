@@ -6,8 +6,11 @@
 export type Platform = 'web' | 'android' | 'ios' | 'tracker' | 'server' | 'other'
 export type Client = { platform: Platform; version?: string; build?: string }
 
-// Sent by the apps on every request: `android/1.0.3 (42)`, `ios/1.0.0 (7)`.
-export const CLIENT_HEADER = 'x-paddlesnitch-client'
+// The header the apps already send (APP_HEADER in ./auth, which also makes
+// sign-in answer with tokens): `android/0.1.0`, optionally with the store
+// build, `android/1.0.3 (42)`. Not imported from ./auth, which pulls in
+// next/headers and the Cognito SDK.
+export const CLIENT_HEADER = 'x-paddlesnitch-app'
 const APP_CLIENT = /^(android|ios)\/(\d{1,4}(?:\.\d{1,4}){0,3})(?: \((\d{1,9})\))?$/
 
 /** No header is the web site. A header that isn't a well-formed app client is

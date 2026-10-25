@@ -91,6 +91,30 @@ export function flush(useBeacon = false): void {
   }
 }
 
+// Browser errors from our own scripts (docs/features/observability.md). At
+// most MAX_ERRORS per page load, each message once. Errors from extensions and
+// other sites' scripts aren't ours, so they never leave the browser: the
+// zero-tolerance alarm only hears about our code.
+const MAX_ERRORS = 5
+let errorsSent = 0
+const errorsSeen = new Set<string>()
+
+/** True when `source` (a script URL or a stack trace) points at our origin. */
+export function isOwnScript(source: string | undefined, origin: string): boolean {
+  return !!source && source.includes(`${origin}/`)
+}
+
+/** Report one browser error: its type and the first line of its message. */
+export function reportClientError(type: string, message: string): void {
+  if (!_config.enabled) return
+  const first = (message ?? '').split('\n')[0].trim().slice(0, 120)
+  // "Script error." is the browser hiding another origin's error from us.
+  if (!first || first === 'Script error.' || errorsSent >= MAX_ERRORS || errorsSeen.has(first)) return
+  errorsSeen.add(first)
+  errorsSent++
+  capture('client_error', { type: (type || 'Error').slice(0, 60), message: first, path: window.location.pathname })
+}
+
 // Start the flush timer + unload listeners. Idempotent; safe to call on mount.
 export function startAnalytics(): void {
   if (!_config.enabled || bound) return
@@ -99,6 +123,20 @@ export function startAnalytics(): void {
   const onVisibility = () => { if (document.visibilityState === 'hidden') flush(true) }
   document.addEventListener('visibilitychange', onVisibility)
   window.addEventListener('pagehide', () => flush(true))
+  window.addEventListener('error', onError)
+  window.addEventListener('unhandledrejection', onRejection)
+}
+
+function onError(e: ErrorEvent) {
+  // Resource load errors (a broken image) carry no filename and are dropped.
+  if (!isOwnScript(e.filename, window.location.origin)) return
+  reportClientError(e.error?.name ?? 'Error', e.message)
+}
+
+function onRejection(e: PromiseRejectionEvent) {
+  const r = e.reason
+  if (!(r instanceof Error) || !isOwnScript(r.stack, window.location.origin)) return
+  reportClientError(r.name, r.message)
 }
 
 // Test-only: reset module state between cases.
@@ -107,4 +145,10 @@ export function _resetForTest(): void {
   if (timer) clearInterval(timer)
   timer = null
   bound = false
+  errorsSent = 0
+  errorsSeen.clear()
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('error', onError)
+    window.removeEventListener('unhandledrejection', onRejection)
+  }
 }
