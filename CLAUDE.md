@@ -12,6 +12,17 @@ This file is the source of truth for *current* behaviour. It's organised as: **W
 
 After completing any task that changes behaviour, adds a feature, or introduces a new convention: update this file and the memory files in `~/.claude/projects/…/memory/` to reflect the new state. Do not wait to be asked.
 
+### Agent roles
+
+Sessions run in roles: `lead` (the default contact; routes work and runs the
+reviewers), `help` (explains this setup), builders `android`, `ios`,
+`firmware`, `motion-core`, `game`, and reviewers `tester`, `security-privacy`,
+`design-usability`, `copy-style`. Briefs are in `.claude/agents/`; who owns
+what, how to start a window (`psa <role>`), worktrees and ports are in
+[`docs/agents.md`](docs/agents.md). Stay in your area, write lessons into your
+area's `CLAUDE.md`, and keep `docs/agents.md` in step with `.claude/agents/`
+(`pnpm test:agents` checks it).
+
 ### The backlog (GitHub issues)
 
 The to-do list is **GitHub issues labelled `backlog`** (`gh issue list --label backlog`). It exists so there is always something worth doing when the owner leaves Claude working (overnight, during the day). Labels:
@@ -175,6 +186,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`release-testing.md`](docs/features/release-testing.md) | ✅ in use 2026-10 | Firmware release checklist: bench walk with `firmware/tools/bench.sh`, phone steps, after-merge update check, rollback; plan for beta channel + hardware in CI |
 | [`tracker-bluetooth-sync.md`](docs/features/tracker-bluetooth-sync.md) | 📋 spec, not built | Recordings home by phone/browser over Bluetooth, compression first, game-style setup |
 | [`mobile-apps.md`](docs/features/mobile-apps.md) | 🚧 C1 built | Native Android + iPhone apps sharing a contract, not code: generated API schema, golden fixtures, design tokens in `mobile/contract/`; phone as tracker; server changes. Replaces the Expo plan. **C1:** schemas in `packages/api/src/contract.ts` (type-checked against the router, not runtime `.output()`), `pnpm mobile:contract` regenerates `mobile/contract/{api,tokens,format}`, `mobile-contract.test.ts` fails while stale |
+| [`on-device-metrics.md`](docs/features/on-device-metrics.md) | 📋 design, not built | Live stroke rate and boat motion on the tracker and phones from ONE portable C recorder core (`recorder-core/`, also the server via WASM); devices log what they showed (`live_*` columns), raw data always uploaded and recomputed; streaming = batch |
 | [`android-app.md`](docs/features/android-app.md) | 🚧 P0 done, P1 started, P3 tracker setup built (awaiting hardware test) (`mobile/android`, CI `android.yml`, `/.well-known/assetlinks.json`) | The Android app: Kotlin + Compose, Android 10+, capability list, CompanionDeviceManager pairing, Google Play |
 | [`ios-app.md`](docs/features/ios-app.md) | 🚧 P0 + P1 built | The iPhone app: Swift + SwiftUI, iOS 17+, capability list + "This iPhone", While Using recording, AccessorySetupKit pairing, MapKit; build first (simulator + free Apple ID), App Store at P5 |
 | [`buddies-and-compare.md`](docs/features/buddies-and-compare.md) | ✅ 2026-10-11 | Mutual buddies who see each other's paddles; two paddles on one map to study the line |

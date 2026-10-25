@@ -43,6 +43,9 @@ jobs:
       # The games (games/) are plain JS with Node's own test runner, no deps.
       - name: Game tests
         run: pnpm test:games
+      # The Claude agent briefs and the role map they are routed by (docs/agents.md).
+      - name: Agent role checks
+        run: pnpm test:agents
       - name: Typecheck (app, packages, tests)
         run: pnpm typecheck
       # Errors fail; warnings are reported. (It used to lint the generated
