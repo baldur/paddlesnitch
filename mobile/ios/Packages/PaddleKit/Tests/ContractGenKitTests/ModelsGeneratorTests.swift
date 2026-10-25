@@ -129,6 +129,26 @@ import Testing
         #expect(swift.contains(#"method: "POST", path: "/att/api/auth/otp-verify", errorStatuses: [400, 500])"#))
     }
 
+    /// One path, several methods (GET, POST, DELETE /api/account/contact):
+    /// each needs its own name. A lone POST keeps the plain name.
+    @Test func routesSharingAPathAreNamedByMethod() throws {
+        let swift = try #require(
+            try ModelsGenerator.generate(
+                schemas: ["Ok.schema.json": Data(Self.object(field: "ok").utf8)],
+                procedures: noProcedures,
+                rest: Data(
+                    #"""
+                    {"GET /api/account/contact":{"input":null,"output":"Ok","errors":[401]},
+                     "POST /api/account/contact":{"input":null,"output":"Ok","errors":[401]},
+                     "DELETE /api/account":{"input":null,"output":"Ok","errors":[401]},
+                     "POST /api/account/export":{"input":null,"output":"Ok","errors":[401]}}
+                    """#.utf8)
+            )["Endpoints.swift"])
+        for name in ["getAccountContact", "postAccountContact", "deleteAccount", "accountExport"] {
+            #expect(swift.contains("public static let \(name) = Endpoint<"), "\(name)")
+        }
+    }
+
     @Test func constantsBecomeStaticStrings() throws {
         let swift = try #require(
             try ModelsGenerator.generate(

@@ -6,6 +6,28 @@ import Foundation
 
 /// Every REST route the apps call, from mobile/contract/api/rest.json.
 public enum Endpoints {
+    public static let deleteAccount = Endpoint<DeleteAccount, Ok>(
+        method: "DELETE", path: "/api/account", errorStatuses: [401])
+    public static let deleteAccountContact = Endpoint<NoInput, Ok>(
+        method: "DELETE", path: "/api/account/contact", errorStatuses: [401])
+    public static let deleteAccountHandle = Endpoint<NoInput, ProfileSettings>(
+        method: "DELETE", path: "/api/account/handle", errorStatuses: [401])
+    public static let getAccountContact = Endpoint<NoInput, Contact>(
+        method: "GET", path: "/api/account/contact", errorStatuses: [401])
+    public static let getAccountHandle = Endpoint<HandleCheck, HandleAvailability>(
+        method: "GET", path: "/api/account/handle", errorStatuses: [401])
+    public static let getAccountProfile = Endpoint<NoInput, ProfileSettings>(
+        method: "GET", path: "/api/account/profile", errorStatuses: [401])
+    public static let getAccountTos = Endpoint<NoInput, TosStatus>(
+        method: "GET", path: "/api/account/tos", errorStatuses: [401])
+    public static let patchAccountProfile = Endpoint<ProfileVisibility, ProfileSettings>(
+        method: "PATCH", path: "/api/account/profile", errorStatuses: [400, 401])
+    public static let postAccountContact = Endpoint<ContactEmail, Contact>(
+        method: "POST", path: "/api/account/contact", errorStatuses: [400, 401])
+    public static let accountExport = Endpoint<NoInput, DownloadLink>(
+        method: "POST", path: "/api/account/export", errorStatuses: [401])
+    public static let postAccountTos = Endpoint<TosAccept, TosAccepted>(
+        method: "POST", path: "/api/account/tos", errorStatuses: [401, 422])
     public static let authLogin = Endpoint<Login, SignIn>(
         method: "POST", path: "/att/api/auth/login", errorStatuses: [400, 401, 500])
     public static let authLogout = Endpoint<RefreshToken, Ok>(
@@ -24,12 +46,25 @@ public enum Endpoints {
         method: "POST", path: "/att/api/auth/web-code", errorStatuses: [401])
     public static let analyse = Endpoint<NoInput, Analysed>(
         method: "POST", path: "/paddles/api/analyse", errorStatuses: [400, 401, 422, 500])
+    public static let putAccountHandle = Endpoint<HandleClaim, ProfileSettings>(
+        method: "PUT", path: "/api/account/handle", errorStatuses: [400, 401])
 
     /// Decodes `data` as the answer of the route `"POST /path"`. For the contract tests.
     public static func decodeOutput(of route: String, from data: Data, using decoder: JSONDecoder)
         throws -> any Sendable
     {
         switch route {
+        case "DELETE /api/account": try decoder.decode(Ok.self, from: data)
+        case "DELETE /api/account/contact": try decoder.decode(Ok.self, from: data)
+        case "DELETE /api/account/handle": try decoder.decode(ProfileSettings.self, from: data)
+        case "GET /api/account/contact": try decoder.decode(Contact.self, from: data)
+        case "GET /api/account/handle": try decoder.decode(HandleAvailability.self, from: data)
+        case "GET /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
+        case "GET /api/account/tos": try decoder.decode(TosStatus.self, from: data)
+        case "PATCH /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
+        case "POST /api/account/contact": try decoder.decode(Contact.self, from: data)
+        case "POST /api/account/export": try decoder.decode(DownloadLink.self, from: data)
+        case "POST /api/account/tos": try decoder.decode(TosAccepted.self, from: data)
         case "POST /att/api/auth/login": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/logout": try decoder.decode(Ok.self, from: data)
         case "POST /att/api/auth/otp-request": try decoder.decode(OtpSession.self, from: data)
@@ -39,6 +74,7 @@ public enum Endpoints {
         case "POST /att/api/auth/strava/app-token": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/web-code": try decoder.decode(WebPage.self, from: data)
         case "POST /paddles/api/analyse": try decoder.decode(Analysed.self, from: data)
+        case "PUT /api/account/handle": try decoder.decode(ProfileSettings.self, from: data)
         default: throw ProcedureError.unknownPath(route)
         }
     }

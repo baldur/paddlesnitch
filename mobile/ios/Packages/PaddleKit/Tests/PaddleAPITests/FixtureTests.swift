@@ -21,11 +21,13 @@ import Testing
         if let path = Contract.procedure(forFixture: name) {
             _ = try Procedures.decodeOutput(of: path, from: data, using: decoder)
         } else if Contract.isErrorAnswer(name) {
-            #expect(name.hasPrefix("auth."), "an error answer for no known routes")
+            #expect(name.hasPrefix("auth.") || name.hasPrefix("account."), "an error answer for no known routes")
             _ = try decoder.decode(ApiError.self, from: data)
         } else {
-            let route = try #require(Contract.route(forFixture: name), "\(name) matches no procedure or route")
-            _ = try Endpoints.decodeOutput(of: route, from: data, using: decoder)
+            let routes = Contract.routes(forFixture: name)
+            try #require(!routes.isEmpty, "\(name) matches no procedure or route")
+            let decodes = routes.contains { (try? Endpoints.decodeOutput(of: $0, from: data, using: decoder)) != nil }
+            #expect(decodes, "\(name) decodes as no answer of \(routes)")
         }
     }
 
