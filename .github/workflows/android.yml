@@ -71,3 +71,34 @@ jobs:
           name: paddlesnitch-release-apk
           path: mobile/android/app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+  # paddlesnitch.com/android/download (apps/web/src/lib/android-download.ts)
+  # points at this release's file, so a merge to main is what people download.
+  # A job of its own so only pushes to main ever hold a token that can write.
+  publish:
+    name: publish APK for paddlesnitch.com/android
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: android-latest
+      APK_NAME: paddlesnitch.apk
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: paddlesnitch-release-apk
+          path: apk
+      - name: Publish
+        run: |
+          cp apk/*.apk "$APK_NAME"
+          notes="Android app built from ${GITHUB_SHA::7} (build ${GITHUB_RUN_NUMBER}). Install it from https://paddlesnitch.com/android"
+          if gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber -R "$GITHUB_REPOSITORY"
+            gh release edit "$RELEASE_TAG" --notes "$notes" -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "$APK_NAME" --prerelease --title "Android app (latest)" --notes "$notes" --target "$GITHUB_SHA" -R "$GITHUB_REPOSITORY"
+          fi

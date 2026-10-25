@@ -117,8 +117,14 @@ Play account later. Until then:
   versions. It **can't** stand in for a paddle (real GPS with the screen off,
   motion, the phone maker's battery killer) or for the real tracker over
   Bluetooth, so S1 and S2 need the phone.
-- **A signed APK from CI** (a workflow artifact) for anyone else who wants to try
-  it before Play exists, installed via "install unknown apps". Google's 2026
+- **A signed APK from CI** for anyone else who wants to try it before Play
+  exists, installed via "install unknown apps". **Built 2026-10-25:** every
+  merge to `main` that touches the app publishes the signed release APK to the
+  GitHub release `android-latest` (`publish` job in `android.yml`), and
+  **paddlesnitch.com/android** has the download button and install steps
+  (`/android/download` redirects to the file; not in the menu, not indexed).
+  Same upload key every time, so a new download installs over the old one and
+  keeps you signed in. Google's 2026
   developer verification will eventually cover such installs too, but `adb`
   installs by a developer stay allowed. Check the status before handing APKs to
   testers.
