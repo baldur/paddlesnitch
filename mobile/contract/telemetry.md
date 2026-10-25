@@ -8,24 +8,29 @@ the real endpoint by `pnpm test` (`apps/web/src/tests/telemetry-contract.test.ts
 
 ## 1. One header on every request
 
-Every request the app makes (tRPC, uploads, sign-in, telemetry) carries:
+This is the header the apps **already send** for sign-in (see "Signing in" in
+the README). It makes sign-in answer with tokens, and it tells the server
+which app sent the request. Send it on **every** request: tRPC, uploads,
+sign-in and telemetry.
 
 ```
-X-Paddlesnitch-Client: <platform>/<version> (<build>)
+x-paddlesnitch-app: <platform>/<version>
+x-paddlesnitch-app: <platform>/<version> (<build>)
 ```
 
 | Part | Value |
 |---|---|
 | `platform` | `android` or `ios` |
-| `version` | the user-facing version, 1–4 dot-separated numbers: `1.0.3` |
+| `version` | the user-facing version, 1–4 dot-separated numbers: `0.1.0` |
 | `build` | the store build number, digits only: `42`. Optional, with its brackets |
 
-Examples: `android/1.0.3 (42)`, `ios/1.0.0 (7)`.
+Examples: `android/0.1.0`, `ios/1.0.0 (7)`.
 
 Anything else is counted as platform `other`, so a typo shows up as "other"
-on the dashboards rather than as the app. **This is the first thing to adopt.**
-With the header alone, every API call and every key action (sign in, upload,
-tracker sync, Strava import) is already split by platform and version
+on the dashboards rather than as the app. Android already sends it on every
+call (`Api.call`). iOS sends it on sign-in calls; it needs to go on every
+request. With the header alone, every API call and every key action (sign in,
+upload, tracker sync, Strava import) is split by platform and version
 server-side.
 
 ## 2. Events: `POST /att/api/track`

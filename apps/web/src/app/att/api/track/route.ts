@@ -18,7 +18,7 @@ import { crashReportProps, clientErrorProps } from '@/lib/client-errors'
 // neither needs nor reads a body.
 //
 // The Android and iPhone apps send no Origin, so a request with a well-formed
-// `X-Paddlesnitch-Client` app header is accepted instead. That header is as
+// `x-paddlesnitch-app` app header is accepted instead. That header is as
 // spoofable as Origin; the allowlist and the caps are what bound abuse. Every
 // event gets `platform` (and the app's version) from the request, never from
 // the client's props (docs/features/observability.md).

@@ -18,7 +18,7 @@ afterEach(() => vi.restoreAllMocks())
 
 const send = (body: unknown, headers: Record<string, string>) =>
   track(new NextRequest('http://x/att/api/track', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json', ...headers } }))
-const ANDROID = { 'X-Paddlesnitch-Client': 'android/1.0.3 (42)' }
+const ANDROID = { 'x-paddlesnitch-app': 'android/1.0.3 (42)' }
 const WEB = { origin: 'https://paddlesnitch.com' }
 const event = (e: string, props?: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
   ({ events: [{ event: e, ...(props ? { props } : {}), ...extra }] })
@@ -30,7 +30,7 @@ describe('who may send events', () => {
   })
 
   it('a junk client header is not an app, so it still needs an Origin', async () => {
-    await send(event('app_open'), { 'X-Paddlesnitch-Client': 'windows/1.0' })
+    await send(event('app_open'), { 'x-paddlesnitch-app': 'windows/1.0' })
     expect(lines).toEqual([])
   })
 

@@ -1,5 +1,5 @@
 {
-  "headers": { "X-Paddlesnitch-Client": "ios/1.0.0 (7)", "Content-Type": "application/json" },
+  "headers": { "x-paddlesnitch-app": "ios/1.0.0 (7)", "Content-Type": "application/json" },
   "body": {
     "events": [
       {

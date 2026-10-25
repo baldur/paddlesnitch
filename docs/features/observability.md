@@ -106,11 +106,14 @@ It answers two questions: is anything broken right now, and are people using it?
 
 ### Which client sent a request
 
-Every app request carries one header:
+The apps already send one header on their calls: `x-paddlesnitch-app`, which
+the sign-in routes use to answer with tokens instead of cookies (mobile C2).
+Observability **reuses it**, so there's no second header. Android already sends
+it on every request; iOS needs to send it on every request, not just sign-in.
 
 ```
-X-Paddlesnitch-Client: android/1.0.3 (42)
-X-Paddlesnitch-Client: ios/1.0.0 (7)
+x-paddlesnitch-app: android/0.1.0
+x-paddlesnitch-app: ios/1.0.0 (7)
 ```
 
 `<platform>/<version> (<build>)`. One pure helper, `clientOf(headers)` in
@@ -188,7 +191,7 @@ watches total `Failures`. The platform split is a Logs Insights widget.
 
 `POST /att/api/track` keeps its batch format and gains:
 
-- **App acceptance.** A request with a valid `X-Paddlesnitch-Client` app header
+- **App acceptance.** A request with a valid `x-paddlesnitch-app` app header
   is accepted without an Origin. That's spoofable, just like Origin is today,
   so it's the same honest limit: the allowlist and the per-request caps are what
   stop abuse, not the header.

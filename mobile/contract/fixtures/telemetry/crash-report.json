@@ -1,5 +1,5 @@
 {
-  "headers": { "X-Paddlesnitch-Client": "android/1.0.4 (43)", "Content-Type": "application/json" },
+  "headers": { "x-paddlesnitch-app": "android/1.0.4 (43)", "Content-Type": "application/json" },
   "body": {
     "sid": "b6f1c0de-4a1e-4c55-9d3e-0f5a2a7c9e11",
     "events": [
