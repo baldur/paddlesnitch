@@ -8,6 +8,23 @@ struct RouteThumb: View {
     let route: [Coordinate]
 
     var body: some View {
+        if route.count < 2 {
+            // Grows with the text, like `NoGpsTag`, instead of cutting it off.
+            Text("no map")
+                .font(.plexMono(.caption))
+                .foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center)
+                .padding(6)
+                .frame(minWidth: 64, minHeight: 64)
+                .background(Palette.bg)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+                .accessibilityHidden(true)
+        } else {
+            line
+        }
+    }
+
+    private var line: some View {
         Canvas { context, size in
             let points = Self.project(route, into: size, inset: 6)
             guard points.count > 1, let start = points.first else { return }
@@ -16,11 +33,6 @@ struct RouteThumb: View {
             context.stroke(path, with: .color(Palette.primary), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
             let dot = CGRect(x: start.x - 2.6, y: start.y - 2.6, width: 5.2, height: 5.2)
             context.fill(Path(ellipseIn: dot), with: .color(Palette.green))
-        }
-        .overlay {
-            if route.count < 2 {
-                Text("no map").font(.plexMono(.caption)).foregroundStyle(Palette.muted)
-            }
         }
         .frame(width: 64, height: 64)
         .background(Palette.bg)

@@ -10,3 +10,13 @@ isn't obvious from the code.
 
 - Generated Swift (`make generate`, from `mobile/contract/`) is never
   hand-edited or hand-merged; regenerate it on the branch instead.
+- Never put text in a fixed-size box (`.frame(width:height:)`): at the largest
+  text sizes it truncates ("NO GPS" became "N…"). Use
+  `.frame(minWidth:minHeight:)` so the box grows with the words.
+- `performAccessibilityAudit` is not deterministic. Its clipped-text check
+  enlarges the text in place, the screen re-lays out (a scrolled page jumps),
+  and it can then report an issue it can't pin to any element. When CI fails on
+  an unpinned audit issue, download the `ios-test-results-*` artifact and
+  export its attachments (`xcrun xcresulttool export attachments`): the
+  screenshot and screen recording show what it saw. A real clip shows in the
+  screenshot. A page that jumped is the audit's own doing.
