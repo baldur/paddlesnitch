@@ -13,13 +13,19 @@ let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()  // mobile
     .appending(path: "contract/fixtures/api")
 
-/// A source that fails, or answers from the samples.
+/// A source that fails, or answers from the samples, optionally as saved
+/// before their summaries were written.
 actor ScriptedSource: PaddlesSource {
     var failure: (any Error)?
     let samples = SamplePaddles(directory: fixtures)
+    let summariesPending: Bool
+    let summaryFailure: (any Error)?
+    private(set) var written: [String] = []
 
-    init(failure: (any Error)? = nil) {
+    init(failure: (any Error)? = nil, summariesPending: Bool = false, summaryFailure: (any Error)? = nil) {
         self.failure = failure
+        self.summariesPending = summariesPending
+        self.summaryFailure = summaryFailure
     }
 
     func fail(with error: (any Error)?) {
@@ -33,7 +39,17 @@ actor ScriptedSource: PaddlesSource {
 
     func paddle(id: String) async throws -> AnalysisSession {
         if let failure { throw failure }
-        return try await samples.paddle(id: id)
+        var paddle = try await samples.paddle(id: id)
+        if summariesPending { paddle.insightPending = true }
+        return paddle
+    }
+
+    func writeSummary(id: String) async throws -> AnalysisSession {
+        written.append(id)
+        if let summaryFailure { throw summaryFailure }
+        var paddle = try await samples.paddle(id: id)
+        paddle.insight = "Written just now."
+        return paddle
     }
 }
 
@@ -178,6 +194,42 @@ actor ScriptedSource: PaddlesSource {
         let paddle = try await SamplePaddles(directory: fixtures).paddle(id: "pdl-river")
         let drawn = river.route.reduce(0) { $0 + $1.coordinates.count } - (river.route.count - 1)
         #expect(drawn == paddle.result.points.count)
+    }
+
+    @Test func aPaddleWithItsSummaryDoesNotWriteAnother() async throws {
+        let source = ScriptedSource()
+        let model = PaddleDetailModel(id: "pdl-river", source: source)
+        await model.load()
+        #expect(await source.written.isEmpty)
+        #expect(model.state.value?.summaryPending == false)
+    }
+
+    @Test func aPaddleWithoutItsSummaryWritesItAndShowsIt() async throws {
+        let source = ScriptedSource(summariesPending: true)
+        let model = PaddleDetailModel(id: "pdl-river", source: source)
+        await model.load()
+        #expect(await source.written == ["pdl-river"])
+        let river = try #require(model.state.value)
+        #expect(!river.summaryPending)
+        #expect(river.coachSummary == "Written just now.")
+    }
+
+    @Test func aSummaryThatCannotBeWrittenDropsTheLineAndKeepsThePage() async throws {
+        let model = PaddleDetailModel(
+            id: "pdl-river",
+            source: ScriptedSource(summariesPending: true, summaryFailure: URLError(.notConnectedToInternet)))
+        await model.load()
+        let river = try #require(model.state.value)
+        #expect(!river.summaryPending)
+        #expect(river.note == "Headwind on the way back.")
+        #expect(!river.stats.isEmpty)
+    }
+
+    @Test func aPendingSummaryShowsTheLineUntilWritten() async throws {
+        var paddle = try await SamplePaddles(directory: fixtures).paddle(id: "pdl-river")
+        paddle.insightPending = true
+        #expect(PaddleSummary(paddle).summaryPending)
+        #expect(!PaddleSummary(paddle, summaryFailed: true).summaryPending)
     }
 
     @Test func aMissingPaddleSaysSo() async {

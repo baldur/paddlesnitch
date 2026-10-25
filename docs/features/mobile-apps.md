@@ -89,13 +89,22 @@ question 1).
 
 | Native | Opens the website (in-app browser, still signed in) |
 |---|---|
-| Sign in / sign up (email code, password, Strava) | Group admin, invitations, join requests |
+| Sign in / sign up (email code, password, Strava), forgot password | Group admin, invitations, join requests |
 | Paddles list, one paddle (map, speed/rate, splits, summary, note, boat) | Drawing or editing a course; opening a trial |
-| Record a paddle | Account: export, delete, handle, public profile, terms |
-| Trackers: pair, set up, sync, settings | River planner, games, help |
-| Trials: open trials, leaderboard, submit an entry | |
-| Race a section, compare, buddies' paddles | |
+| Record a paddle; add one from a file, from another app's share sheet, or from Strava | Public profile |
+| Trackers: pair, set up, sync, settings, the list of trackers and their recordings, remove | River planner, games |
+| Trials: open trials, leaderboard, submit an entry | Help, Privacy, Terms of Service (reading pages: one source of truth) |
+| Race a section, compare, buddies' paddles | Strava's own consent page (Strava requires a browser) |
+| Account: accept new Terms, your details and handle, Strava connected or not, download your data, delete account | |
 | This phone, app settings | |
+
+**2026-10-25, the owner:** the Account pages move from the website to native
+screens in both apps, done the way each platform does it: the system save
+dialog or share sheet for the export, the platform's password manager for a new
+password, a native confirm for delete (Google Play and the App Store both want
+deletion inside the app). Links to paddlesnitch.com open the app (app links /
+universal links), and GPS files from other apps open in it. The calls this
+needs are phase **C5** below.
 
 ## Recording contract (both phones)
 
@@ -256,6 +265,7 @@ platform tell the other when the contract or fixture formats change.
 | **C2. Sign-in** (Bearer on REST ✅) | `getRequestUser`, token-returning sign-in, Strava one-time code, app-link files | Both apps' sign-in |
 | **C3. Recording + sync** | Phone devices on the relay route; CSV + Bluetooth + receipt fixtures from the existing web code and firmware | Both apps' recording and tracker phases |
 | **C4. Signed-in website pages** | One-time code → cookies | Both apps' link-outs |
+| **C5. Native account** | In the contract (schemas + fixtures), as a Bearer call: accept Terms (`/api/account/tos`), details and handle (`profile`, `handle`, `contact`), trackers and their recordings, remove (`/api/account/devices…`), export (`/api/account/export`), delete account, forgot password (request code, set new password), Strava connect / disconnect for a signed-in account (the sign-in one-time-code shape), Strava history + import (`stravaHistory`, `importStravaPaddle`) | Both apps' Account screens and adding from Strava |
 
 Platform phases (spikes, screens, store releases) are in each platform spec.
 They run in parallel and meet only at this contract.

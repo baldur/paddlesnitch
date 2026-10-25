@@ -14,10 +14,25 @@ public final class PaddleDetailModel {
     }
 
     public func load() async {
+        let paddle: AnalysisSession
         do {
-            state = .loaded(PaddleSummary(try await source.paddle(id: id)))
+            paddle = try await source.paddle(id: id)
         } catch {
             state = .failed(FailureMessage.of(error))
+            return
+        }
+        state = .loaded(PaddleSummary(paddle))
+        if paddle.insightPending == true { await writeSummary(paddle) }
+    }
+
+    /// A paddle saved without its summary shows the page at once with
+    /// "Writing your summary…", then the summary. If writing fails, the line
+    /// goes and the page stays as it is.
+    private func writeSummary(_ paddle: AnalysisSession) async {
+        do {
+            state = .loaded(PaddleSummary(try await source.writeSummary(id: id)))
+        } catch {
+            state = .loaded(PaddleSummary(paddle, summaryFailed: true))
         }
     }
 }
@@ -56,8 +71,14 @@ public struct PaddleSummary: Hashable, Sendable {
     public let coachSummary: String?
     public let summaryPending: Bool
     public let note: String?
+    /// Nil without GPS or with too few speeds to scale.
+    public let legend: Legend?
+    public let repeats: [String]
+    public let efforts: [Effort]
+    public let rests: [String]
+    public let splits: [Split]
 
-    public init(_ paddle: AnalysisSession) {
+    public init(_ paddle: AnalysisSession, summaryFailed: Bool = false) {
         let result = paddle.result
         title = Format.weekday(paddle.paddledAt)
         let eyebrowParts = [Format.source(paddle.source.type), paddle.boatClass?.rawValue].compactMap { $0 }
@@ -68,8 +89,13 @@ public struct PaddleSummary: Hashable, Sendable {
         route = result.noGps == nil ? Self.segments(result.points) : []
         let insight = paddle.insight.isEmpty ? result.insight : paddle.insight
         coachSummary = insight.isEmpty ? nil : insight
-        summaryPending = paddle.insightPending == true
+        summaryPending = paddle.insightPending == true && !summaryFailed
         note = paddle.note.isEmpty ? nil : paddle.note
+        legend = route.isEmpty ? nil : Self.legend(result.points)
+        repeats = Self.repeats(result.sets)
+        efforts = Self.efforts(result.surges)
+        rests = Self.rests(result.stops)
+        splits = result.noGps == nil ? Self.splits(result.points) : []
     }
 
     static func gpsStats(_ result: AnalysisResult) -> [Stat] {
