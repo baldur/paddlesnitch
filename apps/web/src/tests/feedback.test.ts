@@ -233,7 +233,7 @@ describe('POST /att/api/feedback', () => {
 // about it) and the cached token is dropped, so a replaced one in SSM works
 // on the next report.
 describe('a token GitHub refuses', () => {
-  it('logs the failure, and the next report fetches the replaced token from SSM', async () => {
+  it.each([401, 403])('a %i is logged, and the next report fetches the replaced token from SSM', async (status) => {
     mockAnonymous()
     delete process.env.GITHUB_ISSUES_TOKEN
     process.env.GITHUB_ISSUES_TOKEN_PARAM = '/att/github-issues-token'
@@ -241,13 +241,33 @@ describe('a token GitHub refuses', () => {
     const ssm = vi.spyOn(SSMClient.prototype, 'send').mockImplementation((async () => ({ Parameter: { Value: tokens.shift() } })) as never)
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      githubResponse = () => new Response('{"message":"Bad credentials"}', { status: 401 })
+      githubResponse = () => new Response('{"message":"Bad credentials"}', { status })
       expect((await feedback(jsonReq({ description: 'First report, the leaderboard never loads.', url: 'https://paddlesnitch.com/att', userAgent: 'Mozilla/5.0' }))).status).toBe(502)
-      expect(errors).toHaveBeenCalledWith('[feedback] GitHub refused the issue:', 401)
+      expect(errors).toHaveBeenCalledWith('[feedback] GitHub refused the issue:', status)
       githubResponse = () => new Response(JSON.stringify({ number: 100, html_url: 'https://github.com/test/repo/issues/100' }), { status: 201, headers: { 'Content-Type': 'application/json' } })
       expect((await feedback(jsonReq({ description: 'Second report, still no leaderboard.', url: 'https://paddlesnitch.com/att', userAgent: 'Mozilla/5.0' }))).status).toBe(200)
       expect(ssm).toHaveBeenCalledTimes(2)
       expect((githubCalls.at(-1)!.init.headers as Record<string, string>).Authorization).toBe('Bearer new-token')
+    } finally {
+      delete process.env.GITHUB_ISSUES_TOKEN_PARAM
+      ssm.mockRestore()
+      errors.mockRestore()
+      githubResponse = () => new Response('{"message":"reset"}', { status: 401 })
+      await feedback(jsonReq({ description: 'Clears the cached token for the next test.', url: 'https://paddlesnitch.com/', userAgent: 'x' })).catch(() => {})
+    }
+  })
+
+  it('a GitHub outage (5xx) keeps the cached token', async () => {
+    mockAnonymous()
+    delete process.env.GITHUB_ISSUES_TOKEN
+    process.env.GITHUB_ISSUES_TOKEN_PARAM = '/att/github-issues-token'
+    const ssm = vi.spyOn(SSMClient.prototype, 'send').mockImplementation((async () => ({ Parameter: { Value: 'good-token' } })) as never)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      githubResponse = () => new Response('down', { status: 503 })
+      await feedback(jsonReq({ description: 'During an outage.', url: 'https://paddlesnitch.com/att', userAgent: 'Mozilla/5.0' }))
+      await feedback(jsonReq({ description: 'Still during an outage.', url: 'https://paddlesnitch.com/att', userAgent: 'Mozilla/5.0' }))
+      expect(ssm).toHaveBeenCalledTimes(1)
     } finally {
       delete process.env.GITHUB_ISSUES_TOKEN_PARAM
       ssm.mockRestore()
