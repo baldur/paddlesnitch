@@ -1,0 +1,4 @@
+{
+  "page": { "hex": "45230100616263", "offset": 74565, "data": "abc" },
+  "empty": { "hex": "00000000", "offset": 0, "data": "" }
+}

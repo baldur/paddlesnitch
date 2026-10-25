@@ -55,9 +55,9 @@ val aboutPages = listOf(
     AccountLink("Terms of Service", "/terms", signedIn = false),
 )
 
-/** Who's signed in, the account pages (opened on the website, signed in), and signing out. */
+/** Who's signed in, tracker setup, the account pages (opened on the website, signed in), and signing out. */
 @Composable
-fun AccountScreen(api: Api, onBack: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, modifier: Modifier = Modifier) {
+fun AccountScreen(api: Api, onBack: () -> Unit, onTracker: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var user by remember { mutableStateOf<AuthUser?>(null) }
@@ -84,6 +84,8 @@ fun AccountScreen(api: Api, onBack: () -> Unit, onSignOut: () -> Unit, onSignedO
             Text(it.email, color = PsColor.muted)
         }
         error?.let { Text(it, color = PsColor.red) }
+        Link("Set up or sync a tracker", onClick = onTracker)
+        HorizontalDivider(color = PsColor.border)
         Text("These open on paddlesnitch.com, already signed in.", color = PsColor.muted, modifier = Modifier.padding(top = 8.dp))
         accountPages.forEach { Link(it.label, red = it.path.endsWith("#delete")) { open(it) } }
         HorizontalDivider(color = PsColor.border)

@@ -3,6 +3,16 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- The tracker (docs/features/android-app.md, "Pairing and syncing the
+         tracker"). CompanionDeviceManager does the finding, so no scan and no
+         location permission: Android 12+ ask only to connect; 10-11 need the
+         old install-time Bluetooth permissions. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"

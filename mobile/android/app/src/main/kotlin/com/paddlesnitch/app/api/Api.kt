@@ -77,6 +77,21 @@ class Api(
     /** Writes a paddle's pending coach summary (can take a few seconds); the paddle as it is when already written. */
     suspend fun writeSummary(id: String): AnalysisSession = mutation("paddles.writeSummary", AnalysisSession.serializer(), """{"id":${str(id)}}""")
 
+    /**
+     * A REST call as the signed-in person (`Authorization: Bearer`), for the
+     * routes the app shares with the website: tracker setup and sync.
+     * POST when there's a body, else GET.
+     */
+    suspend fun rest(path: String, query: Map<String, String> = emptyMap(), body: ByteArray? = null, type: String = "application/json", headers: Map<String, String> = emptyMap()): Answer {
+        val url = base.newBuilder().addPathSegments(path.trimStart('/')).apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
+        return authorized { token ->
+            Request.Builder().url(url).header(AUTH, "Bearer $token").apply {
+                headers.forEach { (k, v) -> header(k, v) }
+                if (body != null) post(body.toRequestBody(type.toMediaType()))
+            }.build()
+        }
+    }
+
     private suspend fun signIn(path: String, body: String): SignIn {
         val answer = read(post(path, body), SignIn.serializer())
         tokens.save(answer.idToken, answer.refreshToken)
@@ -133,7 +148,7 @@ class Api(
         call(Request.Builder().url(base.newBuilder().addPathSegments(path.trimStart('/')).build()).post(body.toRequestBody(jsonType)).build())
 
     /** An answer read in full, so nothing touches the network on the caller's (main) thread. */
-    private class Answer(val code: Int, val body: String) { val ok get() = code in 200..299 }
+    class Answer(val code: Int, val body: String) { val ok get() = code in 200..299 }
 
     private suspend fun call(req: Request): Answer = withContext(Dispatchers.IO) {
         try {

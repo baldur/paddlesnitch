@@ -43,6 +43,7 @@ import com.paddlesnitch.app.paddles.PaddlesHost
 import com.paddlesnitch.app.paddles.addedMessage
 import com.paddlesnitch.app.paddles.rememberAddPaddle
 import com.paddlesnitch.app.paddles.sampleFile
+import com.paddlesnitch.app.tracker.TrackerSetupScreen
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
     var signingIn by rememberSaveable { mutableStateOf(false) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     var inAccount by rememberSaveable { mutableStateOf(false) }
+    var settingUpTracker by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
@@ -81,9 +83,13 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
                     onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
             }
+            signedIn && settingUpTracker -> {
+                BackHandler { settingUpTracker = false }
+                TrackerSetupScreen(api, onClose = { settingUpTracker = false }, onSignedOut = { signedIn = false; settingUpTracker = false }, modifier = m)
+            }
             signedIn && inAccount -> {
                 BackHandler { inAccount = false }
-                AccountScreen(api, onBack = { inAccount = false }, onSignedOut = { signedIn = false; inAccount = false },
+                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false; inAccount = false },
                     onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
             }
             signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
