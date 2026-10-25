@@ -52,7 +52,10 @@ time and isn't obvious from the code.
   (`api.terms()`), not only at sign-in.
 - Deleting the account needs a sign-in from the last 10 minutes. `DeleteAccount`
   asks `accountStatus()` first. A stale sign-in, or a 403 with
-  `ApiFailure.reauth`, shows the "Sign in again" notice, never an error.
-  `onSignInAgain` in App.kt signs out and in again (Strava for placeholder
-  emails), then `deleteAfterSignIn` reopens Delete. Cancelling that sign-in
-  clears it.
+  `ApiFailure.reauth`, shows the "Sign in again" notice, never an error. The
+  round trip (sign out, sign in again, back to Delete) is `Reauth.kt`, plain
+  Kotlin like `Intake` (`ReauthTest`). It resumes only for the same user id,
+  and `signedOut()` clears it. The email to fill in stays out of saved state.
+- Robolectric doesn't throw when there's no browser. A Custom Tab launch is
+  recorded instead: check it with
+  `Shadows.shadowOf(activity).nextStartedActivity`.

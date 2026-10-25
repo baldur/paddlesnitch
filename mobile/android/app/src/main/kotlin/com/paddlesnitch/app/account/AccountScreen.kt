@@ -64,6 +64,7 @@ import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.AuthUser
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.shown
+import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -107,7 +108,7 @@ fun AccountScreen(
     /** Back from signing in again to delete: open Delete account at once. */
     resumeDelete: Boolean = false, onDeleteResumed: () -> Unit = {},
     /** Sign out and in again (Strava when [strava]), then come back with [resumeDelete]. */
-    onSignInAgain: (email: String?, strava: Boolean) -> Unit = { _, _ -> },
+    onSignInAgain: (userId: String, email: String?, strava: Boolean) -> Unit = { _, _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -159,7 +160,7 @@ fun AccountScreen(
         YourData(api, ::act)
         Divider()
         DeleteAccount(api, ::act, resumeDelete, onDeleteResumed,
-            onSignInAgain = { val strava = isPlaceholderEmail(u.email); onSignInAgain(u.email.takeUnless { strava }, strava) }, onDeleted)
+            onSignInAgain = { val strava = isPlaceholderEmail(u.email); onSignInAgain(u.id, u.email.takeUnless { strava }, strava) }, onDeleted)
     }
 }
 
@@ -327,6 +328,7 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
     var state by remember { mutableStateOf(Deleting.No) }
     var typed by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     val signInFocus = remember { FocusRequester() }
@@ -342,18 +344,19 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
     Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("Delete account")
         Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes to one of its admins or members. This happens at once and can't be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
+        // Always in the layout, so TalkBack reads the notice when it appears.
+        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (state == Deleting.NeedsSignIn) Notice(RECENT_SIGN_IN)
+        }
         when (state) {
             Deleting.No, Deleting.Checking ->
                 OutlinedButton(enabled = state == Deleting.No, onClick = ::check, colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.red)) {
                     Text(if (state == Deleting.Checking) "Checking…" else "Delete my account")
                 }
-            Deleting.NeedsSignIn -> {
-                // A calm notice, not an error: nothing went wrong.
-                Text(RECENT_SIGN_IN, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onSignInAgain, modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text("Sign in again") }
-                    TextButton(colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
-                }
+            Deleting.NeedsSignIn -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() },
+                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
+                TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
                 LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
             }
             Deleting.Confirming -> {

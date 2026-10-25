@@ -17,6 +17,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onChildren
@@ -126,7 +127,7 @@ class AccountScreensTest {
     }
     private fun account(api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null), resumeDelete: Boolean = false) = show(fontScale, saveDialog) {
         AccountScreen(api, onBack = {}, onTracker = {}, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" },
-            resumeDelete = resumeDelete, onDeleteResumed = { did += "resumed" }, onSignInAgain = { email, strava -> did += "sign in again $email ${if (strava) "with Strava" else "with email"}" })
+            resumeDelete = resumeDelete, onDeleteResumed = { did += "resumed" }, onSignInAgain = { id, email, strava -> did += "sign in again $id $email ${if (strava) "with Strava" else "with email"}" })
     }
     private fun waitFor(text: String) = compose.waitUntil { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
 
@@ -248,7 +249,7 @@ class AccountScreensTest {
         assertEquals(listOf("status", "delete"), api.calls)
     }
 
-    @Test fun anOldSignInAsksToSignInAgainWithTheEmailFilledIn() {
+    @Test fun anOldSignInAsksToSignInAgainForThisAccount() {
         val api = FakeAccountApi(recentSignIn = false)
         account(api)
         waitFor("Delete my account")
@@ -258,8 +259,25 @@ class AccountScreensTest {
         compose.onNodeWithText("Sign in again").performScrollTo()
         compose.onRoot().captureRoboImage()
         compose.onNodeWithText("Sign in again").performClick()
-        assertEquals(listOf("sign in again pat@example.com with email"), did)
+        compose.onNodeWithText("Sign in again…").assertIsNotEnabled() // signing out takes a moment: one tap, one sign-in
+        assertEquals(listOf("sign in again u-123 pat@example.com with email"), did)
         assertEquals(listOf("status"), api.calls)
+    }
+
+    @Test fun backFromSigningInAgainWithASignInStillTooOldItAsksAgainCalmly() {
+        account(FakeAccountApi(recentSignIn = false), resumeDelete = true)
+        waitFor(RECENT_SIGN_IN)
+        compose.onNodeWithTag("delete-confirm").assertDoesNotExist()
+        compose.onNodeWithTag("delete-message").onChildren().assertCountEquals(0)
+    }
+
+    @Test fun aSessionThatEndedWhenCheckingGoesBackToSigningIn() {
+        val api = FakeAccountApi()
+        account(api)
+        waitFor("Delete my account")
+        api.signedOut = true
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        compose.waitUntil { "signed out" in did }
     }
 
     @Test fun anAccountMadeWithStravaSignsInAgainWithStrava() {
@@ -268,7 +286,7 @@ class AccountScreensTest {
         compose.onNodeWithText("Delete my account").performScrollTo().performClick()
         waitFor("Sign in again")
         compose.onNodeWithText("Sign in again").performScrollTo().performClick()
-        assertEquals(listOf("sign in again null with Strava"), did)
+        assertEquals(listOf("sign in again u-123 null with Strava"), did)
     }
 
     @Test fun cancellingSignInAgainGoesBackToTheDeleteButton() {
@@ -291,6 +309,7 @@ class AccountScreensTest {
         waitFor(RECENT_SIGN_IN)
         compose.onNodeWithText("Sign in again").assertExists()
         compose.onNodeWithText("For your safety, deleting your account needs a recent sign-in. Please sign in again.").assertDoesNotExist()
+        compose.onNodeWithTag("delete-message").onChildren().assertCountEquals(0) // no red error alongside
         assertFalse("deleted" in did)
     }
 

@@ -73,9 +73,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     var inAccount by rememberSaveable { mutableStateOf(false) }
     var settingUpTracker by rememberSaveable { mutableStateOf(false) }
-    // Signing in again to delete the account (it needs a recent sign-in): the email to fill in, and Delete to come back to.
-    var deleteAfterSignIn by rememberSaveable { mutableStateOf(false) }
-    var reauthEmail by rememberSaveable { mutableStateOf<String?>(null) }
+    // Signing in again to delete the account (Reauth.kt). The email to fill in isn't kept past the process.
+    var reauth by rememberSaveable { mutableStateOf(Reauth()) }
+    var reauthEmail by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
@@ -102,12 +102,13 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         val name = (it as? Incoming.AddFile)?.let { f -> withContext(Dispatchers.IO) { displayName(context, Uri.parse(f.uri)) } }
         run(intake.arrived(it, signedIn, name))
     }
-    fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled(); deleteAfterSignIn = false; reauthEmail = null; inAccount = false }
+    fun forgetReauth() { reauth = reauth.cleared(); reauthEmail = null }
+    fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
 
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
-    fun signedOut() { signedIn = false; inAccount = false; settingUpTracker = false; clearExport(context) }
+    fun signedOut() { signedIn = false; inAccount = false; settingUpTracker = false; clearExport(context); forgetReauth() }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
@@ -119,8 +120,11 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             Screen.SignIn -> {
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
-                    onSignedIn = { signedIn = true; signingIn = false; reauthEmail = null; needsTerms = it.needsTerms == true; run(intake.signedIn()) }, onCancel = { leaveSignIn() }, modifier = m,
-                    prefillEmail = reauthEmail, notice = if (deleteAfterSignIn) "Sign in again to delete your account." else null)
+                    onSignedIn = {
+                        if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resumeDelete }
+                        signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn()) }, onCancel = { leaveSignIn() }, modifier = m,
+                    prefillEmail = reauthEmail, notice = reauth.notice,
+                    startStrava = reauth.signingInAgain && reauth.strava)
             }
             Screen.Terms -> TermsScreen(api, onAccepted = { needsTerms = false }, onSignOut = { scope.launch { api.signOut(); signedOut() } },
                 onSignedOut = ::signedOut, modifier = m)
@@ -132,13 +136,12 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 BackHandler { inAccount = false }
                 AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = ::signedOut,
                     onDeleted = ::signedOut, onSignOut = { scope.launch { api.signOut(); signedOut() } }, modifier = m,
-                    resumeDelete = deleteAfterSignIn, onDeleteResumed = { deleteAfterSignIn = false },
-                    onSignInAgain = { email, viaStrava ->
+                    resumeDelete = reauth.resumeDelete, onDeleteResumed = { reauth = reauth.resumed() },
+                    onSignInAgain = { userId, email, viaStrava ->
                         scope.launch {
+                            // signedOut() forgets any sign-in-again, so it goes first.
                             api.signOut(); signedOut()
-                            inAccount = true; deleteAfterSignIn = true; reauthEmail = email; signingIn = true
-                            // An account made with Strava has no password: straight to Strava.
-                            if (viaStrava) runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(strava.start())) }
+                            reauth = reauth.start(userId, viaStrava); reauthEmail = email; inAccount = true; signingIn = true
                         }
                     })
             }
