@@ -23,9 +23,14 @@ struct YouView: View {
     ]
 
     @State private var open: WebPage?
+    @State private var path: [Route] = []
+
+    enum Route: Hashable {
+        case account
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section("Account") {
                     if let user = account.user {
@@ -36,9 +41,7 @@ struct YouView: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("signed-in-as")
                         .listRowBackground(Palette.surface)
-                        NavigationLink {
-                            AccountView(account: account)
-                        } label: {
+                        NavigationLink(value: Route.account) {
                             Text("Account").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
@@ -82,6 +85,13 @@ struct YouView: View {
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
             .navigationTitle("You")
+            .navigationDestination(for: Route.self) { _ in
+                AccountView(account: account, signIn: signIn)
+            }
+            .onChange(of: account.user?.id) { _, id in
+                // Signed in again to delete: straight back to the account.
+                if id != nil && account.deleteAfterSignIn { path = [.account] }
+            }
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in
                 SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path))

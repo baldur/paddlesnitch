@@ -57,6 +57,35 @@ final class AccountTests: AppTestCase {
         XCTAssertTrue(element("sample-notice").waitForExistence(timeout: 10), "signed out")
     }
 
+    /// Deleting needs a sign-in from the last 10 minutes: sign in again and
+    /// come straight back to deleting (mobile/contract/README.md, Account).
+    func testAnOldSignInSignsInAgainThenComesBackToDelete() {
+        signInAndWait()
+        app.terminate()
+        app.launchArguments = ["-SampleServer", "-StaleSignIn"]
+        app.launch()
+        openAccount()
+        scrollToElement(app.buttons["Delete my account"]).tap()
+        XCTAssertTrue(element("delete-needs-sign-in").waitForExistence(timeout: 10))
+        XCTAssertFalse(app.textFields["confirm-delete-text"].exists, "not asked to type DELETE in vain")
+        app.buttons["Sign in again"].tap()
+
+        let email = app.textFields["Email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        XCTAssertEqual(email.value as? String, "pat@example.com", "the email they were signed in with")
+        let password = app.secureTextFields["Password"]
+        password.tap()
+        password.typeText("Password123")
+        app.buttons["sign-in-submit"].tap()
+
+        let field = app.textFields["confirm-delete-text"]
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "straight back to deleting")
+        field.tap()
+        field.typeText("DELETE")
+        app.buttons["confirm-delete-account"].firstMatch.tap()
+        XCTAssertTrue(element("account-deleted").waitForExistence(timeout: 10))
+    }
+
     func testCancellingTheDeleteKeepsTheAccount() {
         signInAndWait()
         openAccount()

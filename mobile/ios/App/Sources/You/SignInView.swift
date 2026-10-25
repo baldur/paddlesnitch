@@ -96,6 +96,10 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            // Signing in again to delete: the email they're signed in with.
+            if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
+        }
     }
 
     /// Strava's own button, unaltered (their brand guidelines).

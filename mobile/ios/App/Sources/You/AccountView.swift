@@ -10,6 +10,8 @@ import SwiftUI
 /// delete. Words follow the website's account page.
 struct AccountView: View {
     let account: AccountModel
+    /// Opens the sign-in sheet.
+    let signIn: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var termsChanged = false
     @State private var downloading = false
@@ -86,6 +88,18 @@ struct AccountView: View {
         .scrollContentBackground(.hidden)
         .background(Palette.bg)
         .navigationTitle("Account")
+        // Back from signing in again to delete: on appearing (You pushed this
+        // screen again), or when the sign-in comes back with this screen
+        // still under the sheet. A sheet can't open while another is
+        // closing, so the sign-in sheet goes first.
+        .onAppear { resumeDelete() }
+        .onChange(of: account.user?.id) { _, id in
+            guard id != nil else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(700))
+                resumeDelete()
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(
@@ -96,11 +110,20 @@ struct AccountView: View {
             SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)).ignoresSafeArea()
         }
         .sheet(isPresented: $confirmingDelete) {
-            DeleteAccountView(account: account) {
-                confirmingDelete = false
-                // Back to You, which now says the account is deleted.
-                dismiss()
-            }
+            DeleteAccountView(
+                account: account,
+                deleted: {
+                    confirmingDelete = false
+                    // Back to You, which now says the account is deleted.
+                    dismiss()
+                },
+                signInAgain: {
+                    confirmingDelete = false
+                    Task {
+                        await account.signOutToDelete()
+                        signIn()
+                    }
+                })
         }
     }
 
@@ -110,6 +133,12 @@ struct AccountView: View {
         } header: {
             header("Terms of Service")
         }
+    }
+
+    private func resumeDelete() {
+        guard account.deleteAfterSignIn, account.user != nil else { return }
+        account.deleteResumed()
+        confirmingDelete = true
     }
 
     private func download() async {
@@ -270,83 +299,4 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}
-
-/// Deleting the account, as the website: what goes, type DELETE, then
-/// "Delete for good". A sheet, not an alert: on iOS 17 an alert's button
-/// didn't follow its text field and did nothing when tapped.
-struct DeleteAccountView: View {
-    let account: AccountModel
-    let deleted: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var confirmText = ""
-    @State private var deleting = false
-    @State private var failure: String?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(AccountView.deleteExplained)
-                        .font(.plexSans(.body))
-                        .foregroundStyle(Palette.fg)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Type DELETE to confirm. There is no undo.")
-                            .font(.plexSans(.subheadline, weight: .medium))
-                            .foregroundStyle(Palette.fg)
-                        TextField("", text: $confirmText)
-                            .font(.plexSans(.body))
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 44)
-                            .background(Palette.surface)
-                            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.borderStrong))
-                            .accessibilityLabel("Type DELETE to confirm")
-                            .accessibilityIdentifier("confirm-delete-text")
-                    }
-                    if let failure {
-                        Text(failure).font(.plexSans(.body)).foregroundStyle(Palette.red)
-                            .accessibilityIdentifier("delete-error")
-                    }
-                    Button(role: .destructive) {
-                        Task { await delete() }
-                    } label: {
-                        Text(deleting ? "Deleting…" : "Delete for good")
-                            .font(.plexSans(.body, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    // Red words on a faint red, as the website's danger
-                    // button: white on this red is too faint to read.
-                    .buttonStyle(.bordered)
-                    .tint(Palette.red)
-                    .disabled(confirmText != "DELETE" || deleting)
-                    .accessibilityIdentifier("confirm-delete-account")
-                }
-                .padding(16)
-            }
-            .background(Palette.bg)
-            .navigationTitle("Delete your account?")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(deleting)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-        .interactiveDismissDisabled(deleting)
-    }
-
-    private func delete() async {
-        deleting = true
-        defer { deleting = false }
-        do {
-            try await account.deleteAccount()
-            deleted()
-        } catch {
-            failure = AccountView.failure("Couldn't delete your account.", error)
-            AccessibilityNotification.Announcement(failure ?? "").post()
-        }
-    }
 }

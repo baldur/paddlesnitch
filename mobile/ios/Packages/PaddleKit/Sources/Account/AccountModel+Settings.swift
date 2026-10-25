@@ -65,12 +65,43 @@ extension AccountModel {
         URL(string: link, relativeTo: base)?.absoluteURL
     }
 
+    public enum DeleteError: Error, Equatable, Sendable {
+        /// No real sign-in in the last 10 minutes (403 reauth): sign in again.
+        case needsRecentSignIn
+    }
+
+    /// Whether the last real sign-in (password, code, Strava) was in the last
+    /// 10 minutes: deleting needs one. A silent refresh doesn't count.
+    public func recentSignIn() async throws -> Bool {
+        try await client.send(Endpoints.getAccount, NoInput()).recentSignIn
+    }
+
+    /// "Sign in again" before deleting: signs out, and remembers to come
+    /// straight back to deleting, with the email to sign in with.
+    public func signOutToDelete() async {
+        let email = user?.email
+        await signOut()
+        signInAgainEmail = email
+        deleteAfterSignIn = true
+    }
+
+    /// Back at deleting after signing in again.
+    public func deleteResumed() {
+        deleteAfterSignIn = false
+        signInAgainEmail = nil
+    }
+
     /// Erases the account. The refresh token goes with the request so it
     /// stops working; only once the server has done it are the tokens
     /// dropped here. A failure leaves you signed in.
     public func deleteAccount() async throws {
         let refreshToken = await session.refreshToken
-        _ = try await client.send(Endpoints.deleteAccount, DeleteAccount(refreshToken: refreshToken))
+        do {
+            _ = try await client.send(Endpoints.deleteAccount, DeleteAccount(refreshToken: refreshToken))
+        } catch PaddleAPIError.rejected(_, 403, _) {
+            // The 10 minutes ran out while they typed.
+            throw DeleteError.needsRecentSignIn
+        }
         _ = await session.signOut()
         profile.clear()
         removeDownloadedData()

@@ -36,10 +36,10 @@ struct PaddlesnitchApp: App {
             tokens.clear()
             UserDefaults.standard.removeObject(forKey: profile.key)
         }
-        let transport: any HTTPTransport =
-            sample
-            ? SampleServer(fixtures: fixtures, summariesPending: arguments.contains("-PendingSummaries"))
-            : URLSession.shared
+        let server = SampleServer(fixtures: fixtures, summariesPending: arguments.contains("-PendingSummaries"))
+        // UI tests: an old sign-in, so deleting asks for a new one.
+        if arguments.contains("-StaleSignIn") { server.signInIsRecent = false }
+        let transport: any HTTPTransport = sample ? server : URLSession.shared
         return AccountModel(
             baseURL: baseURL, transport: transport, app: "ios/\(YouView.shortVersion)", tokens: tokens,
             profile: profile)
