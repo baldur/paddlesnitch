@@ -15,9 +15,27 @@ enum Contract {
     static let fixturesDirectory = directory.appending(path: "fixtures/api")
 
     /// Fixture names without `.json`: `me.signed-in`, `paddles.get.motion-only`.
+    /// `index.json` describes the others and isn't one.
     static var fixtureNames: [String] {
         let files = (try? FileManager.default.contentsOfDirectory(atPath: fixturesDirectory.path)) ?? []
-        return files.filter { $0.hasSuffix(".json") }.map { String($0.dropLast(".json".count)) }.sorted()
+        return files.filter { $0.hasSuffix(".json") && $0 != "index.json" }.map { String($0.dropLast(".json".count)) }
+            .sorted()
+    }
+
+    /// What a fixture is, from fixtures/api/index.json: the call it answers (a
+    /// tRPC path or `"METHOD /path"`; nil for a refusal a group of routes
+    /// shares) and the type to decode it as.
+    struct Entry: Decodable {
+        let call: String?
+        let schema: String
+    }
+
+    /// File name without `.json` → entry.
+    static var index: [String: Entry] {
+        guard let data = try? Data(contentsOf: fixturesDirectory.appending(path: "index.json")),
+            let entries = try? JSONDecoder().decode([String: Entry].self, from: data)
+        else { return [:] }
+        return Dictionary(uniqueKeysWithValues: entries.map { (String($0.key.dropLast(".json".count)), $0.value) })
     }
 
     static var procedurePaths: [String] {
@@ -25,44 +43,6 @@ enum Contract {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return [] }
         return object.keys.sorted()
-    }
-
-    /// The procedure a fixture answers: the longest procedure path that the
-    /// name starts with (`paddles.get.motion-only` → `paddles.get`).
-    static func procedure(forFixture name: String) -> String? {
-        procedurePaths.filter { name == $0 || name.hasPrefix($0 + ".") }.max(by: { $0.count < $1.count })
-    }
-
-    /// REST routes from rest.json, as `"POST /att/api/auth/login"`.
-    static var restRoutes: [String] {
-        guard let data = try? Data(contentsOf: directory.appending(path: "api/rest.json")),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [] }
-        return object.keys.sorted()
-    }
-
-    /// The REST routes a fixture may answer, GET first: `auth.login[.case]`
-    /// is `… /api/auth/login`; `account.<route>[-<what>][.case]` is any
-    /// method on `/api/account/<route>` (`account.tos-accepted` is the POST's
-    /// answer). `auth.error` belongs to no single route.
-    static func routes(forFixture name: String) -> [String] {
-        let parts = name.split(separator: ".").map(String.init)
-        guard parts.count >= 2 else { return [] }
-        let base = parts[1].split(separator: "-").first.map(String.init) ?? parts[1]
-        for route in [parts[1], base] {
-            let path = "/api/\(parts[0])/\(route)"
-            let matches = restRoutes.filter { $0.hasSuffix(" " + path) || $0.hasSuffix("/att" + path) }
-            if !matches.isEmpty { return matches.sorted { $0.hasPrefix("GET ") && !$1.hasPrefix("GET ") } }
-        }
-        return []
-    }
-
-    /// An error answer: every one carries `error` (contract README).
-    static func isErrorAnswer(_ name: String) -> Bool {
-        guard let data = try? fixture(name),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return false }
-        return object["error"] != nil
     }
 
     static func fixture(_ name: String) throws -> Data {
