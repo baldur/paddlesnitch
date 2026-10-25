@@ -123,12 +123,21 @@
       401
     ]
   },
+  "GET /api/account": {
+    "auth": "user",
+    "input": null,
+    "output": "AccountStatus",
+    "errors": [
+      401
+    ]
+  },
   "DELETE /api/account": {
     "auth": "user",
     "input": "DeleteAccount",
     "output": "Ok",
     "errors": [
-      401
+      401,
+      403
     ]
   },
   "GET /api/account/profile": {

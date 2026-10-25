@@ -1,6 +1,6 @@
 # paddlesnitch — paddling platform
 
-A monorepo for **paddlesnitch**, a web platform for paddlers (kayak, canoe, SUP, rowing): **one Next.js app** (`apps/web`) over five internal packages, one Cognito user pool, one S3 bucket, one CloudFront distribution, plus the tracker firmware (`firmware/`). Three sections, one header:
+A monorepo for **paddlesnitch**, a web platform for paddlers (kayak, canoe, SUP, rowing): **one Next.js app** (`apps/web`) over six internal packages, one Cognito user pool, one S3 bucket, one CloudFront distribution, plus the tracker firmware (`firmware/`). Three sections, one header:
 
 - **Trials** (URL `/att`, historically "ATT — Automated Time Trials"): GPS-timed river time trials. Organisers draw start/finish lines on a map; paddlers upload GPS files; the site computes elapsed time, 500 m splits and stroke rate.
 - **Paddles** (`/paddles`, formerly `/analyse`): paddle analysis with an AI-written summary. `/paddles` is also the signed-in home.

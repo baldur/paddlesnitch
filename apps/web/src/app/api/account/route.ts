@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getRequestUser, clearAuthCookies } from '@/lib/auth'
+import { hasRecentSignIn } from '@/lib/app-signin'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { unindexEntries } from '@/lib/entries'
 import { deleteUser, revoke } from '@/lib/cognito'
@@ -18,7 +19,18 @@ import { eraseBuddies } from '@paddlesnitch/core/buddies'
 import { erasePlanDemand, erasePlanShares } from '@paddlesnitch/waterways/plan-store'
 import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 
-// GDPR Art. 17 (right to erasure). Permanently removes:
+const REAUTH_TEXT = 'For your safety, deleting your account needs a recent sign-in. Please sign in again.'
+
+// GET /api/account — whether deleting can go ahead now ({ recentSignIn }), so
+// the account page and the apps ask for a fresh sign-in BEFORE someone types
+// DELETE rather than after.
+export async function GET(req: Request) {
+  const user = await getRequestUser(req)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  return NextResponse.json({ recentSignIn: await hasRecentSignIn(req, user.id) })
+}
+
+// DELETE: GDPR Art. 17 (right to erasure). Permanently removes:
 //   - the Cognito user record (no more sign-ins)
 //   - every course and trial they created that no group owns and nobody else
 //     has results in. Anything with other people's results, or owned by a
@@ -36,9 +48,16 @@ import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 //   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent.
+//
+// Deleting needs a real sign-in from the last 10 minutes (owner, 2026-10-25):
+// a stolen or left-open session must not be able to erase everything. Not a
+// password prompt, because accounts made through Strava have none.
 export async function DELETE(req: Request) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await hasRecentSignIn(req, user.id))) {
+    return NextResponse.json({ error: REAUTH_TEXT, reauth: true }, { status: 403 })
+  }
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)

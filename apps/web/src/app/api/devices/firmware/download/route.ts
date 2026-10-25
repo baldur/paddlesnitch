@@ -24,9 +24,11 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const key = url.searchParams.get('key') ?? ''
-  // Only ever firmware images. Even signed, this must not become a way to read
+  // Only firmware images and prepared "Download my data" files (whose random
+  // name is in the signed key). Even signed, this must not become a way to read
   // sessions or claims out of the data directory.
-  if (!/^firmware\/[\w.-]{1,40}\/firmware\.bin$/.test(key)) {
+  const isExport = /^exports\/[\w-]{1,64}\/[\w-]{21}\.json$/.test(key)
+  if (!isExport && !/^firmware\/[\w.-]{1,40}\/firmware\.bin$/.test(key)) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 })
   }
   if (!devPresignValid(key, url.searchParams.get('exp'), url.searchParams.get('sig'))) {
@@ -36,11 +38,13 @@ export async function GET(req: Request) {
   const body = await getObject(key)
   if (!body) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
+  const name = url.searchParams.get('name') ?? ''
   return new Response(new Uint8Array(body), {
     status: 200,
     headers: {
-      'content-type': 'application/octet-stream',
+      'content-type': isExport ? 'application/json; charset=utf-8' : 'application/octet-stream',
       'content-length': String(body.length),
+      ...(isExport && /^[\w.-]{1,120}\.json$/.test(name) ? { 'content-disposition': `attachment; filename="${name}"` } : {}),
     },
   })
 }

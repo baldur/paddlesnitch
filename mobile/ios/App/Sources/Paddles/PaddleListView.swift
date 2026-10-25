@@ -126,7 +126,7 @@ struct PaddleListView: View {
                 }
             }
             if let failure = model.refreshFailure {
-                Text(failure)
+                Text("Couldn't refresh your paddles. \(failure)")
                     .font(.plexSans(.subheadline))
                     .foregroundStyle(Palette.red)
                     .listRowBackground(Palette.surface)

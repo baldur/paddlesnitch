@@ -145,8 +145,13 @@ export const Refreshed = named('Refreshed', z.object({ idToken: z.string() }))
 export const Ok = named('Ok', z.object({ ok: z.literal(true) }))
 /** A recording analysed and saved (the answer carries the whole analysis too; the apps need only which paddle). */
 export const Analysed = named('Analysed', z.object({ id: z.string(), duplicate: z.literal(true).optional() }))
-/** Every refusal from these routes: words to show as they are; `session` when an email code was wrong but tries remain. */
-export const ApiError = named('ApiError', z.object({ error: z.string(), session: z.string().optional() }))
+/** Every refusal from these routes: words to show as they are; `session` when an email code was wrong but tries remain; `reauth` when deleting needs a fresh sign-in. */
+export const ApiError = named('ApiError', z.object({
+  error: z.string(),
+  session: z.string().optional(),
+  // DELETE /api/account: no real sign-in in the last 10 minutes; sign in again, then retry.
+  reauth: z.literal(true).optional(),
+}))
 
 const Login = named('Login', z.object({ email: z.string(), password: z.string() }))
 const OtpRequest = named('OtpRequest', z.object({
@@ -190,6 +195,8 @@ const TosAccept = named('TosAccept', z.object({ version: z.string() }))
 export const TosAccepted = named('TosAccepted', z.object({ acceptances: z.array(TosAcceptance) }))
 /** A short-lived link to the file; relative (to the site) only in local dev. */
 export const DownloadLink = named('DownloadLink', z.object({ url: z.string() }))
+/** Whether deleting can go ahead now: a real sign-in from the last 10 minutes. Ask before showing "type DELETE". */
+export const AccountStatus = named('AccountStatus', z.object({ recentSignIn: z.boolean() }))
 const DeleteAccount = named('DeleteAccount', z.object({
   // The app's refresh token, so it stops working at once.
   refreshToken: z.string().optional(),
@@ -275,7 +282,8 @@ export const restRoutes = {
   'GET /api/account/tos': { auth: 'user', input: null, output: TosStatus, errors: [401] },
   'POST /api/account/tos': { auth: 'user', input: TosAccept, output: TosAccepted, errors: [401, 422] },
   'POST /api/account/export': { auth: 'user', input: null, output: DownloadLink, errors: [401] },
-  'DELETE /api/account': { auth: 'user', input: DeleteAccount, output: Ok, errors: [401] },
+  'GET /api/account': { auth: 'user', input: null, output: AccountStatus, errors: [401] },
+  'DELETE /api/account': { auth: 'user', input: DeleteAccount, output: Ok, errors: [401, 403] },
   'GET /api/account/profile': { auth: 'user', input: null, output: ProfileSettings, errors: [401] },
   'PATCH /api/account/profile': { auth: 'user', input: ProfileVisibility, output: ProfileSettings, errors: [400, 401] },
   'GET /api/account/handle': { auth: 'user', input: HandleCheck, output: HandleAvailability, errors: [401] },

@@ -138,7 +138,7 @@ actor ScriptedSource: PaddlesSource {
     @Test func aFirstLoadFailureShowsWhy() async {
         let model = PaddleListModel(source: ScriptedSource(failure: URLError(.notConnectedToInternet)))
         await model.load()
-        #expect(model.state == .failed("Can't reach paddlesnitch. Check your connection and try again."))
+        #expect(model.state == .failed("Couldn't reach paddlesnitch. Check your connection and try again."))
     }
 
     @Test func aFailedRefreshKeepsTheList() async {
@@ -232,9 +232,20 @@ actor ScriptedSource: PaddlesSource {
         #expect(!PaddleSummary(paddle, summaryFailed: true).summaryPending)
     }
 
-    @Test func aMissingPaddleSaysSo() async {
+    /// The website's words, and no "Try again": trying again won't help.
+    @Test func aMissingPaddleSaysSoAndIsGone() async {
         let model = PaddleDetailModel(id: "gone", source: ScriptedSource())
         await model.load()
-        #expect(model.state == .failed("This paddle isn't there any more."))
+        #expect(model.state == .failed("We can't find this paddle."))
+        #expect(model.gone)
+    }
+
+    @Test(arguments: [
+        (PaddleAPIError.badResponse(status: 502) as any Error, "Please try again in a moment."),
+        (URLError(.notConnectedToInternet), "Couldn't reach paddlesnitch. Check your connection and try again."),
+        (PaddleAPIError.signedOut, "Sign in again to see your paddles."),
+    ])
+    func failuresSayWhatToDo(error: any Error, words: String) {
+        #expect(FailureMessage.of(error) == words)
     }
 }

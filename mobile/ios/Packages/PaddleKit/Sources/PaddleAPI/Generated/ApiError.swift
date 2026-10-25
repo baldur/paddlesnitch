@@ -6,10 +6,12 @@ import Foundation
 
 public struct ApiError: Codable, Hashable, Sendable {
     public var error: String
+    public var reauth: Bool?
     public var session: String?
 
-    public init(error: String, session: String? = nil) {
+    public init(error: String, reauth: Bool? = nil, session: String? = nil) {
         self.error = error
+        self.reauth = reauth
         self.session = session
     }
 }
