@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "Analysed.schema.json",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "duplicate": {
+      "type": "boolean",
+      "const": true
+    }
+  },
+  "required": [
+    "id"
+  ]
+}

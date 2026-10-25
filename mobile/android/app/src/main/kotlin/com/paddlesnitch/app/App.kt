@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,8 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.SignInScreen
 import com.paddlesnitch.app.paddles.PaddlesScreen
+import com.paddlesnitch.app.paddles.addedMessage
+import com.paddlesnitch.app.paddles.rememberAddPaddle
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.launch
 
@@ -76,13 +79,29 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
             .onSuccess { list = it }
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
+    var adding by remember { mutableStateOf(false) }
+    var added by remember { mutableStateOf<String?>(null) }
+    val addPaddle = rememberAddPaddle(api, onBusy = { adding = it; if (it) added = null }) { result ->
+        if (result.exceptionOrNull() is SignedOut) onSignedOut()
+        added = addedMessage(result)
+        if (result.isSuccess) attempt++
+    }
     val signOut: @Composable () -> Unit = { TextButton(onClick = onSignOut) { Text("Sign out") } }
     val current = list
     when {
-        current != null -> PaddlesScreen(current, sample = false, modifier = modifier, action = signOut, notice = if (needsTerms) ({
+        current != null -> PaddlesScreen(current, sample = false, modifier = modifier, action = {
+            Row {
+                TextButton(onClick = addPaddle, enabled = !adding) { Text("Add a file") }
+                signOut()
+            }
+        }, notice = if (needsTerms || adding || added != null) ({
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
-                TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
+                if (adding) Text("Adding your paddle…", color = PsColor.muted)
+                added?.let { Text(it) }
+                if (needsTerms) {
+                    Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
+                    TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
+                }
             }
         }) else null)
         error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -2,6 +2,7 @@ package com.paddlesnitch.app.api
 
 import com.paddlesnitch.app.auth.TokenStore
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,6 +11,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -29,7 +31,8 @@ class Api(
     baseUrl: String,
     private val tokens: TokenStore,
     private val appVersion: String,
-    private val http: OkHttpClient = OkHttpClient(),
+    // Analysing an upload fetches the weather and river flow, so allow it a minute.
+    private val http: OkHttpClient = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
 ) {
     private val base = baseUrl.trimEnd('/').toHttpUrl()
     private val refreshing = Mutex()
@@ -58,6 +61,14 @@ class Api(
         val answer = read(post(path, body), SignIn.serializer())
         tokens.save(answer.idToken, answer.refreshToken)
         return answer
+    }
+
+    /** Analyse and save a recording (GPX, FIT, TCX, CSV, or a zip of one), as the website's upload does. */
+    suspend fun upload(fileName: String, bytes: ByteArray): Analysed {
+        val url = base.newBuilder().addPathSegments("paddles/api/analyse").build()
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", fileName, bytes.toRequestBody("application/octet-stream".toMediaType())).build()
+        return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(body).build() }, Analysed.serializer())
     }
 
     /** A tRPC query: GET /api/trpc/<path>?input=<json>, answer {result:{data}}. */
@@ -111,6 +122,8 @@ class Api(
     private fun error(res: Answer): ApiFailure {
         // Sign-in refusals are the contract's ApiError; tRPC's errors are shaped differently.
         val said = runCatching { ApiJson.decodeFromString(ApiError.serializer(), res.body).error }.getOrNull()
+        // A request over the server's 6 MB limit is refused before our code sees it.
+        if (said == null && res.code == 413) return ApiFailure("That file is too big to upload. Try the FIT file, or zip it first.", 413)
         return ApiFailure(said ?: "Something went wrong (${res.code}). Please try again.", res.code)
     }
 

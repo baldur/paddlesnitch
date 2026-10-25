@@ -54,6 +54,17 @@ error     4xx/5xx  { "error": { "message": …, "code": …, "data": { "code": "
 
 A query with no input omits `?input=`.
 
+## Adding a paddle from a file
+
+`POST /paddles/api/analyse` with `Authorization: Bearer`, as `multipart/form-data`
+with one part, `file` (GPX, FIT, TCX, CSV, SpeedCoach CSV, or a zip of one; the
+file name's extension picks the parser). In `rest.json` its `input` is `null`
+for that reason. The answer is the whole analysis; the apps need only
+`Analysed`: the paddle's `id`, and `duplicate: true` when that paddle was
+already there (the existing one is returned, nothing is added). 422 is a file
+that can't be read, with the reason in `error`; the server refuses anything
+over 6 MB (413, not an `ApiError`).
+
 ## Signing in
 
 REST, not tRPC. Send `x-paddlesnitch-app: <platform>/<version>` (e.g.

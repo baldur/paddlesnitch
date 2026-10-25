@@ -143,6 +143,8 @@ export const SignIn = named('SignIn', z.object({
 export const OtpSession = named('OtpSession', z.object({ session: z.string() }))
 export const Refreshed = named('Refreshed', z.object({ idToken: z.string() }))
 export const Ok = named('Ok', z.object({ ok: z.literal(true) }))
+/** A recording analysed and saved (the answer carries the whole analysis too; the apps need only which paddle). */
+export const Analysed = named('Analysed', z.object({ id: z.string(), duplicate: z.literal(true).optional() }))
 /** Every refusal from these routes: words to show as they are; `session` when an email code was wrong but tries remain. */
 export const ApiError = named('ApiError', z.object({ error: z.string(), session: z.string().optional() }))
 
@@ -157,7 +159,8 @@ const OtpVerify = named('OtpVerify', z.object({ email: z.string(), session: z.st
 const Signup = named('Signup', z.object({ email: z.string(), displayName: z.string(), password: z.string(), acceptedTosVersion: z.string() }))
 const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }))
 
-type Rest = { input: z.ZodType; output: z.ZodType; errors: number[] }
+/** `input: null` is a multipart upload (`file`), described in mobile/contract/README.md. */
+type Rest = { input: z.ZodType | null; output: z.ZodType; errors: number[] }
 
 /**
  * The REST routes the apps call to sign in, by "<METHOD> <path>". Send
@@ -169,6 +172,7 @@ export const restRoutes = {
   'POST /att/api/auth/otp-request': { input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
   'POST /att/api/auth/otp-verify': { input: OtpVerify, output: SignIn, errors: [400, 500] },
   'POST /att/api/auth/signup': { input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
+  'POST /paddles/api/analyse': { input: null, output: Analysed, errors: [400, 401, 422, 500] },
   'POST /att/api/auth/refresh': { input: RefreshToken, output: Refreshed, errors: [401] },
   'POST /att/api/auth/logout': { input: RefreshToken, output: Ok, errors: [] },
 } satisfies Record<string, Rest>
@@ -216,7 +220,7 @@ export function apiContractFiles(): Record<string, string> {
     kind: p.kind, auth: p.auth, input: p.input ? idOf(p.input) : null, output: idOf(p.output),
   }])))
   files['rest.json'] = json(Object.fromEntries(Object.entries(restRoutes).map(([route, r]) => [route, {
-    input: idOf(r.input), output: idOf(r.output), errors: r.errors,
+    input: r.input ? idOf(r.input) : null, output: idOf(r.output), errors: r.errors,
   }])))
   return files
 }

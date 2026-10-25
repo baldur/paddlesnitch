@@ -35,6 +35,16 @@
       500
     ]
   },
+  "POST /paddles/api/analyse": {
+    "input": null,
+    "output": "Analysed",
+    "errors": [
+      400,
+      401,
+      422,
+      500
+    ]
+  },
   "POST /att/api/auth/refresh": {
     "input": "RefreshToken",
     "output": "Refreshed",
