@@ -90,7 +90,10 @@ export async function runJob(key: string, now = Date.now()): Promise<RunOutcome>
     return 'done'
   } catch (err) {
     const lastError = err instanceof Error ? err.message : String(err)
-    console.error(`[jobs] ${key} attempt ${attempts} failed`, err)
+    // Only giving up is an error (it trips the zero-tolerance alarm); an
+    // attempt that will be retried is what the backoff is for.
+    if (attempts < MAX_ATTEMPTS) console.warn(`[jobs] ${key} attempt ${attempts} failed, will retry`, err)
+    else console.error(`[jobs] ${key} attempt ${attempts} failed, giving up`, err)
     if (attempts >= MAX_ATTEMPTS) {
       await putJson(failedKey(key), { ...job, attempts, lastError, failedAt: new Date(now).toISOString() })
       await deleteObject(key)
