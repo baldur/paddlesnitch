@@ -1,7 +1,7 @@
 import type { AuthUser } from './types'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { refresh, verifyIdToken, idTokenSignedInAt } from './cognito'
+import { refresh, verifyIdToken, idTokenSignIn, type SignInClaims } from './cognito'
 import { resolveDeviceToken, type DeviceAuth } from './devices'
 
 // Authenticate a HARDWARE device from its `Authorization: Bearer <deviceToken>`
@@ -72,14 +72,20 @@ export async function getRequestUser(req: Request): Promise<AuthUser | null> {
   return getAuthUser()
 }
 
-// When the person behind this request last signed in (Unix seconds), from the
-// same token getRequestUser reads: the app's Bearer, else the website cookie.
-// Null when there's no valid token. For actions that need a recent sign-in.
-export async function requestSignedInAt(req: Request): Promise<number | null> {
+// The sign-in behind this request, from the same token getRequestUser reads:
+// the app's Bearer, else the website cookie. Null when there's no valid token.
+// For actions that need a recent, real sign-in (deleting the account).
+export async function requestSignIn(req: Request): Promise<SignInClaims | null> {
   const m = /^Bearer\s+(.+)$/i.exec((req.headers.get('authorization') ?? '').trim())
-  if (m) return idTokenSignedInAt(m[1].trim())
+  if (m) return idTokenSignIn(m[1].trim())
   const idToken = (await cookies()).get(ID_COOKIE)?.value
-  return idToken ? idTokenSignedInAt(idToken) : null
+  return idToken ? idTokenSignIn(idToken) : null
+}
+
+/** The Bearer token's person only: never the website cookie. */
+export async function bearerUser(req: Request): Promise<AuthUser | null> {
+  const m = /^Bearer\s+(.+)$/i.exec((req.headers.get('authorization') ?? '').trim())
+  return m ? verifyIdToken(m[1].trim()) : null
 }
 
 // Returns the authenticated user from the ID-token cookie, or null.

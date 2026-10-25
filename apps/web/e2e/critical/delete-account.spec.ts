@@ -16,3 +16,37 @@ test('Delete account erases the account and signs you out', async ({ page }) => 
   await page.goto('/account')
   await expect(page).toHaveURL(/\/signin/)
 })
+
+// Past the 10 minutes, the page asks for a fresh sign-in BEFORE anyone types
+// DELETE, and brings them straight back to an open Delete account. The first
+// check is answered as "too old" (the clock can't be moved in a browser);
+// after signing in again the real check says yes.
+test('An old sign-in is asked to sign in again first, then comes back to Delete account', async ({ page, context }) => {
+  const { email } = await signUpFlow(page)
+  let firstCheck = true
+  await page.route('**/api/account', route => {
+    if (route.request().method() === 'GET' && firstCheck) {
+      firstCheck = false
+      return route.fulfill({ status: 200, json: { recentSignIn: false } })
+    }
+    return route.continue()
+  })
+  await page.goto('/account#delete')
+  await page.getByRole('button', { name: 'Delete my account' }).click()
+  // No DELETE box yet: a calm note and a way to sign in again.
+  await expect(page.getByText(/deleting an account needs a recent sign-in/)).toBeVisible()
+  await expect(page.getByLabel(/Type DELETE to confirm/)).toHaveCount(0)
+  await page.getByRole('button', { name: 'Sign in again' }).click()
+
+  // Signed out, on the sign-in page with the reason shown and the email filled in.
+  await page.waitForURL(/\/signin\?reason=reauth_delete/)
+  expect((await context.cookies()).some(c => c.name === 'tt_id' && c.value)).toBe(false)
+  await expect(page.getByRole('status')).toContainText('recent sign-in')
+  await expect(page.locator('input[type="email"]').first()).toHaveValue(email)
+  await page.locator('input[type="password"]').fill('Password123')
+  await page.locator('button[type="submit"]:has-text("SIGN IN")').click()
+
+  // Back on Delete account, already open at the DELETE step.
+  await page.waitForURL(/\/account\?resume=delete/)
+  await expect(page.getByLabel(/Type DELETE to confirm/)).toBeVisible()
+})

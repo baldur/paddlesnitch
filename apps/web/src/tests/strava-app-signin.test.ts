@@ -13,14 +13,16 @@ vi.mock('@/lib/cognito', () => ({
   adminCreateUserForStrava: vi.fn(),
   customAuthSignIn: vi.fn(),
   verifyIdToken: vi.fn(),
+  sessionOfFreshToken: vi.fn(() => 'link-session-1'),
 }))
-vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getAuthUser: vi.fn(), getRequestUser: vi.fn(), setAuthCookies: vi.fn() }))
+vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getAuthUser: vi.fn(), getRequestUser: vi.fn(), bearerUser: vi.fn(), setAuthCookies: vi.fn() }))
 
 import { GET as init } from '@/app/att/api/auth/strava/init/route'
 import { GET as callback } from '@/app/att/api/auth/strava/callback/route'
 import { POST as appToken } from '@/app/att/api/auth/strava/app-token/route'
 import { GET as webCode, POST as mintWebCode } from '@/app/att/api/auth/web-code/route'
 import { createAppCode, createWebCode, redeemAppCode, redeemWebCode } from '@/lib/app-signin'
+import { listKeys } from '@/lib/storage'
 import { cookies } from 'next/headers'
 import * as strava from '@/lib/strava'
 import * as stravaStorage from '@/lib/strava-storage'
@@ -145,7 +147,7 @@ describe('website pages from a signed-in app (web codes)', () => {
   const open = (code: string, next = '/account') => webCode(new NextRequest(`http://x/att/api/auth/web-code?code=${code}&next=${encodeURIComponent(next)}`))
 
   it('gives the Bearer token’s person a link to the page with a code for them', async () => {
-    vi.mocked(auth.getRequestUser).mockResolvedValue({ id: 'sub-1', email: 'baldur@example.com', displayName: 'Baldur' })
+    vi.mocked(auth.bearerUser).mockResolvedValue({ id: 'sub-1', email: 'baldur@example.com', displayName: 'Baldur' })
     const res = await mintWebCode(new NextRequest('http://x/att/api/auth/web-code', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ next: '/account#delete' }) }))
     const url = new URL((await res.json()).url)
     expect(url.pathname).toBe('/att/api/auth/web-code')
@@ -154,7 +156,7 @@ describe('website pages from a signed-in app (web codes)', () => {
   })
 
   it('refuses to mint one without a signed-in person', async () => {
-    vi.mocked(auth.getRequestUser).mockResolvedValue(null)
+    vi.mocked(auth.bearerUser).mockResolvedValue(null)
     expect((await mintWebCode(new NextRequest('http://x/att/api/auth/web-code', { method: 'POST' }))).status).toBe(401)
   })
 
@@ -163,6 +165,8 @@ describe('website pages from a signed-in app (web codes)', () => {
     const res = await open(code)
     expect(new URL(res.headers.get('location')!).pathname).toBe('/account')
     expect(auth.setAuthCookies).toHaveBeenCalledWith(expect.anything(), 'id-token', 'refresh-token')
+    // The session it made is recorded: it never counts as a recent sign-in.
+    expect(await listKeys('users/sub-1/link-sessions/')).toHaveLength(1)
     const again = new URL((await open(code)).headers.get('location')!)
     expect(again.pathname).toBe('/signin')
     expect(again.searchParams.get('error')).toBe('app_link_expired')

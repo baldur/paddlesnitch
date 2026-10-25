@@ -21,7 +21,11 @@ import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { revoke } from '@/lib/cognito'
 import { GET as tosStatus, POST as acceptTos } from '@/app/api/account/tos/route'
 import { GET as exportFile, POST as exportLink } from '@/app/api/account/export/route'
-import { DELETE as deleteAccount } from '@/app/api/account/route'
+import { GET as accountStatus, DELETE as deleteAccount } from '@/app/api/account/route'
+import { markLinkSession } from '@/lib/app-signin'
+import { POST as mintWebCode } from '@/app/att/api/auth/web-code/route'
+import { signInFromClaims } from '@paddlesnitch/core/cognito'
+import { setProfilePublic as storeProfilePublic, getProfileSettings } from '@/lib/profile'
 import { GET as getProfile, PATCH as setProfile } from '@/app/api/account/profile/route'
 import { GET as checkHandle, PUT as claimHandle, DELETE as releaseHandle } from '@/app/api/account/handle/route'
 import { GET as getContact, POST as setContact, DELETE as clearContact } from '@/app/api/account/contact/route'
@@ -90,7 +94,7 @@ const calls = (): Call[] => [
 
 describe('the account routes the apps call', () => {
   it('every account route in rest.json is tested here', () => {
-    const tested = new Set([...calls().map(([r]) => r), ...trackerRoutes, 'DELETE /api/account'])
+    const tested = new Set([...calls().map(([r]) => r), ...trackerRoutes, 'DELETE /api/account', 'GET /api/account'])
     for (const route of Object.keys(restRoutes).filter(r => r.includes('/api/account'))) expect(tested.has(route as never), route).toBe(true)
   })
 
@@ -177,26 +181,56 @@ describe('what the Account screens do', () => {
     expect(revoke).toHaveBeenCalledWith(pat.refreshToken)
   })
 
-  it('delete account needs a sign-in from the last 10 minutes (app and website): older is 403 reauth, nothing erased', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      vi.setSystemTime(Date.now() + 11 * 60_000)
-      const app = await deleteAccount(req('DELETE', '/api/account', pat.idToken))
+  it('delete account needs a real sign-in from the last 10 minutes: older is 403 reauth on both paths, and nothing is erased', async () => {
+    await storeProfilePublic(pat.id, true)
+    const minutesLater = async (m: number, run: () => Promise<void>) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      try { vi.setSystemTime(Date.now() + m * 60_000); await run() } finally { vi.useRealTimers() }
+    }
+    await minutesLater(11, async () => {
+      const app = await deleteAccount(req('DELETE', '/api/account', pat.idToken, { refreshToken: pat.refreshToken }))
       expect(app.status).toBe(403)
       expect(await app.json()).toMatchObject({ error: expect.any(String), reauth: true })
-      jar({ tt_id: pat.idToken })
+      jar({ tt_id: pat.idToken, tt_refresh: pat.refreshToken })
       const site = await deleteAccount(req('DELETE', '/api/account'))
       expect(site.status).toBe(403)
-      // Nothing was erased: the account still answers.
-      expect((await getProfile(req('GET', '/api/account/profile', pat.idToken))).status).toBe(200)
-      expect(revoke).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-    // Within the 10 minutes (a fresh sign-in), it goes ahead.
-    jar({})
-    await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))
+      expect(await site.json()).toMatchObject({ reauth: true })
+      jar({})
+      expect(await (await accountStatus(req('GET', '/api/account', pat.idToken))).json()).toEqual({ recentSignIn: false })
+    })
+    // Nothing was erased or revoked.
+    expect((await getProfileSettings(pat.id)).public).toBe(true)
+    expect(revoke).not.toHaveBeenCalled()
+    // Nine minutes on is still within the window.
+    await minutesLater(9, async () => {
+      expect(await (await accountStatus(req('GET', '/api/account', pat.idToken))).json()).toEqual({ recentSignIn: true })
+      await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))
+    })
   })
+
+  it('only an app\'s Bearer token can mint a web-code link, never the website cookie', async () => {
+    jar({ tt_id: pat.idToken })
+    expect((await mintWebCode(req('POST', '/att/api/auth/web-code', undefined, { next: '/account' }))).status).toBe(401)
+    jar({})
+    const ok = await mintWebCode(req('POST', '/att/api/auth/web-code', pat.idToken, { next: '/account' }))
+    expect(ok.status).toBe(200)
+  })
+
+  it('a session a web-code link made never counts as a recent sign-in', async () => {
+    const claims = JSON.parse(Buffer.from(pat.idToken.split('.')[1], 'base64url').toString())
+    await markLinkSession(pat.id, claims.origin_jti ?? claims.jti)
+    expect(await (await accountStatus(req('GET', '/api/account', pat.idToken))).json()).toEqual({ recentSignIn: false })
+    expect((await deleteAccount(req('DELETE', '/api/account', pat.idToken))).status).toBe(403)
+  })
+
+  it('the sign-in time is auth_time, never iat; a token without one, or not an ID token, is no sign-in', () => {
+    expect(signInFromClaims({ token_use: 'id', sub: 's', auth_time: 100, iat: 999, jti: 'j' })).toEqual({ sub: 's', signedInAt: 100, session: 'j' })
+    expect(signInFromClaims({ token_use: 'id', sub: 's', iat: 999, jti: 'j' })?.signedInAt).toBeNull()
+    expect(signInFromClaims({ token_use: 'access', sub: 's', auth_time: 100 })).toBeNull()
+    // origin_jti (the same across refreshes) wins over jti.
+    expect(signInFromClaims({ token_use: 'id', sub: 's', auth_time: 1, jti: 'j', origin_jti: 'o' })?.session).toBe('o')
+  })
+
 
   it('delete account twice (the first answer was lost) succeeds both times', async () => {
     await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))

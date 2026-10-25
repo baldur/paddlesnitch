@@ -31,7 +31,13 @@ function AuthForm() {
   }, [next, router])
 
   const [tab, setTab] = useState<'signin' | 'signup' | 'code'>('signin')
-  const [email, setEmail] = useState('')
+  // Prefilled when the account page sends someone back to sign in again.
+  const [email, setEmail] = useState(() => searchParams.get('email') ?? '')
+  // Why they're here, shown as a notice (not an error): kept apart from `error`,
+  // so switching tabs or a wrong password doesn't clear it.
+  const notice = searchParams.get('reason') === 'reauth_delete'
+    ? 'For your safety, deleting an account needs a recent sign-in. Sign in and you’ll go straight back to Delete account.'
+    : ''
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   // ToS acceptance is mandatory on signup; the checkbox lives just above
@@ -52,7 +58,6 @@ function AuthForm() {
     // sign-in. See src/app/att/api/auth/strava/callback/route.ts.
     if (e === 'strava_user_create_failed') return 'Couldn’t create an account from your Strava profile. Please sign up with your email instead.'
     if (e === 'strava_signin_failed') return 'Strava sign-in didn’t finish. Please try again.'
-    if (e === 'reauth_delete') return 'Sign in again to delete your account.'
     if (e === 'app_link_expired') return 'That link from the app has expired. Sign in here, or open it from the app again.'
     if (e === 'strava_not_configured') return 'Strava sign-in isn’t available right now.'
     return ''
@@ -183,6 +188,9 @@ function AuthForm() {
       <PageHeader title={tab === 'signup' ? 'Create account' : 'Sign in'} />
 
       <div className="flex flex-col gap-6">
+        {notice && (
+          <p role="status" className="rounded-control border border-border bg-surface p-3 text-sm text-fg">{notice}</p>
+        )}
         <Segmented
           label="Sign in or create an account"
           value={tab}
