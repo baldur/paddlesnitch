@@ -77,6 +77,28 @@ header button {
 #map .friend { fill: #38bdf8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
 #map .you { fill: #f43f5e; stroke: #fff; stroke-width: 1; }
 
+/* The close-up, top left: the water near you, ahead up, you a little below the
+   middle so there's more to see in front. */
+#near {
+  position: absolute;
+  top: 3.75rem;
+  left: 16px;
+  width: clamp(100px, 24vmin, 170px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.35);
+}
+/* The controls help runs across it for the first seconds of a race. */
+#hud.helping #near { visibility: hidden; }
+#near .water { fill: rgb(120 190 230 / 0.55); }
+#near line { stroke-width: 2; }
+#near .start { stroke: #4ade80; }
+#near .finish { stroke: #fff; }
+#near .rival { fill: #facc15; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
+#near .friend { fill: #38bdf8; stroke: rgb(0 0 0 / 0.6); stroke-width: 0.8; }
+#near .you { fill: #f43f5e; stroke: #fff; stroke-width: 1; }
+
 .hud-bottom {
   position: absolute;
   inset: auto 16px 16px;
@@ -167,6 +189,7 @@ header button {
   .hud-top { top: 2.6rem; font-size: 1.1rem; }
   #map { top: 2.4rem; width: 150px; }
   #map.tall { width: auto; height: 28vh; }
+  #near { top: 2.6rem; width: 100px; }
   #wash { top: 4.6rem; }
   .hud-bottom { inset: auto 16px 8px; }
   #balance { width: 110px; }

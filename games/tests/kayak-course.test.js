@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { practiceRiver, raceRiver, courseFromFile, locate, pointAt } from '../kayak/course.js';
-import { courseMap, headingDegrees } from '../kayak/map.js';
+import { courseMap, headingDegrees, closeUp, follow } from '../kayak/map.js';
 
 const fromFile = async (name) => courseFromFile(JSON.parse(await readFile(new URL(`../kayak/courses/${name}.json`, import.meta.url), 'utf8')));
 
@@ -67,4 +67,40 @@ test('the course map fits the course, long side along the course, north up, star
   // Heading 0 points up the map, a quarter turn right points right.
   assert.equal(headingDegrees(0), 0);
   assert.equal(headingDegrees(Math.PI / 2), 90);
+});
+
+// The close-up map follows you, ahead up, so the next bend shows the way you'll
+// meet it: the open water as a strip, and the start and finish across it.
+test('the close-up map: the water round you, ahead up the map', async () => {
+  const course = await fromFile('loop');
+  const near = closeUp(course);
+  // One small shape per stretch of river, each wound the same way, so where the
+  // river passes itself (the loop's way out and back) the water stays filled.
+  const quads = near.water.split('Z').filter(Boolean).map((q) => q.split(/[ML]/).filter(Boolean).map((xy) => xy.split(' ').map(Number)));
+  assert.ok(quads.length > 100);
+  for (const q of quads) {
+    assert.equal(q.length, 4);
+    const area = q.reduce((a, [x, y], i) => { const [nx, ny] = q[(i + 1) % 4]; return a + x * ny - nx * y; }, 0);
+    assert.ok(area >= 0, 'wound clockwise on screen');
+  }
+  // The start line goes across the water, bank to bank.
+  const at = course.samples[Math.round(course.start / 2)];
+  const [x1, z1, x2, z2] = near.start;
+  assert.ok(Math.abs(Math.hypot(x2 - x1, z2 - z1) - (at.left + at.right)) < 1);
+  // Seen from a boat, a point ahead of it is straight up the map, a point to
+  // its right is to the right.
+  const toScreen = (t, [x, z]) => {
+    const [, a, tx, tz] = t.match(/rotate\((\S+)\) translate\((\S+) (\S+)\)/).map(Number);
+    const [dx, dy] = [x + tx, z + tz];
+    const r = (a * Math.PI) / 180;
+    return [dx * Math.cos(r) - dy * Math.sin(r), dx * Math.sin(r) + dy * Math.cos(r)];
+  };
+  for (const heading of [0, 1, Math.PI / 2, 2.5, -2]) {
+    const boat = { x: 30, z: -40, heading };
+    const t = follow(boat);
+    const ahead = toScreen(t, [boat.x + Math.sin(heading) * 10, boat.z - Math.cos(heading) * 10]);
+    assert.ok(Math.abs(ahead[0]) < 0.01 && Math.abs(ahead[1] + 10) < 0.01, `heading ${heading}: ahead at ${ahead}`);
+    const right = toScreen(t, [boat.x + Math.cos(heading) * 10, boat.z + Math.sin(heading) * 10]);
+    assert.ok(Math.abs(right[0] - 10) < 0.01 && Math.abs(right[1]) < 0.01, `heading ${heading}: right at ${right}`);
+  }
 });
