@@ -217,7 +217,7 @@ export class Controls {
   // The gyroscope: how far the phone has been turned about the screen's upright
   // axis, as pushing one side of it away from you does.
   #twisted(rate, interval) {
-    if (rate?.beta == null || rate?.gamma == null) return;
+    if (rate?.alpha == null || rate?.beta == null) return;
     const now = performance.now();
     const t = this.#twist;
     // Browsers give the interval in ms (the spec) or, on older ones, seconds.
@@ -293,11 +293,14 @@ export { BUTTON };
 
 // How fast the phone is turning about the screen's upright axis (radians a
 // second; positive when its right side moves away from you), from the
-// gyroscope's rates about the phone's own axes (degrees a second: beta about
-// x, across the phone; gamma about y, along it) and the screen's angle.
-export function twistRate({ beta, gamma }, screenAngle = 0) {
+// gyroscope's rates (degrees a second) and the screen's angle. Browsers give
+// alpha about the phone's x axis (across it, held upright), beta about y (along
+// it) and gamma about z (out of the screen), as the spec now says; its older
+// wording (alpha about z) is wrong for every browser. The screen's upright axis
+// is the phone's y held upright, and its x in landscape.
+export function twistRate({ alpha, beta }, screenAngle = 0) {
   const a = (screenAngle * Math.PI) / 180;
-  return ((beta * Math.sin(a) + gamma * Math.cos(a)) * Math.PI) / 180;
+  return ((alpha * Math.sin(a) + beta * Math.cos(a)) * Math.PI) / 180;
 }
 
 // One reading: the twist so far, turned by `rate` for `dt` seconds, easing

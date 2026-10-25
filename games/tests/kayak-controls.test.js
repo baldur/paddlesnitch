@@ -22,12 +22,16 @@ test('shared input works in a browser without the Gamepad API', () => {
   assert.deepEqual([...input.poll()], []);
 });
 
-// The gyroscope's rates (degrees a second) for turning the phone about the
-// screen's upright axis, the right side moving away from you, at `deg` a second,
-// for a screen at `angle`: in landscape the screen's up is along the phone's x.
+// The gyroscope's rates (degrees a second) about the phone's own axes, as
+// browsers report them: alpha about x (across the phone held upright), beta
+// about y (along it), gamma about z (out of the screen).
+const gyro = (x, y, z) => ({ alpha: x, beta: y, gamma: z });
+// Turning the phone about the screen's upright axis, the right side moving away
+// from you, at `deg` a second, for a screen at `angle`: held upright the
+// screen's up is the phone's y; in landscape it is along the phone's x.
 const pushRight = (deg, angle) => {
   const a = (angle * Math.PI) / 180;
-  return { alpha: 0, beta: deg * Math.sin(a), gamma: deg * Math.cos(a) };
+  return gyro(deg * Math.sin(a), deg * Math.cos(a), 0);
 };
 const hold = (rate, seconds, angle = 90) => {
   let twist = 0;
@@ -36,7 +40,7 @@ const hold = (rate, seconds, angle = 90) => {
 };
 
 test('pushing the right side of the phone forward steers left, the left side right, in either landscape', () => {
-  for (const angle of [90, -90, 270]) {
+  for (const angle of [0, 90, -90, 270]) {
     const right = hold(pushRight(40, angle), 0.5, angle); // about 20 degrees
     assert.ok(twistRudder(right) < -0.9, `right side forward at ${angle}: ${twistRudder(right)}`);
     const left = hold(pushRight(-40, angle), 0.5, angle);
@@ -45,11 +49,13 @@ test('pushing the right side of the phone forward steers left, the left side rig
 });
 
 test('turning the phone like a wheel, or tipping it back, does not steer', () => {
-  const wheel = hold({ alpha: 60, beta: 0, gamma: 0 }, 0.5);
-  assert.equal(twistRudder(wheel), 0);
-  // Tipping the top back, in landscape: about the screen's across axis, which is the phone's long (y) axis.
-  const tip = hold({ alpha: 0, beta: 0, gamma: 60 }, 0.5);
-  assert.equal(twistRudder(tip), 0);
+  // A wheel turns about the screen's normal, the phone's z.
+  for (const angle of [0, 90, -90]) assert.equal(twistRudder(hold(gyro(0, 0, 60), 0.5, angle)), 0, `wheel at ${angle}`);
+  // Tipping the top back, in landscape: about the screen's across axis, the phone's long (y) axis.
+  assert.equal(twistRudder(hold(gyro(0, 60, 0), 0.5, 90)), 0);
+  assert.equal(twistRudder(hold(gyro(0, 60, 0), 0.5, -90)), 0);
+  // Held upright, tipping back is about the phone's x.
+  assert.equal(twistRudder(hold(gyro(60, 0, 0), 0.5, 0)), 0);
 });
 
 test('a small twist does nothing, more turns harder, and held still it eases back to straight', () => {
