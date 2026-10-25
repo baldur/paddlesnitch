@@ -12,6 +12,7 @@
 // the person adding a paddle (5-15 s), Strava's webhook (it wants ~2 s), or a
 // tracker inside its 20 s request timeout.
 import { nanoid } from 'nanoid'
+import { logAction } from '@paddlesnitch/core/observe'
 import { getWeatherAt } from '@paddlesnitch/timing/weather'
 import { getFlowAt } from '@paddlesnitch/timing/river-flow'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
@@ -40,7 +41,20 @@ export type AnalyseSaveResult = { session: AnalysisSession; duplicate: boolean; 
 // Analyse `track` for `userId`, save it as a paddle, and return the saved (or
 // pre-existing duplicate) session. Every enrichment step degrades on its own —
 // conditions, history/memory, and the LLM can each fail without failing the save.
-export async function analyseAndSave(
+export async function analyseAndSave(...args: Parameters<typeof analyseAndSaveOnce>): Promise<AnalyseSaveResult> {
+  // One `analyse` action line per paddle, whichever way it came in
+  // (docs/features/observability.md).
+  try {
+    const r = await analyseAndSaveOnce(...args)
+    logAction('analyse', 'ok', { reason: r.duplicate ? 'duplicate' : r.dropped ? 'dropped' : undefined })
+    return r
+  } catch (e) {
+    logAction('analyse', 'fail', { reason: 'threw' })
+    throw e
+  }
+}
+
+async function analyseAndSaveOnce(
   userId: string,
   track: TrackPoint[],
   source: AnalysisSource,
