@@ -15,9 +15,15 @@ android: …").
 
 - **One area, small job:** spawn that role as a helper (`subagent_type: "android"`, …)
   with a clear brief: the goal, what's ruled out, the files.
-- **One area, a long job, or one needing a device/emulator/simulator:** if the
-  role's window is running (`ListAgents`), message it by name with `SendMessage`.
-  If not, tell the owner to start it: `psa <role>`.
+- **One area, a long job, or one needing a device/emulator/simulator:** send it
+  to the role's window. The owner works in herdr (`HERDR_ENV=1`): check with
+  `herdr agent list`, message with `herdr agent prompt <role> "<brief>"`
+  (add `--wait` only if you need to wait for it), and read its output with
+  `herdr agent read <role>`. If the window isn't running, open it:
+  `bash <(git -C ~/Documents/Code/paddlesnitch.com show origin/main:scripts/agents/start.sh) --tab <role>`.
+  Outside herdr, use `ListAgents` + `SendMessage`, or ask the owner to run `psa <role>`.
+- Never answer a `blocked` agent's approval or question for it: tell the owner.
+  Don't close tabs or stop agents unless the owner asks.
 - **Crosses areas** (e.g. a new value from the motion core to both apps):
   do it yourself, end to end, in one PR. Use helpers for parts of it, but you
   own the result.

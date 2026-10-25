@@ -54,10 +54,29 @@ It runs `scripts/agents/start.sh` from the latest `main`, which:
 4. starts `claude --agent <role> -n <role>` in it.
 
 `--agent` gives the session its brief; `-n` names it, so `/resume` shows the
-role and other sessions can message it by that name. In a terminal manager
-(herder, tmux, …) make one window per role whose command is `psa <role>`.
-Reviewers can run as windows too (`psa tester`), but they're more useful as
-helpers.
+role and other sessions can message it by that name. Reviewers can run as
+windows too (`psa tester`), but they're more useful as helpers.
+
+### In herdr
+
+The owner runs everything in one herdr workspace, a tab per role.
+
+- `psa --tab <role>` opens the role in a new tab labelled with the role, in its
+  worktree, or switches to it if it's already running. You can also just ask
+  `lead` ("start android"), and it runs this for you.
+- `psa <role>` typed in an existing tab also labels the tab and names the
+  agent after the role.
+- Either way, herdr knows each agent by its role, so any session can check on
+  the others and message them:
+
+  ```sh
+  herdr agent list                                # who's running, idle/working/blocked
+  herdr agent prompt android "…" --wait           # send android a message
+  herdr agent read android                        # see what it last printed
+  ```
+
+  `lead` and `help` use these. A `blocked` agent is waiting for an approval or
+  a question for the owner: only the owner answers those.
 
 ## Rules every role follows
 
@@ -65,8 +84,8 @@ helpers.
    in your own worktree. Never edit, check out or stash in the main folder
    (`~/Documents/Code/paddlesnitch.com`): the owner works there.
 2. **Stay in your area.** Need a change in someone else's area? Message the
-   owner of that area if their window is running (`ListAgents` shows who is), or
-   ask `lead`. Don't patch it yourself.
+   owner of that area if their window is running (`herdr agent list` shows who
+   is, or `ListAgents` outside herdr), or ask `lead`. Don't patch it yourself.
 3. **One PR for a change that crosses areas,** done end to end by `lead`, so
    nothing is lost in a handoff.
 4. **Reviewers before a PR** (see `lead`'s routing rules). Say which agents you used.

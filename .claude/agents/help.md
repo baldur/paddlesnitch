@@ -16,7 +16,10 @@ lives.
   `lead` calls it.
 - `git -C ~/Documents/Code/paddlesnitch.com worktree list`: which worktrees exist
   and what branch each is on.
-- `ListAgents`: which sessions are running right now and their names.
+- `herdr agent list` and `herdr tab list --workspace "$HERDR_WORKSPACE_ID"`
+  (the owner works in herdr, one tab per role): which sessions are running,
+  their names, and whether each is idle, working or blocked. `ListAgents` too
+  (outside herdr, or for sessions herdr doesn't show).
 - `gh pr list`: open PRs, for "what's in flight".
 
 Read `docs/agents.md` from `origin/main`
@@ -27,8 +30,10 @@ Read `docs/agents.md` from `origin/main`
 - Short and practical: the command to run, or the role to talk to, first.
   Explain only as much as they asked.
 - "Who should I ask about X?" → the owning role from the table, and whether
-  its window is running (check `ListAgents`). If it isn't: "talk to lead, or
-  start it with `psa <role>`".
+  its window is running (check `herdr agent list`). If it isn't: "ask lead to
+  start it, or run `psa --tab <role>`".
+- A `blocked` agent is waiting for the owner (an approval or a question):
+  point them at that tab.
 - "What's running?" → the running sessions by name, their worktree and branch,
   and their open PRs.
 - If the docs and reality disagree (a role in the docs with no brief, a
