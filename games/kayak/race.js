@@ -303,7 +303,7 @@ export function stepRace(race, dt, input) {
       return;
     }
     // Until you're let go in a time trial, only your balance counts.
-    const intent = r.ai ? think(r, race) : released(race, r) ? { ...input } : { ...input, strokes: [], sprint: false };
+    const intent = r.ai ? think(r, race) : released(race, r) ? { ...input } : { ...input, strokes: [] };
     r.draft = washes[i].draft;
     const rock = washes[i].rock + (race.traffic ? trafficWash(race.traffic, r.boat) : 0);
     const result = step(r.boat, dt, { ...intent, draft: r.draft, rock });
@@ -446,12 +446,17 @@ function think(r, race) {
   // many times further along, and a gap closes that many times quicker.
   const k = course.speedup ?? 1;
   const togo = course.finish - loc.s;
-  // They sprint (spending stamina) for the line, off the start, and to catch a wash.
+  // They sprint (paddling quicker than their comfortable beat, which spends
+  // stamina) for the line, off the start, and to catch a wash: `f` of their
+  // comfortable beat, about 98 a minute for the line and 100 for the rest,
+  // which costs about what their old held sprints did. Cheaper sprints (96 a
+  // minute) had them chasing every wash across the river: more swans hit and
+  // more boats clipping them (measured over 12 and 16 races).
   let cadence = ai.cadence;
-  let sprint = false;
+  const sprint = (f) => Math.min(ai.cadence * 0.85, steadyBeat(boat) * f);
   if (r.finish !== null) cadence = race.time - r.finish < 8 ? 0.9 : 0; // paddle off, then drift
-  else if (togo < ai.kick * k && boat.stamina > 0) [cadence, sprint] = [cadence * 0.85, true];
-  else if (loc.s < race.start.line + 100 * k) [cadence, sprint] = [cadence * 0.93, boat.stamina > 0.5]; // for a place on a wash
+  else if (togo < ai.kick * k && boat.stamina > 0) cadence = sprint(0.92);
+  else if (loc.s < race.start.line + 100 * k) cadence = boat.stamina > 0.5 ? sprint(0.9) : cadence * 0.93; // for a place on a wash
 
   // Find the wash to sit on: the nearest boat just ahead, if it isn't too slow.
   let leader = null;
@@ -463,7 +468,7 @@ function think(r, race) {
   const kicking = togo < ai.kick * k && r.finish === null;
   // No wash to sit on, but one a little way up the river: sprint up to it.
   if (!leader && !kicking && r.finish === null && boat.stamina > 0.6 && racers.some((o) => o !== r && o.boat.swim <= 0
-    && o.loc.s - loc.s > 14 && o.loc.s - loc.s < 40 && Math.abs(o.loc.lateral - loc.lateral) < 8)) [cadence, sprint] = [cadence * 0.9, true];
+    && o.loc.s - loc.s > 14 && o.loc.s - loc.s < 40 && Math.abs(o.loc.lateral - loc.lateral) < 8)) cadence = sprint(0.9);
   const tooSlow = leader && leader.boat.speed < cruiseSpeed(ai.cadence, boat.power) - 0.25;
   let lateral = ai.lane;
   if (leader && !kicking && !tooSlow && r.finish === null && cadence) {
@@ -539,7 +544,7 @@ function think(r, race) {
 
   // Look nearer ahead to swerve round a swan, or to get out of a boat's way.
   const swerve = swans.some((b) => b.pass || b.s - loc.s < 15 * k);
-  return { strokes, sprint, rudder: steer(r, course, lateral, (swerve ? 7 : 18) * Math.sqrt(k)), lean };
+  return { strokes, rudder: steer(r, course, lateral, (swerve ? 7 : 18) * Math.sqrt(k)), lean };
 }
 
 // Rudder towards a point `ahead` metres down the river, `lateral` off the middle.

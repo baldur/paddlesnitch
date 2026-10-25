@@ -62,11 +62,10 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
-controls.bindSprint(els.sprint);
 
 let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'finished'
 let resumeTo = 'racing';
@@ -1146,6 +1145,7 @@ function showTilt(dt) {
     `beta ${num(d.beta)}  gamma ${num(d.gamma)}  accel ${d.accel ? d.accel.map(num).join(' ') : '-'}`,
     `turn ${deg(d.turn)}  level at ${deg(d.zero)}  -> lean ${controls.tiltLean?.toFixed(2) ?? 'none'}`,
     `tilting ${controls.tilting}  assist ${controls.assist}  roll ${deg(boat.roll)}`,
+    `twist ${deg(d.twist)}  -> rudder ${controls.twistRudder.toFixed(2)} (push the right side forward: left)`,
     `settings: full lean at ${deg(TILT_FULL)}, reflex ${TILT_REFLEX}, levels over ${TILT_SETTLE} s`,
   ].join('\n');
 }
@@ -1172,8 +1172,6 @@ function updateHud(dt) {
   els.rate.textContent = strokeRate(boat);
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
   els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
-  if (controls.sprintTouch && boat.stamina <= 0) controls.stopSprint();
-  els.sprint.setAttribute('aria-pressed', controls.sprintTouch);
   sprintHint(boat, dt);
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
@@ -1184,7 +1182,6 @@ function updateHud(dt) {
   hud.classList.toggle('assisted', controls.assist);
   // On phones, the controls in a line until a little way into the race.
   hud.classList.toggle('helping', phone.matches && (state === 'start' || (state === 'racing' && race.time < 6)));
-  showBeat(boat);
   els.rudder.style.transform = `translateX(${(controls.rudder * 39).toFixed(1)}px)`;
   const angle = Math.max(-1.1, Math.min(1.1, boat.roll / BOAT.capsize)) * 90;
   els.needle.style.transform = `rotate(${angle.toFixed(1)}deg)`;
@@ -1289,7 +1286,7 @@ function sprintHint(boat, dt) {
   const ahead = race.racers.some((r) => r !== race.player && r.finish === null
     && r.loc.s - loc.s > 14 * k && r.loc.s - loc.s < 40 * k && Math.abs(r.loc.lateral - loc.lateral) < 8);
   if (!ahead) return;
-  show(phone.matches ? 'Tap Sprint to catch their wash' : 'Hold Shift to sprint onto their wash', { small: true, hold: 2.5 });
+  show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 2.5 });
   hints = { left: hints.left - 1, wait: 30 };
 }
 
@@ -1326,23 +1323,6 @@ function showPlace(course, s, dt) {
     placeTimer = 3.5;
   }
   els.place.classList.toggle('on', placeTimer > 0.8);
-}
-
-// The beat cue: the side to stroke next lights up, and its ring closes in on
-// the moment your beat says it's due (a racing 86 a minute until you have one).
-function showBeat(boat) {
-  const beat = Math.min(0.85, Math.max(0.62, boat.beat ?? 0.7));
-  const since = boat.time - boat.lastStroke;
-  const nextSide = boat.lastSide === 'left' ? 'right' : 'left';
-  const waiting = since > beat * 1.8; // stopped: just show where to start
-  const left = Math.max(0, beat - since);
-  const window = beat * boat.hull.rhythmSlop;
-  for (const [cue, side] of [[els.cueL, 'left'], [els.cueR, 'right']]) {
-    const next = side === nextSide;
-    cue.classList.toggle('next', next);
-    cue.classList.toggle('now', next && !waiting && Math.abs(since - beat) < window);
-    if (next) cue.firstElementChild.style.transform = `scale(${waiting ? 1 : (1 + 1.4 * left / beat).toFixed(3)})`;
-  }
 }
 
 // --- main loop ---------------------------------------------------------------
