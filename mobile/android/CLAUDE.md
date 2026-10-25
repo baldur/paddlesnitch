@@ -50,3 +50,9 @@ time and isn't obvious from the code.
 - Which screen shows is `screenFor` in App.kt (`ScreenTest`). Terms that need
   accepting come before every signed-in screen, and are checked on every start
   (`api.terms()`), not only at sign-in.
+- Deleting the account needs a sign-in from the last 10 minutes. `DeleteAccount`
+  asks `accountStatus()` first. A stale sign-in, or a 403 with
+  `ApiFailure.reauth`, shows the "Sign in again" notice, never an error.
+  `onSignInAgain` in App.kt signs out and in again (Strava for placeholder
+  emails), then `deleteAfterSignIn` reopens Delete. Cancelling that sign-in
+  clears it.

@@ -68,9 +68,12 @@ fun SignInScreen(
     onSignedIn: (SignIn) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Signing in again for a reason (deleting the account): the email to fill in, and why. */
+    prefillEmail: String? = null,
+    notice: String? = null,
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
-    var email by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf(prefillEmail.orEmpty()) }
     var name by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var agreed by rememberSaveable { mutableStateOf(false) }
@@ -118,6 +121,8 @@ fun SignInScreen(
             Text(if (creating) "Create account" else "Sign in", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             TextButton(onClick = onCancel) { Text("Cancel") }
         }
+        // Why they're here, as a notice rather than an error.
+        if (notice != null) Text(notice, color = PsColor.muted)
         SecondaryTabRow(selectedTabIndex = if (creating) 1 else 0) {
             Tab(selected = !creating, onClick = { creating = false; error = null }, text = { Text("Sign in") })
             Tab(selected = creating, onClick = { creating = true; error = null }, text = { Text("Create account") })

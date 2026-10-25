@@ -85,6 +85,25 @@ class AccountApiTest {
         assertFalse(api.signedIn)
     }
 
+    @Test fun theRecentSignInCheck() = runTest {
+        answer(200, """{"recentSignIn":false}""")
+        assertFalse(api.accountStatus().recentSignIn)
+        assertEquals(Triple("GET", "/api/account", ""), sent())
+    }
+
+    @Test fun aDeleteRefusedForAnOldSignInSaysSoAndKeepsYouSignedIn() = runTest {
+        answer(403, """{"error":"For your safety, deleting your account needs a recent sign-in. Please sign in again.","reauth":true}""")
+        val e = runCatching { api.deleteAccount() }.exceptionOrNull() as ApiFailure
+        assertTrue(e.reauth)
+        assertEquals(403, e.status)
+        assertTrue(api.signedIn)
+    }
+
+    @Test fun otherRefusalsAreNotAskingForASignIn() = runTest {
+        answer(403, """{"error":"Not yours."}""")
+        assertFalse((runCatching { api.deleteAccount() }.exceptionOrNull() as ApiFailure).reauth)
+    }
+
     @Test fun aRefusedDeleteKeepsYouSignedIn() = runTest {
         answer(500, "")
         assertTrue(runCatching { api.deleteAccount() }.isFailure)
