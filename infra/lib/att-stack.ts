@@ -166,6 +166,13 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // One-time codes from a phone app's Strava sign-in (apps/web/src/lib/
+        // app-signin.ts). Spent within minutes; this sweeps the ones never used.
+        id: 'expire-app-signin-codes',
+        prefix: 'auth/app-codes/',
+        expiration: cdk.Duration.days(1),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Prepared "Download my data" files: fetched within minutes of being made.
         id: 'expire-account-exports',
         prefix: 'exports/',

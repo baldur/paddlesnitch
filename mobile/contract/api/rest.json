@@ -35,6 +35,15 @@
       500
     ]
   },
+  "POST /att/api/auth/strava/app-token": {
+    "input": "StravaAppToken",
+    "output": "SignIn",
+    "errors": [
+      400,
+      401,
+      500
+    ]
+  },
   "POST /att/api/auth/refresh": {
     "input": "RefreshToken",
     "output": "Refreshed",
