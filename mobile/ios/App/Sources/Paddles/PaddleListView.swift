@@ -210,12 +210,16 @@ struct PaddleRowView: View {
 }
 
 /// In place of a route for a paddle without GPS: the web's `NoGpsTag`.
+/// At least the thumbnail's 64 pt, and bigger when the text is: a fixed box
+/// cut the words to "N…" at the largest text sizes.
 struct NoGpsTag: View {
     var body: some View {
         Text("NO GPS")
             .font(.plexMono(.caption, weight: .medium))
             .foregroundStyle(Palette.muted)
-            .frame(width: 64, height: 64)
+            .multilineTextAlignment(.center)
+            .padding(6)
+            .frame(minWidth: 64, minHeight: 64)
             .background(Palette.bg)
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.borderStrong))
             .clipShape(RoundedRectangle(cornerRadius: Radius.control))
