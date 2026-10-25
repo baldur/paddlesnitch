@@ -37,11 +37,21 @@ class AppTestCase: XCTestCase {
     func fill(email: String, password: String) {
         let emailField = app.textFields["Email"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 10))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["Password"]
-        passwordField.tap()
-        passwordField.typeText(password)
+        type(email, into: emailField)
+        type(password, into: app.secureTextFields["Password"])
+    }
+
+    /// Taps the field and types once it has the keyboard. A tap while the
+    /// keyboard is still moving (or the Passwords bar is) can leave it
+    /// without focus, and typing then fails ("Neither element nor any
+    /// descendant has keyboard focus", seen on CI).
+    func type(_ text: String, into field: XCUIElement) {
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        for _ in 0..<5 {
+            field.tap()
+            if field.waitForKeyboardFocus(timeout: 2) { break }
+        }
+        field.typeText(text)
     }
 
     func element(_ identifier: String) -> XCUIElement {
@@ -201,5 +211,14 @@ class AppTestCase: XCTestCase {
     /// Tab items, wherever this iOS draws the tab bar.
     func tab(_ name: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
+    }
+}
+
+extension XCUIElement {
+    /// Whether this field has the keyboard, waiting up to `timeout`.
+    func waitForKeyboardFocus(timeout: TimeInterval) -> Bool {
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: focused, object: self)], timeout: timeout)
+            == .completed
     }
 }

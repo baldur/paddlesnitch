@@ -62,8 +62,7 @@ final class SignInTests: AppTestCase {
         let name = app.textFields["Display name"]
         XCTAssertTrue(name.waitForExistence(timeout: 10))
         fill(email: "new@example.com", password: "Secret123")
-        name.tap()
-        name.typeText("New")
+        type("New", into: name)
         app.buttons["sign-in-submit"].tap()
         XCTAssertTrue(text(containing: "You must agree to the Terms of Service").waitForExistence(timeout: 10))
         element("terms-checkbox").tap()

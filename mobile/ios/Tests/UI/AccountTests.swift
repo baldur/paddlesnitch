@@ -47,9 +47,7 @@ final class AccountTests: AppTestCase {
         let forGood = app.buttons["confirm-delete-account"].firstMatch
         XCTAssertTrue(forGood.waitForExistence(timeout: 10), "asks before deleting")
         XCTAssertFalse(forGood.isEnabled, "not until DELETE is typed, as on the website")
-        let field = app.textFields["confirm-delete-text"]
-        field.tap()
-        field.typeText("DELETE")
+        type("DELETE", into: app.textFields["confirm-delete-text"])
         XCTAssertTrue(forGood.isEnabled)
         forGood.tap()
         XCTAssertTrue(element("account-deleted").waitForExistence(timeout: 10), "You says it's gone")
