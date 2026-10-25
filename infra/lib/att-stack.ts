@@ -174,6 +174,12 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // The same, for opening website pages from the apps (one minute, one use).
+        id: 'expire-app-web-codes',
+        prefix: 'auth/web-codes/',
+        expiration: cdk.Duration.days(1),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Prepared "Download my data" files: fetched within minutes of being made.
         id: 'expire-account-exports',
         prefix: 'exports/',

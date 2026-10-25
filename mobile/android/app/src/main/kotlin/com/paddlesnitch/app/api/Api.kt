@@ -57,6 +57,17 @@ class Api(
         if (refresh != null) runCatching { post("/att/api/auth/logout", """{"refreshToken":${str(refresh)}}""") }
     }
 
+    /**
+     * A website page that needs the website's sign-in (`next` is a path like
+     * "/account#delete"), as a link that opens it already signed in: it carries
+     * a one-minute, one-use code the website swaps for its cookies.
+     */
+    suspend fun signedInPage(next: String): String {
+        val url = base.newBuilder().addPathSegments("att/api/auth/web-code").build()
+        val body = """{"next":${str(next)}}""".toRequestBody(jsonType)
+        return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(body).build() }, WebPage.serializer()).url
+    }
+
     suspend fun me(): Me = query("me", Me.serializer())
     suspend fun paddles(): PaddleList = query("paddles.list", PaddleList.serializer())
     suspend fun paddle(id: String): AnalysisSession = query("paddles.get", AnalysisSession.serializer(), """{"id":${str(id)}}""")

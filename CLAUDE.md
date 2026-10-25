@@ -226,6 +226,7 @@ auth/login            POST — Cognito InitiateAuth (USER_PASSWORD_AUTH), sets t
 auth/logout           POST — clears cookies, revokes refresh token (an app sends it as {refreshToken})
 auth/refresh          POST — the apps' silent refresh: {refreshToken} → {idToken}, 401 = sign in again. Sign-in routes answer an app (header x-paddlesnitch-app) with the tokens in the body instead of cookies (signedInResponse; see mobile/contract/README.md)
 auth/strava/app-token POST — a phone app swaps the one-time code from its Strava sign-in + its PKCE verifier for tokens (`lib/app-signin.ts`; see Sign-in flows)
+auth/web-code         POST (Bearer) {next} → {url} / GET ?code=&next= — opens a website page from a signed-in app already signed in: a one-minute, one-use code swapped for cookies (`lib/app-signin.ts`, C4 in docs/features/mobile-apps.md)
 auth/me               GET  — returns the user claims from the current ID token, or `null` (200) when signed out. Signed-out is a normal state for this probe (the auth cookie is httpOnly, so the client always calls it); it answers 200 with a null body rather than 401 so a logged-out page load doesn't log a console error. Callers treat a null body as "not signed in". The tRPC `me` procedure returns `{ user: AuthUser | null }` the same way.
 auth/magic-request    POST — 501 (magic link is disabled; email code + password are the sign-in methods)
 auth/magic-verify     GET  — redirects to /signin?error=magic_disabled

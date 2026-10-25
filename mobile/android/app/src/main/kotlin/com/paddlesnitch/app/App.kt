@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import com.paddlesnitch.app.account.AccountScreen
 import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
@@ -59,6 +60,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
     var signedIn by remember { mutableStateOf(api.signedIn) }
     var signingIn by rememberSaveable { mutableStateOf(false) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
+    var inAccount by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
@@ -76,7 +78,12 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
                     onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false }, modifier = m)
             }
-            signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onSignOut = { scope.launch { api.signOut(); signedIn = false } }, modifier = m)
+            signedIn && inAccount -> {
+                BackHandler { inAccount = false }
+                AccountScreen(api, onBack = { inAccount = false }, onSignedOut = { signedIn = false; inAccount = false },
+                    onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
+            }
+            signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
             else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
@@ -85,7 +92,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
 }
 
 @Composable
-private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, onSignOut: () -> Unit, modifier: Modifier) {
+private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -96,10 +103,10 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
             .onSuccess { list = it }
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
-    val signOut: @Composable () -> Unit = { TextButton(onClick = onSignOut) { Text("Sign out") } }
+    val account: @Composable () -> Unit = { TextButton(onClick = onAccount) { Text("Account") } }
     val current = list
     when {
-        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier, action = signOut, notice = if (needsTerms) ({
+        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier, action = account, notice = if (needsTerms) ({
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
                 TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
@@ -108,7 +115,7 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
         error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(error!!, color = PsColor.red)
             Button(onClick = { attempt++ }) { Text("Try again") }
-            signOut()
+            account()
         }
         else -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
