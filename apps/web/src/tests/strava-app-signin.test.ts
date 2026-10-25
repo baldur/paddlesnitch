@@ -14,12 +14,13 @@ vi.mock('@/lib/cognito', () => ({
   customAuthSignIn: vi.fn(),
   verifyIdToken: vi.fn(),
 }))
-vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getAuthUser: vi.fn(), setAuthCookies: vi.fn() }))
+vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getAuthUser: vi.fn(), getRequestUser: vi.fn(), setAuthCookies: vi.fn() }))
 
 import { GET as init } from '@/app/att/api/auth/strava/init/route'
 import { GET as callback } from '@/app/att/api/auth/strava/callback/route'
 import { POST as appToken } from '@/app/att/api/auth/strava/app-token/route'
-import { createAppCode, redeemAppCode } from '@/lib/app-signin'
+import { GET as webCode, POST as mintWebCode } from '@/app/att/api/auth/web-code/route'
+import { createAppCode, createWebCode, redeemAppCode, redeemWebCode } from '@/lib/app-signin'
 import { cookies } from 'next/headers'
 import * as strava from '@/lib/strava'
 import * as stravaStorage from '@/lib/strava-storage'
@@ -137,5 +138,44 @@ describe('POST /att/api/auth/strava/app-token', () => {
 
   it('answers 400 without a code', async () => {
     expect((await appToken(post({}))).status).toBe(400)
+  })
+})
+
+describe('website pages from a signed-in app (web codes)', () => {
+  const open = (code: string, next = '/account') => webCode(new NextRequest(`http://x/att/api/auth/web-code?code=${code}&next=${encodeURIComponent(next)}`))
+
+  it('gives the Bearer token’s person a link to the page with a code for them', async () => {
+    vi.mocked(auth.getRequestUser).mockResolvedValue({ id: 'sub-1', email: 'baldur@example.com', displayName: 'Baldur' })
+    const res = await mintWebCode(new NextRequest('http://x/att/api/auth/web-code', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ next: '/account#delete' }) }))
+    const url = new URL((await res.json()).url)
+    expect(url.pathname).toBe('/att/api/auth/web-code')
+    expect(url.searchParams.get('next')).toBe('/account#delete')
+    expect(await redeemWebCode(url.searchParams.get('code')!)).toEqual({ email: 'baldur@example.com', userId: 'sub-1' })
+  })
+
+  it('refuses to mint one without a signed-in person', async () => {
+    vi.mocked(auth.getRequestUser).mockResolvedValue(null)
+    expect((await mintWebCode(new NextRequest('http://x/att/api/auth/web-code', { method: 'POST' }))).status).toBe(401)
+  })
+
+  it('signs the website in and goes on to the page, once', async () => {
+    const code = await createWebCode('baldur@example.com', 'sub-1')
+    const res = await open(code)
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/account')
+    expect(auth.setAuthCookies).toHaveBeenCalledWith(expect.anything(), 'id-token', 'refresh-token')
+    const again = new URL((await open(code)).headers.get('location')!)
+    expect(again.pathname).toBe('/signin')
+    expect(again.searchParams.get('error')).toBe('app_link_expired')
+    expect(again.searchParams.get('next')).toBe('/account')
+  })
+
+  it('lasts a minute', async () => {
+    const code = await createWebCode('baldur@example.com', 'sub-1', Date.now() - 61_000)
+    expect(new URL((await open(code)).headers.get('location')!).pathname).toBe('/signin')
+  })
+
+  it('never sends anyone off the site', async () => {
+    const code = await createWebCode('baldur@example.com', 'sub-1')
+    expect(new URL((await open(code, '//evil.example/x')).headers.get('location')!).host).toBe('x')
   })
 })

@@ -16,7 +16,8 @@ type Pending = { email: string; userId: string; challenge: string; expiresAt: nu
 
 const b64url = (b: Buffer) => b.toString('base64url')
 const sha256 = (s: string) => createHash('sha256').update(s).digest()
-const keyFor = (code: string) => `auth/app-codes/${sha256(code).toString('hex')}.json`
+const keyFor = (code: string, prefix = 'auth/app-codes/') => `${prefix}${sha256(code).toString('hex')}.json`
+const isCode = (s: string) => /^[A-Za-z0-9_-]{43}$/.test(s)
 
 /** A PKCE S256 challenge: 32 bytes, base64url without padding. */
 export const isChallenge = (s: string | null | undefined): s is string => !!s && /^[A-Za-z0-9_-]{43}$/.test(s)
@@ -29,11 +30,35 @@ export async function createAppCode(email: string, userId: string, challenge: st
 
 /** The account a code was made for, once: the code is spent whether or not the verifier matches. */
 export async function redeemAppCode(code: string, verifier: string, now = Date.now()): Promise<{ email: string; userId: string } | null> {
-  if (!/^[A-Za-z0-9_-]{43}$/.test(code)) return null
+  if (!isCode(code)) return null
   const key = keyFor(code)
   const pending = await getJson<Pending>(key)
   if (!pending) return null
   await deleteObject(key)
   if (pending.expiresAt < now || b64url(sha256(verifier)) !== pending.challenge) return null
   return { email: pending.email, userId: pending.userId }
+}
+
+// Website pages from a signed-in app (C4): the app asks for a code with its
+// Bearer token and opens /att/api/auth/web-code?code=…&next=… in the in-app
+// browser, which turns it into the website's cookies. It sits in a URL, so it
+// lasts a minute and works once.
+const WEB_PREFIX = 'auth/web-codes/'
+const WEB_CODE_TTL_MS = 60_000
+
+type WebPending = { email: string; userId: string; expiresAt: number }
+
+export async function createWebCode(email: string, userId: string, now = Date.now()): Promise<string> {
+  const code = b64url(randomBytes(32))
+  await putJson(keyFor(code, WEB_PREFIX), { email, userId, expiresAt: now + WEB_CODE_TTL_MS } satisfies WebPending)
+  return code
+}
+
+export async function redeemWebCode(code: string, now = Date.now()): Promise<{ email: string; userId: string } | null> {
+  if (!isCode(code)) return null
+  const key = keyFor(code, WEB_PREFIX)
+  const pending = await getJson<WebPending>(key)
+  if (!pending) return null
+  await deleteObject(key)
+  return pending.expiresAt < now ? null : { email: pending.email, userId: pending.userId }
 }

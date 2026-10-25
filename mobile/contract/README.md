@@ -79,6 +79,11 @@ just accepted the Terms).
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
 
+**Website pages, signed in.** For a page only the website has (account
+details, delete account…), `POST /att/api/auth/web-code {next: "/account#delete"}`
+with the Bearer token answers `{url}`; open it in the in-app browser within a
+minute. It works once and signs the website in as the app's person.
+
 **Strava.** Make a PKCE verifier (32 random bytes, base64url without padding)
 and its challenge (`base64url(sha256(verifier))`, 43 characters). Open
 `/att/api/auth/strava/init?challenge=<challenge>` in the system's in-app
