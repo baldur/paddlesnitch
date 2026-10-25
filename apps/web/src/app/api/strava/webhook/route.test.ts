@@ -65,7 +65,7 @@ describe('POST events', () => {
     storage.getUserIdByAthleteId.mockResolvedValue('user-1')
     await post({ object_type: 'activity', aspect_type: 'create', object_id: 555, owner_id: 99 })
     await runAfters()
-    expect(importStravaActivity).toHaveBeenCalledWith('user-1', 555)
+    expect(importStravaActivity).toHaveBeenCalledWith('user-1', 555, undefined, { platform: 'server' })
   })
 
   it('does NOT import for an athlete we do not know', async () => {

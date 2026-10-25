@@ -3,8 +3,9 @@ import { signIn, verifyIdToken } from '@/lib/cognito'
 import { signedInResponse } from '@/lib/auth'
 import { hasAcceptedCurrent } from '@/lib/tos'
 import { emitMetric } from '@/lib/metrics'
+import { withAction } from '@/lib/action'
 
-export async function POST(req: NextRequest) {
+async function post(req: NextRequest) {
   const { email, password } = await req.json()
 
   if (!email || !password) {
@@ -30,3 +31,5 @@ export async function POST(req: NextRequest) {
     needsTerms: !(await hasAcceptedCurrent(user.id)),
   }, tokens.idToken, tokens.refreshToken)
 }
+
+export const POST = withAction('sign_in', post)

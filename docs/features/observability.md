@@ -51,7 +51,7 @@ What's missing:
    work.
 3. **Close to zero tolerance, without noise.** The bar is that a real error
    doesn't happen. So the alarms fire on the **first** server error, failed
-   journey or crash, and the daily digest lists every error of the day. That
+   action or crash, and the daily digest lists every error of the day. That
    only works if "error" means *we* broke something: callers asking for
    something wrong (a bad password, a trace that misses the start line, a 404)
    are logged but never counted, and expected conditions are logged as warnings,
@@ -79,7 +79,7 @@ apps ship and earns a fourth only then.
 | Dashboard | What's on it | Comes from |
 |---|---|---|
 | `paddlesnitch-health` | The one to open first (below) **plus the web view**: pageviews, campaigns, product events, browser errors | Replaces `paddlesnitch-app` (its web widgets move here) |
-| `paddlesnitch-api` | The deep dive on the server: errors per procedure and code, slowest procedures, journeys in detail (outcome × platform × app version), **everything that's on the performance dashboard today** (TTFB, server time, cold starts, CloudFront errors), and **email and sign-in** (SES sends, bounces, complaints, rejects; Cognito sign-ins and failures) | Replaces `paddlesnitch-performance` |
+| `paddlesnitch-api` | The deep dive on the server: errors per procedure and code, slowest procedures, actions in detail (outcome × platform × app version), **everything that's on the performance dashboard today** (TTFB, server time, cold starts, CloudFront errors), and **email and sign-in** (SES sends, bounces, complaints, rejects; Cognito sign-ins and failures) | Replaces `paddlesnitch-performance` |
 | `paddlesnitch-firmware` | Unchanged | Kept |
 | `paddlesnitch-mobile` (O3) | Android and iPhone **side by side**: app opens, crashes and crash rate per version, top crash signatures, version adoption, API errors seen by app clients | New when the Android app ships: the only paid one, $3/month |
 
@@ -94,9 +94,9 @@ It answers two questions: is anything broken right now, and are people using it?
 | Row | Widgets |
 |---|---|
 | Status | **Alarm status** widget (every alarm, green/red). A text widget with links to the deep dives and to the Play Console / App Store Connect crash pages |
-| Errors today | Server errors · failed journeys · app crashes · browser errors: each a single number for the selected range, which should read **0** |
+| Errors today | Server errors · failed actions · app crashes · browser errors: each a single number for the selected range, which should read **0** |
 | API | Requests and server-error count · p95 response time · errors by platform (Logs Insights) |
-| Key actions | Success rate per **journey**: sign in, upload a paddle, analyse, tracker sync, Strava import. One line per journey; a Logs Insights table breaks each down by platform |
+| Key actions | Success rate per **action**: sign in, upload a paddle, analyse, tracker sync, Strava import. One line per action; a Logs Insights table breaks each down by platform |
 | Use | Active sessions per day by platform · sign-ups and uploads per day |
 | Apps | Crash count by platform · share of users on the latest app version (once the apps report) |
 | Trackers | Devices active today · crashes today (summary; detail stays on the firmware dashboard) |
@@ -113,60 +113,76 @@ X-Paddlesnitch-Client: android/1.0.3 (42)
 X-Paddlesnitch-Client: ios/1.0.0 (7)
 ```
 
-`<platform>/<version> (<build>)`. One pure helper, `clientOf(req)`, reads it:
+`<platform>/<version> (<build>)`. One pure helper, `clientOf(headers)` in
+`@paddlesnitch/core/observe`, reads it:
 
 - header present and well-formed → `{ platform: 'android' | 'ios', version, build }`
 - no header → `{ platform: 'web' }`
 - anything else → `{ platform: 'other' }`, so a junk header can't add new values
 
-Server log lines and events then carry `platform` (and `appVersion` for apps)
-as plain properties.
+Server-side callers that aren't a person's client set it themselves: `tracker`
+(the tracker's own upload) and `server` (the Strava webhook's auto-import).
+Lines then carry `platform`, plus `appVersion` and `build` for apps.
 
-### API errors (server)
+**Every telemetry line is an EMF document** (like `emitMetric`): CloudWatch
+makes the metrics straight from it, with no metric filters, and Logs Insights
+sees every property. (The Lambda log format is plain text, so JSON metric
+filters wouldn't match the prefixed lines anyway.)
 
-The tRPC handler (`apps/web/src/app/api/trpc/[trpc]/route.ts`) gets an
-`onError` that writes **one structured log line per failed call**:
+### API calls (server)
 
-```json
-{"kind":"api_error","path":"paddles.get","code":"INTERNAL_SERVER_ERROR","platform":"android","appVersion":"1.0.3"}
-```
-
-- Codes that mean the server broke (`INTERNAL_SERVER_ERROR`, `TIMEOUT`) feed a
-  metric filter → metric `ApiServerErrors` → alarm.
-- Codes that mean the caller asked for something wrong (`UNAUTHORIZED`,
-  `NOT_FOUND`, `BAD_REQUEST`, …) are logged for the dashboard but never alarmed.
-  A burst of `UNAUTHORIZED` from one app version is a useful thing to see on a
-  dashboard, but it's not a 3 a.m. email.
-- No input, no user id, no error message text (it can contain user data).
-
-Total calls per procedure come from the same handler: one
-`{"kind":"api_call","path",…,"ms"}` line per call, so error *rates* can be
-worked out. If that turns out too noisy for the log bill, it gets sampled. See
-the open decisions.
-
-### Journeys (server)
-
-A journey is a user action we care about succeeding. At the end of each one,
-the server writes:
+A timing middleware on every tRPC procedure (`packages/api/src/trpc.ts`,
+outermost, so it also sees auth and input errors) writes **one line per HTTP
+call**:
 
 ```json
-{"kind":"journey","journey":"upload","outcome":"ok","platform":"web"}
+{"kind":"api_call","path":"paddles.get","type":"query","ok":false,"code":"INTERNAL_SERVER_ERROR","ms":412,"platform":"android","appVersion":"1.0.3","Calls":1,"ServerErrors":1}
 ```
 
-| Journey | Where it ends |
+- Namespace `Paddlesnitch/Api`, no dimensions: two metrics, `Calls` and
+  `ServerErrors`. `ServerErrors` is 1 only for codes that mean we broke
+  something (`INTERNAL_SERVER_ERROR`, `TIMEOUT`, `NOT_IMPLEMENTED`,
+  `BAD_GATEWAY`, `SERVICE_UNAVAILABLE`, `GATEWAY_TIMEOUT`).
+- Caller mistakes (`UNAUTHORIZED`, `NOT_FOUND`, `BAD_REQUEST`, …) are logged
+  for the dashboard but never counted. A burst of `UNAUTHORIZED` from one app
+  version is worth seeing on a dashboard, but it's not a 3 a.m. email.
+- Only HTTP calls are logged (the mount puts `client` on the context).
+  In-process calls (server rendering, tests) aren't.
+- No input, no user id, no error message text (it can contain user data). The
+  mount's `onError` keeps the stack trace in the log (`console.error`) for
+  server errors only.
+
+### Actions (server)
+
+An action is something a user does that we care about succeeding. Each attempt
+writes one line:
+
+```json
+{"kind":"action","Action":"upload","outcome":"rejected","reason":"http_422","platform":"web","Attempts":1,"Failures":0}
+```
+
+| Action | Where |
 |---|---|
-| `sign_in` | the password, email-code and Strava sign-in routes (the apps use the same routes and get tokens in the answer) |
-| `upload` | trial upload (REST) and paddle upload (REST) |
-| `analyse` | the analyse pipeline |
-| `device_sync` | tracker session upload, after the last part |
-| `strava_import` | on-demand import and webhook auto-import |
+| `sign_in` | `POST /att/api/auth/login` and `otp-verify` (wrapped), and the Strava sign-in callback (logs its own outcome). The apps use the same routes |
+| `upload` | trial upload and paddle upload (`/paddles/api/analyse`), wrapped |
+| `analyse` | `analyseAndSave`: every paddle analysed, whichever way it came in |
+| `device_sync` | the tracker's upload (`platform: tracker`) and the phone's Bluetooth relay, wrapped. One line per upload request (each part) |
+| `strava_import` | `importStravaActivity`: on-demand import (the client's platform) and webhook auto-import (`server`) |
 
-`outcome` is `ok` or `fail`. Failures we expect, like a trace that doesn't cross
-the start line or a wrong password, are `ok` from a system point of view, with
-a `reason` property. `fail` means *we* let the user down.
+`outcome` is one of:
+- **`ok`**: it worked (2xx, or a redirect).
+- **`rejected`**: the user's input was refused, which is expected and not
+  counted. Examples: a wrong password, a trace that misses the start line, a
+  Strava activity that isn't a paddle, turning Strava down. Wrapped routes:
+  any 4xx.
+- **`fail`**: we let the user down. Wrapped routes: any 5xx, or a throw.
 
-Metrics: one metric filter per journey and outcome (5 × 2 = 10 metrics, about
-$3/month), no platform dimension. The platform split is a Logs Insights widget.
+Routes are wrapped with `withAction(action, handler)` (`apps/web/src/lib/action.ts`),
+which reads the outcome from the status code.
+
+Metrics: namespace `Paddlesnitch/Actions`, `Attempts` and `Failures`, per
+`Action` and in total (5 × 2 + 2 = 12 metrics). The zero-tolerance alarm
+watches total `Failures`. The platform split is a Logs Insights widget.
 
 ### Client events (apps and browsers)
 
@@ -227,7 +243,7 @@ Two channels, both through the existing `paddlesnitch-alerts` topic:
 | Alarm | Fires when | Notes |
 |---|---|---|
 | `paddlesnitch-api-errors` | **≥ 1** server error (`INTERNAL_SERVER_ERROR`, `TIMEOUT`) in 15 min | New. Callers' mistakes (`UNAUTHORIZED`, `NOT_FOUND`, `BAD_REQUEST`, …) never count |
-| `paddlesnitch-journey-failed` | **≥ 1** `fail` on any journey in 15 min | New. One alarm over the sum of the five `fail` metrics; the email names the journey via the digest and the dashboard |
+| `paddlesnitch-action-failed` | **≥ 1** `fail` on any action in 15 min | New. One alarm over the sum of the five `fail` metrics; the email names the action via the digest and the dashboard |
 | `paddlesnitch-app-crashes` | **≥ 1** crash report in 15 min, either platform | New in O3 |
 | `paddlesnitch-browser-errors` | **≥ 1** `client_error` from **our own scripts** in 15 min | New. Errors from browser extensions and third-party scripts (another origin, or `Script error.` with no source) are dropped at capture, so they can't trip it |
 | `paddlesnitch-server-errors` (existing) | Tightened from > 5 an hour to **≥ 1** `ERROR` line in 15 min | Only after the clean-up below. It catches what the API alarm can't see (REST routes, background jobs) |
@@ -258,7 +274,7 @@ the last 24 hours and emails the result through the alerts topic:
 
 - server errors grouped by procedure/route and code, with counts and first/last
   time
-- failed journeys by journey, reason and platform
+- failed actions by action, reason and platform
 - app crash signatures by platform and version (O3)
 - browser errors by message and path
 - new app versions seen for the first time
@@ -268,7 +284,7 @@ the last 24 hours and emails the result through the alerts topic:
 ### Later: automatic rollback
 
 Once the error log has stayed clean for a while, a new deploy that's followed by
-an `api-errors` or `journey-failed` alarm within N minutes can roll itself back:
+an `api-errors` or `action-failed` alarm within N minutes can roll itself back:
 the server Lambda moves to an alias, and a deploy shifts the alias only after a
 quiet window. It's not part of this spec. It's what the zero bar makes possible.
 
@@ -289,7 +305,7 @@ quiet window. It's not part of this spec. It's what the zero bar makes possible.
 | Item | Roughly |
 |---|---|
 | Dashboards: three until the apps ship (all within the free three), then `-mobile` | $0, then $3/month |
-| ~16 new custom metrics (API calls/errors, 10 journey outcomes, app crashes ×2, app opens ×2) at $0.30 | $5/month |
+| ~18 new custom metrics (API calls + server errors, action attempts + failures per action and in total = 12, app crashes ×2, app opens ×2) at $0.30 | $5–6/month |
 | ~4 new alarms at $0.10 | under $1/month |
 | Digest Lambda (once a day) + its Logs Insights queries (scanning a day of logs) | pennies |
 | Extra log lines (one per API call) | well under $1/month at today's traffic |
@@ -301,7 +317,7 @@ About **$6/month** now, **$9/month** once the mobile dashboard exists.
 
 | Phase | What | Touches the apps? |
 |---|---|---|
-| **O1: server, now** | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · journey lines on the five journeys. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and journey alarms at ≥ 1 · tighten `server-errors` | No |
+| **O1: server, now** | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · action lines on the five actions. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and action alarms at ≥ 1 · tighten `server-errors` | No |
 | **O2: contract, ingest, digest** | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture + alarm · the daily digest | No. Only the contract is written for them |
 | **O3: apps adopt** | Android sends the header (one line in its HTTP client) and `app_open`, then crash reports · `paddlesnitch-mobile` + the crash alarm | Yes, when the app agent is ready |
 | **iOS** | Follows the same contract. Nothing new server-side | Yes, when the iPhone app is built |
@@ -315,12 +331,13 @@ work never touches the stack file.
 ## Tests
 
 - `clientOf()`: header parsing, unknown platforms → `other`, junk is bounded.
-- tRPC `onError`: a thrown procedure writes one `api_error` line with path,
-  code and platform, and no input or message. Expected codes aren't counted as
-  server errors.
-- Journeys: each of the five writes exactly one line per attempt, with the right
-  outcome (story-style, e.g. "a trace that misses the start line is an ok
-  journey with reason no_crossing").
+- API calls (`observability.test.ts`): a call over HTTP from the Android app
+  writes one `api_call` line with path, platform and version; a signed-out call
+  and bad input are logged but not counted as server errors; in-process calls
+  write nothing.
+- Actions: 2xx/3xx → ok, 4xx → rejected, 5xx or a throw → fail (rethrown);
+  every action route is wrapped (source check); a Strava import with no
+  connection is a rejected skip, not a failure.
 - `/att/api/track`: app header accepted without an Origin; no header and no
   Origin still dropped; new events allowlisted; crash-report props are bounded
   and stripped to the allowed fields.
