@@ -64,6 +64,17 @@ class ApiTest {
         assertEquals("""{"id":"pdl-river"}""", server.takeRequest().url.queryParameter("input"))
     }
 
+    @Test fun aPendingSummaryIsWrittenByATrpcMutation() = runTest {
+        tokens.save("id-1", "r-1")
+        trpc(File("../../contract/fixtures/api/paddles.get.json").readText())
+        api.writeSummary("pdl-river")
+        val req = server.takeRequest()
+        assertEquals("POST", req.method)
+        assertEquals("/api/trpc/paddles.writeSummary", req.url.encodedPath)
+        assertEquals("""{"id":"pdl-river"}""", req.body!!.utf8())
+        assertEquals("Bearer id-1", req.headers["Authorization"])
+    }
+
     @Test fun aWebsitePageOpensSignedInThroughALinkTheServerMakes() = runTest {
         tokens.save("id-1", "r-1")
         answer(200, """{"url":"https://paddlesnitch.com/att/api/auth/web-code?code=abc&next=%2Faccount"}""")

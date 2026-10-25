@@ -1,6 +1,7 @@
 package com.paddlesnitch.app.paddles
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -21,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -40,7 +44,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val cardShape = RoundedCornerShape(PsRadius.sheet)
-private fun Modifier.card() = background(PsColor.surface, cardShape).border(1.dp, PsColor.border, cardShape)
+internal fun Modifier.card() = background(PsColor.surface, cardShape).border(1.dp, PsColor.border, cardShape)
 
 /**
  * The Paddles list, as the website's /paddles draws it
@@ -54,9 +58,12 @@ fun PaddlesScreen(
     modifier: Modifier = Modifier,
     action: (@Composable () -> Unit)? = null,
     notice: (@Composable () -> Unit)? = null,
+    state: LazyListState = rememberLazyListState(),
+    onOpen: (id: String) -> Unit = {},
 ) {
     LazyColumn(
         modifier.fillMaxWidth(),
+        state = state,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -80,13 +87,13 @@ fun PaddlesScreen(
         } else {
             item { Logbook(list) }
             item { Eyebrow("All paddles") }
-            items(list.cards, key = { it.id }) { PaddleRow(it) }
+            items(list.cards, key = { it.id }) { PaddleRow(it, onOpen) }
         }
     }
 }
 
 @Composable
-private fun Eyebrow(text: String) =
+internal fun Eyebrow(text: String) =
     Text(text.uppercase(), fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = 1.sp, color = PsColor.muted)
 
 @Composable
@@ -146,9 +153,9 @@ private fun WeeksChart(weeks: List<Double>) {
 }
 
 @Composable
-private fun PaddleRow(p: PaddleCard) {
+private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit) {
     val noGps = p.noGps == true
-    Column(Modifier.card()) {
+    Column(Modifier.card().clip(cardShape).clickable(onClickLabel = "Open this paddle") { onOpen(p.id) }) {
         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (noGps) NoGpsTag() else RouteThumb(p.route)
             Column(Modifier.weight(1f)) {

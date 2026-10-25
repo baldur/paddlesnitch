@@ -86,3 +86,7 @@ fun sourceLabel(type: String): String? = mapOf("strava" to "Strava", "trial" to 
 /** "Also recorded by …" for the same outing from another source. */
 fun alsoRecordedBy(type: String): String =
     "Also recorded by " + (mapOf("strava" to "Strava", "trial" to "a time trial", "device" to "the tracker")[type] ?: "a file")
+
+/** About how many strokes: to the hundred from 1,000, with commas ("12,300"). */
+fun roundStrokes(n: Double): String =
+    "%,d".format(java.util.Locale.ROOT, if (n >= 1000) Math.round(n / 100) * 100 else Math.round(n))

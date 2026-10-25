@@ -72,6 +72,7 @@ import Testing
         case ("fmtClock", .number(let seconds)): return Format.clock(seconds)
         case ("split500", .number(let speed)): return Format.split500(speed: speed)
         case ("compassPoint", .number(let degrees)): return Format.compass(degrees: degrees)
+        case ("roundStrokes", .number(let count)): return Format.strokes(count)
         // The web takes a string and gives back anything it can't parse; the
         // app only ever formats a Date, so an unparseable input stays as is.
         case ("fmtWeekday", .string(let text)): return date(text).map(Format.weekday) ?? text

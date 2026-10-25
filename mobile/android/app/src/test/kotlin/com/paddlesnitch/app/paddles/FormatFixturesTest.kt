@@ -34,6 +34,7 @@ class FormatFixturesTest {
             val o = i.jsonObject
             noPaddleMessage(ApiJson.decodeFromJsonElement(NoPaddleReason.serializer(), o.getValue("reason")), o.getValue("hasMotion").jsonPrimitive.boolean)
         },
+        "roundStrokes" to { i -> roundStrokes(i.jsonPrimitive.double) },
     )
 
     @Test
