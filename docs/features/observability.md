@@ -1,9 +1,11 @@
 # Observability: dashboards and error notices
 
-📝 **Spec, for review: 2026-10-25.** Nothing built yet.
+📝 **Spec, decisions made 2026-10-25.** Nothing built yet. The owner's answers
+are under [Decisions](#decisions).
 
 One place to see whether paddlesnitch is healthy as a product, deeper views
-for each part, and alerts that only fire when something real is wrong. It works
+for each part, and **close to zero tolerance for errors**: every real error is
+seen, the same day at the latest. It works
 the same for the web site, the Android app, the iPhone app and the trackers,
 and it can be built now without getting in the way of the app work.
 
@@ -47,9 +49,14 @@ What's missing:
    most problems are in the shared API and would show up three times, and three
    copies drift apart. When iOS ships, it appears as a new line, with no new
    work.
-3. **Alert on rates with a minimum volume, never on single events.** For
-   example: "more than 5% of uploads failed in the last hour *and* at least 5
-   failed". At 3 a.m. one failure out of one is 100%, and that's not a page.
+3. **Close to zero tolerance, without noise.** The bar is that a real error
+   doesn't happen. So the alarms fire on the **first** server error, failed
+   journey or crash, and the daily digest lists every error of the day. That
+   only works if "error" means *we* broke something: callers asking for
+   something wrong (a bad password, a trace that misses the start line, a 404)
+   are logged but never counted, and expected conditions are logged as warnings,
+   not errors. Alarms fire per 15-minute window, so a burst is one email, not
+   fifty.
 4. **Pay for metrics only where an alarm needs them.** Breakdowns (by platform,
    app version, procedure) come from Logs Insights queries over structured log
    lines, which are free to store as part of the Lambda logs and cost pennies to
@@ -65,31 +72,35 @@ What's missing:
 
 ## The dashboards
 
-### 1. `paddlesnitch-health`: the one to open first (new)
+The first three custom dashboards are free, and each one after that costs
+**$3/month**. We already have three, so the layout stays at **three** until the
+apps ship and earns a fourth only then.
+
+| Dashboard | What's on it | Comes from |
+|---|---|---|
+| `paddlesnitch-health` | The one to open first (below) **plus the web view**: pageviews, campaigns, product events, browser errors | Replaces `paddlesnitch-app` (its web widgets move here) |
+| `paddlesnitch-api` | The deep dive on the server: errors per procedure and code, slowest procedures, journeys in detail (outcome × platform × app version), **everything that's on the performance dashboard today** (TTFB, server time, cold starts, CloudFront errors), and **email and sign-in** (SES sends, bounces, complaints, rejects; Cognito sign-ins and failures) | Replaces `paddlesnitch-performance` |
+| `paddlesnitch-firmware` | Unchanged | Kept |
+| `paddlesnitch-mobile` (O3) | Android and iPhone **side by side**: app opens, crashes and crash rate per version, top crash signatures, version adoption, API errors seen by app clients | New when the Android app ships: the only paid one, $3/month |
+
+Two dashboard names change (`-app` → `-health`, `-performance` → `-api`), so
+old bookmarks stop working. The `DashboardUrl` stack output points at
+`-health`.
+
+### `paddlesnitch-health`: the one to open first
 
 It answers two questions: is anything broken right now, and are people using it?
 
 | Row | Widgets |
 |---|---|
 | Status | **Alarm status** widget (every alarm, green/red). A text widget with links to the deep dives and to the Play Console / App Store Connect crash pages |
-| API | Requests and **server-error rate** (5xx), overall · p95 response time · errors by platform (Logs Insights) |
+| Errors today | Server errors · failed journeys · app crashes · browser errors: each a single number for the selected range, which should read **0** |
+| API | Requests and server-error count · p95 response time · errors by platform (Logs Insights) |
 | Key actions | Success rate per **journey**: sign in, upload a paddle, analyse, tracker sync, Strava import. One line per journey; a Logs Insights table breaks each down by platform |
 | Use | Active sessions per day by platform · sign-ups and uploads per day |
-| Apps | Crash rate by platform (once the apps report crashes) · share of users on the latest app version |
+| Apps | Crash count by platform · share of users on the latest app version (once the apps report) |
 | Trackers | Devices active today · crashes today (summary; detail stays on the firmware dashboard) |
-
-### 2. Deep dives: one per component, not per platform
-
-| Dashboard | What's on it | Status |
-|---|---|---|
-| `paddlesnitch-api` (new) | Errors per procedure and code · slowest procedures · journeys in detail (outcome × platform × app version) · Bearer vs cookie traffic | New, from the API error and journey log lines |
-| `paddlesnitch-mobile` (new) | Android and iPhone **side by side**: app opens, crashes and crash rate per version, top crash signatures, version adoption, API errors seen by app clients | New, after the apps send events (phase O3) |
-| `paddlesnitch-app` (existing) | Web: pageviews, campaigns, product events, plus **browser errors** (new widget) | Kept. The server Lambda widgets move to `-api` |
-| `paddlesnitch-performance` (existing) | Unchanged | Kept |
-| `paddlesnitch-firmware` (existing) | Unchanged | Kept |
-| `paddlesnitch-email` (new, small) | SES sends, bounces, complaints, rejects, suppression adds · Cognito sign-ins and sign-in failures | New |
-
-Existing dashboards keep their names, so bookmarks keep working.
+| Web | The widgets that are on `paddlesnitch-app` today: pageviews by path, events by type, campaigns |
 
 ## What gets recorded
 
@@ -198,24 +209,68 @@ those for free, and the health dashboard links to them.
 A small client hook (`window` `error` + `unhandledrejection`, and the
 `error.tsx` page) sends `client_error` with the error type, the first line of
 the message cut to 120 characters, and `publicPath(location.pathname)`. At
-most 5 per page load, and the same message once.
+most 5 per page load, and the same message once. Only errors from **our own
+scripts** are sent: an error whose source is another origin (browser
+extensions, third-party scripts), or the browser's opaque `Script error.`, is
+dropped at capture, so the zero-tolerance alarm only hears about our code.
 
 ## Alerts
 
-All alerts email through the existing `paddlesnitch-alerts` topic.
+Two channels, both through the existing `paddlesnitch-alerts` topic:
+
+- **Email now**: alarms, fired on the **first** error in a 15-minute window.
+  A burst is one email.
+- **Daily digest**: one email every morning listing *every* error of the
+  previous day, grouped. It's the long-term record, and the place to spot
+  something small that keeps coming back.
 
 | Alarm | Fires when | Notes |
 |---|---|---|
-| `paddlesnitch-api-errors` | Server errors > 2% of calls over 15 min **and** ≥ 5 errors | New. Metric math over `ApiServerErrors` / `ApiCalls` |
-| `paddlesnitch-journey-<name>` (×5) | `fail` > 10% over 1 h **and** ≥ 3 fails | New |
-| `paddlesnitch-app-crashes` | Crash reports > 1% of app opens over 24 h **and** ≥ 3 crashes, per platform | New in O3. The one metric with a `Platform` dimension (2 metrics) |
-| `paddlesnitch-browser-errors` | `client_error` > 50 in an hour | New. A spike detector, not a rate |
-| Existing eight | unchanged | `paddlesnitch-server-errors` stays as the catch-all |
+| `paddlesnitch-api-errors` | **≥ 1** server error (`INTERNAL_SERVER_ERROR`, `TIMEOUT`) in 15 min | New. Callers' mistakes (`UNAUTHORIZED`, `NOT_FOUND`, `BAD_REQUEST`, …) never count |
+| `paddlesnitch-journey-failed` | **≥ 1** `fail` on any journey in 15 min | New. One alarm over the sum of the five `fail` metrics; the email names the journey via the digest and the dashboard |
+| `paddlesnitch-app-crashes` | **≥ 1** crash report in 15 min, either platform | New in O3 |
+| `paddlesnitch-browser-errors` | **≥ 1** `client_error` from **our own scripts** in 15 min | New. Errors from browser extensions and third-party scripts (another origin, or `Script error.` with no source) are dropped at capture, so they can't trip it |
+| `paddlesnitch-server-errors` (existing) | Tightened from > 5 an hour to **≥ 1** `ERROR` line in 15 min | Only after the clean-up below. It catches what the API alarm can't see (REST routes, background jobs) |
+| The other seven existing alarms | unchanged | Crashes, throttles, near-timeouts, tracker boot failures and crashes, SES bounce and complaint rates |
 
-**Severity.** Everything above is "email now". A **daily digest** (one email:
-the top API errors, the top crash signatures, new app versions seen, yesterday's
-journeys) is phase O4. It needs a small scheduled Lambda that runs Logs Insights
-queries.
+### Getting to zero first (start of O1)
+
+Zero tolerance only works if today's logs are already quiet, otherwise the
+first week is an inbox of known noise and the alarms get ignored. Before the
+thresholds go to ≥ 1:
+
+1. Count and group every `ERROR` line and Lambda error over the last 30 days
+   (Logs Insights).
+2. For each group: **fix it** if it's a bug, or **log it as a warning**
+   (`console.warn`, which the alarm doesn't count) if it's an expected
+   condition. Example: a best-effort write that's allowed to fail.
+3. Only then switch the alarms to ≥ 1. Anything new after that is real by
+   definition.
+
+The rule from then on: **`console.error` means "we broke something and want to
+hear about it"**. Expected failures use `console.warn`. This goes in CLAUDE.md
+as a convention.
+
+### Daily digest (O2)
+
+A small scheduled Lambda (07:00 UK time) runs a few Logs Insights queries over
+the last 24 hours and emails the result through the alerts topic:
+
+- server errors grouped by procedure/route and code, with counts and first/last
+  time
+- failed journeys by journey, reason and platform
+- app crash signatures by platform and version (O3)
+- browser errors by message and path
+- new app versions seen for the first time
+- a one-line "all clear" when everything is zero, so silence never means "the
+  digest broke"
+
+### Later: automatic rollback
+
+Once the error log has stayed clean for a while, a new deploy that's followed by
+an `api-errors` or `journey-failed` alarm within N minutes can roll itself back:
+the server Lambda moves to an alias, and a deploy shifts the alias only after a
+quiet window. It's not part of this spec. It's what the zero bar makes possible.
 
 ## Privacy
 
@@ -233,27 +288,27 @@ queries.
 
 | Item | Roughly |
 |---|---|
-| ~16 new custom metrics (API calls/errors, 10 journey outcomes, app crashes ×2, app opens ×2) | $5/month |
-| ~10 new alarms (standard, $0.10 each) | $1/month |
-| 3 new dashboards (first 3 per account are free, we already have 3) | $9/month |
+| Dashboards: three until the apps ship (all within the free three), then `-mobile` | $0, then $3/month |
+| ~16 new custom metrics (API calls/errors, 10 journey outcomes, app crashes ×2, app opens ×2) at $0.30 | $5/month |
+| ~4 new alarms at $0.10 | under $1/month |
+| Digest Lambda (once a day) + its Logs Insights queries (scanning a day of logs) | pennies |
 | Extra log lines (one per API call) | well under $1/month at today's traffic |
-| Logs Insights queries behind dashboard widgets | pennies, while dashboards are opened by hand |
+| Logs Insights behind dashboard widgets | free when run from the console |
 
-About **$15/month** in total, mostly dashboards. To halve it, merge `-email`
-into `-api` and open `-mobile` only once the apps ship (see open decisions).
+About **$6/month** now, **$9/month** once the mobile dashboard exists.
 
 ## Phases
 
 | Phase | What | Touches the apps? |
 |---|---|---|
-| **O1: server, now** | Move the dashboards into `infra/lib/dashboards.ts` · `clientOf()` · tRPC `onError` + `api_call` lines · journey lines on the five journeys · `paddlesnitch-health` + `paddlesnitch-api` · API and journey alarms | No |
-| **O2: contract + ingest** | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture · `paddlesnitch-email` | No. Only the contract is written for them |
+| **O1: server, now** | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · journey lines on the five journeys. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and journey alarms at ≥ 1 · tighten `server-errors` | No |
+| **O2: contract, ingest, digest** | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture + alarm · the daily digest | No. Only the contract is written for them |
 | **O3: apps adopt** | Android sends the header (one line in its HTTP client) and `app_open`, then crash reports · `paddlesnitch-mobile` + the crash alarm | Yes, when the app agent is ready |
-| **O4: digest** | Daily digest email | No |
 | **iOS** | Follows the same contract. Nothing new server-side | Yes, when the iPhone app is built |
+| **Later** | Automatic rollback on a post-deploy alarm | No |
 
 O1 and O2 only change server and infra files. The one overlap risk is
-`infra/lib/att-stack.ts`, which other agents also edit. O1 starts by moving the
+`infra/lib/att-stack.ts`, which other agents also edit. O1(a) moves the
 dashboard code into its own file in a small PR of its own, so later dashboard
 work never touches the stack file.
 
@@ -269,25 +324,28 @@ work never touches the stack file.
 - `/att/api/track`: app header accepted without an Origin; no header and no
   Origin still dropped; new events allowlisted; crash-report props are bounded
   and stripped to the allowed fields.
-- Browser hook: at most 5 per load, deduplicated, path through `publicPath`.
+- Browser hook: at most 5 per load, deduplicated, path through `publicPath`,
+  extension and third-party errors dropped.
+- Digest: given canned Logs Insights results, it builds the expected email,
+  including the "all clear" when everything is zero.
 - Infra: dashboards and alarms asserted from the stack source, like
-  `ses-delivery-alerts.test.ts`. Each alarm has a minimum-volume condition.
+  `ses-delivery-alerts.test.ts`. Each error alarm fires at ≥ 1 per 15 minutes,
+  and expected caller errors are excluded from the server-error metric.
 - Contract: the telemetry fixtures validate against their schema in `pnpm test`.
 
-## Open decisions
+## Decisions
 
-1. **Per-call log lines (`api_call`).** Log every call (exact rates, more log
-   volume) or only errors, and work out rates from Lambda invocations (cheaper,
-   rougher, since one invocation isn't always one call)? *Recommendation:* every
-   call. Traffic is small, and it can be sampled later.
-2. **Dashboard count vs cost.** Six dashboards (about $9/month over the free
-   three), or fold `-email` into `-api` and add `-mobile` only when an app
-   ships? *Recommendation:* fold email in, and add mobile in O3. That's $6/month.
-3. **Crash reporting tool.** Our own next-launch report plus the free store
-   consoles (recommended), or Sentry / Firebase Crashlytics from the start
-   (symbolicated traces and native crashes, but a third-party SDK and a privacy
-   policy change)?
-4. **Alert thresholds.** The numbers above are starting guesses. Keep them and
-   tune them after two weeks of data?
-5. **Digest (O4).** Wanted at all, or is "email only when an alarm fires" enough
-   for now?
+Answered by the owner on 2026-10-25:
+
+1. **Log every API call** (`api_call`) until the volume becomes a problem, then
+   sample.
+2. **Fewest dashboards.** Stay at the three free ones by merging (`-app` →
+   `-health`, `-performance` + email → `-api`). Add `-mobile` only when an app
+   ships.
+3. **Our own crash reporting** (report on next launch) plus the free store
+   consoles. No Sentry or Crashlytics.
+4. **Close to zero tolerance**, kept for as long as possible: alarms on the
+   first error, after a clean-up that makes today's logs quiet, and the
+   `console.error` = "we broke something" convention.
+5. **Daily digest of errors** (O2). Later, once the slate stays clean, hook up
+   automatic rollback.
