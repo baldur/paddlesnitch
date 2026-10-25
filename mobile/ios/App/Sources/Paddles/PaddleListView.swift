@@ -13,25 +13,27 @@ struct PaddleListView: View {
     /// a notice, not a block).
     let needsTerms: Bool
     let signIn: () -> Void
+    /// The Terms sheet, for an account that must accept new ones.
+    let openTerms: () -> Void
     /// Adding a paddle from a GPS file, and what came of it.
     let adding: AddPaddleModel
     let openFile: (URL) -> Void
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
-    @State private var termsOpen = false
     @State private var loadedID: String?
     @State private var choosingFile = false
     @State private var openedID: String?
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
-        adding: AddPaddleModel, openFile: @escaping (URL) -> Void
+        openTerms: @escaping () -> Void, adding: AddPaddleModel, openFile: @escaping (URL) -> Void
     ) {
         self.source = source
         self.sourceID = sourceID
         self.isSample = isSample
         self.needsTerms = needsTerms
         self.signIn = signIn
+        self.openTerms = openTerms
         self.adding = adding
         self.openFile = openFile
         _model = State(initialValue: PaddleListModel(source: source))
@@ -83,9 +85,6 @@ struct PaddleListView: View {
             loadedID = sourceID
             await model.load()
         }
-        .sheet(isPresented: $termsOpen) {
-            SafariView(url: PaddlesnitchApp.baseURL.appending(path: "terms/accept")).ignoresSafeArea()
-        }
     }
 
     @ViewBuilder private var content: some View {
@@ -117,8 +116,8 @@ struct PaddleListView: View {
             }
             if needsTerms {
                 notice(
-                    "The Terms of Service have changed. Please accept them on paddlesnitch.com.", id: "terms-notice",
-                    action: "Open the Terms", run: { termsOpen = true })
+                    TermsView.changed, id: "terms-notice",
+                    action: "Read the Terms", run: openTerms)
             }
             if let logbook = model.logbook {
                 Section {

@@ -7,6 +7,7 @@ extension ModelsGenerator {
         var swiftName: String
         var input: String
         var output: String
+        var auth: String
         var errors: [Int]
     }
 
@@ -20,7 +21,8 @@ extension ModelsGenerator {
             let errors = entry.errors.map(String.init).joined(separator: ", ")
             out += "    public static let \(entry.swiftName) = Endpoint<\(entry.input), \(entry.output)>(\n"
             let path = literal(entry.path)
-            out += "        method: \(literal(entry.method)), path: \(path), errorStatuses: [\(errors)])\n"
+            out += "        method: \(literal(entry.method)), path: \(path), auth: .\(entry.auth),"
+            out += " errorStatuses: [\(errors)])\n"
         }
         out += "\n    /// Decodes `data` as the answer of the route `\"POST /path\"`. For the contract tests.\n"
         out += "    public static func decodeOutput(of route: String, from data: Data, using decoder: JSONDecoder)\n"
@@ -74,6 +76,10 @@ extension ModelsGenerator {
                 throw Failure.unsupported(type: "rest.json", reason: "\(route) is not \"METHOD /path\" with an output")
             }
             let input = spec["input"]?.string
+            let auth = spec["auth"]?.string ?? "public"
+            guard ["public", "user"].contains(auth) else {
+                throw Failure.unsupported(type: "rest.json", reason: "\(route) has auth \(auth)")
+            }
             for name in [input, output].compactMap({ $0 }) where !known.contains(name) {
                 throw Failure.unknownType(name)
             }
@@ -85,7 +91,7 @@ extension ModelsGenerator {
                 swiftName: endpointName(
                     method: parts[0], path: parts[1], pathIsShared: paths.filter { $0 == parts[1] }.count > 1),
                 input: input ?? "NoInput",
-                output: output, errors: errors)
+                output: output, auth: auth, errors: errors)
         }
     }
 }

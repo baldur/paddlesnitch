@@ -5,12 +5,7 @@ public struct Procedure<Input: Encodable & Sendable, Output: Decodable & Sendabl
         case query, mutation
     }
 
-    public enum Auth: Sendable {
-        /// Works signed out; signed in, the server answers for the user.
-        case `public`
-        /// Needs a signed-in user.
-        case user
-    }
+    public typealias Auth = CallAuth
 
     public let path: String
     public let kind: Kind
@@ -21,6 +16,14 @@ public struct Procedure<Input: Encodable & Sendable, Output: Decodable & Sendabl
         self.kind = kind
         self.auth = auth
     }
+}
+
+/// Who may call a procedure or route.
+public enum CallAuth: Sendable {
+    /// Works signed out; signed in, the server answers for the user.
+    case `public`
+    /// Needs a signed-in user.
+    case user
 }
 
 /// The input of a procedure that takes none.

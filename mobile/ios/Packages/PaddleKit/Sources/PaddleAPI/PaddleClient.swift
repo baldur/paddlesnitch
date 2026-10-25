@@ -73,8 +73,19 @@ public struct PaddleClient: Sendable {
 
     /// Calls a REST route (mobile/contract/api/rest.json). A refusal comes
     /// back as `PaddleAPIError.rejected` with the server's own words.
+    /// A `.user` route sends the Bearer token; if the server turns it down,
+    /// it gets a fresh one and tries once more.
     public func send<Input, Output>(_ endpoint: Endpoint<Input, Output>, _ input: Input) async throws -> Output {
-        let (data, response) = try await transport.send(try request(for: endpoint, input))
+        guard endpoint.auth == .user else {
+            let (data, response) = try await transport.send(try request(for: endpoint, input, token: nil))
+            return try decodeREST(Output.self, from: data, status: response.statusCode)
+        }
+        guard let token = try await idToken(false) else { throw PaddleAPIError.signedOut }
+        var (data, response) = try await transport.send(try request(for: endpoint, input, token: token))
+        if response.statusCode == 401, let fresh = try await idToken(true), fresh != token {
+            (data, response) = try await transport.send(try request(for: endpoint, input, token: fresh))
+        }
+        if response.statusCode == 401 { throw PaddleAPIError.signedOut }
         return try decodeREST(Output.self, from: data, status: response.statusCode)
     }
 
@@ -94,13 +105,28 @@ public struct PaddleClient: Sendable {
         throw PaddleAPIError.badResponse(status: status)
     }
 
-    func request<Input, Output>(for endpoint: Endpoint<Input, Output>, _ input: Input) throws -> URLRequest {
-        var request = URLRequest(url: baseURL.appending(path: String(endpoint.path.drop { $0 == "/" })))
+    /// A GET's input goes in the query string, one item per field
+    /// (`?check=pat`); any other method's goes as a JSON body.
+    func request<Input, Output>(for endpoint: Endpoint<Input, Output>, _ input: Input, token: String?) throws
+        -> URLRequest
+    {
+        var url = baseURL.appending(path: String(endpoint.path.drop { $0 == "/" }))
+        let hasInput = !(input is NoInput)
+        if hasInput && endpoint.method == "GET" {
+            let object = try JSONSerialization.jsonObject(with: try JSONEncoder.paddlesnitch.encode(input))
+            let fields = (object as? [String: Any] ?? [:]).sorted { $0.key < $1.key }
+            let query = fields.map { "\($0.key)=\(Self.percentEncoded("\($0.value)"))" }.joined(separator: "&")
+            url = URL(string: url.absoluteString + "?" + query) ?? url
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = endpoint.method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(app, forHTTPHeaderField: "x-paddlesnitch-app")
-        if !(input is NoInput) { request.httpBody = try JSONEncoder.paddlesnitch.encode(input) }
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if hasInput && endpoint.method != "GET" {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder.paddlesnitch.encode(input)
+        }
         return request
     }
 

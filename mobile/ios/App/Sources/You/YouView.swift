@@ -3,8 +3,8 @@ import DesignSystem
 import SafariServices
 import SwiftUI
 
-/// The account tab. Account pages open the website for now (mobile-apps.md:
-/// account, privacy and terms stay web pages); signed-in link-outs come with C4.
+/// The account tab. The account itself is native (AccountView); the public
+/// profile and the reading pages (privacy, terms) open the website.
 struct YouView: View {
     let account: AccountModel
     let signIn: () -> Void
@@ -16,13 +16,10 @@ struct YouView: View {
         var id: String { path }
     }
 
-    static let account = [
-        WebPage(title: "Your profile", path: "/profile/me"),
-        WebPage(title: "Account settings", path: "/profile/me/settings"),
-    ]
+    static let account = [WebPage(title: "Your profile", path: "/profile/me")]
     static let about = [
         WebPage(title: "Privacy policy", path: "/privacy"),
-        WebPage(title: "Terms of service", path: "/att/tos"),
+        WebPage(title: "Terms of Service", path: "/terms"),
     ]
 
     @State private var open: WebPage?
@@ -39,12 +36,30 @@ struct YouView: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("signed-in-as")
                         .listRowBackground(Palette.surface)
+                        NavigationLink {
+                            AccountView(account: account)
+                        } label: {
+                            Text("Account").font(.plexSans(.body)).foregroundStyle(Palette.fg)
+                        }
+                        .listRowBackground(Palette.surface)
                         rows(Self.account)
                         Button("Sign out", role: .destructive) { confirmingSignOut = true }
                             .font(.plexSans(.body))
                             .foregroundStyle(Palette.red)
                             .listRowBackground(Palette.surface)
                     } else {
+                        if account.accountDeleted {
+                            Text("Your account and everything in it are deleted.")
+                                .font(.plexSans(.body))
+                                .foregroundStyle(Palette.fg)
+                                .accessibilityIdentifier("account-deleted")
+                                .listRowBackground(Palette.surface)
+                                .onAppear {
+                                    AccessibilityNotification.Announcement(
+                                        "Your account and everything in it are deleted."
+                                    ).post()
+                                }
+                        }
                         Button(action: signIn) {
                             Text("Sign in").font(.plexSans(.body, weight: .semibold)).foregroundStyle(
                                 Palette.primaryText)

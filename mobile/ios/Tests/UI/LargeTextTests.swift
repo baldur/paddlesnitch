@@ -9,13 +9,16 @@ final class LargeTextTests: AppTestCase {
     }
 
     /// Scrolls the screen from top to bottom, checking for clipped text at
-    /// each step.
-    private func checkWholeScreen() throws {
+    /// each step. With `last`, it goes on until that element is on screen: a
+    /// long screen at this size can need more than twelve swipes.
+    private func checkWholeScreen(last: XCUIElement? = nil) throws {
         try audit(.textClipped)
-        for _ in 0..<12 {
+        for step in 0..<30 {
+            if let last { if last.exists && isReadable(last) { return } } else if step == 12 { return }
             app.swipeUp()
             try audit(.textClipped)
         }
+        if let last { XCTFail("never reached \(last)") }
     }
 
     func testTheListAtTheLargestTextSize() throws {
@@ -36,6 +39,16 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(app.buttons["Privacy policy"].waitForExistence(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(text(containing: "Version").exists)
+    }
+
+    func testAccountAtTheLargestTextSize() throws {
+        signInAndWait()
+        tab("You").tap()
+        let row = app.buttons["Account"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(element("account-terms").waitForExistence(timeout: 10))
+        try checkWholeScreen(last: app.buttons["Delete my account"])
     }
 
     func testSignInAtTheLargestTextSize() throws {
