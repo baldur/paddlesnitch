@@ -181,5 +181,30 @@
     "errors": [
       401
     ]
+  },
+  "GET /api/account/devices": {
+    "auth": "user",
+    "input": null,
+    "output": "TrackerList",
+    "errors": [
+      401
+    ]
+  },
+  "DELETE /api/account/devices": {
+    "auth": "user",
+    "input": "TrackerId",
+    "output": "Ok",
+    "errors": [
+      401,
+      404
+    ]
+  },
+  "GET /api/account/devices/sessions": {
+    "auth": "user",
+    "input": null,
+    "output": "RecordingList",
+    "errors": [
+      401
+    ]
   }
 }

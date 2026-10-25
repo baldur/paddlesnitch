@@ -197,6 +197,42 @@ export const Contact = named('Contact', z.object({
 }))
 const ContactEmail = named('ContactEmail', z.object({ email: z.string() }))
 
+// Trackers: the list on Devices, every recording they uploaded, and remove.
+/** One of the person's trackers. `targetVersion` is what it should run (a beta tracker may be ahead of `stableVersion`). */
+export const Tracker = named('Tracker', z.object({
+  deviceId: z.string(),
+  name: z.string(),
+  model: z.string(),
+  firmware: z.string(),
+  linkedAt: timestamp(),
+  lastSeenAt: timestamp(),
+  beta: z.literal(true).optional(),
+  targetVersion: z.string().nullable(),
+  // Its last start-up or hourly report; `crashTask` when that start followed a crash.
+  health: z.object({
+    at: timestamp(),
+    kind: z.enum(['boot', 'heartbeat']),
+    resetReason: z.string().optional(),
+    crashTask: z.string().optional(),
+  }).optional(),
+  lastCrash: z.object({ at: timestamp(), task: z.string() }).optional(),
+}))
+export const TrackerList = named('TrackerList', z.object({ devices: z.array(Tracker), stableVersion: z.string().nullable() }))
+const TrackerId = named('TrackerId', z.object({ deviceId: z.string() }))
+/** A recording a tracker uploaded (it also becomes a paddle in Paddles). `motion` once its motion file is in. */
+export const Recording = named('Recording', z.object({
+  sessionId: z.string(),
+  deviceId: z.string(),
+  filename: z.string(),
+  uploadedAt: timestamp(),
+  startedAt: timestamp().optional(),
+  endedAt: timestamp().optional(),
+  distanceMetres: z.number().optional(),
+  points: z.int(),
+  motion: z.object({ uploadedAt: timestamp(), bytes: z.int(), rows: z.int() }).optional(),
+}))
+export const RecordingList = named('RecordingList', z.object({ sessions: z.array(Recording) }))
+
 /**
  * `input: null` is a multipart upload (`file`) on POST and nothing on GET or
  * DELETE; a GET's input goes in the query string. `auth: 'user'` needs
@@ -231,6 +267,9 @@ export const restRoutes = {
   'GET /api/account/contact': { auth: 'user', input: null, output: Contact, errors: [401] },
   'POST /api/account/contact': { auth: 'user', input: ContactEmail, output: Contact, errors: [400, 401] },
   'DELETE /api/account/contact': { auth: 'user', input: null, output: Ok, errors: [401] },
+  'GET /api/account/devices': { auth: 'user', input: null, output: TrackerList, errors: [401] },
+  'DELETE /api/account/devices': { auth: 'user', input: TrackerId, output: Ok, errors: [401, 404] },
+  'GET /api/account/devices/sessions': { auth: 'user', input: null, output: RecordingList, errors: [401] },
 } satisfies Record<string, Rest>
 
 type Procedure = { kind: 'query' | 'mutation'; auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodType }

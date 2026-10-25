@@ -11,7 +11,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
 import { contractProcedures, restRoutes, Me, PaddleList, AnalysisSession, SignIn, Refreshed, ApiError,
-  TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact,
+  TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact, TrackerList, RecordingList,
 } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
@@ -153,6 +153,7 @@ describe('fixtures/api', () => {
     // Account (REST, C5): `account.<route>[-<what>][.<case>]`; `account.error` is the shared refusal.
     'account.tos': TosStatus, 'account.tos-accepted': TosAccepted, 'account.export': DownloadLink,
     'account.profile': ProfileSettings, 'account.handle-check': HandleAvailability, 'account.contact': Contact,
+    'account.devices': TrackerList, 'account.devices-sessions': RecordingList,
     'account.error': ApiError,
   }
   const names = readdirSync(path.join(CONTRACT, 'fixtures/api')).filter(f => !f.includes('unknown-values'))

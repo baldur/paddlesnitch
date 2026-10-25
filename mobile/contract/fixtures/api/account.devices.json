@@ -1,0 +1,27 @@
+{
+  "devices": [
+    {
+      "deviceId": "C0FFEE01",
+      "name": "Tracker C0FFEE01",
+      "model": "tbeam-s3-supreme",
+      "firmware": "0.19.3",
+      "linkedAt": "2026-09-12T08:30:00.000Z",
+      "lastSeenAt": "2026-10-25T07:02:11.000Z",
+      "beta": true,
+      "targetVersion": "0.19.3",
+      "health": { "at": "2026-10-25T07:02:11.000Z", "kind": "heartbeat", "resetReason": "poweron" }
+    },
+    {
+      "deviceId": "C0FFEE02",
+      "name": "Tracker C0FFEE02",
+      "model": "tbeam-s3-supreme",
+      "firmware": "0.18.1",
+      "linkedAt": "2026-08-01T10:00:00.000Z",
+      "lastSeenAt": "2026-10-20T18:44:00.000Z",
+      "targetVersion": "0.18.2",
+      "health": { "at": "2026-10-20T18:44:00.000Z", "kind": "boot", "resetReason": "panic", "crashTask": "uplink" },
+      "lastCrash": { "at": "2026-10-20T18:43:58.000Z", "task": "uplink" }
+    }
+  ],
+  "stableVersion": "0.18.2"
+}

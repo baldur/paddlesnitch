@@ -19,7 +19,7 @@ export async function deviceList(userId: string) {
     return {
       deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware,
       linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt,
-      ...(beta.has(d.deviceId) ? { beta: true } : {}),
+      ...(beta.has(d.deviceId) ? { beta: true as const } : {}),
       targetVersion: target?.version ?? null,
       ...(h ? { health: { at: h.at, kind: h.kind, resetReason: h.resetReason, crashTask: h.crash?.task } } : {}),
       ...(crash?.crash ? { lastCrash: { at: crash.at, task: crash.crash.task } } : {}),
