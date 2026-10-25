@@ -228,7 +228,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag; While Using + background session; sidecar → `deriveCadence` | The iPhone can be a tracker; whether stroke rate is possible | **Yes** |
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
-| **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
+| **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
 | **P2. Record** | Recorder → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |

@@ -23,8 +23,14 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         set { lock.withLock { _refusesRefresh = newValue } }
     }
 
-    public init(fixtures: URL) {
+    private let summariesPending: Bool
+    private var written: Set<String> = []
+
+    /// `summariesPending`: answer every paddle as saved before its summary
+    /// was written (`insightPending`), until `paddles.writeSummary` writes it.
+    public init(fixtures: URL, summariesPending: Bool = false) {
         self.fixtures = fixtures
+        self.summariesPending = summariesPending
     }
 
     public var requests: [URLRequest] { lock.withLock { _requests } }
@@ -88,21 +94,32 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             return signedIn ? (200, trpc(try fixture("paddles.list"))) : Self.unauthorized
         case "/api/trpc/paddles.get":
             guard signedIn else { return Self.unauthorized }
-            return try paddle(id: try input(ById.self, from: request).id)
+            let id = try input(ById.self, from: request).id
+            let pending = summariesPending && lock.withLock { !written.contains(id) }
+            return try paddle(id: id, pending: pending)
+        case "/api/trpc/paddles.writeSummary":
+            guard signedIn else { return Self.unauthorized }
+            let id = try JSONDecoder().decode(ById.self, from: request.httpBody ?? Data()).id
+            lock.withLock { _ = written.insert(id) }
+            let summary = try fixture("paddles.writeSummary")
+            let paddle = try JSONDecoder.paddlesnitch.decode(AnalysisSession.self, from: summary)
+            return paddle.id == id ? (200, trpc(summary)) : try self.paddle(id: id, pending: false)
         default:
             return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
         }
     }
 
     /// The first `paddles.get*.json` with this id, `paddles.get.json` first.
-    private func paddle(id: String) throws -> (Int, Data) {
+    private func paddle(id: String, pending: Bool) throws -> (Int, Data) {
         let names = try FileManager.default.contentsOfDirectory(atPath: fixtures.path)
             .filter { $0.hasPrefix("paddles.get") && $0.hasSuffix(".json") }.sorted()
         for name in names {
             let data = try Data(contentsOf: fixtures.appending(path: name))
-            if (try? JSONDecoder.paddlesnitch.decode(AnalysisSession.self, from: data))?.id == id {
-                return (200, trpc(data))
-            }
+            guard var paddle = try? JSONDecoder.paddlesnitch.decode(AnalysisSession.self, from: data), paddle.id == id
+            else { continue }
+            guard pending else { return (200, trpc(data)) }
+            paddle.insightPending = true
+            return (200, trpc(try JSONEncoder.paddlesnitch.encode(paddle)))
         }
         return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
     }

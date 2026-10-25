@@ -25,7 +25,8 @@ struct PaddlesnitchApp: App {
 
     /// The real server, or with `-SampleServer` (UI tests) one played from the
     /// contract's fixtures, with its own Keychain entry so the two never mix.
-    /// `-ResetAccount` starts signed out.
+    /// `-ResetAccount` starts signed out; `-PendingSummaries` opens paddles
+    /// whose summaries are still to be written.
     private static func makeAccount(fixtures: URL) -> AccountModel {
         let arguments = ProcessInfo.processInfo.arguments
         let sample = arguments.contains("-SampleServer")
@@ -35,7 +36,10 @@ struct PaddlesnitchApp: App {
             tokens.clear()
             UserDefaults.standard.removeObject(forKey: profile.key)
         }
-        let transport: any HTTPTransport = sample ? SampleServer(fixtures: fixtures) : URLSession.shared
+        let transport: any HTTPTransport =
+            sample
+            ? SampleServer(fixtures: fixtures, summariesPending: arguments.contains("-PendingSummaries"))
+            : URLSession.shared
         return AccountModel(
             baseURL: baseURL, transport: transport, app: "ios/\(YouView.shortVersion)", tokens: tokens,
             profile: profile)

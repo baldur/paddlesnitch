@@ -6,6 +6,9 @@ import PaddleAPI
 public protocol PaddlesSource: Sendable {
     func list() async throws -> PaddleList
     func paddle(id: String) async throws -> AnalysisSession
+    /// Writes the coach summary of a paddle saved without one
+    /// (`insightPending`), as the website does when the paddle is opened.
+    func writeSummary(id: String) async throws -> AnalysisSession
 }
 
 /// The signed-in user's paddles, from the server.
@@ -22,6 +25,10 @@ public struct ServerPaddles: PaddlesSource {
 
     public func paddle(id: String) async throws -> AnalysisSession {
         try await client.call(Procedures.paddlesGet, ById(id: id))
+    }
+
+    public func writeSummary(id: String) async throws -> AnalysisSession {
+        try await client.call(Procedures.paddlesWriteSummary, ById(id: id))
     }
 }
 
@@ -51,5 +58,10 @@ public struct SamplePaddles: PaddlesSource {
             }
         }
         throw PaddleAPIError.notFound
+    }
+
+    /// The samples all have their summaries.
+    public func writeSummary(id: String) async throws -> AnalysisSession {
+        try await paddle(id: id)
     }
 }

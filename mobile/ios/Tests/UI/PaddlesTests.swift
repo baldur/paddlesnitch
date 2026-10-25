@@ -70,3 +70,15 @@ final class PaddlesTests: AppTestCase {
         try audit()
     }
 }
+
+/// A paddle saved before its summary was written, as a new upload is.
+final class PendingSummaryTests: AppTestCase {
+    override var launchArguments: [String] { ["-PendingSummaries"] }
+
+    func testOpeningAPaddleWritesItsSummary() {
+        signInAndWait()
+        open("pdl-river")
+        XCTAssertTrue(text(containing: "A short, sharp three minutes").waitForExistence(timeout: 10))
+        XCTAssertFalse(text(containing: "Writing your summary").exists)
+    }
+}
