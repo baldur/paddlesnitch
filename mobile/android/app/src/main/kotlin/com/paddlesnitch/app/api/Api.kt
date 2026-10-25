@@ -21,7 +21,26 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false) : Exception(message)
 
 /** What to show for a failure: the server's or the app's own words, else [fallback]. Never a status code. */
-fun Throwable.shown(fallback: String): String = if (this is ApiFailure && generic) fallback else message ?: fallback
+fun Throwable.shown(fallback: String): String =
+    // Only our own words reach the screen: any other exception's message is internal (a JSON parser quoting an HTML page, an Intent dump).
+    if (this is ApiFailure && !generic || this is SignedOut) message ?: fallback else fallback
+
+/** What the Account screens ask of the server (Api, or a fake in the tests). */
+interface AccountApi {
+    suspend fun me(): Me
+    suspend fun terms(): TosStatus
+    suspend fun acceptTerms(): TosAccepted
+    suspend fun profile(): ProfileSettings
+    suspend fun setProfilePublic(public: Boolean): ProfileSettings
+    suspend fun claimHandle(handle: String): ProfileSettings
+    suspend fun releaseHandle(): ProfileSettings
+    suspend fun contact(): Contact
+    suspend fun setContact(email: String): Contact
+    suspend fun removeContact(): Ok
+    suspend fun deleteAccount()
+    suspend fun exportAccount(into: java.io.File): String
+    suspend fun signedInPage(next: String): String
+}
 
 /** The session ended (the refresh token expired or was revoked): sign in again. */
 class SignedOut : Exception("Please sign in again.")
@@ -37,7 +56,7 @@ class Api(
     private val appVersion: String,
     // Analysing an upload fetches the weather and river flow, so allow it a minute.
     private val http: OkHttpClient = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
-) {
+) : AccountApi {
     private val base = baseUrl.trimEnd('/').toHttpUrl()
     private val refreshing = Mutex()
     private val jsonType = "application/json".toMediaType()
@@ -69,17 +88,68 @@ class Api(
      * "/account#delete"), as a link that opens it already signed in: it carries
      * a one-minute, one-use code the website swaps for its cookies.
      */
-    suspend fun signedInPage(next: String): String {
+    override suspend fun signedInPage(next: String): String {
         val url = base.newBuilder().addPathSegments("att/api/auth/web-code").build()
         val body = """{"next":${str(next)}}""".toRequestBody(jsonType)
         return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(body).build() }, WebPage.serializer()).url
     }
 
-    suspend fun me(): Me = query("me", Me.serializer())
+    override suspend fun me(): Me = query("me", Me.serializer())
     suspend fun paddles(): PaddleList = query("paddles.list", PaddleList.serializer())
     suspend fun paddle(id: String): AnalysisSession = query("paddles.get", AnalysisSession.serializer(), """{"id":${str(id)}}""")
     /** Writes a paddle's pending coach summary (can take a few seconds); the paddle as it is when already written. */
     suspend fun writeSummary(id: String): AnalysisSession = mutation("paddles.writeSummary", AnalysisSession.serializer(), """{"id":${str(id)}}""")
+
+    // Account (mobile/contract/README.md § Account): the website's /api/account routes with the Bearer token.
+    override suspend fun terms(): TosStatus = account("GET", "api/account/tos", null, TosStatus.serializer())
+    override suspend fun acceptTerms(): TosAccepted =
+        account("POST", "api/account/tos", """{"version":${str(Constants.tosVersion)}}""", TosAccepted.serializer())
+    override suspend fun profile(): ProfileSettings = account("GET", "api/account/profile", null, ProfileSettings.serializer())
+    override suspend fun setProfilePublic(public: Boolean): ProfileSettings =
+        account("PATCH", "api/account/profile", """{"public":$public}""", ProfileSettings.serializer())
+    override suspend fun claimHandle(handle: String): ProfileSettings =
+        account("PUT", "api/account/handle", """{"handle":${str(handle)}}""", ProfileSettings.serializer())
+    override suspend fun releaseHandle(): ProfileSettings = account("DELETE", "api/account/handle", null, ProfileSettings.serializer())
+    override suspend fun contact(): Contact = account("GET", "api/account/contact", null, Contact.serializer())
+    override suspend fun setContact(email: String): Contact = account("POST", "api/account/contact", """{"email":${str(email)}}""", Contact.serializer())
+    override suspend fun removeContact(): Ok = account("DELETE", "api/account/contact", null, Ok.serializer())
+
+    /** Erases the account; the refresh token stops working, so the stored tokens go too. */
+    override suspend fun deleteAccount() {
+        account("DELETE", "api/account", """{"refreshToken":${str(tokens.refreshToken.orEmpty())}}""", Ok.serializer())
+        tokens.clear()
+    }
+
+    /**
+     * "Download my data": the server writes the file and answers a 5-minute
+     * link to it, which is fetched at once into [into]. Returns the file name
+     * the website would save it as.
+     */
+    override suspend fun exportAccount(into: java.io.File): String {
+        val link = account("POST", "api/account/export", null, DownloadLink.serializer()).url
+        val url = base.resolve(link) ?: throw ApiFailure("Couldn’t prepare your download. Please try again.")
+        // A signed S3 link takes no Authorization header; in local dev the link is our own GET, which does.
+        val ours = url.host == base.host && url.port == base.port
+        return withContext(Dispatchers.IO) {
+            val req = Request.Builder().url(url).header(APP_HEADER, "android/$appVersion")
+                .apply { if (ours) tokens.idToken?.let { header(AUTH, "Bearer $it") } }.build()
+            try {
+                // A half-written export is personal data left on the phone: never keep one.
+                runCatching { http.newCall(req).execute() }.onFailure { into.delete() }.getOrThrow().use { res ->
+                    if (!res.isSuccessful) { into.delete(); throw ApiFailure("Couldn’t prepare your download. Please try again.", res.code) }
+                    runCatching { into.outputStream().use { res.body.byteStream().copyTo(it) } }.onFailure { into.delete() }.getOrThrow()
+                    Regex("filename=\"?([^\";]+)").find(res.header("Content-Disposition").orEmpty())?.groupValues?.get(1) ?: "paddlesnitch-data.json"
+                }
+            } catch (e: IOException) {
+                throw ApiFailure("Couldn’t reach paddlesnitch. Check your connection and try again.")
+            }
+        }
+    }
+
+    private suspend fun <T> account(method: String, path: String, body: String?, out: KSerializer<T>): T {
+        val url = base.newBuilder().addPathSegments(path).build()
+        return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").method(method, body?.toRequestBody(jsonType) ?: if (method == "GET" || method == "DELETE") null else ByteArray(0).toRequestBody()).build() }, out)
+    }
 
     /**
      * A REST call as the signed-in person (`Authorization: Bearer`), for the
