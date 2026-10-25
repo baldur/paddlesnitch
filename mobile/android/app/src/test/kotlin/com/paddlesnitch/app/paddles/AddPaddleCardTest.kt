@@ -55,10 +55,10 @@ class AddPaddleCardTest {
     @Test fun addedOpensThePaddle() {
         show(AddCard.Added("pdl-river", duplicate = false))
         compose.onNodeWithText("Paddle added.").assertExists()
+        compose.onRoot().captureRoboImage() // before tapping: a tap's ripple isn't the same from run to run
         compose.onNodeWithText("Open paddle").performClick()
         compose.onNodeWithContentDescription("Close").performClick()
         assertEquals(listOf("open pdl-river", "close"), did)
-        compose.onRoot().captureRoboImage()
     }
 
     @Test fun aDuplicateSaysSo() {
@@ -93,9 +93,9 @@ class AddPaddleCardTest {
     @Test fun signedOutAsksToSignIn() {
         show(AddCard.SignInToAdd("Morning.gpx"))
         compose.onNodeWithText("Sign in to add Morning.gpx.").assertExists()
+        compose.onRoot().captureRoboImage()
         compose.onNodeWithText("Sign in").performClick()
         compose.onNodeWithContentDescription("Close").performClick()
         assertEquals(listOf("sign in", "close"), did)
-        compose.onRoot().captureRoboImage()
     }
 }
