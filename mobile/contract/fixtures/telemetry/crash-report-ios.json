@@ -1,0 +1,32 @@
+{
+  "headers": { "X-Paddlesnitch-Client": "ios/1.0.0 (7)", "Content-Type": "application/json" },
+  "body": {
+    "events": [
+      {
+        "event": "crash_report",
+        "t": "{{now}}",
+        "props": {
+          "type": "EXC_BAD_ACCESS",
+          "frames": "PaddleScreen.body:57|PaddleStore.load:120",
+          "appVersion": "1.0.0",
+          "build": "7",
+          "os": "iOS 18.1"
+        }
+      }
+    ]
+  },
+  "emits": [
+    {
+      "Event": "crash_report",
+      "platform": "ios",
+      "appVersion": "1.0.0",
+      "build": "7",
+      "type": "EXC_BAD_ACCESS",
+      "signature": "EXC_BAD_ACCESS @ PaddleScreen.body:57",
+      "frames": "PaddleScreen.body:57|PaddleStore.load:120",
+      "crashedVersion": "1.0.0",
+      "crashedBuild": "7",
+      "os": "iOS 18.1"
+    }
+  ]
+}

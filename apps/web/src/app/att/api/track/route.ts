@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { emitMetric, isMetricEvent } from '@/lib/metrics'
+import { emitMetric, isMetricEvent, type MetricEvent } from '@/lib/metrics'
 import { isAllowedIngestOrigin } from '@/lib/ingest-origin'
+import { clientOf, type Client } from '@paddlesnitch/core/observe'
+import { crashReportProps, clientErrorProps } from '@/lib/client-errors'
 
 // Receives client-side analytics beacons and emits CloudWatch EMF events.
 // Unauthenticated by design — events come from anyone. No PII is recorded: only
@@ -14,6 +16,12 @@ import { isAllowedIngestOrigin } from '@/lib/ingest-origin'
 //
 // Always returns 204 (No Content) — beacons are fire-and-forget; the client
 // neither needs nor reads a body.
+//
+// The Android and iPhone apps send no Origin, so a request with a well-formed
+// `X-Paddlesnitch-Client` app header is accepted instead. That header is as
+// spoofable as Origin; the allowlist and the caps are what bound abuse. Every
+// event gets `platform` (and the app's version) from the request, never from
+// the client's props (docs/features/observability.md).
 
 const MAX_EVENTS = 100   // cap events per batch (abuse guard)
 const MAX_PROPS = 10     // cap custom props per event
@@ -32,7 +40,14 @@ function safeTs(t: unknown): number | undefined {
   return t
 }
 
-function buildProps(sid: string | undefined, path: unknown, props: unknown): Record<string, string> {
+// Set by the server, never taken from a client's props.
+const RESERVED = new Set(['sid', 'path', 'platform', 'appVersion', 'build'])
+
+function clientProps(c: Client): Record<string, string> {
+  return { platform: c.platform, ...(c.version ? { appVersion: c.version } : {}), ...(c.build ? { build: c.build } : {}) }
+}
+
+function buildProps(sid: string | undefined, path: unknown, props: unknown, client: Client): Record<string, string> {
   const out: Record<string, string> = {}
   if (sid) out.sid = sid
   const p = str(path, STR)
@@ -41,19 +56,35 @@ function buildProps(sid: string | undefined, path: unknown, props: unknown): Rec
     let n = 0
     for (const [k, v] of Object.entries(props as Record<string, unknown>)) {
       if (n >= MAX_PROPS) break
-      if (k === 'sid' || k === 'path') continue // reserved, set above
+      if (RESERVED.has(k)) continue
       const val = str(v, STR)
       if (val !== undefined) { out[k.slice(0, 40)] = val; n++ }
     }
   }
-  return out
+  return { ...out, ...clientProps(client) }
+}
+
+// The two error reports have fixed fields (lib/client-errors.ts); a malformed
+// one is dropped rather than counted.
+function propsFor(event: MetricEvent, sid: string | undefined, path: unknown, props: unknown, client: Client): Record<string, string> | null {
+  if (event === 'crash_report') {
+    const crash = crashReportProps(props)
+    return crash && { ...(sid ? { sid } : {}), ...crash, ...clientProps(client) }
+  }
+  if (event === 'client_error') {
+    const err = clientErrorProps(props, path)
+    return err && { ...(sid ? { sid } : {}), ...err, ...clientProps(client) }
+  }
+  return buildProps(sid, path, props, client)
 }
 
 export async function POST(req: NextRequest) {
   // Drop beacons that don't carry our own origin (cheap first line against
   // random/bot pings — spoofable, see ingest-origin.ts). Still 204 so a bot
   // gets no signal it was rejected.
-  if (!isAllowedIngestOrigin(req)) return new NextResponse(null, { status: 204 })
+  const client = clientOf(req.headers)
+  const isApp = client.platform === 'android' || client.platform === 'ios'
+  if (!isApp && !isAllowedIngestOrigin(req)) return new NextResponse(null, { status: 204 })
 
   const body = await req.json().catch(() => ({}))
 
@@ -62,14 +93,16 @@ export async function POST(req: NextRequest) {
     const sid = str(body.sid, SID)
     for (const e of body.events.slice(0, MAX_EVENTS)) {
       if (!isMetricEvent(e?.event)) continue // strict allowlist
-      emitMetric(e.event, buildProps(sid, e?.path ?? (e?.props as Record<string, unknown>)?.path, e?.props), safeTs(e?.t))
+      const props = propsFor(e.event, sid, e?.path ?? (e?.props as Record<string, unknown>)?.path, e?.props, client)
+      if (props) emitMetric(e.event, props, safeTs(e?.t))
     }
     return new NextResponse(null, { status: 204 })
   }
 
   // Single-event back-compat shape.
   if (isMetricEvent(body?.event)) {
-    emitMetric(body.event, buildProps(str(body.sid, SID), body.path, undefined))
+    const props = propsFor(body.event, str(body.sid, SID), body.path, undefined, client)
+    if (props) emitMetric(body.event, props)
   }
   return new NextResponse(null, { status: 204 })
 }

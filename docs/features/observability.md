@@ -214,7 +214,15 @@ The same pattern the trackers use for crash reports (a coredump summary sent to 
   exception message (it can hold user data).
 - `signature` = the exception type plus the top frame, so the dashboard can
   group identical crashes.
-- Crash rate = crash reports ÷ `app_open`, by platform and version.
+- Crash rate = crash reports ÷ `app_open`, by platform and version (Logs
+  Insights). The alarm watches the plain `crash_report` count, so no
+  `Platform` metric dimension is needed.
+- The exact rules for the apps are in
+  [`mobile/contract/telemetry.md`](../../mobile/contract/telemetry.md), with
+  fixtures that `pnpm test` replays against the endpoint. The server keeps only
+  the fixed fields: frames that look like a path or a message are dropped, and
+  the app's `appVersion` prop is stored as `crashedVersion` (the crashed
+  version can be older than the reporting one).
 
 Native crashes (ANR, out-of-memory, crashes in native code) don't reach this.
 **Google Play's Android vitals and Apple's App Store Connect crash pages** cover
@@ -305,7 +313,7 @@ quiet window. It's not part of this spec. It's what the zero bar makes possible.
 | Item | Roughly |
 |---|---|
 | Dashboards: three until the apps ship (all within the free three), then `-mobile` | $0, then $3/month |
-| ~18 new custom metrics (API calls + server errors, action attempts + failures per action and in total = 12, app crashes ×2, app opens ×2) at $0.30 | $5–6/month |
+| ~17 new custom metrics (API calls + server errors; action attempts + failures, per action and in total = 12; `app_open`, `crash_report`, `client_error` as `Event` counts) at $0.30 | $5/month |
 | ~4 new alarms at $0.10 | under $1/month |
 | Digest Lambda (once a day) + its Logs Insights queries (scanning a day of logs) | pennies |
 | Extra log lines (one per API call) | well under $1/month at today's traffic |
