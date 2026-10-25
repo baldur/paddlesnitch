@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "TosAccepted.schema.json",
+  "type": "object",
+  "properties": {
+    "acceptances": {
+      "type": "array",
+      "items": {
+        "$ref": "TosAcceptance.schema.json"
+      }
+    }
+  },
+  "required": [
+    "acceptances"
+  ]
+}

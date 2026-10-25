@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ProfileSettings.schema.json",
+  "type": "object",
+  "properties": {
+    "public": {
+      "type": "boolean"
+    },
+    "handle": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "public"
+  ]
+}

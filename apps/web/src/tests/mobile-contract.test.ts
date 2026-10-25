@@ -10,7 +10,9 @@ import fs from 'fs/promises'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
-import { contractProcedures, restRoutes, Me, PaddleList, AnalysisSession, SignIn, Refreshed, ApiError } from '@paddlesnitch/api/contract'
+import { contractProcedures, restRoutes, Me, PaddleList, AnalysisSession, SignIn, Refreshed, ApiError,
+  TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact,
+} from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 import { mobileContractFiles, tokensFromCss } from '@/lib/mobile-contract'
@@ -148,6 +150,10 @@ describe('fixtures/api', () => {
     me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession, 'paddles.writeSummary': AnalysisSession,
     // Sign-in (REST): named after the route, or `auth.error` / `.retry` for refusals.
     'auth.login': SignIn, 'auth.refresh': Refreshed, 'auth.error': ApiError, 'auth.otp-verify.retry': ApiError,
+    // Account (REST, C5): `account.<route>[-<what>][.<case>]`; `account.error` is the shared refusal.
+    'account.tos': TosStatus, 'account.tos-accepted': TosAccepted, 'account.export': DownloadLink,
+    'account.profile': ProfileSettings, 'account.handle-check': HandleAvailability, 'account.contact': Contact,
+    'account.error': ApiError,
   }
   const names = readdirSync(path.join(CONTRACT, 'fixtures/api')).filter(f => !f.includes('unknown-values'))
 

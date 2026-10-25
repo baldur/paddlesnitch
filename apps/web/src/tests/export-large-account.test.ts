@@ -52,7 +52,7 @@ describe('Download my data, for an account with many paddles', () => {
     const me = await makeUser('Busy')
     for (let i = 0; i < 60; i++) await saveSession(realSizePaddle(me.id, `p${i}`))
     signInAs(me.idToken)
-    const bytes = (await (await exportFile()).arrayBuffer()).byteLength
+    const bytes = (await (await exportFile(new Request('http://x'))).arrayBuffer()).byteLength
     expect(bytes).toBeGreaterThan(6 * 1024 * 1024)
   })
 
@@ -61,7 +61,7 @@ describe('Download my data, for an account with many paddles', () => {
     for (let i = 0; i < 60; i++) await saveSession(realSizePaddle(me.id, `p${i}`))
     signInAs(me.idToken)
     s3.on = true
-    const res = await exportLink()
+    const res = await exportLink(new Request('http://x'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ url: 'https://s3.example/signed' })
     expect(s3.puts).toHaveLength(1)
@@ -76,19 +76,19 @@ describe('Download my data, for an account with many paddles', () => {
   it('locally, the link is the direct download', async () => {
     const me = await makeUser('Local')
     signInAs(me.idToken)
-    expect(await (await exportLink()).json()).toEqual({ url: '/api/account/export' })
+    expect(await (await exportLink(new Request('http://x'))).json()).toEqual({ url: '/api/account/export' })
   })
 
   it('is only for the signed-in user', async () => {
     vi.mocked(cookies).mockResolvedValue({ get: () => undefined } as never)
-    expect((await exportLink()).status).toBe(401)
+    expect((await exportLink(new Request('http://x'))).status).toBe(401)
   })
 
   it('a prepared file is deleted with the account', async () => {
     const me = await makeUser('Leaving')
     await putObject(`exports/${me.id}/abc.json`, '{}')
     signInAs(me.idToken)
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
     expect(await listKeys(`exports/${me.id}/`)).toEqual([])
   })
 })

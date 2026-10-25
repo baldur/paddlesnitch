@@ -59,7 +59,7 @@ describe('deleting a well-used account', () => {
 
     slow.ms = 10
     const t0 = Date.now()
-    expect((await deleteAccount()).status).toBe(200)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
     const took = Date.now() - t0
     slow.ms = 0
 

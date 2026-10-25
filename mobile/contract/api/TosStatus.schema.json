@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "TosStatus.schema.json",
+  "type": "object",
+  "properties": {
+    "currentVersion": {
+      "type": "string"
+    },
+    "accepted": {
+      "type": "boolean"
+    },
+    "acceptances": {
+      "type": "array",
+      "items": {
+        "$ref": "TosAcceptance.schema.json"
+      }
+    }
+  },
+  "required": [
+    "currentVersion",
+    "accepted",
+    "acceptances"
+  ]
+}
