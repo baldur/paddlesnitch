@@ -259,12 +259,13 @@ export function devPresignValid(key: string, exp: string | null, sig: string | n
  */
 export async function presignGetUrl(
   key: string, expiresInSeconds: number, origin?: string,
-  // Production only: S3 serves it as a download with this file name (JSON).
+  // S3 (or the dev route) serves it as a download with this file name (JSON).
   opts: { downloadAs?: string } = {},
 ): Promise<string> {
   if (isDev()) {
     const exp = Date.now() + expiresInSeconds * 1000
     const q = new URLSearchParams({ key, exp: String(exp), sig: devPresignSignature(key, exp) })
+    if (opts.downloadAs) q.set('name', opts.downloadAs)
     return `${origin ?? ''}/api/devices/firmware/download?${q}`
   }
   const { GetObjectCommand } = await import('@aws-sdk/client-s3')

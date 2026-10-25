@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
+import { findUserBySub } from '@/lib/cognito'
 import { makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial, makeGpxBuffer, makeTestTrack, plantFailedUpload } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
@@ -117,6 +118,14 @@ describe('DELETE /api/account', () => {
 
     expect(await getJson(`courses/${course.id}/metadata.json`)).toBeNull()
     expect(await getJson(`trials/${trial.id}/metadata.json`)).toBeNull()
+  })
+
+  it('deletes the Cognito user itself, found by sub (a Google account\'s username isn\'t its email)', async () => {
+    const user = await makeUser('Leaving')
+    mockAuth(user.idToken)
+    expect(await findUserBySub(user.id)).not.toBeNull()
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
+    expect(await findUserBySub(user.id)).toBeNull()
   })
 
   // Audit decision 2026-09: deleting an account must not delete other people's

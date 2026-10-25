@@ -55,6 +55,9 @@ jobs:
 
       # Single unified app (att now serves /att + /analyse); one OpenNext bundle.
       - name: Build OpenNext bundle
+        env:
+          # Sign in with Google (#697): '1' once Google and Cognito are set up.
+          NEXT_PUBLIC_GOOGLE_SIGNIN: ${{ vars.GOOGLE_SIGNIN }}
         run: |
           set -o pipefail
           pnpm build:open-next 2>&1 | tee "$RUNNER_TEMP/open-next.log"

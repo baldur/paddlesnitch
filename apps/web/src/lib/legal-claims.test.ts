@@ -68,6 +68,7 @@ const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.o
   'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk', 'waterinfo.rws.nl', 'www.waterinfo.be',   // links to a gauge's own page
   'kayak.spw.wallonie.be',   // a link to Wallonia's kayak status; nothing is fetched from it
   'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
+  'developers.google.com',   // Google's branding rules, cited in a comment; nothing is fetched from it
 ])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
 // machine or the weekly refresh job, so no visitor's data ever reaches these hosts.
@@ -94,6 +95,16 @@ describe('privacy page names every outside service the code uses', () => {
 
   it.each([...new Set(Object.values(SERVICES)), 'Bedrock', 'Cognito'])('names %s', name => {
     expect(privacy).toContain(name)
+  })
+})
+
+// Sign in with Google (#697) goes through Cognito's hosted sign-in, whose
+// address comes from COGNITO_DOMAIN, so the host scan above can't see it.
+describe('Sign in with Google is on the privacy page', () => {
+  it('names Google as a sign-in service and what it passes on', () => {
+    expect(privacy).toMatch(/only if you sign in with Google/)
+    expect(privacy).toMatch(/your name, your email address and an ID for your Google account/)
+    expect(readFileSync(path.join(repo, 'apps/web/src/lib/google-signin.ts'), 'utf8')).toContain('identity_provider')
   })
 })
 

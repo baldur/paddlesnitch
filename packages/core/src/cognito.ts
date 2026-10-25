@@ -86,6 +86,8 @@ export type CognitoError =
 
 function classify(err: unknown): CognitoError {
   if (err instanceof UsernameExistsException) return 'email_exists'
+  // The PreSignUp trigger's "one account per email" refusal (#697).
+  if ((err as { name?: string })?.name === 'UserLambdaValidationException' && /ACCOUNT_EXISTS/.test(String((err as Error).message))) return 'email_exists'
   if (err instanceof InvalidPasswordException) return 'invalid_password'
   if (err instanceof CodeMismatchException) return 'invalid_code'
   if (err instanceof ExpiredCodeException) return 'expired_code'
@@ -276,22 +278,55 @@ export async function revoke(refreshToken: string): Promise<void> {
 
 // Deletes the user from Cognito permanently. Used by the GDPR Art. 17
 // erasure flow. Cognito identifies users by sign-in alias (email), not by sub.
+// Already gone counts as done: an erasure whose answer was lost gets retried
+// by the app, and the retry must succeed rather than report a failure.
 export async function deleteUser(email: string): Promise<void> {
   const client = makeClient()
-  await client.send(new AdminDeleteUserCommand({
-    UserPoolId: USER_POOL_ID,
-    Username: email,
-  }))
+  try {
+    await client.send(new AdminDeleteUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+    }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
+  }
 }
 
-type UserSummary = { sub: string; email: string; displayName: string }
+// Deletes the account whose sub this is, whatever its username: an email
+// account's username is its email, a Google account's is "Google_<id>", so
+// erasure finds the user by sub rather than by email. Already gone counts as
+// done (a repeated erasure); any other error throws.
+export async function deleteUserBySub(sub: string): Promise<void> {
+  const client = makeClient()
+  const res = await client.send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  const username = res.Users?.[0]?.Username
+  if (!username) return
+  try {
+    await client.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
+  }
+}
 
-function userSummaryFromAttributes(user: { Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
+type UserSummary = {
+  sub: string; email: string; displayName: string
+  /** Signs in with Google (username `Google_<id>`): our email-based sign-ins can't reach it. */
+  google?: true
+}
+
+function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
   const attr = (name: string) => user.Attributes?.find(a => a.Name === name)?.Value ?? ''
   return {
     sub: attr('sub'),
     email: attr('email'),
     displayName: attr('name') || (attr('email').split('@')[0]),
+    ...(user.Username?.startsWith('Google_') ? { google: true as const } : {}),
   }
 }
 
@@ -301,16 +336,23 @@ function userSummaryFromAttributes(user: { Attributes?: Array<{ Name?: string; V
 export async function findUserByEmail(email: string): Promise<UserSummary | null> {
   const client = makeClient()
   // ListUsers with a filter expression is the supported way to search by
-  // attribute. We limit to 1 — emails are alias-unique so there's never
-  // more than one match in a well-formed pool.
+  // attribute. One account per email is the rule (PreSignUp, #697), but a
+  // Google account's email can change on a later sign-in, so two accounts can
+  // still share one: then nobody is returned rather than whichever comes first
+  // (an invitation must never reach the wrong person). Half-made (UNCONFIRMED)
+  // accounts can't be signed into and don't count.
   const res = await client.send(new ListUsersCommand({
     UserPoolId: USER_POOL_ID,
     Filter: `email = "${email.replace(/"/g, '\\"')}"`,
-    Limit: 1,
+    Limit: 10,
   }))
-  const user = res.Users?.[0]
-  if (!user) return null
-  return userSummaryFromAttributes(user)
+  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  if (users.length > 1) {
+    console.warn('[cognito] findUserByEmail: more than one account has this email; refusing to pick one')
+    return null
+  }
+  if (!users[0]) return null
+  return userSummaryFromAttributes(users[0])
 }
 
 // Look up a user by their Cognito sub. Used by the trial-invitation UI
@@ -334,6 +376,21 @@ export async function findUserBySub(sub: string): Promise<UserSummary | null> {
     console.warn('[cognito] findUserBySub failed', err)
     return null
   }
+}
+
+// Whether an account with this sub exists. Unlike findUserBySub it never
+// answers "no" on an error: it throws. Use it where "no" leads to deleting
+// something (scripts/strava-index-cleanup.ts).
+export async function userExistsBySub(sub: string): Promise<boolean> {
+  const res = await makeClient().send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  if (res.Users?.length) return true
+  // An exact sub filter never pages; an empty page with more to come isn't a "no".
+  if (res.PaginationToken) throw new Error('userExistsBySub: unexpected pagination')
+  return false
 }
 
 // Create a Cognito user for a Strava sign-in where no pre-existing account
@@ -407,9 +464,15 @@ export async function adminCreateUserForStrava(
 //   3. VerifyAuthChallenge confirms; tokens are issued.
 // Only our server can do both halves, so only our server can trigger this
 // sign-in path.
+//
+// `expectedSub`: the account the caller means. Cognito finds the user by email
+// (an alias), so the tokens are checked to be that account's before they are
+// handed out; on a mismatch they are revoked and nothing is returned
+// (security review, #697: two accounts could once share an email).
 export async function customAuthSignIn(
   email: string,
   presetToken: string,
+  expectedSub?: string,
 ): Promise<TokenPair | { error: CognitoError }> {
   const client = makeClient()
   try {
@@ -442,9 +505,53 @@ export async function customAuthSignIn(
     })).catch(() => {})
     const auth = resp.AuthenticationResult
     if (!auth?.IdToken || !auth?.RefreshToken) return { error: 'unknown' }
+    if (expectedSub !== undefined && (await verifyIdToken(auth.IdToken))?.id !== expectedSub) {
+      await revoke(auth.RefreshToken)
+      console.warn('[cognito] customAuthSignIn signed in a different account than asked; refused')
+      return { error: 'unknown' }
+    }
     return { idToken: auth.IdToken, refreshToken: auth.RefreshToken }
   } catch (err) {
     return { error: classify(err) }
+  }
+}
+
+/** What a verified ID token says about the sign-in behind it. */
+export type SignInClaims = {
+  sub: string
+  /** Unix seconds of the last real sign-in (`auth_time`, never `iat`). */
+  signedInAt: number | null
+  /** Stays the same across refreshes of one sign-in (`origin_jti`; `jti` where a test Cognito lacks it). */
+  session: string | null
+}
+
+/** Pure: the sign-in facts from verified claims, or null if they aren't an ID token's. */
+export function signInFromClaims(claims: Record<string, unknown>): SignInClaims | null {
+  if (claims.token_use !== 'id' || typeof claims.sub !== 'string') return null
+  const session = typeof claims.origin_jti === 'string' ? claims.origin_jti : typeof claims.jti === 'string' ? claims.jti : null
+  return { sub: claims.sub, signedInAt: typeof claims.auth_time === 'number' ? claims.auth_time : null, session }
+}
+
+/**
+ * The sign-in behind an ID token. Cognito keeps the original `auth_time` on a
+ * refreshed token (the OpenID rule; cognito-local doesn't), so `signedInAt` is
+ * the last time someone typed a password or code or went through Strava.
+ */
+export async function idTokenSignIn(idToken: string): Promise<SignInClaims | null> {
+  try {
+    return signInFromClaims(await getVerifier().verify(idToken) as Record<string, unknown>)
+  } catch {
+    return null
+  }
+}
+
+/** Unverified: the session key of a token we were just handed by Cognito ourselves. */
+export function sessionOfFreshToken(idToken: string): string | null {
+  try {
+    const claims = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString())
+    return signInFromClaims({ ...claims, token_use: 'id' })?.session ?? null
+  } catch {
+    return null
   }
 }
 

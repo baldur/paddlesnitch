@@ -7,13 +7,15 @@ import Foundation
 /// Every REST route the apps call, from mobile/contract/api/rest.json.
 public enum Endpoints {
     public static let deleteAccount = Endpoint<DeleteAccount, Ok>(
-        method: "DELETE", path: "/api/account", errorStatuses: [401])
+        method: "DELETE", path: "/api/account", errorStatuses: [401, 403])
     public static let deleteAccountContact = Endpoint<NoInput, Ok>(
         method: "DELETE", path: "/api/account/contact", errorStatuses: [401])
     public static let deleteAccountDevices = Endpoint<TrackerId, Ok>(
         method: "DELETE", path: "/api/account/devices", errorStatuses: [401, 404])
     public static let deleteAccountHandle = Endpoint<NoInput, ProfileSettings>(
         method: "DELETE", path: "/api/account/handle", errorStatuses: [401])
+    public static let getAccount = Endpoint<NoInput, AccountStatus>(
+        method: "GET", path: "/api/account", errorStatuses: [401])
     public static let getAccountContact = Endpoint<NoInput, Contact>(
         method: "GET", path: "/api/account/contact", errorStatuses: [401])
     public static let getAccountDevices = Endpoint<NoInput, TrackerList>(
@@ -68,6 +70,7 @@ public enum Endpoints {
         case "DELETE /api/account/contact": try decoder.decode(Ok.self, from: data)
         case "DELETE /api/account/devices": try decoder.decode(Ok.self, from: data)
         case "DELETE /api/account/handle": try decoder.decode(ProfileSettings.self, from: data)
+        case "GET /api/account": try decoder.decode(AccountStatus.self, from: data)
         case "GET /api/account/contact": try decoder.decode(Contact.self, from: data)
         case "GET /api/account/devices": try decoder.decode(TrackerList.self, from: data)
         case "GET /api/account/devices/sessions": try decoder.decode(RecordingList.self, from: data)

@@ -12,6 +12,7 @@ vi.mock('@/lib/strava-storage', () => ({
 vi.mock('@/lib/cognito', () => ({
   findUserByEmail: vi.fn(),
   findUserBySub: vi.fn(),
+  userExistsBySub: vi.fn(),
   adminCreateUserForStrava: vi.fn(),
   customAuthSignIn: vi.fn(),
   verifyIdToken: vi.fn(),
@@ -64,8 +65,47 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     expect(res.headers.get('location') ?? '').not.toContain('error=')
     // Resolved by sub → signs in with the REAL email, no duplicate created.
     expect(cognito.findUserBySub).toHaveBeenCalledWith('real-sub-1')
-    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String))
+    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String), 'real-sub-1')
     expect(cognito.adminCreateUserForStrava).not.toHaveBeenCalled()
+  })
+
+  it('relinks a deleted account\'s athlete only when the strict lookup confirms it is gone', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue('gone-sub')
+    vi.mocked(cognito.findUserBySub).mockResolvedValue(null)
+    vi.mocked(cognito.userExistsBySub).mockResolvedValue(false)
+    vi.mocked(cognito.adminCreateUserForStrava).mockResolvedValue({ sub: 'new-sub' } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location') ?? '').not.toContain('error=')
+    expect(stravaStorage.putAthleteIndex).toHaveBeenCalledWith(555, 'new-sub')
+  })
+
+  it('never moves a link when Cognito can\'t answer: sign-in fails instead', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue('live-sub')
+    // findUserBySub swallows an error as null; the strict lookup throws.
+    vi.mocked(cognito.findUserBySub).mockResolvedValue(null)
+    vi.mocked(cognito.userExistsBySub).mockRejectedValue(new Error('TooManyRequestsException'))
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_signin_failed')
+    expect(cognito.adminCreateUserForStrava).not.toHaveBeenCalled()
+    expect(stravaStorage.putAthleteIndex).not.toHaveBeenCalled()
+  })
+
+  it('an athlete linked to an account that signs in with Google is told to use Google', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue('google-sub')
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'google-sub', email: 'pat@example.com', displayName: 'Pat', google: true } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_use_google')
+    expect(cognito.customAuthSignIn).not.toHaveBeenCalled()
+  })
+
+  it('an unlinked athlete whose Strava email matches an account that signs in with Google is told to use Google, and not linked', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue(null)
+    vi.mocked(strava.getAthleteProfile).mockResolvedValue({ id: 555, firstname: 'Bal', lastname: 'G', email: 'Pat@Example.com' } as never)
+    vi.mocked(cognito.findUserByEmail).mockResolvedValue({ sub: 'google-sub', email: 'pat@example.com', displayName: 'Pat', google: true } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_use_google')
+    expect(cognito.findUserByEmail).toHaveBeenCalledWith('pat@example.com')
+    expect(stravaStorage.putAthleteIndex).not.toHaveBeenCalled()
   })
 
   it('creates a fresh account only when the athlete is NOT linked', async () => {

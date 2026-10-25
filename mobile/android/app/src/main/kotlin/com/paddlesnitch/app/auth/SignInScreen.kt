@@ -5,6 +5,7 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +52,7 @@ import com.paddlesnitch.app.R
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.Constants
 import com.paddlesnitch.app.api.SignIn
+import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.launch
 
@@ -68,9 +70,14 @@ fun SignInScreen(
     onSignedIn: (SignIn) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Signing in again for a reason (deleting the account): the email to fill in, and why. */
+    prefillEmail: String? = null,
+    notice: String? = null,
+    /** Open Strava straight away (signing in again with an account made with Strava). */
+    startStrava: Boolean = false,
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
-    var email by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf(prefillEmail.orEmpty()) }
     var name by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var agreed by rememberSaveable { mutableStateOf(false) }
@@ -96,6 +103,10 @@ fun SignInScreen(
             .onFailure { error = "There’s no web browser on this phone to open Strava in." }
     }
 
+    // Once, not again on rotation; a missing browser shows here, as from the button.
+    var stravaStarted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(startStrava) { if (startStrava && !stravaStarted) { stravaStarted = true; openStrava() } }
+
     fun submit() {
         if (creating && !agreed) { error = "You must agree to the Terms of Service to create an account."; return }
         if (email.isBlank() || password.isEmpty() || (creating && name.isBlank())) { error = "Fill in every field."; return }
@@ -118,6 +129,8 @@ fun SignInScreen(
             Text(if (creating) "Create account" else "Sign in", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             TextButton(onClick = onCancel) { Text("Cancel") }
         }
+        // Why they're here, as a notice rather than an error (the website's role="status" box).
+        if (notice != null) Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { Notice(notice) }
         SecondaryTabRow(selectedTabIndex = if (creating) 1 else 0) {
             Tab(selected = !creating, onClick = { creating = false; error = null }, text = { Text("Sign in") })
             Tab(selected = creating, onClick = { creating = true; error = null }, text = { Text("Create account") })
@@ -158,3 +171,4 @@ fun SignInScreen(
         }
     }
 }
+

@@ -16,6 +16,8 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onChildren
@@ -31,6 +33,7 @@ import androidx.core.app.ActivityOptionsCompat
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.paddlesnitch.app.api.AccountApi
+import com.paddlesnitch.app.api.AccountStatus
 import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.AuthUser
 import com.paddlesnitch.app.api.Contact
@@ -65,6 +68,12 @@ class FakeAccountApi(
     var failLoads: Boolean = false,
     /** The session has ended: every call says so. */
     var signedOut: Boolean = false,
+    /** The sign-in is from the last 10 minutes (GET /api/account). */
+    var recentSignIn: Boolean = true,
+    /** Delete answers 403 {reauth: true}: the 10 minutes ran out while they typed. */
+    var reauthOnDelete: Boolean = false,
+    /** The recent-sign-in check fails. */
+    var failStatus: Boolean = false,
 ) : AccountApi {
     val calls = mutableListOf<String>()
     private fun check() { if (signedOut) throw SignedOut() }
@@ -80,7 +89,15 @@ class FakeAccountApi(
     override suspend fun contact() = load { Contact(contactEmail?.let { Contact.Contact(it, "2026-10-25T16:00:00Z") }) }
     override suspend fun setContact(email: String) = answer("contact $email") { contactEmail = email; Contact(Contact.Contact(email, "2026-10-25T16:00:00Z")) }
     override suspend fun removeContact() = answer("remove contact") { contactEmail = null; Ok(true) }
-    override suspend fun deleteAccount() { answer("delete") {} }
+    override suspend fun accountStatus(): AccountStatus {
+        check(); calls += "status"
+        if (failStatus) throw ApiFailure("x", 500, generic = true)
+        return AccountStatus(recentSignIn)
+    }
+    override suspend fun deleteAccount() {
+        answer("delete") {}
+        if (reauthOnDelete) throw ApiFailure("For your safety, deleting your account needs a recent sign-in. Please sign in again.", 403, reauth = true)
+    }
     override suspend fun exportAccount(into: File) = answer("export") { into.writeText("""{"account":{}}"""); "paddlesnitch-export-2026-10-25.json" }
     override suspend fun signedInPage(next: String) = "https://paddlesnitch.com$next"
 }
@@ -108,8 +125,9 @@ class AccountScreensTest {
             PaddlesnitchTheme { Surface(color = PsColor.bg) { content() } }
         }
     }
-    private fun account(api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null)) = show(fontScale, saveDialog) {
-        AccountScreen(api, onBack = {}, onTracker = {}, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" })
+    private fun account(api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null), resumeDelete: Boolean = false) = show(fontScale, saveDialog) {
+        AccountScreen(api, onBack = {}, onTracker = {}, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" },
+            resumeDelete = resumeDelete, onDeleteResumed = { did += "resumed" }, onSignInAgain = { id, email, strava -> did += "sign in again $id $email ${if (strava) "with Strava" else "with email"}" })
     }
     private fun waitFor(text: String) = compose.waitUntil { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
 
@@ -228,7 +246,88 @@ class AccountScreensTest {
         compose.onRoot().captureRoboImage()
         delete.performScrollTo().performClick()
         compose.waitUntil { "deleted" in did }
-        assertEquals(listOf("delete"), api.calls)
+        assertEquals(listOf("status", "delete"), api.calls)
+    }
+
+    @Test fun anOldSignInAsksToSignInAgainForThisAccount() {
+        val api = FakeAccountApi(recentSignIn = false)
+        account(api)
+        waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor(RECENT_SIGN_IN)
+        compose.onNodeWithTag("delete-confirm").assertDoesNotExist() // nothing to type until the sign-in is fresh
+        compose.onNodeWithText("Sign in again").performScrollTo()
+        compose.onRoot().captureRoboImage()
+        compose.onNodeWithText("Sign in again").performClick()
+        compose.onNodeWithText("Sign in again…").assertIsNotEnabled() // signing out takes a moment: one tap, one sign-in
+        assertEquals(listOf("sign in again u-123 pat@example.com with email"), did)
+        assertEquals(listOf("status"), api.calls)
+    }
+
+    @Test fun backFromSigningInAgainWithASignInStillTooOldItAsksAgainCalmly() {
+        account(FakeAccountApi(recentSignIn = false), resumeDelete = true)
+        waitFor(RECENT_SIGN_IN)
+        compose.onNodeWithTag("delete-confirm").assertDoesNotExist()
+        compose.onNodeWithTag("delete-message").onChildren().assertCountEquals(0)
+    }
+
+    @Test fun aSessionThatEndedWhenCheckingGoesBackToSigningIn() {
+        val api = FakeAccountApi()
+        account(api)
+        waitFor("Delete my account")
+        api.signedOut = true
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        compose.waitUntil { "signed out" in did }
+    }
+
+    @Test fun anAccountMadeWithStravaSignsInAgainWithStrava() {
+        account(FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", recentSignIn = false))
+        waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor("Sign in again")
+        compose.onNodeWithText("Sign in again").performScrollTo().performClick()
+        assertEquals(listOf("sign in again u-123 null with Strava"), did)
+    }
+
+    @Test fun cancellingSignInAgainGoesBackToTheDeleteButton() {
+        account(FakeAccountApi(recentSignIn = false))
+        waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor("Sign in again")
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Delete my account").assertExists()
+        compose.onNodeWithText(RECENT_SIGN_IN).assertDoesNotExist()
+    }
+
+    @Test fun whenTheTenMinutesRunOutWhileTypingItAsksToSignInAgainNotAnError() {
+        val api = FakeAccountApi(reauthOnDelete = true)
+        account(api)
+        waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        compose.onNodeWithTag("delete-confirm").performTextInput("DELETE")
+        compose.onNodeWithText("Delete for good").performScrollTo().performClick()
+        waitFor(RECENT_SIGN_IN)
+        compose.onNodeWithText("Sign in again").assertExists()
+        compose.onNodeWithText("For your safety, deleting your account needs a recent sign-in. Please sign in again.").assertDoesNotExist()
+        compose.onNodeWithTag("delete-message").onChildren().assertCountEquals(0) // no red error alongside
+        assertFalse("deleted" in did)
+    }
+
+    @Test fun backFromSigningInAgainItChecksAndOpensTheDeleteBox() {
+        val api = FakeAccountApi()
+        account(api, resumeDelete = true)
+        compose.waitUntil { compose.onAllNodes(hasTestTag("delete-confirm")).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(listOf("resumed"), did)
+        assertEquals(listOf("status"), api.calls)
+    }
+
+    @Test fun aFailedCheckSaysSoInsteadOfAskingToSignIn() {
+        account(FakeAccountApi(failStatus = true))
+        waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor("Couldn’t check your sign-in. Please try again.")
+        compose.onNodeWithText("Sign in again").assertDoesNotExist()
+        compose.onNodeWithText("Delete my account").assertIsEnabled()
     }
 
     @Test fun cancellingDeleteClearsWhatWasTyped() {
