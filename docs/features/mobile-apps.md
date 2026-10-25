@@ -150,16 +150,19 @@ Reuses what the browser already proved
   `POST /att/api/auth/refresh {refreshToken}` → `{idToken}` (401: sign in
   again), and `POST /att/api/auth/logout {refreshToken}` revokes it. How to call
   them: `mobile/contract/README.md`. Tests: `src/tests/mobile-signin.test.ts`.
-- **Strava sign-in from an app:** the in-app browser runs the existing flow;
-  the callback lands on a verified app link (Android `assetlinks.json`, iOS
-  `apple-app-site-association`, both under `/.well-known/`) carrying a
-  **one-time code** the app swaps for tokens. Tokens never appear in a URL.
-  `apple-app-site-association` declares `webcredentials` as well as
-  `applinks`, so iOS offers saved paddlesnitch.com passwords. Its app IDs need
-  the Apple team ID, which only exists once the Apple Developer Program is
-  joined (iOS P5). Until then the file ships without the iOS app IDs, and Strava
-  sign-in on iPhone waits for P5. Android's `assetlinks.json` needs only the
-  signing key's fingerprint, so it can be real from Android P0.
+- **Strava sign-in from an app ✅ (2026-10-25):** the in-app browser (Custom
+  Tab / `ASWebAuthenticationSession`) runs the existing flow with a PKCE
+  challenge (`strava/init?challenge=`); the callback sends a **one-time code**
+  to the app's own scheme, `com.paddlesnitch.app:/signin/strava?code=`, and the
+  app swaps code + verifier at `POST /att/api/auth/strava/app-token`. Tokens
+  never appear in a URL; a code works once, for 5 minutes, and only with the
+  verifier (`apps/web/src/lib/app-signin.ts`, tests
+  `src/tests/strava-app-signin.test.ts`). **Changed from the plan's verified app
+  link:** a custom scheme hands back reliably from both in-app browsers, works
+  in debug builds, and needs no Apple team ID, so iPhone Strava sign-in doesn't
+  wait for P5; PKCE is what makes an intercepted code useless (RFC 8252).
+  `apple-app-site-association` (for `webcredentials`, saved passwords) still
+  waits for the team ID. How to call it: `mobile/contract/README.md`.
 - **Signed-in website pages from the apps:** proposal is a one-time code
   handed to the in-app browser, which a web route turns into the usual cookies.
 - **Phone devices** on the relay route (above).

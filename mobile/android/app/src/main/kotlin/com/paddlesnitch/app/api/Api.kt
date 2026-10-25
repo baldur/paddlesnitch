@@ -43,6 +43,13 @@ class Api(
     suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignIn =
         signIn("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}""")
 
+    /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
+    fun stravaStartUrl(challenge: String): String =
+        base.newBuilder().encodedPath("/att/api/auth/strava/init").addQueryParameter("challenge", challenge).build().toString()
+
+    suspend fun stravaSignIn(code: String, verifier: String): SignIn =
+        signIn("/att/api/auth/strava/app-token", """{"code":${str(code)},"verifier":${str(verifier)}}""")
+
     suspend fun signOut() {
         val refresh = tokens.refreshToken
         tokens.clear()

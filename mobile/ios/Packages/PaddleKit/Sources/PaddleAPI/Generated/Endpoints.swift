@@ -18,6 +18,8 @@ public enum Endpoints {
         method: "POST", path: "/att/api/auth/refresh", errorStatuses: [401])
     public static let authSignup = Endpoint<Signup, SignIn>(
         method: "POST", path: "/att/api/auth/signup", errorStatuses: [400, 409, 422, 500])
+    public static let authStravaAppToken = Endpoint<StravaAppToken, SignIn>(
+        method: "POST", path: "/att/api/auth/strava/app-token", errorStatuses: [400, 401, 500])
 
     /// Decodes `data` as the answer of the route `"POST /path"`. For the contract tests.
     public static func decodeOutput(of route: String, from data: Data, using decoder: JSONDecoder)
@@ -30,6 +32,7 @@ public enum Endpoints {
         case "POST /att/api/auth/otp-verify": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/refresh": try decoder.decode(Refreshed.self, from: data)
         case "POST /att/api/auth/signup": try decoder.decode(SignIn.self, from: data)
+        case "POST /att/api/auth/strava/app-token": try decoder.decode(SignIn.self, from: data)
         default: throw ProcedureError.unknownPath(route)
         }
     }
