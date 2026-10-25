@@ -145,22 +145,57 @@ class AppTestCase: XCTestCase {
     /// - Contrast: iOS 26+ blurs what scrolls under its glass bars, and the
     ///   audit measures it anyway. `ContrastTests` (DesignSystem) checks every
     ///   colour pairing from the tokens instead.
+    ///
+    /// The audit isn't steady (mobile/ios/CLAUDE.md). An issue it can't pin on
+    /// an element comes and goes between runs, so it's asked again and fails
+    /// only if raised twice; a real clip ("NO GPS" cut to "N…") is a layout
+    /// that stays. A slow runner's timeout (code -56) is retried once.
     func audit(
         _ types: XCUIAccessibilityAuditType = XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast]),
         file: StaticString = #filePath, line: UInt = #line
     ) throws {
-        var issues: [String] = []
-        try app.performAccessibilityAudit(for: types) { issue in
-            if Self.isIOS17LargeTitleWarning(issue) { return true }
-            let element = issue.element.map { "\($0.elementType) \"\($0.label)\"" } ?? "screen"
-            issues.append("\(issue.compactDescription): \(element)")
-            // An issue the audit can't pin on an element keeps Xcode's
-            // screenshots in the test results, so it can still be found.
-            return issue.element != nil
+        var found = try auditIssues(types)
+        if found.pinned.isEmpty && !found.unpinned.isEmpty {
+            keepScreenshot("Audit issue on no element, first time")
+            found = try auditIssues(types)
         }
+        let issues = found.pinned + found.unpinned
         if !issues.isEmpty {
+            keepScreenshot("Audit issues")
             XCTFail("Accessibility audit:\n" + issues.joined(separator: "\n"), file: file, line: line)
         }
+    }
+
+    private func auditIssues(_ types: XCUIAccessibilityAuditType) throws -> (pinned: [String], unpinned: [String]) {
+        for attempt in 1...2 {
+            var pinned: [String] = []
+            var unpinned: [String] = []
+            do {
+                try app.performAccessibilityAudit(for: types) { issue in
+                    if Self.isIOS17LargeTitleWarning(issue) { return true }
+                    if let element = issue.element {
+                        pinned.append("\(issue.compactDescription): \(element.elementType) \"\(element.label)\"")
+                    } else {
+                        unpinned.append("\(issue.compactDescription): \(issue.detailedDescription) (no element)")
+                    }
+                    return true
+                }
+                return (pinned, unpinned)
+            } catch let error as NSError where error.code == Self.auditTimedOut && attempt == 1 {
+                continue
+            }
+        }
+        return ([], [])
+    }
+
+    /// "Audit failed to complete in time", seen on slow CI runners.
+    static let auditTimedOut = -56
+
+    private func keepScreenshot(_ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 
     /// Tab items, wherever this iOS draws the tab bar.

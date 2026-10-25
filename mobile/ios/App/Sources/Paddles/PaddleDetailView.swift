@@ -30,7 +30,7 @@ struct PaddleDetailView: View {
         case .failed(let message):
             MessageView(
                 title: "Couldn't open this paddle", message: message,
-                action: ("Try again", { Task { await model.load() } }))
+                action: model.gone ? nil : ("Try again", { Task { await model.load() } }))
         case .loaded(let paddle):
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
