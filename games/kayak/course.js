@@ -3,6 +3,8 @@
 // along" and "how far off the middle". Width varies along the way, and
 // narrowboats moored against a bank take up some of it. Pure, no DOM.
 
+import { waterMap, shoreOf } from './water.js';
+
 const SPACING = 2; // metres between samples
 
 const NARROWBOAT = 2.1; // beam of a moored narrowboat, metres
@@ -215,6 +217,8 @@ const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6 };
 // river line itself, which everything in the file is placed along. With a
 // `route` (a loop, round islands) the race follows that instead: moored boats
 // narrow it wherever they lie, and `shared` marks water it uses both ways.
+// Where the file maps the water (`water`), `shore` (water.js) keeps boats off
+// the real banks, islands and moored boats.
 export function courseFromFile(data) {
   const along = (line, values) => {
     const cum = [0];
@@ -231,13 +235,24 @@ export function courseFromFile(data) {
     width: along(data.line, data.width), start: data.start, finish: data.finish, warp: data.warp, speedup: data.speedup,
     moorings, bridges: data.bridges,
   });
-  if (!data.route) return { ...river, scenery: { ...data, river } };
+  const shore = data.water?.length ? shoreOf(waterMap(data.water), mooringBoxes(river, moorings)) : null;
+  if (!data.route) return { ...river, shore, scenery: { ...data, river } };
   const { line, left, right, start, finish } = data.route;
   const [l, r] = [along(line, left), along(line, right)];
   const course = createCourse(line, { sides: (s) => ({ left: l(s), right: r(s) }), start, finish, warp: data.warp, speedup: data.speedup });
   for (const m of moorings) moored(course, river, m);
   twoWay(course);
-  return { ...course, scenery: { ...data, river } };
+  return { ...course, shore, scenery: { ...data, river } };
+}
+
+// The boats moored on a river (placed against their bank, as moored() has
+// them), as boxes for water.js's shoreOf: solid.
+function mooringBoxes(river, moorings) {
+  return moorings.map((m) => {
+    const c = pointAt(river, m.s);
+    const w = widthAt(river, m.s).half - m.beam / 2;
+    return { x: c.x - c.tz * m.side * w, z: c.z + c.tx * m.side * w, ux: c.tx, uz: c.tz, half: m.length / 2, beam: m.beam };
+  });
 }
 
 // Narrows a route where a boat moored on the river (`m`, placed along `river`) lies.

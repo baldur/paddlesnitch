@@ -104,7 +104,20 @@ Serves `games/`, plays the course in Chrome with `#debug`, puts the boat at each
 
 Owner's course, 2026-10-24: from Reading Canoe Club up the narrow back channel of St Mary's Island, through the ~9 m gap at its west tip (between it and a little islet: "only one or two boats side by side"), back down the main channel past the club, north of Piper's Island, down the north side of Fry's Island, round its east end (by Christchurch Bridge), back up the south side, south of Piper's, and home to the club: 5.4 km. St Mary's Island isn't named in OSM; it's the islet at 51.4697, -1.0045.
 
+**Re-routed 2026-10-25** (the owner): down through Caversham Bridge's **right (south) arch**, down the **main channel, right of Fry's Island**, **turn left round its end before Christchurch Bridge**, back up the **back (north) channel behind it**, and past Piper's Island **either side** (the left, south arch, is quicker and is the racing line; the narrow bit right of it, in front of the Reading University boathouses, often has swans: a flock is placed there). 5.43 km. Rebuilt with `course:route` (below), so its corners are rounded to turns a K1 can make (12 m radius; about 10 m round the end of Fry's Island, where there are only 20 m between the island and the bridge) and it keeps 3 m off every bank.
+
+What makes the turns clear (heuristics, chosen to look like a real time trial, not a game):
+- **Turning buoys** off the island ends where the course turns or splits (`marks`: big yellow inflatables with a flag, also on both maps).
+- **Cues** about 60-100 m before each turn or split (`cues`: an arrow and a line under the clock, "Keep right: up the back channel behind St Mary's Island", "Christchurch Bridge ahead: turn left round the end of Fry's Island").
+- The close-up map shows the **real water** (islands as holes) and the **racing line** through it, dashed.
+- **Gates** (`gates`): where the course must go through its own water (St Mary's back channel and its end, Fry's main channel, its end, its back channel). Reach one's distance along anywhere else and the game says so ("Missed the course: go back and go round the end of Fry's Island") and won't count a finish until you've gone back for it. Piper's Island has no gate: either arch is fine.
+- **Real banks:** on a course file with `water`, boats meet the mapped banks, islands and moored boats (`water.js` `shoreOf`, `sim.js` `bounceOffShore`), not the racing line's open-water edges. That's what made the turns glitchy before: at an island's end the edge dropped tens of metres in a few, and a boat past it was pushed sideways up to 2 m in a frame. Now a push is at most a few tens of centimetres, and other channels (Piper's north arch) are really there.
+
 It's a time trial with **interval starts**: boats wait in two columns by the banks below the line and are let go 30 s apart (as shown), you 5th; each is timed from crossing the start line, as in a head race. Your place is by the time everyone's on track for. Most of the route is two-way water, so the AI keeps right there and further right for boats coming the other way; the HUD tells you to keep right.
+
+### Changing a route (`route.ts`, pure `lib/route.ts`, tested)
+
+`course:route <id>` rebuilds a course file's route from `course.json` without the downloads or the footage, from the river line and mapped water already in the file: the legs (`along` the river line between two points, or points to go through), moved off any land, corners rounded to 12 m where there's water for it, the open water either side from the mapped shore; and what's placed along the route: `places` (names found where the file's previous route named them; a label `at` a point; `heading` to name it only on the pass going that way), `birds` (`near` a name, or `at` a point off the line: kept to the real water), `gates` and `cues` (`at` a point, `heading` for the pass), and `marks` (buoys, 4 m out from the nearest shore to `at`). Run it after `course:build` for a course with a route (`course:build` doesn't know these).
 
 ## Adding a course
 

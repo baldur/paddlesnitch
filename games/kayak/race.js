@@ -5,7 +5,7 @@
 // sprint off the line, pace themselves on stamina, hang on each other's wash,
 // avoid and bump into each other and kick for the finish. Pure, no DOM, so
 // whole races run in tests.
-import { createBoat, step, bounceOffBank, wrap, steadyBeat, BOAT } from './sim.js';
+import { createBoat, step, bounceOffBank, bounceOffShore, wrap, steadyBeat, BOAT } from './sim.js';
 import { locate, pointAt, headingAt, widthAt, roomAhead } from './course.js';
 import { createBirds, stepBirds, swansAhead } from './birds.js';
 import { createTraffic, moveTraffic, trafficHits, trafficWash, trafficWarnings, trafficNear } from './traffic.js';
@@ -61,6 +61,7 @@ export function createRace(course, { rivals = [], seed = 1, you = {}, birds = tr
     : format === 'interval' ? intervalRace(course, { rivals, seed, you, birds })
       : massRace(course, { rivals, seed, you, birds });
   race.traffic = traffic ? createTraffic(course, seed) : null;
+  race.gates = [...(course.scenery?.gates ?? [])].sort((a, b) => a.s - b.s);
   return race;
 }
 
@@ -307,8 +308,9 @@ export function stepRace(race, dt, input) {
     // Holding water on the line (but you can paddle up to it from behind).
     if ((!going && bowAt(r) > race.start.line - 4) || !released(race, r)) r.boat.speed *= Math.exp(-0.6 * dt);
     r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);
+    // The real banks where they're mapped; else the edges of the open water.
     const w = widthAt(course, r.loc.s);
-    if (bounceOffBank(r.boat, r.loc, w.left, w.right)) result.push('bank');
+    if (course.shore ? bounceOffShore(r.boat, course.shore) : bounceOffBank(r.boat, r.loc, w.left, w.right)) result.push('bank');
     if (r === player) events = result;
     else if (result.includes('stroke')) splashes.push(Math.hypot(r.boat.x - player.boat.x, r.boat.z - player.boat.z));
   });
@@ -334,8 +336,27 @@ export function stepRace(race, dt, input) {
     }
   }
 
+  // Gates (a course file's `gates`): the course goes this way round an island
+  // or up this channel. Reaching one's distance along in its water passes it;
+  // anywhere else (another channel, a short cut) misses it, and then you must
+  // go back for it: there's no finishing with a gate missed.
   for (const r of racers) {
-    if (going && !r.remote && r.finish === null && r.loc.s >= course.finish && (race.format !== 'interval' || r.crossed !== null)) {
+    if (r.remote || !race.gates.length) continue;
+    r.gate ??= 0;
+    const g = race.gates[r.gate];
+    if (r.missed && r.loc.s < r.missed.s - 10) r.missed = null; // gone back for it
+    if (!g || r.missed || r.loc.s < g.s) continue;
+    const w = widthAt(course, g.s);
+    if (Math.abs(r.loc.lateral) <= (r.loc.lateral < 0 ? w.left : w.right) + 2) r.gate++;
+    else {
+      r.missed = g;
+      if (r === player) events.push('missed');
+    }
+  }
+
+  for (const r of racers) {
+    const gated = !race.gates.length || r.gate === race.gates.length;
+    if (going && !r.remote && r.finish === null && gated && r.loc.s >= course.finish && (race.format !== 'interval' || r.crossed !== null)) {
       r.finish = race.format === 'interval' ? race.time - r.crossed : race.time;
       if (r === player) events.push('finish');
     }

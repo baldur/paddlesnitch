@@ -3,6 +3,7 @@
 // finish gantries and distance markers. A real river (course.scenery, from a
 // course file) gets its own buildings, bridges, boats, woods, railway and lock
 // instead of the made-up ones. Pure, no GPU.
+import { waterMap, SHORE_SEARCH } from './water.js';
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt } from './course.js';
 
@@ -81,6 +82,7 @@ export function buildWorld(course, seed = 1) {
   if (real) {
     river.land = waterMap(real.water ?? []);
     realLand(m, river, real, rand);
+    for (const b of real.marks ?? []) buoy(m, b);
   } else {
     // The towpath runs along the left bank.
     for (const side of [-1, 1]) {
@@ -358,58 +360,15 @@ function ground(course, x, z, lineD = null) {
   return { d, y: d < 0 ? -0.4 : groundHeight(d, REAL_PROFILE) + bump(x, z, d) };
 }
 
-const SHORE_SEARCH = 60; // metres: further from the river line than this, the line's distance will do
-
-// The mapped water (rings of the river's areas and its islands, as segments):
-// whether a point is in it (an odd number of crossings), and how far the
-// nearest shore is (up to SHORE_SEARCH).
-function waterMap(rings) {
-  const bands = new Map(); // 10 m bands of z: the segments spanning each, for crossings
-  const cells = new Map(); // 20 m squares: the segments in each, for distances
-  const add = (map, k, seg) => map.set(k, [...(map.get(k) ?? []), seg]);
-  for (const ring of rings) {
-    for (let i = 0; i < ring.length - 1; i++) {
-      const seg = [ring[i], ring[i + 1]];
-      const [[ax, az], [bx, bz]] = seg;
-      for (let b = Math.floor(Math.min(az, bz) / 10); b <= Math.floor(Math.max(az, bz) / 10); b++) add(bands, b, seg);
-      const len = Math.hypot(bx - ax, bz - az);
-      const seen = new Set();
-      for (let t = 0; t <= len; t += 10) {
-        const f = len ? t / len : 0;
-        const k = `${Math.floor((ax + (bx - ax) * f) / 20)},${Math.floor((az + (bz - az) * f) / 20)}`;
-        if (!seen.has(k)) add(cells, k, seg);
-        seen.add(k);
-      }
-      const k = `${Math.floor(bx / 20)},${Math.floor(bz / 20)}`;
-      if (!seen.has(k)) add(cells, k, seg);
-    }
-  }
-  return {
-    rings: rings.length,
-    inside(x, z) {
-      let odd = false;
-      for (const [[ax, az], [bx, bz]] of bands.get(Math.floor(z / 10)) ?? []) {
-        if ((az > z) !== (bz > z) && x < ax + ((z - az) * (bx - ax)) / (bz - az)) odd = !odd;
-      }
-      return odd;
-    },
-    shore(x, z) {
-      let best = SHORE_SEARCH;
-      const r = Math.ceil(SHORE_SEARCH / 20);
-      const [cx, cz] = [Math.floor(x / 20), Math.floor(z / 20)];
-      for (let i = cx - r; i <= cx + r; i++) {
-        for (let j = cz - r; j <= cz + r; j++) {
-          for (const [[ax, az], [bx, bz]] of cells.get(`${i},${j}`) ?? []) {
-            const dx = bx - ax;
-            const dz = bz - az;
-            const f = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
-            best = Math.min(best, Math.hypot(x - ax - dx * f, z - az - dz * f));
-          }
-        }
-      }
-      return best;
-    },
-  };
+// A turning buoy off an island's end (a course file's `marks`): a big yellow
+// inflatable, a red band and a flag on top, to be seen from well back.
+function buoy(m, { x, z }) {
+  const yellow = [1, 0.82, 0.12];
+  m.cylinder([x, -0.2, z], 1, 1.3, 14, yellow);
+  m.cone([x, 1.1, z], 1, 0.9, 14, yellow);
+  m.cylinder([x, 0.6, z], 1.02, 0.25, 14, [0.85, 0.15, 0.12]);
+  m.cylinder([x, 1.9, z], 0.04, 1.8, 4, [0.2, 0.2, 0.22]);
+  m.box([x, 3.1, z - 0.02], [x + 0.8, 3.65, z + 0.02], [0.85, 0.15, 0.12]);
 }
 
 // The land beside a real river: strips out from the river line, shaped by the
