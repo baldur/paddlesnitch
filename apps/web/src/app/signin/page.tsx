@@ -52,6 +52,7 @@ function AuthForm() {
     // sign-in. See src/app/att/api/auth/strava/callback/route.ts.
     if (e === 'strava_user_create_failed') return 'Couldn’t create an account from your Strava profile. Please sign up with your email instead.'
     if (e === 'strava_signin_failed') return 'Strava sign-in didn’t finish. Please try again.'
+    if (e === 'reauth_delete') return 'Sign in again to delete your account.'
     if (e === 'app_link_expired') return 'That link from the app has expired. Sign in here, or open it from the app again.'
     if (e === 'strava_not_configured') return 'Strava sign-in isn’t available right now.'
     return ''

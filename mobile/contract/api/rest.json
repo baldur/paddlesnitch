@@ -128,7 +128,8 @@
     "input": "DeleteAccount",
     "output": "Ok",
     "errors": [
-      401
+      401,
+      403
     ]
   },
   "GET /api/account/profile": {

@@ -254,6 +254,12 @@ function AccountPageInner() {
       const res = await fetch('/api/account', { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
+        if (body.reauth) {
+          // Deleting needs a fresh sign-in: sign out, then back here to finish.
+          await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => {})
+          window.location.assign(`/signin?error=reauth_delete&next=${encodeURIComponent('/account#delete')}`)
+          return
+        }
         throw new Error(body.error ?? 'Couldn’t delete your account. Please try again.')
       }
       // Account gone. Send them home, in full: the header's user came with the page.

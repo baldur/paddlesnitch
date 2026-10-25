@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { getRequestUser, clearAuthCookies } from '@/lib/auth'
+import { getRequestUser, clearAuthCookies, requestSignedInAt } from '@/lib/auth'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { unindexEntries } from '@/lib/entries'
 import { deleteUser, revoke } from '@/lib/cognito'
@@ -36,9 +36,18 @@ import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 //   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent.
+// Needs a sign-in from the last 10 minutes (owner, 2026-10-25): a stolen or
+// left-open session must not be able to erase everything. Not a password
+// prompt, because accounts made through Strava have none.
+const RECENT_SIGN_IN_S = 10 * 60
+
 export async function DELETE(req: Request) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const signedInAt = await requestSignedInAt(req)
+  if (!signedInAt || Date.now() / 1000 - signedInAt > RECENT_SIGN_IN_S) {
+    return NextResponse.json({ error: 'Sign in again to delete your account.', reauth: true }, { status: 403 })
+  }
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)

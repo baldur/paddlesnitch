@@ -463,6 +463,22 @@ export async function customAuthSignIn(
   }
 }
 
+/**
+ * When the person behind this ID token last signed in, in Unix seconds: the
+ * `auth_time` claim. Cognito keeps the original sign-in time on a refreshed
+ * token (cognito-local doesn't), so this is the last time someone typed a
+ * password, a code or went through Strava. Null if the token isn't valid.
+ */
+export async function idTokenSignedInAt(idToken: string): Promise<number | null> {
+  try {
+    const claims = await getVerifier().verify(idToken)
+    if (claims.token_use !== 'id') return null
+    return typeof claims.auth_time === 'number' ? claims.auth_time : null
+  } catch {
+    return null
+  }
+}
+
 export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
   try {
     const claims = await getVerifier().verify(idToken)

@@ -177,6 +177,27 @@ describe('what the Account screens do', () => {
     expect(revoke).toHaveBeenCalledWith(pat.refreshToken)
   })
 
+  it('delete account needs a sign-in from the last 10 minutes (app and website): older is 403 reauth, nothing erased', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(Date.now() + 11 * 60_000)
+      const app = await deleteAccount(req('DELETE', '/api/account', pat.idToken))
+      expect(app.status).toBe(403)
+      expect(await app.json()).toMatchObject({ error: expect.any(String), reauth: true })
+      jar({ tt_id: pat.idToken })
+      const site = await deleteAccount(req('DELETE', '/api/account'))
+      expect(site.status).toBe(403)
+      // Nothing was erased: the account still answers.
+      expect((await getProfile(req('GET', '/api/account/profile', pat.idToken))).status).toBe(200)
+      expect(revoke).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+    // Within the 10 minutes (a fresh sign-in), it goes ahead.
+    jar({})
+    await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))
+  })
+
   it('delete account from the website revokes the cookie\'s refresh token, never one in the body', async () => {
     jar({ tt_id: pat.idToken, tt_refresh: pat.refreshToken })
     await fits(Ok, await deleteAccount(req('DELETE', '/api/account', undefined, { refreshToken: 'someone-elses' })))
