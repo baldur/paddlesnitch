@@ -82,6 +82,22 @@
     "output": "Ok",
     "errors": []
   },
+  "POST /att/api/auth/password-reset/request": {
+    "auth": "public",
+    "input": "ResetRequest",
+    "output": "Ok",
+    "errors": [
+      400
+    ]
+  },
+  "POST /att/api/auth/password-reset/confirm": {
+    "auth": "public",
+    "input": "ResetConfirm",
+    "output": "ResetDone",
+    "errors": [
+      400
+    ]
+  },
   "GET /api/account/tos": {
     "auth": "user",
     "input": null,

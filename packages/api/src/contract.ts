@@ -161,6 +161,21 @@ const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }
 const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
 const WebPage = named('WebPage', z.object({ url: z.string() }))
 const StravaAppToken = named('StravaAppToken', z.object({ code: z.string(), verifier: z.string() }))
+// Forgot password: ask for a code by email, then set a new password with it.
+const ResetRequest = named('ResetRequest', z.object({
+  email: z.string(),
+  // The anti-bot fields, as on OtpRequest.
+  website: z.literal(''),
+  elapsedMs: z.number(),
+}))
+const ResetConfirm = named('ResetConfirm', z.object({ email: z.string(), code: z.string(), password: z.string() }))
+/** The new password is set. `signedIn` with the tokens (an app's request), or false: sign in with the new password. */
+export const ResetDone = named('ResetDone', z.object({
+  ok: z.literal(true),
+  signedIn: z.boolean(),
+  idToken: z.string().optional(),
+  refreshToken: z.string().optional(),
+}))
 
 // ---- Account (C5): the website's /api/account routes, called with Authorization: Bearer ----
 
@@ -255,6 +270,8 @@ export const restRoutes = {
   'POST /paddles/api/analyse': { auth: 'user', input: null, output: Analysed, errors: [400, 401, 422, 500] },
   'POST /att/api/auth/refresh': { auth: 'public', input: RefreshToken, output: Refreshed, errors: [401] },
   'POST /att/api/auth/logout': { auth: 'public', input: RefreshToken, output: Ok, errors: [] },
+  'POST /att/api/auth/password-reset/request': { auth: 'public', input: ResetRequest, output: Ok, errors: [400] },
+  'POST /att/api/auth/password-reset/confirm': { auth: 'public', input: ResetConfirm, output: ResetDone, errors: [400] },
   'GET /api/account/tos': { auth: 'user', input: null, output: TosStatus, errors: [401] },
   'POST /api/account/tos': { auth: 'user', input: TosAccept, output: TosAccepted, errors: [401, 422] },
   'POST /api/account/export': { auth: 'user', input: null, output: DownloadLink, errors: [401] },

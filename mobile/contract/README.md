@@ -99,6 +99,8 @@ just accepted the Terms).
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
+| `POST /att/api/auth/password-reset/request` | `{email, website: "", elapsedMs}` | `{ok: true}` whether or not the account exists (it never says); if it does, a 6-digit code goes to that email |
+| `POST /att/api/auth/password-reset/confirm` | `{email, code, password}` | `{ok: true, signedIn: true, idToken, refreshToken}`: signed in with the new password (then ask `me` for the name). `signedIn: false` = set, but sign in again. 400 with `error` for a wrong or expired code or a weak password |
 
 **Website pages, signed in.** For a page only the website has (account
 details, delete account…), `POST /att/api/auth/web-code {next: "/account#delete"}`
@@ -151,7 +153,7 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId` |
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
-are in `fixtures/tracker/README.md`. Forgot password and Strava come next in C5.
+are in `fixtures/tracker/README.md`. Forgot password is under Signing in. Strava comes next in C5.
 
 ## fixtures/api/
 

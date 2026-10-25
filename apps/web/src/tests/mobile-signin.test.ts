@@ -15,8 +15,11 @@ import { POST as signup } from '@/app/att/api/auth/signup/route'
 import { POST as login } from '@/app/att/api/auth/login/route'
 import { POST as logout } from '@/app/att/api/auth/logout/route'
 import { POST as refreshRoute } from '@/app/att/api/auth/refresh/route'
+import { POST as requestReset } from '@/app/att/api/auth/password-reset/request/route'
+import { POST as confirmReset } from '@/app/att/api/auth/password-reset/confirm/route'
+import { readConfirmationCode } from './cognito-db'
 import { verifyIdToken, refresh } from '@/lib/cognito'
-import { restRoutes, SignIn, Refreshed, Ok, ApiError } from '@paddlesnitch/api/contract'
+import { restRoutes, SignIn, Refreshed, Ok, ApiError, ResetDone } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { existsSync } from 'fs'
 import path from 'path'
@@ -119,5 +122,38 @@ describe('the sign-in routes answer what the contract says', () => {
     await fits(Refreshed, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: u.refreshToken }, true)))
     await fits(ApiError, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: 'nope' }, true)))
     await fits(Ok, await logout(post('/att/api/auth/logout', { refreshToken: u.refreshToken }, true)))
+  })
+})
+
+describe('forgot password from an app', () => {
+  const fits = async (schema: z.ZodType, res: Response) => {
+    const body = await res.json()
+    expect(schema.safeParse(body).error?.issues).toBeUndefined()
+    return body
+  }
+
+  it('asks for a code, then sets the new password and answers with the tokens, no cookies', async () => {
+    const u = await makeUser('Pat')
+    const asked = await requestReset(post('/att/api/auth/password-reset/request', { email: u.email, website: '', elapsedMs: 5000 }, true))
+    expect(asked.status).toBe(200)
+    await fits(Ok, asked)
+    const code = await readConfirmationCode(u.email)
+    const res = await confirmReset(post('/att/api/auth/password-reset/confirm', { email: u.email, code, password: 'NewPassword456' }, true))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    const body = await fits(ResetDone, res)
+    expect(body).toMatchObject({ ok: true, signedIn: true })
+    expect((await verifyIdToken(body.idToken))?.id).toBe(u.id)
+    expect('idToken' in (await refresh(body.refreshToken))).toBe(true)
+  })
+
+  it('a wrong code and a missing email are ApiErrors (400)', async () => {
+    const u = await makeUser('Pat')
+    const wrong = await confirmReset(post('/att/api/auth/password-reset/confirm', { email: u.email, code: '000000', password: 'NewPassword456' }, true))
+    expect(wrong.status).toBe(400)
+    await fits(ApiError, wrong)
+    const none = await requestReset(post('/att/api/auth/password-reset/request', { website: '', elapsedMs: 5000 }, true))
+    expect(none.status).toBe(400)
+    await fits(ApiError, none)
   })
 })

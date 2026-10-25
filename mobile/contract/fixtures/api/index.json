@@ -67,6 +67,10 @@
     "call": "POST /att/api/auth/otp-verify",
     "schema": "ApiError"
   },
+  "auth.password-reset-confirm.json": {
+    "call": "POST /att/api/auth/password-reset/confirm",
+    "schema": "ResetDone"
+  },
   "auth.refresh.json": {
     "call": "POST /att/api/auth/refresh",
     "schema": "Refreshed"
