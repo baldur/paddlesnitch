@@ -34,7 +34,8 @@ API Gateway charges per message, about $1 per million; a phone sends 10 a second
 
 ### Leaderboard
 
-- Stored per course at `games/kayak/leaderboard/<course>.json`: each player's best (time as shown, hull, when), sorted, the top 100 kept.
+- Stored per course at `games/kayak/leaderboard/<course>.json`: each player's best (time as shown, boat, when), sorted, the top 100 kept. The boat is one of the nine in `games/kayak/boats.js` (`GAME_BOATS` in core, a test keeps them the same); times from before there were boats say `stable`, `club` or `racing`.
+- Your paddler and boat (`games.kit.get`/`.set`, signed in): kept at `users/{id}/game-kit.json`, so the account's erasure removes it and the export includes it. Only colours and the known choices are accepted.
 - `games.submit` (signed in) records a finished race: kept if it's your best on that course and plausible (no faster than about 18 km/h over the course's shown distance).
 - `games.leaderboard` (public) returns the top 20 and your own best and rank.
 - Names are shown as first name and initial ("Baldur G."), from the account's name.

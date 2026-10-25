@@ -4,6 +4,9 @@ import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISIO
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees } from './map.js';
+import { BOATS, boatById, hullOf, describe } from './boats.js';
+import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
+import { paddlerSvg, boatSvg, sectionSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
@@ -17,7 +20,8 @@ const STEP = 1 / 120;
 const EYE_HEIGHT = 0.78;
 const FOV_Y = (62 * Math.PI) / 180;
 const MIN_FOV_X = (75 * Math.PI) / 180;
-const HULL_KEY = 'snitchmedia:kayak:hull';
+const HULL_KEY = 'snitchmedia:kayak:hull'; // the hull picked before there were boats
+const KIT_KEY = 'snitchmedia:kayak:kit';
 const FORM_KEY = 'snitchmedia:kayak:form'; // sessionStorage: this visit only, for now
 
 // Real rivers come from course files (courses/*.json), loaded when first picked.
@@ -33,7 +37,8 @@ const OPEN = new Set(['practice']);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 
-// Boat and club colours; the player is always the first.
+// The computer rivals' boat and club colours (the first was the player's,
+// before you chose your own).
 const LIVERIES = [
   { deck: [0.9, 0.2, 0.16], hull: [0.95, 0.93, 0.88], stripe: [0.97, 0.97, 0.95] },
   { deck: [0.12, 0.35, 0.8], hull: [0.95, 0.95, 0.95], stripe: [0.95, 0.85, 0.2], top: [0.95, 0.8, 0.15], skin: [0.85, 0.65, 0.5], cap: [0.1, 0.25, 0.7] },
@@ -56,7 +61,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'sprint', 'map', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'glassesColour', 'deckColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'map', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -66,9 +71,19 @@ let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'f
 let resumeTo = 'racing';
 let mode = MODES.race;
 let race;
-let liveries; // racer -> index into LIVERIES and meshes.racers
-let hull = 'club';
-try { if (HULLS[localStorage.getItem(HULL_KEY)]) hull = localStorage.getItem(HULL_KEY); } catch {}
+let liveries; // racer -> { key, ...colours } (kit.js livery, or one of LIVERIES)
+// Your paddler and boat (kit.js): from this device, or new and random on a
+// first visit; the account's copy replaces it once we know who you are.
+let kit;
+let kitChosen = false; // picked before, so the menu opens on the races
+try {
+  const saved = JSON.parse(localStorage.getItem(KIT_KEY));
+  kitChosen = !!saved;
+  kit = saved ? cleanKit(saved) : randomKit(Math.random, localStorage.getItem(HULL_KEY));
+} catch {
+  kit = randomKit();
+}
+const kits = new Map(); // the other players' kits in a live race, by player id
 let renderer = null;
 let meshes = null;
 let placeNext = 0; // the next landmark to name (showPlace)
@@ -85,18 +100,32 @@ function reset() {
     rivals: mode.rivals,
     format: mode.format,
     seed: liveRace?.seed ?? ((Math.random() * 2 ** 31) | 0),
-    you: { hull, power: 1 + f, endurance: 1 + f * 1.5 },
+    you: { hull: hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
   });
   // Practice also sharpens your feel for the beat.
   const h = race.player.boat.hull;
   race.player.boat.hull = { ...h, rhythmSlop: h.rhythmSlop * (1 + f * 2) };
-  let next = 1;
-  liveries = new Map(race.racers.map((r) => [r, r === race.player ? 0 : next++]));
+  setLiveries();
   controls.clear();
   placeNext = 0;
   placeTimer = 0;
   hints = { left: 3, wait: 8 };
+}
+
+// Each boat's colours: yours, a friend's in a live race (in their boat), or a
+// computer rival's.
+function setLiveries() {
+  let next = 1;
+  liveries = new Map(race.racers.map((r) => {
+    const k = r === race.player ? kit : r.remote && kits.get(r.id);
+    if (!k) {
+      const i = next++;
+      return [r, { key: `rival${i}`, ...LIVERIES[i] }];
+    }
+    if (r.remote) r.boat.hull = hullOf(k);
+    return [r, { key: kitKey(k), ...livery(k) }];
+  }));
 }
 
 function start() {
@@ -201,17 +230,100 @@ function toMenu() {
   const t = training();
   if (t.races) lines.push(`Form this session: +${(form() * 100).toFixed(1)}% after ${t.races} race${t.races > 1 ? 's' : ''}`);
   els.best.textContent = lines.filter(Boolean).join(' · ');
+  showStep(kitChosen ? 'race' : 'paddler');
   openDialog(menu);
 }
 
-// The hull picker: radio buttons in the menu, remembered between visits.
-for (const radio of menu.querySelectorAll('input[name="hull"]')) {
-  radio.checked = radio.value === hull;
-  radio.addEventListener('change', () => {
-    hull = radio.value;
-    try { localStorage.setItem(HULL_KEY, hull); } catch {}
-  });
+// --- the start menu: your paddler, your boat, then a race --------------------------
+
+const STEPS = { paddler: 'stepPaddler', boat: 'stepBoat', race: 'stepRace' };
+function showStep(name) {
+  for (const [step, id] of Object.entries(STEPS)) document.getElementById(id).hidden = step !== name;
+  for (const b of menu.querySelectorAll('.steps button')) {
+    if (b.dataset.step === name) b.setAttribute('aria-current', 'step');
+    else b.removeAttribute('aria-current');
+  }
+  menu.scrollTop = 0;
+  // Getting as far as the races counts as having chosen.
+  if (name === 'race' && !kitChosen) {
+    kitChosen = true;
+    storeKit();
+  }
+  drawKit();
 }
+for (const b of menu.querySelectorAll('[data-step]')) b.addEventListener('click', () => showStep(b.dataset.step));
+
+const make = (html) => {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+};
+els.skinTones.append(...SKIN_TONES.map((tone, i) => make(
+  `<label><input type="radio" name="skin" value="${tone}" aria-label="Skin tone ${i + 1} of ${SKIN_TONES.length}"><span style="background:${tone}"></span></label>`)));
+els.boatList.append(...BOATS.map((b) => make(
+  `<label><input type="radio" name="boat" value="${b.id}"><b>${b.name}</b><span class="meter" aria-label="stability ${b.stability} of 9">${
+    Array.from({ length: 9 }, (_, i) => `<i class="${i < b.stability ? 'on' : ''}"></i>`).join('')}</span><small>${describe(b)}</small></label>`)));
+
+// The fields show the kit; any change to them is the new kit, kept at once.
+function showKit() {
+  for (const name of ['skin', 'head', 'sleeves', 'glasses', 'boat', 'deckShape', 'hullShape']) {
+    for (const input of menu.querySelectorAll(`input[name="${name}"]`)) input.checked = input.value === kit[name];
+  }
+  els.headColour.value = kit.headColour;
+  els.topColour.value = kit.top;
+  els.glassesColour.value = kit.glassesColour;
+  els.deckColour.value = kit.deck;
+  els.stripeColour.value = kit.stripe;
+  drawKit();
+}
+function drawKit() {
+  els.paddlerPic.innerHTML = paddlerSvg(kit);
+  els.youPic.innerHTML = paddlerSvg(kit);
+  els.boatPic.innerHTML = boatSvg(kit);
+  els.sectionPic.innerHTML = sectionSvg(kit);
+  const b = boatById(kit.boat);
+  const shape = [kit.deckShape === 'wings' && 'with wings', kit.hullShape === 'vee' && "a V'd keel"].filter(Boolean).join(' and ');
+  els.youBoat.textContent = `You, in a ${b.name}${shape ? `, ${shape}` : ''} (stability ${b.stability} of 9)`;
+}
+const checked = (name) => menu.querySelector(`input[name="${name}"]:checked`)?.value;
+menu.addEventListener('input', (e) => {
+  if (!e.target.closest('.step') || e.target.closest('#stepRace')) return;
+  kit = cleanKit({
+    skin: checked('skin'), head: checked('head'), headColour: els.headColour.value,
+    sleeves: checked('sleeves'), top: els.topColour.value,
+    glasses: checked('glasses'), glassesColour: els.glassesColour.value,
+    boat: checked('boat'), deck: els.deckColour.value, stripe: els.stripeColour.value,
+    deckShape: checked('deckShape'), hullShape: checked('hullShape'),
+  }, kit);
+  kitChosen = true;
+  drawKit();
+  storeKit();
+});
+
+// On this device straight away; on the account (signed in) once the picking settles.
+let kitTimer = 0;
+function storeKit() {
+  try { localStorage.setItem(KIT_KEY, JSON.stringify(kit)); } catch {}
+  clearTimeout(kitTimer);
+  if (account.user) kitTimer = setTimeout(() => call('games.kit.set', kit, { mutation: true }).catch(() => {}), 800);
+}
+// Signed in: the account's kit wins (picked on another device, say); with none
+// there yet, this device's goes up.
+async function loadKit() {
+  try {
+    const saved = await call('games.kit.get');
+    if (saved) {
+      kit = cleanKit(saved, kit);
+      try { localStorage.setItem(KIT_KEY, JSON.stringify(kit)); } catch {}
+      showKit();
+      if (!kitChosen && state === 'menu') showStep('race');
+      kitChosen = true;
+    } else if (kitChosen) {
+      storeKit();
+    }
+  } catch {}
+}
+showKit();
 
 // Phones: the race buttons are the tap that lets us ask for the motion
 // sensors, and for full screen held sideways where the browser allows it.
@@ -333,7 +445,7 @@ async function submitResult(time) {
   els.ranked.textContent = '';
   if (!account.user) return;
   try {
-    const { best, rank } = await call('games.submit', { course: mode.key, time, hull }, { mutation: true });
+    const { best, rank } = await call('games.submit', { course: mode.key, time, hull: kit.boat }, { mutation: true });
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
       : rank ? `Your best on the ${mode.label} leaderboard is ${ordinal(rank)}.` : '';
   } catch {
@@ -355,7 +467,7 @@ els.boards.addEventListener('toggle', async () => {
       const ol = document.createElement('ol');
       for (const e of b.top.slice(0, 5)) {
         const li = document.createElement('li');
-        li.textContent = `${e.name} ${formatTime(e.time)} (${HULLS[e.hull]?.name ?? e.hull})`;
+        li.textContent = `${e.name} ${formatTime(e.time)} (${boatById(e.hull)?.name ?? HULLS[e.hull]?.name ?? e.hull})`;
         if (e.you) li.className = 'you';
         ol.append(li);
       }
@@ -401,13 +513,24 @@ async function enterLobby(request) {
   els.liveError.replaceChildren();
   try {
     const info = await request;
-    lobby = joinLive(info, { players: showLobby, message: onLive });
+    lobby = joinLive(info, { players: () => { shareKit(); showLobby(); }, message: onLive });
     lobbyTimer = setInterval(showLobby, 1000);
     lobby.course = info.room.course;
     history.replaceState(null, '', `#${HASH.has('debug') ? 'debug&' : ''}race=${info.room.code}`);
     showLobby();
   } catch (err) {
     els.liveError.textContent = err.status === 404 ? 'That race has finished, or it is full.' : `Couldn't get into the race (${err.message}).`;
+  }
+}
+
+// Your kit goes to each player as they connect, so they see your paddler and boat.
+const kitSentTo = new Set();
+function shareKit() {
+  for (const p of lobby?.players ?? []) {
+    const open = p.id !== lobby.you && lobby.status(p.id) === 'open';
+    if (open && !kitSentTo.has(p.id)) lobby.sure({ type: 'kit', kit }, p.id);
+    if (open) kitSentTo.add(p.id);
+    else kitSentTo.delete(p.id);
   }
 }
 
@@ -420,7 +543,9 @@ function showLobby() {
   els.livePlayers.replaceChildren(...lobby.players.map((p) => {
     const li = document.createElement('li');
     const you = p.id === lobby.you;
-    li.textContent = `${p.name}${you ? ' (you)' : ''}${p.id === lobby.host ? ', starter' : ''} `;
+    const look = you ? kit : kits.get(p.id);
+    if (look) li.append(make(`<svg class="face" viewBox="0 0 120 120" aria-hidden="true">${paddlerSvg(look)}</svg>`));
+    li.append(`${p.name}${you ? ' (you)' : ''}${p.id === lobby.host ? ', starter' : ''} `);
     const small = document.createElement('small');
     const rtt = lobby.status(p.id) === 'open' && lobby.rtt(p.id);
     small.textContent = you ? '' : `${STATUS[lobby.status(p.id)]}${rtt ? ` · ${rtt} ms` : ''}`;
@@ -479,7 +604,11 @@ function onLive(id, msg) {
   if (msg.type === 'start' && id === lobby?.host && !liveRace && msg.order.some((p) => p.id === lobby.you)) begin(msg.order, msg.seed);
   else if (msg.type === 'call' && liveRace && id === lobby.host) applyCall(race, msg.call);
   else if (msg.type === 'finish' && liveRace && r && r.finish === null) r.finish = msg.time;
-  else if (msg.type === 'bye') {
+  else if (msg.type === 'kit') {
+    kits.set(id, cleanKit(msg.kit));
+    if (liveRace) setLiveries();
+    showLobby();
+  } else if (msg.type === 'bye') {
     if (liveRace && r) r.name = `${r.name} (left)`;
     showLobby();
   }
@@ -528,6 +657,8 @@ function endLive() {
   lobby = null;
   liveRace = null;
   tracks.clear();
+  kits.clear();
+  kitSentTo.clear();
   if (HASH.has('race') || location.hash.includes('race=')) {
     HASH.delete('race');
     history.replaceState(null, '', `${location.pathname}${HASH.has('debug') ? '#debug' : ''}`);
@@ -792,12 +923,12 @@ function placeRacers() {
   for (const r of race.racers) {
     const fr = boatFrame(r.boat);
     const model = basis(fr.right, fr.up, fr.back, fr.pos);
-    const set = meshes.racers[liveries.get(r)];
     renderer.place(kayakFor(r), [model]);
     if (r === race.player) {
       paddles.push(multiply(model, paddlePose(r.boat).matrix));
       continue;
     }
+    const set = paddlerFor(r);
     // The paddler twists with the stroke; hands stay on the shaft.
     const pose = rivalPaddle(r.boat);
     paddles.push(multiply(model, pose.matrix));
@@ -863,9 +994,8 @@ function render(time) {
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(mode)];
   for (const r of race.racers) {
-    const set = meshes.racers[liveries.get(r)];
     list.push(kayakFor(r));
-    if (r !== race.player) list.push(set.body, set.arms);
+    if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
   list.push(meshes.paddle, meshes.swan, meshes.duck);
   renderer.draw(frameData, list);
@@ -1069,13 +1199,23 @@ function normalize(v) {
 }
 
 // Each racer's boat in their colours, built the first time that colour and
-// hull width are needed.
+// hull width are needed; likewise each paddler.
 function kayakFor(r) {
-  const livery = liveries.get(r);
+  const l = liveries.get(r);
   const { beam } = r.boat.hull;
-  const key = `${livery}:${beam}`;
-  if (!meshes.kayaks.has(key)) meshes.kayaks.set(key, renderer.createMesh(kayakMesh({ ...LIVERIES[livery], beam })));
+  const key = `${l.key}:${beam}`;
+  if (!meshes.kayaks.has(key)) meshes.kayaks.set(key, renderer.createMesh(kayakMesh({ ...l, beam })));
   return meshes.kayaks.get(key);
+}
+function paddlerFor(r) {
+  const l = liveries.get(r);
+  if (!meshes.racers.has(l.key)) {
+    meshes.racers.set(l.key, {
+      body: renderer.createMesh(paddlerMesh(l)),
+      arms: renderer.createMesh(limbMesh(l.top, { skin: l.skin, sleeve: l.sleeves === 'short' ? 0.4 : 1 }), 2),
+    });
+  }
+  return meshes.racers.get(l.key);
 }
 
 // The scenery is built the first time each course is raced.
@@ -1100,6 +1240,7 @@ if (HASH.has('debug')) {
     get tilt() { return controls.tiltLean; },
     get live() { return liveRace; },
     get lobby() { return lobby; },
+    get liveries() { return liveries; },
   };
 }
 
@@ -1108,6 +1249,7 @@ toMenu();
 whoAmI().then((a) => {
   account = a;
   showAccount();
+  if (account.user) loadKit();
   // Opened from a live race's link.
   if (HASH.get('race') && state === 'menu') {
     menu.close('');
@@ -1122,10 +1264,7 @@ try {
     kayaks: new Map(),
     swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
     duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),
-    racers: LIVERIES.map((l, i) => ({
-      body: i ? renderer.createMesh(paddlerMesh(l)) : null,
-      arms: i ? renderer.createMesh(limbMesh(l.top), 2) : null,
-    })),
+    racers: new Map(),
   };
   useWorld();
   requestAnimationFrame(frame);

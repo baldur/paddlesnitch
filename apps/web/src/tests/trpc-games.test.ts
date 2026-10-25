@@ -20,6 +20,35 @@ beforeEach(async () => {
 })
 afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); delete process.env.DATA_DIR })
 
+describe('your paddler and boat', () => {
+  const KIT = { skin: '#c48a60', head: 'hair', headColour: '#3b2414', sleeves: 'long', top: '#2563eb', glasses: 'aviator', glassesColour: '#f97316', boat: 'kirton-typhoon', deck: '#dc2626', stripe: '#f5f5f4', deckShape: 'wings', hullShape: 'vee' } as const
+
+  it('is saved on the account and read back, for that player only', async () => {
+    expect(await as(PAT).games.kit.get()).toBeNull()
+    await as(PAT).games.kit.set(KIT)
+    expect(await as(PAT).games.kit.get()).toEqual(KIT)
+    expect(await as(SAM).games.kit.get()).toBeNull()
+    await expect(as(null).games.kit.get()).rejects.toThrow(/UNAUTHORIZED/)
+  })
+
+  it('takes only colours and the known boats and choices', async () => {
+    await expect(as(PAT).games.kit.set({ ...KIT, top: 'red' })).rejects.toThrow()
+    await expect(as(PAT).games.kit.set({ ...KIT, boat: 'canoe' as never })).rejects.toThrow()
+    await expect(as(PAT).games.kit.set({ ...KIT, extra: 1 } as never)).rejects.toThrow()
+  })
+
+  it("knows the same boats as the game", async () => {
+    const { BOATS } = await import('../../../../games/kayak/boats.js')
+    const { GAME_BOATS } = await import('@paddlesnitch/core/games')
+    expect(BOATS.map((b: { id: string }) => b.id)).toEqual([...GAME_BOATS])
+  })
+
+  it('a time is posted with the boat it was paddled in', async () => {
+    await as(PAT).games.submit({ course: 'race', time: 1900, hull: 'kirton-pulsar' })
+    expect((await as(PAT).games.leaderboard({ course: 'race' })).top[0].hull).toBe('kirton-pulsar')
+  })
+})
+
 describe('the leaderboard', () => {
   it('keeps each player\'s best only, fastest first, and shows names as first name and initial', async () => {
     await as(PAT).games.submit({ course: 'race', time: 1900, hull: 'club' })

@@ -92,10 +92,11 @@ export const HULLS = {
 // power scales every stroke and endurance scales stamina recovery, so rivals
 // can be fitter or weaker than you on the same boat.
 // speedup: the course's (see course.js); the boat moves this many times its speed.
+// hull: a key of HULLS, or a hull itself (boats.js hullFor).
 export function createBoat({ x = 0, z = 0, heading = 0, power = 1, endurance = 1, hull = 'club', speedup = 1 } = {}) {
   return {
     x, z, heading, power, endurance, speedup,
-    hull: HULLS[hull],
+    hull: typeof hull === 'object' ? hull : HULLS[hull],
     rhythm: 0,
     flow: 0, // 0..1, built by holding the rhythm
     sprinting: false, // the sprint button is held, with stamina to spend

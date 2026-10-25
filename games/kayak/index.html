@@ -62,28 +62,102 @@
 
   <dialog id="menu">
     <h2>Kayak</h2>
-    <p class="lede">A first-person marathon kayak race. Find a rhythm, keep your balance, sprint to catch a wash and rest on it, and save something for the finish.</p>
-    <p id="account" class="account"></p>
-    <form method="dialog">
-      <fieldset class="hulls">
-        <legend>Your boat</legend>
-        <label><input type="radio" name="hull" value="stable"> Stable <small>forgiving, slower</small></label>
-        <label><input type="radio" name="hull" value="club"> Club racer <small>in between</small></label>
-        <label><input type="radio" name="hull" value="racing"> Racing <small>fast and tippy; needs a quick, steady beat</small></label>
+    <nav class="steps" aria-label="Getting ready">
+      <button type="button" data-step="paddler"><b>1</b> Paddler</button>
+      <button type="button" data-step="boat"><b>2</b> Boat</button>
+      <button type="button" data-step="race"><b>3</b> Race</button>
+    </nav>
+
+    <section id="stepPaddler" class="step">
+      <p class="lede">Make your paddler. Friends see them in a live race.</p>
+      <div class="maker">
+        <svg id="paddlerPic" class="pic" viewBox="0 0 120 120" role="img" aria-label="Your paddler"></svg>
+        <div class="fields">
+          <fieldset class="tones">
+            <legend>Skin tone</legend>
+            <div id="skinTones"></div>
+          </fieldset>
+          <fieldset>
+            <legend>On your head</legend>
+            <div class="row">
+              <label><input type="radio" name="head" value="cap"> Cap</label>
+              <label><input type="radio" name="head" value="hair"> Hair</label>
+              <label class="swatch">Colour <input type="color" id="headColour"></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Sunglasses</legend>
+            <div class="row">
+              <label><input type="radio" name="glasses" value="none"> None</label>
+              <label><input type="radio" name="glasses" value="wrap"> Wraparound</label>
+              <label><input type="radio" name="glasses" value="round"> Round</label>
+              <label><input type="radio" name="glasses" value="aviator"> Aviator</label>
+              <label><input type="radio" name="glasses" value="square"> Square</label>
+              <label class="swatch">Lenses <input type="color" id="glassesColour"></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Top</legend>
+            <div class="row">
+              <label><input type="radio" name="sleeves" value="short"> T-shirt</label>
+              <label><input type="radio" name="sleeves" value="long"> Long sleeves</label>
+              <label class="swatch">Colour <input type="color" id="topColour"></label>
+            </div>
+          </fieldset>
+        </div>
+      </div>
+      <button type="button" class="next" data-step="boat">Next: your boat &rarr;</button>
+    </section>
+
+    <section id="stepBoat" class="step" hidden>
+      <p class="lede">Pick a boat: the tippier it is, the faster, and the harder to keep upright.</p>
+      <div class="boat-pics">
+        <svg id="boatPic" class="pic" viewBox="0 0 240 60" role="img" aria-label="Your boat from above"></svg>
+        <svg id="sectionPic" class="pic" viewBox="0 0 80 50" role="img" aria-label="Your boat cut across at the cockpit"></svg>
+      </div>
+      <fieldset class="boats">
+        <legend>Boat <small>stability: 1 tippy, 9 stable</small></legend>
+        <div id="boatList"></div>
       </fieldset>
-      <button value="race" autofocus>Division 9 race <small>6 km, 12 paddlers</small></button>
-      <button value="practice">Practice time trial <small>1 km, on your own</small></button>
-      <button value="reading">Reading Thames <small>6.3 km up the real river from Christchurch Bridge to Mapledurham, 12 paddlers</small></button>
-      <button value="live">Race friends <small>a live race against people you send a link to</small></button>
-      <button value="loop">Time Trial Loop <small>5.4 km from Reading Canoe Club round St Mary's and Fry's islands and back, interval starts</small></button>
-    </form>
-    <p class="rotate-hint">Turn your phone sideways to race</p>
-    <p id="best"></p>
-    <details id="boards">
-      <summary>Leaderboards</summary>
-      <div id="boardlist"><p>Loading…</p></div>
-    </details>
-    <p id="nogpu" class="warning" hidden></p>
+      <fieldset>
+        <legend>Deck</legend>
+        <p class="note">Until about 2000 a K1 had to be at least 51 cm wide, so racing boats were narrow at the water and made up the width with wings at the cockpit.</p>
+        <div class="row">
+          <label><input type="radio" name="deckShape" value="modern"> Modern</label>
+          <label><input type="radio" name="deckShape" value="wings"> Diamond, with wings <small>lean further before you go in; a touch more drag</small></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Hull</legend>
+        <div class="row">
+          <label><input type="radio" name="hullShape" value="round"> Rounded</label>
+          <label><input type="radio" name="hullShape" value="vee"> V'd keel <small>holds a line, turns a little wider</small></label>
+        </div>
+      </fieldset>
+      <div class="row colours">
+        <label class="swatch">Deck <input type="color" id="deckColour"></label>
+        <label class="swatch">Stripe <input type="color" id="stripeColour"></label>
+      </div>
+      <button type="button" class="next" data-step="race">Next: pick a race &rarr;</button>
+    </section>
+
+    <section id="stepRace" class="step" hidden>
+      <p class="you-are"><svg id="youPic" viewBox="0 0 120 120" aria-hidden="true"></svg> <span id="youBoat"></span></p>
+      <p id="account" class="account"></p>
+      <form method="dialog">
+        <button value="race" autofocus>Division 9 race <small>6 km, 12 paddlers</small></button>
+        <button value="reading">Reading Thames <small>6.3 km up the real river from Christchurch Bridge to Mapledurham, 12 paddlers</small></button>
+        <button value="loop">Time Trial Loop <small>5.4 km from Reading Canoe Club round St Mary's and Fry's islands and back, interval starts</small></button>
+        <button value="practice">Practice time trial <small>1 km, on your own</small></button>
+        <button value="live">Race friends <small>a live race against people you send a link to</small></button>
+      </form>
+      <p class="rotate-hint">Turn your phone sideways to race</p>
+      <p id="best"></p>
+      <p id="nogpu" class="warning" hidden></p>
+      <details id="boards">
+        <summary>Leaderboards</summary>
+        <div id="boardlist"><p>Loading…</p></div>
+      </details>
     <details>
       <summary>Controls</summary>
       <ul>
@@ -101,6 +175,8 @@
         <li><kbd>P</kbd> or <kbd>Esc</kbd> to pause, <kbd>M</kbd> to toggle sound</li>
       </ul>
     </details>
+    </section>
+
     <p class="credit">Reading Thames and Time Trial Loop map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
     <p class="dialog-links"><a href="../" class="leave">&larr; All games</a></p>
   </dialog>

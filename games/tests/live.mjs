@@ -61,6 +61,8 @@ async function relayRoundTrips(code, a, b, n = 20) {
 }
 
 const kayak = (page, fn, arg) => page.evaluate(fn, arg);
+// The menu's steps: paddler, boat, then the races.
+const toRaces = (page) => page.click('#menu .steps [data-step="race"]');
 const check = (ok, message) => {
   if (!ok) throw new Error(message);
   console.log(`✔ ${message}`);
@@ -75,6 +77,11 @@ try {
   await ann.page.goto(`${BASE}/games/kayak/#debug`);
   await ann.page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   await ann.page.waitForFunction(() => document.getElementById('account').textContent.includes('Signed in'), null, { timeout: 10_000 });
+  // Ann makes her paddler: hair, the darkest skin tone.
+  await ann.page.click('#menu .steps [data-step="paddler"]');
+  await ann.page.check('#menu input[name="head"][value="hair"]');
+  await ann.page.check('#menu input[name="skin"] >> nth=7');
+  await toRaces(ann.page);
   await ann.page.click('#menu button[value="live"]');
   await ann.page.selectOption('#liveCourse', 'practice');
   await ann.page.click('#liveCreate');
@@ -90,6 +97,8 @@ try {
     throw e;
   });
   check(true, 'Bob joined from the link');
+  await bob.page.waitForFunction(() => document.querySelectorAll('#livePlayers .face').length === 2, null, { timeout: 15_000 });
+  check(true, "Bob's lobby shows both paddlers");
 
   // Both are connected to the relay, and can measure the round trip through it.
   await ann.page.waitForFunction(() => !document.getElementById('liveStart').disabled, null, { timeout: 30_000 });
@@ -110,6 +119,9 @@ try {
   }
   const names = await kayak(bob.page, () => window.kayak.race.racers.map((r) => r.name));
   check(names.includes('You') && names.includes('Ann H.'), `Bob's race has ${names.join(' and ')}`);
+  const annKit = await kayak(ann.page, () => JSON.parse(localStorage.getItem('snitchmedia:kayak:kit')));
+  const annLook = await kayak(bob.page, () => window.kayak.liveries.get(window.kayak.race.racers.find((r) => r.remote)).key);
+  check(annLook.startsWith(`${annKit.skin},hair,`), "and Ann's paddler, as she made her");
 
   // Ann's starter calls the start, and Bob's game follows it.
   for (const p of [ann, bob]) await p.page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 60_000 });
@@ -138,8 +150,16 @@ try {
   if (!PROD) {
     const posted = await kayak(ann.page, () => fetch('/api/trpc/games.submit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ course: 'practice', time: 260.4, hull: 'club' }) }).then((r) => r.json()));
     check(posted.result?.data?.best === true, 'a practice time went on the leaderboard');
+    // Ann's paddler is on her account: a device that hasn't seen it gets it.
+    await kayak(ann.page, () => localStorage.clear());
+    await ann.page.goto(`${BASE}/games/kayak/#debug`);
+    await ann.page.waitForFunction((skin) => document.querySelector('#menu input[name="skin"]:checked')?.value === skin
+      && document.querySelector('#menu input[name="head"]:checked')?.value === 'hair', annKit.skin, { timeout: 15_000 });
+    check(true, "Ann's paddler came back from her account");
+
     const fresh = await (await browser.newContext()).newPage();
     await fresh.goto(`${BASE}/games/kayak/`);
+    await toRaces(fresh);
     await fresh.waitForFunction(() => !document.getElementById('boards').hidden, null, { timeout: 15_000 });
     await fresh.click('#boards summary');
     await fresh.waitForFunction(() => document.getElementById('boardlist').textContent.includes('Ann H. 4:20.4'), null, { timeout: 15_000 });

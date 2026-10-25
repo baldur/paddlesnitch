@@ -6,13 +6,19 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import {
-  GAME_COURSES, GAME_HULLS, createRoom, getLeaderboard, getRoom, joinRoom, listPlayers,
-  plausible, relayTicket, shortName, submitResult, type GameCourse,
+  GAME_BOATS, GAME_COURSES, GAME_HULLS, createRoom, getGameKit, getLeaderboard, getRoom, joinRoom, listPlayers,
+  plausible, putGameKit, relayTicket, shortName, submitResult, type GameCourse,
 } from '@paddlesnitch/core/games'
 import { router, publicProcedure, protectedProcedure } from '../trpc'
 
 const course = z.enum(Object.keys(GAME_COURSES) as [GameCourse, ...GameCourse[]])
 const code = z.string().regex(/^[A-Z]{4}$/)
+const colour = z.string().regex(/^#[0-9a-f]{6}$/)
+const kit = z.object({
+  skin: colour, head: z.enum(['cap', 'hair']), headColour: colour, sleeves: z.enum(['short', 'long']), top: colour,
+  glasses: z.enum(['none', 'wrap', 'round', 'aviator', 'square']), glassesColour: colour,
+  boat: z.enum(GAME_BOATS), deck: colour, stripe: colour, deckShape: z.enum(['modern', 'wings']), hullShape: z.enum(['round', 'vee']),
+}).strict()
 
 // The account's name (the sign-in token's copy can lag behind), shortened.
 async function nameOf(user: { id: string; displayName?: string }) {
@@ -35,6 +41,15 @@ export const gamesRouter = router({
     if (!plausible(input.course, input.time)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'implausible_time' })
     const entry = { userId: ctx.user.id, name: await nameOf(ctx.user), time: Math.round(input.time * 10) / 10, hull: input.hull, at: new Date().toISOString() }
     return submitResult(input.course, entry)
+  }),
+
+  // Your paddler and boat, so they follow you to another device. null until saved.
+  kit: router({
+    get: protectedProcedure.query(({ ctx }) => getGameKit(ctx.user.id)),
+    set: protectedProcedure.input(kit).mutation(async ({ ctx, input }) => {
+      await putGameKit(ctx.user.id, input)
+      return input
+    }),
   }),
 
   live: router({
