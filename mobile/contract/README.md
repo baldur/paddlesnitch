@@ -138,8 +138,8 @@ golden answers are `fixtures/api/account.*.json`.
 |---|---|---|
 | `GET /api/account/tos` | | `{currentVersion, accepted, acceptances[]}` |
 | `POST /api/account/tos` | `{version}`: `api/constants.json` `tosVersion` | `{acceptances[]}`; 422 if the version isn't current (the app is out of date) |
-| `POST /api/account/export` | | `{url}`: a link to the whole file, valid 5 minutes, any size. Download it at once and hand it to the save dialog or share sheet. In local dev the link is relative to the site |
-| `DELETE /api/account` | `{refreshToken}` | `{ok: true}`: everything is erased and the refresh token stops working. Drop the stored tokens and go to sign-in. 403 `{error, reauth: true}` when the last sign-in is over 10 minutes old: show `error`, sign the person in again (any way they like), then send it again. A silent token refresh doesn't count as signing in |
+| `POST /api/account/export` | | `{url}`: a link to the whole file, valid 5 minutes, any size. Fetch it with no token (it carries its own permission) at once and hand it to the save dialog or share sheet. Locally it points at the dev server instead of S3, same shape |
+| `DELETE /api/account` | `{refreshToken}` | `{ok: true}`: everything is erased (safe to send again if the answer was lost) and the refresh token stops working. Drop the stored tokens and go to sign-in. 403 `{error, reauth: true}` when the last sign-in is over 10 minutes old: show `error`, sign the person in again (any way they like), then send it again. A silent token refresh doesn't count as signing in |
 | `GET /api/account/profile` | | `{public, handle?}` |
 | `PATCH /api/account/profile` | `{public}` | as GET |
 | `GET /api/account/handle?check=<handle>` | | `{available, slug?}` or `{available: false, reason}`: show `reason` as it is |

@@ -198,6 +198,11 @@ describe('what the Account screens do', () => {
     await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))
   })
 
+  it('delete account twice (the first answer was lost) succeeds both times', async () => {
+    await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))
+    await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken)))
+  })
+
   it('delete account from the website revokes the cookie\'s refresh token, never one in the body', async () => {
     jar({ tt_id: pat.idToken, tt_refresh: pat.refreshToken })
     await fits(Ok, await deleteAccount(req('DELETE', '/api/account', undefined, { refreshToken: 'someone-elses' })))

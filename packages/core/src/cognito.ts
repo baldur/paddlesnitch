@@ -276,12 +276,19 @@ export async function revoke(refreshToken: string): Promise<void> {
 
 // Deletes the user from Cognito permanently. Used by the GDPR Art. 17
 // erasure flow. Cognito identifies users by sign-in alias (email), not by sub.
+// Already gone counts as done: an erasure whose answer was lost gets retried
+// by the app, and the retry must succeed rather than report a failure.
 export async function deleteUser(email: string): Promise<void> {
   const client = makeClient()
-  await client.send(new AdminDeleteUserCommand({
-    UserPoolId: USER_POOL_ID,
-    Username: email,
-  }))
+  try {
+    await client.send(new AdminDeleteUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+    }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
+  }
 }
 
 type UserSummary = { sub: string; email: string; displayName: string }
