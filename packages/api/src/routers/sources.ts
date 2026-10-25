@@ -48,6 +48,6 @@ export const sourcesRouter = router({
 
   stravaHistoryDone: protectedProcedure.mutation(async ({ ctx }) => {
     await markStravaHistoryImported(ctx.user.id)
-    return { ok: true }
+    return { ok: true as const }
   }),
 })

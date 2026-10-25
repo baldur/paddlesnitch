@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { setStravaAutoImport } from '@/lib/strava-storage'
 
 // Turn auto-import of new Strava paddles on/off for the signed-in user.
 // Default is ON (see getStravaAutoImport); this persists an explicit choice.
 export async function POST(req: NextRequest) {
-  const user = await getAuthUser()
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   if (typeof body.enabled !== 'boolean') {

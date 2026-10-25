@@ -566,7 +566,7 @@ export default function UploadPage({
                     <p className="text-base text-fg">
                       Connect Strava once and you can import any recent paddling activity straight into a trial.
                     </p>
-                    <StravaButton href="/att/api/strava/connect" className="self-start" />
+                    <StravaButton href="/att/api/strava/connect" className="self-start" post />
                     <p className="text-sm text-muted">
                       Strava asks you to approve. You can disconnect any time in your{' '}
                       <a href="/account" className="tt-link">account</a>.

@@ -32,7 +32,7 @@ describe('GET /api/account/contact', () => {
     mockAuth(u.idToken)
     const res = await GET(new Request('http://x'))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ contact: null })
+    expect(await res.json()).toEqual({ contact: null, placeholderEmail: false })
   })
 
   it('returns 401 when unauthenticated', async () => {

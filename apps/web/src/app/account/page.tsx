@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { STRAVA_CONNECT_RESULTS } from '@/lib/strava-connect-results'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
@@ -30,13 +31,7 @@ type StravaStatus =
 
 // Banner copy keyed off the ?strava= query param the callback sets when it
 // finishes. Keeps redirects round-trippable instead of relying on session state.
-const STRAVA_FLASH: Record<string, { tone: 'ok' | 'err'; text: string }> = {
-  connected: { tone: 'ok', text: 'Strava connected.' },
-  denied: { tone: 'err', text: 'You cancelled connecting Strava.' },
-  state_mismatch: { tone: 'err', text: 'Connecting Strava didn’t finish. Please try again.' },
-  exchange_failed: { tone: 'err', text: 'Connecting Strava didn’t finish. Please try again.' },
-  not_configured: { tone: 'err', text: 'Connecting Strava isn’t available right now.' },
-}
+const STRAVA_FLASH: Record<string, { tone: 'ok' | 'err'; text: string }> = STRAVA_CONNECT_RESULTS
 
 export default function AccountPage() {
   // Suspense wrapper required because the inner component reads
@@ -498,7 +493,7 @@ function AccountPageInner() {
               {strava === undefined && <p className={msgClass}>Checking…</p>}
 
               {strava && !strava.connected && (
-                <div><StravaButton href="/att/api/strava/connect" /></div>
+                <div><StravaButton href="/att/api/strava/connect" post /></div>
               )}
 
               {strava && strava.connected && (

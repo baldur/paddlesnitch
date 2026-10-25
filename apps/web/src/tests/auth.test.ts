@@ -183,5 +183,7 @@ describe('POST /att/api/auth/logout', () => {
     const cleared = res.headers.get('set-cookie') ?? ''
     expect(cleared).toMatch(/tt_id=;|tt_id=.*Max-Age=0/i)
     expect(cleared).toMatch(/tt_refresh=;|tt_refresh=.*Max-Age=0/i)
+    // The mark a web-code link leaves (it blocks connecting Strava) goes too.
+    expect(cleared).toMatch(/tt_from_link=;|tt_from_link=.*Max-Age=0/i)
   })
 })
