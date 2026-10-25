@@ -2,6 +2,7 @@ import Charts
 import DesignSystem
 import Paddles
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PaddleListView: View {
     let source: any PaddlesSource
@@ -12,21 +13,37 @@ struct PaddleListView: View {
     /// a notice, not a block).
     let needsTerms: Bool
     let signIn: () -> Void
+    /// Adding a paddle from a GPS file, and what came of it.
+    let adding: AddPaddleModel
+    let openFile: (URL) -> Void
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var termsOpen = false
     @State private var loadedID: String?
+    @State private var choosingFile = false
+    @State private var openedID: String?
 
     init(
-        source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void
+        source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
+        adding: AddPaddleModel, openFile: @escaping (URL) -> Void
     ) {
         self.source = source
         self.sourceID = sourceID
         self.isSample = isSample
         self.needsTerms = needsTerms
         self.signIn = signIn
+        self.adding = adding
+        self.openFile = openFile
         _model = State(initialValue: PaddleListModel(source: source))
     }
+
+    /// The files the website reads (mobile/contract/README.md): GPX, FIT,
+    /// TCX, CSV (the tracker's, SpeedCoach), or a zip of one. The first three
+    /// are declared in Info.plist (project.yml).
+    static let fileTypes: [UTType] = [
+        UTType(importedAs: "com.topografix.gpx"), UTType(importedAs: "com.garmin.fit"),
+        UTType(importedAs: "com.garmin.tcx"), .commaSeparatedText, .zip,
+    ]
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -37,6 +54,25 @@ struct PaddleListView: View {
                 .navigationDestination(for: PaddleRow.self) { row in
                     PaddleDetailView(id: row.id, source: source)
                 }
+                .navigationDestination(item: $openedID) { id in
+                    PaddleDetailView(id: id, source: source)
+                }
+                .toolbar {
+                    if !isSample {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Add a file") { choosingFile = true }
+                                .font(.plexSans(.body))
+                        }
+                    }
+                }
+                .safeAreaInset(edge: .bottom) { addNotice }
+        }
+        .fileImporter(isPresented: $choosingFile, allowedContentTypes: Self.fileTypes) { result in
+            if case .success(let url) = result { openFile(url) }
+        }
+        .onChange(of: adding.state) { _, state in
+            // A paddle added: show it in the list.
+            if case .done(let outcome) = state, !outcome.failed { Task { await model.load() } }
         }
         .task(id: sourceID) {
             // Signed in or out: back to the top, and load the other paddles.
@@ -132,6 +168,58 @@ struct PaddleListView: View {
 }
 
 extension PaddleListView {
+    /// Adding a file: waiting for sign-in, adding, then what came of it.
+    @ViewBuilder fileprivate var addNotice: some View {
+        switch adding.state {
+        case .idle:
+            EmptyView()
+        case .waitingForSignIn(let name):
+            addCard("Sign in to add \(name).", action: "Sign in", run: signIn)
+        case .adding(let name):
+            addCard("Adding \(name)…", action: nil, run: {})
+        case .done(let outcome):
+            if let id = outcome.paddleID {
+                addCard(outcome.message, failed: outcome.failed, action: "Open it") {
+                    adding.dismiss()
+                    path = []
+                    openedID = id
+                }
+            } else {
+                addCard(outcome.message, failed: outcome.failed, action: "OK") { adding.dismiss() }
+            }
+        }
+    }
+
+    fileprivate func addCard(_ text: String, failed: Bool = false, action: String?, run: @escaping () -> Void)
+        -> some View
+    {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                if action == nil { ProgressView().tint(Palette.muted) }
+                Text(text)
+                    .font(.plexSans(.subheadline))
+                    .foregroundStyle(failed ? Palette.red : Palette.fg)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("add-notice")
+            }
+            if let action {
+                Button(action: run) {
+                    Text(action).font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Palette.primary)
+                .accessibilityIdentifier("add-notice-action")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Palette.surface)
+        .overlay(RoundedRectangle(cornerRadius: Radius.sheet).stroke(Palette.borderStrong))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.sheet))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
     /// A notice with one action. `id` marks the text, and `id-action` the
     /// button (an identifier on the section would land on both).
     fileprivate func notice(_ text: String, id: String, action: String, run: @escaping () -> Void) -> some View {

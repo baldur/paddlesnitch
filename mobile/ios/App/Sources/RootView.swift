@@ -9,25 +9,70 @@ struct RootView: View {
     let account: AccountModel
     let samples: SamplePaddles
     @State private var signingIn = false
+    @State private var selectedTab = "paddles"
+    @State private var adding: AddPaddleModel
+
+    init(account: AccountModel, samples: SamplePaddles) {
+        self.account = account
+        self.samples = samples
+        _adding = State(
+            initialValue: AddPaddleModel { [account] name, data in
+                let client = await account.client
+                return try await client.upload(fileName: name, data: data)
+            })
+    }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             // The same list view throughout; it reloads when `sourceID` changes
             // (samples, or this person's). Rebuilding its navigation stack
             // under the closing sign-in sheet crashed UIKit on iOS 17.
             PaddleListView(
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
-                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true }
+                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true }, adding: adding,
+                openFile: { url in Task { await open(url) } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
+            .tag("paddles")
             YouView(account: account, signIn: { signingIn = true })
                 .tabItem { Label("You", systemImage: "person.crop.circle") }
+                .tag("you")
         }
+        // A GPS file opened in the app from Files, Mail or a share sheet.
+        .onOpenURL { url in Task { await open(url) } }
+        .onChange(of: account.user?.id) { _, id in
+            if id != nil { Task { await adding.signedIn() } }
+        }
+        .task { await openLaunchFile() }
         .tint(Palette.primaryText)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $signingIn) {
             SignInView(account: account)
         }
+    }
+
+    /// Adds the paddle in a GPS file, or keeps it until sign-in.
+    private func open(_ url: URL) async {
+        selectedTab = "paddles"
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            adding.couldNotRead()
+            return
+        }
+        await adding.add(fileName: url.lastPathComponent, data: data, signedIn: account.user != nil)
+    }
+
+    /// UI tests: `-OpenFile <name>` with the sample server plays a file
+    /// opened from another app (see AddPaddleTests).
+    private func openLaunchFile() async {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-SampleServer"), let flag = arguments.firstIndex(of: "-OpenFile"),
+            flag + 1 < arguments.count
+        else { return }
+        let url = FileManager.default.temporaryDirectory.appending(path: arguments[flag + 1])
+        try? Data("<gpx/>".utf8).write(to: url)
+        await open(url)
     }
 
     private var source: any PaddlesSource {
