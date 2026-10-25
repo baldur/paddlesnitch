@@ -20,6 +20,7 @@ class FixturesTest {
             "account.tos" to TosStatus.serializer(), "account.tos-accepted" to TosAccepted.serializer(), "account.export" to DownloadLink.serializer(),
             "account.profile" to ProfileSettings.serializer(), "account.handle-check" to HandleAvailability.serializer(),
             "account.contact" to Contact.serializer(), "account.error" to ApiError.serializer(),
+            "account.devices" to TrackerList.serializer(), "account.devices-sessions" to RecordingList.serializer(),
         )
         val names = dir.list()!!.filter { it.endsWith(".json") }
         assertTrue(names.size >= 7)
