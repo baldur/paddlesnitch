@@ -41,7 +41,10 @@ export function hullFor(stability) {
 // better: strokes push the bow about less, and it turns a little wider.
 export const DECKS = { modern: 'Modern', wings: 'Diamond, with wings' };
 export const HULL_SHAPES = { round: 'Rounded', vee: "V'd keel" };
-export function hullOf({ boat, deckShape = 'modern', hullShape = 'round' }) {
+// And the paddle: a wing blade (what racers use since the 1980s) pulls
+// cleaner; a flat one gives a firmer brace when the boat wobbles.
+export const PADDLES = { wing: 'Wing', flat: 'Flat' };
+export function hullOf({ boat, deckShape = 'modern', hullShape = 'round', paddle = 'wing' }) {
   const hull = hullFor(boatById(boat)?.stability ?? 5);
   if (deckShape === 'wings') {
     hull.capsize *= 1.1;
@@ -50,6 +53,10 @@ export function hullOf({ boat, deckShape = 'modern', hullShape = 'round' }) {
   if (hullShape === 'vee') {
     hull.strokeYaw *= 0.7;
     hull.rudder *= 0.92;
+  }
+  if (paddle === 'flat') {
+    hull.impulse *= 0.97;
+    hull.brace *= 1.2;
   }
   return hull;
 }

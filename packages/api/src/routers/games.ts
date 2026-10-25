@@ -17,7 +17,8 @@ const colour = z.string().regex(/^#[0-9a-f]{6}$/)
 const kit = z.object({
   skin: colour, head: z.enum(['cap', 'hair']), headColour: colour, sleeves: z.enum(['short', 'long']), top: colour,
   glasses: z.enum(['none', 'wrap', 'round', 'aviator', 'square']), glassesColour: colour,
-  boat: z.enum(GAME_BOATS), deck: colour, stripe: colour, deckShape: z.enum(['modern', 'wings']), hullShape: z.enum(['round', 'vee']),
+  boat: z.enum(GAME_BOATS), deck: colour, hullColour: colour, stripe: colour, deckShape: z.enum(['modern', 'wings']), hullShape: z.enum(['round', 'vee']),
+  paddle: z.enum(['wing', 'flat']), shaftColour: colour, bladeColour: colour,
 }).strict()
 
 // The account's name (the sign-in token's copy can lag behind), shortened.

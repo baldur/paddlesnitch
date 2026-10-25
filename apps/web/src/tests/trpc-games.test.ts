@@ -21,7 +21,7 @@ beforeEach(async () => {
 afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); delete process.env.DATA_DIR })
 
 describe('your paddler and boat', () => {
-  const KIT = { skin: '#c48a60', head: 'hair', headColour: '#3b2414', sleeves: 'long', top: '#2563eb', glasses: 'aviator', glassesColour: '#f97316', boat: 'kirton-typhoon', deck: '#dc2626', stripe: '#f5f5f4', deckShape: 'wings', hullShape: 'vee' } as const
+  const KIT = { skin: '#c48a60', head: 'hair', headColour: '#3b2414', sleeves: 'long', top: '#2563eb', glasses: 'aviator', glassesColour: '#f97316', boat: 'kirton-typhoon', deck: '#dc2626', hullColour: '#f2ede0', stripe: '#f5f5f4', deckShape: 'wings', hullShape: 'vee', paddle: 'flat', shaftColour: '#18181b', bladeColour: '#2563eb' } as const
 
   it('is saved on the account and read back, for that player only', async () => {
     expect(await as(PAT).games.kit.get()).toBeNull()

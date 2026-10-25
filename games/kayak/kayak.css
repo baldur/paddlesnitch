@@ -279,12 +279,25 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 
 /* The start menu: three steps, paddler, boat, race. */
 #menu { width: min(36rem, calc(100vw - 32px)); }
-#menu .steps { display: flex; gap: 0.4rem; margin: -0.25rem 0 1rem; }
-#menu .steps button { flex: 1; padding: 0.45rem 0.5rem; font-size: 0.9rem; }
-#menu .steps button b { display: inline-grid; place-items: center; width: 1.4em; height: 1.4em; margin-right: 0.3em; border-radius: 50%; background: var(--line); font-size: 0.8em; }
-#menu .steps button[aria-current="step"] { border-color: var(--accent); color: var(--accent); }
-#menu .steps button[aria-current="step"] b { background: var(--accent); color: #fff; }
-#menu .step > .next { display: block; margin: 1rem 0 0 auto; padding: 0.6rem 1rem; background: var(--accent); border-color: var(--accent); color: #fff; }
+#menu h3 { margin: 0 0 0.6rem; }
+#menu .progress { margin: -0.6rem 0 0.2rem; color: var(--accent); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+#menu .step-buttons { display: flex; justify-content: flex-end; gap: 0.5rem; margin: 1rem 0 0; }
+#menu .step-buttons button { padding: 0.6rem 1rem; }
+#menu .step-buttons .next { background: var(--accent); border-color: var(--accent); color: #fff; }
+#menu .step-buttons .back { margin-right: auto; }
+#menu .me { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.8rem; align-items: center; margin-bottom: 0.6rem; }
+#menu .me p { margin: 0 0 0.4rem; }
+#menu .edits { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+#menu .edits button { padding: 0.35rem 0.75rem; font-size: 0.9rem; }
+#paddlePic { width: 100%; height: auto; margin-bottom: 0.6rem; }
+#boardlist { display: grid; gap: 0.8rem; }
+#boardlist h4 { margin: 0 0 0.2rem; }
+#boardlist table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+#boardlist td { padding: 0.2rem 0.4rem; border-top: 1px solid var(--line); }
+#boardlist td:first-child { width: 2.5rem; color: var(--dim); }
+#boardlist td:nth-child(3) { font-family: var(--mono); }
+#boardlist td:last-child { color: var(--dim); }
+#boardlist .you td { font-weight: 700; color: var(--ink); }
 #menu fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 0.6rem; padding: 0.4rem 0.75rem 0.6rem; }
 #menu legend { color: var(--dim); font-size: 0.85rem; padding: 0 0.25rem; }
 #menu .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; }
@@ -312,9 +325,7 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 #boatList .meter { display: flex; gap: 2px; }
 #boatList .meter i { width: 6px; height: 12px; border-radius: 2px; background: var(--line); }
 #boatList .meter i.on { background: var(--accent); }
-#menu .you-are { display: flex; align-items: center; gap: 0.6rem; margin: 0 0 0.5rem; }
-#youPic { width: 3rem; height: 3rem; border-radius: 50%; background: #b9d6e4; }
-#menu .you-are button { padding: 0.2rem 0.6rem; font-size: 0.85rem; }
+#youPic { width: 100%; aspect-ratio: 1; }
 @media (max-width: 520px) {
   #menu .maker { grid-template-columns: 1fr; }
   #paddlerPic { width: 55%; margin: 0 auto; }
@@ -339,9 +350,7 @@ summary { cursor: pointer; }
 #menu .credit { font-size: 0.8rem; color: var(--dim); }
 
 #menu .account { font-size: 0.9rem; }
-#boards #boardlist { display: grid; gap: 0.6rem; font-size: 0.85rem; }
-#boards ol { margin: 0.2rem 0 0; padding-left: 1.6rem; }
-#boards .you, #livePlayers .you { font-weight: 700; }
+#livePlayers .you { font-weight: 700; }
 #live select, #live input { font: inherit; padding: 0.3rem 0.4rem; }
 #live .choice { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
 #live .choice button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }

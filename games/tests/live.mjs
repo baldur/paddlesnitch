@@ -61,8 +61,10 @@ async function relayRoundTrips(code, a, b, n = 20) {
 }
 
 const kayak = (page, fn, arg) => page.evaluate(fn, arg);
-// The menu's steps: paddler, boat, then the races.
-const toRaces = (page) => page.click('#menu .steps [data-step="race"]');
+// A first visit makes your paddler, boat and paddle (Next, Next, Done), then the races.
+async function toRaces(page) {
+  for (let i = 0; i < 3 && await page.locator('#stepHome').isHidden(); i++) await page.click('#menu .step:not([hidden]) .step-buttons .next');
+}
 const check = (ok, message) => {
   if (!ok) throw new Error(message);
   console.log(`✔ ${message}`);
@@ -78,7 +80,6 @@ try {
   await ann.page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   await ann.page.waitForFunction(() => document.getElementById('account').textContent.includes('Signed in'), null, { timeout: 10_000 });
   // Ann makes her paddler: hair, the darkest skin tone.
-  await ann.page.click('#menu .steps [data-step="paddler"]');
   await ann.page.check('#menu input[name="head"][value="hair"]');
   await ann.page.check('#menu input[name="skin"] >> nth=7');
   await toRaces(ann.page);
@@ -161,9 +162,10 @@ try {
     await fresh.goto(`${BASE}/games/kayak/`);
     await toRaces(fresh);
     await fresh.waitForFunction(() => !document.getElementById('boards').hidden, null, { timeout: 15_000 });
-    await fresh.click('#boards summary');
-    await fresh.waitForFunction(() => document.getElementById('boardlist').textContent.includes('Ann H. 4:20.4'), null, { timeout: 15_000 });
-    check(true, 'anyone can see it in the menu: Ann H. 4:20.4');
+    await fresh.click('#boards');
+    await fresh.waitForFunction(() => /Ann H\.\s*4:20\.4/.test(document.getElementById('boardlist').textContent), null, { timeout: 15_000 });
+    check(true, 'anyone can see it on the leaderboards page: Ann H. 4:20.4');
+    await fresh.click('#stepBoards .back');
 
     // Signed out, a race button goes to sign in; practice doesn't.
     await fresh.waitForFunction(() => document.getElementById('account').textContent.includes('Sign in'));

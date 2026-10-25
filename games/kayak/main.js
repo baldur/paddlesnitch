@@ -6,7 +6,7 @@ import { joinLive } from './live.js';
 import { courseMap, headingDegrees } from './map.js';
 import { BOATS, boatById, hullOf, describe } from './boats.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
-import { paddlerSvg, boatSvg, sectionSvg } from './picture.js';
+import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
@@ -61,7 +61,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'glassesColour', 'deckColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'map', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'sprint', 'map', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -230,28 +230,34 @@ function toMenu() {
   const t = training();
   if (t.races) lines.push(`Form this session: +${(form() * 100).toFixed(1)}% after ${t.races} race${t.races > 1 ? 's' : ''}`);
   els.best.textContent = lines.filter(Boolean).join(' · ');
-  showStep(kitChosen ? 'race' : 'paddler');
+  showStep(kitChosen ? 'home' : 'paddler');
   openDialog(menu);
 }
 
 // --- the start menu: your paddler, your boat, then a race --------------------------
 
-const STEPS = { paddler: 'stepPaddler', boat: 'stepBoat', race: 'stepRace' };
+// Home: you, the races, the leaderboards. A first visit goes through making
+// your paddler, boat and paddle first (Next, Next, Done); after that each is
+// one tap from home, and its button says Done.
+const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', paddle: 'stepPaddle', boards: 'stepBoards' };
 function showStep(name) {
-  for (const [step, id] of Object.entries(STEPS)) document.getElementById(id).hidden = step !== name;
-  for (const b of menu.querySelectorAll('.steps button')) {
-    if (b.dataset.step === name) b.setAttribute('aria-current', 'step');
-    else b.removeAttribute('aria-current');
-  }
-  menu.scrollTop = 0;
   // Getting as far as the races counts as having chosen.
-  if (name === 'race' && !kitChosen) {
+  if (name === 'home' && !kitChosen) {
     kitChosen = true;
     storeKit();
   }
+  for (const [step, id] of Object.entries(STEPS)) document.getElementById(id).hidden = step !== name;
+  for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen;
+  for (const b of menu.querySelectorAll('.step-buttons .next')) {
+    b.innerHTML = kitChosen ? 'Done' : b.dataset.first;
+  }
+  menu.scrollTop = 0;
+  if (name === 'boards') showBoards();
   drawKit();
 }
-for (const b of menu.querySelectorAll('[data-step]')) b.addEventListener('click', () => showStep(b.dataset.step));
+for (const b of menu.querySelectorAll('[data-step]')) {
+  b.addEventListener('click', () => showStep(b.matches('.next') && kitChosen ? 'home' : b.dataset.step));
+}
 
 const make = (html) => {
   const t = document.createElement('template');
@@ -266,13 +272,16 @@ els.boatList.append(...BOATS.map((b) => make(
 
 // The fields show the kit; any change to them is the new kit, kept at once.
 function showKit() {
-  for (const name of ['skin', 'head', 'sleeves', 'glasses', 'boat', 'deckShape', 'hullShape']) {
+  for (const name of ['skin', 'head', 'sleeves', 'glasses', 'boat', 'deckShape', 'hullShape', 'paddle']) {
     for (const input of menu.querySelectorAll(`input[name="${name}"]`)) input.checked = input.value === kit[name];
   }
   els.headColour.value = kit.headColour;
   els.topColour.value = kit.top;
   els.glassesColour.value = kit.glassesColour;
   els.deckColour.value = kit.deck;
+  els.hullColour.value = kit.hullColour;
+  els.shaftColour.value = kit.shaftColour;
+  els.bladeColour.value = kit.bladeColour;
   els.stripeColour.value = kit.stripe;
   drawKit();
 }
@@ -281,19 +290,21 @@ function drawKit() {
   els.youPic.innerHTML = paddlerSvg(kit);
   els.boatPic.innerHTML = boatSvg(kit);
   els.sectionPic.innerHTML = sectionSvg(kit);
+  els.paddlePic.innerHTML = paddleSvg(kit);
   const b = boatById(kit.boat);
   const shape = [kit.deckShape === 'wings' && 'with wings', kit.hullShape === 'vee' && "a V'd keel"].filter(Boolean).join(' and ');
-  els.youBoat.textContent = `You, in a ${b.name}${shape ? `, ${shape}` : ''} (stability ${b.stability} of 9)`;
+  els.youBoat.textContent = `You, in a ${b.name}${shape ? `, ${shape}` : ''} (stability ${b.stability} of 9), with a ${kit.paddle} paddle`;
 }
 const checked = (name) => menu.querySelector(`input[name="${name}"]:checked`)?.value;
 menu.addEventListener('input', (e) => {
-  if (!e.target.closest('.step') || e.target.closest('#stepRace')) return;
+  if (!e.target.closest('#stepPaddler, #stepBoat, #stepPaddle')) return;
   kit = cleanKit({
     skin: checked('skin'), head: checked('head'), headColour: els.headColour.value,
     sleeves: checked('sleeves'), top: els.topColour.value,
     glasses: checked('glasses'), glassesColour: els.glassesColour.value,
-    boat: checked('boat'), deck: els.deckColour.value, stripe: els.stripeColour.value,
+    boat: checked('boat'), deck: els.deckColour.value, hullColour: els.hullColour.value, stripe: els.stripeColour.value,
     deckShape: checked('deckShape'), hullShape: checked('hullShape'),
+    paddle: checked('paddle'), shaftColour: els.shaftColour.value, bladeColour: els.bladeColour.value,
   }, kit);
   kitChosen = true;
   drawKit();
@@ -316,7 +327,7 @@ async function loadKit() {
       kit = cleanKit(saved, kit);
       try { localStorage.setItem(KIT_KEY, JSON.stringify(kit)); } catch {}
       showKit();
-      if (!kitChosen && state === 'menu') showStep('race');
+      if (!kitChosen && state === 'menu') showStep('home');
       kitChosen = true;
     } else if (kitChosen) {
       storeKit();
@@ -453,30 +464,39 @@ async function submitResult(time) {
   }
 }
 
-els.boards.addEventListener('toggle', async () => {
-  if (!els.boards.open) return;
+// The leaderboards page: the top ten on each course, with the boat each time
+// was paddled in, and where you are if you're further down.
+const SHOW = 10;
+const boatName = (hull) => boatById(hull)?.name ?? HULLS[hull]?.name ?? hull;
+async function showBoards() {
+  els.boardlist.replaceChildren(make('<p>Loading…</p>'));
   const boards = await Promise.all(Object.values(MODES).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
   els.boardlist.replaceChildren(...boards.map(([m, b]) => {
     const div = document.createElement('div');
-    const title = document.createElement('strong');
+    const title = document.createElement('h4');
     title.textContent = m.label;
     div.append(title);
-    if (!b) div.append(": couldn't load it");
-    else if (!b.top.length) div.append(': no times yet');
-    else {
-      const ol = document.createElement('ol');
-      for (const e of b.top.slice(0, 5)) {
-        const li = document.createElement('li');
-        li.textContent = `${e.name} ${formatTime(e.time)} (${boatById(e.hull)?.name ?? HULLS[e.hull]?.name ?? e.hull})`;
-        if (e.you) li.className = 'you';
-        ol.append(li);
-      }
-      div.append(ol);
-      if (b.you && b.you.rank > 5) div.append(`You: ${ordinal(b.you.rank)}, ${formatTime(b.you.time)}`);
+    if (!b?.top.length) {
+      div.append(b ? 'No times yet.' : "Couldn't load it.");
+      return div;
     }
+    const table = document.createElement('table');
+    const row = (e) => {
+      const tr = document.createElement('tr');
+      for (const text of [ordinal(e.rank), e.name, formatTime(e.time), boatName(e.hull)]) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.append(td);
+      }
+      if (e.you) tr.className = 'you';
+      return tr;
+    };
+    table.append(...b.top.slice(0, SHOW).map(row));
+    if (b.you && b.you.rank > SHOW) table.append(row({ ...b.you, name: 'You', you: true }));
+    div.append(table);
     return div;
   }));
-});
+}
 
 // --- live races -------------------------------------------------------------------
 // Make or join a race (live.js connects to the relay), wait in the lobby, then
@@ -919,19 +939,24 @@ function limb(model, from, to) {
 }
 
 function placeRacers() {
-  const paddles = [];
+  const paddles = new Map([...meshes.paddles.values()].map((m) => [m, []])); // mesh -> where
+  const hold = (r, matrix) => {
+    const mesh = paddleFor(r);
+    if (!paddles.has(mesh)) paddles.set(mesh, []);
+    paddles.get(mesh).push(matrix);
+  };
   for (const r of race.racers) {
     const fr = boatFrame(r.boat);
     const model = basis(fr.right, fr.up, fr.back, fr.pos);
     renderer.place(kayakFor(r), [model]);
     if (r === race.player) {
-      paddles.push(multiply(model, paddlePose(r.boat).matrix));
+      hold(r, multiply(model, paddlePose(r.boat).matrix));
       continue;
     }
     const set = paddlerFor(r);
     // The paddler twists with the stroke; hands stay on the shaft.
     const pose = rivalPaddle(r.boat);
-    paddles.push(multiply(model, pose.matrix));
+    hold(r, multiply(model, pose.matrix));
     renderer.place(set.body, [multiply(model, multiply(translation(0, 0, SEAT), rotationY(pose.twist)))]);
     const arms = [-1, 1].map((side) => {
       const c = Math.cos(pose.twist);
@@ -941,7 +966,7 @@ function placeRacers() {
     });
     renderer.place(set.arms, arms);
   }
-  renderer.place(meshes.paddle, paddles);
+  for (const [mesh, where] of paddles) renderer.place(mesh, where);
   // Swans and ducks, bobbing; a duck in the air flaps up and away.
   const birds = { swan: [], duck: [] };
   for (const b of race.birds) {
@@ -997,7 +1022,7 @@ function render(time) {
     list.push(kayakFor(r));
     if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
-  list.push(meshes.paddle, meshes.swan, meshes.duck);
+  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck);
   renderer.draw(frameData, list);
 }
 
@@ -1207,6 +1232,14 @@ function kayakFor(r) {
   if (!meshes.kayaks.has(key)) meshes.kayaks.set(key, renderer.createMesh(kayakMesh({ ...l, beam })));
   return meshes.kayaks.get(key);
 }
+// Rivals all paddle with the same yellow wing blades; you and your friends with your own.
+const RIVAL_PADDLE = { key: 'rival', shaft: [0.22, 0.23, 0.26], blade: [1, 0.82, 0.2] };
+function paddleFor(r) {
+  const l = liveries.get(r);
+  const p = l.shaft ? { key: `${l.flat}:${l.shaft}:${l.blade}`, ...l } : RIVAL_PADDLE;
+  if (!meshes.paddles.has(p.key)) meshes.paddles.set(p.key, renderer.createMesh(paddleMesh(p), LIVERIES.length));
+  return meshes.paddles.get(p.key);
+}
 function paddlerFor(r) {
   const l = liveries.get(r);
   if (!meshes.racers.has(l.key)) {
@@ -1260,7 +1293,7 @@ try {
   renderer = await createRenderer(canvas);
   meshes = {
     worlds: new Map(),
-    paddle: renderer.createMesh(paddleMesh({ shaft: [0.22, 0.23, 0.26], blade: [1, 0.82, 0.2] }), LIVERIES.length),
+    paddles: new Map(),
     kayaks: new Map(),
     swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
     duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),

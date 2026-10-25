@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../kayak/boats.js';
 import { SKIN_TONES, cleanKit, randomKit, kitKey, livery } from '../kayak/kit.js';
 import { HULLS, createBoat } from '../kayak/sim.js';
-import { paddlerMesh, limbMesh, kayakMesh } from '../kayak/meshes.js';
+import { paddlerMesh, limbMesh, kayakMesh, paddleMesh } from '../kayak/meshes.js';
 
 test('nine boats, one for each stability from 1 (tippy) to 9 (stable)', () => {
   assert.deepEqual(BOATS.map((b) => b.stability), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -36,11 +36,15 @@ test('wings let you lean further for a touch of drag; a V keel holds a line and 
   const vee = hullOf({ boat: 'kirton-typhoon', hullShape: 'vee' });
   assert.ok(vee.strokeYaw < plain.strokeYaw && vee.rudder < plain.rudder);
   assert.equal(vee.capsize, plain.capsize);
+  // A flat paddle braces better, a wing pulls harder.
+  const flat = hullOf({ boat: 'kirton-typhoon', paddle: 'flat' });
+  assert.ok(flat.brace > plain.brace && flat.impulse < plain.impulse);
 });
 
 test('a saved look is read back safely: anything unknown falls back', () => {
   const kit = randomKit(() => 0.5);
   assert.deepEqual(cleanKit(kit), kit);
+  assert.equal(cleanKit({ paddle: 'canoe' }).paddle, 'wing');
   const bad = cleanKit({ skin: '#00ff00', head: 'helmet', headColour: 'red', sleeves: 'none', top: '#ABCDEF', boat: 'canoe', deck: '#12345', stripe: null, glasses: 'monocle', deckShape: 'sail', hullShape: 'flat' });
   assert.equal(bad.glasses, 'none');
   assert.equal(bad.deckShape, 'modern');
@@ -71,6 +75,8 @@ test('the look reaches the meshes: hair or a cap, short sleeves or long', () => 
   assert.ok(paddlerMesh({ ...l, glasses: 'wrap' }).count > paddlerMesh({ ...l, glasses: 'none' }).count);
   assert.notDeepEqual(kayakMesh({ ...l, wings: true }).vertices, kayakMesh(l).vertices);
   assert.notDeepEqual(kayakMesh({ ...l, vee: true }).vertices, kayakMesh(l).vertices);
+  assert.notDeepEqual(paddleMesh({ ...l, flat: true }).vertices, paddleMesh({ ...l, flat: false }).vertices);
+  assert.deepEqual(livery(cleanKit({ hullColour: '#000000' })).hull, [0, 0, 0]);
   assert.ok(limbMesh(l.top, { skin: l.skin, sleeve: 0.4 }).count > limbMesh(l.top).count);
   assert.notEqual(kitKey(kit), kitKey({ ...kit, deck: '#000000' }));
 });

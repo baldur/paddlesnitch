@@ -26,8 +26,10 @@ export function paddlerSvg(kit) {
     square: `<rect x="48" y="28.5" width="10" height="7" fill="${lens}" stroke="${frame}" stroke-width="1.4" /><rect x="62" y="28.5" width="10" height="7" fill="${lens}" stroke="${frame}" stroke-width="1.4" /><line x1="58" y1="31" x2="62" y2="31" stroke="${frame}" stroke-width="1.4" />`,
   }[kit.glasses] ?? '';
   return `
-    <line x1="6" y1="83" x2="114" y2="81" stroke="#3f3f46" stroke-width="3" stroke-linecap="round" />
-    <path d="M2 80 L8 74 L16 76 L14 90 L6 90Z" fill="#facc15" /><path d="M118 78 L112 72 L104 74 L106 88 L114 88Z" fill="#facc15" />
+    <line x1="6" y1="83" x2="114" y2="81" stroke="${kit.shaftColour}" stroke-width="3" stroke-linecap="round" />
+    ${kit.paddle === 'flat'
+    ? `<rect x="2" y="74" width="12" height="17" rx="3" fill="${kit.bladeColour}" /><rect x="106" y="72" width="12" height="17" rx="3" fill="${kit.bladeColour}" />`
+    : `<path d="M2 80 L8 74 L16 76 L14 90 L6 90Z" fill="${kit.bladeColour}" /><path d="M118 78 L112 72 L104 74 L106 88 L114 88Z" fill="${kit.bladeColour}" />`}
     <path d="M40 56 Q60 48 80 56 L76 96 L44 96Z" fill="${kit.top}" />
     <rect x="55" y="42" width="10" height="10" fill="${kit.skin}" />
     <circle cx="60" cy="33" r="15" fill="${kit.skin}" />
@@ -66,8 +68,23 @@ export function sectionSvg(kit) {
   const bottom = kit.hullShape === 'vee'
     ? `L${r - 5} 28 L40 37 L${l + 5} 28`
     : `Q${r} 35 40 35 Q${l} 35 ${l} 22`;
+  const shape = `M${l - wing} 18 Q40 6 ${r + wing} 18 L${r} 22 ${bottom} Z`;
   return `
     <rect x="0" y="22" width="80" height="28" fill="#5f9dbd" />
-    <path d="M${l - wing} 18 Q40 6 ${r + wing} 18 L${r} 22 ${bottom} Z" fill="${kit.deck}" stroke="rgb(0 0 0 / 0.4)" stroke-width="1" />
+    <path d="${shape}" fill="${kit.hullColour}" />
+    <clipPath id="aboveWater"><rect width="80" height="19" /></clipPath>
+    <path d="${shape}" fill="${kit.deck}" clip-path="url(#aboveWater)" />
+    <path d="${shape}" fill="none" stroke="rgb(0 0 0 / 0.4)" stroke-width="1" />
     <line x1="0" y1="22" x2="80" y2="22" stroke="rgb(255 255 255 / 0.6)" stroke-width="1" />`;
+}
+
+// The paddle, shaft across: viewBox 0 0 240 50. Wing blades are lopsided
+// spoons, flat ones symmetrical.
+export function paddleSvg(kit) {
+  const blade = kit.paddle === 'flat'
+    ? (x, dir) => `<path d="M${x} 25 L${x + dir * 6} 13 Q${x + dir * 40} 10 ${x + dir * 46} 14 L${x + dir * 46} 36 Q${x + dir * 40} 40 ${x + dir * 6} 37Z" fill="${kit.bladeColour}" stroke="rgb(0 0 0 / 0.3)" />`
+    : (x, dir) => `<path d="M${x} 25 Q${x + dir * 10} 9 ${x + dir * 34} 8 Q${x + dir * 48} 9 ${x + dir * 46} 22 Q${x + dir * 40} 40 ${x + dir * 18} 34 Q${x + dir * 6} 31 ${x} 25Z" fill="${kit.bladeColour}" stroke="rgb(0 0 0 / 0.3)" />`;
+  return `
+    <line x1="50" y1="25" x2="190" y2="25" stroke="${kit.shaftColour}" stroke-width="5" stroke-linecap="round" />
+    ${blade(52, -1)}${blade(188, 1)}`;
 }

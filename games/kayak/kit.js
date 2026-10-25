@@ -1,7 +1,7 @@
 // Your paddler and boat, as chosen in the menu: remembered on this device, and
 // on your account when you're signed in (games.kit). Colours are "#rrggbb".
 // Pure: no DOM.
-import { BOATS, DEFAULT_BOAT, DECKS as DECK_SHAPES, HULL_SHAPES, FROM_HULL, boatById } from './boats.js';
+import { BOATS, DEFAULT_BOAT, DECKS as DECK_SHAPES, HULL_SHAPES, PADDLES, FROM_HULL, boatById } from './boats.js';
 
 // Skin tones, lightest to deepest, from real skin. Picked from a set rather
 // than a free colour picker so every choice looks like a person; none is the
@@ -21,7 +21,8 @@ const DEFAULT = {
   head: 'cap', headColour: '#1d4ed8',
   sleeves: 'short', top: '#facc15',
   glasses: 'none', glassesColour: '#0ea5e9',
-  boat: DEFAULT_BOAT, deck: '#dc2626', stripe: '#f5f5f4', deckShape: 'modern', hullShape: 'round',
+  boat: DEFAULT_BOAT, deck: '#dc2626', hullColour: '#f2ede0', stripe: '#f5f5f4', deckShape: 'modern', hullShape: 'round',
+  paddle: 'wing', shaftColour: '#3a3b42', bladeColour: '#facc15',
 };
 
 // Anything read back (storage, the account, another player) made safe and
@@ -38,9 +39,13 @@ export function cleanKit(raw, fallback = DEFAULT) {
     glassesColour: colour(k.glassesColour, fallback.glassesColour),
     boat: boatById(k.boat) ? k.boat : FROM_HULL[k.boat] ?? fallback.boat,
     deck: colour(k.deck, fallback.deck),
+    hullColour: colour(k.hullColour, fallback.hullColour),
     stripe: colour(k.stripe, fallback.stripe),
     deckShape: oneOf(k.deckShape, Object.keys(DECK_SHAPES), fallback.deckShape),
     hullShape: oneOf(k.hullShape, Object.keys(HULL_SHAPES), fallback.hullShape),
+    paddle: oneOf(k.paddle, Object.keys(PADDLES), fallback.paddle),
+    shaftColour: colour(k.shaftColour, fallback.shaftColour),
+    bladeColour: colour(k.bladeColour, fallback.bladeColour),
   };
 }
 
@@ -64,7 +69,11 @@ export function randomKit(rand = Math.random, hull = null) {
     glassesColour: pick(LENSES),
     boat: FROM_HULL[hull] ?? DEFAULT_BOAT,
     deck: pick(DECKS),
+    hullColour: '#f2ede0',
     stripe: '#f5f5f4',
+    paddle: 'wing',
+    shaftColour: pick(['#3a3b42', '#18181b', '#e5e5e5']),
+    bladeColour: pick(DECKS),
   });
 }
 
@@ -74,9 +83,10 @@ export const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 1
 // changes whenever any of them does.
 export function livery(kit) {
   return {
-    deck: rgb(kit.deck), hull: [0.95, 0.93, 0.88], stripe: rgb(kit.stripe),
+    deck: rgb(kit.deck), hull: rgb(kit.hullColour), stripe: rgb(kit.stripe),
     top: rgb(kit.top), skin: rgb(kit.skin), cap: rgb(kit.headColour), head: kit.head, sleeves: kit.sleeves,
     glasses: kit.glasses, lens: rgb(kit.glassesColour), wings: kit.deckShape === 'wings', vee: kit.hullShape === 'vee',
+    shaft: rgb(kit.shaftColour), blade: rgb(kit.bladeColour), flat: kit.paddle === 'flat',
   };
 }
 export const kitKey = (kit) => Object.values(cleanKit(kit)).join(',');

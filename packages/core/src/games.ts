@@ -73,7 +73,8 @@ export async function getLeaderboard(course: GameCourse, userId?: string) {
 export type GameKit = {
   skin: string; head: 'cap' | 'hair'; headColour: string; sleeves: 'short' | 'long'; top: string
   glasses: 'none' | 'wrap' | 'round' | 'aviator' | 'square'; glassesColour: string
-  boat: (typeof GAME_BOATS)[number]; deck: string; stripe: string; deckShape: 'modern' | 'wings'; hullShape: 'round' | 'vee'
+  boat: (typeof GAME_BOATS)[number]; deck: string; hullColour: string; stripe: string; deckShape: 'modern' | 'wings'; hullShape: 'round' | 'vee'
+  paddle: 'wing' | 'flat'; shaftColour: string; bladeColour: string
 }
 const kitKey = (userId: string) => `users/${userId}/game-kit.json`
 export const getGameKit = (userId: string) => getJson<GameKit>(kitKey(userId))

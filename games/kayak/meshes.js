@@ -152,8 +152,9 @@ export function kayakMesh({ deck, hull, stripe, cockpit = [0.05, 0.05, 0.06], be
   return m.build();
 }
 
-// A wing paddle, shaft along x, centred on the origin, blades facing -z.
-export function paddleMesh({ shaft, blade }) {
+// A paddle, shaft along x, centred on the origin, blades facing -z: wing
+// blades (spoon-shaped, cupped) unless `flat`.
+export function paddleMesh({ shaft, blade, flat = false }) {
   const m = new MeshBuilder();
   const half = 1.08;
   // Square-ish shaft: four long thin quads.
@@ -174,14 +175,17 @@ export function paddleMesh({ shaft, blade }) {
     for (let i = 0; i < cols; i++) {
       const f0 = i / cols;
       const f1 = (i + 1) / cols;
-      const width = (f) => 0.03 + 0.12 * Math.sin(Math.PI * Math.min(1, f * 1.1)) ** 0.6;
-      const cup = (f) => 0.03 * Math.sin(Math.PI * f);
+      const width = flat
+        ? (f) => 0.03 + 0.09 * Math.min(1, f * 3) * (1 - 0.15 * f)
+        : (f) => 0.03 + 0.12 * Math.sin(Math.PI * Math.min(1, f * 1.1)) ** 0.6;
+      const cup = (f) => (flat ? 0 : 0.03 * Math.sin(Math.PI * f));
+      const upper = flat ? 1 : 0.7; // a wing blade is lopsided
       const xa = x0 + (x1 - x0) * f0;
       const xb = x0 + (x1 - x0) * f1;
       const a = [xa, -width(f0), -cup(f0)];
       const b = [xb, -width(f1), -cup(f1)];
-      const c = [xb, width(f1) * 0.7, -cup(f1)];
-      const d = [xa, width(f0) * 0.7, -cup(f0)];
+      const c = [xb, width(f1) * upper, -cup(f1)];
+      const d = [xa, width(f0) * upper, -cup(f0)];
       m.triFacing(a, b, c, blade, [0, 0, -1]);
       m.triFacing(a, c, d, blade, [0, 0, -1]);
     }
