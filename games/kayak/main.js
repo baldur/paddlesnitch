@@ -1,6 +1,6 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
 import { practiceRiver, raceRiver, loadCourse, riverView } from './course.js';
-import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISION_9 } from './race.js';
+import { createRace, stepRace, standings, elapsed, projected, applyCall, released, DIVISION_9 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
@@ -89,6 +89,7 @@ let meshes = null;
 let placeNext = 0; // the next landmark to name (showPlace)
 let placeTimer = 0;
 let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprintHint)
+let stuck = { left: 2, for: 0, s: 0 }; // back-paddling tips still to give this race, and how long you've been getting nowhere (stuckHint)
 let hitSwan = -Infinity; // race time the player last paddled into a swan
 let hitBoat = { kind: null, time: -Infinity }; // and into another boat
 let behindTimer = 0; // hides the arrow for an eight coming up behind
@@ -116,6 +117,7 @@ function reset() {
   cueNext = 0;
   cueTimer = 0;
   hints = { left: 3, wait: 8 };
+  stuck = { left: 2, for: 0, s: 0 };
 }
 
 // Each boat's colours: yours, a friend's in a live race (in their boat), or a
@@ -706,6 +708,8 @@ const sounds = {
     tone({ freq: 85, to: 60, duration: 0.06, type: 'sine', gain: 0.06 });
   },
   weak: () => noise({ freq: 1800, to: 900, q: 1.2, duration: 0.12, gain: 0.05 }),
+  // A back stroke: the blade pushed forward through the water, duller.
+  back: () => noise({ freq: 450, to: 250, q: 0.8, duration: 0.3, gain: 0.08 }),
   capsize: () => {
     noise({ freq: 1600, to: 180, q: 0.7, duration: 1.3, gain: 0.3, type: 'lowpass' });
     tone({ freq: 220, to: 55, duration: 0.8, type: 'triangle', gain: 0.12 });
@@ -763,7 +767,7 @@ function say(text) {
 function react({ events, splashes }) {
   for (const e of events) {
     sounds[e]?.();
-    if (e === 'stroke') controls.rumble(0.25, 40);
+    if (e === 'stroke' || e === 'back') controls.rumble(0.25, 40);
     if (e === 'weak') show('Weak stroke', { small: true, hold: 0.5 });
     if (e === 'swan') hitSwan = race.time;
     if (e.startsWith('hit-')) hitBoat = { kind: e.slice(4), time: race.time };
@@ -873,6 +877,7 @@ function boatFrame(b) {
 // low across the deck, just out of view. A stroke reaches forward and spears
 // the working blade in by the bow, then the blade holds in the water while
 // the boat drives past it, back to the hip, where it lifts out to the side.
+// A back stroke goes the other way: in by the hip, pushed forward to the bow.
 // Also returns `reach`: how far the paddler's body leans into the catch.
 function paddlePose(b) {
   const t = b.time - b.paddle.at;
@@ -881,7 +886,7 @@ function paddlePose(b) {
   // depth 0..1: how far the blade is buried.
   const pose = (p) => {
     const depth = p < 0.12 ? smooth(p / 0.12) : 1 - smooth((p - 0.8) / 0.2);
-    const drive = smooth((p - 0.08) / 0.75);
+    const drive = b.paddle.back ? 1 - smooth((p - 0.08) / 0.75) : smooth((p - 0.08) / 0.75);
     return {
       depth,
       tilt: dir * (0.3 + 0.5 * depth), // shaft steep, top hand high
@@ -1173,6 +1178,7 @@ function updateHud(dt) {
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
   els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
   sprintHint(boat, dt);
+  stuckHint(boat, dt);
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
   showCue(course, loc.s, dt);
@@ -1276,6 +1282,19 @@ function moveMap() {
 
 // Landmarks (a real river's course.scenery.places) named one at a time as you
 // come up to them, each for a few seconds; any already passed are skipped.
+// Getting nowhere for a few seconds mid-race (nosed into a bank, or turned
+// round in a narrow gap where the rudder can't bring you back): how to back
+// out. A back stroke swings the bow towards its side, so it turns you on the spot.
+function stuckHint(boat, dt) {
+  const { loc } = race.player;
+  const going = state === 'racing' && race.player.finish === null && boat.swim <= 0 && released(race, race.player);
+  if (!going || loc.s > stuck.s + 3) Object.assign(stuck, { s: loc.s, for: 0 });
+  else stuck.for += dt;
+  if (stuck.left <= 0 || stuck.for < 3) return;
+  show(phone.matches ? 'Stuck? Swipe down to paddle backwards and turn' : 'Stuck? Hold ↓ and paddle to go backwards and turn', { small: true, hold: 3.5 });
+  Object.assign(stuck, { left: stuck.left - 1, for: -10 });
+}
+
 // Tells you about the sprint when it would help: stamina to spare, and a boat
 // a little way ahead to catch. A few times a race at most.
 function sprintHint(boat, dt) {
