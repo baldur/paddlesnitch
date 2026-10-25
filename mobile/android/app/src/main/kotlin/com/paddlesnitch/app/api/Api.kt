@@ -74,6 +74,8 @@ class Api(
     suspend fun me(): Me = query("me", Me.serializer())
     suspend fun paddles(): PaddleList = query("paddles.list", PaddleList.serializer())
     suspend fun paddle(id: String): AnalysisSession = query("paddles.get", AnalysisSession.serializer(), """{"id":${str(id)}}""")
+    /** Writes a paddle's pending coach summary (can take a few seconds); the paddle as it is when already written. */
+    suspend fun writeSummary(id: String): AnalysisSession = mutation("paddles.writeSummary", AnalysisSession.serializer(), """{"id":${str(id)}}""")
 
     private suspend fun signIn(path: String, body: String): SignIn {
         val answer = read(post(path, body), SignIn.serializer())
@@ -92,7 +94,16 @@ class Api(
     /** A tRPC query: GET /api/trpc/<path>?input=<json>, answer {result:{data}}. */
     private suspend fun <T> query(path: String, out: KSerializer<T>, input: String? = null): T {
         val url = base.newBuilder().addPathSegments("api/trpc/$path").apply { if (input != null) addQueryParameter("input", input) }.build()
-        val res = authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").build() }
+        return data(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").build() }, out)
+    }
+
+    /** A tRPC mutation: POST /api/trpc/<path> with the input as the body. */
+    private suspend fun <T> mutation(path: String, out: KSerializer<T>, input: String): T {
+        val url = base.newBuilder().addPathSegments("api/trpc/$path").build()
+        return data(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(input.toRequestBody(jsonType)).build() }, out)
+    }
+
+    private fun <T> data(res: Answer, out: KSerializer<T>): T {
         if (!res.ok) throw error(res)
         val data = ApiJson.parseToJsonElement(res.body).jsonObject.getValue("result").jsonObject.getValue("data")
         return ApiJson.decodeFromJsonElement(out, data)

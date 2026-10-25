@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { capture, flush, startAnalytics, _config, _resetForTest } from './analytics'
+import { capture, flush, startAnalytics, reportClientError, isOwnScript, _config, _resetForTest } from './analytics'
 
 // jsdom is the default vitest env here, so window/document/sessionStorage exist.
 function lastFetchBody(fetchMock: ReturnType<typeof vi.fn>) {
@@ -94,5 +94,47 @@ describe('client analytics buffer', () => {
     flush()               // retry succeeds
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(lastFetchBody(fetchMock).events).toHaveLength(1)
+  })
+})
+
+describe('browser errors (observability)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  beforeEach(() => {
+    _resetForTest()
+    _config.enabled = true
+    _config.maxBatch = 100
+    fetchMock = vi.fn(() => Promise.resolve({ ok: true } as Response))
+    vi.stubGlobal('fetch', fetchMock)
+  })
+  afterEach(() => { vi.unstubAllGlobals(); _resetForTest() })
+  const sent = () => { flush(); return fetchMock.mock.calls.length ? lastFetchBody(fetchMock).events : [] }
+
+  it('reports the first line of the message, each message once, at most 5 per page', () => {
+    reportClientError('TypeError', 'x is undefined\n  at f (https://paddlesnitch.com/_next/a.js:1:1)')
+    reportClientError('TypeError', 'x is undefined')
+    for (let i = 0; i < 10; i++) reportClientError('Error', `boom ${i}`)
+    const events = sent()
+    expect(events).toHaveLength(5)
+    expect(events[0]).toMatchObject({ event: 'client_error', props: { type: 'TypeError', message: 'x is undefined', path: '/' } })
+  })
+
+  it('"Script error." (another origin hidden from us) is never reported', () => {
+    reportClientError('Error', 'Script error.')
+    expect(sent()).toEqual([])
+  })
+
+  it('only errors from our own scripts reach us', () => {
+    startAnalytics()
+    const origin = window.location.origin
+    window.dispatchEvent(new ErrorEvent('error', { message: 'from an extension', filename: 'chrome-extension://abc/content.js' }))
+    window.dispatchEvent(new ErrorEvent('error', { message: 'no source' }))
+    window.dispatchEvent(new ErrorEvent('error', { message: 'ours', filename: `${origin}/_next/static/chunks/app.js`, error: new TypeError('ours') }))
+    expect(sent().map((e: { props: { message: string } }) => e.props.message)).toEqual(['ours'])
+  })
+
+  it('knows our own scripts by origin', () => {
+    expect(isOwnScript('https://paddlesnitch.com/_next/a.js', 'https://paddlesnitch.com')).toBe(true)
+    expect(isOwnScript('https://paddlesnitch.com.evil.example/a.js', 'https://paddlesnitch.com')).toBe(false)
+    expect(isOwnScript(undefined, 'https://paddlesnitch.com')).toBe(false)
   })
 })

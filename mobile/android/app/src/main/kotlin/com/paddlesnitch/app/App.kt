@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.paddlesnitch.app.account.AccountScreen
+import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
@@ -38,12 +39,15 @@ import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.PrefsVerifierStore
 import com.paddlesnitch.app.auth.StravaSignIn
 import com.paddlesnitch.app.auth.SignInScreen
-import com.paddlesnitch.app.paddles.PaddlesScreen
+import com.paddlesnitch.app.paddles.PaddlesHost
 import com.paddlesnitch.app.paddles.addedMessage
 import com.paddlesnitch.app.paddles.rememberAddPaddle
+import com.paddlesnitch.app.paddles.sampleFile
 import com.paddlesnitch.app.ui.PsColor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Signed out: the sample paddles and a way in. Signed in: your own paddles.
@@ -83,7 +87,7 @@ fun App(returned: MutableStateFlow<Uri?> = MutableStateFlow(null)) {
                     onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
             }
             signedIn -> MyPaddles(api, needsTerms, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
-            else -> PaddlesScreen(sample, sample = true, modifier = m, action = {
+            else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
         }
@@ -112,7 +116,7 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount) { Text("Account") } }
     val current = list
     when {
-        current != null -> PaddlesScreen(current, sample = false, modifier = modifier, action = {
+        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier, action = {
             Row {
                 TextButton(onClick = addPaddle, enabled = !adding) { Text("Add a file") }
                 account()
@@ -134,4 +138,8 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
         }
         else -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
+}
+
+private suspend fun readSample(context: android.content.Context, file: String): AnalysisSession = withContext(Dispatchers.IO) {
+    context.assets.open(file).bufferedReader().use { ApiJson.decodeFromString(AnalysisSession.serializer(), it.readText()) }
 }

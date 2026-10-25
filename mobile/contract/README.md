@@ -10,6 +10,7 @@ and neither app's source is ever the reference.
 | `api/` | JSON Schema (draft-07) for every procedure the apps call, plus `procedures.json` | `pnpm mobile:contract`, from `packages/api/src/contract.ts` |
 | `tokens/` | Colours, radii and font families | `pnpm mobile:contract`, from `packages/ui/src/tokens.css` |
 | `fixtures/api/` | Golden answers per procedure, which both apps must decode | By hand, from synthetic paddles run through the real analysis; checked against the schemas by `pnpm test` |
+| `telemetry.md` + `fixtures/telemetry/` | The `x-paddlesnitch-app` header on every request, `app_open`, and crash reports sent on the next start | By hand; replayed against the real endpoint by `pnpm test` |
 | `fixtures/` (rest) | Recording CSV, tracker Bluetooth protocol, receipts | Phase C3 (not yet) |
 
 **Don't edit `api/` or `tokens/` by hand.** Change the source, run
@@ -117,7 +118,7 @@ Every error answer has a human-readable `error`.
 ## fixtures/api/
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
-`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`),
+`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`), `paddles.writeSummary` (`pdl-river` with its summary written),
 `paddles.get.strava` (`pdl-strava`), `paddles.get.motion-only` (`pdl-motion`, a
 paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
 (rule 2; deliberately does **not** fit the schema). The paddles are synthetic.

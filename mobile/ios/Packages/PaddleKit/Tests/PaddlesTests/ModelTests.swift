@@ -163,7 +163,7 @@ actor ScriptedSource: PaddlesSource {
         let motion = try await summary("pdl-motion")
         #expect(motion.stats.map(\.label) == ["PADDLING", "DISTANCE", "STROKE RATE", "STROKES"])
         #expect(motion.stats[1].value == "—")
-        #expect(motion.stats[3].value == "2310")
+        #expect(motion.stats[3].value == "2,300")
         #expect(motion.route.isEmpty)
         #expect(motion.note == nil)
         #expect(motion.noGpsMessage?.hasPrefix("The GPS lost the sky 19 seconds after you set off") == true)

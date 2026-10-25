@@ -14,7 +14,7 @@ class FixturesTest {
     @Test
     fun everyFixtureHasAModelAndDecodes() {
         val byProcedure = mapOf(
-            "me" to Me.serializer(), "paddles.list" to PaddleList.serializer(), "paddles.get" to AnalysisSession.serializer(),
+            "me" to Me.serializer(), "paddles.list" to PaddleList.serializer(), "paddles.get" to AnalysisSession.serializer(), "paddles.writeSummary" to AnalysisSession.serializer(),
             "auth.login" to SignIn.serializer(), "auth.refresh" to Refreshed.serializer(),
             "auth.error" to ApiError.serializer(), "auth.otp-verify.retry" to ApiError.serializer(),
         )
