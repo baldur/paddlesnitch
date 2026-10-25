@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'That sign-in has expired. Please try again.' }, { status: 401 })
   }
 
-  const tokens = await customAuthSignIn(account.email, randomBytes(32).toString('hex'))
+  const tokens = await customAuthSignIn(account.email, randomBytes(32).toString('hex'), account.userId)
   const user = 'error' in tokens ? null : await verifyIdToken(tokens.idToken)
   if ('error' in tokens || !user) {
     console.error('[strava app-token] sign-in failed', 'error' in tokens ? tokens.error : 'bad token')

@@ -4,7 +4,7 @@ import { setAuthCookies } from '@/lib/auth'
 import { verifyIdToken } from '@/lib/cognito'
 import { hasAcceptedCurrent, termsAcceptPath } from '@/lib/tos'
 import { canonicalBaseUrl, safeNext } from '@/lib/url'
-import { exchangeCode, errorKey } from '@/lib/google-signin'
+import { exchangeCode, errorKey, emailVerified } from '@/lib/google-signin'
 import { clientOf, logAction } from '@paddlesnitch/core/observe'
 
 // GET /att/api/auth/google/callback?code=&state= — back from Cognito's hosted
@@ -37,8 +37,9 @@ export async function GET(req: NextRequest) {
   const user = tokens ? await verifyIdToken(tokens.idToken) : null
   if (!tokens || !user) return fail('google_failed')
 
-  // A first sign-in may be the account an invitation was waiting for.
-  try {
+  // A first sign-in may be the account an invitation was waiting for, but
+  // only an address Google has verified collects one.
+  if (emailVerified(tokens.idToken)) try {
     const { applyPendingInvitations } = await import('@/lib/pending-invitations')
     await applyPendingInvitations(user.email, user.id)
   } catch (err) {

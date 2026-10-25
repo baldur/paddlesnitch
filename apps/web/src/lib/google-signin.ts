@@ -62,7 +62,17 @@ export async function exchangeCode(code: string, verifier: string, redirectUri: 
  */
 export function errorKey(error: string, description: string | null): string {
   if (/ACCOUNT_EXISTS/.test(description ?? '')) return 'google_account_exists'
-  if (/NO_EMAIL/.test(description ?? '')) return 'google_no_email'
+  if (/NO_EMAIL|EMAIL_UNVERIFIED/.test(description ?? '')) return 'google_no_email'
   if (error === 'access_denied') return 'google_denied'
   return 'google_failed'
+}
+
+/** Whether an ID token we have already verified says its email is verified. */
+export function emailVerified(idToken: string): boolean {
+  try {
+    const v = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString()).email_verified
+    return v === true || v === 'true'
+  } catch {
+    return false
+  }
 }

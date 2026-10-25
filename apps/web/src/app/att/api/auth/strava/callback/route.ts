@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   // state cookie (an old tab, a double click), is the user's doing, not ours.
   const client = clientOf(req.headers)
   const fail = (errKey: string) => {
-    const expected = errKey === 'strava_denied' || errKey === 'strava_state_mismatch'
+    const expected = errKey === 'strava_denied' || errKey === 'strava_state_mismatch' || errKey === 'strava_use_google'
     logAction('sign_in', expected ? 'rejected' : 'fail', { client, reason: errKey })
     return clearCookies(NextResponse.redirect(forApp ? `${APP_RETURN_URL}?error=${errKey}` : new URL(`/signin?error=${errKey}`, base)))
   }
@@ -116,6 +116,8 @@ export async function GET(req: NextRequest) {
     // (the bug behind "Could not create an account from your Strava profile"
     // for already-linked accounts). The sub is stable regardless of email.
     const existing = await findUserBySub(linkedUserId)
+    // An account that signs in with Google can't be signed in by email here.
+    if (existing?.google) return fail('strava_use_google')
     if (existing) {
       cognitoEmail = existing.email
       userId = existing.sub
@@ -177,7 +179,7 @@ export async function GET(req: NextRequest) {
 
   // 3. Sign the user in via Custom Auth, using a server-only one-time token.
   const presetToken = randomBytes(32).toString('hex')
-  const signInResult = await customAuthSignIn(cognitoEmail, presetToken)
+  const signInResult = await customAuthSignIn(cognitoEmail, presetToken, userId)
   if ('error' in signInResult) {
     console.error('[strava signin] customAuthSignIn failed', signInResult.error)
     return fail('strava_signin_failed')

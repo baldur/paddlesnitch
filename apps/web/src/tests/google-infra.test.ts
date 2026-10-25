@@ -26,7 +26,11 @@ describe('Sign in with Google in the stack', () => {
   })
 
   it('the app client allows only the code flow, back to our callback, with Google as a provider', () => {
-    const client = stack.slice(stack.indexOf("new cognito.UserPoolClient(this, 'UserPoolClient'"), stack.indexOf('userPoolClient.node.addDependency(google)'))
+    const start = stack.indexOf("new cognito.UserPoolClient(this, 'UserPoolClient'")
+    const end = stack.indexOf('userPoolClient.node.addDependency(google)')
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    const client = stack.slice(start, end)
     expect(client).toContain('flows: { authorizationCodeGrant: true }')
     expect(client).not.toMatch(/implicitCodeGrant/)
     expect(client).toContain("callbackUrls: ['https://paddlesnitch.com/att/api/auth/google/callback']")
@@ -37,6 +41,9 @@ describe('Sign in with Google in the stack', () => {
     expect(stack).toContain("cognitoDomain: { domainPrefix: 'paddlesnitch' }")
     expect(stack).toContain('COGNITO_DOMAIN: hostedDomain.baseUrl()')
     expect(stack).toContain('userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp)')
+    // Its lookup reaches this pool only (the AWS account is shared).
+    expect(stack).toContain("actions: ['cognito-idp:ListUsers'], resources: [userPool.userPoolArn]")
+    expect(stack).not.toContain('userpool/*')
   })
 
   it('the button is switched on per build by the GOOGLE_SIGNIN repository variable', () => {

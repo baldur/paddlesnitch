@@ -8,14 +8,19 @@ import { createHash } from 'crypto'
 import { makeDataDir, cleanDataDir, makeUser, type TestUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
+vi.mock('@/lib/pending-invitations', () => ({ applyPendingInvitations: vi.fn(async () => {}) }))
 
 import { cookies } from 'next/headers'
 import { GET as init } from '@/app/att/api/auth/google/init/route'
 import { GET as callback } from '@/app/att/api/auth/google/callback/route'
 import { recordAcceptance } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
-import { errorKey } from '@/lib/google-signin'
-import { deleteUserBySub, findUserByEmail } from '@/lib/cognito'
+import { errorKey, emailVerified } from '@/lib/google-signin'
+import { applyPendingInvitations } from '@/lib/pending-invitations'
+import { readFileSync } from 'fs'
+import path from 'path'
+import { CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider'
+import { deleteUserBySub, findUserByEmail, signUp, customAuthSignIn } from '@/lib/cognito'
 
 const DOMAIN = 'https://paddlesnitch.auth.eu-west-1.amazoncognito.com'
 let dir: string
@@ -34,12 +39,13 @@ beforeEach(async () => {
       const body = new URLSearchParams(String(initArg?.body))
       tokenCalls.push(body)
       if (body.get('code') === 'good') return Response.json({ id_token: pat.idToken, refresh_token: pat.refreshToken, access_token: 'a' })
+      if (body.get('code') === 'junk') return Response.json({ id_token: 'not.a.token', refresh_token: 'r', access_token: 'a' })
       return Response.json({ error: 'invalid_grant' }, { status: 400 })
     }
     return realFetch(url, initArg)
   }))
 })
-afterEach(async () => { await cleanDataDir(dir); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+afterEach(async () => { await cleanDataDir(dir); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.mocked(applyPendingInvitations).mockClear() })
 
 function jar(c: Record<string, string>) {
   vi.mocked(cookies).mockResolvedValue({ get: (n: string) => (c[n] ? { name: n, value: c[n] } : undefined) } as never)
@@ -64,7 +70,18 @@ describe('starting Sign in with Google', () => {
     expect(q.get('code_challenge')).toBe(createHash('sha256').update(verifier).digest('base64url'))
     expect(q.get('state')).toBe(setCookie(res, 'google_signin_state'))
     expect(setCookie(res, 'google_signin_next')).toBe('%2Fpaddles')
-    expect(res.headers.getSetCookie().find(c => c.startsWith('google_signin_verifier='))).toMatch(/HttpOnly/i)
+    for (const name of ['google_signin_state', 'google_signin_verifier', 'google_signin_next']) {
+      const c = res.headers.getSetCookie().find(x => x.startsWith(`${name}=`))!
+      // Lax, not Strict: the return trip from Cognito is a cross-site navigation.
+      expect(c, name).toMatch(/HttpOnly/i)
+      expect(c, name).toMatch(/SameSite=Lax/i)
+      expect(c, name).toMatch(/Max-Age=600/)
+      expect(c, name).toMatch(/Path=\//)
+    }
+  })
+
+  it('never keeps a next that leaves the site', async () => {
+    expect(setCookie(await init(get('/att/api/auth/google/init?next=%2F%2Fevil.example%2Fx')), 'google_signin_next')).toBe('%2F')
   })
 
   it('says it isn\'t available where there is no hosted sign-in (local dev)', async () => {
@@ -87,15 +104,35 @@ describe('back from Google', () => {
     expect(setCookie(res, 'google_signin_verifier')).toBe('')
     expect(tokenCalls[0].get('code_verifier')).toBe('ver')
     expect(tokenCalls[0].get('grant_type')).toBe('authorization_code')
+    // The same redirect_uri as init sent, and our client.
+    expect(tokenCalls[0].get('redirect_uri')).toBe('http://localhost/att/api/auth/google/callback')
+    expect(tokenCalls[0].get('client_id')).toBe(process.env.COGNITO_CLIENT_ID)
+    for (const name of ['google_signin_state', 'google_signin_verifier', 'google_signin_next']) expect(setCookie(res, name), name).toBe('')
+    // A verified email collects the invitations waiting for it.
+    expect(applyPendingInvitations).toHaveBeenCalledWith(pat.email, pat.id)
   })
 
-  it('a new account accepts the Terms first', async () => {
+  it('a next that leaves the site goes home instead', async () => {
+    await recordAcceptance(pat.id, CURRENT_TOS_VERSION)
+    jar({ ...started, google_signin_next: 'https://evil.example/x' })
+    const res = await back('code=good&state=st')
+    expect(to(res).origin + to(res).pathname).toBe('http://localhost/')
+  })
+
+  it('a new account accepts the Terms first, signed in, then goes on', async () => {
     jar(started)
-    expect(to(await back('code=good&state=st')).pathname).toBe('/terms/accept')
+    const res = await back('code=good&state=st')
+    expect(to(res).pathname).toBe('/terms/accept')
+    expect(to(res).searchParams.get('next')).toBe('/paddles')
+    expect(setCookie(res, 'tt_id')).toBe(pat.idToken)
   })
 
   it('refuses a forged state, a missing verifier and a code Cognito won\'t swap, signing nobody in', async () => {
-    for (const [c, query] of [[started, 'code=good&state=forged'], [{ google_signin_state: 'st' }, 'code=good&state=st'], [started, 'code=spent&state=st']] as const) {
+    for (const [c, query] of [
+      [started, 'code=good&state=forged'], [{ google_signin_state: 'st' }, 'code=good&state=st'], [started, 'code=spent&state=st'],
+      [started, 'state=st'], [started, 'code=good'], [{ google_signin_verifier: 'ver' }, 'code=good&state=st'],
+      [started, 'code=junk&state=st'],
+    ] as const) {
       jar(c as Record<string, string>)
       const res = await back(query)
       expect(to(res).searchParams.get('error'), query).toBe('google_failed')
@@ -110,14 +147,58 @@ describe('back from Google', () => {
     expect(to(res).searchParams.get('next')).toBe('/paddles')
   })
 
+  it('a cancel on Google\'s page comes back as google_denied', async () => {
+    jar(started)
+    expect(to(await back('error=access_denied&state=st')).searchParams.get('error')).toBe('google_denied')
+  })
+
   it('maps every Cognito error to a key the sign-in page has words for', () => {
-    expect(errorKey('access_denied', null)).toBe('google_denied')
-    expect(errorKey('invalid_request', 'PreSignUp failed with error NO_EMAIL.')).toBe('google_no_email')
-    expect(errorKey('server_error', 'something')).toBe('google_failed')
+    const keys = [
+      errorKey('access_denied', null), errorKey('invalid_request', 'PreSignUp failed with error NO_EMAIL.'),
+      errorKey('invalid_request', 'PreSignUp failed with error EMAIL_UNVERIFIED.'), errorKey('invalid_request', 'PreSignUp failed with error ACCOUNT_EXISTS.'),
+      errorKey('server_error', 'something'), 'google_not_configured',
+    ]
+    expect(keys.slice(0, 5)).toEqual(['google_denied', 'google_no_email', 'google_no_email', 'google_account_exists', 'google_failed'])
+    const page = readFileSync(path.join(__dirname, '../app/signin/page.tsx'), 'utf8')
+    for (const k of keys) expect(page, k).toContain(`e === '${k}'`)
+  })
+
+  it('reads email_verified from a verified token, and treats anything else as not verified', () => {
+    const token = (claims: object) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`
+    expect(emailVerified(token({ email_verified: true }))).toBe(true)
+    expect(emailVerified(token({ email_verified: 'true' }))).toBe(true)
+    expect(emailVerified(token({ email_verified: false }))).toBe(false)
+    expect(emailVerified(token({}))).toBe(false)
+    expect(emailVerified('junk')).toBe(false)
   })
 })
 
 describe('erasure finds the account by sub', () => {
+  it('a Google account is deleted by its own username (Google_<id>), not its email', async () => {
+    const sent: { name: string; input: Record<string, unknown> }[] = []
+    vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async (cmd: { constructor: { name: string }; input: Record<string, unknown> }) => {
+      sent.push({ name: cmd.constructor.name, input: cmd.input })
+      return cmd.constructor.name === 'ListUsersCommand' ? { Users: [{ Username: 'Google_1234567890' }] } : {}
+    }) as never)
+    await deleteUserBySub('the-sub')
+    expect(sent[0]).toMatchObject({ name: 'ListUsersCommand', input: { Filter: 'sub = "the-sub"' } })
+    expect(sent[1]).toMatchObject({ name: 'AdminDeleteUserCommand', input: { Username: 'Google_1234567890' } })
+  })
+
+  it('already gone is done; any other error is thrown', async () => {
+    const spy = vi.spyOn(CognitoIdentityProviderClient.prototype, 'send')
+    spy.mockImplementation((async (cmd: { constructor: { name: string } }) => {
+      if (cmd.constructor.name === 'ListUsersCommand') return { Users: [{ Username: 'Google_1' }] }
+      throw Object.assign(new Error('gone'), { name: 'UserNotFoundException' })
+    }) as never)
+    await expect(deleteUserBySub('s')).resolves.toBeUndefined()
+    spy.mockImplementation((async (cmd: { constructor: { name: string } }) => {
+      if (cmd.constructor.name === 'ListUsersCommand') return { Users: [{ Username: 'Google_1' }] }
+      throw Object.assign(new Error('nope'), { name: 'TooManyRequestsException' })
+    }) as never)
+    await expect(deleteUserBySub('s')).rejects.toThrow('nope')
+  })
+
   // A Google account's username is "Google_<id>", not its email, so erasure
   // deletes by sub. Here: an email account, gone afterwards; twice is fine.
   it('deletes the user, and a second time is a no-op', async () => {
@@ -126,5 +207,29 @@ describe('erasure finds the account by sub', () => {
     await deleteUserBySub(pat.id)
     expect(await findUserByEmail(pat.email)).toBeNull()
     await expect(deleteUserBySub(pat.id)).resolves.toBeUndefined()
+  })
+})
+
+describe('the one-account-per-email refusal reaches the sign-up form as "email exists"', () => {
+  it('PreSignUp\'s ACCOUNT_EXISTS is classified like an existing username', async () => {
+    vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockRejectedValueOnce(
+      Object.assign(new Error('PreSignUp failed with error ACCOUNT_EXISTS.'), { name: 'UserLambdaValidationException' }) as never)
+    expect(await signUp('someone@example.com', 'Someone', 'Password123')).toEqual({ error: 'email_exists' })
+  })
+})
+
+describe('the server\'s own sign-in checks it got the account it meant', () => {
+  it('tokens for another account are revoked and refused', async () => {
+    const sam = await makeUser('Sam')
+    const sent: string[] = []
+    vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async (cmd: { constructor: { name: string } }) => {
+      sent.push(cmd.constructor.name)
+      if (cmd.constructor.name === 'InitiateAuthCommand') return { Session: 's' }
+      // Cognito answered with Sam's tokens although Pat was meant.
+      if (cmd.constructor.name === 'RespondToAuthChallengeCommand') return { AuthenticationResult: { IdToken: sam.idToken, RefreshToken: sam.refreshToken } }
+      return {}
+    }) as never)
+    expect(await customAuthSignIn(pat.email, 'preset', pat.id)).toEqual({ error: 'unknown' })
+    expect(sent).toContain('RevokeTokenCommand')
   })
 })

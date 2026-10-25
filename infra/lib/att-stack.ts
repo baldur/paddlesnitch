@@ -408,13 +408,14 @@ export class AttStack extends cdk.Stack {
       code: lambda.Code.fromAsset(lambdaDir),
       timeout: cdk.Duration.seconds(5),
     })
-    // Named by pattern, not userPool.userPoolArn: the pool depends on its
-    // triggers, so referencing it here would be a dependency cycle.
-    preSignUp.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:ListUsers'],
-      resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`],
-    }))
     userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp)
+    // Only this pool (the account is shared with other projects). A separate
+    // policy, not the function's own: that one would make the pool, which
+    // depends on its triggers, depend on itself.
+    new iam.Policy(this, 'PreSignUpListUsers', {
+      roles: [preSignUp.role!],
+      statements: [new iam.PolicyStatement({ actions: ['cognito-idp:ListUsers'], resources: [userPool.userPoolArn] })],
+    })
 
     const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
       userPool,

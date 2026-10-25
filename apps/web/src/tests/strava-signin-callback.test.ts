@@ -65,7 +65,7 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     expect(res.headers.get('location') ?? '').not.toContain('error=')
     // Resolved by sub → signs in with the REAL email, no duplicate created.
     expect(cognito.findUserBySub).toHaveBeenCalledWith('real-sub-1')
-    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String))
+    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String), 'real-sub-1')
     expect(cognito.adminCreateUserForStrava).not.toHaveBeenCalled()
   })
 
@@ -88,6 +88,14 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     expect(res.headers.get('location')).toContain('error=strava_signin_failed')
     expect(cognito.adminCreateUserForStrava).not.toHaveBeenCalled()
     expect(stravaStorage.putAthleteIndex).not.toHaveBeenCalled()
+  })
+
+  it('an athlete linked to an account that signs in with Google is told to use Google', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue('google-sub')
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'google-sub', email: 'pat@example.com', displayName: 'Pat', google: true } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_use_google')
+    expect(cognito.customAuthSignIn).not.toHaveBeenCalled()
   })
 
   it('creates a fresh account only when the athlete is NOT linked', async () => {

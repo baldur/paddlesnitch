@@ -103,7 +103,7 @@ describe('privacy page names every outside service the code uses', () => {
 describe('Sign in with Google is on the privacy page', () => {
   it('names Google as a sign-in service and what it passes on', () => {
     expect(privacy).toMatch(/only if you sign in with Google/)
-    expect(privacy).toMatch(/your name and email address/)
+    expect(privacy).toMatch(/your name, your email address and an ID for your Google account/)
     expect(readFileSync(path.join(repo, 'apps/web/src/lib/google-signin.ts'), 'utf8')).toContain('identity_provider')
   })
 })

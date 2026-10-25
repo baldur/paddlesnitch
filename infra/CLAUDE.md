@@ -71,7 +71,7 @@ Cognito's hosted sign-in does the Google part; the app only sends people there a
 - **Hosted domain** `paddlesnitch` → `https://paddlesnitch.auth.eu-west-1.amazoncognito.com` (Cognito's own, no certificate). The server gets it as `COGNITO_DOMAIN`.
 - **Google provider** (`GoogleIdp`): scopes `openid email profile`; maps `email`, `email_verified`, `name`.
 - **App client:** only the authorization-code flow (with PKCE), callback `https://paddlesnitch.com/att/api/auth/google/callback`, providers COGNITO + GOOGLE. Until #697 CDK's defaults were live (implicit flow, callback `https://example.com`).
-- **PreSignUp trigger** (`infra/lambdas/cognito-auth/pre-sign-up.mjs`, `att-cognito-pre-sign-up`): refuses a Google sign-up whose email already has an account (`ACCOUNT_EXISTS`; owner's decision: Google is linked only from Account). Its ListUsers grant names the pool by pattern, because the pool depends on its triggers.
+- **PreSignUp trigger** (`infra/lambdas/cognito-auth/pre-sign-up.mjs`, `att-cognito-pre-sign-up`): **one account per email**. Our sign-ins find people by email, so it refuses any new account (Google, email sign-up, Strava's AdminCreateUser) whose email a confirmed account already has (`ACCOUNT_EXISTS`; owner: Google is linked only from Account), and a Google account without a Google-verified email (`NO_EMAIL`, `EMAIL_UNVERIFIED`). UNCONFIRMED accounts block nobody. Its ListUsers grant is a separate `iam.Policy` on this pool only (the account is shared; the function's own policy would make a dependency cycle).
 
 **Before the first deploy with it, both must exist** (CloudFormation reads them at deploy time and fails without them):
 

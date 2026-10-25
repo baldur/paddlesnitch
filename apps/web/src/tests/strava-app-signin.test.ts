@@ -128,7 +128,7 @@ describe('POST /att/api/auth/strava/app-token', () => {
     const res = await appToken(post({ code, verifier }))
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ id: 'sub-1', idToken: 'id-token', refreshToken: 'refresh-token', needsTerms: true })
-    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String))
+    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String), 'sub-1')
     expect(res.headers.get('set-cookie')).toBeNull()
   })
 

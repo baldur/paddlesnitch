@@ -1,12 +1,20 @@
-// Cognito PreSignUp trigger: refuses a Google sign-in whose email already has
-// a paddlesnitch account (owner's decision, #697). Google is linked to an
-// existing account only from Account, by someone signed in there; never by a
-// matching email, because email sign-up doesn't prove who owns the address.
+// Cognito PreSignUp trigger: one account per email (#697).
 //
-// Cognito runs this before it creates the Google user. Throwing stops the
-// sign-up, and Cognito sends the browser back to our callback with
-// `error_description` containing "ACCOUNT_EXISTS", which the callback turns
-// into a message. Every other sign-up (email, Strava's AdminCreateUser) passes.
+// Our sign-ins find people by email (an alias), so two accounts sharing one
+// email could put someone into the other's account (security review, #697).
+// So every new account is refused when a confirmed account already has its
+// email, whichever way either was made:
+//  - a Google sign-up whose email already has an account: the owner's
+//    decision is that Google is linked only from Account, never by email,
+//    because email sign-up doesn't prove who owns the address;
+//  - an email sign-up, or Strava's AdminCreateUser, whose email already
+//    belongs to a Google account.
+// A Google account must also come with an email Google has verified.
+//
+// Half-made accounts (UNCONFIRMED: Cognito's own sign-up page, which never
+// confirms) don't block anyone. Throwing stops the sign-up; for Google,
+// Cognito sends the browser back to our callback with `error_description`
+// holding the message, which the callback turns into words.
 import { CognitoIdentityProviderClient, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider'
 
 async function usersWithEmail(userPoolId, email) {
@@ -19,14 +27,24 @@ async function usersWithEmail(userPoolId, email) {
   return res.Users ?? []
 }
 
+const CHECKED = new Set(['PreSignUp_ExternalProvider', 'PreSignUp_SignUp', 'PreSignUp_AdminCreateUser'])
+
 export async function handler(event, deps = { usersWithEmail }) {
-  if (event.triggerSource !== 'PreSignUp_ExternalProvider') return event
-  const email = (event.request?.userAttributes?.email ?? '').trim().toLowerCase()
-  // Our accounts are keyed by email: a Google account without one can't sign in.
-  if (!email) throw new Error('NO_EMAIL')
-  const existing = await deps.usersWithEmail(event.userPoolId, email)
-  // Another Google sign-in with the same email is the same Google user (Cognito
-  // keys it by Google's sub), so only a non-Google account blocks it.
-  if (existing.some(u => u.UserStatus !== 'EXTERNAL_PROVIDER')) throw new Error('ACCOUNT_EXISTS')
+  if (!CHECKED.has(event.triggerSource)) return event
+  const attrs = event.request?.userAttributes ?? {}
+  const email = (attrs.email ?? '').trim().toLowerCase()
+  const google = event.triggerSource === 'PreSignUp_ExternalProvider'
+  if (google) {
+    // Our accounts are keyed by email: a Google account without a verified one can't sign in.
+    if (!email) throw new Error('NO_EMAIL')
+    if (String(attrs.email_verified).toLowerCase() !== 'true') throw new Error('EMAIL_UNVERIFIED')
+  }
+  if (!email) return event
+  const existing = (await deps.usersWithEmail(event.userPoolId, email)).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  // A Google user signing in again is the same Cognito user (keyed by Google's
+  // id), so only another kind of account blocks a Google sign-up; every
+  // existing account blocks an email or Strava sign-up.
+  const blocking = google ? existing.filter(u => u.UserStatus !== 'EXTERNAL_PROVIDER') : existing
+  if (blocking.length) throw new Error('ACCOUNT_EXISTS')
   return event
 }
