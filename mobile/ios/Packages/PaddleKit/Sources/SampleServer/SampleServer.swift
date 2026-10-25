@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import PaddleAPI
 
@@ -65,6 +66,14 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             let login = try JSONDecoder().decode(Login.self, from: body)
             guard login.password == Self.password else { return (401, try fixture("auth.error")) }
             return (200, try fixture(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
+        case "/att/api/auth/strava/app-token":
+            // A code from `stravaBrowser` carries its challenge, so this checks
+            // the verifier the way the server does.
+            let swap = try JSONDecoder().decode(StravaAppToken.self, from: body)
+            guard swap.code == "sample." + Self.challenge(swap.verifier) else {
+                return (401, Data(#"{"error":"That sign-in has expired. Please try again."}"#.utf8))
+            }
+            return (200, try fixture("auth.login"))
         case "/att/api/auth/signup":
             let signup = try JSONDecoder().decode(Signup.self, from: body)
             guard signup.acceptedTosVersion == Constants.tosVersion else {
@@ -122,6 +131,21 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             return (200, trpc(try JSONEncoder.paddlesnitch.encode(paddle)))
         }
         return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
+    }
+
+    /// Strava sign-in without Strava: answers the start page's link at once
+    /// with a code the app-token route takes for that challenge.
+    public static func stravaBrowser(_ start: URL) -> URL {
+        let challenge =
+            URLComponents(url: start, resolvingAgainstBaseURL: false)?.queryItems?
+            .first { $0.name == "challenge" }?.value ?? ""
+        return URL(string: "com.paddlesnitch.app:/signin/strava?code=sample.\(challenge)") ?? start
+    }
+
+    private static func challenge(_ verifier: String) -> String {
+        Data(SHA256.hash(data: Data(verifier.utf8))).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 
     private static let unauthorized = (

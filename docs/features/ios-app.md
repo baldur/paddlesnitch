@@ -90,9 +90,13 @@ The protocol is fixed by the tracker sync contract and its fixtures. On iPhone:
 - Server side is in [`mobile-apps.md`](mobile-apps.md) (C2).
 - The refresh token lives in the **Keychain** (this device only, after first
   unlock). The app refreshes the ID token itself.
-- Strava sign-in runs in `ASWebAuthenticationSession`. The callback returns
-  through a verified **universal link** (`/.well-known/apple-app-site-association`,
-  `applinks`), and the app swaps the one-time code for tokens.
+- Strava sign-in runs in `ASWebAuthenticationSession` (shared with Safari,
+  so someone signed in to Strava there needn't sign in again). It comes back
+  on the app's own scheme, `com.paddlesnitch.app:/signin/strava?code=`, and the
+  app swaps the one-time code and its PKCE verifier for tokens
+  (`mobile/contract/README.md`, "Strava"; `Account/StravaSignIn.swift`). The
+  session catches the callback itself, so there's no URL type to register and
+  no universal link, and it works with a free Apple ID.
 - The same file also declares `webcredentials`, so iOS offers saved
   paddlesnitch.com passwords and suggests strong ones at sign-up.
 - Website link-outs open in `SFSafariViewController`, signed in through the
@@ -154,8 +158,8 @@ Android's sideload-first plan). Until there are testers:
 - The **simulator** needs no Apple account. CI builds and runs every test on
   simulators without one.
 - On the owner's own iPhone, Xcode installs with a **free Apple ID** ("personal
-  team"). Builds expire after 7 days and can't use universal links (so Strava
-  sign-in waits; email and password work), but background GPS and Bluetooth
+  team"). Builds expire after 7 days and can't use universal links (Strava
+  sign-in doesn't need one), but background GPS and Bluetooth
   work, which is all S1, S2 and P3 need.
 - The paid membership below starts at **P5**, when other people should test.
 
@@ -228,7 +232,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag; While Using + background session; sidecar → `deriveCadence` | The iPhone can be a tracker; whether stroke rate is possible | **Yes** |
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
-| **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
+| **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Strava, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
 | **P2. Record** | Recorder → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |

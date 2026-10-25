@@ -70,6 +70,17 @@ public final class AccountModel {
         try await accept(try await anonymous.send(Endpoints.authSignup, signup))
     }
 
+    /// Strava sign-in. `browser` opens the page and answers the link it came
+    /// back on (ASWebAuthenticationSession in the app). The verifier never
+    /// leaves this call, so a code caught by another app is useless.
+    public func signInWithStrava(browser: (URL) async throws -> URL) async throws {
+        let verifier = Pkce.verifier()
+        let start = StravaSignIn.startURL(baseURL: anonymous.baseURL, challenge: Pkce.challenge(verifier))
+        let code = try StravaSignIn.code(from: try await browser(start))
+        try await accept(
+            try await anonymous.send(Endpoints.authStravaAppToken, StravaAppToken(code: code, verifier: verifier)))
+    }
+
     /// Signs out here at once, then asks the server to revoke the refresh
     /// token. If that can't reach the server the token is still gone from
     /// this phone.
