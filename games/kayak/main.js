@@ -3,7 +3,7 @@ import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course
 import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISION_9 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
-import { courseMap, headingDegrees } from './map.js';
+import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, SEAT, SHOULDER } from './meshes.js';
@@ -56,7 +56,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'sprint', 'map', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'sprint', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'cueL', 'cueR', 'best', 'result', 'details', 'standings', 'nogpu']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -943,9 +943,10 @@ function updateHud(dt) {
 }
 
 // The course map: its shape once per race, then a dot per boat each frame (an
-// arrow for you, pointing where you're heading).
+// arrow for you, pointing where you're heading). And the close-up beside it:
+// the water near you, turned each frame so ahead is up, you in the middle.
 const SVG = 'http://www.w3.org/2000/svg';
-let map = null; // { project, dots: Map(racer -> element) }
+let map = null; // { project, dots: Map(racer -> element), world, near: Map(racer -> element) }
 
 function drawMap() {
   const shape = courseMap(race.course);
@@ -954,6 +955,17 @@ function drawMap() {
     for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
     return e;
   };
+  const water = closeUp(race.course);
+  const line = ([x1, y1, x2, y2], cls) => el('line', { x1, y1, x2, y2, class: cls });
+  const world = el('g', {});
+  world.append(el('path', { d: water.water, class: 'water' }), line(water.start, 'start'), line(water.finish, 'finish'));
+  const near = new Map();
+  for (const r of race.racers.filter((x) => x !== race.player)) {
+    const dot = el('circle', { r: 3, class: r.remote ? 'friend' : 'rival' });
+    world.append(dot);
+    near.set(r, dot);
+  }
+  els.near.replaceChildren(world, el('path', { d: 'M0 -6L4.5 4.5L0 2.2L-4.5 4.5Z', class: 'you' }));
   const tick = ([x, y], cls) => el('circle', { cx: x, cy: y, r: 3, class: cls });
   els.map.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
   els.map.style.aspectRatio = `${shape.width} / ${shape.height}`;
@@ -966,7 +978,7 @@ function drawMap() {
     els.map.append(dot);
     dots.set(r, dot);
   }
-  map = { project: shape.project, dots };
+  map = { project: shape.project, dots, world, near };
 }
 
 function moveMap() {
@@ -976,6 +988,12 @@ function moveMap() {
     const turn = r === race.player ? ` rotate(${headingDegrees(r.boat.heading).toFixed(0)})` : '';
     dot.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})${turn}`);
     dot.style.opacity = r.finish !== null && r !== race.player ? 0.4 : 1;
+  }
+  map.world.setAttribute('transform', follow(race.player.boat));
+  for (const [r, dot] of map.near) {
+    dot.setAttribute('cx', r.boat.x.toFixed(1));
+    dot.setAttribute('cy', r.boat.z.toFixed(1));
+    dot.style.opacity = r.finish !== null ? 0.4 : 1;
   }
 }
 
