@@ -28,6 +28,8 @@ public enum PaddleAPIError: Error, Equatable, Sendable {
     /// "That email and password don't match." `session` comes with a wrong
     /// email code that can be tried again.
     case rejected(message: String, status: Int, session: String?)
+    /// An upload over the size limit in front of the server (413).
+    case tooLarge
 }
 
 /// Calls the server as mobile/contract/README.md describes: tRPC procedures
@@ -73,8 +75,12 @@ public struct PaddleClient: Sendable {
     /// back as `PaddleAPIError.rejected` with the server's own words.
     public func send<Input, Output>(_ endpoint: Endpoint<Input, Output>, _ input: Input) async throws -> Output {
         let (data, response) = try await transport.send(try request(for: endpoint, input))
+        return try decodeREST(Output.self, from: data, status: response.statusCode)
+    }
+
+    /// A REST answer: the output, or the server's words as `rejected`.
+    func decodeREST<Output: Decodable>(_ type: Output.Type, from data: Data, status: Int) throws -> Output {
         let decoder = JSONDecoder.paddlesnitch
-        let status = response.statusCode
         if (200..<300).contains(status) {
             do {
                 return try decoder.decode(Output.self, from: data)

@@ -2,6 +2,7 @@ import Charts
 import DesignSystem
 import Paddles
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PaddleListView: View {
     let source: any PaddlesSource
@@ -12,21 +13,34 @@ struct PaddleListView: View {
     /// a notice, not a block).
     let needsTerms: Bool
     let signIn: () -> Void
+    /// Adding a paddle from a GPS file, and what came of it.
+    let adding: AddPaddleModel
+    let openFile: (URL) -> Void
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var termsOpen = false
     @State private var loadedID: String?
+    @State private var choosingFile = false
+    @State private var openedID: String?
 
     init(
-        source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void
+        source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
+        adding: AddPaddleModel, openFile: @escaping (URL) -> Void
     ) {
         self.source = source
         self.sourceID = sourceID
         self.isSample = isSample
         self.needsTerms = needsTerms
         self.signIn = signIn
+        self.adding = adding
+        self.openFile = openFile
         _model = State(initialValue: PaddleListModel(source: source))
     }
+
+    /// Any file: watch and phone apps often save FIT or GPX with no declared
+    /// type, which a narrower list would grey out. The server says why it
+    /// can't read one. ("Open in" from other apps is narrower: project.yml.)
+    static let fileTypes: [UTType] = [.data]
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -37,6 +51,28 @@ struct PaddleListView: View {
                 .navigationDestination(for: PaddleRow.self) { row in
                     PaddleDetailView(id: row.id, source: source)
                 }
+                .navigationDestination(item: $openedID) { id in
+                    PaddleDetailView(id: id, source: source)
+                }
+                .toolbar {
+                    if !isSample {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Add paddle") { choosingFile = true }
+                                .font(.plexSans(.body))
+                                .disabled(adding.isAdding)
+                        }
+                    }
+                }
+                .safeAreaInset(edge: .bottom) { addNotice }
+        }
+        .fileImporter(isPresented: $choosingFile, allowedContentTypes: Self.fileTypes) { result in
+            if case .success(let url) = result { openFile(url) }
+        }
+        .onChange(of: adding.state) { _, state in
+            // A paddle added: show it in the list.
+            if case .done(let outcome) = state, !outcome.failed { Task { await model.load() } }
+            // The card appears away from VoiceOver's focus: read it out.
+            if let words = state.announcement { AccessibilityNotification.Announcement(words).post() }
         }
         .task(id: sourceID) {
             // Signed in or out: back to the top, and load the other paddles.
@@ -132,6 +168,77 @@ struct PaddleListView: View {
 }
 
 extension PaddleListView {
+    /// Adding a file: waiting for sign-in, adding, then what came of it.
+    @ViewBuilder fileprivate var addNotice: some View {
+        switch adding.state {
+        case .idle:
+            EmptyView()
+        case .waitingForSignIn:
+            addCard(adding.announcement ?? "", action: "Sign in", run: signIn)
+        case .adding:
+            addCard(adding.announcement ?? "", busy: true)
+        case .done(let outcome):
+            if let id = outcome.paddleID {
+                addCard(outcome.message, action: "Open paddle") {
+                    adding.dismiss()
+                    path = []
+                    openedID = id
+                }
+            } else {
+                addCard(outcome.message, failed: true)
+            }
+        }
+    }
+
+    /// Every card but "Adding…" can be closed, which forgets the file.
+    fileprivate func addCard(
+        _ text: String, failed: Bool = false, busy: Bool = false, action: String? = nil, run: @escaping () -> Void = {}
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
+                HStack(spacing: 8) {
+                    if busy { ProgressView().tint(Palette.muted) }
+                    Text(text)
+                        .font(.plexSans(.subheadline))
+                        .foregroundStyle(failed ? Palette.red : Palette.fg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("add-notice")
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                if !busy {
+                    Button {
+                        adding.dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.plexSans(.subheadline, weight: .semibold))
+                            .foregroundStyle(Palette.muted)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Close")
+                    .accessibilityIdentifier("add-notice-close")
+                }
+            }
+            if let action {
+                Button(action: run) {
+                    Text(action).font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Palette.primary)
+                .accessibilityIdentifier("add-notice-action")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Palette.surface)
+        .overlay(RoundedRectangle(cornerRadius: Radius.sheet).stroke(Palette.borderStrong))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.sheet))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        // Rows mustn't show through the gaps around the card.
+        .background(Palette.bg)
+    }
+
     /// A notice with one action. `id` marks the text, and `id-action` the
     /// button (an identifier on the section would land on both).
     fileprivate func notice(_ text: String, id: String, action: String, run: @escaping () -> Void) -> some View {

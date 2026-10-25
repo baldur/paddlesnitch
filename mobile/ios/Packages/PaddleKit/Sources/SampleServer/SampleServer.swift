@@ -56,6 +56,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         if path.hasPrefix("/api/trpc/") {
             return try trpc(path: path, request: request)
         }
+        if path == "/paddles/api/analyse" {
+            return analyse(request)
+        }
         return (404, Data(#"{"error":"Not found"}"#.utf8))
     }
 
@@ -131,6 +134,26 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             return (200, trpc(try JSONEncoder.paddlesnitch.encode(paddle)))
         }
         return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
+    }
+
+    /// Adding a paddle from a file. The file's name picks the answer: one with
+    /// "duplicate" in it was already there, "unreadable" can't be read, "huge"
+    /// is over the limit; any other is added as `pdl-river`, a sample that
+    /// can be opened.
+    private func analyse(_ request: URLRequest) -> (Int, Data) {
+        guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
+            return (401, Data(#"{"error":"Sign in to analyse and save paddles."}"#.utf8))
+        }
+        let body = String(bytes: request.httpBody ?? Data(), encoding: .utf8) ?? ""
+        let name =
+            body.components(separatedBy: "filename=\"").dropFirst().first?
+            .components(separatedBy: "\"").first ?? ""
+        if name.contains("huge") { return (413, Data("Request Entity Too Large".utf8)) }
+        if name.contains("unreadable") {
+            return (422, Data(#"{"error":"That file has too few GPS points to analyse."}"#.utf8))
+        }
+        if name.contains("duplicate") { return (200, Data(#"{"id":"pdl-river","duplicate":true}"#.utf8)) }
+        return (200, Data(#"{"id":"pdl-river"}"#.utf8))
     }
 
     /// Strava sign-in without Strava: answers the start page's link at once

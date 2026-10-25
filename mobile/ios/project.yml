@@ -60,6 +60,39 @@ targets:
         NSAppTransportSecurity:
           # Plain http only to this Mac's own dev server (pnpm dev).
           NSAllowsLocalNetworking: true
+        # GPS files open in the app from Files, Mail, AirDrop or a share
+        # sheet, and are added as paddles: the files the website reads
+        # (mobile/contract/README.md). "Alternate": we're not the main app for
+        # CSV or zip, only one that can open them. Copied in, not edited in
+        # place.
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: GPS file
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.topografix.gpx
+              - com.garmin.fit
+              - com.garmin.tcx
+              - public.comma-separated-values-text
+              - public.zip-archive
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.topografix.gpx
+            UTTypeDescription: GPX file
+            UTTypeConformsTo: [public.xml]
+            UTTypeTagSpecification:
+              public.filename-extension: [gpx]
+              public.mime-type: [application/gpx+xml]
+          - UTTypeIdentifier: com.garmin.fit
+            UTTypeDescription: FIT file
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [fit]
+          - UTTypeIdentifier: com.garmin.tcx
+            UTTypeDescription: TCX file
+            UTTypeConformsTo: [public.xml]
+            UTTypeTagSpecification:
+              public.filename-extension: [tcx]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.paddlesnitch.app
