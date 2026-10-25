@@ -13,7 +13,12 @@ import { getJson, putJson, listKeys } from './storage'
 /** The game's courses, and their distances as the game shows them (metres). */
 export const GAME_COURSES = { race: 6000, practice: 1000, reading: 6260, loop: 5400 } as const
 export type GameCourse = keyof typeof GAME_COURSES
-export const GAME_HULLS = ['stable', 'club', 'racing'] as const
+/** The boats you can race (games/kayak/boats.js), then the three hulls the game had before them. */
+export const GAME_BOATS = [
+  'nelo-vanquish-3', 'vajda-supersonic', 'kirton-typhoon', 'marsport-macros', 'vajda-cruiser',
+  'nelo-viper-51', 'plastex-swift', 'kirton-pulsar', 'vajda-voyageur',
+] as const
+export const GAME_HULLS = [...GAME_BOATS, 'stable', 'club', 'racing'] as const
 
 /** Faster than this over a course's shown distance isn't paddling (an elite K1 sprints at about 18 km/h). */
 export const MAX_KMH = 18
@@ -60,6 +65,20 @@ export async function getLeaderboard(course: GameCourse, userId?: string) {
     you: i < 0 ? null : { rank: i + 1, ...strip(board[i]) },
   }
 }
+
+// --- your paddler and boat ------------------------------------------------------
+// As chosen in the game's menu (games/kayak/kit.js). Under users/{id}/, so the
+// account's erasure removes it with the rest; the export includes it.
+
+export type GameKit = {
+  skin: string; head: 'cap' | 'hair'; headColour: string; sleeves: 'short' | 'long'; top: string
+  glasses: 'none' | 'wrap' | 'round' | 'aviator' | 'square'; glassesColour: string
+  boat: (typeof GAME_BOATS)[number]; deck: string; hullColour: string; stripe: string; deckShape: 'modern' | 'wings'; hullShape: 'round' | 'vee'
+  paddle: 'wing' | 'flat'; shaftColour: string; bladeColour: string
+}
+const kitKey = (userId: string) => `users/${userId}/game-kit.json`
+export const getGameKit = (userId: string) => getJson<GameKit>(kitKey(userId))
+export const putGameKit = (userId: string, kit: GameKit) => putJson(kitKey(userId), kit)
 
 // --- live races ----------------------------------------------------------------
 

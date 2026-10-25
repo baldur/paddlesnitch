@@ -47,6 +47,8 @@ export async function buildAccountExport(user: AuthUser) {
     termsAccepted: await getJson(`users/${user.id}/tos-consent.json`),
     strava: strava ? { connected: true, athleteId: strava.athleteId } : { connected: false },
     stravaAutoImport: await getJson(`users/${user.id}/strava-prefs.json`),
+    // The kayak game's paddler and boat.
+    gameKit: await getJson(`users/${user.id}/game-kit.json`),
     // Saved sections (#435): names and the gates you picked.
     sections: await listSavedSections(user.id),
     // River plans: the clicks, shape, start time and pace of each.

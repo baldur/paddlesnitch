@@ -92,6 +92,11 @@ async function play(c, page, errors) {
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
   // The practice time trial on your own, or a real river with the pack: there
   // the horn waits for you on the line, so the boat is put there.
+  // A first visit opens on making your paddler: Next through boat and paddle to the races.
+  for (let i = 0; i < 3 && await page.locator('#stepHome').isHidden(); i++) {
+    const next = page.locator('#menu .step:not([hidden]) .step-buttons .next');
+    await (c.touch ? next.tap() : next.click());
+  }
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });

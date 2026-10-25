@@ -113,7 +113,9 @@ export class MeshBuilder {
 // A marathon K1, about 5.2 m long, in boat space: x right, y up, -z forward.
 // The paddler's eye sits just behind the origin.
 // `beam` scales the width: narrower racing hulls, wider stable ones.
-export function kayakMesh({ deck, hull, stripe, cockpit = [0.05, 0.05, 0.06], beam = 1 }) {
+// `wings`: the deck flares out at the cockpit, a diamond (boats.js DECKS);
+// `vee`: a V'd keel instead of a rounded bottom.
+export function kayakMesh({ deck, hull, stripe, cockpit = [0.05, 0.05, 0.06], beam = 1, wings = false, vee = false }) {
   const m = new MeshBuilder();
   const bow = -3.3;
   const stern = 1.9;
@@ -122,10 +124,12 @@ export function kayakMesh({ deck, hull, stripe, cockpit = [0.05, 0.05, 0.06], be
     const t = (z - bow) / (stern - bow); // 0 at the bow, 1 at the stern
     const shape = Math.sin(Math.PI * Math.min(1, t * 1.15)) ** 0.75;
     const w = 0.235 * beam * shape;
+    const wing = wings ? 0.075 * Math.max(0, 1 - Math.abs(z) / 1.7) : 0; // at deck level only
     const top = 0.05 + 0.1 * shape;
+    const [keel, bilge] = vee ? [-0.2, -0.07] : [-0.15, -0.12];
     return [
-      [-w, 0.02, z], [-w * 0.55, top * 0.9, z], [0, top, z], [w * 0.55, top * 0.9, z],
-      [w, 0.02, z], [w * 0.6, -0.12 * shape, z], [0, -0.15 * shape, z], [-w * 0.6, -0.12 * shape, z],
+      [-w - wing, 0.02 + wing * 0.3, z], [-w * 0.55 - wing * 0.6, top * 0.9, z], [0, top, z], [w * 0.55 + wing * 0.6, top * 0.9, z],
+      [w + wing, 0.02 + wing * 0.3, z], [w * 0.6, bilge * shape, z], [0, keel * shape, z], [-w * 0.6, bilge * shape, z],
     ];
   };
   for (let i = 0; i < stations; i++) {
@@ -148,8 +152,9 @@ export function kayakMesh({ deck, hull, stripe, cockpit = [0.05, 0.05, 0.06], be
   return m.build();
 }
 
-// A wing paddle, shaft along x, centred on the origin, blades facing -z.
-export function paddleMesh({ shaft, blade }) {
+// A paddle, shaft along x, centred on the origin, blades facing -z: wing
+// blades (spoon-shaped, cupped) unless `flat`.
+export function paddleMesh({ shaft, blade, flat = false }) {
   const m = new MeshBuilder();
   const half = 1.08;
   // Square-ish shaft: four long thin quads.
@@ -170,14 +175,17 @@ export function paddleMesh({ shaft, blade }) {
     for (let i = 0; i < cols; i++) {
       const f0 = i / cols;
       const f1 = (i + 1) / cols;
-      const width = (f) => 0.03 + 0.12 * Math.sin(Math.PI * Math.min(1, f * 1.1)) ** 0.6;
-      const cup = (f) => 0.03 * Math.sin(Math.PI * f);
+      const width = flat
+        ? (f) => 0.03 + 0.09 * Math.min(1, f * 3) * (1 - 0.15 * f)
+        : (f) => 0.03 + 0.12 * Math.sin(Math.PI * Math.min(1, f * 1.1)) ** 0.6;
+      const cup = (f) => (flat ? 0 : 0.03 * Math.sin(Math.PI * f));
+      const upper = flat ? 1 : 0.7; // a wing blade is lopsided
       const xa = x0 + (x1 - x0) * f0;
       const xb = x0 + (x1 - x0) * f1;
       const a = [xa, -width(f0), -cup(f0)];
       const b = [xb, -width(f1), -cup(f1)];
-      const c = [xb, width(f1) * 0.7, -cup(f1)];
-      const d = [xa, width(f0) * 0.7, -cup(f0)];
+      const c = [xb, width(f1) * upper, -cup(f1)];
+      const d = [xa, width(f0) * upper, -cup(f0)];
       m.triFacing(a, b, c, blade, [0, 0, -1]);
       m.triFacing(a, c, d, blade, [0, 0, -1]);
     }
@@ -186,26 +194,51 @@ export function paddleMesh({ shaft, blade }) {
 }
 
 // A rival paddler from the hips up, in boat space, sitting at the cockpit:
-// torso in their club top, head and cap. Arms are separate (see limbMesh).
+// torso in their club top, head and a cap (in `cap`'s colour) or hair (`head`
+// 'hair', the same colour), and sunglasses unless `glasses` is 'none' (lenses
+// in `lens`). Arms are separate (see limbMesh).
 export const SEAT = 0.15; // z of the paddler's hips
 export const SHOULDER = { x: 0.2, y: 0.58 };
-export function paddlerMesh({ top, skin, cap }) {
+const FRAME = [0.08, 0.08, 0.09];
+// Each lens's half width and height, and how far below the eyeline it hangs.
+const LENSES = { round: [0.024, 0.016, 0], aviator: [0.026, 0.022, 0.006], square: [0.028, 0.015, 0] };
+export function paddlerMesh({ top, skin, cap, head = 'cap', glasses = 'none', lens = FRAME }) {
   const m = new MeshBuilder();
   const ring = (y, w, d) => [[-w, y, -d], [w, y, -d], [w, y, d], [-w, y, d]];
   m.prism(ring(0.08, 0.16, 0.11), ring(0.38, 0.17, 0.12), top);
   m.prism(ring(0.38, 0.17, 0.12), ring(SHOULDER.y + 0.02, 0.22, 0.1), top);
   m.cylinder([0, SHOULDER.y, 0], 0.05, 0.12, 6, skin);
   m.sphere([0, 0.77, -0.01], 0.105, skin, 5, 8);
-  m.sphere([0, 0.81, 0.0], 0.1, cap, 3, 8);
-  m.box([-0.08, 0.79, -0.15], [0.08, 0.805, -0.07], cap); // peak
+  if (head === 'hair') {
+    m.sphere([0, 0.795, 0.015], 0.108, cap, 3, 8);
+    m.box([-0.09, 0.7, 0.02], [0.09, 0.8, 0.11], cap); // the back of the head
+  } else {
+    m.sphere([0, 0.81, 0.0], 0.1, cap, 3, 8);
+    m.box([-0.08, 0.79, -0.15], [0.08, 0.805, -0.07], cap); // peak
+  }
+  // On the face, which looks down -z; the eyes are about y 0.785.
+  if (glasses === 'wrap') {
+    m.box([-0.088, 0.772, -0.124], [0.088, 0.8, -0.1], lens);
+  } else if (LENSES[glasses]) {
+    const [hw, hh, drop] = LENSES[glasses];
+    for (const side of [-1, 1]) {
+      const x = side * 0.04;
+      m.box([x - hw, 0.786 - hh - drop, -0.124], [x + hw, 0.786 + hh - drop, -0.104], lens);
+    }
+    m.box([-0.016, 0.785, -0.122], [0.016, 0.792, -0.108], FRAME); // the bridge
+    m.box([-0.106, 0.783, -0.11], [-0.09, 0.791, 0.02], FRAME); // arms
+    m.box([0.09, 0.783, -0.11], [0.106, 0.791, 0.02], FRAME);
+  }
   return m.build();
 }
 
 // A unit-length arm along +z, 1 unit across; a model matrix stretches it
-// from shoulder to hand.
-export function limbMesh(color) {
+// from shoulder to hand. A short sleeve covers the first `sleeve` of it, the
+// rest is bare (`skin`).
+export function limbMesh(color, { skin = color, sleeve = 1 } = {}) {
   const m = new MeshBuilder();
-  m.box([-0.5, -0.5, 0], [0.5, 0.5, 1], color);
+  m.box([-0.5, -0.5, 0], [0.5, 0.5, sleeve], color);
+  if (sleeve < 1) m.box([-0.45, -0.45, sleeve], [0.45, 0.45, 1], skin);
   return m.build();
 }
 
