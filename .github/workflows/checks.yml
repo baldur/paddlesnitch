@@ -96,6 +96,29 @@ jobs:
           bash .github/scripts/firmware-sign.test.sh
           bash firmware/tools/enroll.test.sh
 
+  # The shared recorder core (recorder-core/): every fixture, byte for byte,
+  # with gcc and clang and under the sanitizers. Seconds, so it always runs.
+  # macOS is arm64, where clang fuses multiply-adds by default as the phones'
+  # compilers do: the leg that proves fixtures/fp_contract holds.
+  recorder-core:
+    name: recorder core fixtures (${{ matrix.os }}, ${{ matrix.cc }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, cc: gcc }
+          - { os: ubuntu-latest, cc: clang }
+          - { os: macos-latest, cc: clang }
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fixtures
+        working-directory: recorder-core
+        run: make test CC=${{ matrix.cc }}
+      - name: Fixtures under the sanitizers
+        working-directory: recorder-core
+        run: make sanitize CC=${{ matrix.cc }}
+
   games:
     name: games in browsers
     runs-on: ubuntu-latest

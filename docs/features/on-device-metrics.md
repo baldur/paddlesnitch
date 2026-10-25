@@ -1,6 +1,8 @@
 # On-device metrics and the shared recorder core
 
-📋 **Design — 2026-10-25, not built.** Owner: `motion-core` (see
+📋 **Design — 2026-10-25; phase 1 in progress** (the API, its fixtures and
+the host build are in `recorder-core/`; the firmware doesn't use it yet).
+Owner: `motion-core` (see
 [`docs/agents.md`](../agents.md)). Related: [`mobile-apps.md`](mobile-apps.md)
 (recording contract), [`device-uplink.md`](device-uplink.md) +
 [`device-data.md`](device-data.md) (the CSV), [`one-paddle.md`](one-paddle.md),
@@ -37,13 +39,26 @@ and boat motion (`attitude.ts`) from the raw data afterwards.
 use it too). Pure C, `float` throughout (the ESP32-S3 has a single-precision
 FPU), no Arduino/ESP-IDF headers, no malloc, no file I/O.
 
+The API is [`recorder-core/include/recorder_core.h`](../../recorder-core/include/recorder_core.h):
+
 ```
-rc_feed_imu(t_ns, ax, ay, az /* g */, gx, gy, gz /* deg/s */)
-rc_feed_gps(t_ns, fix)            // lat, lon, alt, speed, course; sats/hdop optional
-rc_tick(t_ns)                     // emits finished CSV lines through a write callback
-rc_live(&values)                  // the current live values, for a screen
-rc_columns.h                      // the column lists, defined once
+rc_init(&rc, &cfg)                    // cfg: write callback, user pointer, RC_HAS_* bits; writes the headers
+rc_imu(&rc, t_ms, ax, ay, az, gx, gy, gz)  // g, deg/s; writes the raw and the 80 ms-thinned motion lines
+rc_second(&rc, t_ms, &gps, &extras)   // once a second: writes the track row, closes the motion window
+rc_live(&rc, &values)                 // the current live values, NAN until ready
 ```
+
+Three changes from the first sketch, each for a reason:
+
+- **GPS arrives with the row** (`rc_second`), not on its own: the row is the
+  GPS state at that second, and the tracker's receiver only reports once a
+  second anyway.
+- **The adapter calls the row, the core keeps no clock,** so replaying a
+  recording reproduces its rows exactly.
+- **`t_ms` is a `uint32_t` millisecond clock**, not nanoseconds: it's what the
+  CSV's `ms` column has always held, and the comparisons are wrap-safe.
+  GPS fields are `double` (7-decimal lat/lon don't fit a float); motion is
+  `float`.
 
 It owns everything that turns samples into lines and numbers: the column order
 and number formats, blank lat/lon without a fix (never `0,0`), the per-second
@@ -68,7 +83,8 @@ running or screens. Those are the adapters, one per platform.
 - Timestamps from the **sample's own** timestamp, not when the app received it.
   Neither phone delivers a steady 50 Hz; the core thins by time.
 - GPS fields a platform doesn't have (satellites and HDOP on iPhone; the
-  tracker's radio `txSeq` on phones) are **blank**, never invented.
+  tracker's radio `txSeq` on phones) are **blank**, never invented: the
+  adapter leaves their `RC_HAS_*` bit clear.
 
 Each adapter proves this twice: a unit test on synthetic sensor events, and a
 bench check (phone flat on a table, then tipped on each axis) recorded
@@ -126,6 +142,13 @@ ESP32-S3. Confirm once on the bench build.
    `recorder-core/`, byte-identical. Build it for all four targets with the
    fixtures running in CI. The phones can then build recording, background
    running and upload on it.
+   - **1a, done:** the header, the implementation, golden fixtures, `make test`
+     in CI, and a Swift package. Replaying the 13 and 16 Sep captures matched
+     the raw motion file and every GPS column byte for byte (details in
+     `recorder-core/CLAUDE.md`).
+   - **1b, next:** the tracker links the core (PlatformIO, `pio test -e
+     native` on the fixtures) and its own copy goes; the Android CMake and JNI
+     wrapper; the WASM build.
 2. **Stroke rate** in the core as a stream; the server switches to the WASM
    build and `cadence.ts` goes once its tests pass against it.
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.
@@ -139,3 +162,7 @@ ESP32-S3. Confirm once on the bench build.
 - Whether `core_ver` is a column or a line in the file header.
 - The single-sided stroke (canoe, SUP) still needs a real recording to
   calibrate the doubling check.
+- Phones without a gyroscope (some cheap Android ones). For now they record
+  the track with no motion (`imu_ok = 0`). Accelerometer-only motion would need
+  blank gyro columns in the motion file, and the server would have to accept
+  them.
