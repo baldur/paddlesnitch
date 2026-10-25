@@ -7,57 +7,57 @@ import Foundation
 /// Every REST route the apps call, from mobile/contract/api/rest.json.
 public enum Endpoints {
     public static let deleteAccount = Endpoint<DeleteAccount, Ok>(
-        method: "DELETE", path: "/api/account", errorStatuses: [401])
+        method: "DELETE", path: "/api/account", auth: .user, errorStatuses: [401])
     public static let deleteAccountContact = Endpoint<NoInput, Ok>(
-        method: "DELETE", path: "/api/account/contact", errorStatuses: [401])
+        method: "DELETE", path: "/api/account/contact", auth: .user, errorStatuses: [401])
     public static let deleteAccountDevices = Endpoint<TrackerId, Ok>(
-        method: "DELETE", path: "/api/account/devices", errorStatuses: [401, 404])
+        method: "DELETE", path: "/api/account/devices", auth: .user, errorStatuses: [401, 404])
     public static let deleteAccountHandle = Endpoint<NoInput, ProfileSettings>(
-        method: "DELETE", path: "/api/account/handle", errorStatuses: [401])
+        method: "DELETE", path: "/api/account/handle", auth: .user, errorStatuses: [401])
     public static let getAccountContact = Endpoint<NoInput, Contact>(
-        method: "GET", path: "/api/account/contact", errorStatuses: [401])
+        method: "GET", path: "/api/account/contact", auth: .user, errorStatuses: [401])
     public static let getAccountDevices = Endpoint<NoInput, TrackerList>(
-        method: "GET", path: "/api/account/devices", errorStatuses: [401])
+        method: "GET", path: "/api/account/devices", auth: .user, errorStatuses: [401])
     public static let getAccountDevicesSessions = Endpoint<NoInput, RecordingList>(
-        method: "GET", path: "/api/account/devices/sessions", errorStatuses: [401])
+        method: "GET", path: "/api/account/devices/sessions", auth: .user, errorStatuses: [401])
     public static let getAccountHandle = Endpoint<HandleCheck, HandleAvailability>(
-        method: "GET", path: "/api/account/handle", errorStatuses: [401])
+        method: "GET", path: "/api/account/handle", auth: .user, errorStatuses: [401])
     public static let getAccountProfile = Endpoint<NoInput, ProfileSettings>(
-        method: "GET", path: "/api/account/profile", errorStatuses: [401])
+        method: "GET", path: "/api/account/profile", auth: .user, errorStatuses: [401])
     public static let getAccountTos = Endpoint<NoInput, TosStatus>(
-        method: "GET", path: "/api/account/tos", errorStatuses: [401])
+        method: "GET", path: "/api/account/tos", auth: .user, errorStatuses: [401])
     public static let patchAccountProfile = Endpoint<ProfileVisibility, ProfileSettings>(
-        method: "PATCH", path: "/api/account/profile", errorStatuses: [400, 401])
+        method: "PATCH", path: "/api/account/profile", auth: .user, errorStatuses: [400, 401])
     public static let postAccountContact = Endpoint<ContactEmail, Contact>(
-        method: "POST", path: "/api/account/contact", errorStatuses: [400, 401])
+        method: "POST", path: "/api/account/contact", auth: .user, errorStatuses: [400, 401])
     public static let accountExport = Endpoint<NoInput, DownloadLink>(
-        method: "POST", path: "/api/account/export", errorStatuses: [401])
+        method: "POST", path: "/api/account/export", auth: .user, errorStatuses: [401])
     public static let postAccountTos = Endpoint<TosAccept, TosAccepted>(
-        method: "POST", path: "/api/account/tos", errorStatuses: [401, 422])
+        method: "POST", path: "/api/account/tos", auth: .user, errorStatuses: [401, 422])
     public static let authLogin = Endpoint<Login, SignIn>(
-        method: "POST", path: "/att/api/auth/login", errorStatuses: [400, 401, 500])
+        method: "POST", path: "/att/api/auth/login", auth: .public, errorStatuses: [400, 401, 500])
     public static let authLogout = Endpoint<RefreshToken, Ok>(
-        method: "POST", path: "/att/api/auth/logout", errorStatuses: [])
+        method: "POST", path: "/att/api/auth/logout", auth: .public, errorStatuses: [])
     public static let authOtpRequest = Endpoint<OtpRequest, OtpSession>(
-        method: "POST", path: "/att/api/auth/otp-request", errorStatuses: [400, 429, 500])
+        method: "POST", path: "/att/api/auth/otp-request", auth: .public, errorStatuses: [400, 429, 500])
     public static let authOtpVerify = Endpoint<OtpVerify, SignIn>(
-        method: "POST", path: "/att/api/auth/otp-verify", errorStatuses: [400, 500])
+        method: "POST", path: "/att/api/auth/otp-verify", auth: .public, errorStatuses: [400, 500])
     public static let authPasswordResetConfirm = Endpoint<ResetConfirm, ResetDone>(
-        method: "POST", path: "/att/api/auth/password-reset/confirm", errorStatuses: [400])
+        method: "POST", path: "/att/api/auth/password-reset/confirm", auth: .public, errorStatuses: [400])
     public static let authPasswordResetRequest = Endpoint<ResetRequest, Ok>(
-        method: "POST", path: "/att/api/auth/password-reset/request", errorStatuses: [400])
+        method: "POST", path: "/att/api/auth/password-reset/request", auth: .public, errorStatuses: [400])
     public static let authRefresh = Endpoint<RefreshToken, Refreshed>(
-        method: "POST", path: "/att/api/auth/refresh", errorStatuses: [401])
+        method: "POST", path: "/att/api/auth/refresh", auth: .public, errorStatuses: [401])
     public static let authSignup = Endpoint<Signup, SignIn>(
-        method: "POST", path: "/att/api/auth/signup", errorStatuses: [400, 409, 422, 500])
+        method: "POST", path: "/att/api/auth/signup", auth: .public, errorStatuses: [400, 409, 422, 500])
     public static let authStravaAppToken = Endpoint<StravaAppToken, SignIn>(
-        method: "POST", path: "/att/api/auth/strava/app-token", errorStatuses: [400, 401, 500])
+        method: "POST", path: "/att/api/auth/strava/app-token", auth: .public, errorStatuses: [400, 401, 500])
     public static let authWebCode = Endpoint<WebPageFor, WebPage>(
-        method: "POST", path: "/att/api/auth/web-code", errorStatuses: [401])
+        method: "POST", path: "/att/api/auth/web-code", auth: .user, errorStatuses: [401])
     public static let analyse = Endpoint<NoInput, Analysed>(
-        method: "POST", path: "/paddles/api/analyse", errorStatuses: [400, 401, 422, 500])
+        method: "POST", path: "/paddles/api/analyse", auth: .user, errorStatuses: [400, 401, 422, 500])
     public static let putAccountHandle = Endpoint<HandleClaim, ProfileSettings>(
-        method: "PUT", path: "/api/account/handle", errorStatuses: [400, 401])
+        method: "PUT", path: "/api/account/handle", auth: .user, errorStatuses: [400, 401])
 
     /// Decodes `data` as the answer of the route `"POST /path"`. For the contract tests.
     public static func decodeOutput(of route: String, from data: Data, using decoder: JSONDecoder)

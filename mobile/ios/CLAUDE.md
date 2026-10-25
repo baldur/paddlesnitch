@@ -20,3 +20,11 @@ isn't obvious from the code.
   export its attachments (`xcrun xcresulttool export attachments`): the
   screenshot and screen recording show what it saw. A real clip shows in the
   screenshot. A page that jumped is the audit's own doing.
+- A `List` row taller than the screen (a long paragraph at the largest text
+  size) can leave the whole List blank after scrolling past it. Keep list rows
+  short; put long text in an alert message or its own scrolling screen.
+  `LargeTextTests.checkWholeScreen(last:)` scrolls until a screen's last row is
+  readable, so a blank list fails.
+- A SwiftUI alert's `TextField` keeps no accessibility identifier; find it as
+  `app.alerts.textFields.firstMatch`. Since iOS 26 a `confirmationDialog` is a
+  popover with no Cancel button; an `.alert` always has one.
