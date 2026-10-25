@@ -310,7 +310,7 @@ export function stepRace(race, dt, input) {
     r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);
     // The real banks where they're mapped; else the edges of the open water.
     const w = widthAt(course, r.loc.s);
-    if (course.shore ? bounceOffShore(r.boat, course.shore) : bounceOffBank(r.boat, r.loc, w.left, w.right)) result.push('bank');
+    if (course.shore ? bounceOffShore(r.boat, course.shore, dt) : bounceOffBank(r.boat, r.loc, w.left, w.right)) result.push('bank');
     if (r === player) events = result;
     else if (result.includes('stroke')) splashes.push(Math.hypot(r.boat.x - player.boat.x, r.boat.z - player.boat.z));
   });

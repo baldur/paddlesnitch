@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate, pointAt } from '../kayak/course.js';
-import { createRace, stepRace } from '../kayak/race.js';
-import { createBoat, step, bounceOffShore } from '../kayak/sim.js';
+import { courseFromFile, locate, pointAt, riverView } from '../kayak/course.js';
+import { createRace, stepRace, started } from '../kayak/race.js';
+import { createBoat, step, bounceOffShore, wrap } from '../kayak/sim.js';
 
 const loop = async () => courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
 const gate = (course, words) => course.scenery.gates.find((g) => g.label.includes(words));
@@ -130,10 +130,12 @@ test("a boat paddled into the end of an island stops there: it isn't thrown side
   for (let t = 0; t < 3; t += 1 / 120) {
     const [x, z] = [boat.x, boat.z];
     step(boat, 1 / 120, { strokes: [], lean: 0 });
+    const h = boat.heading;
     const [mx, mz] = [boat.x, boat.z];
-    if (bounceOffShore(boat, course.shore)) hits++;
+    if (bounceOffShore(boat, course.shore, 1 / 120)) hits++;
     worst = Math.max(worst, Math.hypot(boat.x - mx, boat.z - mz));
     assert.ok(Math.hypot(boat.x - x, boat.z - z) < 0.6, 'no jump');
+    assert.ok(Math.abs(wrap(boat.heading - h)) < 0.06, 'turned along the bank over a few frames, not in one');
   }
   assert.ok(hits >= 1, 'it hit the island');
   assert.ok(worst < 0.5, `pushed back at most ${worst.toFixed(2)} m in a step`);
@@ -153,4 +155,52 @@ test('swans crowd in front of the university boathouses, off the racing line on 
     assert.ok(!course.shore.dry(b.x, b.z), 'still on the water');
     assert.ok(Math.abs(b.loc.lateral) > 12, 'still off the racing line');
   }
+});
+
+// A paddler who steers for a point 15 m up the line cuts every corner, and
+// brushes the ends of St Mary's and Fry's Islands, and the bank below
+// Caversham Bridge: the boat used to be turned along the bank in a frame
+// (up to 78 degrees), which on screen is the view jerking round.
+test("brushing the bank round the island ends doesn't jerk the boat round", async () => {
+  const course = await loop();
+  const race = createRace(course, { rivals: [], seed: 1, traffic: false, birds: false, format: 'interval' });
+  const p = race.player;
+  const DT = 1 / 60;
+  const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
+  for (let t = 0; !started(race) && t < 120; t += DT) stepRace(race, DT, { strokes: [], lean: balance(p.boat) });
+  let next = 0;
+  let bank = 0;
+  while (p.finish === null && race.time < 900) {
+    const strokes = race.time >= next ? [p.boat.lastSide === 'left' ? 'right' : 'left'] : [];
+    if (strokes.length) next += 0.7;
+    const aim = pointAt(course, p.loc.s + 15);
+    const err = wrap(Math.atan2(aim.x - p.boat.x, -(aim.z - p.boat.z)) - p.boat.heading);
+    const h = p.boat.heading;
+    const { events } = stepRace(race, DT, { strokes, lean: balance(p.boat), rudder: Math.max(-1, Math.min(1, err * 3 - p.boat.yawRate * 0.5)) });
+    if (events.includes('bank')) bank++;
+    assert.ok(Math.abs(wrap(p.boat.heading - h)) < 0.12, `turned ${wrap(p.boat.heading - h).toFixed(2)} rad in a frame at ${p.loc.s.toFixed(0)} m`);
+  }
+  assert.notEqual(p.finish, null, 'and finished');
+  assert.ok(bank >= 1, 'it did brush a bank');
+});
+
+// The water's tree reflections are taken from the river line and the open
+// water's width where you are; at an island's end that width jumps by tens of
+// metres in a few, and the reflections all over the water jumped with it.
+test("the water's reflections ease through the island ends rather than jump", async () => {
+  const course = await loop();
+  let view = null;
+  let worst = { half: 0, turn: 0 };
+  for (let s = course.start; s < course.finish; s += 4 / 60) {
+    const was = view;
+    view = riverView(course, s, view, 1 / 60);
+    if (!was) continue;
+    worst.half = Math.max(worst.half, Math.abs(view.half - was.half));
+    worst.turn = Math.max(worst.turn, Math.abs(wrap(Math.atan2(view.tx, -view.tz) - Math.atan2(was.tx, -was.tz))));
+  }
+  assert.ok(worst.half < 1, `the width moved ${worst.half.toFixed(2)} m in a frame`);
+  assert.ok(worst.turn < 0.02, `the river's direction turned ${worst.turn.toFixed(3)} rad in a frame`);
+  // And it starts afresh on a new race or a restart.
+  const fresh = riverView(course, course.start, view, 1 / 60);
+  assert.equal(fresh.x, pointAt(course, course.start).x);
 });

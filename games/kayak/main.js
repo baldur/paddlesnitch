@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { practiceRiver, raceRiver, loadCourse, pointAt, widthAt } from './course.js';
+import { practiceRiver, raceRiver, loadCourse, riverView } from './course.js';
 import { createRace, stepRace, standings, elapsed, projected, applyCall, DIVISION_9 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
@@ -1050,6 +1050,7 @@ function placeRacers() {
   renderer.place(meshes.duck, birds.duck);
 }
 
+let reflected = null; // the river line the water's reflections are taken from, eased
 function render(time) {
   placeRacers();
   placeTraffic();
@@ -1092,9 +1093,10 @@ function render(time) {
   for (let i = 0; i < 16; i++) frameData.set(wakes[i] ?? [0, 0, 0, 0], 48 + i * 4);
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
-  const c = pointAt(race.course, race.player.loc.s);
-  const { half } = widthAt(race.course, race.player.loc.s);
-  frameData.set([c.x, c.z, c.tx, c.tz], 112);
+  reflected = riverView(race.course, race.player.loc.s, reflected, time - (reflected?.time ?? time));
+  reflected.time = time;
+  const { half } = reflected;
+  frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(mode)];
   for (const r of race.racers) {

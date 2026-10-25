@@ -114,6 +114,22 @@ export function widthAt(course, s) {
   return samples[Math.max(0, Math.min(samples.length - 1, Math.round(s / SPACING)))];
 }
 
+// Where the water's tree reflections are taken from: the river line at `s`,
+// its direction and how wide the open water is, eased from the last frame's
+// (`prev`, `dt` seconds ago), since at an island's end the width jumps by tens
+// of metres in a few and the reflections all over the water jumped with it.
+// Starts afresh on another course or a jump along it (a restart).
+export function riverView(course, s, prev = null, dt = 0) {
+  const p = pointAt(course, s);
+  const { half } = widthAt(course, s);
+  if (!prev || prev.course !== course || Math.abs(prev.s - s) > 20) return { course, s, x: p.x, z: p.z, tx: p.tx, tz: p.tz, half };
+  const k = 1 - Math.exp(-dt / 0.8);
+  const tx = prev.tx + (p.tx - prev.tx) * k;
+  const tz = prev.tz + (p.tz - prev.tz) * k;
+  const n = Math.hypot(tx, tz) || 1;
+  return { course, s, x: p.x, z: p.z, tx: tx / n, tz: tz / n, half: prev.half + (half - prev.half) * k };
+}
+
 // The narrowest the open water gets on each side over the next `ahead` metres.
 export function roomAhead(course, s, ahead) {
   let left = Infinity;

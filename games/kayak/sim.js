@@ -297,9 +297,12 @@ export function bounceOffBank(boat, loc, left, right = left) {
 // On a real river (course.shore, water.js): the real banks, islands and moored
 // boats. Points along the hull, stern to bow, that are on land or in a boat
 // are moved back onto the water; heading into the bank, the boat turns along
-// it. Returns true at the moment of impact (like bounceOffBank).
+// it, at a paddler's rate (`dt` the step): turned in one step, at an island's
+// end, where the bank's direction swings round, the view jerked about.
+// Returns true at the moment of impact (like bounceOffBank).
 const HULL_POINTS = [-1.9, -0.5, 1.6, 3.3]; // metres along from the boat's origin
-export function bounceOffShore(boat, shore) {
+const BANK_TURN = 6; // radians a second
+export function bounceOffShore(boat, shore, dt) {
   const f = [Math.sin(boat.heading), -Math.cos(boat.heading)];
   let push = null;
   for (const d of HULL_POINTS) {
@@ -321,7 +324,10 @@ export function bounceOffShore(boat, shore) {
   const into = -(f[0] * push.nx + f[1] * push.nz);
   if (into > 0) {
     const along = [f[0] + push.nx * into, f[1] + push.nz * into];
-    if (Math.hypot(along[0], along[1]) > 0.2) boat.heading = Math.atan2(along[0], -along[1]);
+    if (Math.hypot(along[0], along[1]) > 0.2) {
+      const turn = wrap(Math.atan2(along[0], -along[1]) - boat.heading);
+      boat.heading += Math.max(-BANK_TURN * dt, Math.min(BANK_TURN * dt, turn));
+    }
     boat.yawRate = 0;
   }
   const impact = !boat.onBank;
