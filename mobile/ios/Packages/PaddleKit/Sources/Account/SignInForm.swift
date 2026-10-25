@@ -11,7 +11,12 @@ public final class SignInForm {
     }
 
     public var mode: Mode = .signIn {
-        didSet { if mode != oldValue { error = nil } }
+        didSet {
+            if mode != oldValue {
+                error = nil
+                notice = nil
+            }
+        }
     }
     public var email = ""
     public var displayName = ""
@@ -19,11 +24,22 @@ public final class SignInForm {
     public var agreedToTerms = false
     public private(set) var busy = false
     public private(set) var error: String?
+    /// Not an error: "Your new password is set. Please sign in."
+    public private(set) var notice: String?
 
     public static let passwordRule = "At least 8 characters, with an uppercase letter, a lowercase letter and a number."
     public static let displayNameHelp = "Shown on leaderboards. You can change it later."
 
     public init() {}
+
+    /// Back from forgot password with the new one set but not signed in.
+    public func passwordWasReset(email: String) {
+        mode = .signIn
+        self.email = email
+        password = ""
+        error = nil
+        notice = "Your new password is set. Please sign in."
+    }
 
     public var buttonTitle: String {
         switch (mode, busy) {

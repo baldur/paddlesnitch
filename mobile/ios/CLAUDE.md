@@ -20,3 +20,7 @@ isn't obvious from the code.
   export its attachments (`xcrun xcresulttool export attachments`): the
   screenshot and screen recording show what it saw. A real clip shows in the
   screenshot. A page that jumped is the audit's own doing.
+- The audit's clipped-text check flags a text field with text in it (our
+  Plex font) as clipped when nothing is: zoomed screenshots show the whole
+  text, descenders too. Audit a filled form without `.textClipped`, and check
+  clipping in `LargeTextTests` with the fields empty.
