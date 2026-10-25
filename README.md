@@ -13,16 +13,20 @@ A platform for paddlers — kayak, canoe, SUP, rowing. Live at
 
 ## Layout
 
-One pnpm workspace. One Next app over five shared packages.
+One pnpm workspace. One Next app over six shared packages, plus the tracker
+firmware, the phone apps and the games, which live outside it.
 
 ```
 apps/web            the whole web app — /att, /paddles, /profile, /api/trpc
 packages/core       auth, storage, cognito, strava, shared types
 packages/timing     GPS domain — geo, parsers, weather/flow, cadence, attitude
 packages/analysis   the analysis engine, store, LLM, share cards
-packages/api        the typed tRPC router the app and a future mobile app share
+packages/api        the typed tRPC router the website and the phone apps share
 packages/ui         shared shell, design tokens, analytics
+packages/waterways  the river planner (/plan): waterway network, routing, locks
 firmware/           the tracker — C++/PlatformIO, NOT part of the pnpm workspace
+mobile/             the Android and iPhone apps, and the contract they share
+games/              the browser games at /games — plain HTML/JS, no build
 infra/              AWS CDK — CloudFront, Lambda, S3, Cognito, SES
 ```
 
@@ -62,19 +66,49 @@ deploys with CDK via OIDC — there are no stored AWS credentials.
 **Not Vercel.** It runs on CloudFront in front of a single Lambda, with S3 for
 assets and data and Cognito for identity.
 
-Firmware is built separately: flash by cable with `cd firmware && ./tools/flash.sh`. Releases are automatic: every merge to `main` promotes `firmware/VERSION` to the trackers over the air (`.github/workflows/firmware-release.yml`).
+Firmware is built separately: flash by cable with `cd firmware && ./tools/flash.sh`. A merge to `main` that changes `firmware/VERSION` releases it over the air to the beta trackers; moving it to every tracker (stable) is a manual step (`.github/workflows/firmware-release.yml` explains both).
 A plain `pio run -t upload` does not work on this board — see `firmware/CLAUDE.md`.
 
 ## Where the documentation is
 
-**[`CLAUDE.md`](CLAUDE.md) is the source of truth for current behaviour.** It is
-written for whoever — person or agent — is about to change something, and it is
-kept current as part of doing the work rather than afterwards.
+**The `CLAUDE.md` files are the source of truth for current behaviour.** They
+are written for whoever — person or agent — is about to change something, and
+they are kept current as part of doing the work rather than afterwards. The
+root [`CLAUDE.md`](CLAUDE.md) holds the working rules, the map and the writing
+rules, and indexes one `CLAUDE.md` per area next to its code (`apps/web/`, each
+package, `infra/`, `firmware/`, `games/`, the apps).
 
 - [`firmware/CLAUDE.md`](firmware/CLAUDE.md) — the tracker, its gesture
   contract, and the hardware traps that have cost real time
 - [`docs/features/`](docs/features/) — design records, one per feature. These
   are history: they describe what was built and why at the time. Where they
-  disagree with `CLAUDE.md`, `CLAUDE.md` wins.
+  disagree with a `CLAUDE.md`, the `CLAUDE.md` wins.
 - [`docs/features/device-screen-map.md`](docs/features/device-screen-map.md) —
   every device screen, and a catalogue of where a customer can get stuck
+
+## Working with Claude agents
+
+Most of the work here is done by Claude Code sessions, each with a role. The
+full map is [`docs/agents.md`](docs/agents.md); the short version:
+
+- **`lead`** is the one to talk to. It routes work to the right specialist,
+  does changes that cross areas itself, and runs the reviewers before every
+  pull request.
+- **Builders** each own one area and edit only that: `android`, `ios`,
+  `firmware`, `motion-core` (the shared recorder core and the motion maths)
+  and `game`. Everything else (the web app, packages, infra, the mobile
+  contract) is `lead`'s.
+- **Reviewers** check a change and report, never edit: `tester`,
+  `security-privacy`, `design-usability` and `copy-style`. Each pull request
+  lists which ones ran and what they found.
+- **`help`** explains the setup and answers "who does what".
+
+Each role has a brief in [`.claude/agents/`](.claude/agents/) and works in its
+own git worktree (`../paddlesnitch-<role>`), so sessions never share a
+checkout. Start one with `psa <role>`: a one-line shell function, set up as
+[`docs/agents.md`](docs/agents.md) shows, that runs
+[`scripts/agents/start.sh`](scripts/agents/start.sh) (`psa -h` lists the
+roles). Agents open pull requests and people merge them. The exception is
+small backlog fixes labelled `unattended-ok`, which an agent may merge once
+the checks pass. Firmware pull requests always wait for a person, because a
+merge can release to trackers.
