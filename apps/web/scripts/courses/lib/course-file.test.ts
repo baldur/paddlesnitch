@@ -88,6 +88,39 @@ describe('courseFile', () => {
     })
     expect(out.buildings[0].style).toBe('rowing-club')
   })
+
+  it('marks an unnamed building for a bespoke model from a point beside it', () => {
+    const square = (x: number, z: number): XZ[] => [[x, z], [x + 10, z], [x + 10, z - 10], [x, z - 10], [x, z]]
+    const out = courseFile({
+      ...base, toXZ: ([lat, lng]) => [lng, -lat],
+      observations: [{ kind: 'landmark', style: 'spiral-boathouse', at: [455, 30], heading: 0 }],
+      things: [
+        { kind: 'building', s: 450, lateral: 40, tags: { building: 'house' }, shape: square(40, -450) },
+        { kind: 'building', s: 480, lateral: 40, tags: { building: 'house' }, shape: square(40, -480) },
+      ],
+    })
+    expect(out.buildings.map((b) => b.style)).toEqual(['spiral-boathouse', undefined])
+  })
+
+  it('keeps posts in the water where they were seen, and anglers spread along their stretch of bank', () => {
+    const out = courseFile({
+      ...base, toXZ: ([lat, lng]) => [lng, -lat],
+      observations: [
+        { kind: 'posts', at: [300, 5], heading: 0, points: [[300, 5], [303, 6]] },
+        { kind: 'anglers', side: 'left', count: 3, from: { at: [600, 0], heading: 0 }, to: { at: [700, 0], heading: 0 } },
+      ],
+    })
+    expect(out.posts).toEqual([[5, -300], [6, -303]])
+    expect(out.anglers).toHaveLength(3)
+    expect(out.anglers!.every((a) => a.side === -1 && a.s >= 600 && a.s <= 700)).toBe(true)
+    expect(out.anglers!.map((a) => a.s)).toEqual([...out.anglers!.map((a) => a.s)].sort((a, b) => a - b))
+  })
+
+  it('moors tatty boats as their own kind', () => {
+    const out = courseFile({ ...base, observations: [{ kind: 'moorings', side: 'right', boats: 'tatty', from: { at: [300, 0], heading: 0 }, to: { at: [360, 0], heading: 0 } }] })
+    expect(out.moorings.length).toBeGreaterThan(3)
+    expect(out.moorings.every((m) => m.kind === 'tatty' && m.side === 1)).toBe(true)
+  })
 })
 
 describe('places', () => {

@@ -46,7 +46,7 @@ const out = courseFile({
   // Observations are tied to places, not to this course: find each on the line,
   // and flip its side if the camera was heading the other way.
   places: landmarks, birds: config.birds, styles: config.styles,
-  observations: items, place: (at: LatLng, heading: number) => {
+  observations: items, toXZ, place: (at: LatLng, heading: number) => {
     const p = toXZ(at)
     const cum = cumulative(line)
     const hit = locate(line, cum, p)

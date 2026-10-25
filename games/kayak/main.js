@@ -721,6 +721,11 @@ const sounds = {
     noise({ freq: 3200, to: 2400, q: 0.6, duration: 0.6, gain: 0.12 });
     tone({ freq: 520, to: 430, duration: 0.25, type: 'sawtooth', gain: 0.08 });
   },
+  // Paddling through a fishing line: the reel's ratchet screaming as it runs out.
+  line: () => {
+    for (let k = 0; k < 6; k++) setTimeout(() => tone({ freq: 2400 + k * 120, duration: 0.05, type: 'square', gain: 0.05 }), k * 55);
+    noise({ freq: 3000, to: 1800, q: 1.5, duration: 0.35, gain: 0.06 });
+  },
   // The starter: a horn for the off, a whistle for a jumped start.
   go: () => {
     tone({ freq: 233, duration: 0.9, type: 'sawtooth', gain: 0.12 });
@@ -767,6 +772,11 @@ function react({ events, splashes }) {
       const why = race.time - hitSwan < 0.5 ? 'You hit a swan!' : race.time - hitBoat.time < 0.5 ? HIT[hitBoat.kind] : 'Capsized!';
       show(why, { hold: race.player.boat.hull.swimTime - 0.5 });
       controls.rumble(1, 400);
+    }
+    if (e === 'line') {
+      say('Oi! Mind my line!');
+      show('You paddled into a fishing line!', { small: true, hold: 2 });
+      controls.rumble(0.7, 300);
     }
     if (e === 'bank') controls.rumble(0.8, 150);
     if (e === 'bump') controls.rumble(0.6, 120);
