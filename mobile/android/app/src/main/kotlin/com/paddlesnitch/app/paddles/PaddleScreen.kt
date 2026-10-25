@@ -61,6 +61,8 @@ fun PaddlesHost(
     sample: Boolean,
     load: suspend (id: String) -> AnalysisSession,
     modifier: Modifier = Modifier,
+    /** Writes a summary that's still pending, as the website's paddle page does; null for the samples. */
+    writeSummary: (suspend (id: String) -> AnalysisSession)? = null,
     action: (@Composable () -> Unit)? = null,
     notice: (@Composable () -> Unit)? = null,
     map: MapSlot = routeMap,
@@ -72,18 +74,23 @@ fun PaddlesHost(
         PaddlesScreen(list, sample, modifier, action, notice, listState, onOpen = { open = it })
     } else {
         BackHandler { open = null }
-        PaddleLoader(id, load, onBack = { open = null }, modifier, map)
+        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map)
     }
 }
 
 @Composable
-private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, onBack: () -> Unit, modifier: Modifier, map: MapSlot) {
+private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, writeSummary: (suspend (String) -> AnalysisSession)?, onBack: () -> Unit, modifier: Modifier, map: MapSlot) {
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var attempt by remember(id) { mutableIntStateOf(0) }
     LaunchedEffect(id, attempt) {
         error = null
-        runCatching { PaddleDetail(load(id)) }.onSuccess { detail = it }.onFailure { error = it.message ?: "Couldn’t open this paddle." }
+        val session = runCatching { load(id) }.onFailure { error = it.message ?: "Couldn’t open this paddle." }.getOrNull() ?: return@LaunchedEffect
+        detail = PaddleDetail(session)
+        // The page shows at once; the summary follows when it's written.
+        if (session.insightPending == true && writeSummary != null) {
+            detail = runCatching { PaddleDetail(writeSummary(id)) }.getOrElse { PaddleDetail(session, summaryFailed = true) }
+        }
     }
     val d = detail
     Column(modifier.fillMaxSize()) {

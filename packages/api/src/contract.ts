@@ -180,6 +180,8 @@ export const contractProcedures = {
   me: { kind: 'query', auth: 'public', input: null, output: Me },
   'paddles.list': { kind: 'query', auth: 'user', input: null, output: PaddleList },
   'paddles.get': { kind: 'query', auth: 'user', input: ById, output: AnalysisSession },
+  // Writes the coach summary of a paddle that shows insightPending; the paddle page asks while it says "Writing your summary…".
+  'paddles.writeSummary': { kind: 'mutation', auth: 'user', input: ById, output: AnalysisSession },
 } satisfies Record<string, Procedure>
 
 // ---- Drift checks: a schema and its procedure must accept each other's types.
@@ -191,6 +193,8 @@ check<Same<z.infer<typeof Me>, Out['me']>>()
 check<Same<z.infer<typeof PaddleList>, Out['paddles']['list']>>()
 check<Same<z.infer<typeof AnalysisSession>, Out['paddles']['get']>>()
 check<Same<z.infer<typeof ById>, In['paddles']['get']>>()
+check<Same<z.infer<typeof AnalysisSession>, Out['paddles']['writeSummary']>>()
+check<Same<z.infer<typeof ById>, In['paddles']['writeSummary']>>()
 
 // ---- What `pnpm mobile:contract` writes to mobile/contract/api/ ----
 

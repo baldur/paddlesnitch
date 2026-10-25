@@ -81,6 +81,30 @@ class PaddleScreensTest {
         compose.onNodeWithText("Sample paddles. Sign in to see your own.").assertExists()
     }
 
+    private fun pending(id: String) = paddle(id).let { it.copy(insight = "", insightPending = true, result = it.result.copy(insight = "")) }
+    private fun openRiver() {
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Headwind on the way back."))
+        compose.onNode(hasText("Headwind on the way back.") and hasClickAction()).performClick()
+    }
+
+    @Test
+    fun aPendingSummaryIsAskedForAndShownWhenWritten() {
+        var asked: String? = null
+        show { PaddlesHost(list, sample = true, load = { pending(it) }, writeSummary = { asked = it; paddle(it).copy(insight = "Written just now.") }, map = fakeMap) }
+        openRiver()
+        compose.onNodeWithText("Written just now.").assertExists()
+        compose.onNodeWithText("Writing your summary…").assertDoesNotExist()
+        assert(asked == "pdl-river")
+    }
+
+    @Test
+    fun aSummaryThatCantBeWrittenStopsSayingItIsBeingWritten() {
+        show { PaddlesHost(list, sample = true, load = { pending(it) }, writeSummary = { error("offline") }, map = fakeMap) }
+        openRiver()
+        compose.onNodeWithText("Efforts and rests").assertExists()
+        compose.onNodeWithText("Writing your summary…").assertDoesNotExist()
+    }
+
     @Test
     fun paddlesList() {
         show { PaddlesScreen(list, sample = true, action = { Text("Sign in") }) }

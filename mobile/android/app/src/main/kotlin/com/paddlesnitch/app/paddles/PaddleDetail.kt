@@ -29,7 +29,7 @@ data class EffortRow(val number: Int, val at: String, val lasted: String, val pa
  * One paddle, worked into what its page shows, top to bottom as the website's
  * AnalysisView.tsx. Pure, so it's tested without a screen.
  */
-class PaddleDetail(s: AnalysisSession) {
+class PaddleDetail(s: AnalysisSession, summaryFailed: Boolean = false) {
     private val r = s.result
     val title: String = fmtWeekday(s.paddledAt)
     val eyebrow: String? = listOfNotNull(sourceLabel(s.source.type.wire), s.boatClass?.wire?.ifEmpty { "?" }).joinToString(" · ").ifEmpty { null }
@@ -42,7 +42,8 @@ class PaddleDetail(s: AnalysisSession) {
     val legend: Pair<String, String>? = ColourScale.bounds(r.points)?.let { (lo, hi) -> pace(lo, "slower") to pace(hi, "faster") }
     val note: String? = s.note.trim().ifEmpty { null }
     val insight: String? = s.insight.ifEmpty { r.insight }.ifEmpty { null }
-    val insightPending = s.insightPending == true
+    /** The summary is still to be written (and asking for it hasn't failed). */
+    val insightPending = s.insightPending == true && !summaryFailed
     val repeats: List<String> = r.sets.filter { it.count > 1 }.map { set ->
         "${set.count} × ${fmtDur(set.avgDurS)} at ${split500(set.avgSpeed)}/500" + (set.avgSR?.let { ", ${it.roundToInt()} spm" } ?: "")
     }

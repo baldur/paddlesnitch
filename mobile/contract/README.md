@@ -88,7 +88,7 @@ Every error answer has a human-readable `error`.
 ## fixtures/api/
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
-`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`),
+`me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`), `paddles.writeSummary` (`pdl-river` with its summary written),
 `paddles.get.strava` (`pdl-strava`), `paddles.get.motion-only` (`pdl-motion`, a
 paddle whose GPS failed: `result.noGps`), and `paddles.get.unknown-values`
 (rule 2; deliberately does **not** fit the schema). The paddles are synthetic.

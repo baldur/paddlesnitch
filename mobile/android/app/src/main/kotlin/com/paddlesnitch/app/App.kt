@@ -83,7 +83,7 @@ private fun MyPaddles(api: Api, needsTerms: Boolean, onSignedOut: () -> Unit, on
     val signOut: @Composable () -> Unit = { TextButton(onClick = onSignOut) { Text("Sign out") } }
     val current = list
     when {
-        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, modifier = modifier, action = signOut, notice = if (needsTerms) ({
+        current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier, action = signOut, notice = if (needsTerms) ({
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
                 TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
