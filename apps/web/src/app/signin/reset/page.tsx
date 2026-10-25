@@ -12,7 +12,7 @@ import NoEmailReset from '../NoEmailReset'
 function ResetForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // Derive directly — see CLAUDE.md (useSearchParams anti-pattern note).
+  // Derive directly — see apps/web/CLAUDE.md (useSearchParams anti-pattern note).
   const presetEmail = searchParams.get('email') ?? ''
 
   const [email, setEmail] = useState(presetEmail)
