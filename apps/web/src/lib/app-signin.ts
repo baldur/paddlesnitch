@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto'
 import { deleteObject, getJson, putJson } from '@paddlesnitch/core/storage'
+import { requestSignIn } from '@paddlesnitch/core/auth'
 
 // Strava sign-in from a phone app (docs/features/mobile-apps.md, C2). The app
 // opens the website's Strava flow in an in-app browser with a PKCE challenge
@@ -61,4 +62,29 @@ export async function redeemWebCode(code: string, now = Date.now()): Promise<{ e
   if (!pending) return null
   await deleteObject(key)
   return pending.expiresAt < now ? null : { email: pending.email, userId: pending.userId }
+}
+
+// A web-code link signs a browser in with a NEW Cognito sign-in, whose
+// auth_time is "now" even though nobody proved who they are just then. So the
+// session it makes is recorded, and never counts as a recent sign-in
+// (security review, 2026-10-25). Kept under users/{id}/, so erasure removes it.
+const linkSessionKey = (userId: string, session: string) => `users/${userId}/link-sessions/${sha256(session).toString('hex')}.json`
+
+export async function markLinkSession(userId: string, session: string, now = Date.now()): Promise<void> {
+  await putJson(linkSessionKey(userId, session), { at: new Date(now).toISOString() })
+}
+
+/** Deleting the account needs a real sign-in from the last 10 minutes. */
+export const RECENT_SIGN_IN_S = 10 * 60
+
+/**
+ * Whether this request's sign-in is recent enough to delete the account: a
+ * real sign-in (not one a web-code link made) by this same person, within
+ * RECENT_SIGN_IN_S. Fails closed on anything missing.
+ */
+export async function hasRecentSignIn(req: Request, userId: string, now = Date.now()): Promise<boolean> {
+  const signIn = await requestSignIn(req)
+  if (!signIn || signIn.sub !== userId || !signIn.signedInAt || !signIn.session) return false
+  if (now / 1000 - signIn.signedInAt > RECENT_SIGN_IN_S) return false
+  return !(await getJson(linkSessionKey(userId, signIn.session)))
 }

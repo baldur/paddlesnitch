@@ -8,6 +8,10 @@
     },
     "session": {
       "type": "string"
+    },
+    "reauth": {
+      "type": "boolean",
+      "const": true
     }
   },
   "required": [

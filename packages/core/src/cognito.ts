@@ -276,12 +276,19 @@ export async function revoke(refreshToken: string): Promise<void> {
 
 // Deletes the user from Cognito permanently. Used by the GDPR Art. 17
 // erasure flow. Cognito identifies users by sign-in alias (email), not by sub.
+// Already gone counts as done: an erasure whose answer was lost gets retried
+// by the app, and the retry must succeed rather than report a failure.
 export async function deleteUser(email: string): Promise<void> {
   const client = makeClient()
-  await client.send(new AdminDeleteUserCommand({
-    UserPoolId: USER_POOL_ID,
-    Username: email,
-  }))
+  try {
+    await client.send(new AdminDeleteUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+    }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
+  }
 }
 
 type UserSummary = { sub: string; email: string; displayName: string }
@@ -460,6 +467,45 @@ export async function customAuthSignIn(
     return { idToken: auth.IdToken, refreshToken: auth.RefreshToken }
   } catch (err) {
     return { error: classify(err) }
+  }
+}
+
+/** What a verified ID token says about the sign-in behind it. */
+export type SignInClaims = {
+  sub: string
+  /** Unix seconds of the last real sign-in (`auth_time`, never `iat`). */
+  signedInAt: number | null
+  /** Stays the same across refreshes of one sign-in (`origin_jti`; `jti` where a test Cognito lacks it). */
+  session: string | null
+}
+
+/** Pure: the sign-in facts from verified claims, or null if they aren't an ID token's. */
+export function signInFromClaims(claims: Record<string, unknown>): SignInClaims | null {
+  if (claims.token_use !== 'id' || typeof claims.sub !== 'string') return null
+  const session = typeof claims.origin_jti === 'string' ? claims.origin_jti : typeof claims.jti === 'string' ? claims.jti : null
+  return { sub: claims.sub, signedInAt: typeof claims.auth_time === 'number' ? claims.auth_time : null, session }
+}
+
+/**
+ * The sign-in behind an ID token. Cognito keeps the original `auth_time` on a
+ * refreshed token (the OpenID rule; cognito-local doesn't), so `signedInAt` is
+ * the last time someone typed a password or code or went through Strava.
+ */
+export async function idTokenSignIn(idToken: string): Promise<SignInClaims | null> {
+  try {
+    return signInFromClaims(await getVerifier().verify(idToken) as Record<string, unknown>)
+  } catch {
+    return null
+  }
+}
+
+/** Unverified: the session key of a token we were just handed by Cognito ourselves. */
+export function sessionOfFreshToken(idToken: string): string | null {
+  try {
+    const claims = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString())
+    return signInFromClaims({ ...claims, token_use: 'id' })?.session ?? null
+  } catch {
+    return null
   }
 }
 

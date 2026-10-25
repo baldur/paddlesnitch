@@ -32,6 +32,13 @@ function AuthForm() {
 
   const [tab, setTab] = useState<'signin' | 'signup' | 'code'>('signin')
   const [email, setEmail] = useState('')
+  // Why they're here, shown as a notice (not an error): kept apart from `error`,
+  // so switching tabs or a wrong password doesn't clear it.
+  const notice = searchParams.get('reason') === 'reauth_delete'
+    ? 'For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back to Delete account.'
+    : searchParams.get('reason') === 'reauth_strava'
+      ? 'For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
+      : ''
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   // ToS acceptance is mandatory on signup; the checkbox lives just above
@@ -182,6 +189,9 @@ function AuthForm() {
       <PageHeader title={tab === 'signup' ? 'Create account' : 'Sign in'} />
 
       <div className="flex flex-col gap-6">
+        {notice && (
+          <p role="status" className="rounded-control border border-border bg-surface p-3 text-sm text-fg">{notice}</p>
+        )}
         <Segmented
           label="Sign in or create an account"
           value={tab}

@@ -17,12 +17,16 @@ vi.mock('@/lib/storage', async (orig) => {
     ...real,
     usesLocalStorage: () => (s3.on ? false : real.usesLocalStorage()),
     putObject: async (key: string, body: string) => { if (s3.on) { s3.puts.push({ key, body }); return } return real.putObject(key, body) },
-    presignGetUrl: async (...args: unknown[]) => { s3.presigned.push(args); return 'https://s3.example/signed' },
+    presignGetUrl: async (...args: Parameters<typeof real.presignGetUrl>) => {
+      if (!s3.on) return real.presignGetUrl(...args)
+      s3.presigned.push(args); return 'https://s3.example/signed'
+    },
   }
 })
 
 import { cookies } from 'next/headers'
 import { GET as exportFile, POST as exportLink } from '@/app/api/account/export/route'
+import { GET as devDownload } from '@/app/api/devices/firmware/download/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { listKeys, putObject } from '@/lib/storage'
 import { saveSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
@@ -73,10 +77,19 @@ describe('Download my data, for an account with many paddles', () => {
     expect(opts.downloadAs).toMatch(new RegExp(`^paddlesnitch-data-${me.id}-\\d{4}-\\d{2}-\\d{2}\\.json$`))
   })
 
-  it('locally, the link is the direct download', async () => {
+  it('locally too, the link carries its own permission: it opens with no sign-in, as a named file, and a changed one doesn\'t', async () => {
     const me = await makeUser('Local')
     signInAs(me.idToken)
-    expect(await (await exportLink(new Request('http://x'))).json()).toEqual({ url: '/api/account/export' })
+    const { url } = await (await exportLink(new Request('http://x/api/account/export', { method: 'POST' }))).json()
+    expect(new URL(url).pathname).toBe('/api/devices/firmware/download')
+    // The apps fetch it with no token at all.
+    vi.mocked(cookies).mockResolvedValue({ get: () => undefined } as never)
+    const res = await devDownload(new Request(url))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-disposition')).toMatch(new RegExp(`filename="paddlesnitch-data-${me.id}-`))
+    expect((await res.json()).user.email).toBe(me.email)
+    const forged = new URL(url); forged.searchParams.set('key', `exports/someone-else/${'a'.repeat(21)}.json`)
+    expect((await devDownload(new Request(forged))).status).toBe(403)
   })
 
   it('is only for the signed-in user', async () => {
