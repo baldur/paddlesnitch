@@ -56,7 +56,7 @@ test('An old sign-in is asked to sign in again first, then comes back to Delete 
 test('If the sign-in gets too old while typing, Delete account asks to sign in again', async ({ page, context }) => {
   await signUpFlow(page)
   await page.route('**/api/account', route => route.request().method() === 'DELETE'
-    ? route.fulfill({ status: 403, json: { error: 'For your safety, deleting your account needs a recent sign-in. Sign in again, then delete it.', reauth: true } })
+    ? route.fulfill({ status: 403, json: { error: 'For your safety, deleting your account needs a recent sign-in. Please sign in again.', reauth: true } })
     : route.continue())
   await page.goto('/account#delete')
   await page.getByRole('button', { name: 'Delete my account' }).click()

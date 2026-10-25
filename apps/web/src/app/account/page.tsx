@@ -285,7 +285,7 @@ function AccountPageInner() {
     const back = then === 'delete' ? '/account?resume=delete#delete' : '/account#strava'
     const out = await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => null)
     if (!out?.ok) {
-      setErr('Couldn’t sign you out. Please try again.')
+      setErr('Couldn’t start signing in again. Please try again.')
       setWorking(null)
       return
     }
@@ -595,7 +595,7 @@ function AccountPageInner() {
               {deleteStep === 'closed' || deleteStep === 'checking' ? (
                 <div>
                   <button type="button" onClick={openDelete} disabled={deleteStep === 'checking'} className={buttonClass('danger')}>
-                    {deleteStep === 'checking' ? 'Delete my account…' : 'Delete my account'}
+                    Delete my account
                   </button>
                 </div>
               ) : deleteStep === 'signin' ? (
