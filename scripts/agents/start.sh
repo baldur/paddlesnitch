@@ -9,8 +9,16 @@ MAIN="${PADDLESNITCH_REPO:-$HOME/Documents/Code/paddlesnitch.com}"
 tab=false
 if [ "${1:-}" = --tab ]; then tab=true; shift; fi
 role="${1:-}"
+roles() { git -C "$MAIN" ls-tree --name-only origin/main .claude/agents/ | sed 's|.*/||; s|\.md$||'; }
+if [ "$role" = -h ] || [ "$role" = --help ]; then
+  echo "usage: psa <role> [claude args...]   start a role in this terminal"
+  echo "       psa --tab <role>              (inside herdr) open it in a new tab, or go to it if it's running"
+  echo "roles:" $(roles)
+  echo "Each role works in its own worktree, ../paddlesnitch-<role>. See docs/agents.md."
+  exit 0
+fi
 if [ -z "$role" ]; then
-  echo "usage: psa [--tab] <role>   roles:" $(git -C "$MAIN" ls-tree --name-only origin/main .claude/agents/ | sed 's|.*/||; s|\.md$||')
+  echo "usage: psa [--tab] <role>   (psa -h for more)   roles:" $(roles)
   exit 1
 fi
 shift
@@ -35,19 +43,22 @@ if $in_herdr && herdr agent get "$role" 2>/dev/null | jq -e .result >/dev/null 2
   exit 1
 fi
 
-# help only reads, so it runs in the main folder; every other role gets its own worktree.
-if [ "$role" = help ]; then
-  dir="$MAIN"
-else
-  dir="$(dirname "$MAIN")/paddlesnitch-$role"
-  if [ ! -d "$dir" ]; then
-    if git -C "$MAIN" show-ref -q --verify "refs/heads/role/$role"; then
-      git -C "$MAIN" worktree add -q "$dir" "role/$role"
-    else
-      git -C "$MAIN" worktree add -q -b "role/$role" "$dir" origin/main
-    fi
-    echo "created worktree $dir"
+# Every role, help included, gets its own worktree. help used to run in the
+# main folder, but that is whatever the owner has checked out: on an old branch
+# with no .claude/agents/ the session never started.
+dir="$(dirname "$MAIN")/paddlesnitch-$role"
+if [ ! -d "$dir" ]; then
+  if git -C "$MAIN" show-ref -q --verify "refs/heads/role/$role"; then
+    git -C "$MAIN" worktree add -q "$dir" "role/$role"
+  else
+    git -C "$MAIN" worktree add -q -b "role/$role" "$dir" origin/main
   fi
+  echo "created worktree $dir"
+fi
+# help only reads and answers about the current setup: keep it on main.
+if [ "$role" = help ] && git -C "$dir" diff --quiet && git -C "$dir" diff --cached --quiet; then
+  git -C "$dir" merge -q --ff-only origin/main 2>/dev/null \
+    || echo "note: $dir has commits that are not on main, so help may be out of date."
 fi
 
 if ! git -C "$dir" diff --quiet origin/main -- .claude/agents docs/agents.md 2>/dev/null; then

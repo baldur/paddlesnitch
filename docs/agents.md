@@ -13,7 +13,7 @@ platform's own window only when that platform has a lot of work going on.
 | Role | Kind | Runs as | Owns (only it edits these) | Worktree |
 |---|---|---|---|---|
 | `lead` | coordinator | window | `mobile/contract/`, `docs/agents.md`, `.claude/agents/`, and every change that crosses areas | `../paddlesnitch-lead` |
-| `help` | guide | window, or ask any session | nothing (read-only) | the main folder |
+| `help` | guide | window, or ask any session | nothing (read-only) | `../paddlesnitch-help` (kept on `main`) |
 | `android` | builder | window | `mobile/android/` | `../paddlesnitch-android` |
 | `ios` | builder | window | `mobile/ios/` | `../paddlesnitch-ios` |
 | `firmware` | builder | helper, or a window when busy | `firmware/` | `../paddlesnitch-firmware` |
@@ -38,6 +38,7 @@ hand a piece to a helper.
 
 ```sh
 psa lead          # or android, ios, firmware, motion-core, game, help
+psa -h            # usage and the list of roles
 ```
 
 `psa` is a shell function (add it to `~/.zshrc` once):
