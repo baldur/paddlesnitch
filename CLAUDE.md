@@ -1128,6 +1128,8 @@ What breaks and for whom, across web, Android, iOS and trackers ([`observability
 - **API calls:** the outermost tRPC middleware (`packages/api/src/trpc.ts`) logs one `api_call` line per HTTP call (`Paddlesnitch/Api` `Calls` + `ServerErrors`). Only server codes (`INTERNAL_SERVER_ERROR`, `TIMEOUT`, …) count as errors; caller mistakes (`UNAUTHORIZED`, `BAD_REQUEST`, …) never do. In-process calls (SSR, tests) aren't logged, because only the HTTP mount puts `client` on the context.
 - **Actions:** `sign_in`, `upload`, `analyse`, `device_sync` and `strava_import` each log one `action` line per attempt with outcome `ok` / `rejected` (the user's input refused, expected) / `fail` (we broke). REST routes use `withAction(action, handler)` (`src/lib/action.ts`: 4xx = rejected, 5xx or a throw = fail). **A new user-facing flow that matters gets wrapped too.** (The word "journey" is banned by the copy style guide, hence "action".)
 - Never user ids, input, coordinates or error-message text in these lines.
+- **Alarms (zero tolerance, first one in 15 min):** `paddlesnitch-api-errors`, `-action-failed`, `-app-crashes`, `-browser-errors`, and `-server-errors` (any `console.error`). **Daily digest** at 07:00 UTC (`infra/lambdas/error-digest/`, pure queries + formatting in `digest.mjs`): every error of the last day grouped, or an all-clear; `paddlesnitch-digest-failed` if it doesn't run. Logs Insights query strings joined by hand need `\n| ` between commands (CDK's `queryLines` adds the pipes itself).
+- **Dashboards (the free three):** `paddlesnitch-health` (open first), `paddlesnitch-api`, `paddlesnitch-firmware`, all in `infra/lib/dashboards.ts`.
 
 ### Payload sizing
 

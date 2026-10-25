@@ -1162,6 +1162,39 @@ export class AttStack extends cdk.Stack {
       metric: count15('Paddlesnitch/App', 'Count', { Event: 'client_error' }), ...firstOne,
     })
 
+    // The daily digest: one email every morning listing every error of the
+    // last day, grouped, or an all-clear (docs/features/observability.md).
+    // Logs Insights queries over the server's log group; the email goes
+    // through the alerts topic. 07:00 UTC (07:00 or 08:00 in the UK).
+    const digestFn = new lambda.Function(this, 'ErrorDigestFn', {
+      logRetention: LOG_RETENTION,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/error-digest')),
+      memorySize: 128,
+      timeout: cdk.Duration.minutes(2),
+      environment: { LOG_GROUP: `/aws/lambda/${serverFn.functionName}`, TOPIC_ARN: alerts.topicArn },
+    })
+    digestFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['logs:StartQuery'],
+      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${serverFn.functionName}:*`],
+    }))
+    // GetQueryResults takes a query id and has no resource-level permissions.
+    digestFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['logs:GetQueryResults'], resources: ['*'] }))
+    alerts.grantPublish(digestFn)
+    new events.Rule(this, 'ErrorDigestDaily', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '7' }),
+      targets: [new eventsTargets.LambdaFunction(digestFn, { retryAttempts: 1 })],
+    })
+    // A digest that didn't send must not look like a quiet day.
+    alarm('ErrorDigestFailedAlarm', {
+      alarmName: 'paddlesnitch-digest-failed',
+      alarmDescription: 'The daily error digest failed to run, so this morning\'s email is missing.',
+      metric: digestFn.metricErrors({ period: cdk.Duration.hours(6), statistic: 'Sum' }),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
     // CloudWatch dashboards: infra/lib/dashboards.ts
     addDashboards(this, { serverFn, distribution, alarms: allAlarms })
 

@@ -1,6 +1,6 @@
 # Observability: dashboards and error notices
 
-🚧 **O1 built 2026-10-25** (server telemetry, the three dashboards, zero-tolerance alarms); O2 ingest in #671; the digest and the apps' crash reports next. The owner's answers are under [Decisions](#decisions).
+🚧 **O1 + O2 built 2026-10-25**: server telemetry, the three dashboards, zero-tolerance alarms, app/browser ingest, the contract, and the daily digest. Next is O3: the apps send `app_open` and crash reports. The owner's answers are under [Decisions](#decisions).
 
 One place to see whether paddlesnitch is healthy as a product, deeper views
 for each part, and **close to zero tolerance for errors**: every real error is
@@ -298,19 +298,26 @@ reach the server alarm).
 One code change came out of it: a background job attempt that will be retried
 now logs `console.warn`; only the attempt that gives up logs `console.error`.
 
-### Daily digest (O2)
+### Daily digest
 
-A small scheduled Lambda (07:00 UK time) runs a few Logs Insights queries over
-the last 24 hours and emails the result through the alerts topic:
+`ErrorDigestFn` (`infra/lambdas/error-digest/`), run by EventBridge at
+**07:00 UTC** (07:00 or 08:00 in the UK). It runs seven Logs Insights queries
+over the server's log group and publishes one email to the alerts topic:
 
-- server errors grouped by procedure/route and code, with counts and first/last
-  time
-- failed actions by action, reason and platform
-- app crash signatures by platform and version (O3)
-- browser errors by message and path
-- new app versions seen for the first time
-- a one-line "all clear" when everything is zero, so silence never means "the
-  digest broke"
+- errors the server logged, grouped by message
+- API calls that failed on our side, by procedure, code and platform
+- key actions that failed, by action, reason and platform
+- app crashes by platform, crashed version and signature
+- browser errors by message and page
+- activity (API calls, key actions), so a quiet day is visibly quiet, not empty
+- app versions seen for the first time in the last day (from a 14-day look-back)
+
+The subject is `paddlesnitch 2026-10-25: all clear` or `…: 4 errors`. A day
+with no errors still sends the all-clear line, and `paddlesnitch-digest-failed`
+alarms if the digest itself fails, so a missing email never reads as a quiet
+day. Queries and formatting are pure (`digest.mjs`, tested in
+`error-digest.test.ts`); `index.mjs` only runs them. All seven queries were
+run against production when this was written.
 
 ### Later: automatic rollback
 
@@ -348,8 +355,8 @@ About **$6/month** now, **$9/month** once the mobile dashboard exists.
 
 | Phase | What | Touches the apps? |
 |---|---|---|
-| **O1: server, now** | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · action lines on the five actions. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and action alarms at ≥ 1 · tighten `server-errors` | No |
-| **O2: contract, ingest, digest** | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture + alarm · the daily digest | No. Only the contract is written for them |
+| **O1: server** ✅ | (a) Small PR: move the dashboards into `infra/lib/dashboards.ts`, no change in what they show. (b) Get to zero: group 30 days of errors, fix or downgrade each. (c) `clientOf()` · tRPC `onError` + `api_call` lines · action lines on the five actions. (d) `paddlesnitch-health` + `paddlesnitch-api` (replacing `-app` and `-performance`) · the API and action alarms at ≥ 1 · tighten `server-errors` | No |
+| **O2: contract, ingest, digest** ✅ | `mobile/contract/telemetry.md` + fixture JSON for the header, client events and crash report · `/att/api/track` accepts app requests · new allowlisted events · browser error capture + alarm · the daily digest | No. Only the contract is written for them |
 | **O3: apps adopt** | Android sends the header (one line in its HTTP client) and `app_open`, then crash reports · `paddlesnitch-mobile` + the crash alarm | Yes, when the app agent is ready |
 | **iOS** | Follows the same contract. Nothing new server-side | Yes, when the iPhone app is built |
 | **Later** | Automatic rollback on a post-deploy alarm | No |
