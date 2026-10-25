@@ -29,11 +29,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
 import com.paddlesnitch.app.account.AccountScreen
+import com.paddlesnitch.app.account.TermsScreen
 import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
@@ -100,7 +100,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     }
     fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled() }
 
-    val onList = !signingIn && !inAccount && !settingUpTracker
+    val onList = !signingIn && !inAccount && !settingUpTracker && !(signedIn && needsTerms)
     Scaffold(bottomBar = {
         AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
             onClose = { intake = intake.cardClosed() })
@@ -119,9 +119,11 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             signedIn && inAccount -> {
                 BackHandler { inAccount = false }
                 AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false; inAccount = false },
+                    onDeleted = { signedIn = false; inAccount = false },
                     onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
             }
-            signedIn -> MyPaddles(api, needsTerms, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
+            signedIn && needsTerms -> TermsScreen(api, onAccepted = { needsTerms = false }, onSignedOut = { signedIn = false }, modifier = m)
+            signedIn -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
                 adding = intake.card is AddCard.Adding, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
             else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
@@ -132,13 +134,12 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
 
 @Composable
 private fun MyPaddles(
-    api: Api, needsTerms: Boolean, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
+    api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier,
 ) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
-    val uri = LocalUriHandler.current
     LaunchedEffect(attempt, added) {
         error = null
         runCatching { api.paddles() }
@@ -154,12 +155,7 @@ private fun MyPaddles(
                 TextButton(onClick = pick, enabled = !adding) { Text("Add paddle") }
                 account()
             }
-        }, notice = if (needsTerms) ({
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
-                TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
-            }
-        }) else null)
+        })
         error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(error!!, color = PsColor.red)
             Button(onClick = { attempt++ }) { Text("Try again") }
