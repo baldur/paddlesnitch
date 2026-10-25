@@ -43,3 +43,34 @@ export function courseMap(course, { long = 160, short = 40, pad = 8 } = {}) {
 export function headingDegrees(heading) {
   return (heading * 180) / Math.PI;
 }
+
+// The close-up map: the open water near you, turned so ahead is up, for seeing
+// how a bend goes before you're in it. closeUp gives the shapes once, in world
+// metres (x east, z south); follow gives the turn that puts a boat in the
+// middle, heading up.
+const STEP = 3; // samples per stretch of water drawn
+
+export function closeUp(course) {
+  const { samples } = course;
+  // Right of the direction of travel is (-tz, tx).
+  const edges = (p) => [[p.x + p.tz * p.left, p.z - p.tx * p.left], [p.x - p.tz * p.right, p.z + p.tx * p.right]];
+  const quads = [];
+  for (let i = 0; i < samples.length - 1; i += STEP) {
+    const [la, ra] = edges(samples[i]);
+    const [lb, rb] = edges(samples[Math.min(i + STEP, samples.length - 1)]);
+    let q = [la, lb, rb, ra];
+    // Each wound the same way: where stretches overlap, the water stays filled.
+    const area = q.reduce((a, [x, y], k) => { const [nx, ny] = q[(k + 1) % 4]; return a + x * ny - nx * y; }, 0);
+    if (area < 0) q = q.reverse();
+    quads.push(q.map(([x, z], k) => `${k ? 'L' : 'M'}${x.toFixed(1)} ${z.toFixed(1)}`).join('') + 'Z');
+  }
+  const across = (s) => {
+    const [[x1, z1], [x2, z2]] = edges(samples[Math.round(s / (course.length / (samples.length - 1)))]);
+    return [x1, z1, x2, z2];
+  };
+  return { water: quads.join(''), start: across(course.start), finish: across(course.finish) };
+}
+
+export function follow(boat) {
+  return `rotate(${(-headingDegrees(boat.heading)).toFixed(2)}) translate(${(-boat.x).toFixed(2)} ${(-boat.z).toFixed(2)})`;
+}
