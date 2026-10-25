@@ -64,6 +64,23 @@ class ApiTest {
         assertEquals("""{"id":"pdl-river"}""", server.takeRequest().url.queryParameter("input"))
     }
 
+    // tRPC's NOT_FOUND body isn't the contract's ApiError: the status comes through so the paddle page can say it's not there.
+    @Test fun aPaddleThatIsntThereKeepsItsStatus() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(404, """{"error":{"json":{"message":"Not found","code":-32004,"data":{"code":"NOT_FOUND","httpStatus":404}}}}""")
+        val e = runCatching { api.paddle("nope") }.exceptionOrNull() as ApiFailure
+        assertEquals(404, e.status)
+    }
+
+    @Test fun aFailureTheServerDoesntExplainNeverShowsACode() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(500, "Internal Server Error")
+        val e = runCatching { api.paddles() }.exceptionOrNull() as ApiFailure
+        assertFalse(e.message!!.contains("500"))
+        assertEquals("Couldn’t open this paddle. Please try again.", e.shown("Couldn’t open this paddle. Please try again."))
+        assertEquals("That file has too few GPS points to analyse.", ApiFailure("That file has too few GPS points to analyse.", 422).shown("fallback"))
+    }
+
     @Test fun aFileIsUploadedLikeTheWebsitesFormWithTheBearerToken() = runTest {
         tokens.save("id-1", "r-1")
         answer(200, """{"id":"pdl-new","distanceKm":4.2,"source":{"type":"file"}}""")
@@ -94,7 +111,7 @@ class ApiTest {
         tokens.save("id-1", "r-1")
         answer(413, "Request Entity Too Large")
         val e = runCatching { api.upload("big.gpx", ByteArray(10)) }.exceptionOrNull() as ApiFailure
-        assertEquals(com.paddlesnitch.app.paddles.TOO_BIG, e.message) // the website's words
+        assertEquals(com.paddlesnitch.app.paddles.TOO_BIG, e.message) // PrepareUploadTest checks it against the website
     }
 
     @Test fun aPendingSummaryIsWrittenByATrpcMutation() = runTest {

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.ApiFailure
+import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.ui.PsColor
 
@@ -88,9 +89,10 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var attempt by remember(id) { mutableIntStateOf(0) }
+    var notFound by remember(id) { mutableStateOf(false) }
     LaunchedEffect(id, attempt) {
         error = null
-        val session = runCatching { load(id) }.onFailure { error = if ((it as? ApiFailure)?.status == 404) "We can’t find this paddle." else it.message ?: "Couldn’t open this paddle." }.getOrNull() ?: return@LaunchedEffect
+        val session = runCatching { load(id) }.onFailure { notFound = (it as? ApiFailure)?.status == 404; error = if (notFound) "We can’t find this paddle." else it.shown("Couldn’t open this paddle. Please try again.") }.getOrNull() ?: return@LaunchedEffect
         detail = PaddleDetail(session)
         // The page shows at once; the summary follows when it's written.
         if (session.insightPending == true && writeSummary != null) {
@@ -104,7 +106,8 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
             d != null -> PaddlePage(d, map)
             error != null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(error!!, color = PsColor.red)
-                Button(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
+                // Trying again can't find a paddle that isn't there: "← Paddles" above is the way on.
+                if (!notFound) Button(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
             }
             else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         }

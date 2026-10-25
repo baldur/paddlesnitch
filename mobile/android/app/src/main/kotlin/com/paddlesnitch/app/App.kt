@@ -75,45 +75,42 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
-    // A paddle to open or a file to add, kept through signing in.
-    var pending by rememberSaveable { mutableStateOf<Incoming?>(null) }
-    // The add-paddle card, and a count that reloads the list after an add.
-    var card by remember { mutableStateOf<AddCard?>(null) }
+    // Links and files waiting to be dealt with, and the add-paddle card (Intake.kt).
+    var intake by rememberSaveable { mutableStateOf(Intake()) }
     var added by remember { mutableIntStateOf(0) }
-    val addPaddle = rememberAddPaddle(api, onCard = { card = it }, onAdded = { added++ }, onSignedOut = { signedIn = false })
-    LaunchedEffect(signedIn, pending) {
-        val file = pending as? Incoming.AddFile ?: return@LaunchedEffect
-        if (signedIn) { pending = null; addPaddle.add(Uri.parse(file.uri)) }
-        else card = AddCard.SignInToAdd(withContext(Dispatchers.IO) { displayName(context, Uri.parse(file.uri)) })
+    val addPaddle = rememberAddPaddle(api, onCard = { intake = intake.show(it) }, onAdded = { added++ },
+        onSignedOut = { uri, name -> intake = intake.uploadSignedOut(uri, name); signedIn = false })
+    fun run(step: Pair<Intake, Intake.Do>) {
+        intake = step.first
+        when (val d = step.second) {
+            Intake.Do.Nothing -> {}
+            Intake.Do.SignIn -> signingIn = true
+            is Intake.Do.Browser -> openInBrowser(context, d.url)
+            is Intake.Do.StravaReturn -> { stravaReturn = Uri.parse(d.uri); signingIn = true }
+            is Intake.Do.Upload -> addPaddle.add(Uri.parse(d.uri))
+        }
     }
     val arrived by incoming.collectAsState()
     LaunchedEffect(arrived) {
-        when (val it = arrived) {
-            is Incoming.StravaReturn -> { stravaReturn = Uri.parse(it.uri); signingIn = true }
-            is Incoming.OpenOnWeb -> openInBrowser(context, it.url)
-            is Incoming.OpenPaddle -> {
-                pending = it; inAccount = false; settingUpTracker = false
-                if (!signedIn) signingIn = true
-            }
-            is Incoming.AddFile -> { pending = it; inAccount = false; settingUpTracker = false }
-            null -> {}
-        }
+        val it = arrived ?: return@LaunchedEffect
         incoming.value = null
+        if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; settingUpTracker = false }
+        val name = (it as? Incoming.AddFile)?.let { f -> withContext(Dispatchers.IO) { displayName(context, Uri.parse(f.uri)) } }
+        run(intake.arrived(it, signedIn, name))
     }
+    fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled() }
 
     val onList = !signingIn && !inAccount && !settingUpTracker
     Scaffold(bottomBar = {
-        card?.takeIf { onList }?.let { c ->
-            AddPaddleCard(c, onOpen = { pending = Incoming.OpenPaddle(it); card = null }, onSignIn = { signingIn = true },
-                onClose = { card = null; if (c is AddCard.SignInToAdd) pending = null })
-        }
+        AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
+            onClose = { intake = intake.cardClosed() })
     }) { inner ->
         val m = Modifier.padding(inner)
         when {
             signingIn -> {
-                BackHandler { signingIn = false }
+                BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
-                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false; if (pending is Incoming.OpenPaddle) pending = null }, modifier = m)
+                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn()) }, onCancel = { leaveSignIn() }, modifier = m)
             }
             signedIn && settingUpTracker -> {
                 BackHandler { settingUpTracker = false }
@@ -124,8 +121,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false; inAccount = false },
                     onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
             }
-            signedIn -> MyPaddles(api, needsTerms, (pending as? Incoming.OpenPaddle)?.id, onOpened = { pending = null }, added, addPaddle.pick,
-                adding = card is AddCard.Adding, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
+            signedIn -> MyPaddles(api, needsTerms, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
+                adding = intake.card is AddCard.Adding, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
             else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
@@ -181,9 +178,14 @@ private suspend fun readSample(context: android.content.Context, file: String): 
  * an unnamed link to paddlesnitch.com/paddles/… would come straight back here.
  */
 private fun openInBrowser(context: Context, url: String) {
-    val browser = CustomTabsClient.getPackageName(context, null)
-        ?: context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)?.activityInfo?.packageName
-            ?.takeIf { it != context.packageName && it != "android" } // "android" is the chooser
-        ?: return
+    val browser = chooseBrowser(
+        customTabs = CustomTabsClient.getPackageName(context, null),
+        default = context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)?.activityInfo?.packageName,
+        self = context.packageName,
+    ) ?: return
     runCatching { CustomTabsIntent.Builder().build().apply { intent.setPackage(browser) }.launchUrl(context, Uri.parse(url)) }
 }
+
+/** The browser to name: one with Custom Tabs, else the default; never this app or the system chooser ("android"). */
+internal fun chooseBrowser(customTabs: String?, default: String?, self: String): String? =
+    listOfNotNull(customTabs, default).firstOrNull { it != self && it != "android" }

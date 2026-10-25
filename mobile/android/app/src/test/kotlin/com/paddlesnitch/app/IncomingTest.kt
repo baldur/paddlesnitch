@@ -26,6 +26,7 @@ class IncomingTest {
     @Test fun linksFromOtherSitesAreIgnored() {
         assertNull(incoming(view, "https://example.com/paddles/Xy3", null))
         assertNull(incoming(view, "http://paddlesnitch.com.evil.net/paddles/Xy3", null))
+        assertNull(incoming(view, "http://paddlesnitch.com/paddles/Xy3", null)) // App Links are https only
     }
 
     @Test fun stravaSignInComesBack() {
@@ -46,7 +47,9 @@ class IncomingTest {
 
     // A new page under /paddles on the website must be listed, or its links would open as a paddle that isn't there.
     @Test fun everyNamedPaddlesPageOnTheWebsiteIsNotAPaddle() {
-        val pages = File("../../../apps/web/src/app/paddles").listFiles()!!.filter { it.isDirectory && !it.name.startsWith("[") }.map { it.name }
+        val dir = File("../../../apps/web/src/app/paddles")
+        assertTrue("can't see the website at ${dir.absolutePath}", dir.isDirectory)
+        val pages = dir.listFiles()!!.filter { it.isDirectory && !it.name.startsWith("[") }.map { it.name }
         assertTrue(pages.isNotEmpty())
         pages.forEach { assertTrue("/paddles/$it isn't in notPaddles", it in notPaddles) }
     }
