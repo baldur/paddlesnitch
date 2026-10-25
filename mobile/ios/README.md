@@ -21,6 +21,9 @@ everything.
 ## Day to day
 
 ```
+make run              build and launch the app in the simulator, against
+                      paddlesnitch.com (sign in with your own account);
+                      SAMPLE=1 for the offline sample server
 make open             generate the Xcode project and open it (▶ runs the app)
 make test             package tests, then app tests on the newest simulator
 make test-app IOS=17  app tests on iOS 17 (needs Xcode 26; CI runs it)

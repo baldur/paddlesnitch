@@ -5,7 +5,8 @@ import Paddles
 import SwiftUI
 
 /// One paddle, top to bottom as the web's paddle page: map, heading, stats,
-/// conditions, why there's no route, note, coach summary.
+/// conditions, why there's no route, note, coach summary, efforts and rests,
+/// then the Android app's 500 m splits.
 struct PaddleDetailView: View {
     @State private var model: PaddleDetailModel
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -34,8 +35,11 @@ struct PaddleDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if !paddle.route.isEmpty {
-                        RouteMap(segments: paddle.route)
-                            .frame(height: 300)
+                        VStack(spacing: 0) {
+                            RouteMap(segments: paddle.route)
+                                .frame(height: 300)
+                            if let legend = paddle.legend { SpeedLegend(legend: legend) }
+                        }
                     }
                     VStack(alignment: .leading, spacing: 20) {
                         header(paddle)
@@ -47,9 +51,14 @@ struct PaddleDetailView: View {
                             Text("“\(note)”")
                                 .font(.plexSans(.body, weight: .medium))
                                 .foregroundStyle(Palette.split)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityLabel("Your note: \(note)")
                         }
                         summary(paddle)
+                        if !paddle.efforts.isEmpty || !paddle.rests.isEmpty || !paddle.repeats.isEmpty {
+                            efforts(paddle)
+                        }
+                        if !paddle.splits.isEmpty { splits(paddle.splits) }
                     }
                     .padding(.horizontal, 16)
                 }
@@ -107,6 +116,99 @@ struct PaddleDetailView: View {
         }
     }
 
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.plexSans(.title3, weight: .semibold))
+            .foregroundStyle(Palette.fg)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func efforts(_ paddle: PaddleSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Efforts and rests")
+            if !paddle.repeats.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Eyebrow("REPEATS")
+                    ForEach(paddle.repeats, id: \.self) { Text($0).font(.plexMono(.body)).foregroundStyle(Palette.fg) }
+                }
+            }
+            if !paddle.efforts.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(paddle.efforts, id: \.number) { effort in
+                        if effort.number > 1 { Divider().overlay(Palette.border) }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Effort \(effort.number) at \(effort.at)")
+                                .font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                            Text("\(effort.lasted) · \(effort.pace)/500 · \(effort.spm) spm")
+                                .font(.plexMono(.body)).foregroundStyle(Palette.fg)
+                            if let trend = effort.trend {
+                                Text(trend).font(.plexSans(.subheadline)).foregroundStyle(Palette.split)
+                            }
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                .background(Palette.surface)
+                .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+            }
+            if !paddle.rests.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Eyebrow("RESTS")
+                    Text(paddle.rests.joined(separator: "   "))
+                        .font(.plexMono(.subheadline)).foregroundStyle(Palette.muted)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private func splits(_ rows: [PaddleSummary.Split]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("500 m splits")
+            VStack(spacing: 0) {
+                // At accessibility sizes four columns don't fit: one line each.
+                if !typeSize.isAccessibilitySize {
+                    splitLine(["KM", "AT", "/500", "SPM"], header: true).accessibilityHidden(true)
+                }
+                ForEach(rows, id: \.km) { row in
+                    Divider().overlay(Palette.border)
+                    Group {
+                        if typeSize.isAccessibilitySize {
+                            Text("\(row.km) km at \(row.at): \(row.pace)/500, \(row.spm) spm")
+                                .font(.plexMono(.body)).foregroundStyle(Palette.fg)
+                                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                        } else {
+                            splitLine([row.km, row.at, row.pace, row.spm], header: false)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        "\(row.km) kilometres at \(row.at), \(row.pace) per 500, \(row.spm) strokes a minute")
+                }
+            }
+            .padding(.horizontal, 12)
+            .background(Palette.surface)
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+        }
+        .accessibilityIdentifier("splits")
+    }
+
+    private func splitLine(_ cells: [String], header: Bool) -> some View {
+        HStack {
+            ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
+                Text(cell)
+                    .font(.plexMono(header ? .caption : .body))
+                    .foregroundStyle(header ? Palette.muted : index == 2 ? Palette.primaryText : Palette.fg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(minHeight: 40)
+    }
+
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
             .padding(16)
@@ -114,6 +216,34 @@ struct PaddleDetailView: View {
             .background(Palette.surface)
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
             .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+    }
+}
+
+/// The speed colours' ends under the map: blue slower, red faster, as paces.
+struct SpeedLegend: View {
+    let legend: PaddleSummary.Legend
+
+    var body: some View {
+        VStack(spacing: 4) {
+            LinearGradient(
+                stops: [0, 0.4, 0.7, 1].map { .init(color: Color(ColourScale.ramp($0)), location: $0) },
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(height: 6)
+            .clipShape(Capsule())
+            HStack {
+                Text(legend.slower)
+                Spacer()
+                Text(legend.faster)
+            }
+            .font(.plexMono(.footnote))
+            .foregroundStyle(Palette.muted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Palette.surface)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Speed colours: blue \(legend.slower), red \(legend.faster)")
     }
 }
 

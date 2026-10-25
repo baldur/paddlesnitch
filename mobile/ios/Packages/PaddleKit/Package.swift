@@ -34,7 +34,7 @@ let package = Package(
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "ContractGenKitTests", dependencies: ["ContractGenKit"]),
         .testTarget(name: "PaddleAPITests", dependencies: ["PaddleAPI"]),
-        .testTarget(name: "PaddlesTests", dependencies: ["Paddles", "PaddleAPI"]),
+        .testTarget(name: "PaddlesTests", dependencies: ["Paddles", "PaddleAPI", "SampleServer"]),
         .testTarget(name: "AccountTests", dependencies: ["Account", "PaddleAPI", "SampleServer"]),
     ]
 )
