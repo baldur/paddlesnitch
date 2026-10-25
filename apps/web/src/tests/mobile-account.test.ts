@@ -188,17 +188,15 @@ describe('what the Account screens do', () => {
 // ---- Trackers ----
 
 // The tracker list and recordings answer what the website's code builds; these
-// fail `pnpm typecheck` if the contract and that code stop matching.
+// fail `pnpm typecheck` if the contract and that code stop matching anywhere,
+// nested fields included. `Norm` makes optional and `| undefined` alike (the
+// list spreads its optional fields in as `undefined`).
+type Norm<T> = T extends object ? { [K in keyof T]-?: Norm<Exclude<T[K], undefined>> } : T
 type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 const check = <T extends true>() => undefined as unknown as T
-// The list's optional fields are spread in as `undefined`, so compare by
-// assignability: what the code returns must fit the schema, and every field
-// the schema names must be one the code sends.
-type Fits<A, B> = [A] extends [B] ? true : false
-type Answer = Awaited<ReturnType<typeof deviceList>>
-check<Fits<Answer, z.infer<typeof TrackerList>>>()
-check<Same<keyof z.infer<typeof TrackerList>['devices'][number], keyof Answer['devices'][number]>>()
-check<Same<keyof z.infer<typeof RecordingList>['sessions'][number], Exclude<keyof DeviceSessionMeta, 'userId'>>>()
+check<Same<Norm<z.infer<typeof TrackerList>>, Norm<Awaited<ReturnType<typeof deviceList>>>>>()
+// The stored metadata, less the owner's own id (unnamed fields are allowed).
+check<Same<Norm<z.infer<typeof RecordingList>['sessions'][number]>, Norm<Omit<DeviceSessionMeta, 'userId'>>>>()
 
 const trackerRoutes = ['GET /api/account/devices', 'DELETE /api/account/devices', 'GET /api/account/devices/sessions']
 const DEVICE = 'C0FFEE01'
@@ -209,6 +207,7 @@ const CSV = [
   '2026-09-05T09:00:02Z,51.4602,-0.9302,3,4.04',
 ].join('\n')
 
+const tokenOf = new Map<string, string>()
 /** Pairs a tracker as the real one does (the app adds it with its Bearer token), then it uploads one recording. */
 async function trackerWithRecording(owner: TestUser) {
   const post = (url: string, body: unknown, bearer?: string) => new NextRequest(`http://x${url}`, {
@@ -218,6 +217,7 @@ async function trackerWithRecording(owner: TestUser) {
   const { claimCode, claimSecret } = await (await claim(post('/api/devices/claim', { deviceId: DEVICE, model: 'tbeam', firmware: '0.19.3' }))).json()
   expect((await link(post('/api/account/devices/link', { claimCode }, owner.idToken))).status).toBe(200)
   const { deviceToken } = await (await token(post('/api/devices/token', await provedPoll(DEVICE, claimSecret)))).json()
+  tokenOf.set(DEVICE, deviceToken)
   const res = await upload(new Request('http://x/api/devices/sessions?filename=track_0001.csv', {
     method: 'POST', body: CSV, headers: { authorization: `Bearer ${deviceToken}`, 'content-type': 'text/csv' },
   }))
@@ -232,6 +232,17 @@ describe('trackers in the apps', () => {
     expect(list.devices[0]).not.toHaveProperty('tokenHash')
     const recs = await fits(RecordingList, await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken)))
     expect(recs.sessions).toMatchObject([{ deviceId: DEVICE, filename: 'track_0001.csv', points: 3 }])
+  })
+
+  it('recordings come newest upload first (not newest paddle)', async () => {
+    await trackerWithRecording(pat)
+    // An older paddle, synced later, comes first.
+    const older = CSV.replaceAll('2026-09-05', '2026-08-01')
+    expect((await upload(new Request('http://x/api/devices/sessions?filename=track_0000.csv', {
+      method: 'POST', body: older, headers: { authorization: `Bearer ${tokenOf.get(DEVICE)}`, 'content-type': 'text/csv' },
+    }))).status).toBe(201)
+    const { sessions } = await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()
+    expect(sessions.map((r: { filename: string }) => r.filename)).toEqual(['track_0000.csv', 'track_0001.csv'])
   })
 
   it('remove a tracker: gone from the list, its recordings stay; someone else\'s is 404', async () => {

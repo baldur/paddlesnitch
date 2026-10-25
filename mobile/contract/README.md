@@ -148,12 +148,19 @@ golden answers are `fixtures/api/account.*.json`.
 | `DELETE /api/account/contact` | | `{ok: true}` |
 | `GET /api/account/devices` | | `{devices: Tracker[], stableVersion}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash |
 | `DELETE /api/account/devices` | `{deviceId}` | `{ok: true}`: removed; it stops syncing and can be added again. Its recordings and paddles stay. 404 if it isn't this person's |
-| `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest first, including removed trackers'. Each also becomes a paddle in `paddles.list` |
+| `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId` |
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
 are in `fixtures/tracker/README.md`. Forgot password and Strava come next in C5.
 
 ## fixtures/api/
+
+**`index.json` says what each fixture is:** file name → `{call, schema}`.
+`call` is a tRPC path or a `"<METHOD> <path>"` from `rest.json` (`null` for a
+refusal every route in a group shares), and `schema` is the type to decode it
+as: the call's output, or `ApiError` for a refusal. `fits: false` marks the one
+fixture that deliberately breaks its schema (rule 2). Read this instead of
+working it out from the file name; `pnpm test` keeps it complete.
 
 `<procedure>[.<case>].json`, each the `data` of one answer: `me.signed-in`,
 `me.signed-out`, `paddles.list`, `paddles.get` (`pdl-river`), `paddles.writeSummary` (`pdl-river` with its summary written),

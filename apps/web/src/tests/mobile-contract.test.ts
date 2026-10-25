@@ -10,9 +10,8 @@ import fs from 'fs/promises'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
-import { contractProcedures, restRoutes, Me, PaddleList, AnalysisSession, SignIn, Refreshed, ApiError,
-  TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact, TrackerList, RecordingList,
-} from '@paddlesnitch/api/contract'
+import * as contract from '@paddlesnitch/api/contract'
+import { contractProcedures, restRoutes, AnalysisSession, Me, PaddleList } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 import { mobileContractFiles, tokensFromCss } from '@/lib/mobile-contract'
@@ -146,28 +145,43 @@ describe('the HTTP form the apps speak', () => {
 // The golden answers both apps decode in their own tests.
 describe('fixtures/api', () => {
   const fixture = (name: string) => JSON.parse(readFileSync(path.join(CONTRACT, 'fixtures/api', name), 'utf8'))
-  const schemaFor: Record<string, z.ZodType> = {
-    me: Me, 'paddles.list': PaddleList, 'paddles.get': AnalysisSession, 'paddles.writeSummary': AnalysisSession,
-    // Sign-in (REST): named after the route, or `auth.error` / `.retry` for refusals.
-    'auth.login': SignIn, 'auth.refresh': Refreshed, 'auth.error': ApiError, 'auth.otp-verify.retry': ApiError,
-    // Account (REST, C5): `account.<route>[-<what>][.<case>]`; `account.error` is the shared refusal.
-    'account.tos': TosStatus, 'account.tos-accepted': TosAccepted, 'account.export': DownloadLink,
-    'account.profile': ProfileSettings, 'account.handle-check': HandleAvailability, 'account.contact': Contact,
-    'account.devices': TrackerList, 'account.devices-sessions': RecordingList,
-    'account.error': ApiError,
+  // index.json says, for every fixture, which call it answers and its schema
+  // (by type name), so the apps never guess from the file name.
+  type Entry = { call: string | null; schema: string; fits?: false }
+  const index = fixture('index.json') as Record<string, Entry>
+  const byId = new Map<string, z.ZodType>()
+  for (const v of Object.values(contract)) {
+    const isSchema = typeof (v as { safeParse?: unknown } | null)?.safeParse === 'function'
+    const id = isSchema ? contract.contractRegistry.get(v as z.ZodType)?.id : undefined
+    if (id) byId.set(id, v as z.ZodType)
   }
-  const names = readdirSync(path.join(CONTRACT, 'fixtures/api')).filter(f => !f.includes('unknown-values'))
+  const outputOf = (call: string) => {
+    const c = (contractProcedures as Record<string, { output: z.ZodType }>)[call] ?? (restRoutes as Record<string, { output: z.ZodType }>)[call]
+    return c && contract.contractRegistry.get(c.output)?.id
+  }
+  const names = readdirSync(path.join(CONTRACT, 'fixtures/api')).filter(f => f !== 'index.json')
 
-  it.each(names)('%s fits its procedure\'s output schema', name => {
-    // <procedure>[.<case>].json — the longest procedure path the name starts with.
-    const procedure = Object.keys(schemaFor).filter(p => name.startsWith(`${p}.`)).sort((a, b) => b.length - a.length)[0]
-    const schema = schemaFor[procedure]
-    expect(schema, `no schema for ${name}`).toBeDefined()
-    expect(schema.safeParse(fixture(name)).error?.issues).toBeUndefined()
+  it('index.json lists every fixture, and nothing else', () => {
+    expect(Object.keys(index).sort()).toEqual([...names].sort())
+  })
+
+  it.each(names)('%s: its call exists, its schema is that call\'s answer (or a refusal), and it fits', name => {
+    const { call, schema, fits } = index[name]
+    if (call === null) expect(schema, 'a fixture for no one call is a shared refusal').toBe('ApiError')
+    else {
+      const output = outputOf(call)
+      expect(output, `unknown call ${call}`).toBeDefined()
+      const rest = call in restRoutes
+      expect(schema === output || (rest && schema === 'ApiError'), `${name}: ${schema} is not what ${call} answers`).toBe(true)
+    }
+    const zod = byId.get(schema)
+    expect(zod, `no schema ${schema}`).toBeDefined()
+    if (fits !== false) expect(zod!.safeParse(fixture(name)).error?.issues).toBeUndefined()
   })
 
   it('covers every contract procedure', () => {
-    for (const p of Object.keys(contractProcedures)) expect(names.some(n => n.startsWith(`${p}.`)), p).toBe(true)
+    const calls = new Set(Object.values(index).map(e => e.call))
+    for (const p of Object.keys(contractProcedures)) expect(calls.has(p), p).toBe(true)
   })
 
   // A newer server may add a value to any closed set. The apps must decode
