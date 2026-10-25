@@ -8,6 +8,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import { POST as feedback } from '@/app/att/api/feedback/route'
 import { cookies } from 'next/headers'
 import { getJson } from '@/lib/storage'
+import { SSMClient } from '@aws-sdk/client-ssm'
 
 let dataDir: string
 let fetchSpy: ReturnType<typeof vi.spyOn>
@@ -223,5 +224,34 @@ describe('POST /att/api/feedback', () => {
     expect(res.status).toBe(200)
     expect((await res.json()).ok).toBe(true)
     expect(githubCalls).toHaveLength(0)
+  })
+})
+
+// 2026-10-25: the token was revoked on GitHub and every report failed
+// silently for hours, because the 502 logged nothing and a warm server kept
+// the dead token cached. Now a refusal is a console.error (the owner hears
+// about it) and the cached token is dropped, so a replaced one in SSM works
+// on the next report.
+describe('a token GitHub refuses', () => {
+  it('logs the failure, and the next report fetches the replaced token from SSM', async () => {
+    mockAnonymous()
+    delete process.env.GITHUB_ISSUES_TOKEN
+    process.env.GITHUB_ISSUES_TOKEN_PARAM = '/att/github-issues-token'
+    const tokens = ['revoked-token', 'new-token']
+    const ssm = vi.spyOn(SSMClient.prototype, 'send').mockImplementation((async () => ({ Parameter: { Value: tokens.shift() } })) as never)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      githubResponse = () => new Response('{"message":"Bad credentials"}', { status: 401 })
+      expect((await feedback(jsonReq({ description: 'First report, the leaderboard never loads.', url: 'https://paddlesnitch.com/att', userAgent: 'Mozilla/5.0' }))).status).toBe(502)
+      expect(errors).toHaveBeenCalledWith('[feedback] GitHub refused the issue:', 401)
+      githubResponse = () => new Response(JSON.stringify({ number: 100, html_url: 'https://github.com/test/repo/issues/100' }), { status: 201, headers: { 'Content-Type': 'application/json' } })
+      expect((await feedback(jsonReq({ description: 'Second report, still no leaderboard.', url: 'https://paddlesnitch.com/att', userAgent: 'Mozilla/5.0' }))).status).toBe(200)
+      expect(ssm).toHaveBeenCalledTimes(2)
+      expect((githubCalls.at(-1)!.init.headers as Record<string, string>).Authorization).toBe('Bearer new-token')
+    } finally {
+      delete process.env.GITHUB_ISSUES_TOKEN_PARAM
+      ssm.mockRestore()
+      errors.mockRestore()
+    }
   })
 })
