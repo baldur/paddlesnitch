@@ -44,7 +44,9 @@ import com.paddlesnitch.app.auth.PrefsVerifierStore
 import com.paddlesnitch.app.auth.StravaSignIn
 import com.paddlesnitch.app.auth.SignInScreen
 import com.paddlesnitch.app.paddles.PaddlesHost
-import com.paddlesnitch.app.paddles.addedMessage
+import com.paddlesnitch.app.paddles.AddCard
+import com.paddlesnitch.app.paddles.AddPaddleCard
+import com.paddlesnitch.app.paddles.displayName
 import com.paddlesnitch.app.paddles.rememberAddPaddle
 import com.paddlesnitch.app.paddles.sampleFile
 import com.paddlesnitch.app.tracker.TrackerSetupScreen
@@ -75,27 +77,43 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
     // A paddle to open or a file to add, kept through signing in.
     var pending by rememberSaveable { mutableStateOf<Incoming?>(null) }
+    // The add-paddle card, and a count that reloads the list after an add.
+    var card by remember { mutableStateOf<AddCard?>(null) }
+    var added by remember { mutableIntStateOf(0) }
+    val addPaddle = rememberAddPaddle(api, onCard = { card = it }, onAdded = { added++ }, onSignedOut = { signedIn = false })
+    LaunchedEffect(signedIn, pending) {
+        val file = pending as? Incoming.AddFile ?: return@LaunchedEffect
+        if (signedIn) { pending = null; addPaddle.add(Uri.parse(file.uri)) }
+        else card = AddCard.SignInToAdd(withContext(Dispatchers.IO) { displayName(context, Uri.parse(file.uri)) })
+    }
     val arrived by incoming.collectAsState()
     LaunchedEffect(arrived) {
         when (val it = arrived) {
             is Incoming.StravaReturn -> { stravaReturn = Uri.parse(it.uri); signingIn = true }
             is Incoming.OpenOnWeb -> openInBrowser(context, it.url)
-            is Incoming.OpenPaddle, is Incoming.AddFile -> {
+            is Incoming.OpenPaddle -> {
                 pending = it; inAccount = false; settingUpTracker = false
                 if (!signedIn) signingIn = true
             }
+            is Incoming.AddFile -> { pending = it; inAccount = false; settingUpTracker = false }
             null -> {}
         }
         incoming.value = null
     }
 
-    Scaffold { inner ->
+    val onList = !signingIn && !inAccount && !settingUpTracker
+    Scaffold(bottomBar = {
+        card?.takeIf { onList }?.let { c ->
+            AddPaddleCard(c, onOpen = { pending = Incoming.OpenPaddle(it); card = null }, onSignIn = { signingIn = true },
+                onClose = { card = null; if (c is AddCard.SignInToAdd) pending = null })
+        }
+    }) { inner ->
         val m = Modifier.padding(inner)
         when {
             signingIn -> {
                 BackHandler { signingIn = false }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
-                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false; pending = null }, modifier = m)
+                    onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true }, onCancel = { signingIn = false; if (pending is Incoming.OpenPaddle) pending = null }, modifier = m)
             }
             signedIn && settingUpTracker -> {
                 BackHandler { settingUpTracker = false }
@@ -106,7 +124,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false; inAccount = false },
                     onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
             }
-            signedIn -> MyPaddles(api, needsTerms, pending, onPendingHandled = { pending = null }, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
+            signedIn -> MyPaddles(api, needsTerms, (pending as? Incoming.OpenPaddle)?.id, onOpened = { pending = null }, added, addPaddle.pick,
+                adding = card is AddCard.Adding, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
             else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
@@ -115,44 +134,33 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
 }
 
 @Composable
-private fun MyPaddles(api: Api, needsTerms: Boolean, pending: Incoming?, onPendingHandled: () -> Unit, onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier) {
+private fun MyPaddles(
+    api: Api, needsTerms: Boolean, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
+    onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier,
+) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     val uri = LocalUriHandler.current
-    LaunchedEffect(attempt) {
+    LaunchedEffect(attempt, added) {
         error = null
         runCatching { api.paddles() }
             .onSuccess { list = it }
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
-    var adding by remember { mutableStateOf(false) }
-    var added by remember { mutableStateOf<String?>(null) }
-    val addPaddle = rememberAddPaddle(api, onBusy = { adding = it; if (it) added = null }) { result ->
-        if (result.exceptionOrNull() is SignedOut) onSignedOut()
-        added = addedMessage(result)
-        if (result.isSuccess) attempt++
-    }
-    LaunchedEffect(pending) {
-        if (pending is Incoming.AddFile) { addPaddle.add(Uri.parse(pending.uri)); onPendingHandled() }
-    }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount) { Text("Account") } }
     val current = list
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
-            openPaddle = (pending as? Incoming.OpenPaddle)?.id, onOpened = onPendingHandled, action = {
+            openPaddle = openPaddle, onOpened = onOpened, action = {
             Row {
-                TextButton(onClick = addPaddle.pick, enabled = !adding) { Text("Add a file") }
+                TextButton(onClick = pick, enabled = !adding) { Text("Add paddle") }
                 account()
             }
-        }, notice = if (needsTerms || adding || added != null) ({
+        }, notice = if (needsTerms) ({
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (adding) Text("Adding your paddle…", color = PsColor.muted)
-                added?.let { Text(it) }
-                if (needsTerms) {
-                    Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
-                    TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
-                }
+                Text("The Terms of Service have changed. Please accept them on paddlesnitch.com.", color = PsColor.muted)
+                TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms/accept") }) { Text("Open the Terms") }
             }
         }) else null)
         error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
