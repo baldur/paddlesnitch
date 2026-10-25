@@ -291,6 +291,27 @@ export async function deleteUser(email: string): Promise<void> {
   }
 }
 
+// Deletes the account whose sub this is, whatever its username: an email
+// account's username is its email, a Google account's is "Google_<id>", so
+// erasure finds the user by sub rather than by email. Already gone counts as
+// done (a repeated erasure); any other error throws.
+export async function deleteUserBySub(sub: string): Promise<void> {
+  const client = makeClient()
+  const res = await client.send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  const username = res.Users?.[0]?.Username
+  if (!username) return
+  try {
+    await client.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
+  }
+}
+
 type UserSummary = { sub: string; email: string; displayName: string }
 
 function userSummaryFromAttributes(user: { Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {

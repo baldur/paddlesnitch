@@ -8,6 +8,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import * as iam from 'aws-cdk-lib/aws-iam'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
 import * as logs from 'aws-cdk-lib/aws-logs'
@@ -376,6 +377,45 @@ export class AttStack extends cdk.Stack {
     userPool.addTrigger(cognito.UserPoolOperation.CREATE_AUTH_CHALLENGE, createAuth)
     userPool.addTrigger(cognito.UserPoolOperation.VERIFY_AUTH_CHALLENGE_RESPONSE, verifyAuth)
 
+    // Sign in with Google (#697). Cognito's hosted sign-in talks to Google; our
+    // app sends people there (identity_provider=Google) and swaps the code it
+    // gets back (apps/web/src/lib/google-signin.ts).
+    //  - The domain is Cognito's own (no certificate needed). Google's OAuth
+    //    client lists https://paddlesnitch.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse.
+    //  - The client ID is an SSM String (public). The client SECRET is in
+    //    Secrets Manager: CloudFormation can't read an SSM SecureString into a
+    //    Cognito identity provider, and this way it never sits in the template.
+    //    Both must exist before a deploy (infra/CLAUDE.md, Google sign-in).
+    //  - PreSignUp refuses a Google sign-up whose email already has an account
+    //    (owner's decision: link Google only from Account).
+    const hostedDomain = userPool.addDomain('HostedDomain', { cognitoDomain: { domainPrefix: 'paddlesnitch' } })
+    const google = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdp', {
+      userPool,
+      clientId: ssm.StringParameter.valueForStringParameter(this, '/att/google-client-id'),
+      clientSecretValue: cdk.SecretValue.secretsManager('paddlesnitch/google-client-secret'),
+      scopes: ['openid', 'email', 'profile'],
+      attributeMapping: {
+        email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+        emailVerified: cognito.ProviderAttribute.GOOGLE_EMAIL_VERIFIED,
+        fullname: cognito.ProviderAttribute.GOOGLE_NAME,
+      },
+    })
+    const preSignUp = new lambda.Function(this, 'PreSignUp', {
+      logRetention: LOG_RETENTION,
+      functionName: 'att-cognito-pre-sign-up',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'pre-sign-up.handler',
+      code: lambda.Code.fromAsset(lambdaDir),
+      timeout: cdk.Duration.seconds(5),
+    })
+    // Named by pattern, not userPool.userPoolArn: the pool depends on its
+    // triggers, so referencing it here would be a dependency cycle.
+    preSignUp.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:ListUsers'],
+      resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`],
+    }))
+    userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp)
+
     const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
       userPool,
       userPoolClientName: 'paddlesnitch-web',
@@ -390,7 +430,21 @@ export class AttStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(30),
       enableTokenRevocation: true,
       preventUserExistenceErrors: true,
+      // Only for Sign in with Google: the code flow (with PKCE) back to our
+      // callback. Explicit, because CDK's defaults were live until now: the
+      // implicit flow and https://example.com as the callback.
+      oAuth: {
+        flows: { authorizationCodeGrant: true },
+        scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
+        callbackUrls: ['https://paddlesnitch.com/att/api/auth/google/callback'],
+        logoutUrls: ['https://paddlesnitch.com/'],
+      },
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+      ],
     })
+    userPoolClient.node.addDependency(google)
 
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId })
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId })
@@ -425,6 +479,8 @@ export class AttStack extends cdk.Stack {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
         COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
         COGNITO_REGION: this.region,
+        // Cognito's hosted sign-in, for Sign in with Google (lib/google-signin.ts).
+        COGNITO_DOMAIN: hostedDomain.baseUrl(),
         // GitHub PAT used by the feedback widget to file issues. CFN can't
         // resolve SSM SecureString parameters at synth time, so we pass the
         // parameter NAME here and the route fetches+decrypts at runtime.

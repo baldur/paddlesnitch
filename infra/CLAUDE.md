@@ -63,6 +63,33 @@ rm "$SECRET_FILE"
 ```
 
 The Lambda IAM role has `ssm:GetParameter` on the parameter ARNs **and** `kms:Decrypt` on `alias/aws/ssm` (scoped via `kms:ViaService = ssm.<region>.amazonaws.com`). Without the KMS grant, SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`, ~240 chars) instead of failing — which the runtime would then forward to Strava as the "secret".
+
+## Sign in with Google (#697)
+
+Cognito's hosted sign-in does the Google part; the app only sends people there and swaps the code (`apps/web/CLAUDE.md` § Sign-in flows). In `att-stack.ts`:
+
+- **Hosted domain** `paddlesnitch` → `https://paddlesnitch.auth.eu-west-1.amazoncognito.com` (Cognito's own, no certificate). The server gets it as `COGNITO_DOMAIN`.
+- **Google provider** (`GoogleIdp`): scopes `openid email profile`; maps `email`, `email_verified`, `name`.
+- **App client:** only the authorization-code flow (with PKCE), callback `https://paddlesnitch.com/att/api/auth/google/callback`, providers COGNITO + GOOGLE. Until #697 CDK's defaults were live (implicit flow, callback `https://example.com`).
+- **PreSignUp trigger** (`infra/lambdas/cognito-auth/pre-sign-up.mjs`, `att-cognito-pre-sign-up`): refuses a Google sign-up whose email already has an account (`ACCOUNT_EXISTS`; owner's decision: Google is linked only from Account). Its ListUsers grant names the pool by pattern, because the pool depends on its triggers.
+
+**Before the first deploy with it, both must exist** (CloudFormation reads them at deploy time and fails without them):
+
+```bash
+# Client ID: public, an SSM String.
+aws ssm put-parameter --name /att/google-client-id --type String --value '<id>.apps.googleusercontent.com' --profile paddlesnitch --region eu-west-1
+# Client secret: Secrets Manager, NOT SSM. CloudFormation can't read an SSM SecureString into a
+# Cognito identity provider (ssm-secure works only for a short list of resources), and this
+# way it never appears in the template. Same no-trailing-newline rule as Strava's secret.
+SECRET_FILE=$(mktemp); printf '%s' '<secret from Google>' > "$SECRET_FILE"
+aws secretsmanager create-secret --name paddlesnitch/google-client-secret --secret-string "file://$SECRET_FILE" --profile paddlesnitch --region eu-west-1
+rm "$SECRET_FILE"
+```
+
+Google Cloud (project `paddlesnitch`): OAuth consent screen (app name, privacy and terms links, scopes `openid email profile`) and a **Web** client whose only authorized redirect URI is `https://paddlesnitch.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse`.
+
+**The button is off until the `GOOGLE_SIGNIN` repository variable is `1`** (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
+
 ## Inbound email — privacy@paddlesnitch.com
 
 Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded to the human inbox by the `att-email-forwarder` Lambda.

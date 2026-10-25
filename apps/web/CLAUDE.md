@@ -221,7 +221,8 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
    **From a phone app** (`init?challenge=<PKCE S256>`): the callback skips cookies and sends a one-time code to `com.paddlesnitch.app:/signin/strava?code=` (errors as `?error=`), stored hashed at `auth/app-codes/` (5 min, single use, swept by a 1-day lifecycle rule); the app swaps code + verifier at `auth/strava/app-token`, which signs in by `CUSTOM_AUTH` then. A website session in the same browser doesn't short-circuit it. `apps/web/src/lib/app-signin.ts`, `src/tests/strava-app-signin.test.ts`.
    **Strava never shares email** with third-party apps (their policy, not a bug). When the profile call returns no email field, we mint a synthesised address `strava-{athleteId}@noreply.paddlesnitch.com` to satisfy Cognito's email-format requirement. The user sees a banner inviting them to add a real contact email at `/account` (see `src/lib/strava-account.ts` + `src/components/AttContactBanner.tsx` (over `@paddlesnitch/ui/ContactBanner`)). Real emails sit in `users/{userId}/contact.json` (separate from the Cognito email) and feed any future outbound comms.
 4. **Magic link** — **disabled.** `magic-request` answers 501 and `magic-verify` redirects to `/signin?error=magic_disabled`. Email code (flow 2) replaced it.
-5. **Social (Google, Apple)** — not yet wired. When added: Cognito hosted UI handles OAuth, callback lands in `/att/auth/oauth-callback`.
+5. **Sign in with Google** (#697) — through Cognito's hosted sign-in (`lib/google-signin.ts`). `GET /att/api/auth/google/init?next=` → Cognito's `/oauth2/authorize?identity_provider=Google` with a state and a PKCE challenge (httpOnly cookies `google_signin_state`, `_verifier`, `_next`, 10 min) → Google → Cognito → `GET /att/api/auth/google/callback` swaps the code at Cognito's `/oauth2/token` (public client, PKCE; our server never holds Google's secret) for the pool's own tokens, then the Terms check, pending invitations and cookies, like Strava. **An email that already has an account is refused** (`google_account_exists`) by the PreSignUp trigger: Google is linked only from Account, never by matching email, because email sign-up doesn't prove who owns the address (owner, #697; connecting from Account is a follow-up). A Google account's Cognito username is `Google_<id>`, not its email: **find it by sub** (erasure uses `deleteUserBySub`), and admin calls that take the email as username (`customAuthSignIn`, so web-code links) don't work for it. The button shows only when the build has `NEXT_PUBLIC_GOOGLE_SIGNIN=1` (repository variable `GOOGLE_SIGNIN`; infra/CLAUDE.md § Sign in with Google). **Locally** cognito-local has no hosted sign-in, so `COGNITO_DOMAIN` is unset and the routes say "not available"; `google-signin.test.ts` mocks Cognito's token endpoint with tokens cognito-local issued, `google-pre-sign-up.test.ts` calls the trigger, `google-infra.test.ts` checks the stack. The real round trip is tested on production.
+6. **Apple** — not wired.
 
 #### Session mechanics
 
@@ -259,14 +260,9 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 - Public without login: home (open trials list), leaderboard, upload form (shows sign-in prompt).
 - Admin pages require login.
 
-#### Adding Google/Apple OAuth (future)
+#### Google and Apple
 
-User pool is already deployed. Steps when ready:
-1. Register OAuth client in Google Cloud Console / Apple Developer portal
-2. Add identity provider to the pool in CDK (`cognito.UserPoolIdentityProviderGoogle`)
-3. Add a Cognito domain (`userPool.addDomain(...)`) and callback URL
-4. Add "Sign in with Google" button to `/signin` (redirects to hosted UI)
-5. Build `/att/auth/oauth-callback/route.ts` to exchange the code for tokens, set cookie
+Google is wired (flow 5 above; infra/CLAUDE.md § Sign in with Google). Apple would follow the same shape: a Cognito identity provider, `identity_provider=SignInWithApple` on the same init/callback pattern, and the same rule for an email that already has an account.
 
 ### Strava integration
 

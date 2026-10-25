@@ -184,7 +184,7 @@ Shipped and planned specs are in `docs/features/`, indexed in [`docs/features/RE
 | Maps | Leaflet + react-leaflet v5 | Free, no API key |
 | Map drawing | Custom click-to-place | 2 clicks per line; no Leaflet.draw dependency |
 | Auth (local dev) | cognito-local emulator on port 9229 | Same Cognito SDK calls as prod — only the endpoint URL differs |
-| Auth (production) | AWS Cognito User Pool `paddlesnitch-users` (eu-west-1_BHyKJ0toh) | Email/password, email code (OTP, via SES) and Sign in with Strava; magic link is disabled; Google/Apple not wired |
+| Auth (production) | AWS Cognito User Pool `paddlesnitch-users` (eu-west-1_BHyKJ0toh) | Email/password, email code (OTP, via SES), Sign in with Strava and Sign in with Google (Cognito hosted sign-in, #697; button behind the `GOOGLE_SIGNIN` variable); magic link is disabled; Apple not wired |
 | Storage (local dev) | Filesystem under `apps/web/.local-data/` | `@paddlesnitch/core/storage` (app shim `src/lib/storage.ts`) |
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | tRPC (`/api/trpc`, `packages/api`) for JSON; Next route handlers for uploads, auth, account, devices | Same handlers in local dev and prod |
