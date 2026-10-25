@@ -20,7 +20,7 @@ android: …").
   `herdr agent list`, message with `herdr agent prompt <role> "<brief>"`
   (add `--wait` only if you need to wait for it), and read its output with
   `herdr agent read <role>`. If the window isn't running, open it:
-  `bash <(git -C ~/Documents/Code/paddlesnitch.com show origin/main:scripts/agents/start.sh) --tab <role>`.
+  `git -C ~/Documents/Code/paddlesnitch.com fetch -q origin && bash <(git -C ~/Documents/Code/paddlesnitch.com show origin/main:scripts/agents/start.sh) --tab <role>`.
   Outside herdr, use `ListAgents` + `SendMessage`, or ask the owner to run `psa <role>`.
 - Never answer a `blocked` agent's approval or question for it: tell the owner.
   Don't close tabs or stop agents unless the owner asks.

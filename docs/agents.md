@@ -43,7 +43,7 @@ psa lead          # or android, ios, firmware, motion-core, game, help
 `psa` is a shell function (add it to `~/.zshrc` once):
 
 ```sh
-psa() { bash <(git -C ~/Documents/Code/paddlesnitch.com show origin/main:scripts/agents/start.sh) "$@"; }
+psa() { git -C ~/Documents/Code/paddlesnitch.com fetch -q origin && bash <(git -C ~/Documents/Code/paddlesnitch.com show origin/main:scripts/agents/start.sh) "$@"; }
 ```
 
 It runs `scripts/agents/start.sh` from the latest `main`, which:
