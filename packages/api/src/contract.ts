@@ -158,6 +158,9 @@ const OtpRequest = named('OtpRequest', z.object({
 const OtpVerify = named('OtpVerify', z.object({ email: z.string(), session: z.string(), code: z.string() }))
 const Signup = named('Signup', z.object({ email: z.string(), displayName: z.string(), password: z.string(), acceptedTosVersion: z.string() }))
 const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }))
+const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
+const WebPage = named('WebPage', z.object({ url: z.string() }))
+const StravaAppToken = named('StravaAppToken', z.object({ code: z.string(), verifier: z.string() }))
 
 /** `input: null` is a multipart upload (`file`), described in mobile/contract/README.md. */
 type Rest = { input: z.ZodType | null; output: z.ZodType; errors: number[] }
@@ -172,6 +175,8 @@ export const restRoutes = {
   'POST /att/api/auth/otp-request': { input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
   'POST /att/api/auth/otp-verify': { input: OtpVerify, output: SignIn, errors: [400, 500] },
   'POST /att/api/auth/signup': { input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
+  'POST /att/api/auth/strava/app-token': { input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
+  'POST /att/api/auth/web-code': { input: WebPageFor, output: WebPage, errors: [401] },
   'POST /paddles/api/analyse': { input: null, output: Analysed, errors: [400, 401, 422, 500] },
   'POST /att/api/auth/refresh': { input: RefreshToken, output: Refreshed, errors: [401] },
   'POST /att/api/auth/logout': { input: RefreshToken, output: Ok, errors: [] },

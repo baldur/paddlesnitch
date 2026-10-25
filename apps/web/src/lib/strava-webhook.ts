@@ -45,7 +45,7 @@ export async function processStravaEvent(ev: StravaEvent): Promise<void> {
     const userId = await getUserIdByAthleteId(ownerId)
     if (!userId) return                                   // not one of our users
     if (!(await getStravaAutoImport(userId))) return      // opted out
-    const outcome = await importStravaActivity(userId, ev.object_id)
+    const outcome = await importStravaActivity(userId, ev.object_id, undefined, { platform: 'server' })
     console.log(`[strava webhook] activity ${ev.object_id} for user → ${outcome.status}`)
   }
   // activity update/delete and other events are intentionally ignored (v1).

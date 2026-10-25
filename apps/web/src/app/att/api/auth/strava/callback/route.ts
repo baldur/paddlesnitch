@@ -18,6 +18,8 @@ import {
 import { setAuthCookies } from '@/lib/auth'
 import { canonicalBaseUrl, safeNext } from '@/lib/url'
 import { syntheticEmailFor } from '@/lib/strava-account'
+import { APP_RETURN_URL, createAppCode, isChallenge } from '@/lib/app-signin'
+import { clientOf, logAction } from '@paddlesnitch/core/observe'
 
 // Strava OAuth callback for the SIGN-IN flow. This is what runs after the
 // user approves the authorize page from /att/api/auth/strava/init.
@@ -38,15 +40,26 @@ export async function GET(req: NextRequest) {
   const cookieStore = await cookies()
   const stateCookie = cookieStore.get('strava_signin_state')?.value
   const nextCookie = cookieStore.get('strava_signin_next')?.value ?? '/'
+  // Set when a phone app started this sign-in (lib/app-signin.ts): it gets a
+  // one-time code on its own URL scheme instead of cookies, and errors go there too.
+  const appChallenge = cookieStore.get('strava_signin_app')?.value
+  const forApp = isChallenge(appChallenge)
 
   // Clear both transient cookies regardless of outcome — they're single-use.
   const clearCookies = (res: NextResponse) => {
     res.cookies.set('strava_signin_state', '', { path: '/', maxAge: 0 })
     res.cookies.set('strava_signin_next', '', { path: '/', maxAge: 0 })
+    res.cookies.set('strava_signin_app', '', { path: '/', maxAge: 0 })
     return res
   }
-  const fail = (errKey: string) =>
-    clearCookies(NextResponse.redirect(new URL(`/signin?error=${errKey}`, base)))
+  // Every way out is one sign_in action line. Turning Strava down, or a stale
+  // state cookie (an old tab, a double click), is the user's doing, not ours.
+  const client = clientOf(req.headers)
+  const fail = (errKey: string) => {
+    const expected = errKey === 'strava_denied' || errKey === 'strava_state_mismatch'
+    logAction('sign_in', expected ? 'rejected' : 'fail', { client, reason: errKey })
+    return clearCookies(NextResponse.redirect(forApp ? `${APP_RETURN_URL}?error=${errKey}` : new URL(`/signin?error=${errKey}`, base)))
+  }
 
   if (errorFromStrava) return fail('strava_denied')
   if (!code || !stateFromStrava || !stateCookie || stateFromStrava !== stateCookie) {
@@ -89,6 +102,7 @@ export async function GET(req: NextRequest) {
   //         pointless.)
   //      c) Otherwise                     → create a fresh Cognito user.
   let cognitoEmail: string
+  let userId: string
   const displayName = [profile.firstname, profile.lastname].filter(Boolean).join(' ').trim()
     || accountEmail.split('@')[0]
 
@@ -103,6 +117,7 @@ export async function GET(req: NextRequest) {
     const existing = await findUserBySub(linkedUserId)
     if (existing) {
       cognitoEmail = existing.email
+      userId = existing.sub
     } else {
       // The linked Cognito user genuinely no longer exists (deleted account).
       // Drop the stale link and create a fresh synth-email account.
@@ -111,6 +126,7 @@ export async function GET(req: NextRequest) {
       const created = await adminCreateUserForStrava(accountEmail, displayName)
       if ('error' in created) return fail('strava_user_create_failed')
       await putAthleteIndex(profile.id, created.sub)
+      userId = created.sub
     }
   } else {
     // Only try the email-merge path when Strava actually gave us an
@@ -119,6 +135,7 @@ export async function GET(req: NextRequest) {
     const existing = hasRealEmail ? await findUserByEmail(accountEmail) : null
     if (existing) {
       cognitoEmail = existing.email
+      userId = existing.sub
       await putAthleteIndex(profile.id, existing.sub)
     } else {
       const created = await adminCreateUserForStrava(accountEmail, displayName)
@@ -127,6 +144,7 @@ export async function GET(req: NextRequest) {
         return fail('strava_user_create_failed')
       }
       cognitoEmail = accountEmail
+      userId = created.sub
       await putAthleteIndex(profile.id, created.sub)
       // Pull in any group invitations queued for this email before signup.
       // Synth-email users will hit zero pending invites by construction
@@ -139,6 +157,15 @@ export async function GET(req: NextRequest) {
         console.error('[strava signin] applyPendingInvitations failed', err)
       }
     }
+  }
+
+  // An app signs in when it swaps the code (att/api/auth/strava/app-token), so
+  // no tokens are made here, kept, or put in a URL.
+  if (forApp) {
+    await putStravaTokens(userId, tokens)
+    const appCode = await createAppCode(cognitoEmail, userId, appChallenge)
+    logAction('sign_in', 'ok', { client, reason: 'strava-app' })
+    return clearCookies(NextResponse.redirect(`${APP_RETURN_URL}?code=${appCode}`))
   }
 
   // 3. Sign the user in via Custom Auth, using a server-only one-time token.
@@ -163,5 +190,6 @@ export async function GET(req: NextRequest) {
   const accepted = user ? await hasAcceptedCurrent(user.id) : true
   const res = NextResponse.redirect(new URL(accepted ? next : termsAcceptPath(next), base))
   setAuthCookies(res.cookies, signInResult.idToken, signInResult.refreshToken)
+  logAction('sign_in', 'ok', { client, reason: 'strava' })
   return clearCookies(res)
 }

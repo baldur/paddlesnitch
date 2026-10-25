@@ -1,6 +1,6 @@
 # Feature spec: Android app
 
-🚧 **P0 done 2026-10-24**: `mobile/android`, CI (`android.yml`) building a debug APK and a release APK signed with the upload key (secrets `ANDROID_UPLOAD_*`; the key itself is on the owner's Mac, `~/.paddlesnitch-android/`), `/.well-known/assetlinks.json` (route in `apps/web/src/app/.well-known/`), installed on the owner's Pixel 9 Pro. **P1 under way:** models generated from the contract (`buildSrc/ContractModels.kt`), formatters checked against `format.json`, the Paddles list, and password sign-in / sign-up / sign-out with the tokens in the Keystore (signed out it shows the sample paddles), and "Add a file" (2026-10-25: the system file picker → the website's upload, `paddles/AddPaddle.kt`; checked on an emulator against a local server). Strava sign-in waits for the one-time code.
+🚧 **P0 done 2026-10-24**: `mobile/android`, CI (`android.yml`) building a debug APK and a release APK signed with the upload key (secrets `ANDROID_UPLOAD_*`; the key itself is on the owner's Mac, `~/.paddlesnitch-android/`), `/.well-known/assetlinks.json` (route in `apps/web/src/app/.well-known/`), installed on the owner's Pixel 9 Pro. **P1 under way:** models generated from the contract (`buildSrc/ContractModels.kt`), formatters checked against `format.json`, the Paddles list, and password sign-in / sign-up / sign-out with the tokens in the Keystore (signed out it shows the sample paddles), and Strava sign-in (2026-10-25: Custom Tab + PKCE, back on `com.paddlesnitch.app:/signin/strava`; checked on an emulator up to the server, the full Strava round trip needs production), and an Account screen (name and email; details, Strava, devices, your data and delete account open on the website already signed in via C4's one-time code; help, privacy, terms; sign out). **Add a file** (2026-10-25): the system file picker → the website's upload (`paddles/AddPaddle.kt`; checked on an emulator against a local server).
 
 The native Android app: Kotlin + Jetpack Compose + Material 3, Android 10
 (API 29) and up, distributed on Google Play. What it shares with the iPhone app
@@ -78,8 +78,10 @@ The protocol is fixed by the tracker sync contract and its fixtures. On Android:
 - Server side is in [`mobile-apps.md`](mobile-apps.md) (C2).
 - The refresh token lives in Keystore-backed storage. The app refreshes the ID
   token itself.
-- Strava and website link-outs open in a **Custom Tab**. The Strava callback
-  returns through a verified **App Link** (`/.well-known/assetlinks.json`).
+- Strava and website link-outs open in a **Custom Tab**. Strava sign-in comes
+  back on the app's own scheme with a one-time code (`auth/StravaSignIn.kt`;
+  `MainActivity` is `singleTask`, so the return closes the tab). PKCE, not app
+  link verification, is what protects the code, so debug builds work too.
 
 ## Screens and libraries
 

@@ -46,11 +46,29 @@ class Api(
     suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignIn =
         signIn("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}""")
 
+    /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
+    fun stravaStartUrl(challenge: String): String =
+        base.newBuilder().encodedPath("/att/api/auth/strava/init").addQueryParameter("challenge", challenge).build().toString()
+
+    suspend fun stravaSignIn(code: String, verifier: String): SignIn =
+        signIn("/att/api/auth/strava/app-token", """{"code":${str(code)},"verifier":${str(verifier)}}""")
+
     suspend fun signOut() {
         val refresh = tokens.refreshToken
         tokens.clear()
         // Best effort: signed out on the phone either way.
         if (refresh != null) runCatching { post("/att/api/auth/logout", """{"refreshToken":${str(refresh)}}""") }
+    }
+
+    /**
+     * A website page that needs the website's sign-in (`next` is a path like
+     * "/account#delete"), as a link that opens it already signed in: it carries
+     * a one-minute, one-use code the website swaps for its cookies.
+     */
+    suspend fun signedInPage(next: String): String {
+        val url = base.newBuilder().addPathSegments("att/api/auth/web-code").build()
+        val body = """{"next":${str(next)}}""".toRequestBody(jsonType)
+        return read(authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").post(body).build() }, WebPage.serializer()).url
     }
 
     suspend fun me(): Me = query("me", Me.serializer())

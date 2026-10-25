@@ -97,6 +97,16 @@ class ApiTest {
         assertEquals("That file is too big to upload. Try the FIT file, or zip it first.", e.message)
     }
 
+    @Test fun aWebsitePageOpensSignedInThroughALinkTheServerMakes() = runTest {
+        tokens.save("id-1", "r-1")
+        answer(200, """{"url":"https://paddlesnitch.com/att/api/auth/web-code?code=abc&next=%2Faccount"}""")
+        assertEquals("https://paddlesnitch.com/att/api/auth/web-code?code=abc&next=%2Faccount", api.signedInPage("/account#delete"))
+        val req = server.takeRequest()
+        assertEquals("/att/api/auth/web-code", req.url.encodedPath)
+        assertEquals("Bearer id-1", req.headers["Authorization"])
+        assertEquals("""{"next":"/account#delete"}""", req.body!!.utf8())
+    }
+
     @Test fun anExpiredTokenIsRefreshedOnceAndTheCallRetried() = runTest {
         tokens.save("old", "r-1")
         answer(401, """{"error":{"message":"UNAUTHORIZED"}}""")

@@ -1,5 +1,6 @@
 import { withDeviceAuth } from '@/lib/device-route'
 import { handleSessionUpload } from '@/lib/session-upload'
+import { withAction } from '@/lib/action'
 
 // POST /api/devices/sessions — the tracker uploading with its own token. The
 // handling lives in lib/session-upload.ts, shared with the owner's Bluetooth
@@ -10,4 +11,4 @@ import { handleSessionUpload } from '@/lib/session-upload'
 // That header IS the OTA signal — the device learns a new version exists from a
 // sync it was making anyway — and the handler returns from fourteen different
 // places, which is far too many to remember a header in.
-export const POST = withDeviceAuth(handleSessionUpload)
+export const POST = withAction('device_sync', withDeviceAuth(handleSessionUpload), { platform: 'tracker' })

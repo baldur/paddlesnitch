@@ -35,6 +35,22 @@
       500
     ]
   },
+  "POST /att/api/auth/strava/app-token": {
+    "input": "StravaAppToken",
+    "output": "SignIn",
+    "errors": [
+      400,
+      401,
+      500
+    ]
+  },
+  "POST /att/api/auth/web-code": {
+    "input": "WebPageFor",
+    "output": "WebPage",
+    "errors": [
+      401
+    ]
+  },
   "POST /paddles/api/analyse": {
     "input": null,
     "output": "Analysed",
