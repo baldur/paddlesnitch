@@ -3,8 +3,9 @@
 //
 // On a phone held sideways, the phone is your body: turning it like a
 // steering wheel shifts your weight that way (lean), from the motion sensors.
-// Each touch strokes on its side of the screen, and sliding a finger that's
-// down sideways works the rudder.
+// Pushing one side of it away from you works the rudder (the gyroscope: push
+// the right side forward to go left). Each touch strokes on its side of the
+// screen, and sliding a finger that's down sideways works the rudder too.
 // The phone's angle comes from the fused orientation sensor where there is
 // one (steady, and blind to the jolt of each tap), else from the raw
 // accelerometer. Without either (no permission, or a page not served over
@@ -19,7 +20,6 @@ export const KEYS = {
   leanRight: 'KeyD',
   rudderLeft: 'KeyQ',
   rudderRight: 'KeyE',
-  sprint: ['ShiftLeft', 'ShiftRight', 'Space'],
 };
 
 const PAD = { LB: 4, RB: 5, LT: 6, RT: 7 };
@@ -34,6 +34,13 @@ const TILT_DEAD = 0.03;
 export const TILT_REFLEX = 0.45; // lean against the roll rate, as your hips would: see main.js
 export const TILT_SETTLE = 15; // seconds for a new way of holding the phone to become level
 const DRAG_FULL = 0.14; // share of the screen width to slide for full rudder
+// Pushing a side of the phone forward: how far it's turned (radians, about the
+// screen's upright axis) before the rudder starts, and for full rudder. Where
+// you hold it becomes straight ahead again over TWIST_SETTLE seconds, so the
+// gyroscope's slow drift (and a change of grip) doesn't leave you turning.
+export const TWIST_DEAD = 0.05; // about 3 degrees
+export const TWIST_FULL = 0.35; // about 20 degrees
+export const TWIST_SETTLE = 30;
 
 export class Controls {
   #held = new Set();
@@ -44,10 +51,10 @@ export class Controls {
   #touching = false;
   #fingers = new Map(); // pointerId -> x where it came down
   #dragRudder = 0;
-  #sprintTouch = false;
   #tilt = { on: false, zero: null, flip: 1, lean: 0, at: null, fused: null };
+  #twist = { angle: 0, at: null };
   // What the sensors are doing, for the #tilt readout in main.js.
-  debug = { permission: 'not asked', orientations: 0, motions: 0, source: 'none', beta: null, gamma: null, accel: null, turn: null, zero: null };
+  debug = { permission: 'not asked', orientations: 0, motions: 0, source: 'none', beta: null, gamma: null, accel: null, turn: null, zero: null, twist: null };
 
   constructor(target) {
     addEventListener('keydown', (e) => {
@@ -83,25 +90,6 @@ export class Controls {
     target.addEventListener('pointercancel', lift);
   }
 
-  // An on-screen button (phones), tapped to start sprinting and again to stop:
-  // both thumbs are busy paddling, so it can't be held.
-  bindSprint(el) {
-    el.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.#sprintTouch = !this.#sprintTouch;
-    });
-  }
-
-  // The on-screen sprint, on or off (main.js turns it off when stamina runs out).
-  get sprintTouch() {
-    return this.#sprintTouch;
-  }
-
-  stopSprint() {
-    this.#sprintTouch = false;
-  }
-
   // Starts reading the motion sensors. Call it from a tap or click: iOS asks
   // for permission, and only allows asking in response to one.
   async enableTilt() {
@@ -130,6 +118,7 @@ export class Controls {
   // Whatever way the phone is held right now counts as level.
   calibrate() {
     this.#tilt.zero = null;
+    this.#twist.angle = 0;
   }
 
   // True while tilt is working: a sensor reading has arrived recently.
@@ -166,6 +155,7 @@ export class Controls {
   // The same from the accelerometer, which also feels every jolt: only used
   // when there's no orientation sensor.
   #motion(e) {
+    this.#twisted(e.rotationRate, e.interval);
     const g = e.accelerationIncludingGravity;
     this.debug.motions++;
     this.debug.accel = g && [g.x, g.y, g.z];
@@ -201,6 +191,25 @@ export class Controls {
     t.at = now;
   }
 
+  // The gyroscope: how far the phone has been turned about the screen's upright
+  // axis, as pushing one side of it away from you does.
+  #twisted(rate, interval) {
+    if (rate?.beta == null || rate?.gamma == null) return;
+    const now = performance.now();
+    const t = this.#twist;
+    // Browsers give the interval in ms (the spec) or, on older ones, seconds.
+    const dt = t.at === null ? 0 : Math.min(0.1, (now - t.at) / 1000 || (interval > 1 ? interval / 1000 : interval) || 0);
+    const angle = screen.orientation?.angle ?? window.orientation ?? 0;
+    t.angle = stepTwist(t.angle, twistRate(rate, angle), dt);
+    t.at = now;
+    this.debug.twist = t.angle;
+  }
+
+  // The rudder from pushing a side of the phone forward, while the gyroscope works.
+  get twistRudder() {
+    return this.#twist.at !== null && performance.now() - this.#twist.at < 1000 ? twistRudder(this.#twist.angle) : 0;
+  }
+
   // Once per animation frame: reads gamepads. Returns buttons newly pressed, for menus.
   poll(dt) {
     const pressed = new Set();
@@ -228,10 +237,9 @@ export class Controls {
     const keyRudder = (this.#held.has(KEYS.rudderRight) ? 1 : 0) - (this.#held.has(KEYS.rudderLeft) ? 1 : 0);
     const strokes = this.#strokes;
     this.#strokes = [];
-    this.rudder = clamp(keyRudder + axis(0) + this.#dragRudder);
+    this.rudder = clamp(keyRudder + axis(0) + this.#dragRudder + this.twistRudder);
     return {
       strokes,
-      sprint: KEYS.sprint.some((k) => this.#held.has(k)) || !!this.#pad?.buttons[BUTTON.A]?.pressed || this.#sprintTouch,
       rudder: this.rudder,
       lean: clamp(this.#keyLean + axis(2) + (this.tilting ? this.#tilt.lean : 0)),
     };
@@ -239,7 +247,6 @@ export class Controls {
 
   clear() {
     this.#strokes = [];
-    this.#sprintTouch = false;
   }
 
   rumble(strength = 0.4, duration = 60) {
@@ -254,6 +261,26 @@ export class Controls {
 }
 
 export { BUTTON };
+
+// How fast the phone is turning about the screen's upright axis (radians a
+// second; positive when its right side moves away from you), from the
+// gyroscope's rates about the phone's own axes (degrees a second: beta about
+// x, across the phone; gamma about y, along it) and the screen's angle.
+export function twistRate({ beta, gamma }, screenAngle = 0) {
+  const a = (screenAngle * Math.PI) / 180;
+  return ((beta * Math.sin(a) + gamma * Math.cos(a)) * Math.PI) / 180;
+}
+
+// One reading: the twist so far, turned by `rate` for `dt` seconds, easing
+// back towards straight ahead over TWIST_SETTLE seconds.
+export function stepTwist(angle, rate, dt) {
+  return (angle + rate * dt) * (1 - Math.min(1, dt / TWIST_SETTLE));
+}
+
+// The rudder for a twist: the right side pushed forward (positive) turns left.
+export function twistRudder(angle) {
+  return 0 - clamp(Math.sign(angle) * Math.max(0, Math.abs(angle) - TWIST_DEAD) / (TWIST_FULL - TWIST_DEAD));
+}
 
 function clamp(v) {
   return Math.max(-1, Math.min(1, v));

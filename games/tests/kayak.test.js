@@ -6,7 +6,7 @@ import { practiceRiver, raceRiver, locate, pointAt, headingAt, widthAt } from '.
 const DT = 1 / 120;
 
 // Paddles on a fixed beat for `seconds`; `lean` is a function of the boat.
-function paddle(seconds, { interval = 0.7, sides = ['left', 'right'], lean = () => 0, rudder = 0, sprint = false, boat = createBoat() } = {}) {
+function paddle(seconds, { interval = 0.7, sides = ['left', 'right'], lean = () => 0, rudder = 0, boat = createBoat() } = {}) {
   let next = 0;
   let n = 0;
   const events = [];
@@ -16,7 +16,7 @@ function paddle(seconds, { interval = 0.7, sides = ['left', 'right'], lean = () 
       strokes.push(sides[n++ % sides.length]);
       next += interval;
     }
-    events.push(...step(boat, DT, { strokes, rudder, sprint, lean: lean(boat) }));
+    events.push(...step(boat, DT, { strokes, rudder, lean: lean(boat) }));
   }
   return { boat, events };
 }
@@ -25,7 +25,7 @@ function paddle(seconds, { interval = 0.7, sides = ['left', 'right'], lean = () 
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
 
 // Average speed over the last few seconds, in km/h: it surges with each stroke.
-function kmh(interval, seconds, sprint = false) {
+function kmh(interval, seconds) {
   const boat = createBoat();
   let next = 0;
   let n = 0;
@@ -37,7 +37,7 @@ function kmh(interval, seconds, sprint = false) {
       strokes.push(n++ % 2 ? 'right' : 'left');
       next += interval;
     }
-    step(boat, DT, { strokes, sprint, lean: balance(boat) });
+    step(boat, DT, { strokes, lean: balance(boat) });
     if (t > seconds - 3) {
       sum += boat.speed;
       count++;
@@ -51,7 +51,7 @@ test('speeds and stroke rates match real K1 marathon paddling', () => {
   const racing = paddle(25, { lean: balance }).boat;
   assert.ok(Math.abs(strokeRate(easy) - 60) <= 3, `easy rate ${strokeRate(easy)}`);
   assert.ok(Math.abs(strokeRate(racing) - 86) <= 3, `racing rate ${strokeRate(racing)}`);
-  const speeds = { easy: kmh(1, 25), racing: kmh(0.7, 25), sprint: kmh(0.56, 15, true) };
+  const speeds = { easy: kmh(1, 25), racing: kmh(0.7, 25), sprint: kmh(0.56, 15) };
   assert.ok(speeds.easy > 9 && speeds.easy < 11, `easy ${speeds.easy}`);
   assert.ok(speeds.racing > 12.5 && speeds.racing < 14, `racing ${speeds.racing}`);
   assert.ok(speeds.sprint > speeds.racing + 0.8 && speeds.sprint < 16.5, `sprint ${speeds.sprint}`);
@@ -62,13 +62,35 @@ test('alternating strokes paddle upright', () => {
   assert.equal(boat.capsizes, 0);
 });
 
-test('holding sprint is faster, and drains stamina; a quicker beat alone is not', () => {
-  const sprint = paddle(15, { interval: 0.55, sprint: true, lean: balance }).boat;
-  assert.ok(kmh(0.55, 15, true) > kmh(0.66, 15) + 1.5, 'a sprint is well clear of the comfortable beat');
-  assert.ok(Math.abs(kmh(0.55, 15) - kmh(0.66, 15)) < 0.4, 'without the button, a quicker beat gains nothing');
+test('the quicker you paddle, the faster you go', () => {
+  const speeds = [1, 0.8, 0.7, 0.62, 0.55].map((interval) => kmh(interval, 15)); // 60, 75, 86, 97 and 109 a minute
+  for (let i = 1; i < speeds.length; i++) assert.ok(speeds[i] > speeds[i - 1] + 0.3, `${speeds.map((v) => v.toFixed(1)).join(' < ')}`);
+});
+
+test('quicker than 90 a minute is a sprint: well faster, and it drains stamina; 90 or under is free', () => {
+  const sprint = paddle(15, { interval: 0.55, lean: balance }).boat;
+  assert.ok(kmh(0.55, 15) > kmh(0.67, 15) + 1.5, 'a sprint is well clear of the comfortable beat');
   assert.ok(sprint.stamina < 0.2, `sprinted down to ${sprint.stamina}`);
-  assert.equal(paddle(60, { interval: 0.55, lean: balance }).boat.stamina, 1, 'and costs nothing');
-  assert.equal(paddle(60, { lean: balance }).boat.stamina, 1, 'a racing rhythm is free');
+  assert.ok(paddle(15, { interval: 0.62, lean: balance }).boat.stamina > sprint.stamina + 0.3, 'a gentler sprint costs less');
+  for (const interval of [0.68, 0.75, 0.85, 1.2]) {
+    assert.equal(paddle(60, { interval, lean: balance }).boat.stamina, 1, `${Math.round(60 / interval)} a minute costs nothing`);
+  }
+});
+
+test('one hurried stroke in a steady beat is not a sprint', () => {
+  const boat = createBoat();
+  let next = 0;
+  let n = 0;
+  for (let t = 0; t < 20; t += DT) {
+    const strokes = [];
+    if (t >= next) {
+      strokes.push(n++ % 2 ? 'right' : 'left');
+      next += n === 20 ? 0.6 : 0.8; // one quick one at 100 a minute in a beat of 75
+    }
+    step(boat, DT, { strokes, lean: balance(boat) });
+    assert.ok(!boat.sprinting, `sprinting at ${t.toFixed(2)} s`);
+  }
+  assert.equal(boat.stamina, 1);
 });
 
 test('hammering faster than the blade can move gets you nowhere', () => {
@@ -148,6 +170,8 @@ test('a steady beat builds rhythm, and rhythm is speed', () => {
   }
   assert.ok(ragged.rhythm < 0.3, `ragged rhythm ${ragged.rhythm}`);
   assert.ok(steady.speed > ragged.speed + 0.4);
+  // Rhythm matters, but tapping speed matters more: ragged loses a fifth or so, not a third.
+  assert.ok(ragged.speed > steady.speed * 0.75, `ragged ${ragged.speed.toFixed(2)} vs steady ${steady.speed.toFixed(2)}`);
 });
 
 test('stamina is for sprinting: a comfortable beat is free, and a wash refills it fast', () => {
@@ -160,21 +184,31 @@ test('stamina is for sprinting: a comfortable beat is free, and a wash refills i
       const strokes = [];
       if (t >= next) {
         strokes.push(n++ % 2 ? 'right' : 'left');
-        next += t < 20 ? 0.6 : 0.75;
+        next += t < 20 ? 0.56 : 0.75;
       }
-      step(boat, DT, { strokes, sprint: t < 20, lean: balance(boat), draft: t < 20 ? 0 : draft });
+      step(boat, DT, { strokes, lean: balance(boat), draft: t < 20 ? 0 : draft });
       if (Math.abs(t - 20) < DT / 2) assert.ok(boat.stamina < 0.3, `sprinted down to ${boat.stamina}`);
     }
     return boat.stamina;
   };
   const alone = refill(0);
   const sheltered = refill(1);
-  assert.ok(alone > 0.3 && alone < 0.6, `alone back to ${alone}`);
+  assert.ok(alone > 0.25 && alone < 0.6, `alone back to ${alone}`);
   assert.ok(sheltered > 0.95, `on the wash back to ${sheltered}`);
   assert.equal(paddle(120, { interval: 0.68, lean: balance }).boat.stamina, 1, 'about 88 a minute costs nothing');
 });
 
-test('out of stamina, sprinting is no faster than the comfortable beat, and no slower', () => {
+test('a wash tops the sprint bar up to full, never past it, and easing right off refills it too', () => {
+  const boat = createBoat();
+  for (let t = 0; t < 20; t += DT) step(boat, DT, { strokes: [], lean: balance(boat), draft: 1 });
+  assert.equal(boat.stamina, 1);
+  const tired = createBoat();
+  tired.stamina = 0.2;
+  paddle(10, { interval: 1.1, lean: balance, boat: tired }); // about 55 a minute
+  assert.ok(tired.stamina > 0.45, `back to ${tired.stamina}`);
+});
+
+test('out of stamina, paddling quicker than 90 a minute is no faster than 90, and no slower', () => {
   const at = (interval, stamina) => {
     const boat = createBoat();
     let next = 0;
@@ -188,7 +222,7 @@ test('out of stamina, sprinting is no faster than the comfortable beat, and no s
         next += interval;
       }
       boat.stamina = Math.min(boat.stamina, stamina);
-      step(boat, DT, { strokes, sprint: true, lean: balance(boat) });
+      step(boat, DT, { strokes, lean: balance(boat) });
       if (t > 12) {
         sum += boat.speed;
         count++;

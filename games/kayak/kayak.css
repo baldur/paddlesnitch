@@ -226,7 +226,7 @@ header button {
   .cue { width: 48px; height: 48px; }
 }
 
-/* The beat: the ring on the side to stroke next closes in on the moment. */
+/* Which half of the screen strokes on which side. */
 .cue {
   position: absolute;
   top: 50%;
@@ -239,20 +239,9 @@ header button {
   border: 2px solid rgb(255 255 255 / 0.35);
   font-weight: 700;
   opacity: 0.35;
-  transition: opacity 0.15s;
 }
 .cue.left { left: 16px; }
 .cue.right { right: 16px; }
-.cue.next { opacity: 1; }
-.cue.now { background: rgb(180 140 255 / 0.45); border-color: #fff; }
-.cue .ring {
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  border: 3px solid #b48cff;
-  opacity: 0;
-}
-.cue.next .ring { opacity: 1; }
 
 .gauges { display: grid; justify-items: center; gap: 4px; }
 .rudder { position: relative; width: 90px; height: 6px; border-radius: 3px; background: rgb(0 0 0 / 0.35); }
@@ -269,26 +258,6 @@ header button {
   display: none;
 }
 #hud.helping #touchhelp { display: block; }
-
-/* Phones: the sprint toggle, under the right-hand beat cue. */
-#sprint {
-  position: absolute;
-  right: 12px;
-  top: calc(50% + 48px);
-  display: none;
-  pointer-events: auto;
-  padding: 0.5rem 0.8rem;
-  border-radius: 1rem;
-  border: 2px solid #ffb347;
-  background: rgb(0 0 0 / 0.35);
-  color: #fff;
-  font-weight: 700;
-  touch-action: none;
-}
-#sprint[aria-pressed="true"] { background: #ff8a1f; }
-@media (pointer: coarse) {
-  #sprint { display: block; }
-}
 
 #tiltdebug {
   position: fixed;
