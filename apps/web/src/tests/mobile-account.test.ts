@@ -9,12 +9,18 @@ import type { z } from 'zod'
 import { makeDataDir, cleanDataDir, makeUser, type TestUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
+// Watch which refresh token erasure revokes (deleting the Cognito user alone
+// already stops a refresh in cognito-local, so that can't show it).
+vi.mock('@/lib/cognito', async importOriginal => {
+  const real = await importOriginal<typeof import('@/lib/cognito')>()
+  return { ...real, revoke: vi.fn(real.revoke) }
+})
 
 import { cookies } from 'next/headers'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
-import { refresh } from '@/lib/cognito'
+import { revoke } from '@/lib/cognito'
 import { GET as tosStatus, POST as acceptTos } from '@/app/api/account/tos/route'
-import { POST as exportLink } from '@/app/api/account/export/route'
+import { GET as exportFile, POST as exportLink } from '@/app/api/account/export/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as getProfile, PATCH as setProfile } from '@/app/api/account/profile/route'
 import { GET as checkHandle, PUT as claimHandle, DELETE as releaseHandle } from '@/app/api/account/handle/route'
@@ -28,12 +34,18 @@ let pat: TestUser
 beforeEach(async () => {
   dataDir = await makeDataDir()
   // No cookie at all: only the Bearer header can sign anyone in.
-  vi.mocked(cookies).mockResolvedValue({
-    get: () => undefined, set: () => {}, delete: () => {},
-  } as unknown as Awaited<ReturnType<typeof cookies>>)
+  jar({})
   pat = await makeUser('Pat')
 })
-afterEach(async () => { await cleanDataDir(dataDir); vi.restoreAllMocks() })
+afterEach(async () => { await cleanDataDir(dataDir); vi.mocked(revoke).mockClear() })
+
+/** The website's cookies for this request. */
+function jar(c: { tt_id?: string; tt_refresh?: string }) {
+  vi.mocked(cookies).mockResolvedValue({
+    get: (name: string) => (c[name as keyof typeof c] ? { name, value: c[name as keyof typeof c] } : undefined),
+    set: () => {}, delete: () => {},
+  } as unknown as Awaited<ReturnType<typeof cookies>>)
+}
 
 const req = (method: string, url: string, token?: string, body?: unknown) => new NextRequest(`http://x${url}`, {
   method,
@@ -80,8 +92,14 @@ describe('the account routes the apps call', () => {
     }
   })
 
-  it('refuse a Bearer header that is not an ID token', async () => {
+  it('refuse a Bearer header that is not an ID token, even beside a live website cookie', async () => {
+    jar({ tt_id: pat.idToken })
     for (const [route, call] of calls()) expect((await call('not-a-jwt')).status, route).toBe(401)
+    // Above all, a junk or tracker token must never erase an account.
+    for (const token of ['not-a-jwt', 'c2VjcmV0LWRldmljZS10b2tlbi0zMi1ieXRlcw']) {
+      expect((await deleteAccount(req('DELETE', '/api/account', token))).status).toBe(401)
+    }
+    expect((await getProfile(req('GET', '/api/account/profile', pat.idToken))).status).toBe(200)
   })
 
   it('let the person in with only the Bearer token, and answer what the contract says', async () => {
@@ -92,11 +110,35 @@ describe('the account routes the apps call', () => {
       'GET /api/account/handle': HandleAvailability, 'PUT /api/account/handle': ProfileSettings, 'DELETE /api/account/handle': ProfileSettings,
       'GET /api/account/contact': Contact, 'POST /api/account/contact': Contact, 'DELETE /api/account/contact': Ok,
     }
+    // The values too: the schemas drop unknown keys and most fields are
+    // optional, so a renamed field would still parse.
+    const expected: Record<string, object> = {
+      'GET /api/account/tos': { currentVersion: CURRENT_TOS_VERSION, accepted: false },
+      'POST /api/account/tos': { acceptances: [{ version: CURRENT_TOS_VERSION }] },
+      'POST /api/account/export': { url: expect.any(String) },
+      'GET /api/account/profile': { public: false },
+      'PATCH /api/account/profile': { public: true },
+      'GET /api/account/handle': { available: true, slug: 'pat-paddles' },
+      'PUT /api/account/handle': { public: true, handle: 'pat-paddles' },
+      'DELETE /api/account/handle': { public: true },
+      'GET /api/account/contact': { contact: null },
+      'POST /api/account/contact': { contact: { email: 'pat@example.com', addedAt: expect.any(String) } },
+      'DELETE /api/account/contact': { ok: true },
+    }
     for (const [route, call] of calls()) {
       const res = await call(pat.idToken)
       expect(res.status, route).toBe(200)
-      expect(schemaOf[route].safeParse(await res.json()).error?.issues, route).toBeUndefined()
+      const body = await res.json()
+      expect(schemaOf[route].safeParse(body).error?.issues, route).toBeUndefined()
+      expect(body, route).toMatchObject(expected[route])
     }
+  })
+
+  it('the export link in local dev is the file itself, which the Bearer token also opens', async () => {
+    const res = await exportFile(req('GET', '/api/account/export', pat.idToken))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-disposition')).toMatch(/^attachment; filename=/)
+    expect((await exportFile(req('GET', '/api/account/export'))).status).toBe(401)
   })
 })
 
@@ -122,6 +164,13 @@ describe('what the Account screens do', () => {
 
   it('delete account: erases it and revokes the refresh token the app sends', async () => {
     await fits(Ok, await deleteAccount(req('DELETE', '/api/account', pat.idToken, { refreshToken: pat.refreshToken })))
-    expect('error' in (await refresh(pat.refreshToken))).toBe(true)
+    expect(revoke).toHaveBeenCalledWith(pat.refreshToken)
+  })
+
+  it('delete account from the website revokes the cookie\'s refresh token, never one in the body', async () => {
+    jar({ tt_id: pat.idToken, tt_refresh: pat.refreshToken })
+    await fits(Ok, await deleteAccount(req('DELETE', '/api/account', undefined, { refreshToken: 'someone-elses' })))
+    expect(revoke).toHaveBeenCalledTimes(1)
+    expect(revoke).toHaveBeenCalledWith(pat.refreshToken)
   })
 })
