@@ -86,6 +86,8 @@ export type CognitoError =
 
 function classify(err: unknown): CognitoError {
   if (err instanceof UsernameExistsException) return 'email_exists'
+  // The PreSignUp trigger's "one account per email" refusal (#697).
+  if ((err as { name?: string })?.name === 'UserLambdaValidationException' && /ACCOUNT_EXISTS/.test(String((err as Error).message))) return 'email_exists'
   if (err instanceof InvalidPasswordException) return 'invalid_password'
   if (err instanceof CodeMismatchException) return 'invalid_code'
   if (err instanceof ExpiredCodeException) return 'expired_code'
@@ -291,14 +293,40 @@ export async function deleteUser(email: string): Promise<void> {
   }
 }
 
-type UserSummary = { sub: string; email: string; displayName: string }
+// Deletes the account whose sub this is, whatever its username: an email
+// account's username is its email, a Google account's is "Google_<id>", so
+// erasure finds the user by sub rather than by email. Already gone counts as
+// done (a repeated erasure); any other error throws.
+export async function deleteUserBySub(sub: string): Promise<void> {
+  const client = makeClient()
+  const res = await client.send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  const username = res.Users?.[0]?.Username
+  if (!username) return
+  try {
+    await client.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
+  }
+}
 
-function userSummaryFromAttributes(user: { Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
+type UserSummary = {
+  sub: string; email: string; displayName: string
+  /** Signs in with Google (username `Google_<id>`): our email-based sign-ins can't reach it. */
+  google?: true
+}
+
+function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
   const attr = (name: string) => user.Attributes?.find(a => a.Name === name)?.Value ?? ''
   return {
     sub: attr('sub'),
     email: attr('email'),
     displayName: attr('name') || (attr('email').split('@')[0]),
+    ...(user.Username?.startsWith('Google_') ? { google: true as const } : {}),
   }
 }
 
@@ -308,16 +336,23 @@ function userSummaryFromAttributes(user: { Attributes?: Array<{ Name?: string; V
 export async function findUserByEmail(email: string): Promise<UserSummary | null> {
   const client = makeClient()
   // ListUsers with a filter expression is the supported way to search by
-  // attribute. We limit to 1 — emails are alias-unique so there's never
-  // more than one match in a well-formed pool.
+  // attribute. One account per email is the rule (PreSignUp, #697), but a
+  // Google account's email can change on a later sign-in, so two accounts can
+  // still share one: then nobody is returned rather than whichever comes first
+  // (an invitation must never reach the wrong person). Half-made (UNCONFIRMED)
+  // accounts can't be signed into and don't count.
   const res = await client.send(new ListUsersCommand({
     UserPoolId: USER_POOL_ID,
     Filter: `email = "${email.replace(/"/g, '\\"')}"`,
-    Limit: 1,
+    Limit: 10,
   }))
-  const user = res.Users?.[0]
-  if (!user) return null
-  return userSummaryFromAttributes(user)
+  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  if (users.length > 1) {
+    console.warn('[cognito] findUserByEmail: more than one account has this email; refusing to pick one')
+    return null
+  }
+  if (!users[0]) return null
+  return userSummaryFromAttributes(users[0])
 }
 
 // Look up a user by their Cognito sub. Used by the trial-invitation UI
@@ -429,9 +464,15 @@ export async function adminCreateUserForStrava(
 //   3. VerifyAuthChallenge confirms; tokens are issued.
 // Only our server can do both halves, so only our server can trigger this
 // sign-in path.
+//
+// `expectedSub`: the account the caller means. Cognito finds the user by email
+// (an alias), so the tokens are checked to be that account's before they are
+// handed out; on a mismatch they are revoked and nothing is returned
+// (security review, #697: two accounts could once share an email).
 export async function customAuthSignIn(
   email: string,
   presetToken: string,
+  expectedSub?: string,
 ): Promise<TokenPair | { error: CognitoError }> {
   const client = makeClient()
   try {
@@ -464,6 +505,11 @@ export async function customAuthSignIn(
     })).catch(() => {})
     const auth = resp.AuthenticationResult
     if (!auth?.IdToken || !auth?.RefreshToken) return { error: 'unknown' }
+    if (expectedSub !== undefined && (await verifyIdToken(auth.IdToken))?.id !== expectedSub) {
+      await revoke(auth.RefreshToken)
+      console.warn('[cognito] customAuthSignIn signed in a different account than asked; refused')
+      return { error: 'unknown' }
+    }
     return { idToken: auth.IdToken, refreshToken: auth.RefreshToken }
   } catch (err) {
     return { error: classify(err) }

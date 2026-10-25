@@ -2,6 +2,7 @@
 // (GDPR Art. 15 + 20). Shared by the direct download and the large-account
 // path (app/api/account/export/route.ts).
 import { getJson } from '@/lib/storage'
+import { findUserBySub } from '@/lib/cognito'
 import { getUserGroupIds, getGroup, groupRoleOf } from '@/lib/groups'
 import { getStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { listSessions, getAthleteProfile } from '@paddlesnitch/analysis/analysis-store'
@@ -71,6 +72,8 @@ export async function buildAccountExport(user: AuthUser) {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      // Cognito also keeps the Google account's ID for an account that signs in with Google (#697).
+      ...((await findUserBySub(user.id))?.google ? { signsInWithGoogle: true } : {}),
     },
     ownedCourses,
     ownedTrials,

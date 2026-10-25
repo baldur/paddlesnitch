@@ -63,6 +63,36 @@ rm "$SECRET_FILE"
 ```
 
 The Lambda IAM role has `ssm:GetParameter` on the parameter ARNs **and** `kms:Decrypt` on `alias/aws/ssm` (scoped via `kms:ViaService = ssm.<region>.amazonaws.com`). Without the KMS grant, SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`, ~240 chars) instead of failing — which the runtime would then forward to Strava as the "secret".
+
+## Sign in with Google (#697)
+
+Cognito's hosted sign-in does the Google part; the app only sends people there and swaps the code (`apps/web/CLAUDE.md` § Sign-in flows). In `att-stack.ts`:
+
+- **Hosted domain** `paddlesnitch` → `https://paddlesnitch.auth.eu-west-1.amazoncognito.com` (Cognito's own, no certificate). The server gets it as `COGNITO_DOMAIN`.
+- **Google provider** (`GoogleIdp`): scopes `openid email profile`; maps `email`, `email_verified`, `name`.
+- **App client:** only the authorization-code flow (with PKCE), callback `https://paddlesnitch.com/att/api/auth/google/callback`, providers COGNITO + GOOGLE. Until #697 CDK's defaults were live (implicit flow, callback `https://example.com`).
+- **PreSignUp trigger** (`infra/lambdas/cognito-auth/pre-sign-up.mjs`, `att-cognito-pre-sign-up`): **one account per email**. Our sign-ins find people by email, so it refuses any new account (Google, email sign-up, Strava's AdminCreateUser) whose email a confirmed account already has (`ACCOUNT_EXISTS`; owner: Google is linked only from Account), and a Google account without a Google-verified email (`NO_EMAIL`, `EMAIL_UNVERIFIED`). UNCONFIRMED accounts block nobody. Its ListUsers grant is a separate `iam.Policy` on this pool only (the account is shared; the function's own policy would make a dependency cycle).
+
+**Before the first deploy with it, both must exist** (CloudFormation reads them at deploy time and fails without them):
+
+```bash
+# Client ID: public, an SSM String.
+aws ssm put-parameter --name /att/google-client-id --type String --value '<id>.apps.googleusercontent.com' --profile paddlesnitch --region eu-west-1
+# Client secret: Secrets Manager, NOT SSM. CloudFormation can't read an SSM SecureString into a
+# Cognito identity provider (ssm-secure works only for a short list of resources), and this
+# way it never appears in the template. Same no-trailing-newline rule as Strava's secret.
+SECRET_FILE=$(mktemp); printf '%s' '<secret from Google>' > "$SECRET_FILE"
+aws secretsmanager create-secret --name paddlesnitch/google-client-secret --secret-string "file://$SECRET_FILE" --profile paddlesnitch --region eu-west-1
+rm "$SECRET_FILE"
+```
+
+Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
+- **Branding:** app name paddlesnitch; home, `/privacy` and `/terms` links; authorized domains `paddlesnitch.com` and the Cognito domain. No logo (a logo needs Google's review).
+- **Audience:** External, in **Testing**. Only listed test users (the owner's handful, managed in the console) can sign in until it is published, and publishing is the owner's call.
+- **Client** "paddlesnitch Cognito" (Web): redirect URI `https://paddlesnitch.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse`, JavaScript origin the Cognito domain. Its ID is in SSM and its secret in Secrets Manager (above). Google shows a secret only once: to rotate it, make a new one in the console and `aws secretsmanager put-secret-value` it, never in chat or the repo.
+
+**The button is off until the `GOOGLE_SIGNIN` repository variable is `1`** (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
+
 ## Inbound email — privacy@paddlesnitch.com
 
 Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded to the human inbox by the `att-email-forwarder` Lambda.

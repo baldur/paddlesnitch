@@ -5,6 +5,11 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
+import GoogleButton from '@/components/GoogleButton'
+
+// Sign in with Google is switched on per build (NEXT_PUBLIC_GOOGLE_SIGNIN=1, the
+// GOOGLE_SIGNIN repository variable in deploy.yml) once Google and Cognito are set up.
+const GOOGLE_SIGNIN = process.env.NEXT_PUBLIC_GOOGLE_SIGNIN === '1'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { termsAcceptPath } from '@/lib/terms-path'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
@@ -59,7 +64,13 @@ function AuthForm() {
     // sign-in. See src/app/att/api/auth/strava/callback/route.ts.
     if (e === 'strava_user_create_failed') return 'Couldn’t create an account from your Strava profile. Please sign up with your email instead.'
     if (e === 'strava_signin_failed') return 'Strava sign-in didn’t finish. Please try again.'
+    if (e === 'google_denied') return 'You cancelled the Google sign-in.'
+    if (e === 'google_failed') return 'Couldn’t sign in with Google. Please try again.'
+    if (e === 'google_account_exists') return 'You already have an account with this email. Sign in with your email or Strava instead.'
+    if (e === 'google_no_email') return 'Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead.'
+    if (e === 'google_not_configured') return 'Google sign-in isn’t available right now.'
     if (e === 'app_link_expired') return 'That link from the app has expired. Sign in here, or open it from the app again.'
+    if (e === 'strava_use_google') return 'Your account signs in with Google. Please sign in with Google instead.'
     if (e === 'strava_not_configured') return 'Strava sign-in isn’t available right now.'
     return ''
   })()
@@ -173,6 +184,7 @@ function AuthForm() {
   // trip; the button is a plain <a> rather than a form submit because the
   // /init endpoint sets a CSRF state cookie and 302s to Strava.
   const stravaHref = `/att/api/auth/strava/init?next=${encodeURIComponent(next)}`
+  const googleHref = `/att/api/auth/google/init?next=${encodeURIComponent(next)}`
 
   const switchTab = (t: typeof tab) => {
     setTab(t)
@@ -380,7 +392,8 @@ function AuthForm() {
 
       {/* Strava is the secondary way in, below the email form. */}
       <div className="flex flex-col items-center gap-3 border-t border-border pt-6">
-        <p className="text-sm text-muted">Or use your Strava account</p>
+        <p className="text-sm text-muted">{GOOGLE_SIGNIN ? 'Or use your Google or Strava account' : 'Or use your Strava account'}</p>
+        {GOOGLE_SIGNIN && <GoogleButton href={googleHref} />}
         <StravaButton href={stravaHref} />
         <p className="text-sm text-muted text-center">
           Already have an account? Sign in first, then connect Strava in Account.

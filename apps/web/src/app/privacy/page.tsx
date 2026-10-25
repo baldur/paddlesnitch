@@ -37,7 +37,7 @@ export default function PrivacyPolicy() {
         <Section title="What we collect">
           <p>Only what you give us, or what your GPS files and tracker record:</p>
           <ul className="list-disc pl-5 mt-2 space-y-2">
-            <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. If you sign in with Strava, which doesn&apos;t share your email, you can add a contact email.</li>
+            <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. If you sign in with Strava, which doesn&apos;t share your email, you can add a contact email. If you sign in with Google, Google tells us your name, your email address and an ID for your Google account; we never see your Google password.</li>
             <li><strong>Public profile</strong>: off unless you turn it on, plus the profile handle if you pick one.</li>
             <li><strong>Time-trial results</strong>: the track from the GPS file you upload (times, positions and stroke rate; we don&apos;t keep the file itself), and your time, 500 m splits, average stroke rate, boat class and crew names.</li>
             <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, Strava, a time trial or a tracker): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
@@ -103,6 +103,7 @@ export default function PrivacyPolicy() {
             <li><code>tt_id</code>: your sign-in token. Lasts 24 hours.</li>
             <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
             <li><code>strava_state</code>, <code>strava_signin_state</code>, <code>strava_signin_next</code> and <code>strava_signin_app</code>: only while you connect or sign in with Strava, to check the reply really came from Strava and to bring you back to the right page, or to the paddlesnitch app if you started there. Last 10 minutes.</li>
+            <li><code>google_signin_state</code>, <code>google_signin_verifier</code> and <code>google_signin_next</code>: only while you sign in with Google, to check the reply really came from Google and to bring you back to the right page. Last 10 minutes.</li>
             <li><code>ps_contact_banner_dismissed</code>: only if you sign in with Strava and hide the &quot;add your email&quot; banner. Lasts 180 days.</li>
           </ul>
           <p className="mt-3">
@@ -121,6 +122,7 @@ export default function PrivacyPolicy() {
             <li><strong>Environment Agency</strong>, <strong>SEPA</strong>, the <strong>OPW</strong> (waterlevel.ie), <strong>Rijkswaterstaat</strong>, <strong>waterinfo.be</strong> (Flanders), <strong>PEGELONLINE</strong> (Germany), <strong>BAFU</strong> (Switzerland), <strong>SMHI</strong> (Sweden) and <strong>GOV.UK</strong>: for river levels and the Thames stream warnings on Plan, our server reads their whole national lists. Your route and your details are never sent to them.</li>
             <li><strong>GitHub</strong> (USA): issue reports are filed there, and <strong>the text you write is public</strong>. Your name and email are not sent.</li>
             <li><strong>Esri</strong>, <strong>PDOK</strong>, <strong>Digitaal Vlaanderen</strong>, <strong>IGN</strong>, <strong>Geobasis NRW</strong>, <strong>Geoportal Berlin</strong>, <strong>LGB Brandenburg</strong>, the <strong>Bayerische Vermessungsverwaltung</strong>, <strong>HVBG Hessen</strong>, <strong>LAiV Mecklenburg-Vorpommern</strong>, <strong>LGL Baden-Württemberg</strong>, <strong>swisstopo</strong> and <strong>basemap.at</strong> (the Dutch, Flemish, French and German governments&apos; map services, for aerial photos) and <strong>unpkg</strong>: your browser loads map tiles and map icons from them, so they see your IP address. They don&apos;t see your account.</li>
+            <li><strong>Google</strong> (sign-in, USA): only if you sign in with Google. Google confirms it&apos;s you and passes your name, your email address and an ID for your Google account to Amazon Cognito, which signs you in. We get nothing else from your Google account.</li>
             <li><strong>Google</strong> (Gmail, USA): emails you send to privacy@paddlesnitch.com, and beta tester applications, are forwarded to our Gmail inbox so we can answer them.</li>
           </ul>
           <p className="mt-3">

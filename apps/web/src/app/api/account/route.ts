@@ -4,7 +4,7 @@ import { getRequestUser, clearAuthCookies } from '@/lib/auth'
 import { hasRecentSignIn } from '@/lib/app-signin'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { unindexEntries } from '@/lib/entries'
-import { deleteUser, revoke } from '@/lib/cognito'
+import { deleteUserBySub, revoke } from '@/lib/cognito'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
 import { eraseFeedbackContactsForUser } from '@/lib/feedback-contacts'
@@ -162,7 +162,8 @@ export async function DELETE(req: Request) {
   const refreshToken = cookieStore.get('tt_refresh')?.value
     ?? (typeof body.refreshToken === 'string' ? body.refreshToken : undefined)
   if (refreshToken) await revoke(refreshToken)
-  await deleteUser(user.email)
+  // By sub: a Google account's username isn't its email.
+  await deleteUserBySub(user.id)
 
   // 8. Clear cookies on the response so the browser stops sending stale ones.
   const res = NextResponse.json({ ok: true }, { status: 200 })

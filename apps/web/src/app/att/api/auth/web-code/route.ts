@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const base = canonicalBaseUrl(req)
   const next = safeNext(req.nextUrl.searchParams.get('next'))
   const account = await redeemWebCode(req.nextUrl.searchParams.get('code') ?? '')
-  const tokens = account ? await customAuthSignIn(account.email, randomBytes(32).toString('hex')) : null
+  const tokens = account ? await customAuthSignIn(account.email, randomBytes(32).toString('hex'), account.userId) : null
   if (!account || !tokens || 'error' in tokens) {
     // Signing in by hand still gets them there.
     return NextResponse.redirect(new URL(`/signin?error=app_link_expired&next=${encodeURIComponent(next)}`, base))

@@ -65,7 +65,7 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     expect(res.headers.get('location') ?? '').not.toContain('error=')
     // Resolved by sub → signs in with the REAL email, no duplicate created.
     expect(cognito.findUserBySub).toHaveBeenCalledWith('real-sub-1')
-    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String))
+    expect(cognito.customAuthSignIn).toHaveBeenCalledWith('baldur@example.com', expect.any(String), 'real-sub-1')
     expect(cognito.adminCreateUserForStrava).not.toHaveBeenCalled()
   })
 
@@ -87,6 +87,24 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     const res = await callback(req())
     expect(res.headers.get('location')).toContain('error=strava_signin_failed')
     expect(cognito.adminCreateUserForStrava).not.toHaveBeenCalled()
+    expect(stravaStorage.putAthleteIndex).not.toHaveBeenCalled()
+  })
+
+  it('an athlete linked to an account that signs in with Google is told to use Google', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue('google-sub')
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'google-sub', email: 'pat@example.com', displayName: 'Pat', google: true } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_use_google')
+    expect(cognito.customAuthSignIn).not.toHaveBeenCalled()
+  })
+
+  it('an unlinked athlete whose Strava email matches an account that signs in with Google is told to use Google, and not linked', async () => {
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue(null)
+    vi.mocked(strava.getAthleteProfile).mockResolvedValue({ id: 555, firstname: 'Bal', lastname: 'G', email: 'Pat@Example.com' } as never)
+    vi.mocked(cognito.findUserByEmail).mockResolvedValue({ sub: 'google-sub', email: 'pat@example.com', displayName: 'Pat', google: true } as never)
+    const res = await callback(req())
+    expect(res.headers.get('location')).toContain('error=strava_use_google')
+    expect(cognito.findUserByEmail).toHaveBeenCalledWith('pat@example.com')
     expect(stravaStorage.putAthleteIndex).not.toHaveBeenCalled()
   })
 

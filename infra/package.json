@@ -9,15 +9,16 @@
     "deploy": "cdk deploy --require-approval never"
   },
   "dependencies": {
+    "@opennextjs/aws": "^4.0.0",
     "aws-cdk-lib": "^2.180.0",
-    "constructs": "^10.0.0",
-    "@opennextjs/aws": "^4.0.0"
+    "constructs": "^10.0.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
+    "@aws-sdk/client-ses": "^3.1056.0",
+    "@types/node": "^20.0.0",
     "aws-cdk": "^2.180.0",
     "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@aws-sdk/client-ses": "^3.1056.0"
+    "typescript": "^5.0.0"
   }
 }
