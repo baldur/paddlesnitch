@@ -21,7 +21,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false) : Exception(message)
 
 /** What to show for a failure: the server's or the app's own words, else [fallback]. Never a status code. */
-fun Throwable.shown(fallback: String): String = if (this is ApiFailure && generic) fallback else message ?: fallback
+fun Throwable.shown(fallback: String): String =
+    // Only our own words reach the screen: any other exception's message is internal (a JSON parser quoting an HTML page, an Intent dump).
+    if (this is ApiFailure && !generic || this is SignedOut) message ?: fallback else fallback
 
 /** What the Account screens ask of the server (Api, or a fake in the tests). */
 interface AccountApi {
@@ -132,9 +134,10 @@ class Api(
             val req = Request.Builder().url(url).header(APP_HEADER, "android/$appVersion")
                 .apply { if (ours) tokens.idToken?.let { header(AUTH, "Bearer $it") } }.build()
             try {
-                http.newCall(req).execute().use { res ->
-                    if (!res.isSuccessful) throw ApiFailure("Couldn’t prepare your download. Please try again.", res.code)
-                    into.outputStream().use { res.body.byteStream().copyTo(it) }
+                // A half-written export is personal data left on the phone: never keep one.
+                runCatching { http.newCall(req).execute() }.onFailure { into.delete() }.getOrThrow().use { res ->
+                    if (!res.isSuccessful) { into.delete(); throw ApiFailure("Couldn’t prepare your download. Please try again.", res.code) }
+                    runCatching { into.outputStream().use { res.body.byteStream().copyTo(it) } }.onFailure { into.delete() }.getOrThrow()
                     Regex("filename=\"?([^\";]+)").find(res.header("Content-Disposition").orEmpty())?.groupValues?.get(1) ?: "paddlesnitch-data.json"
                 }
             } catch (e: IOException) {

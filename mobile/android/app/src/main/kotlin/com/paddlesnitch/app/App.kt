@@ -34,6 +34,7 @@ import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
 import com.paddlesnitch.app.account.AccountScreen
 import com.paddlesnitch.app.account.TermsScreen
+import com.paddlesnitch.app.account.clearExport
 import com.paddlesnitch.app.api.AnalysisSession
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
@@ -100,36 +101,53 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     }
     fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled() }
 
-    val onList = !signingIn && !inAccount && !settingUpTracker && !(signedIn && needsTerms)
+    // Terms that changed are asked for on every start until accepted, not only at sign-in:
+    // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
+    LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
+    fun signedOut() { signedIn = false; inAccount = false; settingUpTracker = false; clearExport(context) }
+    val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inAccount = inAccount)
+    val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
         AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
             onClose = { intake = intake.cardClosed() })
     }) { inner ->
         val m = Modifier.padding(inner)
-        when {
-            signingIn -> {
+        when (screen) {
+            Screen.SignIn -> {
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
                     onSignedIn = { signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn()) }, onCancel = { leaveSignIn() }, modifier = m)
             }
-            signedIn && settingUpTracker -> {
+            Screen.Terms -> TermsScreen(api, onAccepted = { needsTerms = false }, onSignOut = { scope.launch { api.signOut(); signedOut() } },
+                onSignedOut = ::signedOut, modifier = m)
+            Screen.Tracker -> {
                 BackHandler { settingUpTracker = false }
-                TrackerSetupScreen(api, onClose = { settingUpTracker = false }, onSignedOut = { signedIn = false; settingUpTracker = false }, modifier = m)
+                TrackerSetupScreen(api, onClose = { settingUpTracker = false }, onSignedOut = ::signedOut, modifier = m)
             }
-            signedIn && inAccount -> {
+            Screen.Account -> {
                 BackHandler { inAccount = false }
-                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = { signedIn = false; inAccount = false },
-                    onDeleted = { signedIn = false; inAccount = false },
-                    onSignOut = { scope.launch { api.signOut(); signedIn = false; inAccount = false } }, modifier = m)
+                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = ::signedOut,
+                    onDeleted = ::signedOut, onSignOut = { scope.launch { api.signOut(); signedOut() } }, modifier = m)
             }
-            signedIn && needsTerms -> TermsScreen(api, onAccepted = { needsTerms = false }, onSignedOut = { signedIn = false }, modifier = m)
-            signedIn -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
-                adding = intake.card is AddCard.Adding, onSignedOut = { signedIn = false }, onAccount = { inAccount = true }, modifier = m)
-            else -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
+            Screen.Paddles -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
+                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m)
+            Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
         }
     }
+}
+
+enum class Screen { SignIn, Samples, Terms, Tracker, Account, Paddles }
+
+/** Which screen shows. Terms that need accepting come before everything a signed-in person can reach. */
+fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settingUpTracker: Boolean, inAccount: Boolean) = when {
+    signingIn -> Screen.SignIn
+    !signedIn -> Screen.Samples
+    needsTerms -> Screen.Terms
+    settingUpTracker -> Screen.Tracker
+    inAccount -> Screen.Account
+    else -> Screen.Paddles
 }
 
 @Composable

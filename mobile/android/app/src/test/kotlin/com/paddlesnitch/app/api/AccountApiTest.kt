@@ -71,10 +71,10 @@ class AccountApiTest {
         assertEquals(Triple("POST", "/api/account/contact", """{"email":"pat@example.com"}"""), sent())
         answer(200, fixture("account.contact.none"))
         assertNull(api.contact().contact)
+        assertEquals(Triple("GET", "/api/account/contact", ""), sent())
         answer(200, """{"ok":true}""")
         api.removeContact()
-        sent()
-        assertEquals("DELETE", sent().first)
+        assertEquals(Triple("DELETE", "/api/account/contact", ""), sent())
     }
 
     @Test fun deletingTheAccountSendsTheRefreshTokenThenForgetsBoth() = runTest {
@@ -111,5 +111,31 @@ class AccountApiTest {
         assertEquals("paddlesnitch-data.json", api.exportAccount(tmp.newFile()))
         sent()
         assertEquals("Bearer id-1", server.takeRequest().headers["Authorization"])
+    }
+
+    @Test fun anEndedSessionOnAnAccountRouteRefreshesOnceThenSignsOut() = runTest {
+        answer(401, fixture("account.error"))
+        answer(401, """{"error":"Please sign in again."}""") // the refresh is refused too
+        assertTrue(runCatching { api.profile() }.exceptionOrNull() is SignedOut)
+        assertEquals("/api/account/profile", server.takeRequest().url.encodedPath)
+        assertEquals("/att/api/auth/refresh", server.takeRequest().url.encodedPath)
+        assertFalse(api.signedIn)
+    }
+
+    @Test fun termsFromAnOutOfDateAppSayWhy() = runTest {
+        answer(422, """{"error":"Please update the app to accept the current Terms."}""")
+        assertEquals("Please update the app to accept the current Terms.", (runCatching { api.acceptTerms() }.exceptionOrNull() as ApiFailure).message)
+    }
+
+    @Test fun anExpiredExportLinkSaysSoWithoutACodeAndKeepsNothing() = runTest {
+        val s3 = MockWebServer().apply { start() }
+        try {
+            answer(200, """{"url":"${s3.url("/exports/u1/abc.json")}"}""")
+            s3.enqueue(MockResponse.Builder().code(403).body("<Error>AccessDenied</Error>").build())
+            val file = tmp.newFile()
+            val e = runCatching { api.exportAccount(file) }.exceptionOrNull() as ApiFailure
+            assertEquals("Couldn’t prepare your download. Please try again.", e.message)
+            assertFalse(file.exists())
+        } finally { s3.close() }
     }
 }

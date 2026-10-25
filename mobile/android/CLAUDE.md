@@ -42,3 +42,11 @@ time and isn't obvious from the code.
 - Account screens take `AccountApi` (Api implements it), so
   `AccountScreensTest` drives them with `FakeAccountApi` and `AccountApiTest`
   checks the real calls against MockWebServer and the contract's fixtures.
+- To test anything that opens a system screen (the save dialog), provide a
+  fake `ActivityResultRegistry` through `LocalActivityResultRegistryOwner`.
+  `FakeSaveDialog` in `AccountScreensTest` records the input and answers with
+  a `file://` Uri, which `contentResolver.openOutputStream` writes under
+  Robolectric.
+- Which screen shows is `screenFor` in App.kt (`ScreenTest`). Terms that need
+  accepting come before every signed-in screen, and are checked on every start
+  (`api.terms()`), not only at sign-in.

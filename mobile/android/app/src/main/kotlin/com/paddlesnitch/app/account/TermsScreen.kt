@@ -1,6 +1,7 @@
 package com.paddlesnitch.app.account
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,7 +43,7 @@ import kotlinx.coroutines.launch
  * the website's /terms/accept, in the app. The documents open in a browser tab.
  */
 @Composable
-fun TermsScreen(api: AccountApi, onAccepted: () -> Unit, onSignedOut: () -> Unit, modifier: Modifier = Modifier) {
+fun TermsScreen(api: AccountApi, onAccepted: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var ticked by remember { mutableStateOf(false) }
@@ -51,15 +52,17 @@ fun TermsScreen(api: AccountApi, onAccepted: () -> Unit, onSignedOut: () -> Unit
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Terms of Service", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         Text("Before you carry on, please read and agree to our Terms of Service and Privacy Policy. They say what we do with your paddles and results, and what you agree to when you use the site.", color = PsColor.muted)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(colors = linkColors(), onClick = { openTab(context, BuildConfig.API_BASE_URL + "/terms") }) { Text("Terms of Service") }
-            TextButton(colors = linkColors(), onClick = { openTab(context, BuildConfig.API_BASE_URL + "/privacy") }) { Text("Privacy Policy") }
+        // One above the other: side by side they don't fit at the largest text.
+        Column {
+            TextButton(colors = linkColors(), onClick = { openTab(context, BuildConfig.API_BASE_URL + "/terms") }) { Text("Terms of Service ↗") }
+            TextButton(colors = linkColors(), onClick = { openTab(context, BuildConfig.API_BASE_URL + "/privacy") }) { Text("Privacy Policy ↗") }
         }
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(ticked, role = Role.Checkbox) { ticked = it }, verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = ticked, onCheckedChange = null)
             Text("I have read and agree to the Terms of Service and Privacy Policy.", modifier = Modifier.padding(start = 12.dp))
         }
-        error?.let { Text(it, color = PsColor.red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        // The live region stays in the layout, so TalkBack reads the error when it appears.
+        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive }) { error?.let { Text(it, color = PsColor.red) } }
         Button(enabled = ticked && !working, modifier = Modifier.heightIn(min = 48.dp), onClick = {
             working = true; error = null
             scope.launch {
@@ -68,6 +71,8 @@ fun TermsScreen(api: AccountApi, onAccepted: () -> Unit, onSignedOut: () -> Unit
                     .onFailure { if (it is SignedOut) onSignedOut() else error = it.shown("Couldn’t save that. Please try again.") }
                 working = false
             }
-        }) { Text("Continue") }
+        }) { Text(if (working) "Continue…" else "Continue") }
+        // Not agreeing is a choice too: sign out rather than be stuck here.
+        TextButton(enabled = !working, colors = linkColors(), onClick = onSignOut) { Text("Sign out") }
     }
 }
