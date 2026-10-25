@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getAuthUser } from '@/lib/auth'
+import { hasRecentSignIn } from '@/lib/app-signin'
 import { exchangeCode } from '@/lib/strava'
 import { putStravaTokens, putAthleteIndex } from '@/lib/strava-storage'
 import { canonicalBaseUrl } from '@/lib/url'
@@ -35,6 +36,11 @@ export async function GET(req: NextRequest) {
   // State must match what we set on /connect, else this is CSRF.
   if (!code || !stateFromStrava || !stateCookie || stateFromStrava !== stateCookie) {
     return clearStateCookie(NextResponse.redirect(new URL('/account?strava=state_mismatch', base)))
+  }
+
+  // Checked again here: the sign-in may have aged past the window on Strava's page.
+  if (!(await hasRecentSignIn(req, user.id))) {
+    return clearStateCookie(NextResponse.redirect(new URL('/account?strava=reauth#strava', base)))
   }
 
   try {

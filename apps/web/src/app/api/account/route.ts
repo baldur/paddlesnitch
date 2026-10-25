@@ -19,7 +19,7 @@ import { eraseBuddies } from '@paddlesnitch/core/buddies'
 import { erasePlanDemand, erasePlanShares } from '@paddlesnitch/waterways/plan-store'
 import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 
-const REAUTH_TEXT = 'For your safety, deleting an account needs a recent sign-in. Sign in again, then delete.'
+const REAUTH_TEXT = 'For your safety, deleting your account needs a recent sign-in. Sign in again, then delete it.'
 
 // GET /api/account — whether deleting can go ahead now ({ recentSignIn }), so
 // the account page and the apps ask for a fresh sign-in BEFORE someone types

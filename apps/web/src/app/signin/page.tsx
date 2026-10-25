@@ -31,13 +31,14 @@ function AuthForm() {
   }, [next, router])
 
   const [tab, setTab] = useState<'signin' | 'signup' | 'code'>('signin')
-  // Prefilled when the account page sends someone back to sign in again.
-  const [email, setEmail] = useState(() => searchParams.get('email') ?? '')
+  const [email, setEmail] = useState('')
   // Why they're here, shown as a notice (not an error): kept apart from `error`,
   // so switching tabs or a wrong password doesn't clear it.
   const notice = searchParams.get('reason') === 'reauth_delete'
-    ? 'For your safety, deleting an account needs a recent sign-in. Sign in and you’ll go straight back to Delete account.'
-    : ''
+    ? 'For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back to Delete account.'
+    : searchParams.get('reason') === 'reauth_strava'
+      ? 'For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
+      : ''
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   // ToS acceptance is mandatory on signup; the checkbox lives just above

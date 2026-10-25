@@ -22,9 +22,9 @@ import { revoke } from '@/lib/cognito'
 import { GET as tosStatus, POST as acceptTos } from '@/app/api/account/tos/route'
 import { GET as exportFile, POST as exportLink } from '@/app/api/account/export/route'
 import { GET as accountStatus, DELETE as deleteAccount } from '@/app/api/account/route'
-import { markLinkSession } from '@/lib/app-signin'
+import { markLinkSession, hasRecentSignIn } from '@/lib/app-signin'
 import { POST as mintWebCode } from '@/app/att/api/auth/web-code/route'
-import { signInFromClaims } from '@paddlesnitch/core/cognito'
+import { signInFromClaims, sessionOfFreshToken, idTokenSignIn } from '@paddlesnitch/core/cognito'
 import { setProfilePublic as storeProfilePublic, getProfileSettings } from '@/lib/profile'
 import { GET as getProfile, PATCH as setProfile } from '@/app/api/account/profile/route'
 import { GET as checkHandle, PUT as claimHandle, DELETE as releaseHandle } from '@/app/api/account/handle/route'
@@ -39,7 +39,7 @@ import type { deviceList } from '@/lib/device-list'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { provedPoll } from './device-proof'
 import {
-  restRoutes, ApiError, Ok, TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact,
+  restRoutes, ApiError, Ok, TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact, AccountStatus,
   TrackerList, RecordingList,
 } from '@paddlesnitch/api/contract'
 
@@ -99,7 +99,9 @@ describe('the account routes the apps call', () => {
   })
 
   it('refuse a caller with no sign-in (401, an ApiError)', async () => {
-    for (const [route, call] of [...calls(), ['DELETE /api/account', () => deleteAccount(req('DELETE', '/api/account'))] as Call]) {
+    for (const [route, call] of [...calls(),
+      ['DELETE /api/account', () => deleteAccount(req('DELETE', '/api/account'))] as Call,
+      ['GET /api/account', () => accountStatus(req('GET', '/api/account'))] as Call]) {
       const res = await call()
       expect(res.status, route).toBe(401)
       expect(ApiError.safeParse(await res.json()).success, route).toBe(true)
@@ -221,6 +223,19 @@ describe('what the Account screens do', () => {
     await markLinkSession(pat.id, claims.origin_jti ?? claims.jti)
     expect(await (await accountStatus(req('GET', '/api/account', pat.idToken))).json()).toEqual({ recentSignIn: false })
     expect((await deleteAccount(req('DELETE', '/api/account', pat.idToken))).status).toBe(403)
+  })
+
+  it('the session a fresh token names is the one the verified token names (what web-code marks)', async () => {
+    expect(sessionOfFreshToken(pat.idToken)).toBe((await idTokenSignIn(pat.idToken))?.session)
+    expect(sessionOfFreshToken(pat.idToken)).toEqual(expect.any(String))
+    expect(sessionOfFreshToken('not-a-token')).toBeNull()
+  })
+
+  it('a recent sign-in counts only for its own person', async () => {
+    const sam = await makeUser('Sam')
+    expect(await hasRecentSignIn(req('GET', '/api/account', sam.idToken), pat.id)).toBe(false)
+    expect(await hasRecentSignIn(req('GET', '/api/account', pat.idToken), pat.id)).toBe(true)
+    await fits(AccountStatus, await accountStatus(req('GET', '/api/account', pat.idToken)))
   })
 
   it('the sign-in time is auth_time, never iat; a token without one, or not an ID token, is no sign-in', () => {

@@ -173,6 +173,14 @@ describe('website pages from a signed-in app (web codes)', () => {
     expect(again.searchParams.get('next')).toBe('/account')
   })
 
+  it('hands out no session it can\'t mark (an unreadable token): back to sign-in, no cookies', async () => {
+    vi.mocked(cognito.sessionOfFreshToken).mockReturnValueOnce(null)
+    const code = await createWebCode('baldur@example.com', 'sub-1')
+    const res = await open(code)
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('app_link_expired')
+    expect(auth.setAuthCookies).not.toHaveBeenCalled()
+  })
+
   it('lasts a minute', async () => {
     const code = await createWebCode('baldur@example.com', 'sub-1', Date.now() - 61_000)
     expect(new URL((await open(code)).headers.get('location')!).pathname).toBe('/signin')

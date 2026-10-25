@@ -34,19 +34,36 @@ test('An old sign-in is asked to sign in again first, then comes back to Delete 
   await page.goto('/account#delete')
   await page.getByRole('button', { name: 'Delete my account' }).click()
   // No DELETE box yet: a calm note and a way to sign in again.
-  await expect(page.getByText(/deleting an account needs a recent sign-in/)).toBeVisible()
+  await expect(page.getByText(/deleting your account needs a recent sign-in/)).toBeVisible()
   await expect(page.getByLabel(/Type DELETE to confirm/)).toHaveCount(0)
   await page.getByRole('button', { name: 'Sign in again' }).click()
 
-  // Signed out, on the sign-in page with the reason shown and the email filled in.
+  // Signed out, on the sign-in page with the reason shown.
   await page.waitForURL(/\/signin\?reason=reauth_delete/)
   expect((await context.cookies()).some(c => c.name === 'tt_id' && c.value)).toBe(false)
   await expect(page.getByRole('status')).toContainText('recent sign-in')
-  await expect(page.locator('input[type="email"]').first()).toHaveValue(email)
+  await page.locator('input[type="email"]').first().fill(email)
   await page.locator('input[type="password"]').fill('Password123')
   await page.locator('button[type="submit"]:has-text("SIGN IN")').click()
 
   // Back on Delete account, already open at the DELETE step.
-  await page.waitForURL(/\/account\?resume=delete/)
+  await page.waitForURL(/\/account/)
   await expect(page.getByLabel(/Type DELETE to confirm/)).toBeVisible()
+})
+
+// The 10 minutes can run out while someone types DELETE: the page goes back
+// to the Sign in again step, without signing them out by itself.
+test('If the sign-in gets too old while typing, Delete account asks to sign in again', async ({ page, context }) => {
+  await signUpFlow(page)
+  await page.route('**/api/account', route => route.request().method() === 'DELETE'
+    ? route.fulfill({ status: 403, json: { error: 'For your safety, deleting your account needs a recent sign-in. Sign in again, then delete it.', reauth: true } })
+    : route.continue())
+  await page.goto('/account#delete')
+  await page.getByRole('button', { name: 'Delete my account' }).click()
+  await page.getByLabel(/Type DELETE to confirm/).fill('DELETE')
+  await page.getByRole('button', { name: 'Delete for good' }).click()
+  await expect(page.getByRole('button', { name: 'Sign in again' })).toBeVisible()
+  await expect(page.getByLabel(/Type DELETE to confirm/)).toHaveCount(0)
+  // Still signed in: nothing happened behind their back.
+  expect((await context.cookies()).some(c => c.name === 'tt_id' && c.value)).toBe(true)
 })

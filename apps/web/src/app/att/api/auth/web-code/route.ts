@@ -32,9 +32,11 @@ export async function GET(req: NextRequest) {
     // Signing in by hand still gets them there.
     return NextResponse.redirect(new URL(`/signin?error=app_link_expired&next=${encodeURIComponent(next)}`, base))
   }
-  // This sign-in proved nothing new, so it never counts as a recent one.
+  // This sign-in proved nothing new, so it never counts as a recent one. A
+  // session we can't name can't be marked, so it isn't handed out at all.
   const session = sessionOfFreshToken(tokens.idToken)
-  if (session) await markLinkSession(account.userId, session)
+  if (!session) return NextResponse.redirect(new URL(`/signin?error=app_link_expired&next=${encodeURIComponent(next)}`, base))
+  await markLinkSession(account.userId, session)
   const res = NextResponse.redirect(new URL(next, base))
   setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
   return res

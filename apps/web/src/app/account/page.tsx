@@ -58,6 +58,9 @@ function AccountPageInner() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
   // Delete account: closed → (check) → 'signin' (needs a fresh sign-in) or 'confirm' (type DELETE).
   const [deleteStep, setDeleteStep] = useState<'closed' | 'checking' | 'signin' | 'confirm'>('closed')
+  // Shown inside the Delete account / Strava sections, where the person is looking.
+  const [deleteError, setDeleteError] = useState('')
+  const [stravaSignInError, setStravaSignInError] = useState('')
   const [confirmText, setConfirmText] = useState('')
   const [working, setWorking] = useState<'export' | 'delete' | 'strava' | 'contact' | null>(null)
   const [error, setError] = useState('')
@@ -83,6 +86,8 @@ function AccountPageInner() {
   const resumeDelete = searchParams.get('resume') === 'delete'
   useEffect(() => {
     if (!user || !resumeDelete) return
+    // Used once: a reload after Cancel shouldn't reopen it.
+    window.history.replaceState(null, '', '/account#delete')
     document.getElementById('delete')?.scrollIntoView()
     void openDelete()
   }, [user, resumeDelete])
@@ -258,38 +263,40 @@ function AccountPageInner() {
 
   // Deleting needs a recent real sign-in: ask first, so nobody types DELETE for nothing.
   async function openDelete() {
-    setError('')
+    setDeleteError('')
     setDeleteStep('checking')
     try {
       const res = await fetch('/api/account')
-      const body = res.ok ? await res.json() : null
-      setDeleteStep(body?.recentSignIn ? 'confirm' : 'signin')
+      if (!res.ok) throw new Error()
+      const body = await res.json()
+      setDeleteStep(body.recentSignIn ? 'confirm' : 'signin')
     } catch {
-      setError('Couldn’t check your sign-in. Please try again.')
+      setDeleteError('Couldn’t check your sign-in. Please try again.')
       setDeleteStep('closed')
     }
   }
 
   // Sign out, then sign in again the way this account does, and come back here.
-  async function signInAgain() {
+  async function signInAgain(then: 'delete' | 'strava') {
     if (!user) return
-    setError('')
-    setWorking('delete')
-    const back = '/account?resume=delete#delete'
+    const setErr = then === 'delete' ? setDeleteError : setStravaSignInError
+    setErr('')
+    setWorking(then === 'delete' ? 'delete' : 'strava')
+    const back = then === 'delete' ? '/account?resume=delete#delete' : '/account#strava'
     const out = await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => null)
     if (!out?.ok) {
-      setError('Couldn’t sign you out. Please try again.')
+      setErr('Couldn’t sign you out. Please try again.')
       setWorking(null)
       return
     }
     // A full page load either way: the header's user came with the page.
     window.location.assign(isSyntheticStravaEmail(user.email)
       ? `/att/api/auth/strava/init?next=${encodeURIComponent(back)}`
-      : `/signin?reason=reauth_delete&email=${encodeURIComponent(user.email)}&next=${encodeURIComponent(back)}`)
+      : `/signin?reason=reauth_${then}&next=${encodeURIComponent(back)}`)
   }
 
   async function deleteAccount() {
-    setError('')
+    setDeleteError('')
     setWorking('delete')
     try {
       const res = await fetch('/api/account', { method: 'DELETE' })
@@ -302,7 +309,7 @@ function AccountPageInner() {
       // Account gone. Send them home, in full: the header's user came with the page.
       window.location.replace('/att')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Couldn’t delete your account. Please try again.')
+      setDeleteError(err instanceof Error ? err.message : 'Couldn’t delete your account. Please try again.')
       setWorking(null)
     }
   }
@@ -474,6 +481,19 @@ function AccountPageInner() {
                   {stravaFlash.text}
                 </p>
               )}
+              {stravaFlashKey === 'reauth' && (
+                <div className="rounded-control border border-border bg-surface p-4 flex flex-col gap-3">
+                  <p role="status" className="text-sm text-fg">
+                    For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.
+                  </p>
+                  {stravaSignInError && <p role="alert" className="text-sm text-red">{stravaSignInError}</p>}
+                  <div>
+                    <button type="button" onClick={() => signInAgain('strava')} disabled={working === 'strava'} className={buttonClass('secondary')}>
+                      {working === 'strava' ? 'Sign in again…' : 'Sign in again'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {strava === undefined && <p className={msgClass}>Checking…</p>}
 
@@ -570,6 +590,7 @@ function AccountPageInner() {
                 to one of its admins or members. <strong className="text-fg">This happens at once and can&apos;t be undone.</strong> This
                 is your right to erasure (UK GDPR Art. 17).
               </p>
+              {deleteError && <p role="alert" className="text-sm text-red">{deleteError}</p>}
 
               {deleteStep === 'closed' || deleteStep === 'checking' ? (
                 <div>
@@ -578,15 +599,15 @@ function AccountPageInner() {
                   </button>
                 </div>
               ) : deleteStep === 'signin' ? (
-                <div role="status" className="rounded-control border border-border bg-surface p-4 flex flex-col gap-3">
-                  <p className="text-sm text-fg">
-                    For your safety, deleting an account needs a recent sign-in. Sign in again and you’ll come straight back here.
+                <div className="rounded-control border border-border bg-surface p-4 flex flex-col gap-3">
+                  <p role="status" className="text-sm text-fg">
+                    For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here.
                   </p>
                   <div className="flex gap-2 flex-wrap">
-                    <button type="button" onClick={signInAgain} disabled={working === 'delete'} className={buttonClass('secondary')}>
+                    <button type="button" autoFocus onClick={() => signInAgain('delete')} disabled={working === 'delete'} className={buttonClass('secondary')}>
                       {working === 'delete' ? 'Sign in again…' : 'Sign in again'}
                     </button>
-                    <button type="button" onClick={() => setDeleteStep('closed')} className={buttonClass('quiet')}>
+                    <button type="button" onClick={() => setDeleteStep('closed')} className={buttonClass('secondary')}>
                       Cancel
                     </button>
                   </div>
