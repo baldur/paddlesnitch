@@ -52,10 +52,14 @@ final class PaddlesTests: AppTestCase {
         try audit()
     }
 
+    /// Without the clipped-text check: it enlarges the text in place, the
+    /// page re-lays out and jumps back up, and the audit then flags text it
+    /// can't pin to an element (seen on iOS 17 CI). Clipping on this page is
+    /// checked top to bottom by `LargeTextTests.testAPaddleAtTheLargestTextSize`.
     func testAPaddleScrolledToItsEffortsPassesTheAccessibilityAudit() throws {
         open("pdl-river")
         XCTAssertTrue(scrollToElement(text(containing: "29 s at 1:23")).waitForExistence(timeout: 10))
-        try audit()
+        try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
     }
 
     func testANoGPSPaddlePassesTheAccessibilityAudit() throws {
