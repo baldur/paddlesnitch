@@ -46,6 +46,8 @@ export async function buildAccountExport(user: AuthUser) {
     profile: await getJson(`users/${user.id}/profile.json`),
     contact: await getJson(`users/${user.id}/contact.json`),
     termsAccepted: await getJson(`users/${user.id}/tos-consent.json`),
+    // When the account last proved it owns its email (#702).
+    emailProven: await getJson(`users/${user.id}/email-proven.json`),
     strava: strava ? { connected: true, athleteId: strava.athleteId } : { connected: false },
     stravaAutoImport: await getJson(`users/${user.id}/strava-prefs.json`),
     // The kayak game's paddler and boat.

@@ -12,6 +12,10 @@
     "reauth": {
       "type": "boolean",
       "const": true
+    },
+    "needsCode": {
+      "type": "boolean",
+      "const": true
     }
   },
   "required": [

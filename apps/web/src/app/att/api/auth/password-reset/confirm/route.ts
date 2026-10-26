@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { confirmForgotPassword, signIn } from '@/lib/cognito'
 import { signedInResponse } from '@/lib/auth'
+import { afterPasswordReset } from '@/lib/password-reset'
 
 // Confirms the reset using the emailed code + new password, then signs the
 // user in straight away so they don't have to re-enter credentials.
@@ -32,6 +33,9 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: 'Couldn’t reset your password. Please try again.' }, { status: 400 })
   }
+
+  // Before signing in: ending every session would end this new one too.
+  await afterPasswordReset(email)
 
   // Auto-sign-in so the user lands on /att without an extra step.
   const tokens = await signIn(email, password)

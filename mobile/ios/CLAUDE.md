@@ -34,9 +34,23 @@ isn't obvious from the code.
   differ (alerts, dialogs, tab bars). There's no iOS 17 simulator on this Mac.
 - The audit's clipped-text check flags a text field with text in it (our
   Plex font) as clipped when nothing is: zoomed screenshots show the whole
-  text, descenders too. A text field scrolls its text rather than cutting it,
-  so `AppTestCase.audit` ignores that one report on text fields only
-  (`isTextFieldClipWarning`); clipping anywhere else still fails.
+  text, descenders too. `AppTestCase.audit` ignores that one report on text
+  fields (`isTextFieldClipWarning`); check clipping in `LargeTextTests` with
+  the fields empty.
+- iOS shows "Use Strong Password?" on a new-password field and "Save
+  Password?" after it's sent, at different moments on each iOS (26.5 and 27
+  differ), covering buttons and swallowing keys. With `-SampleServer` the
+  password fields have no autofill type (`PaddlesnitchApp.password`), which
+  stops "Use Strong Password?"; iOS 26 still asks "Save Password?" for any
+  secure field, so tests that send a new password call
+  `declineSavingPassword()`. CI's "newest iOS" isn't this Mac's: check
+  `scripts/simulator.sh` on both, and install CI's runtime to reproduce
+  (`xcodebuild -downloadPlatform iOS -buildVersion 26.5`).
+- To queue UI runs, wait on the xcodebuild binary itself
+  (`pgrep -f "^/Applications/Xcode.app/.*/xcodebuild test"`): a pattern like
+  `pgrep -f "xcodebuild test"` also matches the waiting shells' own command
+  lines, and two of them wait on each other forever. A download
+  (`xcodebuild -downloadPlatform`) is an xcodebuild too.
 - The audit's clip report on no element also comes from a row half under the
   navigation or tab bar. `AppTestCase.audit` looks up to three times, moving
   the page a little before each, and fails only if every look reports it: a

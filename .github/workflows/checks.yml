@@ -119,6 +119,45 @@ jobs:
         working-directory: recorder-core
         run: make sanitize CC=${{ matrix.cc }}
 
+  # The core as each platform builds it. Fixtures can't run on a phone or the
+  # tracker here, so this checks what decides whether they would agree: that
+  # no build fuses multiply-adds (fixtures/fp_contract).
+  recorder-core-builds:
+    name: recorder core builds (CMake, Android, ESP32-S3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: CMake build and fixtures
+        run: |
+          cmake -S recorder-core -B /tmp/rc-cmake -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/rc-cmake
+          ctest --test-dir /tmp/rc-cmake --output-on-failure
+      - name: Android (NDK, arm64) has no fused multiply-adds
+        run: |
+          ndk="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          cmake -S recorder-core -B /tmp/rc-android -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29
+          cmake --build /tmp/rc-android --target recorder_core
+          fused=$("$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump" -d /tmp/rc-android/librecorder_core.a \
+            | grep -c -E '\b(fn?madd|fn?msub|fmla|fmls)\b' || true)
+          echo "fused multiply-adds: $fused"
+          test "$fused" -eq 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Cache the ESP32-S3 toolchain
+        uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-esp32s3-toolchain-8.4.0+2021r2-patch5
+      - name: ESP32-S3 has no fused multiply-adds
+        run: |
+          pip install --upgrade platformio
+          pio pkg install --global --tool "espressif/toolchain-xtensa-esp32s3@8.4.0+2021r2-patch5"
+          bash recorder-core/test/esp32_no_fma.sh
+
   games:
     name: games in browsers
     runs-on: ubuntu-latest

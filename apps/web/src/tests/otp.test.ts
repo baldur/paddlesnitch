@@ -27,6 +27,7 @@ import { POST as otpRequest } from '@/app/att/api/auth/otp-request/route'
 import { POST as otpVerify } from '@/app/att/api/auth/otp-verify/route'
 import * as cognito from '@/lib/cognito'
 import { recordAcceptance } from '@/lib/tos'
+import { getJson } from '@/lib/storage'
 
 let dataDir: string
 beforeEach(async () => {
@@ -127,6 +128,13 @@ describe('POST /att/api/auth/otp-verify', () => {
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toContain('tt_id=')
     expect(setCookie).toContain('tt_refresh=')
+  })
+
+  it('a code that reached the inbox marks the email proven (#702)', async () => {
+    vi.mocked(cognito.otpVerify).mockResolvedValue({ idToken: 'i', refreshToken: 'r' })
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-proven', email: 'p@example.com', displayName: 'P' })
+    expect((await otpVerify(jsonReq({ email: 'p@example.com', session: 's', code: '123456' }))).status).toBe(200)
+    expect(await getJson('users/sub-proven/email-proven.json')).toMatchObject({ how: 'email_code' })
   })
 
   it('answers an app with the tokens instead of cookies', async () => {
