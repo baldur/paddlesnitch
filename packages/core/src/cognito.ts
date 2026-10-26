@@ -12,6 +12,11 @@ import {
   RevokeTokenCommand,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
+  ConfirmSignUpCommand,
+  ResendConfirmationCodeCommand,
+  AdminGetUserCommand,
+  AdminUserGlobalSignOutCommand,
+  UserNotConfirmedException,
   CodeMismatchException,
   ExpiredCodeException,
   UsernameExistsException,
@@ -82,6 +87,7 @@ export type CognitoError =
   | 'user_not_found'
   | 'invalid_code'
   | 'expired_code'
+  | 'not_confirmed'
   | 'unknown'
 
 function classify(err: unknown): CognitoError {
@@ -91,11 +97,17 @@ function classify(err: unknown): CognitoError {
   if (err instanceof InvalidPasswordException) return 'invalid_password'
   if (err instanceof CodeMismatchException) return 'invalid_code'
   if (err instanceof ExpiredCodeException) return 'expired_code'
+  // Cognito says this only once the password is right (#702).
+  if (err instanceof UserNotConfirmedException) return 'not_confirmed'
   if (err instanceof NotAuthorizedException) return 'invalid_credentials'
   if (err instanceof UserNotFoundException) return 'invalid_credentials'
   return 'unknown'
 }
 
+// Creates a CONFIRMED account with email_verified=true, sending nothing. Only
+// for paths that prove the address some other way (the email-code sign-in,
+// seed data, tests). A person creating an account with a password goes through
+// startSignUp + confirmSignUp, which prove the address with a code (#702).
 export async function signUp(
   email: string,
   displayName: string,
@@ -133,6 +145,90 @@ export async function signUp(
     return { sub: res.UserSub! }
   } catch (err) {
     return { error: classify(err) }
+  }
+}
+
+// Email + password sign-up (#702): Cognito emails a code (autoVerify on the
+// pool, Cognito's own sender) and the account can't sign in until
+// confirmSignUp. An unconfirmed account already on this email proved nothing,
+// so starting again replaces it (and sends a new code) instead of refusing.
+export async function startSignUp(
+  email: string,
+  displayName: string,
+  password: string,
+): Promise<{ sub: string } | { error: CognitoError }> {
+  const client = makeClient()
+  const attempt = () => client.send(new SignUpCommand({
+    ClientId: CLIENT_ID,
+    Username: email,
+    Password: password,
+    UserAttributes: [
+      { Name: 'email', Value: email },
+      { Name: 'name', Value: displayName },
+    ],
+  }))
+  try {
+    return { sub: (await attempt()).UserSub! }
+  } catch (err) {
+    if (!(err instanceof UsernameExistsException)) return { error: classify(err) }
+  }
+  try {
+    const existing = await client.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: email }))
+    if (existing.UserStatus !== 'UNCONFIRMED') return { error: 'email_exists' }
+    await client.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: email }))
+    return { sub: (await attempt()).UserSub! }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// The code from the sign-up email. Marks the email verified explicitly as well
+// (real Cognito does it itself; cognito-local doesn't).
+export async function confirmSignUp(email: string, code: string): Promise<{ ok: true } | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    await client.send(new ConfirmSignUpCommand({ ClientId: CLIENT_ID, Username: email, ConfirmationCode: code }))
+    await client.send(new AdminUpdateUserAttributesCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
+      ],
+    }))
+    return { ok: true }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// cognito-local answers operations it doesn't have with this; real Cognito
+// never does. Local dev carries on as if the call worked.
+const localOnlyUnsupported = (err: unknown) => (err as { name?: string })?.name === 'Unsupported'
+
+// A new sign-up code, for someone whose password was right but who never
+// entered the first one. cognito-local doesn't have it: there the first code
+// still stands (tests stub it).
+export async function resendSignUpCode(email: string): Promise<{ ok: true } | { error: CognitoError }> {
+  try {
+    await makeClient().send(new ResendConfirmationCodeCommand({ ClientId: CLIENT_ID, Username: email }))
+    return { ok: true }
+  } catch (err) {
+    if (localOnlyUnsupported(err)) return { ok: true }
+    return { error: classify(err) }
+  }
+}
+
+// Ends every session the account has: all its refresh tokens stop working
+// (#702: a password reset must end a squatter's sessions). ID tokens already
+// issued stay valid until they expire (at most 24 h); hasRecentSignIn still
+// refuses them for deleting or connecting Strava. Throws on failure: the
+// caller decides. (Not in cognito-local, where it does nothing; tests stub it.)
+export async function signOutEverywhere(email: string): Promise<void> {
+  try {
+    await makeClient().send(new AdminUserGlobalSignOutCommand({ UserPoolId: USER_POOL_ID, Username: email }))
+  } catch (err) {
+    if (!localOnlyUnsupported(err)) throw err
   }
 }
 
@@ -346,7 +442,10 @@ export async function findUserByEmail(email: string): Promise<UserSummary | null
     Filter: `email = "${email.replace(/"/g, '\\"')}"`,
     Limit: 10,
   }))
-  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  // Nor do accounts whose email isn't verified: an address someone typed but
+  // never proved must not receive another person's invitation (#702).
+  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED'
+    && u.Attributes?.find(a => a.Name === 'email_verified')?.Value === 'true')
   if (users.length > 1) {
     console.warn('[cognito] findUserByEmail: more than one account has this email; refusing to pick one')
     return null

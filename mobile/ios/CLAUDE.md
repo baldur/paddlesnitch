@@ -36,6 +36,20 @@ isn't obvious from the code.
   Plex font) as clipped when nothing is: zoomed screenshots show the whole
   text, descenders too. Audit a filled form without `.textClipped`, and check
   clipping in `LargeTextTests` with the fields empty.
+- iOS shows "Use Strong Password?" on a new-password field and "Save
+  Password?" after it's sent, at different moments on each iOS (26.5 and 27
+  differ), covering buttons and swallowing keys. With `-SampleServer` the
+  password fields have no autofill type (`PaddlesnitchApp.password`), which
+  stops "Use Strong Password?"; iOS 26 still asks "Save Password?" for any
+  secure field, so tests that send a new password call
+  `declineSavingPassword()`. CI's "newest iOS" isn't this Mac's: check
+  `scripts/simulator.sh` on both, and install CI's runtime to reproduce
+  (`xcodebuild -downloadPlatform iOS -buildVersion 26.5`).
+- To queue UI runs, wait on the xcodebuild binary itself
+  (`pgrep -f "^/Applications/Xcode.app/.*/xcodebuild test"`): a pattern like
+  `pgrep -f "xcodebuild test"` also matches the waiting shells' own command
+  lines, and two of them wait on each other forever. A download
+  (`xcodebuild -downloadPlatform`) is an xcodebuild too.
 - Push screens by value, with the destination declared on a screen that
   stays in the stack (`navigationDestination(for:)`). On iOS 17 a
   `NavigationLink { destination }` two screens under a typed path hung
@@ -43,6 +57,6 @@ isn't obvious from the code.
   You's path is a `NavigationPath`, so a pushed screen can add its own routes.
 - iOS 17's audit cuts long text in List rows and section footers where newer
   iOS doesn't: give every sentence `.fixedSize(horizontal: false, vertical: true)`.
-- Test scrolls start in the side margin (`scrollPage(up:)`), outside every
+- Test scrolls start in the side margin (`swipe(up:)`), outside every
   row: `app.swipeUp()` starts mid-screen, and at the largest text size it
   landed on a tracker card and opened it.
