@@ -48,8 +48,11 @@ class AppTestCase: XCTestCase {
     func type(_ text: String, into field: XCUIElement) {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         // A field that took the keyboard itself (the code step's) needs no
-        // tap, and one mid-animation can't take it ("not hittable").
-        if !field.waitForKeyboardFocus(timeout: 2) {
+        // tap, and one mid-animation can't take it ("not hittable"). Only
+        // wait for that when a keyboard is up: otherwise it's 2 s for nothing
+        // on every field, and the CI run hit its timeout.
+        let focusedAlready = app.keyboards.firstMatch.exists && field.waitForKeyboardFocus(timeout: 2)
+        if !focusedAlready {
             for _ in 0..<5 {
                 scrollToElement(field).tap()
                 if field.waitForKeyboardFocus(timeout: 2) { break }
@@ -63,12 +66,15 @@ class AppTestCase: XCTestCase {
     /// Not now. iOS 27 doesn't ask there.
     func declineSavingPassword() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        for owner in [app, springboard] {
-            let notNow = owner.buttons["Not Now"].firstMatch
-            if notNow.waitForExistence(timeout: 2) {
-                notNow.tap()
+        // One short look at both, not a wait on each: on iOS 27 it never
+        // comes, and every second here is paid in every such test.
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            for owner in [app, springboard] where owner.buttons["Not Now"].firstMatch.exists {
+                owner.buttons["Not Now"].firstMatch.tap()
                 return
             }
+            usleep(200_000)
         }
     }
 
