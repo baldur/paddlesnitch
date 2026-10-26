@@ -10,6 +10,7 @@ public struct Recording: Codable, Hashable, Sendable {
     public var endedAt: Date?
     public var filename: String
     public var motion: Motion?
+    public var paddleId: String?
     public var points: Int
     public var sessionId: String
     public var startedAt: Date?
@@ -21,6 +22,7 @@ public struct Recording: Codable, Hashable, Sendable {
         endedAt: Date? = nil,
         filename: String,
         motion: Motion? = nil,
+        paddleId: String? = nil,
         points: Int,
         sessionId: String,
         startedAt: Date? = nil,
@@ -31,6 +33,7 @@ public struct Recording: Codable, Hashable, Sendable {
         self.endedAt = endedAt
         self.filename = filename
         self.motion = motion
+        self.paddleId = paddleId
         self.points = points
         self.sessionId = sessionId
         self.startedAt = startedAt

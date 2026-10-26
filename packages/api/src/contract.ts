@@ -268,6 +268,8 @@ export const Recording = named('Recording', z.object({
   distanceMetres: z.number().optional(),
   points: z.int(),
   motion: z.object({ uploadedAt: timestamp(), bytes: z.int(), rows: z.int() }).optional(),
+  // The paddle it became, when it did (too short or no track: none).
+  paddleId: z.string().optional(),
 }))
 export const RecordingList = named('RecordingList', z.object({ sessions: z.array(Recording) }))
 
