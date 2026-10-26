@@ -136,7 +136,8 @@ struct AccountView: View {
                 },
                 // Made through Strava with Strava off: no way back in to
                 // sign in again with, so it asks for help instead.
-                cantSignInAgain: profile.needsContactEmail && !account.options.strava,
+                // Only when the server said so: unknown isn't off.
+                cantSignInAgain: profile.needsContactEmail && account.stravaSaidOff,
                 signInAgain: {
                     confirmingDelete = false
                     signInAgain(then: .delete)

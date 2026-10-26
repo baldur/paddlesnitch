@@ -30,7 +30,7 @@ struct DeleteAccountView: View {
         "Strava sign-in is off for now, so you can’t sign in again here. Report an issue and we’ll delete your "
         + "account for you."
     static let needsSignIn =
-        "For your safety, deleting your account needs a recent sign-in. Sign in again and you'll come straight back here."
+        "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
 
     var body: some View {
         NavigationStack {

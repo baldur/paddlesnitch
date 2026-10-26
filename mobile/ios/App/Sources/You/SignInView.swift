@@ -56,11 +56,14 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .task { await account.loadOptions() }
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
-            // A Strava account signing in again: straight to Strava.
+        }
+        .task {
+            await account.loadOptions()
+            // A Strava account signing in again: straight to Strava, once
+            // the server has said Strava is on.
             if account.signInAgainWithStrava && account.options.strava && !startedStrava && !form.busy {
                 startedStrava = true
                 signInWithStrava()

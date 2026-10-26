@@ -97,6 +97,15 @@ The protocol is fixed by the tracker sync contract and its fixtures. On iPhone:
   (`mobile/contract/README.md`, "Strava"; `Account/StravaSignIn.swift`). The
   session catches the callback itself, so there's no URL type to register and
   no universal link, and it works with a free Apple ID.
+- Google sign-in works the same way (`Account/GoogleSignIn.swift`): its page
+  first asks for one tap on "Sign in with Google", and it comes back on
+  `com.paddlesnitch.app:/signin/google`. The sign-in screen, Account and the
+  app's start ask `GET /att/api/auth/options` which ways in are on; until it
+  answers (or if it fails) only email is offered. With Strava off: no Strava
+  button, connect, auto-import or Strava wording; a connected account sees
+  Strava "Paused"; a Strava-made account is offered Report an issue
+  (`/signin?report=1`) instead of signing in again before deleting, and
+  can't disconnect its only way in.
 - The same file also declares `webcredentials`, so iOS offers saved
   paddlesnitch.com passwords and suggests strong ones at sign-up.
 - Website link-outs open in `SFSafariViewController`, signed in through the
