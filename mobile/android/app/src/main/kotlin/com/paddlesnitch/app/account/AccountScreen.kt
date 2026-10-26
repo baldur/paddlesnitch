@@ -93,6 +93,8 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.switchColors
+import com.paddlesnitch.app.ui.fieldColors
 import com.paddlesnitch.app.ui.outlinedColors
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -249,7 +251,7 @@ private fun Details(api: AccountApi, user: AuthUser, act: Act) {
         act(fallback, { message = it; failed = true }) { work(); message = ok; failed = false }.invokeOnCompletion { working = false }
     }
     if (!load.done) { LoadState(load); return }
-    OutlinedTextField(email, { email = it }, label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+    OutlinedTextField(email, { email = it }, colors = fieldColors(), label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("you@example.com") },
         supportingText = { Text("You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
@@ -290,11 +292,11 @@ private fun PublicProfile(api: AccountApi, user: AuthUser, act: Act, onPreview: 
     }.semantics(mergeDescendants = true) { toggleableState = ToggleableState(public); stateDescription = if (public) "Public" else "Private" },
         verticalAlignment = Alignment.CenterVertically) {
         Text("Show my profile to everyone", modifier = Modifier.weight(1f))
-        Switch(checked = public, onCheckedChange = null, enabled = !saving)
+        Switch(checked = public, onCheckedChange = null, enabled = !saving, colors = switchColors())
     }
     Text("Show your race results and personal bests on a public page. Private and group-only results stay hidden. Off until you turn it on.", color = PsColor.muted)
     Link(if (public) "View my profile ↗" else "Preview my profile ↗") { onPreview("/profile/${handle ?: user.id}") }
-    OutlinedTextField(input, { input = it }, label = { Text("Profile handle") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+    OutlinedTextField(input, { input = it }, colors = fieldColors(), label = { Text("Profile handle") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("your-handle") },
         supportingText = { Text("A short link like /profile/${handle ?: "your-handle"}. Lowercase letters, numbers and hyphens, 3–30 characters.") },
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii))
@@ -468,7 +470,7 @@ private fun StravaSection(
                         Text("Auto-import new paddles")
                         Text("New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.", color = PsColor.muted)
                     }
-                    Switch(checked = on, onCheckedChange = null, enabled = !working && !switching)
+                    Switch(checked = on, onCheckedChange = null, enabled = !working && !switching, colors = switchColors())
                 }
                 StravaImports(api, onSignedOut)
                 // Attribution: this row shows the athlete's Strava profile name.
@@ -511,7 +513,7 @@ private fun StravaImports(api: AccountApi, onSignedOut: () -> Unit) {
         Text("Older paddles", fontWeight = FontWeight.Medium)
         Text("Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.", color = PsColor.muted)
         ExposedDropdownMenuBox(expanded = picking, onExpandedChange = { if (!busy) picking = it }) {
-            OutlinedTextField(spans.first { it.first == model.span }.second, {}, readOnly = true, enabled = !busy, label = { Text("How far back") },
+            OutlinedTextField(spans.first { it.first == model.span }.second, {}, readOnly = true, enabled = !busy, colors = fieldColors(), label = { Text("How far back") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(picking) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).testTag("import-span"))
             ExposedDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
@@ -592,7 +594,7 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
             Deleting.Confirming -> {
                 // Inline, as on the website: the words to type sit above the field and the button they unlock.
                 Text("Type DELETE to confirm. There is no undo.")
-                OutlinedTextField(typed, { typed = it }, label = { Text("Confirm") }, singleLine = true,
+                OutlinedTextField(typed, { typed = it }, colors = fieldColors(), label = { Text("Confirm") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("delete-confirm"),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false))
                 LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }

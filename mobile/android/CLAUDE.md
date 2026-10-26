@@ -26,7 +26,10 @@ time and isn't obvious from the code.
   blue (`PsColor.primary` #0369a1, about 3:1 on the dark ground). Every
   `TextButton` and `OutlinedButton` passes `colors = textColors()` or
   `outlinedColors()` (`ui/Buttons.kt`), or its own; `ButtonColoursTest` fails on
-  one that doesn't. Tabs pass `selectedContentColor = PsColor.primaryText`.
+  one that doesn't. Tabs pass `selectedContentColor = PsColor.primaryText`. Text
+  fields, checkboxes and switches do the same with `fieldColors()`, `checkboxColors()`
+  and `switchColors()` (`ui/Fields.kt`). The theme's `primary` stays #0369a1 for
+  filled buttons (lead, 2026-10-26).
 - TalkBack reads a change inside a live region it already knows, not a node
   that has just appeared. Keep the live-region container in the layout even
   when it's empty (`AddPaddleCard(card = null)`).

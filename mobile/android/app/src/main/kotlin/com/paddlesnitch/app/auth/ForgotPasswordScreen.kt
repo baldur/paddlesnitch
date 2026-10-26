@@ -48,6 +48,7 @@ import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.fieldColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -115,16 +116,16 @@ fun ForgotPasswordScreen(
             TextButton(onClick = onBack, colors = ButtonDefaults.textButtonColors(contentColor = PsColor.primaryText)) { Text("Cancel") }
         }
         Text(if (codeSent) "Enter the 6-digit code from your email and choose a new password." else "Enter your email and we’ll send you a 6-digit code.", color = PsColor.muted)
-        OutlinedTextField(address, { address = it }, label = { Text("Email") }, singleLine = true,
+        OutlinedTextField(address, { address = it }, colors = fieldColors(), label = { Text("Email") }, singleLine = true,
             modifier = Modifier.fillMaxWidth().focusRequester(first).semantics { contentType = ContentType.EmailAddress },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = if (codeSent) ImeAction.Next else ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { sendCode() }))
         if (codeSent) {
-            OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, label = { Text("Code from the email") }, singleLine = true,
+            OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, colors = fieldColors(), label = { Text("Code from the email") }, singleLine = true,
                 placeholder = { Text("000000") }, textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier.fillMaxWidth().focusRequester(codeFocus).testTag("reset-code").semantics { contentType = ContentType.SmsOtpCode },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next))
-            OutlinedTextField(password, { password = it }, label = { Text("New password") }, singleLine = true,
+            OutlinedTextField(password, { password = it }, colors = fieldColors(), label = { Text("New password") }, singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 supportingText = { Text("At least 8 characters, with an uppercase letter, a lowercase letter and a number.") },
                 modifier = Modifier.fillMaxWidth().testTag("reset-password").semantics { contentType = ContentType.NewPassword },
