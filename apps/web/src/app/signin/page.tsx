@@ -6,10 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
 import GoogleButton from '@/components/GoogleButton'
+import { googleSignInOn, stravaOn } from '@/lib/sign-in-options'
+import { ReportIssueButton } from '@paddlesnitch/ui/FeedbackWidget'
 
-// Sign in with Google is switched on per build (NEXT_PUBLIC_GOOGLE_SIGNIN=1, the
-// GOOGLE_SIGNIN repository variable in deploy.yml) once Google and Cognito are set up.
-const GOOGLE_SIGNIN = process.env.NEXT_PUBLIC_GOOGLE_SIGNIN === '1'
+// Google and Strava are switched on per build (lib/sign-in-options.ts).
+const GOOGLE_SIGNIN = googleSignInOn()
+const STRAVA = stravaOn()
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { termsAcceptPath } from '@/lib/terms-path'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
@@ -54,7 +56,7 @@ function AuthForm() {
   // legacy magic-link). Map known keys to user-friendly messages once.
   const initialError = (() => {
     const e = searchParams.get('error')
-    if (e === 'magic_disabled') return 'That sign-in link no longer works. Use your password, or sign in with Strava.'
+    if (e === 'magic_disabled') return STRAVA ? 'That sign-in link no longer works. Use your password, or sign in with Strava.' : 'That sign-in link no longer works. Use your password instead.'
     if (e === 'strava_denied') return 'You cancelled the Strava sign-in.'
     if (e === 'strava_state_mismatch') return 'Strava sign-in didn’t finish. Please try again.'
     if (e === 'strava_exchange_failed') return 'Strava sign-in didn’t finish. Please try again.'
@@ -66,7 +68,7 @@ function AuthForm() {
     if (e === 'strava_signin_failed') return 'Strava sign-in didn’t finish. Please try again.'
     if (e === 'google_denied') return 'You cancelled the Google sign-in.'
     if (e === 'google_failed') return 'Couldn’t sign in with Google. Please try again.'
-    if (e === 'google_account_exists') return 'You already have an account with this email. Sign in with your email or Strava instead.'
+    if (e === 'google_account_exists') return STRAVA ? 'You already have an account with this email. Sign in with your email or Strava instead.' : 'You already have an account with this email. Sign in with your email instead.'
     if (e === 'google_no_email') return 'Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead.'
     if (e === 'google_not_configured') return 'Google sign-in isn’t available right now.'
     if (e === 'app_link_expired') return 'That link from the app has expired. Sign in here, or open it from the app again.'
@@ -530,15 +532,26 @@ function AuthForm() {
         )}
       </div>
 
-      {/* Strava is the secondary way in, below the email form. */}
-      <div className="flex flex-col items-center gap-3 border-t border-border pt-6">
-        <p className="text-sm text-muted">{GOOGLE_SIGNIN ? 'Or use your Google or Strava account' : 'Or use your Strava account'}</p>
-        {GOOGLE_SIGNIN && <GoogleButton href={googleHref} />}
-        <StravaButton href={stravaHref} />
-        <p className="text-sm text-muted text-center">
-          Already have an account? Sign in first, then connect Strava in Account.
-        </p>
-      </div>
+      {/* Google and Strava are the secondary ways in, below the email form. */}
+      {(GOOGLE_SIGNIN || STRAVA) && (
+        <div className="flex flex-col items-center gap-3 border-t border-border pt-6">
+          <p className="text-sm text-muted">{otherWays(GOOGLE_SIGNIN, STRAVA)}</p>
+          {GOOGLE_SIGNIN && <GoogleButton href={googleHref} />}
+          {STRAVA && <StravaButton href={stravaHref} />}
+          {STRAVA && (
+            <p className="text-sm text-muted text-center">
+              Already have an account? Sign in first, then connect Strava in Account.
+            </p>
+          )}
+        </div>
+      )}
+      {/* Accounts made through Strava have no email or password to use instead. */}
+      {!STRAVA && (
+        <div className="flex flex-col items-center gap-3 border-t border-border pt-6 mt-6">
+          <p className="text-sm text-muted text-center">Signed up with Strava? Strava sign-in is off for now. Report an issue and we’ll help you sign in.</p>
+          <ReportIssueButton className={buttonClass('secondary')} />
+        </div>
+      )}
     </Page>
   )
 }
@@ -549,4 +562,9 @@ export default function AuthPage() {
       <AuthForm />
     </Suspense>
   )
+}
+
+function otherWays(google: boolean, strava: boolean): string {
+  if (google && strava) return 'Or use your Google or Strava account'
+  return google ? 'Or use your Google account' : 'Or use your Strava account'
 }

@@ -15,6 +15,7 @@ import LoadingState from '@/components/LoadingState'
 import RouteThumb from '@paddlesnitch/ui/RouteThumb'
 import NoGpsTag from './NoGpsTag'
 import { StravaFirstImport } from '@/components/strava/StravaHistoryImport'
+import { stravaOn } from '@/lib/sign-in-options'
 
 // PADDLES: every paddle you've saved, with your totals on top. This is also the
 // signed-in home (/ redirects here). It replaces two near-copies: a dashboard at
@@ -98,7 +99,7 @@ export default function PaddlesList() {
       {header}
       <Page width="narrow">
         <PageHeader title="Paddles" />
-        <EmptyState title="Sign in to see your paddles" body="Add a paddle from a GPS file, Strava or a tracker, and keep them all here."
+        <EmptyState title="Sign in to see your paddles" body={stravaOn() ? 'Add a paddle from a GPS file, Strava or a tracker, and keep them all here.' : 'Add a paddle from a GPS file or a tracker, and keep them all here.'}
           action={<a href="/signin?next=/paddles" className={buttonClass('primary')}>Sign in</a>} />
       </Page>
     </main>
@@ -118,7 +119,7 @@ export default function PaddlesList() {
           actions={!empty && <Link href="/paddles/new" className={buttonClass('primary')}>Add paddle</Link>} />
 
         {/* Connecting Strava brings in about the last month by itself (#415). */}
-        <StravaFirstImport />
+        {stravaOn() && <StravaFirstImport />}
 
         {sessions && sessions.length > 0 && (() => {
           const { weeks, streakWeeks: streak, thisMonthKm, lastMonthKm } = paddleLogbook(sessions, new Date())
@@ -147,7 +148,7 @@ export default function PaddlesList() {
 
         {sessions === undefined && <LoadingState label="Loading" className="py-10" />}
         {empty && (
-          <EmptyState title="No paddles yet" body="Add one from a GPS file, Strava or a time trial. A tracker adds its own."
+          <EmptyState title="No paddles yet" body={stravaOn() ? 'Add one from a GPS file, Strava or a time trial. A tracker adds its own.' : 'Add one from a GPS file or a time trial. A tracker adds its own.'}
             action={<Link href="/paddles/new" className={buttonClass('primary')}>Add paddle</Link>} />
         )}
 

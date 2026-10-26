@@ -34,7 +34,7 @@ const post = (body: unknown) =>
 const runAfters = async () => { for (const k of await listKeys('jobs/')) await runJob(k) }
 
 let dataDir: string
-afterEach(async () => { await cleanDataDir(dataDir) })
+afterEach(async () => { await cleanDataDir(dataDir); vi.unstubAllEnvs() })
 beforeEach(async () => {
   dataDir = await makeDataDir()
   vi.clearAllMocks()
@@ -81,6 +81,18 @@ describe('POST events', () => {
     await post({ object_type: 'activity', aspect_type: 'create', object_id: 555, owner_id: 99 })
     await runAfters()
     expect(importStravaActivity).not.toHaveBeenCalled()
+  })
+
+  it('imports nothing while Strava is switched off (STRAVA_OFF), but still honours a deauthorization', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STRAVA_OFF', '1')
+    storage.getUserIdByAthleteId.mockResolvedValue('user-1')
+    await post({ object_type: 'activity', aspect_type: 'create', object_id: 555, owner_id: 99 })
+    await runAfters()
+    expect(importStravaActivity).not.toHaveBeenCalled()
+    storage.stravaAccessRevoked.mockResolvedValue(true)
+    await post({ object_type: 'athlete', aspect_type: 'update', owner_id: 99, updates: { authorized: 'false' } })
+    await runAfters()
+    expect(storage.deleteStravaTokens).toHaveBeenCalledWith('user-1')
   })
 
   it('ignores activity updates/deletes', async () => {

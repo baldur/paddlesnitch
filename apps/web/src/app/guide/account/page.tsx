@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import GuidePage, { Note, Steps } from '@/components/guide/GuidePage'
+import { googleSignInOn, stravaOn } from '@/lib/sign-in-options'
 
 export const metadata: Metadata = { title: 'Create your account' }
 
@@ -20,9 +21,12 @@ export default function AccountStep() {
         <li>Tick the box to agree to the terms, then choose <strong>CREATE ACCOUNT</strong>.</li>
       </Steps>
 
-      <p>
-        Rather not have a password? You can sign in with Strava instead.
-      </p>
+      {(googleSignInOn() || stravaOn()) && (
+        <p>
+          Rather not have a password? You can sign in with{' '}
+          {googleSignInOn() && stravaOn() ? 'Google or Strava' : googleSignInOn() ? 'Google' : 'Strava'} instead.
+        </p>
+      )}
 
       <Note>
         Use the email you applied to the beta with, so we know which account is yours.
