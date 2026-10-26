@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.fieldColors
 import com.paddlesnitch.app.ui.outlinedColors
 import com.paddlesnitch.app.ui.textColors
 import com.paddlesnitch.app.ui.PsRadius
@@ -287,9 +288,9 @@ fun TrackerSetupScreen(api: Api, onClose: () -> Unit, onSignedOut: () -> Unit, m
             Section {
                 Text("WiFi (optional)", fontWeight = FontWeight.SemiBold)
                 Text("With WiFi the tracker uploads by itself at home. It tries the network first and keeps it only if it can join. 2.4 GHz networks only.", color = PsColor.muted)
-                OutlinedTextField(ssid, { ssid = it }, label = { Text("Network name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(ssid, { ssid = it }, colors = fieldColors(), label = { Text("Network name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
-                OutlinedTextField(pass, { pass = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(pass, { pass = it }, colors = fieldColors(), label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done))
                 BigButton(if (wifiBusy) "Trying the network…" else "Send WiFi to the tracker", enabled = !wifiBusy && ssid.isNotBlank()) { sendWifi() }
