@@ -22,16 +22,18 @@ final class EmailCodeStepTests: AppTestCase {
         XCTAssertTrue(text(containing: "new@example.com").exists)
         XCTAssertFalse(app.buttons["Create account"].exists, "no tabs during the code")
         XCTAssertEqual(app.buttons["sign-in-submit"].label, "Confirm email")
+        // The code first, while the field has the keyboard it took; then the
+        // keyboard away to see the buttons under it.
+        typeWhenFocused("123456", into: app.textFields["code-field"])
         dismissKeyboard()
         XCTAssertFalse(scrollToElement(app.buttons["send-new-code"]).isEnabled, "30 seconds before another")
-        type("123456", into: app.textFields["code-field"])
         scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }
 
     func testAWrongCodeSaysSo() {
         startAccount()
-        type("000000", into: app.textFields["code-field"])
+        typeWhenFocused("000000", into: app.textFields["code-field"])
         scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(text(containing: "That code is not valid.").waitForExistence(timeout: 10))
     }
@@ -52,7 +54,7 @@ final class EmailCodeStepTests: AppTestCase {
         declineSavingPassword()
         XCTAssertTrue(text(containing: "Confirm your email first.").exists)
         XCTAssertFalse(element("sign-in-error").exists, "a status, not an error")
-        type("123456", into: app.textFields["code-field"])
+        typeWhenFocused("123456", into: app.textFields["code-field"])
         scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }

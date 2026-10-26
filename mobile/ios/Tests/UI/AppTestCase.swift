@@ -78,6 +78,16 @@ class AppTestCase: XCTestCase {
         }
     }
 
+    /// Types into a field that takes the keyboard by itself (the code step's):
+    /// waits for that, however late it comes (after "Save Password?" closes,
+    /// iOS gives the keyboard back), and never taps it. Tapping a field while
+    /// it takes the keyboard fails as "not hittable" on a slow simulator.
+    func typeWhenFocused(_ text: String, into field: XCUIElement) {
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        if !field.waitForKeyboardFocus(timeout: 5) { scrollToElement(field).tap() }
+        field.typeText(text)
+    }
+
     /// Puts the keyboard away: the keyboard's Done (the code step's number
     /// pad has no return key), else a drag down the page.
     func dismissKeyboard() {
