@@ -146,17 +146,25 @@ Google sign-in.
 **When `strava` is false** (Strava switched off; ask `options` on these
 screens too, not only on sign-in), do as the website does:
 - Sign in: no Strava button. Under the form: "Signed up with Strava? Strava
-  sign-in is off for now. Report an issue and we’ll help you sign in." Its
-  Report an issue button opens `/signin?report=1` in the in-app browser: the
-  website's issue form opens by itself on any page with `?report=1`.
+  sign-in is off for now. Email us and we’ll help you sign in." and an
+  "Email us" button: `mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava`.
+  Not Report an issue: reports are public, and people would put their name
+  and email in them.
 - Account: no Strava section unless `strava/status` says connected. Then a
   neutral "Paused" badge, "Strava isn’t available right now. Paddles you
   already brought in stay here.", and Disconnect, except on a `placeholderEmail`
   account (its Strava link is its only way back in). No auto-import, no older
   paddles, no Connect.
 - Add paddle: no Strava choice.
-- Sign in again (before deleting): a `placeholderEmail` account can't, so offer
-  Report an issue instead (`/signin?report=1`, as above).
+- Sign in again (before deleting): a `placeholderEmail` account can't. Say
+  "Strava sign-in is off for now, so you can’t sign in again here. Report an
+  issue asking us to delete your account. We’ll know it’s yours, so leave out
+  your name and email: reports are public." and open `/account?report=1`
+  through `web-code`, so the report is filed signed in, as that account (the
+  website's issue form opens by itself on any page with `?report=1`).
+- If `options` fails, show the email form and "Couldn’t load the other ways to
+  sign in." with Try again, so a Strava-made account can still reach the line
+  above.
 
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that

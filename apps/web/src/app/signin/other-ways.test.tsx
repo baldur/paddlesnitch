@@ -48,6 +48,8 @@ describe('other ways in', () => {
     expect(c.querySelector('a[href^="/att/api/auth/strava/init"]')).toBeNull()
     // People who signed up with Strava have no other way in: say what to do.
     expect(c.textContent).toContain('Signed up with Strava? Strava sign-in is off for now.')
+    // By email, not a public issue report.
+    expect(c.querySelector('a[href^="mailto:privacy@paddlesnitch.com"]')).not.toBeNull()
   })
 
   it('Strava only, when Google is off', async () => {

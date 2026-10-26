@@ -7,7 +7,6 @@ import { safeNext } from '@paddlesnitch/core/url'
 import StravaButton from '@/components/strava/StravaButton'
 import GoogleButton from '@/components/GoogleButton'
 import { googleSignInOn, stravaOn } from '@/lib/sign-in-options'
-import { ReportIssueButton } from '@paddlesnitch/ui/FeedbackWidget'
 
 // Google and Strava are switched on per build (lib/sign-in-options.ts).
 const GOOGLE_SIGNIN = googleSignInOn()
@@ -548,8 +547,9 @@ function AuthForm() {
       {/* Accounts made through Strava have no email or password to use instead. */}
       {!STRAVA && (
         <div className="flex flex-col items-center gap-3 border-t border-border pt-6 mt-6">
-          <p className="text-sm text-muted text-center">Signed up with Strava? Strava sign-in is off for now. Report an issue and we’ll help you sign in.</p>
-          <ReportIssueButton className={buttonClass('secondary')} />
+          {/* Email, not Report an issue: reports are public, and people would write their name and email in them. */}
+          <p className="text-sm text-muted text-center">Signed up with Strava? Strava sign-in is off for now. Email us and we’ll help you sign in.</p>
+          <a href="mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava" className={buttonClass('secondary')}>Email us</a>
         </div>
       )}
     </Page>
