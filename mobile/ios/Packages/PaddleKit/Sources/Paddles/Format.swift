@@ -90,6 +90,43 @@ public enum Format {
         return "\(weekday), \(parts.day ?? 0) \(months[(parts.month ?? 1) - 1]) \(parts.year ?? 0)"
     }
 
+    /// The web's `fmtDay`: "13 Sep 2026", the UTC day; "never" for none.
+    public static func day(_ date: Date?) -> String {
+        guard let date else { return "never" }
+        let parts = utc.dateComponents([.day, .month, .year], from: date)
+        return "\(parts.day ?? 0) \(months[(parts.month ?? 1) - 1]) \(parts.year ?? 0)"
+    }
+
+    /// The web's `fmtDist`: "999 m" under a kilometre (rounded half up, so
+    /// 999.5 is "1000 m"), then "84.21 km" as JavaScript's toFixed(2) has it;
+    /// "—" for none.
+    public static func distance(metres: Double?) -> String {
+        guard let metres else { return dash }
+        if metres < 1000 { return "\(Int((metres + 0.5).rounded(.down))) m" }
+        return "\(fixed(metres / 1000, digits: 2)) km"
+    }
+
+    /// The web's `fmtAgo`: "89s ago" under 90 seconds, then minutes under
+    /// 90, hours under 48, then days; the future is "0s ago"; "never" for
+    /// none.
+    public static func ago(_ date: Date?, now: Date) -> String {
+        guard let date else { return "never" }
+        let seconds = max(0, Int((now.timeIntervalSince(date)).rounded(.down)))
+        if seconds < 90 { return "\(seconds)s ago" }
+        if seconds / 60 < 90 { return "\(seconds / 60)m ago" }
+        if seconds / 3600 < 48 { return "\(seconds / 3600)h ago" }
+        return "\(seconds / 86_400)d ago"
+    }
+
+    /// The web's `fmtDayTime`: "13 Sep 2026, 08:05" in the viewer's zone.
+    public static func dayTime(_ date: Date, zone: TimeZone) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let parts = calendar.dateComponents([.day, .month, .year, .hour, .minute], from: date)
+        let time = String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+        return "\(parts.day ?? 0) \(months[(parts.month ?? 1) - 1]) \(parts.year ?? 0), \(time)"
+    }
+
     /// "Sep 2026", in UTC.
     public static func month(_ date: Date) -> String {
         let parts = utc.dateComponents([.month, .year], from: date)
