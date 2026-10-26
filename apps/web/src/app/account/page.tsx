@@ -280,6 +280,11 @@ function AccountPageInner() {
     if (!user) return
     const setErr = then === 'delete' ? setDeleteError : setStravaSignInError
     setErr('')
+    // Made through Strava, and Strava is off: signing out would leave no way back in.
+    if (!STRAVA && isSyntheticStravaEmail(user.email)) {
+      setErr('Strava sign-in is off for now, so you can’t sign in again here. Report an issue and we’ll delete your account for you.')
+      return
+    }
     setWorking(then === 'delete' ? 'delete' : 'strava')
     const back = then === 'delete' ? '/account?resume=delete#delete' : '/account#strava'
     const out = await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => null)
@@ -339,7 +344,7 @@ function AccountPageInner() {
 
             {/* In-page jump list, from sm up: the page is long. */}
             <nav aria-label="On this page" className="hidden sm:flex flex-wrap gap-x-5 gap-y-1 text-sm -mt-4">
-              {SECTIONS.map(([id, label]) => (
+              {SECTIONS.filter(([id]) => id !== 'strava' || STRAVA || strava?.connected).map(([id, label]) => (
                 <a key={id} href={`#${id}`} className="text-muted hover:text-fg">{label}</a>
               ))}
             </nav>
@@ -511,14 +516,17 @@ function AccountPageInner() {
                       {STRAVA ? <Badge tone="green">Connected</Badge> : <Badge>Paused</Badge>}
                       <span className="text-base text-fg truncate">{strava.athlete.name}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={disconnectStrava}
-                      disabled={working === 'strava'}
-                      className={buttonClass('quiet')}
-                    >
-                      {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
-                    </button>
+                    {/* Strava off: an account made through Strava keeps its link, its only way back in once Strava returns. */}
+                    {(STRAVA || !isSyntheticStravaEmail(user.email)) && (
+                      <button
+                        type="button"
+                        onClick={disconnectStrava}
+                        disabled={working === 'strava'}
+                        className={buttonClass('quiet')}
+                      >
+                        {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
+                      </button>
+                    )}
                   </div>
                   {!STRAVA && <p className={msgClass}>Strava isn’t available right now. Paddles you already brought in stay here.</p>}
                   {STRAVA && (<>

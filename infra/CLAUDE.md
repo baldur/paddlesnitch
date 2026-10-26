@@ -93,6 +93,8 @@ Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
 
 **The button is off until the `GOOGLE_SIGNIN` repository variable is `1`** (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
 
+**Strava is off while the `STRAVA_OFF` repository variable is `1`** (deploy.yml → `NEXT_PUBLIC_STRAVA_OFF`; apps/web/CLAUDE.md § sign-in flow 6). Delete the variable and redeploy to turn it back on.
+
 ## Inbound email — privacy@paddlesnitch.com
 
 Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded to the human inbox by the `att-email-forwarder` Lambda.

@@ -142,6 +142,19 @@ A Google account has no password here: don't offer "Forgot password" for it.
 Ignore a `?code=` or `?error=` on that address when the app didn't start a
 Google sign-in.
 
+**When `strava` is false** (Strava switched off; ask `options` on these
+screens too, not only on sign-in), do as the website does:
+- Sign in: no Strava button. Under the form: "Signed up with Strava? Strava
+  sign-in is off for now. Report an issue and we’ll help you sign in."
+- Account: no Strava section unless `strava/status` says connected. Then a
+  neutral "Paused" badge, "Strava isn’t available right now. Paddles you
+  already brought in stay here.", and Disconnect, except on a `placeholderEmail`
+  account (its Strava link is its only way back in). No auto-import, no older
+  paddles, no Connect.
+- Add paddle: no Strava choice.
+- Sign in again (before deleting): a `placeholderEmail` account can't, so offer
+  Report an issue instead.
+
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that
 fills `website` or arrives under 2 s is dropped while looking like a success,

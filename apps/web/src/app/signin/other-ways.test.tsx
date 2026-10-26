@@ -38,13 +38,16 @@ describe('other ways in', () => {
     expect(c.querySelector('a[href^="/att/api/auth/google/init"]')).not.toBeNull()
     expect(c.querySelector('a[href^="/att/api/auth/strava/init"]')).not.toBeNull()
     expect(c.textContent).toContain('then connect Strava in Account')
+    expect(c.textContent).not.toContain('Signed up with Strava?')
   })
 
   it('Google only, when Strava is switched off', async () => {
     const c = await mountWith({ google: true, strava: false })
     expect(c.textContent).toContain('Or use your Google account')
-    expect(c.textContent).not.toMatch(/Strava/)
+    expect(c.textContent).not.toContain('connect Strava in Account')
     expect(c.querySelector('a[href^="/att/api/auth/strava/init"]')).toBeNull()
+    // People who signed up with Strava have no other way in: say what to do.
+    expect(c.textContent).toContain('Signed up with Strava? Strava sign-in is off for now.')
   })
 
   it('Strava only, when Google is off', async () => {
@@ -56,7 +59,7 @@ describe('other ways in', () => {
   it('neither: no section at all', async () => {
     const c = await mountWith({ strava: false })
     expect(c.textContent).not.toContain('Or use your')
-    expect(c.textContent).not.toMatch(/Strava|Google/)
+    expect(c.querySelector('a[href*="/google/init"], a[href*="/strava/init"]')).toBeNull()
   })
 
   it('an existing-account message without Strava doesn\'t point to Strava', async () => {

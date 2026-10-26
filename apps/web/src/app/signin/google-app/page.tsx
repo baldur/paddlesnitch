@@ -1,6 +1,7 @@
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import GoogleButton from '@/components/GoogleButton'
-import { isChallenge } from '@/lib/app-signin'
+import { APP_GOOGLE_URL, isChallenge } from '@/lib/app-signin'
+import { buttonClass } from '@paddlesnitch/ui/Button'
 
 // The paddlesnitch app's Sign in with Google starts here, in the app's in-app
 // browser (att/api/auth/google/init?challenge=). The tap is the point: a link
@@ -15,11 +16,14 @@ export default async function GoogleAppSignIn({ searchParams }: { searchParams: 
       <PageHeader title="Sign in with Google" />
       {ok ? (
         <div className="flex flex-col gap-4">
-          <p className="text-base text-muted">This signs you in to the paddlesnitch app with your Google account.</p>
+          <p className="text-base text-muted">This signs you in to the paddlesnitch app with your Google account. Only continue if you started this in the app.</p>
           <div><GoogleButton href="/att/api/auth/google/init" post={{ challenge, n }} /></div>
         </div>
       ) : (
-        <p role="alert" className="text-base text-red">Couldn’t start signing in with Google. Go back to the app and try again.</p>
+        <div className="flex flex-col gap-4">
+          <p role="alert" className="text-base text-red">Couldn’t start signing in with Google. Go back to the app and try again.</p>
+          <div><a href={`${APP_GOOGLE_URL}?error=google_failed`} className={buttonClass('primary')}>Back to the app</a></div>
+        </div>
       )}
     </Page>
   )

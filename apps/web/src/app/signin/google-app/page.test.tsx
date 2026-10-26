@@ -21,6 +21,7 @@ describe('/signin/google-app', () => {
       const html = await render(q)
       expect(html).not.toContain('<form')
       expect(html).toContain('Go back to the app and try again.')
+      expect(html).toContain('href="com.paddlesnitch.app:/signin/google?error=google_failed"')
     }
   })
 })
