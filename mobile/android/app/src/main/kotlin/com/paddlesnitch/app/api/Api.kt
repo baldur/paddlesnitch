@@ -50,6 +50,10 @@ interface AccountApi {
     suspend fun stravaConnectFinish(code: String, verifier: String): StravaStatus
     suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport
     suspend fun stravaDisconnect(): Ok
+    // Trackers (README § Account): each card is worked out by the server (summaries).
+    suspend fun trackers(): TrackerList
+    suspend fun recordings(): RecordingList
+    suspend fun removeTracker(deviceId: String): Ok
     // Older Strava paddles (README § Strava, signed in), one at a time from the open screen.
     suspend fun stravaHistory(since: HistorySpan): StravaHistory
     suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport
@@ -157,6 +161,11 @@ class Api(
     override suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport =
         account("POST", "att/api/strava/auto-import", """{"enabled":$enabled}""", StravaAutoImport.serializer())
     override suspend fun stravaDisconnect(): Ok = account("POST", "att/api/strava/disconnect", null, Ok.serializer())
+
+    override suspend fun trackers(): TrackerList = account("GET", "api/account/devices", null, TrackerList.serializer())
+    override suspend fun recordings(): RecordingList = account("GET", "api/account/devices/sessions", null, RecordingList.serializer())
+    override suspend fun removeTracker(deviceId: String): Ok =
+        account("DELETE", "api/account/devices", """{"deviceId":${str(deviceId)}}""", Ok.serializer())
 
     override suspend fun stravaHistory(since: HistorySpan): StravaHistory =
         query("sources.stravaHistory", StravaHistory.serializer(), """{"since":${str(since.wire)}}""")

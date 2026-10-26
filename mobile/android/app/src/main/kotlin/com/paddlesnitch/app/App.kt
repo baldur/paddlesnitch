@@ -54,6 +54,7 @@ import com.paddlesnitch.app.paddles.displayName
 import com.paddlesnitch.app.paddles.rememberAddPaddle
 import com.paddlesnitch.app.paddles.sampleFile
 import com.paddlesnitch.app.tracker.TrackerSetupScreen
+import com.paddlesnitch.app.tracker.TrackersScreen
 import com.paddlesnitch.app.ui.PsColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     var inAccount by rememberSaveable { mutableStateOf(false) }
     var settingUpTracker by rememberSaveable { mutableStateOf(false) }
+    var inTrackers by rememberSaveable { mutableStateOf(false) }
     // Signing in again to delete the account (Reauth.kt). The email to fill in isn't kept past the process.
     var reauth by rememberSaveable { mutableStateOf(Reauth()) }
     var reauthEmail by remember { mutableStateOf<String?>(null) }
@@ -107,7 +109,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     LaunchedEffect(arrived) {
         val it = arrived ?: return@LaunchedEffect
         incoming.value = null
-        if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; settingUpTracker = false }
+        if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; inTrackers = false; settingUpTracker = false }
         val name = (it as? Incoming.AddFile)?.let { f -> withContext(Dispatchers.IO) { displayName(context, Uri.parse(f.uri)) } }
         run(intake.arrived(it, signedIn, name))
     }
@@ -117,8 +119,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
-    fun signedOut() { signedIn = false; inAccount = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); forgetReauth() }
-    val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inAccount = inAccount)
+    fun signedOut() { signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); forgetReauth() }
+    val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
         AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
@@ -153,9 +155,14 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 BackHandler { settingUpTracker = false }
                 TrackerSetupScreen(api, onClose = { settingUpTracker = false }, onSignedOut = ::signedOut, modifier = m)
             }
+            Screen.Trackers -> {
+                BackHandler { inTrackers = false }
+                TrackersScreen(api, onBack = { inTrackers = false }, onSetUp = { settingUpTracker = true }, onSignedOut = ::signedOut, modifier = m,
+                    onOpenPaddle = { id -> inTrackers = false; inAccount = false; intake = intake.openFromCard(id) })
+            }
             Screen.Account -> {
                 BackHandler { inAccount = false }
-                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = ::signedOut,
+                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onTrackers = { inTrackers = true }, onSignedOut = ::signedOut,
                     onDeleted = ::signedOut, onSignOut = { scope.launch { api.signOut(); signedOut() } }, modifier = m,
                     resume = reauth.resume, onResumed = { reauth = reauth.resumed() },
                     stravaReturn = stravaConnectReturn, onStravaReturnHandled = { stravaConnectReturn = null },
@@ -176,14 +183,15 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     }
 }
 
-enum class Screen { SignIn, Samples, Terms, Tracker, Account, Paddles }
+enum class Screen { SignIn, Samples, Terms, Tracker, Trackers, Account, Paddles }
 
 /** Which screen shows. Terms that need accepting come before everything a signed-in person can reach. */
-fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settingUpTracker: Boolean, inAccount: Boolean) = when {
+fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settingUpTracker: Boolean, inAccount: Boolean, inTrackers: Boolean = false) = when {
     signingIn -> Screen.SignIn
     !signedIn -> Screen.Samples
     needsTerms -> Screen.Terms
     settingUpTracker -> Screen.Tracker
+    inTrackers -> Screen.Trackers
     inAccount -> Screen.Account
     else -> Screen.Paddles
 }

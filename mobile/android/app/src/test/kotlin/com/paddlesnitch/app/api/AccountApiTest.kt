@@ -214,4 +214,26 @@ class AccountApiTest {
         answer(200, """{"result":{"data":${fixture("sources.importStravaPaddle.skipped")}}}""")
         assertEquals(StravaImport.Reason.NotWaterSport, api.importStravaPaddle(h.toImport!![1]).reason)
     }
+
+    @Test fun trackersWithTheirCardsWorkedOutByTheServer() = runTest {
+        answer(200, fixture("account.devices"))
+        val list = api.trackers()
+        assertEquals(Triple("GET", "/api/account/devices", ""), sent())
+        assertEquals(TrackerSummary.FirmwareState.UpdatePending, list.summaries[1].firmwareState)
+        assertFalse(list.summaries.last().linked)
+
+        answer(200, fixture("account.devices-sessions"))
+        assertEquals("pdl_8Kq2Zr", api.recordings().sessions.first().paddleId)
+        assertEquals(Triple("GET", "/api/account/devices/sessions", ""), sent())
+
+        answer(200, """{"ok":true}""")
+        api.removeTracker("C0FFEE01")
+        assertEquals(Triple("DELETE", "/api/account/devices", """{"deviceId":"C0FFEE01"}"""), sent())
+    }
+
+    @Test fun aRecordingNamesThePaddleItBecame() = runTest {
+        answer(200, """{"sessions":[{"sessionId":"rec-river","deviceId":"C0FFEE01","filename":"t.csv","uploadedAt":"2026-10-25T08:15:00.000Z","points":3,"paddleId":"pdl-river"},
+            {"sessionId":"rec-desk","deviceId":"C0FFEE01","filename":"d.csv","uploadedAt":"2026-10-24T19:00:00.000Z","points":0}]}""")
+        assertEquals(listOf("pdl-river", null), api.recordings().sessions.map { it.paddleId })
+    }
 }
