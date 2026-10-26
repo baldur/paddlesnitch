@@ -123,14 +123,16 @@ code caught by another app useless (RFC 8252).
 
 **Google** works the same way, with its own addresses. Show it only when
 `options` says `google: true` (and Strava only when `strava: true`). Open
-`/att/api/auth/google/init?challenge=<challenge>`; it ends on
+`/att/api/auth/google/init?challenge=<challenge>`. It first shows a page with a
+"Sign in with Google" button, so a link alone can't finish a sign-in for the app;
+the person taps it once. It ends on
 `com.paddlesnitch.app:/signin/google?code=<code>` or `?error=<key>`, and you
 swap the code and verifier at `google/app-token` (within 5 minutes, once).
 The keys and what to say for them, as on the website:
 
 | `error` | Say |
 |---|---|
-| `google_account_exists` | You already have an account with this email. Sign in with your email instead. |
+| `google_account_exists` | You already have an account with this email. Sign in with your email instead. (With `strava: true`: "…with your email or Strava instead.") |
 | `google_no_email` | Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead. |
 | `google_denied` | You cancelled the Google sign-in. |
 | `google_failed` | Couldn’t sign in with Google. Please try again. |

@@ -17,13 +17,13 @@ export async function POST(req: NextRequest) {
   const client = clientOf(req.headers)
   const { code, verifier } = await req.json().catch(() => ({}))
   if (typeof code !== 'string' || typeof verifier !== 'string' || !code || !verifier) {
-    return NextResponse.json({ error: 'Sign-in didn’t finish. Please try again.' }, { status: 400 })
+    return NextResponse.json({ error: 'Couldn’t finish signing in. Please try again.' }, { status: 400 })
   }
   const tokens = await exchangeCode(code, verifier, new URL('/att/api/auth/google/callback', canonicalBaseUrl(req)).toString())
   const user = tokens ? await verifyIdToken(tokens.idToken) : null
   if (!tokens || !user) {
     logAction('sign_in', 'rejected', { client, reason: 'google_app_code' })
-    return NextResponse.json({ error: 'That sign-in has expired. Please try again.' }, { status: 401 })
+    return NextResponse.json({ error: 'Couldn’t finish signing in. Please try again.' }, { status: 401 })
   }
 
   if (emailVerified(tokens.idToken)) try {

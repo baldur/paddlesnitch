@@ -55,6 +55,17 @@ describe('Strava switched off', () => {
     expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('strava_not_configured')
   })
 
+  it('every route gets Strava\'s consent page through the switch, never from core directly', async () => {
+    const { execSync } = await import('child_process')
+    const hits = execSync("git grep -l \"authorizeUrl\" -- 'apps/web/src/app/**/*.ts' || true", { cwd: path.join(__dirname, '../../../..'), encoding: 'utf8' })
+      .split('\n').filter(Boolean).filter(f => !f.includes('/google/') && !f.endsWith('.test.ts'))
+    expect(hits.length).toBeGreaterThan(2)
+    for (const f of hits) {
+      const src = readFileSync(path.join(__dirname, '../../../..', f), 'utf8')
+      expect(src, f).toMatch(/import \{[^}]*authorizeUrl[^}]*\} from '@\/lib\/strava'/)
+    }
+  })
+
   it('is switched by the STRAVA_OFF repository variable', () => {
     const deploy = readFileSync(path.join(__dirname, '../../../../.github/workflows/deploy.yml'), 'utf8')
     expect(deploy).toContain('NEXT_PUBLIC_STRAVA_OFF: ${{ vars.STRAVA_OFF }}')

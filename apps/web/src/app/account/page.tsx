@@ -461,12 +461,16 @@ function AccountPageInner() {
               </div>
             </section>
 
+            {/* Strava switched off: shown only to people still connected, so they can disconnect. */}
+            {(STRAVA || strava?.connected) && (
             <section id="strava" className="flex flex-col gap-3 scroll-mt-4">
               <h2 className="text-lg font-semibold text-fg">Strava</h2>
-              <p className="text-base text-muted">
-                Connect Strava to bring in your paddles and trial results without exporting files,
-                and to sign in with Strava. We only read your activities; we never post.
-              </p>
+              {STRAVA && (
+                <p className="text-base text-muted">
+                  Connect Strava to bring in your paddles and trial results without exporting files,
+                  and to sign in with Strava. We only read your activities; we never post.
+                </p>
+              )}
 
               {stravaFlash && (
                 <p
@@ -496,16 +500,15 @@ function AccountPageInner() {
 
               {strava === undefined && <p className={msgClass}>Checking…</p>}
 
-              {strava && !strava.connected && (STRAVA
-                ? <div><StravaButton href="/att/api/strava/connect" post /></div>
-                : <p className={msgClass}>Strava isn’t available at the moment.</p>
+              {strava && !strava.connected && STRAVA && (
+                <div><StravaButton href="/att/api/strava/connect" post /></div>
               )}
 
               {strava && strava.connected && (
                 <>
                   <div className={`${cardClass} flex items-center justify-between gap-4 px-4 py-2`}>
                     <div className="flex items-center gap-2 min-w-0">
-                      <Badge tone="green">Connected</Badge>
+                      {STRAVA ? <Badge tone="green">Connected</Badge> : <Badge>Paused</Badge>}
                       <span className="text-base text-fg truncate">{strava.athlete.name}</span>
                     </div>
                     <button
@@ -517,7 +520,7 @@ function AccountPageInner() {
                       {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
                     </button>
                   </div>
-                  {!STRAVA && <p className={msgClass}>Strava isn’t available at the moment, so nothing new comes in from it. You can still disconnect.</p>}
+                  {!STRAVA && <p className={msgClass}>Strava isn’t available right now. Paddles you already brought in stay here.</p>}
                   {STRAVA && (<>
                   {/* Auto-import toggle (default on). New water-sport activities
                       flow into Paddles automatically via the Strava webhook. */}
@@ -550,6 +553,7 @@ function AccountPageInner() {
                 </>
               )}
             </section>
+            )}
 
             <section id="devices" className="flex flex-col gap-3 scroll-mt-4">
               <h2 className="text-lg font-semibold text-fg">Devices</h2>

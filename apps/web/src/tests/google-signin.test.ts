@@ -11,7 +11,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 vi.mock('@/lib/pending-invitations', () => ({ applyPendingInvitations: vi.fn(async () => {}) }))
 
 import { cookies } from 'next/headers'
-import { GET as init } from '@/app/att/api/auth/google/init/route'
+import { GET as init, POST as initPost } from '@/app/att/api/auth/google/init/route'
 import { GET as callback } from '@/app/att/api/auth/google/callback/route'
 import { POST as appToken } from '@/app/att/api/auth/google/app-token/route'
 import { recordAcceptance } from '@/lib/tos'
@@ -181,11 +181,48 @@ describe('Sign in with Google from a phone app', () => {
   const appStarted = { google_signin_state: 'st', google_signin_app: '1', google_signin_next: '/' }
   const post = (body: unknown) => appToken(new NextRequest('http://localhost/att/api/auth/google/app-token', { method: 'POST', body: JSON.stringify(body), headers: { 'x-paddlesnitch-app': 'ios/1.0' } }))
 
-  it('init sends Cognito the app\'s own challenge and keeps no verifier', async () => {
+  // The tap (security review 2026-10-26): a link alone must not reach Google.
+  const tap = (fields: Record<string, string>, nonceCookie?: string) => {
+    const body = new URLSearchParams(fields)
+    return initPost(new NextRequest('http://localhost/att/api/auth/google/init', {
+      method: 'POST', body, headers: { 'content-type': 'application/x-www-form-urlencoded', ...(nonceCookie ? { cookie: `google_signin_app_nonce=${nonceCookie}` } : {}) },
+    }))
+  }
+
+  it('init shows the Continue page first, with a nonce in a Lax cookie, and doesn\'t go to Google', async () => {
     const res = await init(get(`/att/api/auth/google/init?challenge=${appChallenge}`))
+    const page = to(res)
+    expect(page.pathname).toBe('/signin/google-app')
+    expect(page.searchParams.get('challenge')).toBe(appChallenge)
+    const n = page.searchParams.get('n')!
+    expect(n.length).toBeGreaterThan(20)
+    const c = res.headers.getSetCookie().find(x => x.startsWith('google_signin_app_nonce='))!
+    expect(c).toContain(`google_signin_app_nonce=${n}`)
+    expect(c).toMatch(/HttpOnly/i)
+    expect(c).toMatch(/SameSite=Lax/i)
+    expect(setCookie(res, 'google_signin_state')).toBeUndefined()
+  })
+
+  it('the tap sends Cognito the app\'s own challenge and keeps no verifier', async () => {
+    const res = await tap({ challenge: appChallenge, n: 'nonce-123' }, 'nonce-123')
+    expect(res.status).toBe(303)
     expect(to(res).searchParams.get('code_challenge')).toBe(appChallenge)
     expect(setCookie(res, 'google_signin_verifier')).toBe('')
     expect(setCookie(res, 'google_signin_app')).toBe('1')
+    expect(setCookie(res, 'google_signin_app_nonce')).toBe('')
+  })
+
+  it('a POST from another site (no cookie), a wrong nonce or a bad challenge goes back to the app with an error, never to Google', async () => {
+    for (const [fields, cookie] of [
+      [{ challenge: appChallenge, n: 'nonce-123' }, undefined],
+      [{ challenge: appChallenge, n: 'nonce-123' }, 'other-nonce'],
+      [{ challenge: appChallenge }, 'nonce-123'],
+      [{ challenge: 'short', n: 'nonce-123' }, 'nonce-123'],
+    ] as const) {
+      const res = await tap(fields as Record<string, string>, cookie)
+      expect(res.headers.get('location')).toBe('com.paddlesnitch.app:/signin/google?error=google_failed')
+      expect(setCookie(res, 'google_signin_state')).toBeUndefined()
+    }
   })
 
   it('init refuses a challenge that isn\'t one, and says "not available" to the app when there is no hosted sign-in', async () => {
