@@ -17,11 +17,11 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.PsRadius
 import kotlin.math.PI
 import kotlin.math.cos
@@ -75,6 +75,6 @@ fun NoGpsTag(size: Dp = 64.dp) {
         Modifier.size(size).background(PsColor.bg, thumbShape).border(1.dp, PsColor.border, thumbShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text("NO GPS", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = PsColor.muted)
+        Text("NO GPS", fontFamily = PlexMono, fontSize = 12.sp, color = PsColor.muted)
     }
 }

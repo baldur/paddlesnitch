@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +46,7 @@ import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.textColors
 
 /** The map on the paddle page; tests swap in a stand-in, as MapLibre can't draw on the JVM. */
@@ -176,7 +176,7 @@ private fun StatCell(s: Stat, modifier: Modifier) {
     val tone = when (s.label) { "Pace" -> PsColor.primaryText; "Stroke rate" -> PsColor.split; "River" -> PsColor.flow; else -> PsColor.fg }
     Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Eyebrow(s.label)
-        Text(s.value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = tone)
+        Text(s.value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = tone, fontFamily = PlexMono)
         s.sub?.let { Text(it, fontSize = 13.sp, color = PsColor.muted) }
     }
 }
@@ -196,21 +196,21 @@ private fun Efforts(d: PaddleDetail) {
         SectionTitle("Efforts and rests")
         if (d.repeats.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Eyebrow("Repeats")
-            d.repeats.forEach { Text(it, fontFamily = FontFamily.Monospace, fontSize = 15.sp) }
+            d.repeats.forEach { Text(it, fontFamily = PlexMono, fontSize = 15.sp) }
         }
         if (d.efforts.isNotEmpty()) Column(Modifier.fillMaxWidth().card()) {
             d.efforts.forEachIndexed { i, e ->
                 if (i > 0) HorizontalDivider(color = PsColor.border)
                 Column(Modifier.fillMaxWidth().padding(12.dp).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Effort ${e.number} at ${e.at}", color = PsColor.muted, fontSize = 14.sp)
-                    Text("${e.lasted} · ${e.pace}/500 · ${e.spm} spm", fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+                    Text("${e.lasted} · ${e.pace}/500 · ${e.spm} spm", fontFamily = PlexMono, fontSize = 16.sp)
                     e.trend?.let { Text(it, color = PsColor.split, fontSize = 14.sp) }
                 }
             }
         }
         if (d.rests.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Eyebrow("Rests")
-            Text(d.rests.joinToString("   "), color = PsColor.muted, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+            Text(d.rests.joinToString("   "), color = PsColor.muted, fontFamily = PlexMono, fontSize = 14.sp)
         }
     }
 }
@@ -236,7 +236,7 @@ private fun SplitLine(km: String, at: String, pace: String, spm: String, header:
     Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
         listOf(km, at, pace, spm).forEachIndexed { i, s ->
             Text(if (header) s.uppercase() else s, color = if (i == 2 && !header) PsColor.primaryText else colour, fontSize = size,
-                fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                fontFamily = PlexMono, modifier = Modifier.weight(1f))
         }
     }
 }
