@@ -126,18 +126,22 @@ public enum ModelsGenerator {
             }
             return (swift: swift, raw: value)
         }
+        // The catch-all is `unknown(String)`, unless the enum has a real
+        // "unknown" value of its own (TrackerSummary.firmwareState): then it is
+        // `unrecognised(String)`, as on Android, since Swift can't declare both.
+        let catchAll = cases.contains { $0.swift == "unknown" } ? "unrecognised" : "unknown"
         var out = "public enum \(name): Codable, Hashable, Sendable {\n"
         out += cases.map { "    case \($0.swift)\n" }.joined()
         out += "    /// A value this version of the app doesn't know yet.\n"
-        out += "    case unknown(String)\n\n"
+        out += "    case \(catchAll)(String)\n\n"
         out += "    /// Every value this version of the app knows.\n"
         out += "    public static let known: [\(name)] = [\(cases.map { ".\($0.swift)" }.joined(separator: ", "))]\n\n"
         out += "    public init(rawValue: String) {\n        switch rawValue {\n"
         out += cases.map { "        case \(literal($0.raw)): self = .\($0.swift)\n" }.joined()
-        out += "        default: self = .unknown(rawValue)\n        }\n    }\n\n"
+        out += "        default: self = .\(catchAll)(rawValue)\n        }\n    }\n\n"
         out += "    public var rawValue: String {\n        switch self {\n"
         out += cases.map { "        case .\($0.swift): \(literal($0.raw))\n" }.joined()
-        out += "        case .unknown(let rawValue): rawValue\n        }\n    }\n\n"
+        out += "        case .\(catchAll)(let rawValue): rawValue\n        }\n    }\n\n"
         out += """
                 public init(from decoder: any Decoder) throws {
                     self.init(rawValue: try decoder.singleValueContainer().decode(String.self))

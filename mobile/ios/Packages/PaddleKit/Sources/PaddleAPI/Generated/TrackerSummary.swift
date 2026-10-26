@@ -55,7 +55,7 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
         case updatePending
         case unknown
         /// A value this version of the app doesn't know yet.
-        case unknown(String)
+        case unrecognised(String)
 
         /// Every value this version of the app knows.
         public static let known: [FirmwareState] = [.upToDate, .updatePending, .unknown]
@@ -65,7 +65,7 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
             case "up_to_date": self = .upToDate
             case "update_pending": self = .updatePending
             case "unknown": self = .unknown
-            default: self = .unknown(rawValue)
+            default: self = .unrecognised(rawValue)
             }
         }
 
@@ -74,7 +74,7 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
             case .upToDate: "up_to_date"
             case .updatePending: "update_pending"
             case .unknown: "unknown"
-            case .unknown(let rawValue): rawValue
+            case .unrecognised(let rawValue): rawValue
             }
         }
 

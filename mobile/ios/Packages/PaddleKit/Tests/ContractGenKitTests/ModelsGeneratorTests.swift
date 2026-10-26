@@ -60,6 +60,16 @@ import Testing
         #expect(swift.contains(#"case "4X+": self = .coxedQuad"#))
     }
 
+    @Test func anEnumWithItsOwnUnknownValueNamesTheCatchAllUnrecognised() throws {
+        let swift = try #require(
+            try generate(["State.schema.json": #"{"type":"string","enum":["up_to_date","unknown"]}"#])["State.swift"])
+        #expect(swift.contains("case unknown\n"))
+        #expect(swift.contains("case unrecognised(String)\n"))
+        #expect(!swift.contains("case unknown(String)"))
+        #expect(swift.contains(#"case "unknown": self = .unknown"#))
+        #expect(swift.contains("default: self = .unrecognised(rawValue)"))
+    }
+
     @Test func anInlineTypeEnumBecomesANestedKind() throws {
         let swift = try #require(
             try generate([

@@ -311,6 +311,9 @@ describe('trackers in the apps', () => {
     const list = await fits(TrackerList, await listTrackers(req('GET', '/api/account/devices', pat.idToken)))
     expect(list.devices).toMatchObject([{ deviceId: DEVICE, firmware: '0.19.3' }])
     expect(list.devices[0]).not.toHaveProperty('tokenHash')
+    // The card, worked out by the server: the apps show it as it comes.
+    expect(list.summaries).toMatchObject([{ deviceId: DEVICE, linked: true, recordings: 1, motionRecordings: 0, quiet: false }])
+    expect(['up_to_date', 'update_pending', 'unknown']).toContain(list.summaries[0].firmwareState)
     const recs = await fits(RecordingList, await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken)))
     expect(recs.sessions).toMatchObject([{ deviceId: DEVICE, filename: 'track_0001.csv', points: 3 }])
   })
@@ -331,7 +334,10 @@ describe('trackers in the apps', () => {
     const sam = await makeUser('Sam')
     await fits(ApiError, await removeTracker(req('DELETE', '/api/account/devices', sam.idToken, { deviceId: DEVICE })), 404)
     await fits(Ok, await removeTracker(req('DELETE', '/api/account/devices', pat.idToken, { deviceId: DEVICE })))
-    expect((await (await listTrackers(req('GET', '/api/account/devices', pat.idToken))).json()).devices).toEqual([])
+    const after = await (await listTrackers(req('GET', '/api/account/devices', pat.idToken))).json()
+    expect(after.devices).toEqual([])
+    // Its card stays, as a removed tracker with its recording.
+    expect(after.summaries).toMatchObject([{ deviceId: DEVICE, linked: false, recordings: 1, quiet: false, firmwareState: 'unknown' }])
     expect((await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()).sessions).toHaveLength(1)
   })
 

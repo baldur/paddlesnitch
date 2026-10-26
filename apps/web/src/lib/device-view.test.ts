@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
-import { deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, fmtDur, type DeviceView, crashNote, trackerSummaries } from './device-view'
+import { deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, fmtDur, type DeviceView, crashNote, trackerSummaries, CRASH_SHOWN_MS, DEVICE_QUIET_MS } from './device-view'
 import type { DeviceSessionMeta } from '@/lib/devices'
 
 const dev = (deviceId: string, over: Partial<DeviceView> = {}): DeviceView =>
@@ -156,5 +156,25 @@ describe('trackerSummaries', () => {
     expect(byId.Z.quiet).toBe(false)
     expect(byId.B.crash).toEqual({ at: '2026-10-20T18:43:58Z', task: 'uplink' })
     expect(byId.C.crash).toBeUndefined()
+  })
+
+  it('leaves latestAt out with no recordings, and counts zero for a new tracker', () => {
+    expect(byId.C).not.toHaveProperty('latestAt')
+    expect(byId.C).toMatchObject({ recordings: 0, motionRecordings: 0, distanceMetres: 0 })
+  })
+
+  it('judges against the tracker\'s own target even when there is no stable version', () => {
+    const s = trackerSummaries([{ deviceId: 'T', name: 'T', firmware: '0.19.2', targetVersion: '0.19.3', lastSeenAt: '2026-10-25T07:00:00Z' }], [], null, now)
+    expect(s[0].firmwareState).toBe('update_pending')
+  })
+
+  it('the edges the contract states: a crash exactly 7 days old still shows, 1 ms more and it goes; quiet only after 2 days', () => {
+    const at = (ms: number) => new Date(now - ms).toISOString()
+    const card = (lastSeenAt: string, crashAt?: string) => trackerSummaries(
+      [{ deviceId: 'E', name: 'E', lastSeenAt, ...(crashAt ? { lastCrash: { at: crashAt, task: 't' } } : {}) }], [], null, now)[0]
+    expect(card(at(0), at(CRASH_SHOWN_MS)).crash).toBeDefined()
+    expect(card(at(0), at(CRASH_SHOWN_MS + 1)).crash).toBeUndefined()
+    expect(card(at(DEVICE_QUIET_MS)).quiet).toBe(false)
+    expect(card(at(DEVICE_QUIET_MS + 1)).quiet).toBe(true)
   })
 })
