@@ -21,8 +21,11 @@ fun fmtWeekday(value: String): String = utc(value)?.let {
     "${WEEKDAYS[it.dayOfWeek.value - 1]}, ${it.dayOfMonth} ${MONTHS[it.monthValue - 1]} ${it.year}"
 } ?: value
 
-/** An ISO timestamp → "13 Sep 2026" (UTC). Unparseable → as given. */
-fun fmtDay(value: String): String = utc(value)?.let { "${it.dayOfMonth} ${MONTHS[it.monthValue - 1]} ${it.year}" } ?: value
+/** An ISO timestamp or date → "13 Sep 2026" (UTC); none → "never". Unparseable → as given. */
+fun fmtDay(value: String?): String {
+    if (value == null) return "never"
+    return utc(if (value.length == 10) "${value}T00:00:00Z" else value)?.let { "${it.dayOfMonth} ${MONTHS[it.monthValue - 1]} ${it.year}" } ?: value
+}
 
 /** An ISO timestamp → "13 Sep 2026, 09:11" in the phone's time zone (the website's fmtDayTime). */
 fun fmtDayTime(value: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
@@ -30,8 +33,12 @@ fun fmtDayTime(value: String, zone: java.time.ZoneId = java.time.ZoneId.systemDe
         "${it.dayOfMonth} ${MONTHS[it.monthValue - 1]} ${it.year}, ${it.hour.toString().padStart(2, '0')}:${it.minute.toString().padStart(2, '0')}"
     } ?: value
 
-/** A tracker's distance as the website's devices pages write it: "8.24 km", or "640 m" under a kilometre. */
-fun fmtDist(m: Double): String = if (m >= 1000) "${toFixed(m / 1000, 2)} km" else "${Math.round(m)} m"
+/** A tracker's distance as the website's devices pages write it: "8.24 km", or "640 m" under a kilometre; none → "—". */
+fun fmtDist(m: Double?): String = when {
+    m == null -> "—"
+    m >= 1000 -> "${toFixed(m / 1000, 2)} km"
+    else -> "${Math.round(m)} m"
+}
 
 /** "42s ago", "3m ago", "5h ago", "2d ago": when a tracker was last heard from (the website's fmtAgo). */
 fun fmtAgo(value: String?, nowMs: Long = System.currentTimeMillis()): String {
