@@ -11,6 +11,8 @@ import { requestSignIn } from '@paddlesnitch/core/auth'
 // and a code caught by another app on the phone is useless without the verifier.
 
 export const APP_RETURN_URL = 'com.paddlesnitch.app:/signin/strava'
+/** Where Sign in with Google from an app ends: `?code=` (Cognito's own, to swap at google/app-token) or `?error=<key>`. */
+export const APP_GOOGLE_URL = 'com.paddlesnitch.app:/signin/google'
 /** Where connecting Strava from a signed-in app ends: `?code=` to collect at app-connect/finish, or `?strava=<key>` (lib/strava-connect-results.ts) when it didn't work. */
 export const APP_STRAVA_URL = 'com.paddlesnitch.app:/account/strava'
 const CODE_TTL_MS = 5 * 60_000

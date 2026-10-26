@@ -166,6 +166,10 @@ const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }
 const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
 export const WebPage = named('WebPage', z.object({ url: z.string() }))
 const StravaAppToken = named('StravaAppToken', z.object({ code: z.string(), verifier: z.string() }))
+/** The code from com.paddlesnitch.app:/signin/google?code= and the verifier behind the challenge. */
+const GoogleAppToken = named('GoogleAppToken', z.object({ code: z.string(), verifier: z.string() }))
+/** Which sign-in buttons to show besides email. */
+export const SignInOptions = named('SignInOptions', z.object({ google: z.boolean(), strava: z.boolean() }))
 // Forgot password: ask for a code by email, then set a new password with it.
 const ResetRequest = named('ResetRequest', z.object({
   email: z.string(),
@@ -307,6 +311,8 @@ export const restRoutes = {
   'POST /att/api/auth/otp-verify': { auth: 'public', input: OtpVerify, output: SignIn, errors: [400, 500] },
   'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
   'POST /att/api/auth/strava/app-token': { auth: 'public', input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
+  'GET /att/api/auth/options': { auth: 'public', input: null, output: SignInOptions, errors: [] },
+  'POST /att/api/auth/google/app-token': { auth: 'public', input: GoogleAppToken, output: SignIn, errors: [400, 401] },
   'POST /att/api/auth/web-code': { auth: 'user', input: WebPageFor, output: WebPage, errors: [401] },
   'POST /paddles/api/analyse': { auth: 'user', input: null, output: Analysed, errors: [400, 401, 422, 500] },
   'POST /att/api/auth/refresh': { auth: 'public', input: RefreshToken, output: Refreshed, errors: [401] },

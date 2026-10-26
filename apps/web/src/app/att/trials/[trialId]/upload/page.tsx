@@ -7,6 +7,7 @@ import CourseMapClient from '@/components/map/CourseMapClient'
 import StravaButton from '@/components/strava/StravaButton'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import ViewOnStrava from '@/components/strava/ViewOnStrava'
+import { stravaOn } from '@/lib/sign-in-options'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
 import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
@@ -22,6 +23,9 @@ import { Card, cardClass } from '@paddlesnitch/ui/Card'
 // that blocked the match.
 type GateAnalysis = { blocking: { gateNumber: number } | null }
 type UploadDiagnostic = { track: LatLng[]; course: CourseMetadata; gateAnalysis?: GateAnalysis }
+
+// Strava is switched off in some builds (lib/sign-in-options.ts).
+const STRAVA = stravaOn()
 
 // Local helpers used only by the Strava picker.
 function formatDistance(metres: number): string {
@@ -475,7 +479,7 @@ export default function UploadPage({
               options={[
                 { value: 'file', label: 'File' },
                 { value: 'url', label: 'Link' },
-                { value: 'strava', label: 'Strava' },
+                ...(STRAVA ? [{ value: 'strava' as const, label: 'Strava' }] : []),
                 ...(trackerRecordings && trackerRecordings.length > 0
                   ? [{ value: 'tracker' as const, label: 'Tracker' }]
                   : []),

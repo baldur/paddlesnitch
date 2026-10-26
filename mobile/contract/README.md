@@ -84,7 +84,7 @@ every API call.
 
 The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
 `Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
-`RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its
+`RefreshToken`, `StravaAppToken`, `GoogleAppToken`, `SignInOptions`), and `api/rest.json` maps each `"<METHOD> <path>"` to its
 `auth` (`user` = send `Authorization: Bearer`), input, output and the statuses
 that answer an `ApiError`. Golden answers:
 `fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
@@ -96,7 +96,9 @@ just accepted the Terms).
 | `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
 | `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 201, as login; 422 if `acceptedTosVersion` isn't current |
+| `GET /att/api/auth/options` | | `{google, strava}`: which buttons to show besides email. Ask each time the sign-in screen opens; if the call fails, show email only |
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
+| `POST /att/api/auth/google/app-token` | `{code, verifier}` | as login; 401 = the code is spent, expired or not from this verifier: start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
 | `POST /att/api/auth/password-reset/request` | `{email, website: "", elapsedMs}` | `{ok: true}` whether or not the account exists (it never says); if it does, a 6-digit code goes to that email |
@@ -118,6 +120,25 @@ keys the website's `/signin?error=` shows). Swap the code and the verifier at
 spends it. The app's own scheme, not an app link, so it works in debug builds
 and on iPhone before the Apple team ID exists; the verifier is what makes a
 code caught by another app useless (RFC 8252).
+
+**Google** works the same way, with its own addresses. Show it only when
+`options` says `google: true` (and Strava only when `strava: true`). Open
+`/att/api/auth/google/init?challenge=<challenge>`; it ends on
+`com.paddlesnitch.app:/signin/google?code=<code>` or `?error=<key>`, and you
+swap the code and verifier at `google/app-token` (within 5 minutes, once).
+The keys and what to say for them, as on the website:
+
+| `error` | Say |
+|---|---|
+| `google_account_exists` | You already have an account with this email. Sign in with your email instead. |
+| `google_no_email` | Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead. |
+| `google_denied` | You cancelled the Google sign-in. |
+| `google_failed` | Couldn’t sign in with Google. Please try again. |
+| `google_not_configured` | Google sign-in isn’t available right now. |
+
+A Google account has no password here: don't offer "Forgot password" for it.
+Ignore a `?code=` or `?error=` on that address when the app didn't start a
+Google sign-in.
 
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that

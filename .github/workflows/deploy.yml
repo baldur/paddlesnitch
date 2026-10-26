@@ -58,6 +58,7 @@ jobs:
         env:
           # Sign in with Google (#697): '1' once Google and Cognito are set up.
           NEXT_PUBLIC_GOOGLE_SIGNIN: ${{ vars.GOOGLE_SIGNIN }}
+          NEXT_PUBLIC_STRAVA_OFF: ${{ vars.STRAVA_OFF }}
         run: |
           set -o pipefail
           pnpm build:open-next 2>&1 | tee "$RUNNER_TEMP/open-next.log"

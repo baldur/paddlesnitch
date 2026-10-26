@@ -14,6 +14,10 @@ import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Field, inputClass } from '@paddlesnitch/ui/Form'
 import { Badge, Chevron, EmptyState, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
+import { stravaOn } from '@/lib/sign-in-options'
+
+// Strava is switched off in some builds (lib/sign-in-options.ts).
+const STRAVA = stravaOn()
 
 // The page's sections, in order, for the in-page jump list (sm and up).
 const SECTIONS: [string, string][] = [
@@ -492,8 +496,9 @@ function AccountPageInner() {
 
               {strava === undefined && <p className={msgClass}>Checking…</p>}
 
-              {strava && !strava.connected && (
-                <div><StravaButton href="/att/api/strava/connect" post /></div>
+              {strava && !strava.connected && (STRAVA
+                ? <div><StravaButton href="/att/api/strava/connect" post /></div>
+                : <p className={msgClass}>Strava isn’t available at the moment.</p>
               )}
 
               {strava && strava.connected && (
@@ -512,6 +517,8 @@ function AccountPageInner() {
                       {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
                     </button>
                   </div>
+                  {!STRAVA && <p className={msgClass}>Strava isn’t available at the moment, so nothing new comes in from it. You can still disconnect.</p>}
+                  {STRAVA && (<>
                   {/* Auto-import toggle (default on). New water-sport activities
                       flow into Paddles automatically via the Strava webhook. */}
                   <label className={`${cardClass} flex items-center justify-between gap-4 px-4 py-3 cursor-pointer`}>
@@ -533,10 +540,13 @@ function AccountPageInner() {
                   <StravaMoreImport />
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
                   <PoweredByStrava />
-                  <p className={msgClass}>
-                    You can also sign in with Strava. Disconnecting stops both importing and signing in
-                    with Strava.
-                  </p>
+                  </>)}
+                  {STRAVA && (
+                    <p className={msgClass}>
+                      You can also sign in with Strava. Disconnecting stops both importing and signing in
+                      with Strava.
+                    </p>
+                  )}
                 </>
               )}
             </section>
