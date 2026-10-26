@@ -4,6 +4,12 @@ export type AuthUser = {
   id: string
   email: string
   displayName: string
+  /**
+   * The token's email_verified claim. Anyone can set their own email to any
+   * address through Cognito's public client (it is then unverified), so the
+   * email proves nothing unless this is true (#713).
+   */
+  emailVerified?: boolean
 }
 
 // Persisted per-user at users/{userId}/strava.json. Consumers should call
