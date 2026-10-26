@@ -32,6 +32,15 @@ struct EmailCodeStepView: View {
                     .keyboardType(.numberPad)
                     .focused(focus, equals: .code)
                     .accessibilityIdentifier("code-field")
+                    // The number pad has no return key: without this the
+                    // buttons under it can't be reached.
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") { focus.wrappedValue = nil }
+                                .accessibilityIdentifier("keyboard-done")
+                        }
+                    }
             }
             if let error = form.error {
                 Text(error)

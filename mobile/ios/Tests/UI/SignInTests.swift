@@ -69,6 +69,7 @@ final class SignInTests: AppTestCase {
         app.buttons["sign-in-submit"].tap()
         // Since #702 the emailed code proves the address first.
         XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
+        declineSavingPassword()
         type("123456", into: app.textFields["code-field"])
         scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed up and in")

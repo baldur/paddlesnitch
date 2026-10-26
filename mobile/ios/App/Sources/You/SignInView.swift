@@ -89,7 +89,7 @@ struct SignInView: View {
             }
             field("Password", help: form.mode == .createAccount ? SignInForm.passwordRule : nil) {
                 SecureField("", text: $form.password)
-                    .textContentType(form.mode == .createAccount ? .newPassword : .password)
+                    .textContentType(PaddlesnitchApp.password(form.mode == .createAccount ? .newPassword : .password))
                     .focused($focus, equals: .password)
                     .submitLabel(.go)
                     .onSubmit(submit)

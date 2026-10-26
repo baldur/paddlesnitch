@@ -47,12 +47,39 @@ class AppTestCase: XCTestCase {
     /// descendant has keyboard focus", seen on CI).
     func type(_ text: String, into field: XCUIElement) {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        // A field that took the keyboard itself (the code step's) may sit
-        // where a tap can't land; it needs none.
-        for _ in 0..<5 where !field.waitForKeyboardFocus(timeout: 0.5) {
-            scrollToElement(field).tap()
+        // A field that took the keyboard itself (the code step's) needs no
+        // tap, and one mid-animation can't take it ("not hittable").
+        if !field.waitForKeyboardFocus(timeout: 2) {
+            for _ in 0..<5 {
+                scrollToElement(field).tap()
+                if field.waitForKeyboardFocus(timeout: 2) { break }
+            }
         }
         field.typeText(text)
+    }
+
+    /// iOS 26 asks "Save Password?" once a password is sent, for any secure
+    /// field (an autofill type or none), covering the next screen's buttons.
+    /// Not now. iOS 27 doesn't ask there.
+    func declineSavingPassword() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for owner in [app, springboard] {
+            let notNow = owner.buttons["Not Now"].firstMatch
+            if notNow.waitForExistence(timeout: 2) {
+                notNow.tap()
+                return
+            }
+        }
+    }
+
+    /// Puts the keyboard away: the keyboard's Done (the code step's number
+    /// pad has no return key), else a drag down the page.
+    func dismissKeyboard() {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+        let done = app.buttons["keyboard-done"].firstMatch
+        if done.exists && done.isHittable { done.tap() } else { swipe(up: false) }
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5), "the keyboard went away")
     }
 
     func element(_ identifier: String) -> XCUIElement {
@@ -72,11 +99,13 @@ class AppTestCase: XCTestCase {
         let window = app.windows.firstMatch.frame
         let top = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame.maxY : window.minY
         var bottom = window.maxY
-        if app.tabBars.firstMatch.exists { bottom = min(bottom, app.tabBars.firstMatch.frame.minY) }
+        // Only a tab bar that's in front: under a sheet it covers nothing.
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists && tabBar.isHittable { bottom = min(bottom, tabBar.frame.minY) }
         // The keyboard covers what's under it too.
         if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY) }
         let paddlesTab = tab("Paddles")
-        if paddlesTab.exists { bottom = min(bottom, paddlesTab.frame.minY - 8) }
+        if paddlesTab.exists && paddlesTab.isHittable { bottom = min(bottom, paddlesTab.frame.minY - 8) }
         return CGRect(x: window.minX, y: top, width: window.width, height: max(0, bottom - top))
     }
 

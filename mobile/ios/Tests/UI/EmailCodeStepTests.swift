@@ -13,6 +13,7 @@ final class EmailCodeStepTests: AppTestCase {
         element("terms-checkbox").tap()
         app.buttons["sign-in-submit"].tap()
         XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
+        declineSavingPassword()
     }
 
     func testCreatingAnAccountAsksForTheCodeWithoutTabs() {
@@ -21,6 +22,7 @@ final class EmailCodeStepTests: AppTestCase {
         XCTAssertTrue(text(containing: "new@example.com").exists)
         XCTAssertFalse(app.buttons["Create account"].exists, "no tabs during the code")
         XCTAssertEqual(app.buttons["sign-in-submit"].label, "Confirm email")
+        dismissKeyboard()
         XCTAssertFalse(scrollToElement(app.buttons["send-new-code"]).isEnabled, "30 seconds before another")
         type("123456", into: app.textFields["code-field"])
         scrollToElement(app.buttons["sign-in-submit"]).tap()
@@ -36,6 +38,7 @@ final class EmailCodeStepTests: AppTestCase {
 
     func testChangeEmailGoesBackToCreateAccount() {
         startAccount()
+        dismissKeyboard()
         scrollToElement(app.buttons["change-email"]).tap()
         XCTAssertTrue(app.textFields["Display name"].waitForExistence(timeout: 10))
         XCTAssertFalse(element("code-explainer").exists)
@@ -46,6 +49,7 @@ final class EmailCodeStepTests: AppTestCase {
         fill(email: "una@example.com", password: "Password123")
         app.buttons["sign-in-submit"].tap()
         XCTAssertTrue(element("code-status").waitForExistence(timeout: 10))
+        declineSavingPassword()
         XCTAssertTrue(text(containing: "Confirm your email first.").exists)
         XCTAssertFalse(element("sign-in-error").exists, "a status, not an error")
         type("123456", into: app.textFields["code-field"])
@@ -53,8 +57,11 @@ final class EmailCodeStepTests: AppTestCase {
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }
 
+    /// The step as read after putting the keyboard away (Done), so the
+    /// buttons under it are part of the audit.
     func testTheCodeStepPassesTheAccessibilityAudit() throws {
         startAccount()
+        dismissKeyboard()
         try audit()
     }
 }
