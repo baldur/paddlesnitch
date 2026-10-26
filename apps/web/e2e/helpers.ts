@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
+import { readFileSync } from 'fs'
 
 // Helpers shared across E2E specs. Keep the surface small — each helper
 // should pay for itself by appearing in >1 test. The dial we're tuning
@@ -31,6 +32,10 @@ export async function signUpFlow(
   await page.getByLabel(/I have read and agree/i).check()
 
   await page.getByRole('button', { name: 'Create account', exact: true }).click()
+  // The code that proves the address (#702): cognito-local keeps it in its
+  // database rather than emailing it.
+  await page.getByLabel('Code', { exact: true }).fill(await signUpCode(email))
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click()
   // Signed in, / redirects to /paddles (the signed-in home). Wait for where we
   // end up: checking '/' raced the redirect and flaked.
   await expect(page).toHaveURL('/paddles', { timeout: 10_000 })
@@ -166,3 +171,23 @@ export function gpxThatCrossesDefaultCourse(): string {
   cachedGpxPath = path
   return path
 }
+
+// The sign-up code cognito-local made for this email (pnpm dev's pool, under
+// apps/web/.cognito). Real Cognito emails it; cognito-local only stores it,
+// and writes it a moment after answering, so this polls.
+export async function signUpCode(email: string): Promise<string> {
+  const env = readFileSync(join(process.cwd(), '.env.local'), 'utf8')
+  const poolId = env.match(/^COGNITO_USER_POOL_ID=(.+)$/m)?.[1]?.trim()
+  const db = join(process.cwd(), '.cognito', 'db', `${poolId}.json`)
+  for (let i = 0; i < 40; i++) {
+    try {
+      const users = JSON.parse(readFileSync(db, 'utf8')).Users ?? {}
+      for (const u of Object.values(users) as Array<{ Attributes?: Array<{ Name: string; Value: string }>; ConfirmationCode?: string }>) {
+        if (u.Attributes?.find(a => a.Name === 'email')?.Value === email && u.ConfirmationCode) return u.ConfirmationCode
+      }
+    } catch { /* mid-write: try again */ }
+    await new Promise(r => setTimeout(r, 100))
+  }
+  throw new Error(`no sign-up code for ${email} in ${db}`)
+}
+

@@ -9,9 +9,16 @@ import { NextRequest } from 'next/server'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
+// Not in cognito-local.
+vi.mock('@/lib/cognito', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/cognito')>()),
+  resendSignUpCode: vi.fn(async () => ({ ok: true })),
+  signOutEverywhere: vi.fn(async () => {}),
+}))
 
 import { cookies } from 'next/headers'
 import { POST as signup } from '@/app/att/api/auth/signup/route'
+import { POST as confirmSignup } from '@/app/att/api/auth/signup/confirm/route'
 import { POST as login } from '@/app/att/api/auth/login/route'
 import { POST as logout } from '@/app/att/api/auth/logout/route'
 import { POST as refreshRoute } from '@/app/att/api/auth/refresh/route'
@@ -19,7 +26,7 @@ import { POST as requestReset } from '@/app/att/api/auth/password-reset/request/
 import { POST as confirmReset } from '@/app/att/api/auth/password-reset/confirm/route'
 import { readConfirmationCode } from './cognito-db'
 import { verifyIdToken, refresh } from '@/lib/cognito'
-import { restRoutes, SignIn, Refreshed, Ok, ApiError, ResetDone } from '@paddlesnitch/api/contract'
+import { restRoutes, SignIn, Refreshed, Ok, ApiError, ResetDone, CodeSent } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { existsSync } from 'fs'
 import path from 'path'
@@ -50,7 +57,12 @@ describe('signing in from an app', () => {
   })
 
   it('sign-up does the same, after the same checks (terms, invitations)', async () => {
-    const res = await signup(post('/att/api/auth/signup', { email: email(), displayName: 'Sam', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true))
+    // The first call only sends the code (#702), to an app as to a page.
+    const e = email()
+    const started = await signup(post('/att/api/auth/signup', { email: e, displayName: 'Sam', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true))
+    expect(started.status).toBe(202)
+    expect(await started.json()).toEqual({ needsCode: true, email: e })
+    const res = await confirmSignup(post('/att/api/auth/signup/confirm', { email: e, code: await readConfirmationCode(e), password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true))
     expect(res.status).toBe(201)
     expect(res.headers.get('set-cookie')).toBeNull()
     const body = await res.json()
@@ -117,7 +129,16 @@ describe('the sign-in routes answer what the contract says', () => {
     const u = await makeUser('Pat')
     await fits(SignIn, await login(post('/att/api/auth/login', { email: u.email, password: 'Password123' }, true)))
     await fits(ApiError, await login(post('/att/api/auth/login', { email: u.email, password: 'Wrong12345' }, true)))
-    await fits(SignIn, await signup(post('/att/api/auth/signup', { email: email(), displayName: 'Sam', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true)))
+    const e = email()
+    await fits(CodeSent, await signup(post('/att/api/auth/signup', { email: e, displayName: 'Sam', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true)))
+    await fits(ApiError, await confirmSignup(post('/att/api/auth/signup/confirm', { email: e, code: '000000x', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true)))
+    await fits(SignIn, await confirmSignup(post('/att/api/auth/signup/confirm', { email: e, code: await readConfirmationCode(e), password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true)))
+    // Signing in before the code was entered: a new code, and a request for it.
+    const late = email()
+    await signup(post('/att/api/auth/signup', { email: late, displayName: 'Late', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true))
+    const asked = await login(post('/att/api/auth/login', { email: late, password: 'Password123' }, true))
+    expect(asked.status).toBe(403)
+    await fits(ApiError, asked)
     await fits(ApiError, await signup(post('/att/api/auth/signup', { email: email(), displayName: 'Old', password: 'Password123', acceptedTosVersion: 'v0' }, true)))
     await fits(Refreshed, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: u.refreshToken }, true)))
     await fits(ApiError, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: 'nope' }, true)))

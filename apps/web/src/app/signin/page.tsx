@@ -78,6 +78,11 @@ function AuthForm() {
   const [loading, setLoading] = useState(false)
   // OTP flow state. `session` is non-empty once the user has requested a code
   // and we're waiting for them to type it in.
+  // Sign-up code (#702): set once a code has gone to `email`, from Create
+  // account or from signing in to an account whose code was never entered.
+  // "Send a new code" repeats that same request.
+  const [confirming, setConfirming] = useState<'signup' | 'signin' | null>(null)
+  const [signupCode, setSignupCode] = useState('')
   const [otpSession, setOtpSession] = useState('')
   const [otpCode, setOtpCode] = useState('')
   // Anti-bot fields for the passwordless code request (which sends an email):
@@ -100,7 +105,8 @@ function AuthForm() {
         signedIn(data?.needsTerms ? termsAcceptPath(next) : next)
       } else {
         const data = await res.json()
-        setError(data.error ?? 'Couldn’t sign you in. Please try again.')
+        if (data?.needsCode) { setConfirming('signin'); setSignupCode('') }
+        setError(data?.needsCode ? '' : (data.error ?? 'Couldn’t sign you in. Please try again.'))
         setLoading(false)
       }
     } catch {
@@ -109,8 +115,8 @@ function AuthForm() {
     }
   }
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSignUp = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     setError('')
     if (!tosAccepted) {
       setError('You must agree to the Terms of Service to create an account.')
@@ -124,7 +130,9 @@ function AuthForm() {
         body: JSON.stringify({ email, displayName, password, acceptedTosVersion: CURRENT_TOS_VERSION }),
       })
       if (res.ok) {
-        signedIn(next)
+        setConfirming('signup')
+        setSignupCode('')
+        setLoading(false)
       } else {
         const data = await res.json()
         setError(data.error ?? 'Couldn’t sign you up. Please try again.')
@@ -134,6 +142,37 @@ function AuthForm() {
       setError('Couldn’t reach the server. Check your connection and try again.')
       setLoading(false)
     }
+  }
+
+  const handleConfirm = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/att/api/auth/signup/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: signupCode, password, acceptedTosVersion: CURRENT_TOS_VERSION }),
+      })
+      if (res.ok) {
+        signedIn(next)
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      setError(data?.error ?? 'Couldn’t confirm your email. Please try again.')
+      // Confirmed, but signing in failed: the Sign in form takes it from here.
+      if (res.status === 500) { setConfirming(null); setTab('signin') }
+      setLoading(false)
+    } catch {
+      setError('Couldn’t reach the server. Check your connection and try again.')
+      setLoading(false)
+    }
+  }
+
+  const sendNewCode = () => {
+    setError('')
+    if (confirming === 'signup') void handleSignUp()
+    else void handleSignIn({ preventDefault() {} } as React.FormEvent)
   }
 
   const handleOtpRequest = async (e: React.FormEvent) => {
@@ -189,6 +228,7 @@ function AuthForm() {
   const switchTab = (t: typeof tab) => {
     setTab(t)
     setError('')
+    setConfirming(null)
     if (t === 'code') { setOtpSession(''); setOtpCode('') }
   }
 
@@ -215,7 +255,41 @@ function AuthForm() {
           ]}
         />
 
-        {tab === 'signin' && (
+        {confirming && (
+          <form onSubmit={handleConfirm} className="flex flex-col gap-4">
+            <p className="text-base text-muted">
+              We&apos;ve emailed a 6-digit code to <strong className="text-fg">{email}</strong>, to check the address is yours. It may take a minute, and may land in spam.
+            </p>
+            <Field label="Code" htmlFor="signup-code">
+              <input
+                id="signup-code"
+                type="text"
+                required
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="\d{6}"
+                maxLength={6}
+                value={signupCode}
+                onChange={e => setSignupCode(e.target.value.trim())}
+                className={`${inputClass} tabular`}
+                placeholder="000000"
+                autoFocus
+              />
+            </Field>
+            {errorBox}
+            <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
+              {loading ? 'Confirming…' : 'Confirm'}
+            </button>
+            <p className="text-sm text-muted text-center">
+              Didn&apos;t arrive?{' '}
+              <button type="button" onClick={sendNewCode} disabled={loading} className="tt-link">Send a new code</button>
+              {' '}or{' '}
+              <button type="button" onClick={() => { setConfirming(null); setError('') }} className="tt-link">change your email</button>
+            </p>
+          </form>
+        )}
+
+        {!confirming && tab === 'signin' && (
           <form onSubmit={handleSignIn} className="flex flex-col gap-4">
             <Field label="Email" htmlFor="signin-email">
               <input
@@ -249,7 +323,7 @@ function AuthForm() {
           </form>
         )}
 
-        {tab === 'signup' && (
+        {!confirming && tab === 'signup' && (
           <form onSubmit={handleSignUp} className="flex flex-col gap-4">
             <Field label="Email" htmlFor="signup-email">
               <input
@@ -314,7 +388,7 @@ function AuthForm() {
           </form>
         )}
 
-        {EMAIL_DELIVERY && tab === 'code' && (
+        {!confirming && EMAIL_DELIVERY && tab === 'code' && (
           otpSession ? (
             <form onSubmit={handleOtpVerify} className="flex flex-col gap-4">
               <p className="text-base text-muted">

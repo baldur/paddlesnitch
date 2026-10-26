@@ -64,6 +64,10 @@ rm "$SECRET_FILE"
 
 The Lambda IAM role has `ssm:GetParameter` on the parameter ARNs **and** `kms:Decrypt` on `alias/aws/ssm` (scoped via `kms:ViaService = ssm.<region>.amazonaws.com`). Without the KMS grant, SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`, ~240 chars) instead of failing — which the runtime would then forward to Strava as the "secret".
 
+## Pool email: sign-up codes and resets (#702)
+
+The pool sends its own email with **Cognito's sender** (`UserPoolEmail.withCognito`, 50 a day for the whole pool, from no-reply@verificationemail.com), because SES is in the sandbox (#23). Since 2026-10-26 that is **sign-up codes** (`autoVerify: { email: true }`, subject "Your paddlesnitch code", same neutral body for resets) **and password-reset codes**, sharing the 50. Self sign-up is open (the client id is public), so someone could spend the day's emails by signing up repeatedly; if that happens, the fix is SES production access or a CloudWatch alarm on Cognito's email throttling, not turning codes off. Check what's live: `aws cognito-idp describe-user-pool --user-pool-id eu-west-1_BHyKJ0toh --query 'UserPool.[AutoVerifiedAttributes,VerificationMessageTemplate]'`.
+
 ## Sign in with Google (#697)
 
 Cognito's hosted sign-in does the Google part; the app only sends people there and swaps the code (`apps/web/CLAUDE.md` § Sign-in flows). In `att-stack.ts`:

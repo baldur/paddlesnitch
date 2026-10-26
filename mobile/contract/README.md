@@ -92,15 +92,16 @@ just accepted the Terms).
 
 | Call | Body | Answer |
 |---|---|---|
-| `POST /att/api/auth/login` | `{email, password}` | `{id, email, displayName, needsTerms, idToken, refreshToken}`; 401 wrong password |
+| `POST /att/api/auth/login` | `{email, password}` | `{id, email, displayName, needsTerms, idToken, refreshToken}`; 401 wrong password; 403 with `needsCode: true` = right password but the sign-up code was never entered: a new one has gone out, ask for it and POST signup/confirm |
 | `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
-| `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 201, as login; 422 if `acceptedTosVersion` isn't current |
+| `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 202 `{needsCode: true, email}`: a 6-digit code has gone to the email, nothing is signed in yet (#702). 409 = a confirmed account has this email; 422 if `acceptedTosVersion` isn't current. Calling it again sends a new code |
+| `POST /att/api/auth/signup/confirm` | `{email, code, password, acceptedTosVersion}` | 201, as login. 400 = wrong or expired code (ask again or send a new one) |
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
 | `POST /att/api/auth/password-reset/request` | `{email, website: "", elapsedMs}` | `{ok: true}` whether or not the account exists (it never says); if it does, a 6-digit code goes to that email |
-| `POST /att/api/auth/password-reset/confirm` | `{email, code, password}` | `{ok: true, signedIn: true, idToken, refreshToken}`: signed in with the new password (then ask `me` for the name). `signedIn: false` = set, but sign in again. 400 with `error` for a wrong or expired code or a weak password |
+| `POST /att/api/auth/password-reset/confirm` | `{email, code, password}` | `{ok: true, signedIn: true, idToken, refreshToken}`: signed in with the new password (then ask `me` for the name). Every other session of the account ends, so other devices' refresh tokens stop working (#702). `signedIn: false` = set, but sign in again. 400 with `error` for a wrong or expired code or a weak password |
 
 **Website pages, signed in.** For a page only the website has (account
 details, delete account…), `POST /att/api/auth/web-code {next: "/account#delete"}`
