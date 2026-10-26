@@ -64,3 +64,7 @@ time and isn't obvious from the code.
   sign-in return, since the manifest's scheme filter catches both. A return with
   no stored connect verifier is ignored (anyone can open the address), and
   `Reauth.After.ConnectStrava` brings a fresh sign-in back to Account.
+- Older Strava paddles come in one at a time from the open Account screen
+  (`StravaImporter`, plain Kotlin with an injectable clock and sleep, as on the
+  website). Leaving Account cancels the import, and what came in stays. The
+  automatic last-month import marks itself done only when every paddle was tried.

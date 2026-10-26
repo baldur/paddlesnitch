@@ -2,6 +2,13 @@ package com.paddlesnitch.app.account
 
 import android.content.Context
 import android.net.Uri
+import com.paddlesnitch.app.api.StravaHistory
+import com.paddlesnitch.app.api.HistorySpan
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
@@ -91,8 +98,6 @@ data class AccountLink(val label: String, val path: String, val signedIn: Boolea
 val accountPages = listOf(
     AccountLink("Your trackers", "/devices"),
 )
-/** Older Strava paddles are still brought in on the website. */
-val olderStravaPaddles = AccountLink("Bring in older paddles", "/account#strava")
 val aboutPages = listOf(
     AccountLink("Help", "/help", signedIn = false),
     AccountLink("Privacy", "/privacy", signedIn = false),
@@ -169,7 +174,7 @@ fun AccountScreen(
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
         StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
-            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onOlderPaddles = { open(olderStravaPaddles) },
+            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) },
             stravaOnly = isPlaceholderEmail(u.email))
         Divider()
         Section("Trackers")
@@ -337,14 +342,13 @@ private fun YourData(api: AccountApi, act: Act) {
 
 /**
  * Strava, as the website's Account section: connect (Strava's consent page in a
- * Custom Tab), who is connected, auto-import, disconnect. Older paddles are still
- * brought in on the website.
+ * Custom Tab), who is connected, auto-import, older paddles, disconnect.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StravaSection(
     api: AccountApi, act: Act, connect: StravaConnect, resume: Boolean, onResumed: () -> Unit,
-    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onOlderPaddles: () -> Unit,
+    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit,
     /** The account signs in only with Strava: disconnecting it is asked about first. */
     stravaOnly: Boolean,
 ) {
@@ -459,12 +463,72 @@ private fun StravaSection(
                     }
                     Switch(checked = on, onCheckedChange = null, enabled = !working && !switching)
                 }
-                Link("${olderStravaPaddles.label} ↗", onClick = onOlderPaddles)
+                FirstImport(api, act)
+                OlderPaddles(api, act)
                 // Attribution: this row shows the athlete's Strava profile name.
                 Image(painterResource(R.drawable.powered_by_strava), contentDescription = "Powered by Strava", modifier = Modifier.height(20.dp))
                 Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted,
                     modifier = Modifier.testTag("strava-end"))
             }
+        }
+    }
+}
+
+/** By itself, once: about the last month of Strava paddles. Shows nothing when there's nothing to do. */
+@Composable
+private fun FirstImport(api: AccountApi, act: Act) {
+    val importer = remember { StravaImporter(api) }
+    var progress by remember { mutableStateOf<ImportProgress?>(null) }
+    LaunchedEffect(Unit) {
+        // Quietly: a failure here leaves Older paddles to do it by hand.
+        act("", {}) {
+            val h = api.stravaHistory(HistorySpan.First)
+            if (h.status != StravaHistory.Status.Ok || h.firstImportDone) return@act
+            val items = h.toImport.orEmpty()
+            if (items.isNotEmpty()) progress = ImportProgress(0, items.size, 0)
+            if (importer.run(items) { progress = it }) api.stravaHistoryDone()
+        }
+    }
+    Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+        progress?.let { Text(importStatus(it, "your last month"), color = PsColor.muted, modifier = Modifier.testTag("first-import")) }
+    }
+}
+
+/** Bring in older paddles: as far back as the paddler picks. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OlderPaddles(api: AccountApi, act: Act) {
+    val importer = remember { StravaImporter(api) }
+    val spans = listOf(HistorySpan.Months3 to "Last 3 months", HistorySpan.Year to "Last year", HistorySpan.All to "Everything")
+    var span by remember { mutableStateOf(HistorySpan.Year) }
+    var picking by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf<ImportProgress?>(null) }
+    fun start() {
+        busy = true; progress = null
+        act("", { progress = ImportProgress(0, 0, 0, stopped = ImportProgress.Stopped.Error) }) {
+            val h = api.stravaHistory(span)
+            when (h.status) {
+                StravaHistory.Status.RateLimited -> progress = ImportProgress(0, 0, 0, stopped = ImportProgress.Stopped.DailyLimit)
+                StravaHistory.Status.Ok -> h.toImport.orEmpty().let { items -> progress = ImportProgress(0, items.size, 0); importer.run(items) { progress = it } }
+                else -> progress = ImportProgress(0, 0, 0, stopped = ImportProgress.Stopped.Error)
+            }
+        }.invokeOnCompletion { busy = false }
+    }
+    Column(Modifier.card().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Older paddles", fontWeight = FontWeight.Medium)
+        Text("Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.", color = PsColor.muted)
+        ExposedDropdownMenuBox(expanded = picking, onExpandedChange = { if (!busy) picking = it }) {
+            OutlinedTextField(spans.first { it.first == span }.second, {}, readOnly = true, enabled = !busy, label = { Text("How far back") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(picking) },
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).testTag("import-span"))
+            ExposedDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                spans.forEach { (value, label) -> DropdownMenuItem(text = { Text(label) }, onClick = { span = value; picking = false }) }
+            }
+        }
+        OutlinedButton(enabled = !busy, onClick = ::start, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (busy) "Bringing in…" else "Bring in older paddles") }
+        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+            progress?.let { Text(importStatus(it, "your paddles"), color = if (it.stopped != null) PsColor.red else PsColor.muted, modifier = Modifier.testTag("older-import")) }
         }
     }
 }

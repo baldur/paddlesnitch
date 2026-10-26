@@ -50,6 +50,10 @@ interface AccountApi {
     suspend fun stravaConnectFinish(code: String, verifier: String): StravaStatus
     suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport
     suspend fun stravaDisconnect(): Ok
+    // Older Strava paddles (README § Strava, signed in), one at a time from the open screen.
+    suspend fun stravaHistory(since: HistorySpan): StravaHistory
+    suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport
+    suspend fun stravaHistoryDone(): Ok
 }
 
 /** The session ended (the refresh token expired or was revoked): sign in again. */
@@ -132,6 +136,12 @@ class Api(
     override suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport =
         account("POST", "att/api/strava/auto-import", """{"enabled":$enabled}""", StravaAutoImport.serializer())
     override suspend fun stravaDisconnect(): Ok = account("POST", "att/api/strava/disconnect", null, Ok.serializer())
+
+    override suspend fun stravaHistory(since: HistorySpan): StravaHistory =
+        query("sources.stravaHistory", StravaHistory.serializer(), """{"since":${str(since.wire)}}""")
+    override suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport =
+        mutation("sources.importStravaPaddle", StravaImport.serializer(), """{"id":${paddle.id},"sport":${str(paddle.sport)},"startDate":${str(paddle.startDate)}}""")
+    override suspend fun stravaHistoryDone(): Ok = mutation("sources.stravaHistoryDone", Ok.serializer(), "{}")
 
     override suspend fun accountStatus(): AccountStatus = account("GET", "api/account", null, AccountStatus.serializer())
 

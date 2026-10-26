@@ -10,7 +10,7 @@ class AccountPagesTest {
     private val app = File("../../../apps/web/src/app")
 
     @Test fun everyLinkedPageExists() {
-        (accountPages + aboutPages + olderStravaPaddles).forEach {
+        (accountPages + aboutPages).forEach {
             val dir = File(app, it.path.substringBefore('#').trimStart('/'))
             assertTrue("${it.label}: no page at ${it.path}", File(dir, "page.tsx").exists())
         }
@@ -18,7 +18,7 @@ class AccountPagesTest {
 
     @Test fun everyJumpIsASectionOfTheAccountPage() {
         val page = File(app, "account/page.tsx").readText()
-        (accountPages + olderStravaPaddles).mapNotNull { it.path.substringAfter('#', "").ifEmpty { null } }.forEach {
+        accountPages.mapNotNull { it.path.substringAfter('#', "").ifEmpty { null } }.forEach {
             assertTrue("no section $it on /account", page.contains("['$it',"))
         }
     }
