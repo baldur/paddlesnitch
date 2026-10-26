@@ -11,6 +11,7 @@ struct SignInView: View {
     let account: AccountModel
     @State private var form = SignInForm()
     @State private var web: URL?
+    @State private var forgotPassword = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @FocusState private var focus: Field?
@@ -58,6 +59,12 @@ struct SignInView: View {
                     if form.mode == .createAccount {
                         terms
                     }
+                    if let notice = form.notice {
+                        Text(notice)
+                            .font(.plexSans(.body))
+                            .foregroundStyle(Palette.fg)
+                            .accessibilityIdentifier("sign-in-notice")
+                    }
                     if let error = form.error {
                         Text(error)
                             .font(.plexSans(.body))
@@ -74,7 +81,7 @@ struct SignInView: View {
                     .disabled(form.busy)
                     .accessibilityIdentifier("sign-in-submit")
                     if form.mode == .signIn {
-                        Button("Forgot password?") { web = PaddlesnitchApp.baseURL.appending(path: "signin/forgot") }
+                        Button("Forgot password?") { forgotPassword = true }
                             .font(.plexSans(.body))
                             .foregroundStyle(Palette.primaryText)
                             .frame(minHeight: 44)
@@ -90,6 +97,14 @@ struct SignInView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+            .navigationDestination(isPresented: $forgotPassword) {
+                ForgotPasswordView(
+                    account: account, email: form.email, signedIn: { dismiss() },
+                    signInAgain: { email in
+                        form.passwordWasReset(email: email)
+                        forgotPassword = false
+                    })
             }
             .sheet(item: $web) { url in
                 SafariView(url: url).ignoresSafeArea()
@@ -137,23 +152,12 @@ struct SignInView: View {
         }
     }
 
-    private func field<Content: View>(_ label: String, help: String? = nil, @ViewBuilder _ input: () -> Content)
+    private func field<Content: View>(
+        _ label: String, help: String? = nil, @ViewBuilder _ input: @escaping () -> Content
+    )
         -> some View
     {
-        // A visible label above every input, help below (design-system.md).
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.plexSans(.subheadline, weight: .medium)).foregroundStyle(Palette.fg)
-            input()
-                .font(.plexSans(.body))
-                .padding(.horizontal, 12)
-                .frame(minHeight: 44)
-                .background(Palette.surface)
-                .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.borderStrong))
-                .accessibilityLabel(label)
-            if let help {
-                Text(help).font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
-            }
-        }
+        FormField(label: label, help: help, input: input)
     }
 
     /// The keyboard goes first, so the sheet isn't still laying out for it

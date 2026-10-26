@@ -83,6 +83,23 @@ public final class AccountModel {
             try await anonymous.send(Endpoints.authStravaAppToken, StravaAppToken(code: code, verifier: verifier)))
     }
 
+    public func requestPasswordReset(_ request: ResetRequest) async throws {
+        _ = try await anonymous.send(Endpoints.authPasswordResetRequest, request)
+    }
+
+    /// Sets a new password from the emailed code. True when that also signed
+    /// you in: the tokens are kept, and `me` says who you are.
+    public func resetPassword(_ confirm: ResetConfirm) async throws -> Bool {
+        let done = try await anonymous.send(Endpoints.authPasswordResetConfirm, confirm)
+        guard done.signedIn, let idToken = done.idToken, let refreshToken = done.refreshToken else { return false }
+        try await session.signedIn(idToken: idToken, refreshToken: refreshToken)
+        guard let who = try await client.call(Procedures.me).user else { return false }
+        let user = User(id: who.id, email: who.email, displayName: who.displayName, needsTerms: false)
+        profile.save(user)
+        state = .signedIn(user)
+        return true
+    }
+
     /// Signs out here at once, then asks the server to revoke the refresh
     /// token. If that can't reach the server the token is still gone from
     /// this phone.

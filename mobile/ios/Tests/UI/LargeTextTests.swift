@@ -41,6 +41,15 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(text(containing: "Version").exists)
     }
 
+    func testForgotPasswordAtTheLargestTextSize() throws {
+        app.buttons["sample-notice-action"].tap()
+        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
+        scrollToElement(app.buttons["Forgot password?"]).tap()
+        XCTAssertTrue(element("forgot-explainer").waitForExistence(timeout: 10))
+        try checkWholeScreen()
+        XCTAssertTrue(app.buttons["forgot-submit"].exists)
+    }
+
     func testAccountAtTheLargestTextSize() throws {
         signInAndWait()
         tab("You").tap()

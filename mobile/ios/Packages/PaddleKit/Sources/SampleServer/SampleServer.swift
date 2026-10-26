@@ -12,6 +12,11 @@ import PaddleAPI
 public final class SampleServer: HTTPTransport, @unchecked Sendable {
     public static let password = "Password123"
     public static let needsTermsEmail = "sam@example.com"
+    /// Forgot password: this code works; any other is wrong.
+    public static let resetCode = "123456"
+    public static let wrongResetCodeMessage = "That code is wrong or has expired. Ask for a new one."
+    /// An account whose new password is set without signing in.
+    public static let resetWithoutSignInEmail = "kim@example.com"
 
     private let fixtures: URL
     private let lock = NSLock()
@@ -60,6 +65,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
 
     private func answer(_ request: URLRequest) throws -> (Int, Data) {
         let path = request.url?.path ?? ""
+        if path.hasPrefix("/att/api/auth/password-reset/") {
+            return try passwordReset(path: path, body: request.httpBody ?? Data())
+        }
         if path.hasPrefix("/att/api/auth/") {
             return try auth(path: path, body: request.httpBody ?? Data())
         }
@@ -108,6 +116,26 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
             _ = lock.withLock { revoked.insert(token) }
             return (200, Data(#"{"ok":true}"#.utf8))
+        default:
+            return (404, Data(#"{"error":"Not found"}"#.utf8))
+        }
+    }
+
+    /// Forgot password: `resetCode` works, any other code is wrong.
+    private func passwordReset(path: String, body: Data) throws -> (Int, Data) {
+        switch path {
+        case "/att/api/auth/password-reset/request":
+            _ = try JSONDecoder().decode(ResetRequest.self, from: body)
+            return (200, Data(#"{"ok":true}"#.utf8))
+        case "/att/api/auth/password-reset/confirm":
+            let confirm = try JSONDecoder().decode(ResetConfirm.self, from: body)
+            guard confirm.code == Self.resetCode else {
+                return (400, Data(#"{"error":"\#(Self.wrongResetCodeMessage)"}"#.utf8))
+            }
+            if confirm.email == Self.resetWithoutSignInEmail {
+                return (200, Data(#"{"ok":true,"signedIn":false}"#.utf8))
+            }
+            return (200, try fixture("auth.password-reset-confirm"))
         default:
             return (404, Data(#"{"error":"Not found"}"#.utf8))
         }

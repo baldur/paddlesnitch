@@ -32,3 +32,7 @@ isn't obvious from the code.
   `confirmationDialog` is a popover with no Cancel button.
 - Run the UI tests on iOS 17 too when a screen is new: CI does, and the two
   differ (alerts, dialogs, tab bars). There's no iOS 17 simulator on this Mac.
+- The audit's clipped-text check flags a text field with text in it (our
+  Plex font) as clipped when nothing is: zoomed screenshots show the whole
+  text, descenders too. Audit a filled form without `.textClipped`, and check
+  clipping in `LargeTextTests` with the fields empty.
