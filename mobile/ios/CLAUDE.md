@@ -36,3 +36,10 @@ isn't obvious from the code.
   Plex font) as clipped when nothing is: zoomed screenshots show the whole
   text, descenders too. Audit a filled form without `.textClipped`, and check
   clipping in `LargeTextTests` with the fields empty.
+- Push screens by value, with the destination declared on a screen that
+  stays in the stack (`navigationDestination(for:)`). On iOS 17 a
+  `NavigationLink { destination }` two screens under a typed path hung
+  opening a paddle (CI: "App event loop idle notification not received").
+  You's path is a `NavigationPath`, so a pushed screen can add its own routes.
+- iOS 17's audit cuts long text in List rows and section footers where newer
+  iOS doesn't: give every sentence `.fixedSize(horizontal: false, vertical: true)`.
