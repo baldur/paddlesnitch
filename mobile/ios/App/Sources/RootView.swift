@@ -48,9 +48,14 @@ struct RootView: View {
         .task { await openLaunchFile() }
         .tint(Palette.primaryText)
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $signingIn) {
-            SignInView(account: account)
-        }
+        .sheet(
+            isPresented: $signingIn,
+            onDismiss: {
+                // Closed without signing in again: don't jump to deleting later.
+                if account.user == nil && account.deleteAfterSignIn { account.deleteResumed() }
+            },
+            content: { SignInView(account: account) }
+        )
         .sheet(isPresented: $termsOpen) {
             NavigationStack {
                 List {

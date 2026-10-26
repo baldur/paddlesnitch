@@ -130,4 +130,30 @@ import Testing
         #expect(account.user != nil)
         #expect(tokens.load() != nil)
     }
+
+    // MARK: A recent sign-in before deleting (mobile/contract/README.md, Account)
+
+    @Test func justSignedInIsRecent() async throws {
+        #expect(try await signedIn().recentSignIn())
+    }
+
+    @Test func anOldSignInIsNotRecentAndDeletingIsRefusedForIt() async throws {
+        let account = try await signedIn()
+        server.signInIsRecent = false
+        #expect(try await account.recentSignIn() == false)
+        await #expect(throws: AccountModel.DeleteError.needsRecentSignIn) { try await account.deleteAccount() }
+        #expect(account.user != nil, "never signed out without asking")
+        #expect(tokens.load() != nil)
+    }
+
+    @Test func signingOutToDeleteRemembersToComeBackWithTheEmail() async throws {
+        let account = try await signedIn()
+        await account.signOutToDelete()
+        #expect(account.user == nil)
+        #expect(account.deleteAfterSignIn)
+        #expect(account.signInAgainEmail == "pat@example.com")
+        account.deleteResumed()
+        #expect(!account.deleteAfterSignIn)
+        #expect(account.signInAgainEmail == nil)
+    }
 }

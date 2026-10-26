@@ -25,6 +25,14 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     private var _refusesRefresh = false
     private var _termsAccepted = true
     private var _failsAccountDelete = false
+    private var _signInIsRecent = true
+    /// Make the last sign-in older than 10 minutes, as after a day signed
+    /// in: `GET /api/account` says so and `DELETE` refuses (403 reauth).
+    /// A sign-in makes it recent again.
+    public var signInIsRecent: Bool {
+        get { lock.withLock { _signInIsRecent } }
+        set { lock.withLock { _signInIsRecent = newValue } }
+    }
     /// Make `DELETE /api/account` fail, as when the server is down.
     public var failsAccountDelete: Bool {
         get { lock.withLock { _failsAccountDelete } }
@@ -92,8 +100,11 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         case "/att/api/auth/login":
             let login = try JSONDecoder().decode(Login.self, from: body)
             guard login.password == Self.password else { return (401, try fixture("auth.error")) }
-            lock.withLock { _termsAccepted = login.email != Self.needsTermsEmail }
-            return (200, try fixture(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
+            lock.withLock {
+                _termsAccepted = login.email != Self.needsTermsEmail
+                _signInIsRecent = true
+            }
+            return (200, try signIn(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
         case "/att/api/auth/strava/app-token":
             // A code from `stravaBrowser` carries its challenge, so this checks
             // the verifier the way the server does.
@@ -101,13 +112,13 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             guard swap.code == "sample." + Self.challenge(swap.verifier) else {
                 return (401, Data(#"{"error":"That sign-in has expired. Please try again."}"#.utf8))
             }
-            return (200, try fixture("auth.login"))
+            return (200, try signIn("auth.login"))
         case "/att/api/auth/signup":
             let signup = try JSONDecoder().decode(Signup.self, from: body)
             guard signup.acceptedTosVersion == Constants.tosVersion else {
                 return (422, Data(#"{"error":"The Terms of Service have changed. Update the app to sign up."}"#.utf8))
             }
-            return (201, try fixture("auth.login"))
+            return (201, try signIn("auth.login"))
         case "/att/api/auth/refresh":
             let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
             let refused = lock.withLock { _refusesRefresh || revoked.contains(token) }
@@ -205,18 +216,29 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             }
             lock.withLock { _termsAccepted = true }
             return (200, try fixture("account.tos-accepted"))
+        case ("GET", "/api/account"):
+            return (200, Data(#"{"recentSignIn":\#(lock.withLock { _signInIsRecent })}"#.utf8))
         case ("POST", "/api/account/export"):
             return (200, Data(#"{"url":"\#(Self.exportPath)"}"#.utf8))
         case ("DELETE", "/api/account"):
-            if lock.withLock({ _failsAccountDelete }) {
-                return (500, Data(#"{"error":"Couldn't delete the account."}"#.utf8))
-            }
-            let body = try JSONDecoder().decode(DeleteAccount.self, from: request.httpBody ?? Data())
-            if let token = body.refreshToken { _ = lock.withLock { revoked.insert(token) } }
-            return (200, Data(#"{"ok":true}"#.utf8))
+            return try deleteAccount(request)
         default:
             return (404, Data(#"{"error":"Not found"}"#.utf8))
         }
+    }
+
+    /// Deleting: refused without a recent sign-in, as the server does.
+    private func deleteAccount(_ request: URLRequest) throws -> (Int, Data) {
+        if lock.withLock({ _failsAccountDelete }) {
+            return (500, Data(#"{"error":"Couldn't delete the account."}"#.utf8))
+        }
+        guard lock.withLock({ _signInIsRecent }) else {
+            let words = "For your safety, deleting your account needs a recent sign-in. Please sign in again."
+            return (403, Data(#"{"error":"\#(words)","reauth":true}"#.utf8))
+        }
+        let body = try JSONDecoder().decode(DeleteAccount.self, from: request.httpBody ?? Data())
+        if let token = body.refreshToken { _ = lock.withLock { revoked.insert(token) } }
+        return (200, Data(#"{"ok":true}"#.utf8))
     }
 
     /// Adding a paddle from a file. The file's name picks the answer: one with
@@ -257,6 +279,15 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     private static let unauthorized = (
         401, Data(#"{"error":{"message":"Sign in","data":{"code":"UNAUTHORIZED","httpStatus":401}}}"#.utf8)
     )
+
+    /// A sign-in answer with a refresh token of its own, as the server
+    /// gives: one revoked by signing out mustn't come back on the next.
+    private func signIn(_ name: String) throws -> Data {
+        var answer = try JSONDecoder.paddlesnitch.decode(SignIn.self, from: try fixture(name))
+        // Random, not counted: a relaunched app starts a new sample server.
+        answer.refreshToken += "." + UUID().uuidString
+        return try JSONEncoder.paddlesnitch.encode(answer)
+    }
 
     private func fixture(_ name: String) throws -> Data {
         try Data(contentsOf: fixtures.appending(path: "\(name).json"))
