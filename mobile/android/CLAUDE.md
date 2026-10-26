@@ -94,11 +94,17 @@ time and isn't obvious from the code.
   `assets/licences`). The theme sets Plex Sans for every style (`ui/Type.kt`).
   Numbers and mono labels use `PlexMono`, never `FontFamily.Monospace` (`TypeTest`).
 - Which sign-ins are on comes from `GET /att/api/auth/options`, asked each time sign-in
-  and Account open (`loadOptions`, `AccountApi.signInOptions`). A failure means email
-  only, and Strava counts as off. With Strava off, Account shows Strava only to a connected
-  account, as Paused. An account made with Strava gets Report an issue instead of Sign in
-  again (`reportIssue`: `/signin?report=1`). Screen tests built on MockWebServer must pass
-  their own `loadOptions`, or the options call eats an answer meant for the test.
+  and Account open (`loadOptions`, `AccountApi.signInOptions`). A failure says so with Try
+  again on both screens. It never quietly counts as "Strava off". With Strava off, Account
+  shows Strava only to a connected account, as Paused. On sign-in, an account made with
+  Strava gets "Email us" (mailto), never the issue form: reports are public. Before deleting,
+  it gets Report an issue, opened through `signedInPage("/account?report=1")` so the report
+  is filed as that account. Screen tests built on MockWebServer must pass their own
+  `loadOptions`, or the options call eats an answer meant for the test.
+- A `LaunchedEffect` that waits for other state must wait inside one run
+  (`snapshotFlow { … }.first { it }`) and read that state after the wait. Adding the state as
+  a key reruns the effect, which wipes the first run's result. A value read into a `val`
+  before the effect is the one from first composition.
 - Sign in with Google (`auth/GoogleSignIn.kt`) is PKCE like Strava. The return address is
   `com.paddlesnitch.app:/signin/google`, and App.kt acts on it only while
   `PrefsGoogleVerifierStore` holds a verifier from the last 10 minutes.

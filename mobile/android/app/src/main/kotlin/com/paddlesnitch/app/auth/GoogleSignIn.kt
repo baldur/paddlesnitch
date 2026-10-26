@@ -15,6 +15,9 @@ class GoogleSignIn(private val api: Api, private val verifiers: VerifierStore) {
     /** The page to open; remembers the verifier, which outlives the app being killed meanwhile. */
     fun start(): String = Pkce.verifier().let { verifiers.put(it); api.googleStartUrl(Pkce.challenge(it)) }
 
+    /** The page never opened: forget the verifier, so nothing is pending. */
+    fun cancel() { verifiers.take() }
+
     /** Null when this app didn't start a Google sign-in. [strava]: whether Strava sign-in is on, for the words. */
     suspend fun finish(code: String?, error: String?, strava: Boolean): SignIn? {
         val verifier = verifiers.take() ?: return null

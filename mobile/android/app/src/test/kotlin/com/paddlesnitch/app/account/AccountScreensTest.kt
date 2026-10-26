@@ -795,10 +795,27 @@ class AccountScreensTest {
         compose.onNodeWithContentDescription("Connect with Strava").assertDoesNotExist()
     }
 
-    @Test fun notKnowingWhetherStravaIsOnCountsAsOff() {
-        account(FakeAccountApi(options = null))
-        waitFor("Your trackers")
+    @Test fun aFailedStravaCheckSaysSoAndCanBeTriedAgain() {
+        val api = FakeAccountApi(options = null)
+        account(api)
+        waitFor("Couldn’t check Strava. Please try again.")
         compose.onNodeWithContentDescription("Connect with Strava").assertDoesNotExist()
+        api.options = SignInOptions(google = true, strava = true)
+        compose.onNodeWithText("Try again").performScrollTo().performClick()
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test fun whileStravaIsUnknownAnAccountMadeWithStravaIsntSentToStrava() {
+        account(FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", options = null, recentSignIn = false))
+        waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor("Report an issue")
+        compose.onNodeWithText("Sign in again").assertDoesNotExist()
+    }
+
+    @Test fun stravaOffAndStatusFailingSaysSoRatherThanHidingStrava() {
+        account(FakeAccountApi(options = stravaOff, strava = connected(), failStravaStatus = true))
+        waitFor("Couldn’t check Strava. Please try again.")
     }
 
     @Test fun stravaOffShowsAConnectedAccountAsPausedWithDisconnect() {
@@ -824,14 +841,18 @@ class AccountScreensTest {
     }
 
     @Test fun stravaOffAnAccountMadeWithStravaReportsAnIssueInsteadOfSigningInAgain() {
-        account(FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", options = stravaOff, recentSignIn = false))
+        account(FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", options = stravaOff, recentSignIn = false), fontScale = 2f)
         waitFor("Delete my account")
         compose.onNodeWithText("Delete my account").performScrollTo().performClick()
         waitFor(NO_SIGN_IN_AGAIN)
         compose.onNodeWithText("Sign in again").assertDoesNotExist()
+        compose.onNodeWithText("Report an issue").performScrollTo()
+        compose.onRoot().captureRoboImage()
         compose.onNodeWithText("Report an issue").performScrollTo().performClick()
         assertEquals(emptyList<String>(), did) // never signed out
-        assertTrue(Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString().endsWith("/signin?report=1"))
+        // Signed in on the website, so the report says whose account it is.
+        compose.waitUntil { Shadows.shadowOf(compose.activity).peekNextStartedActivity() != null }
+        assertEquals("https://paddlesnitch.com/account?report=1", Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString())
     }
 
     @Test fun stravaOffAnEmailAccountStillSignsInAgain() {

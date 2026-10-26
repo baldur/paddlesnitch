@@ -106,4 +106,31 @@ class GoogleSignInTest {
         assertFalse(store.pending)
         assertNull(store.take())
     }
+
+    @Test fun aReturnWithNeitherCodeNorErrorSaysTryAgain() = runTest {
+        google.start()
+        val e = runCatching { google.finish(null, null, strava = false) }.exceptionOrNull() as ApiFailure
+        assertEquals("Couldn’t sign in with Google. Please try again.", e.message)
+    }
+
+    @Test fun aRefusedSwapUsesTheVerifierUpAndSaysTryAgain() = runTest {
+        google.start()
+        server.enqueue(MockResponse.Builder().code(400).body("""{"error":"Couldn’t finish signing in. Please try again."}""").build())
+        val e = runCatching { google.finish("x", null, strava = false) }.exceptionOrNull() as ApiFailure
+        assertEquals("Couldn’t sign in with Google. Please try again.", e.message)
+        assertNull(verifiers.kept)
+    }
+
+    @Test fun theServersOwnWordsForAnythingElsePassThrough() = runTest {
+        google.start()
+        server.enqueue(MockResponse.Builder().code(429).body("""{"error":"Too many attempts. Please wait a minute."}""").build())
+        val e = runCatching { google.finish("x", null, strava = false) }.exceptionOrNull() as ApiFailure
+        assertEquals("Too many attempts. Please wait a minute.", e.message)
+    }
+
+    @Test fun cancellingForgetsTheVerifier() {
+        google.start()
+        google.cancel()
+        assertNull(verifiers.kept)
+    }
 }
