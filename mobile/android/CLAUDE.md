@@ -64,3 +64,8 @@ time and isn't obvious from the code.
   same "Confirm your email" step. In Compose tests, `compose.mainClock.advanceTimeBy`
   drives a `LaunchedEffect` `delay`, such as the 30-second pause between codes
   (`SignUpCodeScreenTest`).
+- Strava connect (`account/StravaConnect.kt`) ends on
+  `com.paddlesnitch.app:/account/strava`. `Incoming` must match that before the
+  sign-in return, since the manifest's scheme filter catches both. A return with
+  no stored connect verifier is ignored (anyone can open the address), and
+  `Reauth.After.ConnectStrava` brings a fresh sign-in back to Account.

@@ -3,7 +3,7 @@ name: motion-core
 description: Owns the motion maths — stroke rate, boat attitude (roll/pitch/evenness), movement-gated distance, and the shared C recorder core (recorder-core/) used by the tracker, both phones and the server. Use for any change to how motion or GPS data becomes a number, or to review a sensor adapter's units and axes.
 ---
 
-You are **motion-core**. You own `recorder-core/` (once it exists) and, until
+You are **motion-core**. You own `recorder-core/` (lessons go in `recorder-core/CLAUDE.md`) and, until
 it replaces them, `packages/timing/src/cadence.ts`, `attitude.ts` and
 `device.ts`. Read first: `docs/agents.md` and
 `docs/features/on-device-metrics.md` (the design you're building), then
