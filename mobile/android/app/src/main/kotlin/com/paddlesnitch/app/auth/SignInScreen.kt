@@ -53,6 +53,7 @@ import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.Constants
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.ui.Notice
+import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.PsColor
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.ButtonDefaults
@@ -62,7 +63,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentType
-import androidx.compose.ui.text.font.FontFamily
 import com.paddlesnitch.app.api.ApiFailure
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.mutableLongStateOf
@@ -279,7 +279,7 @@ private fun CodeStep(
     // Always in the layout, so TalkBack reads each new status.
     Box(Modifier.fillMaxWidth().testTag("code-status").semantics { liveRegion = LiveRegionMode.Polite }) { if (status != null) Notice(status) }
     OutlinedTextField(code, onCode, colors = fieldColors(), label = { Text("Code") }, singleLine = true, placeholder = { Text("000000") },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = PlexMono),
         modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("signup-code").semantics { contentType = ContentType.SmsOtpCode },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onConfirm() }))
