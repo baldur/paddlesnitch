@@ -19,12 +19,17 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     public static let resetWithoutSignInEmail = "kim@example.com"
 
     private let fixtures: URL
-    private let lock = NSLock()
+    let lock = NSLock()
     private var _requests: [URLRequest] = []
     private var revoked: Set<String> = []
     private var _refusesRefresh = false
     private var _termsAccepted = true
     private var _failsAccountDelete = false
+    var _removedTrackers: Set<String> = []
+    var _failsTrackerRemoval = false
+    var _failsTrackerList = false
+    var _failsTrackerRecordings = false
+
     private var _signInIsRecent = true
     /// Make the last sign-in older than 10 minutes, as after a day signed
     /// in: `GET /api/account` says so and `DELETE` refuses (403 reauth).
@@ -84,6 +89,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         }
         if path == "/paddles/api/analyse" {
             return analyse(request)
+        }
+        if path.hasPrefix("/api/account/devices") {
+            return try trackers(path: path, request: request)
         }
         if path == "/api/account" || path.hasPrefix("/api/account/") {
             return try account(path: path, request: request)
@@ -289,7 +297,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         return try JSONEncoder.paddlesnitch.encode(answer)
     }
 
-    private func fixture(_ name: String) throws -> Data {
+    func fixture(_ name: String) throws -> Data {
         try Data(contentsOf: fixtures.appending(path: "\(name).json"))
     }
 

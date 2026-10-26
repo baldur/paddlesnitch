@@ -60,6 +60,27 @@ final class LargeTextTests: AppTestCase {
         try checkWholeScreen(last: app.buttons["Delete my account"])
     }
 
+    /// Scrolls to each element and checks for clipped text there: each
+    /// check resizes the text in place and a long List jumps back up, so
+    /// swiping from the top can't count on keeping its place.
+    private func checkScreen(at elements: [XCUIElement]) throws {
+        try audit(.textClipped)
+        for element in elements {
+            for _ in 0..<2 where !(element.exists && isReadable(element)) { scrollToElement(element) }
+            XCTAssertTrue(element.exists, "reached \(element)")
+            try audit(.textClipped)
+        }
+    }
+
+    func testTrackersAtTheLargestTextSize() throws {
+        signInAndWait()
+        tab("You").tap()
+        scrollToElement(app.buttons["Devices"]).tap()
+        XCTAssertTrue(app.navigationBars["Devices"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element("tracker-C0FFEE01").waitForExistence(timeout: 10))
+        try checkScreen(at: [element("tracker-C0FFEE02"), element("tracker-BADC0DE9")])
+    }
+
     func testSignInAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))

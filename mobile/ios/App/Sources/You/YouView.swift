@@ -26,7 +26,7 @@ struct YouView: View {
     @State private var path: [Route] = []
 
     enum Route: Hashable {
-        case account
+        case account, trackers
     }
 
     var body: some View {
@@ -43,6 +43,10 @@ struct YouView: View {
                         .listRowBackground(Palette.surface)
                         NavigationLink(value: Route.account) {
                             Text("Account").font(.plexSans(.body)).foregroundStyle(Palette.fg)
+                        }
+                        .listRowBackground(Palette.surface)
+                        NavigationLink(value: Route.trackers) {
+                            Text("Devices").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
                         rows(Self.account)
@@ -85,8 +89,11 @@ struct YouView: View {
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
             .navigationTitle("You")
-            .navigationDestination(for: Route.self) { _ in
-                AccountView(account: account, signIn: signIn)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .account: AccountView(account: account, signIn: signIn)
+                case .trackers: TrackersView(account: account)
+                }
             }
             .onChange(of: account.user?.id) { _, id in
                 // Signed in again to delete: straight back to the account.
