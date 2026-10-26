@@ -43,7 +43,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -59,6 +58,7 @@ import com.paddlesnitch.app.paddles.fmtDay
 import com.paddlesnitch.app.paddles.fmtDayTime
 import com.paddlesnitch.app.paddles.fmtDist
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.PlexMono
 import kotlinx.coroutines.launch
 
 /**
@@ -147,10 +147,10 @@ private fun TrackerCard(s: TrackerSummary, device: Tracker?, now: Long, onOpen: 
             Text(s.name, fontWeight = FontWeight.Medium)
             if (!s.linked) Badge("removed")
         }
-        if (s.linked) Text(statusLine(s, device, now), style = MaterialTheme.typography.bodySmall)
-        Text(recordingsLine(s), color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
+        if (s.linked) Text(statusLine(s, device, now), style = MaterialTheme.typography.bodySmall, fontFamily = PlexMono)
+        Text(recordingsLine(s), color = PsColor.muted, style = MaterialTheme.typography.bodySmall, fontFamily = PlexMono)
         // The id is for support, not for recognising your tracker: last, small.
-        Text(s.deviceId + (device?.model?.let { " · $it" } ?: ""), color = PsColor.muted, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
+        Text(s.deviceId + (device?.model?.let { " · $it" } ?: ""), color = PsColor.muted, style = MaterialTheme.typography.labelSmall, fontFamily = PlexMono)
     }
     Chevron()
     }
@@ -203,7 +203,7 @@ private fun TrackerScreen(
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Header(s.name, onBack, back = "Trackers")
         Text(listOfNotNull(s.deviceId, device?.model, device?.firmware?.let { "firmware $it" }, device?.lastSeenAt?.let { "last seen ${fmtDay(it)}" }).joinToString(" · "),
-            color = PsColor.muted, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            color = PsColor.muted, style = MaterialTheme.typography.bodySmall, fontFamily = PlexMono)
         if (!s.linked) Text("This tracker is no longer on your account, but its recordings are still yours. Add it again to get new ones.",
             color = PsColor.muted, modifier = Modifier.card().padding(16.dp))
         Text("Recordings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
@@ -222,14 +222,14 @@ private fun TrackerScreen(
             if (paddle != null) Row(Modifier.card().clickable(role = Role.Button) { onOpenPaddle(paddle) }
                 .padding(horizontal = 16.dp, vertical = 12.dp).testTag("recording-${r.sessionId}"), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(line)
+                    Text(line, fontFamily = PlexMono)
                     Text("paddle" + (if (r.motion != null) " · with boat motion" else ""), color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
                 }
                 Chevron()
             }
             // Not a paddle: nothing to open here yet, so it doesn't look like a button.
             else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("recording-${r.sessionId}")) {
-                Text(line, color = PsColor.muted)
+                Text(line, color = PsColor.muted, fontFamily = PlexMono)
                 Text("not a paddle · ${r.filename}", color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
             }
         }

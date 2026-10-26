@@ -30,7 +30,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -39,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.paddlesnitch.app.api.PaddleCard
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.PsRadius
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -94,13 +94,13 @@ fun PaddlesScreen(
 
 @Composable
 internal fun Eyebrow(text: String) =
-    Text(text.uppercase(), fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = 1.sp, color = PsColor.muted)
+    Text(text.uppercase(), fontFamily = PlexMono, fontSize = 12.sp, letterSpacing = 1.sp, color = PsColor.muted)
 
 @Composable
 private fun Stat(label: String, value: String, sub: String?, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Eyebrow(label)
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, fontFamily = PlexMono)
         if (sub != null) Text(sub, fontSize = 13.sp, color = PsColor.muted)
     }
 }
@@ -167,11 +167,11 @@ private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit) {
                     },
                     color = PsColor.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-                Text("${paddleKm(p.distanceKm, noGps)} · ${fmtClock(p.durationS)}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("${paddleKm(p.distanceKm, noGps)} · ${fmtClock(p.durationS)}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexMono)
                 val spm = p.avgSR?.let { "${it.roundToInt()} spm" }
                 Text(
                     if (noGps) spm.orEmpty() else listOfNotNull("${split500(p.cruiseSpeed)} /500", spm).joinToString(" · "),
-                    color = PsColor.muted, fontSize = 14.sp,
+                    color = PsColor.muted, fontSize = 14.sp, fontFamily = PlexMono,
                 )
                 p.note?.let { Text(it, color = PsColor.split, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }

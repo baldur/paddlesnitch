@@ -38,7 +38,6 @@ import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +47,7 @@ import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.PlexMono
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -121,7 +121,7 @@ fun ForgotPasswordScreen(
             keyboardActions = KeyboardActions(onDone = { sendCode() }))
         if (codeSent) {
             OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, label = { Text("Code from the email") }, singleLine = true,
-                placeholder = { Text("000000") }, textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+                placeholder = { Text("000000") }, textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = PlexMono),
                 modifier = Modifier.fillMaxWidth().focusRequester(codeFocus).testTag("reset-code").semantics { contentType = ContentType.SmsOtpCode },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next))
             OutlinedTextField(password, { password = it }, label = { Text("New password") }, singleLine = true,
