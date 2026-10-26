@@ -668,6 +668,7 @@ export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
       id: String(claims.sub),
       email,
       displayName: name,
+      emailVerified: claims.email_verified === true || claims.email_verified === 'true',
     }
   } catch {
     return null

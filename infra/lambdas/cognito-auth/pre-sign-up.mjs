@@ -48,7 +48,11 @@ export async function check(event, deps) {
   // Any confirmed account with this email blocks, a Google one included:
   // PreSignUp only runs when Cognito is about to make a NEW user, so a Google
   // account already holding the email is a different Google identity.
-  const existing = (await deps.usersWithEmail(event.userPoolId, email)).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  // Only an account that proved the address counts: anyone can set their own
+  // email to someone else's through the public client (it stays unverified),
+  // and that mustn't stop the real owner signing up (#713).
+  const verified = (u) => (u.Attributes ?? []).some(x => x.Name === 'email_verified' && x.Value === 'true')
+  const existing = (await deps.usersWithEmail(event.userPoolId, email)).filter(u => u.UserStatus !== 'UNCONFIRMED' && verified(u))
   if (existing.length) throw new Error('ACCOUNT_EXISTS')
   return event
 }
