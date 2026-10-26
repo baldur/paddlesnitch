@@ -22,10 +22,14 @@ time and isn't obvious from the code.
   `adb shell am start -a android.intent.action.VIEW -d https://paddlesnitch.com/paddles/<id> com.paddlesnitch.app.debug`.
 - `adb exec-out screencap` gives a black image when the phone is locked
   (`dumpsys power` shows `mWakefulness=Dozing`).
-- `TextButton` takes its text colour from M3 `primary`, which is `PsColor.primary`
-  (#0369a1, ~3:1 on the dark ground). Give text buttons
-  `ButtonDefaults.textButtonColors(contentColor = PsColor.primaryText)`.
-  Older screens still use the dark one.
+- M3 colours text and outlined buttons with `primary`, which is the filled-button
+  blue (`PsColor.primary` #0369a1, about 3:1 on the dark ground). Every
+  `TextButton` and `OutlinedButton` passes `colors = textColors()` or
+  `outlinedColors()` (`ui/Buttons.kt`), or its own; `ButtonColoursTest` fails on
+  one that doesn't. Tabs pass `selectedContentColor = PsColor.primaryText`. Text
+  fields, checkboxes and switches do the same with `fieldColors()`, `checkboxColors()`
+  and `switchColors()` (`ui/Fields.kt`). The theme's `primary` stays #0369a1 for
+  filled buttons (lead, 2026-10-26).
 - TalkBack reads a change inside a live region it already knows, not a node
   that has just appeared. Keep the live-region container in the layout even
   when it's empty (`AddPaddleCard(card = null)`).
@@ -69,3 +73,20 @@ time and isn't obvious from the code.
   sign-in return, since the manifest's scheme filter catches both. A return with
   no stored connect verifier is ignored (anyone can open the address), and
   `Reauth.After.ConnectStrava` brings a fresh sign-in back to Account.
+- Older Strava paddles come in one at a time (`StravaImporter`, plain Kotlin with an
+  injectable clock and sleep). `StravaImportModel` is the app's first ViewModel: it
+  keeps the import through rotation and setting changes. `onDispose` calls `stop()`
+  only when `!activity.isChangingConfigurations`, and keeps the screen on while an
+  import runs. TalkBack hears only start, waiting, stopped and done
+  (`importAnnouncement`). Use `semantics { contentDescription }`, not
+  `clearAndSetSemantics`, so tests can still find the visible text.
+- Large-text goldens catch rows that squeeze text to a letter per line. Use
+  `FlowRow` for a badge, name and action on one line.
+- Forgot password is in the app (`ForgotPasswordScreen`, shown inside signing in).
+  A reset that signs in returns a `SignIn` built from `me`, so App.kt's one
+  `signedInWith` handles it like any sign-in: reauth, intake and the Terms check
+  on start.
+- Trackers (`tracker/TrackersScreen.kt`) show the server's `summaries` as they are.
+  Recordings, firmware and last-seen are looked up by id from the same answer, never
+  added up in the app. Anything with "ago" in a golden takes an injected `now`, or
+  the golden fails the next day.

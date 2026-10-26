@@ -47,6 +47,7 @@ import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.textColors
 
 /** The map on the paddle page; tests swap in a stand-in, as MapLibre can't draw on the JVM. */
 typealias MapSlot = @Composable (PaddleDetail, Modifier) -> Unit
@@ -101,7 +102,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     }
     val d = detail
     Column(modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
+        TextButton(onClick = onBack, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
         when {
             d != null -> PaddlePage(d, map)
             error != null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

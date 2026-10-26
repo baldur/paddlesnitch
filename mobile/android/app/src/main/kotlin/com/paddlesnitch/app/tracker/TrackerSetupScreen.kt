@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.dp
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.fieldColors
+import com.paddlesnitch.app.ui.outlinedColors
+import com.paddlesnitch.app.ui.textColors
 import com.paddlesnitch.app.ui.PsRadius
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -224,7 +227,7 @@ fun TrackerSetupScreen(api: Api, onClose: () -> Unit, onSignedOut: () -> Unit, m
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Your tracker", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).semantics { heading() })
-            TextButton(onClick = onClose) { Text(if (phase == Phase.Ready) "Done" else "Close") }
+            TextButton(onClick = onClose, colors = textColors()) { Text(if (phase == Phase.Ready) "Done" else "Close") }
         }
 
         when (phase) {
@@ -237,7 +240,7 @@ fun TrackerSetupScreen(api: Api, onClose: () -> Unit, onSignedOut: () -> Unit, m
                 }
                 BigButton("Find my tracker") { ready(::find) }
                 remembered?.let { (address, name) ->
-                    OutlinedButton(onClick = { ready { TrackerCompanion.byAddress(context, address)?.let(::connect) ?: run { problem = Messages.NOT_FOUND } } },
+                    OutlinedButton(colors = outlinedColors(), onClick = { ready { TrackerCompanion.byAddress(context, address)?.let(::connect) ?: run { problem = Messages.NOT_FOUND } } },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Connect to $name") }
                 }
             }
@@ -251,10 +254,10 @@ fun TrackerSetupScreen(api: Api, onClose: () -> Unit, onSignedOut: () -> Unit, m
 
         problem?.let {
             Text(it, color = PsColor.red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            if (needsSettings) OutlinedButton(onClick = {
+            if (needsSettings) OutlinedButton(colors = outlinedColors(), onClick = {
                 context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
             }) { Text("Open the app’s settings") }
-            if (problem == Messages.BLUETOOTH_OFF) OutlinedButton(onClick = { ready(::find) }) { Text("Turn Bluetooth on") }
+            if (problem == Messages.BLUETOOTH_OFF) OutlinedButton(onClick = { ready(::find) }, colors = outlinedColors()) { Text("Turn Bluetooth on") }
         }
 
         val t = tracker; val a = about
@@ -268,7 +271,7 @@ fun TrackerSetupScreen(api: Api, onClose: () -> Unit, onSignedOut: () -> Unit, m
             }
             if (!paired) {
                 BigButton("Try pairing again") { pair() }
-                OutlinedButton(onClick = { reset(null) }, modifier = Modifier.fillMaxWidth()) { Text("Start again") }
+                OutlinedButton(onClick = { reset(null) }, modifier = Modifier.fillMaxWidth(), colors = outlinedColors()) { Text("Start again") }
                 return@Column
             }
 
@@ -285,9 +288,9 @@ fun TrackerSetupScreen(api: Api, onClose: () -> Unit, onSignedOut: () -> Unit, m
             Section {
                 Text("WiFi (optional)", fontWeight = FontWeight.SemiBold)
                 Text("With WiFi the tracker uploads by itself at home. It tries the network first and keeps it only if it can join. 2.4 GHz networks only.", color = PsColor.muted)
-                OutlinedTextField(ssid, { ssid = it }, label = { Text("Network name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(ssid, { ssid = it }, colors = fieldColors(), label = { Text("Network name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
-                OutlinedTextField(pass, { pass = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(pass, { pass = it }, colors = fieldColors(), label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done))
                 BigButton(if (wifiBusy) "Trying the network…" else "Send WiFi to the tracker", enabled = !wifiBusy && ssid.isNotBlank()) { sendWifi() }

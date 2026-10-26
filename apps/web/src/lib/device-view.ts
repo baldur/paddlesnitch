@@ -113,6 +113,39 @@ export function deviceSummaries(devices: DeviceView[], sessions: DeviceSessionMe
   })
 }
 
+/** One tracker card as the apps get it (GET /api/account/devices `summaries`):
+ *  every number and judgement made here, so web and apps say the same. */
+export type TrackerSummary = {
+  deviceId: string; name: string; linked: boolean
+  recordings: number; motionRecordings: number; distanceMetres: number
+  latestAt?: string
+  firmwareState: 'up_to_date' | 'update_pending' | 'unknown'
+  quiet: boolean
+  /** Only a crash from the last 7 days. */
+  crash?: { at: string; task: string }
+}
+
+/** The cards in the website's order (deviceSummaries), with the same rules the
+ *  page uses: behind its target version (or stable), quiet after 2 days, a
+ *  crash shown for 7. `now` is the request's time. */
+export function trackerSummaries(
+  devices: DeviceView[], sessions: DeviceSessionMeta[], stableVersion: string | null, now: number = Date.now(),
+): TrackerSummary[] {
+  return deviceSummaries(devices, sessions).map(d => {
+    const behind = deviceIsBehind(d.firmware, d.targetVersion ?? stableVersion)
+    const crash = crashNote(d.lastCrash, now) ? d.lastCrash : undefined
+    return {
+      deviceId: d.deviceId, name: d.name, linked: d.linked,
+      recordings: d.sessions, motionRecordings: d.motionSessions, distanceMetres: Math.round(d.totalDistanceM),
+      ...(d.latestAt ? { latestAt: d.latestAt } : {}),
+      firmwareState: behind === null ? 'unknown' : behind ? 'update_pending' : 'up_to_date',
+      // A removed tracker isn't expected to call in, so it's never "quiet".
+      quiet: d.linked && deviceIsQuiet(d.lastSeenAt, now),
+      ...(crash ? { crash: { at: crash.at, task: crash.task } } : {}),
+    }
+  })
+}
+
 // How far the boat must move for a recording to become a paddle. Kept equal to
 // MIN_PADDLE_METRES in @paddlesnitch/analysis/tracker-paddle (a test checks),
 // without pulling the analysis pipeline into this client bundle.

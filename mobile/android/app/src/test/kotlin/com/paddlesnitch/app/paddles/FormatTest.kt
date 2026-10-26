@@ -37,4 +37,24 @@ class FormatTest {
         assertEquals("0", km1(0.0))
         assertEquals("6.3", km1(6.3))
     }
+
+    // The devices pages' formatters (apps/web/src/lib/device-view.ts, packages/core/src/format.ts).
+    @Test fun trackerDatesDistancesAndAges() {
+        assertEquals("24 Oct 2026", fmtDay("2026-10-24T16:05:00.000Z"))
+        assertEquals("4 Jul 2026, 07:30", fmtDayTime("2026-07-04T06:30:00Z", java.time.ZoneId.of("Europe/London"))) // BST: the phone's zone, not UTC
+        assertEquals("84.21 km", fmtDist(84210.0))
+        assertEquals("1.00 km", fmtDist(1000.0))
+        assertEquals("640 m", fmtDist(640.4))
+        val now = java.time.Instant.parse("2026-10-25T12:00:00Z").toEpochMilli()
+        assertEquals("89s ago", fmtAgo("2026-10-25T11:58:31Z", now))
+        assertEquals("2m ago", fmtAgo("2026-10-25T11:58:00Z", now))
+        assertEquals("2h ago", fmtAgo("2026-10-25T09:59:00Z", now))
+        assertEquals("2d ago", fmtAgo("2026-10-23T11:00:00Z", now))
+        assertEquals("never", fmtAgo(null, now))
+        assertEquals("0s ago", fmtAgo("2026-10-25T12:00:30Z", now)) // a clock a little ahead
+        assertEquals("1m ago", fmtAgo("2026-10-25T11:58:30Z", now)) // 90 s
+        assertEquals("1h ago", fmtAgo("2026-10-25T10:30:00Z", now)) // 90 m
+        assertEquals("2d ago", fmtAgo("2026-10-23T12:00:00Z", now)) // 48 h
+        assertEquals("never", fmtAgo("yesterday", now))
+    }
 }

@@ -9,7 +9,12 @@
       "endedAt": "2026-10-25T08:01:40.000Z",
       "distanceMetres": 8240.5,
       "points": 3569,
-      "motion": { "uploadedAt": "2026-10-25T08:16:10.000Z", "bytes": 912400, "rows": 35690 }
+      "motion": {
+        "uploadedAt": "2026-10-25T08:16:10.000Z",
+        "bytes": 912400,
+        "rows": 35690
+      },
+      "paddleId": "pdl_8Kq2Zr"
     },
     {
       "sessionId": "rec-no-fix",

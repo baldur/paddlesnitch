@@ -150,9 +150,9 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/contact` | | `{contact: {email, addedAt} \| null, placeholderEmail}`: show "Contact email" only when `placeholderEmail` is true (the account was made through Strava, which never shares an email), as the website does |
 | `POST /api/account/contact` | `{email}` | as GET; 400 if it doesn't look like an email |
 | `DELETE /api/account/contact` | | `{ok: true}` |
-| `GET /api/account/devices` | | `{devices: Tracker[], stableVersion}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash |
+| `GET /api/account/devices` | | `{devices: Tracker[], stableVersion, summaries: TrackerSummary[]}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash. **Show the cards from `summaries`**: already in order, removed trackers that still have recordings included (`linked: false`), with the counts, `firmwareState`, `quiet` (over 2 days silent) and `crash` (last 7 days) worked out by the server, the same rules the website uses. Don't recompute them |
 | `DELETE /api/account/devices` | `{deviceId}` | `{ok: true}`: removed; it stops syncing and can be added again. Its recordings and paddles stay. 404 if it isn't this person's |
-| `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId` |
+| `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId`. `paddleId` on each recording that became a paddle (open it with `paddles.get`); none = too short or no track |
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
 are in `fixtures/tracker/README.md`. Forgot password is under Signing in; Strava has its own section below.

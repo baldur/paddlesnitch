@@ -45,6 +45,7 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.PrefsVerifierStore
 import com.paddlesnitch.app.auth.StravaSignIn
+import com.paddlesnitch.app.auth.ForgotPasswordScreen
 import com.paddlesnitch.app.auth.SignInScreen
 import com.paddlesnitch.app.paddles.PaddlesHost
 import com.paddlesnitch.app.paddles.AddCard
@@ -53,7 +54,9 @@ import com.paddlesnitch.app.paddles.displayName
 import com.paddlesnitch.app.paddles.rememberAddPaddle
 import com.paddlesnitch.app.paddles.sampleFile
 import com.paddlesnitch.app.tracker.TrackerSetupScreen
+import com.paddlesnitch.app.tracker.TrackersScreen
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -72,9 +75,13 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     }
     var signedIn by remember { mutableStateOf(api.signedIn) }
     var signingIn by rememberSaveable { mutableStateOf(false) }
+    // Forgot password, inside signing in: the email it started with, and what the sign-in screen says after.
+    var forgotFor by remember { mutableStateOf<String?>(null) } // an email: kept out of saved state
+    var resetNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     var inAccount by rememberSaveable { mutableStateOf(false) }
     var settingUpTracker by rememberSaveable { mutableStateOf(false) }
+    var inTrackers by rememberSaveable { mutableStateOf(false) }
     // Signing in again to delete the account (Reauth.kt). The email to fill in isn't kept past the process.
     var reauth by rememberSaveable { mutableStateOf(Reauth()) }
     var reauthEmail by remember { mutableStateOf<String?>(null) }
@@ -103,18 +110,18 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     LaunchedEffect(arrived) {
         val it = arrived ?: return@LaunchedEffect
         incoming.value = null
-        if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; settingUpTracker = false }
+        if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; inTrackers = false; settingUpTracker = false }
         val name = (it as? Incoming.AddFile)?.let { f -> withContext(Dispatchers.IO) { displayName(context, Uri.parse(f.uri)) } }
         run(intake.arrived(it, signedIn, name))
     }
     fun forgetReauth() { reauth = reauth.cleared(); reauthEmail = null }
-    fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
+    fun leaveSignIn() { signingIn = false; forgotFor = null; resetNotice = null; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
 
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
-    fun signedOut() { signedIn = false; inAccount = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); forgetReauth() }
-    val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inAccount = inAccount)
+    fun signedOut() { signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); forgetReauth() }
+    val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
         AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
@@ -123,12 +130,24 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         val m = Modifier.padding(inner)
         when (screen) {
             Screen.SignIn -> {
+                // Signed in, from the sign-in screen or a password reset.
+                val signedInWith: (com.paddlesnitch.app.api.SignIn) -> Unit = {
+                    if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resume != null }
+                    forgotFor = null; resetNotice = null
+                    signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn())
+                }
+                val forgot = forgotFor
+                if (forgot != null) {
+                    BackHandler { forgotFor = null }
+                    ForgotPasswordScreen(api, forgot, onSignedIn = signedInWith,
+                        onPasswordSet = { email -> forgotFor = null; reauthEmail = email; resetNotice = "Your password is set. Please sign in." },
+                        onBack = { forgotFor = null }, modifier = m)
+                    return@Scaffold
+                }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
-                    onSignedIn = {
-                        if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resume != null }
-                        signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn()) }, onCancel = { leaveSignIn() }, modifier = m,
-                    prefillEmail = reauthEmail, notice = reauth.notice,
+                    onSignedIn = signedInWith, onCancel = { leaveSignIn() }, modifier = m,
+                    prefillEmail = reauthEmail, notice = reauth.notice ?: resetNotice, onForgot = { forgotFor = it },
                     startStrava = reauth.signingInAgain && reauth.strava)
             }
             Screen.Terms -> TermsScreen(api, onAccepted = { needsTerms = false }, onSignOut = { scope.launch { api.signOut(); signedOut() } },
@@ -137,9 +156,14 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 BackHandler { settingUpTracker = false }
                 TrackerSetupScreen(api, onClose = { settingUpTracker = false }, onSignedOut = ::signedOut, modifier = m)
             }
+            Screen.Trackers -> {
+                BackHandler { inTrackers = false }
+                TrackersScreen(api, onBack = { inTrackers = false }, onSetUp = { settingUpTracker = true }, onSignedOut = ::signedOut, modifier = m,
+                    onOpenPaddle = { id -> inTrackers = false; inAccount = false; intake = intake.openFromCard(id) })
+            }
             Screen.Account -> {
                 BackHandler { inAccount = false }
-                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onSignedOut = ::signedOut,
+                AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onTrackers = { inTrackers = true }, onSignedOut = ::signedOut,
                     onDeleted = ::signedOut, onSignOut = { scope.launch { api.signOut(); signedOut() } }, modifier = m,
                     resume = reauth.resume, onResumed = { reauth = reauth.resumed() },
                     stravaReturn = stravaConnectReturn, onStravaReturnHandled = { stravaConnectReturn = null },
@@ -160,14 +184,15 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     }
 }
 
-enum class Screen { SignIn, Samples, Terms, Tracker, Account, Paddles }
+enum class Screen { SignIn, Samples, Terms, Tracker, Trackers, Account, Paddles }
 
 /** Which screen shows. Terms that need accepting come before everything a signed-in person can reach. */
-fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settingUpTracker: Boolean, inAccount: Boolean) = when {
+fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settingUpTracker: Boolean, inAccount: Boolean, inTrackers: Boolean = false) = when {
     signingIn -> Screen.SignIn
     !signedIn -> Screen.Samples
     needsTerms -> Screen.Terms
     settingUpTracker -> Screen.Tracker
+    inTrackers -> Screen.Trackers
     inAccount -> Screen.Account
     else -> Screen.Paddles
 }
@@ -186,13 +211,13 @@ private fun MyPaddles(
             .onSuccess { list = it }
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
-    val account: @Composable () -> Unit = { TextButton(onClick = onAccount) { Text("Account") } }
+    val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened, action = {
             Row {
-                TextButton(onClick = pick, enabled = !adding) { Text("Add paddle") }
+                TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
             }
         })

@@ -2,6 +2,21 @@ package com.paddlesnitch.app.account
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.foundation.layout.widthIn
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.activity.compose.LocalActivity
+import com.paddlesnitch.app.api.StravaHistory
+import com.paddlesnitch.app.api.HistorySpan
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
@@ -78,6 +93,9 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.switchColors
+import com.paddlesnitch.app.ui.fieldColors
+import com.paddlesnitch.app.ui.outlinedColors
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -87,12 +105,7 @@ import kotlinx.coroutines.withContext
 /** A website page, and whether it needs the website's sign-in. */
 data class AccountLink(val label: String, val path: String, val signedIn: Boolean = true)
 
-/** What the app still leaves to the website (the next C5 parts bring these into the app). */
-val accountPages = listOf(
-    AccountLink("Your trackers", "/devices"),
-)
-/** Older Strava paddles are still brought in on the website. */
-val olderStravaPaddles = AccountLink("Bring in older paddles", "/account#strava")
+/** Help and the legal pages, which stay on the website. */
 val aboutPages = listOf(
     AccountLink("Help", "/help", signedIn = false),
     AccountLink("Privacy", "/privacy", signedIn = false),
@@ -116,7 +129,7 @@ fun clearExport(context: Context) { exportFile(context).delete() }
  */
 @Composable
 fun AccountScreen(
-    api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
+    api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onTrackers: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
     /** Back from signing in again: open Delete account, or show Strava, at once. */
     resume: Reauth.After? = null, onResumed: () -> Unit = {},
@@ -169,13 +182,12 @@ fun AccountScreen(
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
         StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
-            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onOlderPaddles = { open(olderStravaPaddles) },
+            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onSignedOut = onSignedOut,
             stravaOnly = isPlaceholderEmail(u.email))
         Divider()
         Section("Trackers")
+        Link("Your trackers", onClick = onTrackers)
         Link("Set up or sync a tracker", onClick = onTracker)
-        Text("These open on paddlesnitch.com, already signed in.", color = PsColor.muted)
-        accountPages.forEach { Link("${it.label} ↗") { open(it) } }
         Divider()
         aboutPages.forEach { Link("${it.label} ↗") { open(it) } }
         Link("Sign out", onClick = onSignOut)
@@ -239,12 +251,12 @@ private fun Details(api: AccountApi, user: AuthUser, act: Act) {
         act(fallback, { message = it; failed = true }) { work(); message = ok; failed = false }.invokeOnCompletion { working = false }
     }
     if (!load.done) { LoadState(load); return }
-    OutlinedTextField(email, { email = it }, label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+    OutlinedTextField(email, { email = it }, colors = fieldColors(), label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("you@example.com") },
         supportingText = { Text("You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {
+        OutlinedButton(colors = outlinedColors(), enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {
             run("Couldn’t save the email. Please try again.", "Saved.") { saved = api.setContact(email.trim()).contact?.email }
         }) { Text(if (working) "Saving…" else if (saved != null) "Update" else "Save") }
         if (saved != null) TextButton(enabled = !working, colors = linkColors(), modifier = Modifier.testTag("contact-remove"), onClick = {
@@ -280,16 +292,16 @@ private fun PublicProfile(api: AccountApi, user: AuthUser, act: Act, onPreview: 
     }.semantics(mergeDescendants = true) { toggleableState = ToggleableState(public); stateDescription = if (public) "Public" else "Private" },
         verticalAlignment = Alignment.CenterVertically) {
         Text("Show my profile to everyone", modifier = Modifier.weight(1f))
-        Switch(checked = public, onCheckedChange = null, enabled = !saving)
+        Switch(checked = public, onCheckedChange = null, enabled = !saving, colors = switchColors())
     }
     Text("Show your race results and personal bests on a public page. Private and group-only results stay hidden. Off until you turn it on.", color = PsColor.muted)
     Link(if (public) "View my profile ↗" else "Preview my profile ↗") { onPreview("/profile/${handle ?: user.id}") }
-    OutlinedTextField(input, { input = it }, label = { Text("Profile handle") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+    OutlinedTextField(input, { input = it }, colors = fieldColors(), label = { Text("Profile handle") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("your-handle") },
         supportingText = { Text("A short link like /profile/${handle ?: "your-handle"}. Lowercase letters, numbers and hyphens, 3–30 characters.") },
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(enabled = !saving && input.isNotBlank() && input.trim() != handle, modifier = Modifier.testTag("handle-save"), onClick = {
+        OutlinedButton(colors = outlinedColors(), enabled = !saving && input.isNotBlank() && input.trim() != handle, modifier = Modifier.testTag("handle-save"), onClick = {
             busy("Couldn’t save your handle. Please try again.", "Saved.") { handle = api.claimHandle(input.trim()).handle; input = handle.orEmpty() }
         }) { Text(if (saving) "Saving…" else if (handle != null) "Change" else "Save") }
         if (handle != null) TextButton(enabled = !saving, colors = linkColors(), modifier = Modifier.testTag("handle-remove"), onClick = {
@@ -325,7 +337,7 @@ private fun YourData(api: AccountApi, act: Act) {
     }
     Section("Your data")
     Text("Download everything we hold about you as a JSON file: your account, paddles and diary notes, trials, courses and results, groups, and trackers. This is your right of access (UK GDPR Art. 15) and to data portability (Art. 20).", color = PsColor.muted)
-    OutlinedButton(enabled = !working, onClick = {
+    OutlinedButton(colors = outlinedColors(), enabled = !working, onClick = {
         working = true; message = null
         act("Couldn’t prepare your download. Please try again.", { message = it; failed = true; file.delete(); working = false }) {
             val name = api.exportAccount(file)
@@ -337,14 +349,13 @@ private fun YourData(api: AccountApi, act: Act) {
 
 /**
  * Strava, as the website's Account section: connect (Strava's consent page in a
- * Custom Tab), who is connected, auto-import, disconnect. Older paddles are still
- * brought in on the website.
+ * Custom Tab), who is connected, auto-import, older paddles, disconnect.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StravaSection(
     api: AccountApi, act: Act, connect: StravaConnect, resume: Boolean, onResumed: () -> Unit,
-    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onOlderPaddles: () -> Unit,
+    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onSignedOut: () -> Unit,
     /** The account signs in only with Strava: disconnecting it is asked about first. */
     stravaOnly: Boolean,
 ) {
@@ -415,7 +426,7 @@ private fun StravaSection(
         when {
             // The notice takes the button's place, as on the website.
             needsSignIn -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp), colors = outlinedColors()) {
                     Text(if (leaving) "Sign in again…" else "Sign in again")
                 }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { needsSignIn = false }) { Text("Cancel") }
@@ -429,10 +440,12 @@ private fun StravaSection(
             }
             else -> {
                 Column(Modifier.card()) {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Wraps at large text rather than squeezing the name to a letter a line.
+                    FlowRow(Modifier.fillMaxWidth().padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        itemVerticalAlignment = Alignment.CenterVertically) {
                         Text("Connected", color = PsColor.green, style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.border(1.dp, PsColor.green, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-                        Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+                        Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp))
                         if (!confirmDisconnect) TextButton(enabled = !working, colors = linkColors(),
                             onClick = { if (stravaOnly) confirmDisconnect = true else disconnect() }) { Text(if (working) "Disconnecting…" else "Disconnect") }
                     }
@@ -457,9 +470,9 @@ private fun StravaSection(
                         Text("Auto-import new paddles")
                         Text("New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.", color = PsColor.muted)
                     }
-                    Switch(checked = on, onCheckedChange = null, enabled = !working && !switching)
+                    Switch(checked = on, onCheckedChange = null, enabled = !working && !switching, colors = switchColors())
                 }
-                Link("${olderStravaPaddles.label} ↗", onClick = onOlderPaddles)
+                StravaImports(api, onSignedOut)
                 // Attribution: this row shows the athlete's Strava profile name.
                 Image(painterResource(R.drawable.powered_by_strava), contentDescription = "Powered by Strava", modifier = Modifier.height(20.dp))
                 Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted,
@@ -467,6 +480,66 @@ private fun StravaSection(
             }
         }
     }
+}
+
+/**
+ * The first month by itself, then Older paddles (the website's StravaHistoryImport), kept in
+ * [StravaImportModel] so they outlive turning the phone. Leaving Account stops them.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StravaImports(api: AccountApi, onSignedOut: () -> Unit) {
+    val model: StravaImportModel = viewModel { StravaImportModel(api) }
+    val activity = LocalActivity.current
+    DisposableEffect(model) { onDispose { if (activity?.isChangingConfigurations != true) model.stop() } }
+    LaunchedEffect(model) { model.startFirst() }
+    LaunchedEffect(model.signedOut) { if (model.signedOut) onSignedOut() }
+    // "Keep this screen open" means the phone mustn't sleep while Strava makes us wait.
+    val view = LocalView.current
+    DisposableEffect(model.running) { view.keepScreenOn = model.running; onDispose { view.keepScreenOn = false } }
+
+    // The first month: a rule on the left marks it as something happening, as on the website.
+    model.first?.let { p ->
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            Box(Modifier.width(2.dp).fillMaxHeight().background(PsColor.primary))
+            ImportStatus(p, "your last month", "first-import", Modifier.padding(start = 12.dp))
+        }
+    }
+    val spans = listOf(HistorySpan.Months3 to "Last 3 months", HistorySpan.Year to "Last year", HistorySpan.All to "Everything")
+    var picking by remember { mutableStateOf(false) }
+    // One import at a time against Strava's limit.
+    val busy = model.running
+    Column(Modifier.card().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Older paddles", fontWeight = FontWeight.Medium)
+        Text("Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.", color = PsColor.muted)
+        ExposedDropdownMenuBox(expanded = picking, onExpandedChange = { if (!busy) picking = it }) {
+            OutlinedTextField(spans.first { it.first == model.span }.second, {}, readOnly = true, enabled = !busy, colors = fieldColors(), label = { Text("How far back") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(picking) },
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).testTag("import-span"))
+            ExposedDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                spans.forEach { (value, label) -> DropdownMenuItem(text = { Text(label) }, onClick = { model.span = value; picking = false }) }
+            }
+        }
+        OutlinedButton(enabled = !busy, onClick = model::startOlder, modifier = Modifier.heightIn(min = 48.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.primaryText)) {
+            Text(if (model.olderRunning) "Bringing in…" else "Bring in older paddles")
+        }
+        model.older?.let { ImportStatus(it, "your paddles", "older-import") }
+    }
+}
+
+/**
+ * Progress, with TalkBack told only when it starts, waits, stops or ends
+ * (importAnnouncement), and at once when it stops.
+ */
+@Composable
+private fun ImportStatus(p: ImportProgress, what: String, tag: String, modifier: Modifier = Modifier) {
+    val announce = importAnnouncement(p, what)
+    Text(importStatus(p, what), color = if (p.stopped != null) PsColor.red else PsColor.muted,
+        modifier = modifier.testTag(tag).semantics {
+            contentDescription = announce
+            liveRegion = if (p.stopped != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
+        })
 }
 
 /** A bordered surface box, as the website's cards. */
@@ -513,7 +586,7 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
                     Text(if (state == Deleting.Checking) "Checking…" else "Delete my account")
                 }
             Deleting.NeedsSignIn -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() },
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, colors = outlinedColors(),
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
                 LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
@@ -521,7 +594,7 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
             Deleting.Confirming -> {
                 // Inline, as on the website: the words to type sit above the field and the button they unlock.
                 Text("Type DELETE to confirm. There is no undo.")
-                OutlinedTextField(typed, { typed = it }, label = { Text("Confirm") }, singleLine = true,
+                OutlinedTextField(typed, { typed = it }, colors = fieldColors(), label = { Text("Confirm") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("delete-confirm"),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false))
                 LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }

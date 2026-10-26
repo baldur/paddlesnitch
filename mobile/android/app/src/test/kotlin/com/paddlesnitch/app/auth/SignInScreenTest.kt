@@ -5,6 +5,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import org.junit.Assert.assertEquals
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithText
 import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.api.Api
@@ -28,10 +32,11 @@ class SignInScreenTest {
         override fun take() = v.also { v = null }
     })
 
+    private var forgot: String? = null
     private fun show(reauth: Reauth, email: String?) = compose.setContent {
         PaddlesnitchTheme {
             SignInScreen(api, strava, null, onReturnHandled = {}, onSignedIn = {}, onCancel = {},
-                prefillEmail = email, notice = reauth.notice, startStrava = reauth.signingInAgain && reauth.strava)
+                prefillEmail = email, notice = reauth.notice, startStrava = reauth.signingInAgain && reauth.strava, onForgot = { forgot = it })
         }
     }
 
@@ -53,5 +58,12 @@ class SignInScreenTest {
         show(Reauth(), null)
         compose.waitForIdle()
         assertNull(Shadows.shadowOf(compose.activity).nextStartedActivity)
+    }
+
+    @Test fun forgotPasswordTakesTheEmailTypedSoFar() {
+        show(Reauth(), null)
+        compose.onNode(hasText("Email") and hasSetTextAction()).performTextInput(" pat@example.com ")
+        compose.onNodeWithText("Forgot password?").performScrollTo().performClick()
+        assertEquals("pat@example.com", forgot)
     }
 }

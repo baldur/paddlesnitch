@@ -36,6 +36,7 @@ import { POST as claim } from '@/app/api/devices/claim/route'
 import { POST as token } from '@/app/api/devices/token/route'
 import { POST as upload } from '@/app/api/devices/sessions/route'
 import type { deviceList } from '@/lib/device-list'
+import { saveSession } from '@paddlesnitch/analysis/analysis-store'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { provedPoll } from './device-proof'
 import {
@@ -277,7 +278,7 @@ type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ?
 const check = <T extends true>() => undefined as unknown as T
 check<Same<Norm<z.infer<typeof TrackerList>>, Norm<Awaited<ReturnType<typeof deviceList>>>>>()
 // The stored metadata, less the owner's own id (unnamed fields are allowed).
-check<Same<Norm<z.infer<typeof RecordingList>['sessions'][number]>, Norm<Omit<DeviceSessionMeta, 'userId'>>>>()
+check<Same<Norm<z.infer<typeof RecordingList>['sessions'][number]>, Norm<Omit<DeviceSessionMeta, 'userId'> & { paddleId?: string }>>>()
 
 const trackerRoutes = ['GET /api/account/devices', 'DELETE /api/account/devices', 'GET /api/account/devices/sessions']
 const DEVICE = 'C0FFEE01'
@@ -311,8 +312,25 @@ describe('trackers in the apps', () => {
     const list = await fits(TrackerList, await listTrackers(req('GET', '/api/account/devices', pat.idToken)))
     expect(list.devices).toMatchObject([{ deviceId: DEVICE, firmware: '0.19.3' }])
     expect(list.devices[0]).not.toHaveProperty('tokenHash')
+    // The card, worked out by the server: the apps show it as it comes.
+    expect(list.summaries).toMatchObject([{ deviceId: DEVICE, linked: true, recordings: 1, motionRecordings: 0, quiet: false }])
+    expect(['up_to_date', 'update_pending', 'unknown']).toContain(list.summaries[0].firmwareState)
     const recs = await fits(RecordingList, await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken)))
     expect(recs.sessions).toMatchObject([{ deviceId: DEVICE, filename: 'track_0001.csv', points: 3 }])
+    // Three points is too short to be a paddle: no paddleId.
+    expect(recs.sessions[0]).not.toHaveProperty('paddleId')
+  })
+
+  it('a recording that became a paddle names it (paddleId), so the apps can link to it', async () => {
+    await trackerWithRecording(pat)
+    const [rec] = (await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()).sessions
+    await saveSession({
+      id: 'p-from-tracker', userId: pat.id, createdAt: '2026-09-05T10:00:00Z', paddledAt: '2026-09-05T09:00:00Z',
+      source: { type: 'device', deviceId: DEVICE, deviceSessionId: rec.sessionId }, doubleStrokeRate: false,
+      insight: '', result: { points: [], surges: [], distanceKm: 1, durationS: 600 },
+    } as never)
+    const recs = await fits(RecordingList, await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken)))
+    expect(recs.sessions[0]).toMatchObject({ sessionId: rec.sessionId, paddleId: 'p-from-tracker' })
   })
 
   it('recordings come newest upload first (not newest paddle)', async () => {
@@ -331,7 +349,10 @@ describe('trackers in the apps', () => {
     const sam = await makeUser('Sam')
     await fits(ApiError, await removeTracker(req('DELETE', '/api/account/devices', sam.idToken, { deviceId: DEVICE })), 404)
     await fits(Ok, await removeTracker(req('DELETE', '/api/account/devices', pat.idToken, { deviceId: DEVICE })))
-    expect((await (await listTrackers(req('GET', '/api/account/devices', pat.idToken))).json()).devices).toEqual([])
+    const after = await (await listTrackers(req('GET', '/api/account/devices', pat.idToken))).json()
+    expect(after.devices).toEqual([])
+    // Its card stays, as a removed tracker with its recording.
+    expect(after.summaries).toMatchObject([{ deviceId: DEVICE, linked: false, recordings: 1, quiet: false, firmwareState: 'unknown' }])
     expect((await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()).sessions).toHaveLength(1)
   })
 

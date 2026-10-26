@@ -8,7 +8,8 @@ import java.io.File
  * (mobile/contract/README.md):
  *
  * - unknown fields are ignored (the app's Json has ignoreUnknownKeys);
- * - a string enum gets an `Unknown` entry, and a `oneOf` on `kind` an
+ * - a string enum gets an `Unknown` entry (`Unrecognised` when the contract
+ *   itself has an "unknown" value), and a `oneOf` on `kind` an
  *   `Unknown` case, so a value from a newer server never fails decoding;
  * - integers are Long, numbers Double; optional or nullable fields default to
  *   null.
@@ -127,7 +128,9 @@ object ContractModels {
         }
 
         fun enum(name: String, values: List<String>): String {
-            val entries = values.joinToString(",\n") { "    ${enumName(it)}(\"$it\")" } + ",\n    Unknown(\"\");"
+            // The catch-all for values from a newer server; named apart when the contract has its own "unknown".
+            val other = if (values.any { enumName(it) == "Unknown" }) "Unrecognised" else "Unknown"
+            val entries = values.joinToString(",\n") { "    ${enumName(it)}(\"$it\")" } + ",\n    $other(\"\");"
             return """
                 |@Serializable(with = $name.Serializer::class)
                 |enum class $name(val wire: String) {
@@ -136,7 +139,7 @@ object ContractModels {
                 |    internal object Serializer : KSerializer<$name> {
                 |        override val descriptor = PrimitiveSerialDescriptor("$root.$name", PrimitiveKind.STRING)
                 |        override fun deserialize(decoder: Decoder): $name =
-                |            decoder.decodeString().let { s -> entries.firstOrNull { it != Unknown && it.wire == s } ?: Unknown }
+                |            decoder.decodeString().let { s -> entries.firstOrNull { it != $other && it.wire == s } ?: $other }
                 |        override fun serialize(encoder: Encoder, value: $name) = encoder.encodeString(value.wire)
                 |    }
                 |}""".trimMargin()
