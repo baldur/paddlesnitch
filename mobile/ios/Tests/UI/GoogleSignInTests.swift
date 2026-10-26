@@ -19,8 +19,8 @@ final class GoogleSignInTests: AppTestCase {
         XCTAssertTrue(scrollToElement(app.buttons["google-sign-in"]).exists)
         XCTAssertTrue(text(containing: "Or use your Google account").exists)
         XCTAssertFalse(app.buttons["strava-sign-in"].exists, "no Strava sign-in")
-        XCTAssertTrue(text(containing: "Signed up with Strava? Strava sign-in is off for now.").exists)
-        XCTAssertTrue(scrollToElement(app.buttons["report-issue"]).exists)
+        XCTAssertTrue(text(containing: "Signed up with Strava? Strava sign-in is off for now. Email us").exists)
+        XCTAssertTrue(scrollToElement(app.buttons["email-us"]).exists)
     }
 
     func testWithStravaOffAConnectedAccountShowsStravaPaused() {
@@ -64,18 +64,20 @@ final class GoogleSignInTests: AppTestCase {
     func testSignInAsksWhichWaysInAreOn() {
         relaunch(["-StravaOffLater"])
         openSignIn()
-        XCTAssertTrue(scrollToElement(app.buttons["report-issue"]).waitForExistence(timeout: 10))
+        XCTAssertTrue(scrollToElement(app.buttons["email-us"]).waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["strava-sign-in"].exists)
     }
 
-    /// Unknown isn't off: email only, and no word about Strava being off.
-    func testWhenAskingFailsSignInIsEmailOnly() {
+    /// Unknown isn't off: the email form, "Couldn't load the other ways to
+    /// sign in." with Try again, and no word about Strava being off.
+    func testWhenAskingFailsSignInSaysSoAndCanTryAgain() {
         relaunch(["-OptionsFail"])
         openSignIn()
-        XCTAssertTrue(scrollToElement(app.buttons["sign-in-submit"]).exists)
-        XCTAssertFalse(app.buttons["google-sign-in"].waitForExistence(timeout: 3))
+        XCTAssertTrue(scrollTo("ways-in-failed").waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["google-sign-in"].exists)
         XCTAssertFalse(app.buttons["strava-sign-in"].exists)
-        XCTAssertFalse(app.buttons["report-issue"].exists, "doesn't say Strava is off")
+        XCTAssertFalse(app.buttons["email-us"].exists, "doesn't say Strava is off")
+        XCTAssertTrue(scrollToElement(app.buttons["ways-in-try-again"]).exists)
     }
 
     /// An email account can still sign in again with Strava off.
@@ -105,9 +107,11 @@ final class GoogleSignInTests: AppTestCase {
         XCTAssertFalse(scrollToElement(app.buttons["Disconnect"]).exists, "its only way in")
         scrollToElement(app.buttons["Delete my account"]).tap()
         XCTAssertTrue(element("delete-needs-sign-in").waitForExistence(timeout: 10))
-        XCTAssertTrue(text(containing: "Report an issue and we’ll delete your account for you.").exists)
-        XCTAssertTrue(app.buttons["Report an issue"].exists)
+        XCTAssertTrue(text(containing: "leave out your name and email: reports are public.").exists)
         XCTAssertFalse(app.buttons["Sign in again"].exists)
+        // Signed in through a one-time link, so it's filed as this account.
+        app.buttons["Report an issue"].tap()
+        XCTAssertFalse(element("delete-error").waitForExistence(timeout: 3), "the signed-in link came")
     }
 
     func testTheSignInSheetWithStravaOffPassesTheAccessibilityAudit() throws {

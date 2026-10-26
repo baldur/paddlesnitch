@@ -37,6 +37,8 @@ public final class AccountModel {
     /// The server said Strava is off (not just unknown): only then is it
     /// right to say so.
     public internal(set) var stravaSaidOff = false
+    /// The ask failed and nothing was known before: say so, with Try again.
+    public internal(set) var optionsFailed = false
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
     /// Signing in again goes straight to Strava sign-in.

@@ -145,9 +145,36 @@ import Testing
         #expect(!SignInOptions.emailOnly.noPaddlesYet.contains("Strava"))
     }
 
-    @Test func reportAnIssueIsTheWebsitesFormAndCarriesNothingAboutYou() {
-        let url = ReportIssue.url(base: URL(string: "https://paddlesnitch.com") ?? URL(filePath: "/"))
-        #expect(url.absoluteString == "https://paddlesnitch.com/signin?report=1")
+    @Test func emailUsGoesToPrivacyWithTheSubject() {
+        #expect(
+            SignInHelp.emailUs.absoluteString
+                == "mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava")
+    }
+
+    @Test func theReportPageIsSignedInAsThisAccount() async throws {
+        let account = account()
+        try await account.signIn(email: "pat@example.com", password: SampleServer.password)
+        let url = try await account.reportPage()
+        #expect(url.path() == SampleServer.webCodePath)
+        let next = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "next" }
+        #expect(next?.value == "/account?report=1")
+        let request = try #require(server.requests.last)
+        #expect(request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true)
+        let asked = try JSONDecoder().decode(WebPageFor.self, from: try #require(request.httpBody))
+        #expect(asked.next == "/account?report=1")
+    }
+
+    @Test func aFirstFailedAskSaysSoUntilOneWorks() async {
+        let account = account()
+        server.options = nil
+        await account.loadOptions()
+        #expect(account.optionsFailed)
+        server.options = SignInOptions(google: true, strava: false)
+        await account.loadOptions()
+        #expect(!account.optionsFailed)
+        server.options = nil
+        await account.loadOptions()
+        #expect(!account.optionsFailed, "an answer is known")
     }
 
     @Test func theOptionsFixturesDecode() throws {

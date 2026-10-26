@@ -1,21 +1,26 @@
+import Account
 import DesignSystem
 import PaddleAPI
 import SwiftUI
 
 /// Below the email form, as the website's /signin: Google and Strava when the
-/// server offers them (`GET /att/api/auth/options`), and with Strava off, a
-/// way for someone who signed up with Strava to ask for help.
+/// server offers them (`GET /att/api/auth/options`); with Strava off, an
+/// email for someone who signed up with Strava (not a public issue report:
+/// they'd put their name and email in it); and if asking failed, Try again.
 struct OtherWaysIn: View {
     let options: SignInOptions
     /// The server said Strava is off, so say so (not when it's unknown).
     let stravaSaidOff: Bool
+    /// Asking failed and nothing was known before.
+    let failed: Bool
     let busy: Bool
     let google: () -> Void
     let strava: () -> Void
-    let report: () -> Void
+    let tryAgain: () -> Void
+    @Environment(\.openURL) private var openURL
 
     static let stravaOff =
-        "Signed up with Strava? Strava sign-in is off for now. Report an issue and we’ll help you sign in."
+        "Signed up with Strava? Strava sign-in is off for now. Email us and we’ll help you sign in."
 
     var body: some View {
         VStack(spacing: 12) {
@@ -35,14 +40,12 @@ struct OtherWaysIn: View {
             if stravaSaidOff {
                 Divider().overlay(Palette.border).padding(.top, options.google ? 12 : 0)
                 muted(Self.stravaOff)
-                Button(action: report) {
-                    // On the label: the whole 44 pt is the button.
-                    Text("Report an issue").frame(minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-                .tint(Palette.primaryText)
-                .accessibilityHint("Opens paddlesnitch.com")
-                .accessibilityIdentifier("report-issue")
+                bordered("Email us", id: "email-us", hint: "Opens Mail") { openURL(SignInHelp.emailUs) }
+            }
+            if failed {
+                Divider().overlay(Palette.border)
+                muted("Couldn’t load the other ways to sign in.").accessibilityIdentifier("ways-in-failed")
+                bordered("Try again", id: "ways-in-try-again", hint: nil, action: tryAgain).disabled(busy)
             }
         }
         .frame(maxWidth: .infinity)
@@ -58,6 +61,17 @@ struct OtherWaysIn: View {
         .accessibilityLabel("Connect with Strava")
         .accessibilityIdentifier("strava-sign-in")
         muted("Already have an account? Sign in first, then connect Strava in Account.")
+    }
+
+    private func bordered(_ title: String, id: String, hint: String?, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            // On the label: the whole 44 pt is the button.
+            Text(title).frame(minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .tint(Palette.primaryText)
+        .accessibilityHint(hint ?? "")
+        .accessibilityIdentifier(id)
     }
 
     private func muted(_ words: String) -> some View {

@@ -114,14 +114,14 @@ final class LargeTextTests: AppTestCase {
         ])
     }
 
-    /// Strava off: Google, the Strava help line and Report an issue.
+    /// Strava off: Google, the Strava help line and Email us.
     func testSignInWithStravaOffAtTheLargestTextSize() throws {
         app.terminate()
         app.launchArguments = ["-SampleServer", "-ResetAccount", "-StravaOff"] + launchArguments
         app.launch()
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
-        try checkWholeScreen(last: app.buttons["report-issue"])
+        try checkWholeScreen(last: app.buttons["email-us"])
         XCTAssertTrue(app.buttons["google-sign-in"].exists)
     }
 

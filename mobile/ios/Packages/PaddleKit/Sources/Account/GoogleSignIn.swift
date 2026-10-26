@@ -59,13 +59,13 @@ extension SignInOptions {
     }
 }
 
-/// The website's issue form, which opens by itself on a page with
-/// `?report=1`: for whoever can't sign in, so it needs no account and
-/// carries nothing about them.
-public enum ReportIssue {
-    public static func url(base: URL) -> URL {
-        base.appending(path: "signin").appending(queryItems: [URLQueryItem(name: "report", value: "1")])
-    }
+/// Help for someone who can't sign in (mobile/contract/README.md, "When
+/// `strava` is false"): an email, not a public issue report, as they'd put
+/// their name and email in it.
+public enum SignInHelp {
+    public static let emailUs =
+        URL(string: "mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava")
+        ?? URL(filePath: "/")
 }
 
 extension AccountModel {
@@ -73,10 +73,14 @@ extension AccountModel {
     /// or Strava asks when it opens: sign in, Account, Add paddle.
     public func loadOptions() async {
         // A failed ask keeps the last answer: only a first ask that fails
-        // leaves email only.
-        guard let answer = try? await anonymous.send(Endpoints.getAuthOptions, NoInput()) else { return }
+        // leaves email only, and says so.
+        guard let answer = try? await anonymous.send(Endpoints.getAuthOptions, NoInput()) else {
+            optionsFailed = options == .emailOnly && !stravaSaidOff
+            return
+        }
         options = answer
         stravaSaidOff = !answer.strava
+        optionsFailed = false
     }
 
     /// Google sign-in. `browser` opens the page and answers the link it came
@@ -87,5 +91,16 @@ extension AccountModel {
         let code = try GoogleSignIn.code(from: try await browser(start), stravaOn: options.strava)
         try await accept(
             try await anonymous.send(Endpoints.authGoogleAppToken, GoogleAppToken(code: code, verifier: verifier)))
+    }
+
+    /// The website's issue form, signed in as this account through a
+    /// one-time web-code link, so the report is filed as it (for a Strava-made
+    /// account that can't sign in again to delete itself).
+    public func reportPage() async throws -> URL {
+        let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: "/account?report=1"))
+        guard let url = Self.resolve(page.url, against: client.baseURL) else {
+            throw PaddleAPIError.undecodable("web-code link")
+        }
+        return url
     }
 }

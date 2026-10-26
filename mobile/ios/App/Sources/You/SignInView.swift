@@ -153,9 +153,10 @@ struct SignInView: View {
                     .frame(minHeight: 44)
             }
             OtherWaysIn(
-                options: account.options, stravaSaidOff: account.stravaSaidOff, busy: form.busy,
+                options: account.options, stravaSaidOff: account.stravaSaidOff, failed: account.optionsFailed,
+                busy: form.busy,
                 google: signInWithGoogle, strava: signInWithStrava,
-                report: { web = ReportIssue.url(base: PaddlesnitchApp.baseURL) })
+                tryAgain: { Task { await account.loadOptions() } })
         }
     }
 

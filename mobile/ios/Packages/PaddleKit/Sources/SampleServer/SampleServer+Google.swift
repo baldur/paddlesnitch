@@ -17,7 +17,13 @@ extension SampleServer {
         set { lock.withLock { _optionsLater = newValue } }
     }
 
-    func google(path: String, body: Data) throws -> (Int, Data) {
+    static let googleRoutes: Set<String> = [
+        "/att/api/auth/options", "/att/api/auth/google/app-token", "/att/api/auth/web-code",
+    ]
+
+    func google(path: String, request: URLRequest) throws -> (Int, Data) {
+        if path == "/att/api/auth/web-code" { return try webCode(request) }
+        let body = request.httpBody ?? Data()
         if path == "/att/api/auth/options" {
             let options = lock.withLock {
                 let now = _options
@@ -45,4 +51,19 @@ extension SampleServer {
             .first { $0.name == "challenge" }?.value ?? ""
         return URL(string: "com.paddlesnitch.app:/signin/google?code=sample-google.\(challenge)") ?? start
     }
+
+    /// A one-time link that signs the website in as the app's person, then
+    /// opens `next` (mobile/contract/README.md, "Website pages, signed in").
+    func webCode(_ request: URLRequest) throws -> (Int, Data) {
+        guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
+            return (401, try fixture("account.error"))
+        }
+        let next = try JSONDecoder().decode(WebPageFor.self, from: request.httpBody ?? Data()).next
+        var link = URLComponents(string: Self.webCodePath)
+        link?.queryItems = [URLQueryItem(name: "next", value: next)]
+        return (200, try JSONEncoder.paddlesnitch.encode(WebPage(url: link?.string ?? Self.webCodePath)))
+    }
+
+    /// Where the sample web-code link points, relative to the site.
+    public static let webCodePath = "/att/api/auth/web-code/sample"
 }

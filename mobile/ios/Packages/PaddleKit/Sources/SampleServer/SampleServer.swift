@@ -129,8 +129,8 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         if path.hasPrefix("/att/api/auth/password-reset/") {
             return try passwordReset(path: path, body: request.httpBody ?? Data())
         }
-        if path == "/att/api/auth/options" || path == "/att/api/auth/google/app-token" {
-            return try google(path: path, body: request.httpBody ?? Data())
+        if Self.googleRoutes.contains(path) {
+            return try google(path: path, request: request)
         }
         if path.hasPrefix("/att/api/auth/") {
             return try auth(path: path, body: request.httpBody ?? Data())
