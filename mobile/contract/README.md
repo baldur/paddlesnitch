@@ -87,7 +87,7 @@ The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
 `RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its
 `auth` (`user` = send `Authorization: Bearer`), input, output and the statuses
 that answer an `ApiError`. Golden answers:
-`fixtures/api/auth.*.json`. `needsTerms` is missing on sign-up (the account has
+`fixtures/api/auth.*.json` (sign-up: `auth.signup.json`, `auth.login.needs-code.json`, `auth.too-many-codes.json`). `needsTerms` is missing on sign-up (the account has
 just accepted the Terms).
 
 | Call | Body | Answer |
@@ -96,7 +96,7 @@ just accepted the Terms).
 | `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
 | `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 202 `{needsCode: true, email}`: a 6-digit code has gone to the email, nothing is signed in yet (#702). 409 = a confirmed account has this email; 422 if `acceptedTosVersion` isn't current. Calling it again sends a new code |
-| `POST /att/api/auth/signup/confirm` | `{email, code, password, acceptedTosVersion?}` | 201, as login. Send `acceptedTosVersion` when the Terms were just ticked (Create account); leave it out when the code step came from a 403 sign-in, and then follow `needsTerms`. 400 = wrong or expired code (ask again, or send a new code by repeating the sign-up or sign-in) |
+| `POST /att/api/auth/signup/confirm` | `{email, code, password, acceptedTosVersion?}` | 201, as login. 500 "Your email is confirmed. Please sign in." = confirmed but the sign-in failed: go back to the Sign in form with that message (sending a new code would now answer 409). 429 never here; signup and login answer 429 with `auth.too-many-codes.json` (show it as an error, don't restart the pause). Send `acceptedTosVersion` when the Terms were just ticked (Create account); leave it out when the code step came from a 403 sign-in, and then follow `needsTerms`. 400 = wrong or expired code (ask again, or send a new code by repeating the sign-up or sign-in) |
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |

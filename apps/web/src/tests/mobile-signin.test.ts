@@ -28,7 +28,7 @@ import { readConfirmationCode } from './cognito-db'
 import { verifyIdToken, refresh } from '@/lib/cognito'
 import { restRoutes, SignIn, Refreshed, Ok, ApiError, ResetDone, CodeSent } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import path from 'path'
 
 let dataDir: string
@@ -116,7 +116,11 @@ describe('signing out from an app', () => {
 // The schemas in mobile/contract/api/ (rest.json) are hand-written for these
 // routes, so the routes' real answers are read through them here.
 describe('the sign-in routes answer what the contract says', () => {
-  const fits = async (schema: z.ZodType, res: Response) => expect(schema.safeParse(await res.json()).error?.issues).toBeUndefined()
+  const fits = async (schema: z.ZodType, res: Response) => {
+    const body = await res.json()
+    expect(schema.safeParse(body).error?.issues).toBeUndefined()
+    return body
+  }
 
   it('every route in rest.json exists', () => {
     for (const route of Object.keys(restRoutes)) {
@@ -138,7 +142,9 @@ describe('the sign-in routes answer what the contract says', () => {
     await signup(post('/att/api/auth/signup', { email: late, displayName: 'Late', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION }, true))
     const asked = await login(post('/att/api/auth/login', { email: late, password: 'Password123' }, true))
     expect(asked.status).toBe(403)
-    await fits(ApiError, asked)
+    // The shared fixture is the server's real answer, word for word.
+    const fixture = (n: string) => JSON.parse(readFileSync(path.join(__dirname, '../../../../mobile/contract/fixtures/api', n), 'utf8'))
+    expect(await fits(ApiError, asked)).toEqual(fixture('auth.login.needs-code.json'))
     await fits(ApiError, await signup(post('/att/api/auth/signup', { email: email(), displayName: 'Old', password: 'Password123', acceptedTosVersion: 'v0' }, true)))
     await fits(Refreshed, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: u.refreshToken }, true)))
     await fits(ApiError, await refreshRoute(post('/att/api/auth/refresh', { refreshToken: 'nope' }, true)))
