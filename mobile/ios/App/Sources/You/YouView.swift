@@ -23,7 +23,9 @@ struct YouView: View {
     ]
 
     @State private var open: WebPage?
-    @State private var path: [Route] = []
+    /// Type-erased, so Devices can push its own routes (a tracker, a
+    /// paddle) with destinations it declares.
+    @State private var path = NavigationPath()
 
     enum Route: Hashable {
         case account, trackers
@@ -97,7 +99,7 @@ struct YouView: View {
             }
             .onChange(of: account.user?.id) { _, id in
                 // Signed in again to delete: straight back to the account.
-                if id != nil && account.deleteAfterSignIn { path = [.account] }
+                if id != nil && account.deleteAfterSignIn { path = NavigationPath([Route.account]) }
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in

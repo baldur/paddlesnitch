@@ -13,6 +13,14 @@ struct TrackersView: View {
     @State private var model: TrackersModel
     @State private var guide = false
 
+    /// Pushed by value, with the destinations declared here: on iOS 17 a
+    /// link that builds its destination inline hung opening a paddle two
+    /// screens down (CI: the app never went idle).
+    enum Route: Hashable {
+        case tracker(String)
+        case paddle(String)
+    }
+
     init(account: AccountModel) {
         self.account = account
         _model = State(initialValue: TrackersModel(source: ServerTrackers(client: account.client)))
@@ -25,6 +33,12 @@ struct TrackersView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .task { await model.load() }
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .tracker(let id): TrackerDetailView(account: account, model: model, deviceId: id)
+                case .paddle(let id): PaddleDetailView(id: id, source: ServerPaddles(client: account.client))
+                }
+            }
             .sheet(isPresented: $guide) {
                 SafariView(url: PaddlesnitchApp.baseURL.appending(path: "guide")).ignoresSafeArea()
             }
@@ -51,14 +65,12 @@ struct TrackersView: View {
                 if let failure = model.refreshFailure {
                     Text("Couldn’t refresh your trackers. \(failure)")
                         .font(.plexSans(.subheadline)).foregroundStyle(Palette.red)
+                        .fixedSize(horizontal: false, vertical: true)
                         .listRowBackground(Palette.surface)
                 }
                 Section {
                     ForEach(cards) { card in
-                        // A destination, not a value: You's path holds its own routes only.
-                        NavigationLink {
-                            TrackerDetailView(account: account, model: model, deviceId: card.id)
-                        } label: {
+                        NavigationLink(value: Route.tracker(card.id)) {
                             TrackerCardView(card: card)
                         }
                         .listRowBackground(Palette.surface)
@@ -68,8 +80,10 @@ struct TrackersView: View {
                     Text("Your trackers").font(.plexSans(.subheadline, weight: .medium))
                         .foregroundStyle(Palette.muted).textCase(nil)
                 } footer: {
+                    // Full height: iOS 17 cut it short (its audit: text clipped).
                     Text("Each tracker’s paddles appear in Paddles by themselves. To remove a tracker, open it.")
                         .font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -146,6 +160,7 @@ struct TrackerDetailView: View {
             } else if model.card(deviceId)?.removed == true {
                 Text("This tracker is no longer on your account, but its recordings are still yours.")
                     .font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                     .listRowBackground(Palette.surface)
             }
         }
@@ -166,6 +181,7 @@ struct TrackerDetailView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Couldn’t load the recordings. \(message)")
                         .font(.plexSans(.subheadline)).foregroundStyle(Palette.red)
+                        .fixedSize(horizontal: false, vertical: true)
                     Button {
                         Task { await model.loadRecordings() }
                     } label: {
@@ -180,13 +196,12 @@ struct TrackerDetailView: View {
                         "No recordings yet. The tracker uploads them by itself when it’s switched on in range of your WiFi."
                     )
                     .font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                     .listRowBackground(Palette.surface)
                 }
                 ForEach(rows) { row in
                     if let id = row.paddleID {
-                        NavigationLink {
-                            PaddleDetailView(id: id, source: ServerPaddles(client: account.client))
-                        } label: {
+                        NavigationLink(value: TrackersView.Route.paddle(id)) {
                             recordingLabel(row)
                         }
                         .listRowBackground(Palette.surface)
@@ -224,6 +239,7 @@ struct TrackerDetailView: View {
             if confirmingRemove {
                 Text("Remove this tracker? It stops uploading until you add it again. Its recordings stay yours.")
                     .font(.plexSans(.body)).foregroundStyle(Palette.fg)
+                    .fixedSize(horizontal: false, vertical: true)
                     .listRowBackground(Palette.surface)
                     // The button that was focused is gone: read the question.
                     .accessibilityFocused($questionFocused)
