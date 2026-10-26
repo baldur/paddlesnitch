@@ -41,6 +41,10 @@ import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.api.AccountApi
+import com.paddlesnitch.app.api.HistoryPaddle
+import com.paddlesnitch.app.api.HistorySpan
+import com.paddlesnitch.app.api.StravaHistory
+import com.paddlesnitch.app.api.StravaImport
 import com.paddlesnitch.app.api.StravaAutoImport
 import com.paddlesnitch.app.api.StravaStatus
 import com.paddlesnitch.app.api.WebPage
@@ -94,6 +98,13 @@ class FakeAccountApi(
     var finishLinkedElsewhere: Boolean = false,
     /** Strava's status won't load. */
     var failStravaStatus: Boolean = false,
+    /** What sources.stravaHistory answers, by span. */
+    var history: (HistorySpan) -> StravaHistory = { StravaHistory(StravaHistory.Status.Ok, emptyList(), 0, firstImportDone = true) },
+    /** Importing these Strava ids fails. */
+    var importFails: Set<Long> = emptySet(),
+    /** When set, each import waits for it (to see the screen mid-import). */
+    var importGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null,
+    var historyFails: Boolean = false,
 ) : AccountApi {
     val calls = mutableListOf<String>()
     private fun check() { if (signedOut) throw SignedOut() }
@@ -131,6 +142,19 @@ class FakeAccountApi(
             if (finishLinkedElsewhere) throw ApiFailure("Couldn’t connect Strava. It’s already connected to another paddlesnitch account. Sign in to that account and disconnect it there.", 409)
             StravaStatus(true, StravaStatus.Athlete(12345678, "Pat on Strava"), true).also { strava = it } }
     override suspend fun setStravaAutoImport(enabled: Boolean) = answer("auto-import $enabled") { StravaAutoImport(enabled) }
+    override suspend fun stravaHistory(since: HistorySpan): StravaHistory {
+        check(); calls += "history ${since.wire}"
+        if (historyFails && since != HistorySpan.First) throw ApiFailure("x", 500, generic = true)
+        return history(since)
+    }
+    override suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport {
+        importGate?.await()
+        return answer("import ${paddle.id}") {
+            if (paddle.id in importFails) throw ApiFailure("x", 500, generic = true)
+            StravaImport(StravaImport.Status.Imported, "pdl-${paddle.id}")
+        }
+    }
+    override suspend fun stravaHistoryDone() = answer("history done") { Ok(true) }
     override suspend fun stravaDisconnect() = answer("strava disconnect") { strava = StravaStatus(connected = false); Ok(true) }
 }
 
@@ -618,5 +642,123 @@ class AccountScreensTest {
     @Test fun aStravaOnAnotherAccountSaysSo() {
         connectAndReturn(FakeAccountApi(finishLinkedElsewhere = true), "code=abc")
         waitFor("Couldn’t connect Strava. It’s already connected to another paddlesnitch account. Sign in to that account and disconnect it there.")
+    }
+
+    private val twoPaddles = listOf(
+        HistoryPaddle(12000000001, "Morning paddle", "Kayaking", "2026-07-04T06:30:00Z", 8123.4),
+        HistoryPaddle(12000000002, "Club sprints", "Rowing", "2026-07-09T18:05:00Z", 6040.0),
+    )
+
+    @Test fun olderPaddlesWaitsForTheFirstImport() {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val api = FakeAccountApi(strava = connected(), importGate = gate, history = { StravaHistory(StravaHistory.Status.Ok, twoPaddles, 0, firstImportDone = false) })
+        account(api)
+        waitFor("Bringing in your last month from Strava: 0 of 2.")
+        compose.onNodeWithText("Bring in older paddles").assertIsNotEnabled() // one import at a time against Strava's limit
+        assertTrue(compose.activity.window.decorView.findViewById<android.view.View>(android.R.id.content).let { v -> generateSequence(v) { (it as? android.view.ViewGroup)?.getChildAt(0) }.any { it.keepScreenOn } }) // the phone stays awake while it runs
+        gate.complete(Unit)
+        waitFor("Added 2 paddles from Strava.")
+        compose.onNodeWithText("Bring in older paddles").assertIsEnabled()
+    }
+
+    @Test fun stravaConnectedAtTheLargestText() {
+        account(FakeAccountApi(strava = connected()), fontScale = 2f)
+        waitFor("Older paddles")
+        compose.onNodeWithText("Bring in older paddles").performScrollTo()
+        compose.onRoot().captureRoboImage()
+    }
+
+    @Test fun theLastMonthComesInByItselfAndIsMarkedDone() {
+        val api = FakeAccountApi(strava = connected(), history = { StravaHistory(StravaHistory.Status.Ok, twoPaddles, 0, firstImportDone = false) })
+        account(api)
+        waitFor("Added 2 paddles from Strava.")
+        compose.waitUntil { "history done" in api.calls }
+        assertEquals(listOf("history first", "import 12000000001", "import 12000000002", "history done"), api.calls.filter { it.startsWith("history") || it.startsWith("import") })
+    }
+
+    @Test fun aLastMonthAlreadyBroughtInIsNotBroughtInAgain() {
+        val api = FakeAccountApi(strava = connected())
+        account(api)
+        waitFor("Older paddles")
+        compose.waitForIdle()
+        assertEquals(listOf("history first"), api.calls.filter { it.startsWith("history") || it.startsWith("import") })
+        compose.onNodeWithTag("first-import").assertDoesNotExist()
+    }
+
+    @Test fun olderPaddlesAsFarBackAsPicked() {
+        val api = FakeAccountApi(strava = connected(), history = { if (it == HistorySpan.First) StravaHistory(StravaHistory.Status.Ok, emptyList(), 0, true) else StravaHistory(StravaHistory.Status.Ok, twoPaddles, 3, true) })
+        account(api)
+        waitFor("Older paddles")
+        compose.onNodeWithTag("import-span").performScrollTo().performClick()
+        compose.onNodeWithText("Last 3 months").performClick()
+        compose.onNodeWithText("Bring in older paddles").performScrollTo().performClick()
+        waitFor("Added 2 paddles from Strava.")
+        assertTrue("history months3" in api.calls)
+        assertFalse("history done" in api.calls) // only the first, automatic import marks itself done
+    }
+
+    @Test fun olderPaddlesWhenStravasLimitIsUsedUp() {
+        val api = FakeAccountApi(strava = connected(), history = { if (it == HistorySpan.First) StravaHistory(StravaHistory.Status.Ok, emptyList(), 0, true) else StravaHistory(StravaHistory.Status.RateLimited, firstImportDone = true) })
+        account(api)
+        waitFor("Older paddles")
+        compose.onNodeWithText("Bring in older paddles").performScrollTo().performClick()
+        waitFor("Strava’s limit for today is used up. Please try again tomorrow.")
+        compose.onNodeWithText("Bring in older paddles").assertIsEnabled()
+    }
+
+    @Test fun aFirstImportThatFailsPartWayIsNotMarkedDone() {
+        val api = FakeAccountApi(strava = connected(), importFails = setOf(12000000002),
+            history = { StravaHistory(StravaHistory.Status.Ok, twoPaddles, 0, firstImportDone = false) })
+        account(api)
+        waitFor("Couldn’t bring in all your Strava paddles (1 of 2). Please try again later.")
+        assertFalse("history done" in api.calls) // the rest comes on the next visit
+    }
+
+    @Test fun aFirstImportWithNothingToBringInIsMarkedDoneQuietly() {
+        val api = FakeAccountApi(strava = connected(), history = { StravaHistory(StravaHistory.Status.Ok, emptyList(), 0, firstImportDone = false) })
+        account(api)
+        compose.waitUntil { "history done" in api.calls }
+        compose.onNodeWithTag("first-import").assertDoesNotExist()
+    }
+
+    @Test fun connectingStravaStartsTheFirstImport() {
+        val api = FakeAccountApi(history = { StravaHistory(StravaHistory.Status.Ok, twoPaddles, 0, firstImportDone = false) })
+        connectAndReturn(api, "code=abc")
+        waitFor("Added 2 paddles from Strava.")
+        compose.waitUntil { "history done" in api.calls }
+    }
+
+    @Test fun olderPaddlesThatCantBeListedSaysSoAndCanBeTriedAgain() {
+        val api = FakeAccountApi(strava = connected(), historyFails = true)
+        account(api)
+        waitFor("Older paddles")
+        compose.onNodeWithText("Bring in older paddles").performScrollTo().performClick()
+        waitFor("Couldn’t bring in your Strava paddles. Please try again later.")
+        compose.onNodeWithText("Bring in older paddles").assertIsEnabled()
+    }
+
+    @Test fun olderPaddlesWhileBringingInCantStartAgain() {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val api = FakeAccountApi(strava = connected(), importGate = gate,
+            history = { if (it == HistorySpan.First) StravaHistory(StravaHistory.Status.Ok, emptyList(), 0, true) else StravaHistory(StravaHistory.Status.Ok, twoPaddles, 0, true) })
+        account(api)
+        waitFor("Older paddles")
+        compose.onNodeWithText("Bring in older paddles").performScrollTo().performClick()
+        waitFor("Bringing in your paddles from Strava: 0 of 2.")
+        compose.onNodeWithText("Bringing in…").assertIsNotEnabled()
+        compose.onNodeWithTag("import-span").assertIsNotEnabled()
+        gate.complete(Unit)
+        waitFor("Added 2 paddles from Strava.")
+        compose.onNodeWithText("Bring in older paddles").assertIsEnabled()
+    }
+
+    @Test fun olderPaddlesForAStravaNoLongerConnectedShowsNoError() {
+        val api = FakeAccountApi(strava = connected(), history = { if (it == HistorySpan.First) StravaHistory(StravaHistory.Status.Ok, emptyList(), 0, true) else StravaHistory(StravaHistory.Status.NotConnected, firstImportDone = false) })
+        account(api)
+        waitFor("Older paddles")
+        compose.onNodeWithText("Bring in older paddles").performScrollTo().performClick()
+        compose.waitUntil { "history year" in api.calls }
+        compose.waitForIdle()
+        compose.onNodeWithTag("older-import").assertDoesNotExist()
     }
 }

@@ -194,4 +194,24 @@ class AccountApiTest {
         assertEquals(409, e.status)
         assertTrue(e.message!!.contains("already connected to another paddlesnitch account"))
     }
+
+    @Test fun olderStravaPaddlesOneAtATime() = runTest {
+        answer(200, """{"result":{"data":${fixture("sources.stravaHistory")}}}""")
+        val h = api.stravaHistory(HistorySpan.First)
+        assertEquals(2, h.toImport!!.size)
+        assertEquals("/api/trpc/sources.stravaHistory?input=%7B%22since%22%3A%22first%22%7D", sent().second)
+
+        answer(200, """{"result":{"data":${fixture("sources.importStravaPaddle")}}}""")
+        assertEquals(StravaImport.Status.Imported, api.importStravaPaddle(h.toImport!![0]).status)
+        assertEquals(Triple("POST", "/api/trpc/sources.importStravaPaddle", """{"id":12000000001,"sport":"Kayaking","startDate":"2026-07-04T06:30:00Z"}"""), sent())
+
+        answer(200, """{"result":{"data":${fixture("sources.stravaHistoryDone")}}}""")
+        api.stravaHistoryDone()
+        assertEquals("/api/trpc/sources.stravaHistoryDone", sent().second)
+
+        answer(200, """{"result":{"data":${fixture("sources.stravaHistory.rate-limited")}}}""")
+        assertEquals(StravaHistory.Status.RateLimited, api.stravaHistory(HistorySpan.All).status)
+        answer(200, """{"result":{"data":${fixture("sources.importStravaPaddle.skipped")}}}""")
+        assertEquals(StravaImport.Reason.NotWaterSport, api.importStravaPaddle(h.toImport!![1]).reason)
+    }
 }

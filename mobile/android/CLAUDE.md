@@ -64,3 +64,12 @@ time and isn't obvious from the code.
   sign-in return, since the manifest's scheme filter catches both. A return with
   no stored connect verifier is ignored (anyone can open the address), and
   `Reauth.After.ConnectStrava` brings a fresh sign-in back to Account.
+- Older Strava paddles come in one at a time (`StravaImporter`, plain Kotlin with an
+  injectable clock and sleep). `StravaImportModel` is the app's first ViewModel: it
+  keeps the import through rotation and setting changes. `onDispose` calls `stop()`
+  only when `!activity.isChangingConfigurations`, and keeps the screen on while an
+  import runs. TalkBack hears only start, waiting, stopped and done
+  (`importAnnouncement`). Use `semantics { contentDescription }`, not
+  `clearAndSetSemantics`, so tests can still find the visible text.
+- Large-text goldens catch rows that squeeze text to a letter per line. Use
+  `FlowRow` for a badge, name and action on one line.

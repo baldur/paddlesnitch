@@ -2,6 +2,21 @@ package com.paddlesnitch.app.account
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.foundation.layout.widthIn
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.activity.compose.LocalActivity
+import com.paddlesnitch.app.api.StravaHistory
+import com.paddlesnitch.app.api.HistorySpan
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
@@ -91,8 +106,6 @@ data class AccountLink(val label: String, val path: String, val signedIn: Boolea
 val accountPages = listOf(
     AccountLink("Your trackers", "/devices"),
 )
-/** Older Strava paddles are still brought in on the website. */
-val olderStravaPaddles = AccountLink("Bring in older paddles", "/account#strava")
 val aboutPages = listOf(
     AccountLink("Help", "/help", signedIn = false),
     AccountLink("Privacy", "/privacy", signedIn = false),
@@ -169,7 +182,7 @@ fun AccountScreen(
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
         StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
-            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onOlderPaddles = { open(olderStravaPaddles) },
+            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onSignedOut = onSignedOut,
             stravaOnly = isPlaceholderEmail(u.email))
         Divider()
         Section("Trackers")
@@ -337,14 +350,13 @@ private fun YourData(api: AccountApi, act: Act) {
 
 /**
  * Strava, as the website's Account section: connect (Strava's consent page in a
- * Custom Tab), who is connected, auto-import, disconnect. Older paddles are still
- * brought in on the website.
+ * Custom Tab), who is connected, auto-import, older paddles, disconnect.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StravaSection(
     api: AccountApi, act: Act, connect: StravaConnect, resume: Boolean, onResumed: () -> Unit,
-    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onOlderPaddles: () -> Unit,
+    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onSignedOut: () -> Unit,
     /** The account signs in only with Strava: disconnecting it is asked about first. */
     stravaOnly: Boolean,
 ) {
@@ -429,10 +441,12 @@ private fun StravaSection(
             }
             else -> {
                 Column(Modifier.card()) {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Wraps at large text rather than squeezing the name to a letter a line.
+                    FlowRow(Modifier.fillMaxWidth().padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        itemVerticalAlignment = Alignment.CenterVertically) {
                         Text("Connected", color = PsColor.green, style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.border(1.dp, PsColor.green, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-                        Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+                        Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp))
                         if (!confirmDisconnect) TextButton(enabled = !working, colors = linkColors(),
                             onClick = { if (stravaOnly) confirmDisconnect = true else disconnect() }) { Text(if (working) "Disconnecting…" else "Disconnect") }
                     }
@@ -459,7 +473,7 @@ private fun StravaSection(
                     }
                     Switch(checked = on, onCheckedChange = null, enabled = !working && !switching)
                 }
-                Link("${olderStravaPaddles.label} ↗", onClick = onOlderPaddles)
+                StravaImports(api, onSignedOut)
                 // Attribution: this row shows the athlete's Strava profile name.
                 Image(painterResource(R.drawable.powered_by_strava), contentDescription = "Powered by Strava", modifier = Modifier.height(20.dp))
                 Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted,
@@ -467,6 +481,66 @@ private fun StravaSection(
             }
         }
     }
+}
+
+/**
+ * The first month by itself, then Older paddles (the website's StravaHistoryImport), kept in
+ * [StravaImportModel] so they outlive turning the phone. Leaving Account stops them.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StravaImports(api: AccountApi, onSignedOut: () -> Unit) {
+    val model: StravaImportModel = viewModel { StravaImportModel(api) }
+    val activity = LocalActivity.current
+    DisposableEffect(model) { onDispose { if (activity?.isChangingConfigurations != true) model.stop() } }
+    LaunchedEffect(model) { model.startFirst() }
+    LaunchedEffect(model.signedOut) { if (model.signedOut) onSignedOut() }
+    // "Keep this screen open" means the phone mustn't sleep while Strava makes us wait.
+    val view = LocalView.current
+    DisposableEffect(model.running) { view.keepScreenOn = model.running; onDispose { view.keepScreenOn = false } }
+
+    // The first month: a rule on the left marks it as something happening, as on the website.
+    model.first?.let { p ->
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            Box(Modifier.width(2.dp).fillMaxHeight().background(PsColor.primary))
+            ImportStatus(p, "your last month", "first-import", Modifier.padding(start = 12.dp))
+        }
+    }
+    val spans = listOf(HistorySpan.Months3 to "Last 3 months", HistorySpan.Year to "Last year", HistorySpan.All to "Everything")
+    var picking by remember { mutableStateOf(false) }
+    // One import at a time against Strava's limit.
+    val busy = model.running
+    Column(Modifier.card().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Older paddles", fontWeight = FontWeight.Medium)
+        Text("Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.", color = PsColor.muted)
+        ExposedDropdownMenuBox(expanded = picking, onExpandedChange = { if (!busy) picking = it }) {
+            OutlinedTextField(spans.first { it.first == model.span }.second, {}, readOnly = true, enabled = !busy, label = { Text("How far back") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(picking) },
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).testTag("import-span"))
+            ExposedDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                spans.forEach { (value, label) -> DropdownMenuItem(text = { Text(label) }, onClick = { model.span = value; picking = false }) }
+            }
+        }
+        OutlinedButton(enabled = !busy, onClick = model::startOlder, modifier = Modifier.heightIn(min = 48.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.primaryText)) {
+            Text(if (model.olderRunning) "Bringing in…" else "Bring in older paddles")
+        }
+        model.older?.let { ImportStatus(it, "your paddles", "older-import") }
+    }
+}
+
+/**
+ * Progress, with TalkBack told only when it starts, waits, stops or ends
+ * (importAnnouncement), and at once when it stops.
+ */
+@Composable
+private fun ImportStatus(p: ImportProgress, what: String, tag: String, modifier: Modifier = Modifier) {
+    val announce = importAnnouncement(p, what)
+    Text(importStatus(p, what), color = if (p.stopped != null) PsColor.red else PsColor.muted,
+        modifier = modifier.testTag(tag).semantics {
+            contentDescription = announce
+            liveRegion = if (p.stopped != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
+        })
 }
 
 /** A bordered surface box, as the website's cards. */
