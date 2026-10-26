@@ -83,6 +83,27 @@ class Api(
     suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignIn =
         signIn("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}""")
 
+    /**
+     * Forgot password, step 1: a 6-digit code goes to [email] if it has an account (the
+     * answer never says). [elapsedMs] is how long the screen was open (the server's bot check).
+     */
+    suspend fun requestPasswordReset(email: String, elapsedMs: Long) {
+        read(post("/att/api/auth/password-reset/request", """{"email":${str(email)},"website":"","elapsedMs":$elapsedMs}"""), Ok.serializer())
+    }
+
+    /**
+     * Step 2: the code and a new password. Usually that signs in, and then the answer is
+     * shaped as any other sign-in (name and id from `me`); null = set, but sign in again.
+     */
+    suspend fun confirmPasswordReset(email: String, code: String, password: String): SignIn? {
+        val done = read(post("/att/api/auth/password-reset/confirm", """{"email":${str(email)},"code":${str(code)},"password":${str(password)}}"""), ResetDone.serializer())
+        val id = done.idToken; val refresh = done.refreshToken
+        if (!done.signedIn || id == null || refresh == null) return null
+        tokens.save(id, refresh)
+        val user = runCatching { me().user }.getOrNull() ?: return null.also { tokens.clear() }
+        return SignIn(user.id, user.email, user.displayName, needsTerms = null, idToken = id, refreshToken = refresh)
+    }
+
     /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
     fun stravaStartUrl(challenge: String): String =
         base.newBuilder().encodedPath("/att/api/auth/strava/init").addQueryParameter("challenge", challenge).build().toString()

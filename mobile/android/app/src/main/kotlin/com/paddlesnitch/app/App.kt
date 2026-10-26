@@ -45,6 +45,7 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.PrefsVerifierStore
 import com.paddlesnitch.app.auth.StravaSignIn
+import com.paddlesnitch.app.auth.ForgotPasswordScreen
 import com.paddlesnitch.app.auth.SignInScreen
 import com.paddlesnitch.app.paddles.PaddlesHost
 import com.paddlesnitch.app.paddles.AddCard
@@ -72,6 +73,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     }
     var signedIn by remember { mutableStateOf(api.signedIn) }
     var signingIn by rememberSaveable { mutableStateOf(false) }
+    // Forgot password, inside signing in: the email it started with, and what the sign-in screen says after.
+    var forgotFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var resetNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     var inAccount by rememberSaveable { mutableStateOf(false) }
     var settingUpTracker by rememberSaveable { mutableStateOf(false) }
@@ -108,7 +112,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         run(intake.arrived(it, signedIn, name))
     }
     fun forgetReauth() { reauth = reauth.cleared(); reauthEmail = null }
-    fun leaveSignIn() { signingIn = false; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
+    fun leaveSignIn() { signingIn = false; forgotFor = null; resetNotice = null; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
 
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
@@ -123,12 +127,24 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         val m = Modifier.padding(inner)
         when (screen) {
             Screen.SignIn -> {
+                // Signed in, from the sign-in screen or a password reset.
+                val signedInWith: (com.paddlesnitch.app.api.SignIn) -> Unit = {
+                    if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resume != null }
+                    forgotFor = null; resetNotice = null
+                    signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn())
+                }
+                val forgot = forgotFor
+                if (forgot != null) {
+                    BackHandler { forgotFor = null }
+                    ForgotPasswordScreen(api, forgot, onSignedIn = signedInWith,
+                        onPasswordSet = { email -> forgotFor = null; reauthEmail = email; resetNotice = "Your password is set. Please sign in." },
+                        onBack = { forgotFor = null }, modifier = m)
+                    return@Scaffold
+                }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
-                    onSignedIn = {
-                        if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resume != null }
-                        signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn()) }, onCancel = { leaveSignIn() }, modifier = m,
-                    prefillEmail = reauthEmail, notice = reauth.notice,
+                    onSignedIn = signedInWith, onCancel = { leaveSignIn() }, modifier = m,
+                    prefillEmail = reauthEmail, notice = reauth.notice ?: resetNotice, onForgot = { forgotFor = it },
                     startStrava = reauth.signingInAgain && reauth.strava)
             }
             Screen.Terms -> TermsScreen(api, onAccepted = { needsTerms = false }, onSignOut = { scope.launch { api.signOut(); signedOut() } },

@@ -73,3 +73,7 @@ time and isn't obvious from the code.
   `clearAndSetSemantics`, so tests can still find the visible text.
 - Large-text goldens catch rows that squeeze text to a letter per line. Use
   `FlowRow` for a badge, name and action on one line.
+- Forgot password is in the app (`ForgotPasswordScreen`, shown inside signing in).
+  A reset that signs in returns a `SignIn` built from `me`, so App.kt's one
+  `signedInWith` handles it like any sign-in: reauth, intake and the Terms check
+  on start.
