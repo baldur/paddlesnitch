@@ -41,5 +41,7 @@ class ReauthTest {
         assertEquals("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.", strava.notice)
         assertEquals(Reauth.After.ConnectStrava, strava.signedIn("u-1").resume)
         assertNull(strava.signedIn("someone-else").resume)
+        assertEquals("For your safety, connecting Strava needs a recent sign-in. Sign in with Strava below and you’ll come straight back to Account.",
+            Reauth().start("u-1", strava = true, then = Reauth.After.ConnectStrava).notice)
     }
 }

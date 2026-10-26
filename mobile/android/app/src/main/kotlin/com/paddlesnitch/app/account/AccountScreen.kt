@@ -2,6 +2,10 @@ package com.paddlesnitch.app.account
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import com.paddlesnitch.app.auth.VerifierStore
 import com.paddlesnitch.app.api.StravaStatus
 import com.paddlesnitch.app.Reauth
@@ -87,6 +91,8 @@ data class AccountLink(val label: String, val path: String, val signedIn: Boolea
 val accountPages = listOf(
     AccountLink("Your trackers", "/devices"),
 )
+/** Older Strava paddles are still brought in on the website. */
+val olderStravaPaddles = AccountLink("Bring in older paddles", "/account#strava")
 val aboutPages = listOf(
     AccountLink("Help", "/help", signedIn = false),
     AccountLink("Privacy", "/privacy", signedIn = false),
@@ -163,7 +169,8 @@ fun AccountScreen(
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
         StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
-            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onOlderPaddles = { open(AccountLink("", "/account#strava")) })
+            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onOlderPaddles = { open(olderStravaPaddles) },
+            stravaOnly = isPlaceholderEmail(u.email))
         Divider()
         Section("Trackers")
         Link("Set up or sync a tracker", onClick = onTracker)
@@ -338,13 +345,17 @@ private fun YourData(api: AccountApi, act: Act) {
 private fun StravaSection(
     api: AccountApi, act: Act, connect: StravaConnect, resume: Boolean, onResumed: () -> Unit,
     stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onOlderPaddles: () -> Unit,
+    /** The account signs in only with Strava: disconnecting it is asked about first. */
+    stravaOnly: Boolean,
 ) {
     val context = LocalContext.current
     val load = remember { Load() }
     var status by remember { mutableStateOf<StravaStatus?>(null) }
     var working by remember { mutableStateOf(false) }
+    var switching by remember { mutableStateOf(false) }
     var needsSignIn by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
+    var confirmDisconnect by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
     val view = remember { BringIntoViewRequester() }
@@ -358,16 +369,17 @@ private fun StravaSection(
         val back = stravaReturn?.let(Uri::parse) ?: return@LaunchedEffect
         onReturnHandled()
         working = true
+        say("Connecting Strava…", false)
+        runCatching { view.bringIntoView() }
         act(stravaConnectResult("exchange_failed"), { say(it, true); working = false }) {
             try {
                 val now = connect.finish(back.getQueryParameter("code"), back.getQueryParameter("strava"))
-                if (now != null) { status = now; say(stravaConnectResult("connected"), false) }
+                if (now != null) { status = now; say(stravaConnectResult("connected"), false) } else say(null, false)
             } catch (e: ApiFailure) {
                 if (!e.reauth) throw e
-                needsSignIn = true
+                say(null, false); needsSignIn = true
             }
             working = false
-            runCatching { view.bringIntoView() }
         }
     }
     LaunchedEffect(resume) { if (resume) { onResumed(); runCatching { view.bringIntoView() } } }
@@ -384,63 +396,81 @@ private fun StravaSection(
             working = false
         }
     }
+    fun disconnect() {
+        working = true; confirmDisconnect = false; say(null, false)
+        act("Couldn’t disconnect Strava. Please try again.", { say(it, true) }) {
+            api.stravaDisconnect(); status = StravaStatus(connected = false)
+        }.invokeOnCompletion { working = false }
+    }
 
     Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("Strava")
         Text("Connect Strava to bring in your paddles and trial results without exporting files, and to sign in with Strava. We only read your activities; we never post.", color = PsColor.muted)
         // Always in the layout, so TalkBack reads what happened.
-        Message(message, red = failed, green = !failed, tag = "strava-message")
+        Message(message, red = failed, green = !failed && message != "Connecting Strava…", tag = "strava-message")
         Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
             if (needsSignIn) Notice("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
         }
-        if (needsSignIn) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(if (leaving) "Sign in again…" else "Sign in again")
-            }
-            TextButton(enabled = !leaving, colors = linkColors(), onClick = { needsSignIn = false }) { Text("Cancel") }
-        }
         val s = status
         when {
+            // The notice takes the button's place, as on the website.
+            needsSignIn -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(if (leaving) "Sign in again…" else "Sign in again")
+                }
+                TextButton(enabled = !leaving, colors = linkColors(), onClick = { needsSignIn = false }) { Text("Cancel") }
+            }
             !load.done -> LoadState(load)
-            s == null || !s.connected ->
+            s == null || !s.connected -> {
                 // Strava's own button, unaltered (their brand guidelines).
                 Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
-                    modifier = Modifier.height(48.dp).alpha(if (working) 0.5f else 1f).clickable(enabled = !working && !needsSignIn, role = Role.Button, onClick = ::start))
+                    modifier = Modifier.height(48.dp).alpha(if (working) 0.5f else 1f).clickable(enabled = !working, role = Role.Button, onClick = ::start))
+                if (working) CircularProgressIndicator(Modifier.padding(4.dp))
+            }
             else -> {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Connected", color = PsColor.green, style = MaterialTheme.typography.bodySmall)
-                        Text(s.athlete?.name.orEmpty())
+                Column(Modifier.card()) {
+                    Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Connected", color = PsColor.green, style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.border(1.dp, PsColor.green, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                        Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+                        if (!confirmDisconnect) TextButton(enabled = !working, colors = linkColors(),
+                            onClick = { if (stravaOnly) confirmDisconnect = true else disconnect() }) { Text(if (working) "Disconnecting…" else "Disconnect") }
                     }
-                    TextButton(enabled = !working, colors = linkColors(), onClick = {
-                        working = true; say(null, false)
-                        act("Couldn’t disconnect Strava. Please try again.", { say(it, true) }) {
-                            api.stravaDisconnect(); status = StravaStatus(connected = false)
-                        }.invokeOnCompletion { working = false }
-                    }) { Text(if (working) "Disconnecting…" else "Disconnect") }
+                    if (confirmDisconnect) Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Strava is this account's only way to sign in.
+                        Text("You sign in with Strava. Once it’s disconnected, you can’t sign in to this account until you connect it again on the website.")
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = ::disconnect, colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.red)) { Text("Disconnect") }
+                            TextButton(colors = linkColors(), onClick = { confirmDisconnect = false }) { Text("Cancel") }
+                        }
+                    }
                 }
                 val on = s.autoImport ?: true
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !working, role = Role.Switch) {
+                Row(Modifier.card().heightIn(min = 48.dp).clickable(enabled = !working && !switching, role = Role.Switch) {
                     // At once, and back again if the server says no.
-                    status = s.copy(autoImport = !on); say(null, false)
+                    status = s.copy(autoImport = !on); say(null, false); switching = true
                     act("Couldn’t change auto-import. Please try again.", { status = status?.copy(autoImport = on); say(it, true) }) {
                         status = status?.copy(autoImport = api.setStravaAutoImport(!on).autoImport)
-                    }
-                }.semantics(mergeDescendants = true) { toggleableState = ToggleableState(on) }, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+                    }.invokeOnCompletion { switching = false }
+                }.semantics(mergeDescendants = true) { toggleableState = ToggleableState(on) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
                         Text("Auto-import new paddles")
                         Text("New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.", color = PsColor.muted)
                     }
-                    Switch(checked = on, onCheckedChange = null, enabled = !working)
+                    Switch(checked = on, onCheckedChange = null, enabled = !working && !switching)
                 }
-                Link("Bring in older paddles ↗", onClick = onOlderPaddles)
+                Link("${olderStravaPaddles.label} ↗", onClick = onOlderPaddles)
                 // Attribution: this row shows the athlete's Strava profile name.
                 Image(painterResource(R.drawable.powered_by_strava), contentDescription = "Powered by Strava", modifier = Modifier.height(20.dp))
-                Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted)
+                Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted,
+                    modifier = Modifier.testTag("strava-end"))
             }
         }
     }
 }
+
+/** A bordered surface box, as the website's cards. */
+private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(6.dp)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp))
 
 /** What the Delete account section shows. */
 private enum class Deleting { No, Checking, NeedsSignIn, Confirming }

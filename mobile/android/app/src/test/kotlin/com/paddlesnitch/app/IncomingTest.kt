@@ -38,6 +38,7 @@ class IncomingTest {
         val back = "com.paddlesnitch.app:/account/strava?code=abc"
         assertEquals(Incoming.StravaConnectReturn(back), incoming(view, back, null))
         assertEquals(Incoming.StravaConnectReturn("com.paddlesnitch.app:/account/strava?strava=denied"), incoming(view, "com.paddlesnitch.app:/account/strava?strava=denied", null))
+        assertEquals(Incoming.StravaReturn("com.paddlesnitch.app:/account/stravax?code=1"), incoming(view, "com.paddlesnitch.app:/account/stravax?code=1", null)) // that exact path only
     }
 
     @Test fun aFileOpenedOrSharedFromAnotherAppIsAdded() {

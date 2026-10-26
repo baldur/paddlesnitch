@@ -31,7 +31,7 @@ fun incoming(action: String?, data: String?, stream: String?): Incoming? = when 
 }
 
 private fun viewed(data: String): Incoming? {
-    if (data.startsWith("${StravaSignIn.SCHEME}:/account/strava")) return Incoming.StravaConnectReturn(data)
+    if (data.substringBefore('?') == "${StravaSignIn.SCHEME}:/account/strava") return Incoming.StravaConnectReturn(data)
     if (data.startsWith("${StravaSignIn.SCHEME}:")) return Incoming.StravaReturn(data)
     if (data.startsWith("content:")) return Incoming.AddFile(data)
     val uri = runCatching { URI(data) }.getOrNull() ?: return null

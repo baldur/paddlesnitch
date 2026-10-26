@@ -89,6 +89,11 @@ class FakeAccountApi(
     var strava: StravaStatus = StravaStatus(connected = false),
     /** Connecting Strava answers 403 {reauth: true}. */
     var stravaReauth: Boolean = false,
+    /** Finishing a connect answers 403 {reauth: true}, or 409 when this Strava is on another account. */
+    var finishReauth: Boolean = false,
+    var finishLinkedElsewhere: Boolean = false,
+    /** Strava's status won't load. */
+    var failStravaStatus: Boolean = false,
 ) : AccountApi {
     val calls = mutableListOf<String>()
     private fun check() { if (signedOut) throw SignedOut() }
@@ -115,13 +120,16 @@ class FakeAccountApi(
     }
     override suspend fun exportAccount(into: File) = answer("export") { into.writeText("""{"account":{}}"""); "paddlesnitch-export-2026-10-25.json" }
     override suspend fun signedInPage(next: String) = "https://paddlesnitch.com$next"
-    override suspend fun stravaStatus(): StravaStatus { check(); return strava } // its own load, apart from failLoads
+    override suspend fun stravaStatus(): StravaStatus { check(); if (failStravaStatus) throw ApiFailure("x", 500, generic = true); return strava } // its own load, apart from failLoads
     override suspend fun stravaConnect(challenge: String): WebPage {
         if (stravaReauth) { calls += "strava connect"; throw ApiFailure("For your safety, connecting Strava needs a recent sign-in. Please sign in again.", 403, reauth = true) }
         return answer("strava connect") { WebPage("https://www.strava.com/oauth/authorize?x") }
     }
     override suspend fun stravaConnectFinish(code: String, verifier: String) =
-        answer("strava finish $code") { StravaStatus(true, StravaStatus.Athlete(12345678, "Pat on Strava"), true).also { strava = it } }
+        answer("strava finish $code") {
+            if (finishReauth) throw ApiFailure("For your safety, connecting Strava needs a recent sign-in. Please sign in again.", 403, reauth = true)
+            if (finishLinkedElsewhere) throw ApiFailure("Couldn’t connect Strava. It’s already connected to another paddlesnitch account. Sign in to that account and disconnect it there.", 409)
+            StravaStatus(true, StravaStatus.Athlete(12345678, "Pat on Strava"), true).also { strava = it } }
     override suspend fun setStravaAutoImport(enabled: Boolean) = answer("auto-import $enabled") { StravaAutoImport(enabled) }
     override suspend fun stravaDisconnect() = answer("strava disconnect") { strava = StravaStatus(connected = false); Ok(true) }
 }
@@ -156,10 +164,10 @@ class AccountScreensTest {
     }
     private fun account(
         api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null), resumeDelete: Boolean = false,
-        stravaReturn: MutableState<String?> = mutableStateOf(null),
+        stravaReturn: MutableState<String?> = mutableStateOf(null), resume: Reauth.After? = if (resumeDelete) Reauth.After.Delete else null,
     ) = show(fontScale, saveDialog) {
         AccountScreen(api, onBack = {}, onTracker = {}, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" },
-            resume = if (resumeDelete) Reauth.After.Delete else null, onResumed = { did += "resumed" },
+            resume = resume, onResumed = { did += "resumed" },
             onSignInAgain = { id, email, strava, then -> did += "sign in again $id $email ${if (strava) "with Strava" else "with email"}" + if (then == Reauth.After.ConnectStrava) " to connect Strava" else "" },
             stravaReturn = stravaReturn.value, onStravaReturnHandled = { stravaReturn.value = null }, connectVerifiers = verifiers)
     }
@@ -460,7 +468,7 @@ class AccountScreensTest {
         waitFor("Pat on Strava")
         compose.onNodeWithText("Auto-import new paddles").assertExists()
         compose.onNodeWithContentDescription("Powered by Strava").assertExists()
-        compose.onNodeWithContentDescription("Powered by Strava").performScrollTo()
+        compose.onNodeWithTag("strava-end").performScrollTo()
         compose.onRoot().captureRoboImage()
     }
 
@@ -530,5 +538,85 @@ class AccountScreensTest {
         waitFor("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
         compose.onAllNodesWithText("Sign in again")[0].performScrollTo().performClick()
         assertEquals(listOf("sign in again u-123 pat@example.com with email to connect Strava"), did)
+    }
+
+    private fun waitForConnect() = compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+
+    /** Starts a connect and comes back from Strava with [query]. */
+    private fun connectAndReturn(api: FakeAccountApi, query: String) {
+        val back = mutableStateOf<String?>(null)
+        account(api, stravaReturn = back)
+        waitForConnect()
+        compose.onNodeWithContentDescription("Connect with Strava").performScrollTo().performClick()
+        compose.waitUntil { "strava connect" in api.calls }
+        back.value = "com.paddlesnitch.app:/account/strava?$query"
+    }
+
+    @Test fun stravaNotConnectedAtTheLargestText() {
+        account(FakeAccountApi(), fontScale = 2f)
+        waitForConnect()
+        compose.onNodeWithContentDescription("Connect with Strava").performScrollTo()
+        compose.onRoot().captureRoboImage()
+    }
+
+    @Test fun signInAgainForStravaAtTheLargestText() {
+        account(FakeAccountApi(stravaReauth = true), fontScale = 2f)
+        waitForConnect()
+        compose.onNodeWithContentDescription("Connect with Strava").performScrollTo().performClick()
+        waitFor("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
+        compose.onNodeWithContentDescription("Connect with Strava").assertDoesNotExist() // the notice takes its place
+        compose.onAllNodesWithText("Sign in again")[0].performScrollTo()
+        compose.onRoot().captureRoboImage()
+    }
+
+    @Test fun backFromSigningInAgainForStravaShowsStravaAndNotDelete() {
+        val api = FakeAccountApi()
+        account(api, resume = Reauth.After.ConnectStrava)
+        waitForConnect()
+        compose.waitUntil { did == listOf("resumed") }
+        compose.onNodeWithTag("delete-confirm").assertDoesNotExist()
+        assertFalse("status" in api.calls) // no delete check
+    }
+
+    @Test fun stravaThatWontLoadSaysSoAndOffersNoConnect() {
+        val api = FakeAccountApi(failStravaStatus = true, strava = connected())
+        account(api)
+        waitFor("Couldn’t check Strava. Please try again.")
+        compose.onNodeWithContentDescription("Connect with Strava").assertDoesNotExist()
+        api.failStravaStatus = false
+        compose.onNodeWithText("Try again").performScrollTo().performClick()
+        waitFor("Pat on Strava")
+    }
+
+    @Test fun aRefusedDisconnectSaysSoAndStaysConnected() {
+        val api = FakeAccountApi(strava = connected(), refuse = "Couldn’t disconnect Strava. Please try again.")
+        account(api)
+        waitFor("Disconnect")
+        compose.onNodeWithText("Disconnect").performScrollTo().performClick()
+        waitFor("Couldn’t disconnect Strava. Please try again.")
+        compose.onNodeWithText("Pat on Strava").assertExists()
+        compose.onNodeWithText("Disconnect").assertIsEnabled()
+    }
+
+    @Test fun disconnectingAStravaOnlyAccountAsksFirst() {
+        val api = FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", strava = connected())
+        account(api)
+        waitFor("Disconnect")
+        compose.onNodeWithText("Disconnect").performScrollTo().performClick()
+        waitFor("You sign in with Strava. Once it’s disconnected, you can’t sign in to this account until you connect it again on the website.")
+        assertFalse("strava disconnect" in api.calls)
+        compose.onNodeWithText("Disconnect").performScrollTo().performClick()
+        compose.waitUntil { "strava disconnect" in api.calls }
+    }
+
+    @Test fun stravaAskingForAFreshSignInOnTheWayBackShowsSignInAgain() {
+        connectAndReturn(FakeAccountApi(finishReauth = true), "code=abc")
+        waitFor("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
+        compose.onNodeWithTag("strava-message").onChildren().assertCountEquals(0)
+    }
+
+    @Test fun aStravaOnAnotherAccountSaysSo() {
+        connectAndReturn(FakeAccountApi(finishLinkedElsewhere = true), "code=abc")
+        waitFor("Couldn’t connect Strava. It’s already connected to another paddlesnitch account. Sign in to that account and disconnect it there.")
     }
 }

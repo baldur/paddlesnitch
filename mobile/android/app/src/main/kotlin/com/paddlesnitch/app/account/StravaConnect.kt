@@ -48,8 +48,20 @@ class StravaConnect(private val api: AccountApi, private val verifiers: Verifier
 fun stravaConnectResult(key: String): String =
     Constants.stravaConnectResults[key] ?: Constants.stravaConnectResults.getValue("exchange_failed")
 
-class PrefsConnectVerifierStore(context: Context) : VerifierStore {
+/**
+ * The connect verifier, kept through the app being killed while Strava is open.
+ * It lasts 10 minutes (the server's code lasts 5) and goes on sign-out ([clearStravaConnect]).
+ */
+class PrefsConnectVerifierStore(context: Context, private val now: () -> Long = System::currentTimeMillis) : VerifierStore {
     private val prefs = context.getSharedPreferences("strava-connect", Context.MODE_PRIVATE)
-    override fun put(verifier: String) { prefs.edit().putString("verifier", verifier).commit() }
-    override fun take(): String? = prefs.getString("verifier", null).also { prefs.edit().remove("verifier").apply() }
+    override fun put(verifier: String) { prefs.edit().putString("verifier", verifier).putLong("at", now()).commit() }
+    override fun take(): String? = current().also { clear() }
+    /** A connect this app started and hasn't finished. */
+    val pending: Boolean get() = current() != null
+    fun clear() { prefs.edit().clear().commit() }
+    private fun current(): String? = prefs.getString("verifier", null)?.takeIf { now() - prefs.getLong("at", 0) < TEN_MINUTES }
+    private companion object { const val TEN_MINUTES = 10 * 60 * 1000L }
 }
+
+/** Signed out or deleted: an unfinished connect goes too. */
+fun clearStravaConnect(context: Context) = PrefsConnectVerifierStore(context).clear()
