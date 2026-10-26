@@ -22,11 +22,12 @@ public final class AccountModel {
     public internal(set) var state: State = .signedOut
     /// The account was just deleted here: the signed-out You tab says so.
     public internal(set) var accountDeleted = false
-    /// Signed out to sign in again before deleting: come straight back.
-    public internal(set) var deleteAfterSignIn = false
+    /// Signed out to sign in again before deleting or connecting Strava:
+    /// come straight back to it.
+    public internal(set) var afterSignIn: AfterSignIn?
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
-    /// Signing in again to delete goes straight to Strava sign-in.
+    /// Signing in again goes straight to Strava sign-in.
     public internal(set) var signInAgainWithStrava = false
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
     public private(set) var client: PaddleClient

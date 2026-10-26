@@ -2,17 +2,19 @@ import Account
 import DesignSystem
 import PaddleAPI
 import Paddles
+import SampleServer
 import SwiftUI
 
 /// The account, native in the app (mobile-apps.md, the owner's 2026-10-25
 /// note), in the website's order: the Terms when they've changed, your
-/// details, public profile, your data, then delete. Words follow the
+/// details, public profile, Strava, your data, then delete. Words follow the
 /// website's account page.
 struct AccountView: View {
     let account: AccountModel
     /// Opens the sign-in sheet.
     let signIn: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var termsChanged = false
     @State private var downloading = false
     @State private var downloaded: SharedFile?
@@ -20,11 +22,13 @@ struct AccountView: View {
     @State private var confirmingDelete = false
     @State private var webPage: YouView.WebPage?
     @State private var profile: ProfileForm
+    @State private var strava: StravaConnection
 
     init(account: AccountModel, signIn: @escaping () -> Void) {
         self.account = account
         self.signIn = signIn
         _profile = State(initialValue: ProfileForm(account: account))
+        _strava = State(initialValue: StravaConnection(account: account))
     }
 
     struct SharedFile: Identifiable {
@@ -52,6 +56,8 @@ struct AccountView: View {
             // The profile arrives after the screen: its rows appear in place
             // rather than animating in (iOS 17's audit measured them mid-move).
             .transaction { $0.animation = nil }
+            StravaSection(strava: strava, connect: connectStrava) { signInAgain(then: .connectStrava) }
+                .transaction { $0.animation = nil }
             Section {
                 Button {
                     Task { await download() }
@@ -88,17 +94,18 @@ struct AccountView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Palette.bg)
         .navigationTitle("Account")
-        // Back from signing in again to delete: on appearing (You pushed this
-        // screen again), or when the sign-in comes back with this screen
-        // still under the sheet. A sheet can't open while another is
+        // Back from signing in again to delete or connect: on appearing (You
+        // pushed this screen again), or when the sign-in comes back with this
+        // screen still under the sheet. A sheet can't open while another is
         // closing, so the sign-in sheet goes first.
-        .onAppear { resumeDelete() }
+        .onAppear { resume() }
         .task { await profile.load() }
+        .task { await strava.load() }
         .onChange(of: account.user?.id) { _, id in
             guard id != nil else { return }
             Task {
                 try? await Task.sleep(for: .milliseconds(700))
-                resumeDelete()
+                resume()
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -120,11 +127,7 @@ struct AccountView: View {
                 },
                 signInAgain: {
                     confirmingDelete = false
-                    Task {
-                        // A Strava account signs in again with Strava.
-                        await account.signOutToDelete(withStrava: profile.needsContactEmail)
-                        signIn()
-                    }
+                    signInAgain(then: .delete)
                 })
         }
     }
@@ -137,10 +140,30 @@ struct AccountView: View {
         }
     }
 
-    private func resumeDelete() {
-        guard account.deleteAfterSignIn, account.user != nil else { return }
-        account.deleteResumed()
-        confirmingDelete = true
+    private func resume() {
+        guard account.user != nil, let next = account.afterSignIn else { return }
+        account.resumed()
+        switch next {
+        case .delete: confirmingDelete = true
+        case .connectStrava: connectStrava()
+        }
+    }
+
+    private func signInAgain(then next: AccountModel.AfterSignIn) {
+        Task {
+            // A Strava account signs in again with Strava.
+            await account.signOutToSignInAgain(then: next, withStrava: profile.needsContactEmail)
+            signIn()
+        }
+    }
+
+    private func connectStrava() {
+        Task {
+            await strava.connect { page in
+                try await StravaBrowser.open(
+                    page, with: webAuthenticationSession, sample: SampleServer.stravaConnectBrowser)
+            }
+        }
     }
 
     private func download() async {

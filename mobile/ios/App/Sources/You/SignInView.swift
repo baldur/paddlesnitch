@@ -29,10 +29,14 @@ struct SignInView: View {
                     if account.signInAgainWithStrava {
                         // Its sign-in email is a placeholder: the password
                         // form can't work, so say why and offer Strava first.
-                        Text("Sign in with Strava again to delete your account.")
-                            .font(.plexSans(.body))
-                            .foregroundStyle(Palette.fg)
-                            .accessibilityIdentifier("sign-in-again-strava")
+                        Text(
+                            account.afterSignIn == .connectStrava
+                                ? "Sign in with Strava again to connect Strava."
+                                : "Sign in with Strava again to delete your account."
+                        )
+                        .font(.plexSans(.body))
+                        .foregroundStyle(Palette.fg)
+                        .accessibilityIdentifier("sign-in-again-strava")
                         if !account.signInAgainWithStrava { strava }
                     }
                     Picker("Sign in or create an account", selection: $form.mode) {
@@ -125,7 +129,7 @@ struct SignInView: View {
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
-            // A Strava account signing in again to delete: straight to Strava.
+            // A Strava account signing in again: straight to Strava.
             if account.signInAgainWithStrava && !startedStrava && !form.busy {
                 startedStrava = true
                 signInWithStrava()
@@ -147,7 +151,7 @@ struct SignInView: View {
             .disabled(form.busy)
             .accessibilityLabel("Connect with Strava")
             .accessibilityIdentifier("strava-sign-in")
-            Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.")
+            Text("Already have an account? Sign in first, then connect Strava in Account.")
                 .font(.plexSans(.subheadline))
                 .foregroundStyle(Palette.muted)
                 .multilineTextAlignment(.center)
@@ -198,17 +202,8 @@ extension SignInView {
         }
     }
 
-    /// The system's sign-in browser, which shares Safari's cookies: someone
-    /// signed in to Strava there needn't sign in again. The sample server
-    /// answers at once.
     private func openStrava(_ start: URL) async throws -> URL {
-        if PaddlesnitchApp.usesSampleServer { return SampleServer.stravaBrowser(start) }
-        do {
-            return try await webAuthenticationSession.authenticate(
-                using: start, callbackURLScheme: StravaSignIn.callbackScheme, preferredBrowserSession: .shared)
-        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
-            throw CancellationError()
-        }
+        try await StravaBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.stravaBrowser)
     }
 }
 

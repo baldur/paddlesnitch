@@ -30,6 +30,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _handle: String? = "river-pat"
     var _contact: String?
     var _placeholderEmail = false
+    var _stravaConnected = false
+    var _stravaAutoImport = true
+    var _stravaNotConfigured = false
     /// Signed in through Strava: the sign-in email is a placeholder.
     public var placeholderEmail: Bool {
         get { lock.withLock { _placeholderEmail } }
@@ -108,6 +111,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         }
         if path == "/api/account" || path.hasPrefix("/api/account/") {
             return try account(path: path, request: request)
+        }
+        if path.hasPrefix("/att/api/strava/") {
+            return try strava(path: path, request: request)
         }
         if path == Self.exportPath {
             return (200, Data(#"{"account":{"email":"pat@example.com"},"paddles":[]}"#.utf8))
@@ -248,7 +254,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         return URL(string: "com.paddlesnitch.app:/signin/strava?code=sample.\(challenge)") ?? start
     }
 
-    private static func challenge(_ verifier: String) -> String {
+    static func challenge(_ verifier: String) -> String {
         Data(SHA256.hash(data: Data(verifier.utf8))).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")

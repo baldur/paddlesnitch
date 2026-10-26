@@ -51,8 +51,8 @@ struct RootView: View {
         .sheet(
             isPresented: $signingIn,
             onDismiss: {
-                // Closed without signing in again: don't jump to deleting later.
-                if account.user == nil && account.deleteAfterSignIn { account.deleteResumed() }
+                // Closed without signing in again: don't jump back later.
+                if account.user == nil && account.afterSignIn != nil { account.resumed() }
             },
             content: { SignInView(account: account) }
         )
