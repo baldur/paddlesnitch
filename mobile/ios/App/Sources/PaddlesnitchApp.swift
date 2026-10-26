@@ -41,6 +41,10 @@ struct PaddlesnitchApp: App {
         if arguments.contains("-StaleSignIn") { server.signInIsRecent = false }
         // UI tests: a session restored from a Strava sign-in.
         if arguments.contains("-StravaAccount") { server.placeholderEmail = true }
+        // UI tests: Strava switched off on the server, as production now.
+        if arguments.contains("-StravaOff") { server.options = SignInOptions(google: true, strava: false) }
+        // UI tests: Strava was connected before it was switched off.
+        if arguments.contains("-StravaConnected") { server.stravaConnected = true }
         let transport: any HTTPTransport = sample ? server : URLSession.shared
         return AccountModel(
             baseURL: baseURL, transport: transport, app: "ios/\(YouView.shortVersion)", tokens: tokens,

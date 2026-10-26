@@ -11,6 +11,9 @@ struct StravaSection: View {
     /// Made through Strava (its sign-in email is a placeholder): Strava is
     /// its only way in (#712).
     var signsInWithStrava = false
+    /// The server offers Strava (`options`). Off: only a connected account
+    /// sees this section, paused.
+    var stravaOn = true
     let connect: () -> Void
     /// A sign-in from the last 10 minutes is needed: sign out and back in.
     let signInAgain: () -> Void
@@ -30,39 +33,75 @@ struct StravaSection: View {
     static let disconnectOnlyWayIn =
         "You sign in to this account with Strava. Once it’s disconnected, you can’t sign in to this account again."
 
+    static let pausedLine = "Strava isn’t available right now. Paddles you already brought in stay here."
+
     @State private var confirmingDisconnect = false
 
     var body: some View {
         Section {
-            text(Self.explained, tone: Palette.muted)
-            if let flash = strava.flash { flashRow(flash) }
-            if strava.needsRecentSignIn {
-                text(Self.reauth, tone: Palette.fg).accessibilityIdentifier("strava-reauth")
-                Button("Sign in again", action: signInAgain)
-                    .frame(minHeight: 44)
-                    .listRowBackground(Palette.surface)
-            }
-            if let status = strava.status {
-                if status.connected {
-                    connected(status)
-                } else if !strava.needsRecentSignIn && (strava.flash == nil || strava.canTryAgain) {
-                    connectButton
-                    if strava.busy == .connecting { text("Connecting…", tone: Palette.muted) }
-                }
-            } else if let failure = strava.loadFailure {
-                text(failure, tone: Palette.red)
-                Button(strava.busy == nil ? "Try again" : "Checking…") { Task { await strava.load() } }
-                    .disabled(strava.busy != nil)
-                    .frame(minHeight: 44)
-                    .listRowBackground(Palette.surface)
-            } else {
-                text("Checking…", tone: Palette.muted)
+            if stravaOn {
+                onContent
+            } else if let status = strava.status, status.connected {
+                paused(status)
             }
         } header: {
             Text("Strava").font(.plexSans(.subheadline, weight: .medium)).foregroundStyle(Palette.muted)
                 .textCase(nil)
         }
         .font(.plexSans(.body))
+    }
+
+    @ViewBuilder private var onContent: some View {
+        text(Self.explained, tone: Palette.muted)
+        if let flash = strava.flash { flashRow(flash) }
+        if strava.needsRecentSignIn {
+            text(Self.reauth, tone: Palette.fg).accessibilityIdentifier("strava-reauth")
+            Button("Sign in again", action: signInAgain)
+                .frame(minHeight: 44)
+                .listRowBackground(Palette.surface)
+        }
+        if let status = strava.status {
+            if status.connected {
+                connected(status)
+            } else if !strava.needsRecentSignIn && (strava.flash == nil || strava.canTryAgain) {
+                connectButton
+                if strava.busy == .connecting { text("Connecting…", tone: Palette.muted) }
+            }
+        } else if let failure = strava.loadFailure {
+            text(failure, tone: Palette.red)
+            Button(strava.busy == nil ? "Try again" : "Checking…") { Task { await strava.load() } }
+                .disabled(strava.busy != nil)
+                .frame(minHeight: 44)
+                .listRowBackground(Palette.surface)
+        } else {
+            text("Checking…", tone: Palette.muted)
+        }
+    }
+
+    /// Strava off (`options`), but this account is still connected: as the
+    /// website, "Paused", and Disconnect unless Strava is its only way in.
+    @ViewBuilder private func paused(_ status: StravaStatus) -> some View {
+        badgeRow("Paused", tone: Palette.muted, name: status.athlete?.name)
+        text(Self.pausedLine, tone: Palette.muted)
+        if !signsInWithStrava { disconnectButton }
+    }
+
+    private func badgeRow(_ badge: String, tone: Color, name: String?) -> some View {
+        HStack(spacing: 8) {
+            Text(badge)
+                .font(.plexSans(.subheadline, weight: .medium))
+                .fixedSize()
+                .foregroundStyle(tone)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(tone.opacity(0.5)))
+            if let name {
+                Text(name).foregroundStyle(Palette.fg).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("strava-connected")
+        .listRowBackground(Palette.surface)
     }
 
     /// Strava's own button, unaltered (their brand guidelines).
@@ -80,21 +119,7 @@ struct StravaSection: View {
     @ViewBuilder private func connected(_ status: StravaStatus) -> some View {
         // Rows of their own: at the largest text size one tall row left the
         // List blank (CLAUDE.md).
-        HStack(spacing: 8) {
-            Text("Connected")
-                .font(.plexSans(.subheadline, weight: .medium))
-                .fixedSize()
-                .foregroundStyle(Palette.green)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.green.opacity(0.5)))
-            if let name = status.athlete?.name {
-                Text(name).foregroundStyle(Palette.fg).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("strava-connected")
-        .listRowBackground(Palette.surface)
+        badgeRow("Connected", tone: Palette.green, name: status.athlete?.name)
         Toggle(
             isOn: Binding(
                 get: { status.autoImport ?? true },

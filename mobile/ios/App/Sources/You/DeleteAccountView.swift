@@ -9,18 +9,26 @@ struct DeleteAccountView: View {
     let account: AccountModel
     let deleted: () -> Void
     /// Sign out and sign in again, then come straight back here.
+    /// Made through Strava, and Strava is off: there's no way back in to
+    /// sign in again with, so it offers Report an issue instead.
+    var cantSignInAgain = false
     let signInAgain: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .checking
     @State private var confirmText = ""
     @State private var deleting = false
     @State private var failure: String?
+    @State private var reporting = false
 
     enum Step {
         case checking, needsSignIn, ready
     }
 
     /// mobile/contract/README.md, Account: the words for this step.
+    /// The website's words for the same case.
+    static let cantSignInAgainWords =
+        "Strava sign-in is off for now, so you can’t sign in again here. Report an issue and we’ll delete your "
+        + "account for you."
     static let needsSignIn =
         "For your safety, deleting your account needs a recent sign-in. Sign in again and you'll come straight back here."
 
@@ -42,16 +50,19 @@ struct DeleteAccountView: View {
                         ProgressView("Checking…").tint(Palette.muted).foregroundStyle(Palette.muted)
                             .frame(maxWidth: .infinity)
                     case .needsSignIn:
-                        Text(Self.needsSignIn)
+                        Text(cantSignInAgain ? Self.cantSignInAgainWords : Self.needsSignIn)
                             .font(.plexSans(.body))
                             .foregroundStyle(Palette.fg)
+                            .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("delete-needs-sign-in")
-                        Button(action: signInAgain) {
-                            Text("Sign in again").font(.plexSans(.body, weight: .semibold))
+                        Button(action: cantSignInAgain ? { reporting = true } : signInAgain) {
+                            Text(cantSignInAgain ? "Report an issue" : "Sign in again")
+                                .font(.plexSans(.body, weight: .semibold))
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(Palette.primary)
+                        .accessibilityHint(cantSignInAgain ? "Opens paddlesnitch.com" : "")
                     case .ready:
                         confirm
                     }
@@ -71,6 +82,9 @@ struct DeleteAccountView: View {
                 }
             }
             .task { await check() }
+        }
+        .sheet(isPresented: $reporting) {
+            SafariView(url: ReportIssue.url).ignoresSafeArea()
         }
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled(deleting)

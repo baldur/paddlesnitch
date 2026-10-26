@@ -33,6 +33,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _stravaConnected = false
     var _stravaAutoImport = true
     var _stravaNotConfigured = false
+    var _options: SignInOptions? = SignInOptions(google: true, strava: true)
     var _stravaLinkedElsewhere = false
     var _failsStrava = false
     /// Signed in through Strava: the sign-in email is a placeholder.
@@ -126,6 +127,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         }
         if path.hasPrefix("/att/api/auth/password-reset/") {
             return try passwordReset(path: path, body: request.httpBody ?? Data())
+        }
+        if path == "/att/api/auth/options" || path == "/att/api/auth/google/app-token" {
+            return try google(path: path, body: request.httpBody ?? Data())
         }
         if path.hasPrefix("/att/api/auth/") {
             return try auth(path: path, body: request.httpBody ?? Data())

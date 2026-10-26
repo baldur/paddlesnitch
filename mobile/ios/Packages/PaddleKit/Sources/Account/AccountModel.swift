@@ -31,6 +31,12 @@ public final class AccountModel {
     /// open yet (iOS drops it without a word). Set by the app; kept here, as
     /// iOS 17 doesn't pass environment changes to pushed screens.
     public var signInSheetUp = false
+    /// The ways in the server offers besides email: none until asked, and
+    /// none if asking fails (mobile/contract/README.md, Signing in).
+    public internal(set) var options = SignInOptions.emailOnly
+    /// The server said Strava is off (not just unknown): only then is it
+    /// right to say so.
+    public internal(set) var stravaSaidOff = false
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
     /// Signing in again goes straight to Strava sign-in.
@@ -140,7 +146,7 @@ public final class AccountModel {
     }
 
     /// Tokens first, so the first call after signing in already has them.
-    private func accept(_ answer: SignIn) async throws {
+    func accept(_ answer: SignIn) async throws {
         let user = User(
             id: answer.id, email: answer.email, displayName: answer.displayName, needsTerms: answer.needsTerms == true)
         try await session.signedIn(idToken: answer.idToken, refreshToken: answer.refreshToken)

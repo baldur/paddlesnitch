@@ -31,7 +31,7 @@ struct RootView: View {
             PaddleListView(
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
                 needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
-                openTerms: { termsOpen = true }, adding: adding,
+                openTerms: { termsOpen = true }, adding: adding, stravaOn: account.options.strava,
                 openFile: { url in Task { await open(url) } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
@@ -46,6 +46,8 @@ struct RootView: View {
             if id != nil { Task { await adding.signedIn() } }
         }
         .task { await openLaunchFile() }
+        // Google and Strava, for the screens that offer them.
+        .task { await account.loadOptions() }
         .tint(Palette.primaryText)
         .preferredColorScheme(.dark)
         .sheet(

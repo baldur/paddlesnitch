@@ -5,8 +5,8 @@ import SampleServer
 import SwiftUI
 
 /// Sign in or create an account: the same fields, checks and words as the
-/// Android app and the website's /signin: password sign-in, sign-up and
-/// Strava. The email code waits for email delivery, as on the website.
+/// Android app and the website's /signin: password sign-in, sign-up, and
+/// Google and Strava when the server offers them.
 struct SignInView: View {
     let account: AccountModel
     @State private var form = SignInForm()
@@ -56,11 +56,12 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task { await account.loadOptions() }
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
             // A Strava account signing in again: straight to Strava.
-            if account.signInAgainWithStrava && !startedStrava && !form.busy {
+            if account.signInAgainWithStrava && account.options.strava && !startedStrava && !form.busy {
                 startedStrava = true
                 signInWithStrava()
             }
@@ -143,31 +144,11 @@ struct SignInView: View {
                     .foregroundStyle(Palette.primaryText)
                     .frame(minHeight: 44)
             }
-            strava
+            OtherWaysIn(
+                options: account.options, stravaSaidOff: account.stravaSaidOff, busy: form.busy,
+                google: signInWithGoogle, strava: signInWithStrava,
+                report: { web = ReportIssue.url })
         }
-    }
-
-    /// Strava's own button, unaltered (their brand guidelines).
-    private var strava: some View {
-        VStack(spacing: 12) {
-            Divider().overlay(Palette.border)
-            Text("Or use your Strava account")
-                .font(.plexSans(.body))
-                .foregroundStyle(Palette.muted)
-            Button(action: signInWithStrava) {
-                Image("ConnectWithStrava").resizable().scaledToFit().frame(height: 48)
-            }
-            .buttonStyle(.plain)
-            .disabled(form.busy)
-            .accessibilityLabel("Connect with Strava")
-            .accessibilityIdentifier("strava-sign-in")
-            Text("Already have an account? Sign in first, then connect Strava in Account.")
-                .font(.plexSans(.subheadline))
-                .foregroundStyle(Palette.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
     }
 
     private var terms: some View {
@@ -212,8 +193,19 @@ extension SignInView {
         }
     }
 
+    private func signInWithGoogle() {
+        focus = nil
+        Task {
+            if await form.signInWithGoogle(to: account, browser: openGoogle) { dismiss() }
+        }
+    }
+
+    private func openGoogle(_ start: URL) async throws -> URL {
+        try await SignInBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.googleBrowser)
+    }
+
     private func openStrava(_ start: URL) async throws -> URL {
-        try await StravaBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.stravaBrowser)
+        try await SignInBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.stravaBrowser)
     }
 }
 

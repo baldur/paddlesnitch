@@ -56,10 +56,13 @@ struct AccountView: View {
             // The profile arrives after the screen: its rows appear in place
             // rather than animating in (iOS 17's audit measured them mid-move).
             .transaction { $0.animation = nil }
-            StravaSection(
-                strava: strava, signsInWithStrava: profile.needsContactEmail, connect: connectStrava
-            ) { signInAgain(then: .connectStrava) }
-            .transaction { $0.animation = nil }
+            if account.options.strava || strava.status?.connected == true {
+                StravaSection(
+                    strava: strava, signsInWithStrava: profile.needsContactEmail, stravaOn: account.options.strava,
+                    connect: connectStrava
+                ) { signInAgain(then: .connectStrava) }
+                .transaction { $0.animation = nil }
+            }
             Section {
                 Button {
                     Task { await download() }
@@ -112,6 +115,7 @@ struct AccountView: View {
         // Again for whoever signs in, so nothing of the last account stays.
         .task(id: account.user?.id) { await profile.load() }
         .task(id: account.user?.id) { await strava.load() }
+        .task { await account.loadOptions() }
         .onChange(of: account.signInSheetUp) { _, up in if !up { resume() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
@@ -130,6 +134,9 @@ struct AccountView: View {
                     // Back to You, which now says the account is deleted.
                     dismiss()
                 },
+                // Made through Strava with Strava off: no way back in to
+                // sign in again with, so it asks for help instead.
+                cantSignInAgain: profile.needsContactEmail && !account.options.strava,
                 signInAgain: {
                     confirmingDelete = false
                     signInAgain(then: .delete)
@@ -164,7 +171,7 @@ struct AccountView: View {
     private func connectStrava() {
         Task {
             await strava.connect { page in
-                try await StravaBrowser.open(
+                try await SignInBrowser.open(
                     page, with: webAuthenticationSession, sample: SampleServer.stravaConnectBrowser)
             }
         }
