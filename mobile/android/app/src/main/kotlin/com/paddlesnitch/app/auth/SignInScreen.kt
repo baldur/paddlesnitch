@@ -54,6 +54,8 @@ import com.paddlesnitch.app.api.Constants
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.checkboxColors
+import com.paddlesnitch.app.ui.fieldColors
 import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.launch
 
@@ -138,16 +140,16 @@ fun SignInScreen(
             Tab(selected = !creating, onClick = { creating = false; error = null }, selectedContentColor = PsColor.primaryText, unselectedContentColor = PsColor.muted, text = { Text("Sign in") })
             Tab(selected = creating, onClick = { creating = true; error = null }, selectedContentColor = PsColor.primaryText, unselectedContentColor = PsColor.muted, text = { Text("Create account") })
         }
-        OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        OutlinedTextField(email, { email = it }, colors = fieldColors(), label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next))
-        if (creating) OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        if (creating) OutlinedTextField(name, { name = it }, colors = fieldColors(), label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             supportingText = { Text("Shown on leaderboards. You can change it later.") })
-        OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        OutlinedTextField(password, { password = it }, colors = fieldColors(), label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation(),
             supportingText = if (creating) ({ Text("At least 8 characters, with an uppercase letter, a lowercase letter and a number.") }) else null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done))
         if (creating) Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(agreed, { agreed = it })
+            Checkbox(agreed, { agreed = it }, colors = checkboxColors())
             Text("I agree to the ", fontSize = MaterialTheme.typography.bodyMedium.fontSize)
             TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
         }

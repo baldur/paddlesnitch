@@ -36,6 +36,7 @@ import com.paddlesnitch.app.api.AccountApi
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.checkboxColors
 import kotlinx.coroutines.launch
 
 /**
@@ -58,7 +59,7 @@ fun TermsScreen(api: AccountApi, onAccepted: () -> Unit, onSignOut: () -> Unit, 
             TextButton(colors = linkColors(), onClick = { openTab(context, BuildConfig.API_BASE_URL + "/privacy") }) { Text("Privacy Policy ↗") }
         }
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(ticked, role = Role.Checkbox) { ticked = it }, verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = ticked, onCheckedChange = null)
+            Checkbox(checked = ticked, onCheckedChange = null, colors = checkboxColors())
             Text("I have read and agree to the Terms of Service and Privacy Policy.", modifier = Modifier.padding(start = 12.dp))
         }
         // The live region stays in the layout, so TalkBack reads the error when it appears.
