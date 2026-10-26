@@ -9,9 +9,17 @@ include/recorder_core.h   the whole API and the sensor convention
 src/recorder_core.c       the implementation
 test/run_fixtures.c       replays fixtures/*/calls.csv, diffs every stream
 fixtures/                 golden cases (format: fixtures/README.md)
-Package.swift             the iPhone app's local package (`import RecorderCore`)
+Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
+CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
+library.json              tracker: lib_deps = symlink://../recorder-core (carries -ffp-contract=off)
+test/esp32_no_fma.sh      the tracker's gcc build has no fused multiply-adds
 make test                 host build + every fixture; CI runs this
 ```
+
+CI (`checks.yml`): `recorder-core` runs the fixtures (ubuntu gcc and clang,
+macOS arm64 clang, sanitizers). `recorder-core-builds` runs them through CMake
+and checks the Android NDK (arm64) and ESP32-S3 builds for fused
+multiply-adds, since the fixtures can't run on those devices here.
 
 ## Rules
 
@@ -69,9 +77,11 @@ are byte-identical. Two differences, both from the replay rather than the core:
   the last digit of a peak (found by the `tester` review, 2026-10-25). Any new
   float maths is covered by the same pragma, but only CI's macOS leg proves it.
   With the pragma on, one more row of the 16 Sep replay differed: it had
-  matched only when fused. That hints the tracker's ESP32 gcc build fuses
-  (`madd.s`), so phase 1b's `-ffp-contract=off` may change an occasional
-  peak's last digit on the tracker. That's the intended change: it then
+  matched only when fused. Confirmed 2026-10-26: the ESP32-S3 gcc emits 4
+  `madd.s` in `rc_imu` in GNU C mode (the firmware's), and none with
+  `-ffp-contract=off`. Strict `-std=c99` hides it, because ISO mode turns
+  contraction off on its own, so test in GNU mode. Once the tracker links the
+  core, an occasional peak's last digit changes. That's intended: it then
   matches the server.
 - The firmware cut its raw line at 96 characters and its row at 320. The core
   has room for any float, so the two would differ only on values no sensor
