@@ -30,6 +30,9 @@ public enum PaddleAPIError: Error, Equatable, Sendable {
     case rejected(message: String, status: Int, session: String?)
     /// An upload over the size limit in front of the server (413).
     case tooLarge
+    /// Right password, but the email's sign-up code was never entered: a new
+    /// code has gone out (#702). `message` is a status to show, not an error.
+    case codeNeeded(message: String)
 }
 
 /// Calls the server as mobile/contract/README.md describes: tRPC procedures
@@ -100,6 +103,7 @@ public struct PaddleClient: Sendable {
             }
         }
         if let failure = try? decoder.decode(ApiError.self, from: data) {
+            if failure.needsCode == true { throw PaddleAPIError.codeNeeded(message: failure.error) }
             throw PaddleAPIError.rejected(message: failure.error, status: status, session: failure.session)
         }
         throw PaddleAPIError.badResponse(status: status)

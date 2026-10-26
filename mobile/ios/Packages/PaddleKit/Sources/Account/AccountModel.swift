@@ -76,10 +76,23 @@ public final class AccountModel {
         try await accept(try await anonymous.send(Endpoints.authLogin, Login(email: email, password: password)))
     }
 
-    public func createAccount(email: String, displayName: String, password: String) async throws {
+    /// Starts an account: a 6-digit code goes to the email, and nothing is
+    /// signed in until `confirmEmail` (#702). Calling it again sends a new code.
+    @discardableResult
+    public func createAccount(email: String, displayName: String, password: String) async throws -> CodeSent {
         let signup = Signup(
             acceptedTosVersion: Constants.tosVersion, displayName: displayName, email: email, password: password)
-        try await accept(try await anonymous.send(Endpoints.authSignup, signup))
+        return try await anonymous.send(Endpoints.authSignup, signup)
+    }
+
+    /// The emailed code signs you in. `agreedToTerms`: the Terms were just
+    /// ticked on Create account; from a sign-in they weren't, and the
+    /// answer's needsTerms says whether they're out of date.
+    public func confirmEmail(email: String, code: String, password: String, agreedToTerms: Bool) async throws {
+        let confirm = SignupConfirm(
+            acceptedTosVersion: agreedToTerms ? Constants.tosVersion : nil, code: code, email: email, password: password
+        )
+        try await accept(try await anonymous.send(Endpoints.authSignupConfirm, confirm))
     }
 
     /// Strava sign-in. `browser` opens the page and answers the link it came

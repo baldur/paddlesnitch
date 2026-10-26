@@ -151,6 +151,8 @@ export const ApiError = named('ApiError', z.object({
   session: z.string().optional(),
   // DELETE /api/account: no real sign-in in the last 10 minutes; sign in again, then retry.
   reauth: z.literal(true).optional(),
+  // POST /att/api/auth/login (403): the password is right but the email was never confirmed; a new code has gone to it. Ask for the code, then POST signup/confirm.
+  needsCode: z.literal(true).optional(),
 }))
 
 const Login = named('Login', z.object({ email: z.string(), password: z.string() }))
@@ -162,6 +164,10 @@ const OtpRequest = named('OtpRequest', z.object({
 }))
 const OtpVerify = named('OtpVerify', z.object({ email: z.string(), session: z.string(), code: z.string() }))
 const Signup = named('Signup', z.object({ email: z.string(), displayName: z.string(), password: z.string(), acceptedTosVersion: z.string() }))
+/** Sign-up has begun: a 6-digit code has gone to `email`. Nothing is signed in until signup/confirm. */
+export const CodeSent = named('CodeSent', z.object({ needsCode: z.literal(true), email: z.string() }))
+// acceptedTosVersion: send it when the Terms were just ticked (Create account); leave it out when the code step came from signing in, and follow needsTerms in the answer.
+const SignupConfirm = named('SignupConfirm', z.object({ email: z.string(), code: z.string(), password: z.string(), acceptedTosVersion: z.string().optional() }))
 const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }))
 const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
 export const WebPage = named('WebPage', z.object({ url: z.string() }))
@@ -302,10 +308,11 @@ type Rest = { auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodTyp
  * answers with an ApiError.
  */
 export const restRoutes = {
-  'POST /att/api/auth/login': { auth: 'public', input: Login, output: SignIn, errors: [400, 401, 500] },
+  'POST /att/api/auth/login': { auth: 'public', input: Login, output: SignIn, errors: [400, 401, 403, 429, 500] },
   'POST /att/api/auth/otp-request': { auth: 'public', input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
   'POST /att/api/auth/otp-verify': { auth: 'public', input: OtpVerify, output: SignIn, errors: [400, 500] },
-  'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: SignIn, errors: [400, 409, 422, 500] },
+  'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: CodeSent, errors: [400, 409, 422, 429, 500] },
+  'POST /att/api/auth/signup/confirm': { auth: 'public', input: SignupConfirm, output: SignIn, errors: [400, 422, 500] },
   'POST /att/api/auth/strava/app-token': { auth: 'public', input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
   'POST /att/api/auth/web-code': { auth: 'user', input: WebPageFor, output: WebPage, errors: [401] },
   'POST /paddles/api/analyse': { auth: 'user', input: null, output: Analysed, errors: [400, 401, 422, 500] },

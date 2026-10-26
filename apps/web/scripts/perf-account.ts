@@ -48,9 +48,15 @@ async function main() {
 
   // 1. The account: sign in, or sign up the first time.
   let res = await req('/att/api/auth/login', json({ email: PERF_EMAIL, password: PASSWORD }))
-  if (!res.ok) {
+  if (!res.ok && !process.env.SIGNUP_CODE) {
+    // Sign-up emails a code (#702); run again with it as SIGNUP_CODE.
     res = await req('/att/api/auth/signup', json({ email: PERF_EMAIL, displayName: 'Performance check', password: PASSWORD, acceptedTosVersion: '002' }))
     if (!res.ok) throw new Error(`sign-up failed: ${res.status} ${await res.text()}`)
+    throw new Error(`A code has gone to ${PERF_EMAIL}. Run again with SIGNUP_CODE=<code>.`)
+  }
+  if (!res.ok) {
+    res = await req('/att/api/auth/signup/confirm', json({ email: PERF_EMAIL, code: process.env.SIGNUP_CODE, password: PASSWORD, acceptedTosVersion: '002' }))
+    if (!res.ok) throw new Error(`confirming the sign-up failed: ${res.status} ${await res.text()}`)
     console.log('signed up', PERF_EMAIL)
   } else console.log('signed in', PERF_EMAIL)
 

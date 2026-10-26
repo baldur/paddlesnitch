@@ -3,6 +3,7 @@ import { otpVerify, verifyIdToken } from '@/lib/cognito'
 import { signedInResponse } from '@/lib/auth'
 import { hasAcceptedCurrent } from '@/lib/tos'
 import { withAction } from '@/lib/action'
+import { markEmailProven } from '@/lib/email-proven'
 
 // Step 2 of passwordless sign-in. Submit the 6-digit code from the user's
 // email. On success, set tt_id + tt_refresh cookies and return the user.
@@ -32,6 +33,12 @@ async function post(req: NextRequest) {
   const user = await verifyIdToken(result.idToken)
   if (!user) {
     return NextResponse.json({ error: 'Sign-in didn’t finish. Please try again.' }, { status: 500 })
+  }
+  // The code reached this inbox, so the address is theirs (#702).
+  try {
+    await markEmailProven(user.id, 'email_code')
+  } catch (err) {
+    console.warn('[otp-verify] markEmailProven failed', err)
   }
   // needsTerms: the sign-in page sends them to accept the Terms first.
   const needsTerms = !(await hasAcceptedCurrent(user.id))

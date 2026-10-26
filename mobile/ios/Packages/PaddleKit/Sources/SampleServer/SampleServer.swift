@@ -44,6 +44,31 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     /// A handle someone else has.
     public static let takenHandle = "taken-handle"
     public static let badEmailMessage = "That doesn't look like an email address."
+    var _waitingForCode: [String: String] = [:]
+    var _unconfirmed: Set<String> = [SampleServer.unconfirmedEmail, SampleServer.unconfirmedOldTermsEmail]
+    var _tooManyCodes = false
+    var _confirmSignInFails = false
+    /// Sign-up and sign-in answer 429 "too many codes".
+    public var tooManyCodes: Bool {
+        get { lock.withLock { _tooManyCodes } }
+        set { lock.withLock { _tooManyCodes = newValue } }
+    }
+    /// The code confirms the email, but the sign-in after it fails (500).
+    public var confirmSignInFails: Bool {
+        get { lock.withLock { _confirmSignInFails } }
+        set { lock.withLock { _confirmSignInFails = newValue } }
+    }
+    /// The code was entered somewhere else: signing in now works.
+    public func confirmElsewhere(_ email: String) {
+        _ = lock.withLock { _unconfirmed.remove(email) }
+    }
+    /// Unconfirmed, and on Terms older than the current ones.
+    public static let unconfirmedOldTermsEmail = "ola@example.com"
+    /// Sign-up codes (#702): this one works; any other is wrong.
+    public static let signupCode = "123456"
+    public static let wrongSignupCodeMessage = "That code is not valid. Check your email and try again."
+    /// An account whose sign-up code was never entered: signing in asks for it.
+    public static let unconfirmedEmail = "una@example.com"
     /// Make the last sign-in older than 10 minutes, as after a day signed
     /// in: `GET /api/account` says so and `DELETE` refuses (403 reauth).
     /// A sign-in makes it recent again.
@@ -91,6 +116,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
 
     private func answer(_ request: URLRequest) throws -> (Int, Data) {
         let path = request.url?.path ?? ""
+        if path.hasPrefix("/att/api/auth/signup") {
+            return try signup(path: path, body: request.httpBody ?? Data())
+        }
         if path.hasPrefix("/att/api/auth/password-reset/") {
             return try passwordReset(path: path, body: request.httpBody ?? Data())
         }
@@ -121,6 +149,11 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         case "/att/api/auth/login":
             let login = try JSONDecoder().decode(Login.self, from: body)
             guard login.password == Self.password else { return (401, try fixture("auth.error")) }
+            if lock.withLock({ _tooManyCodes }) { return (429, try fixture("auth.too-many-codes")) }
+            if lock.withLock({ _unconfirmed.contains(login.email) }) {
+                lock.withLock { _waitingForCode[login.email] = login.password }
+                return (403, try fixture("auth.login.needs-code"))
+            }
             lock.withLock {
                 _termsAccepted = login.email != Self.needsTermsEmail
                 _placeholderEmail = false
@@ -140,12 +173,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
                 _signInIsRecent = true
             }
             return (200, try signIn("auth.login"))
-        case "/att/api/auth/signup":
-            let signup = try JSONDecoder().decode(Signup.self, from: body)
-            guard signup.acceptedTosVersion == Constants.tosVersion else {
-                return (422, Data(#"{"error":"The Terms of Service have changed. Update the app to sign up."}"#.utf8))
-            }
-            return (201, try signIn("auth.login"))
         case "/att/api/auth/refresh":
             let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
             let refused = lock.withLock { _refusesRefresh || revoked.contains(token) }
@@ -154,26 +181,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
             _ = lock.withLock { revoked.insert(token) }
             return (200, Data(#"{"ok":true}"#.utf8))
-        default:
-            return (404, Data(#"{"error":"Not found"}"#.utf8))
-        }
-    }
-
-    /// Forgot password: `resetCode` works, any other code is wrong.
-    private func passwordReset(path: String, body: Data) throws -> (Int, Data) {
-        switch path {
-        case "/att/api/auth/password-reset/request":
-            _ = try JSONDecoder().decode(ResetRequest.self, from: body)
-            return (200, Data(#"{"ok":true}"#.utf8))
-        case "/att/api/auth/password-reset/confirm":
-            let confirm = try JSONDecoder().decode(ResetConfirm.self, from: body)
-            guard confirm.code == Self.resetCode else {
-                return (400, Data(#"{"error":"\#(Self.wrongResetCodeMessage)"}"#.utf8))
-            }
-            if confirm.email == Self.resetWithoutSignInEmail {
-                return (200, Data(#"{"ok":true,"signedIn":false}"#.utf8))
-            }
-            return (200, try fixture("auth.password-reset-confirm"))
         default:
             return (404, Data(#"{"error":"Not found"}"#.utf8))
         }
@@ -260,7 +267,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
 
     /// A sign-in answer with a refresh token of its own, as the server
     /// gives: one revoked by signing out mustn't come back on the next.
-    private func signIn(_ name: String) throws -> Data {
+    func signIn(_ name: String) throws -> Data {
         var answer = try JSONDecoder.paddlesnitch.decode(SignIn.self, from: try fixture(name))
         // Random, not counted: a relaunched app starts a new sample server.
         answer.refreshToken += "." + UUID().uuidString

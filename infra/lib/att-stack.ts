@@ -289,13 +289,16 @@ export class AttStack extends cdk.Stack {
       userPoolName: 'paddlesnitch-users',
       selfSignUpEnabled: true,
       signInAliases: { email: true },
-      // autoVerify explicitly disabled. The signUp handler immediately calls
-      // AdminConfirmSignUp + AdminUpdateUserAttributes (email_verified=true),
-      // so the user is confirmed and recovery-ready without Cognito sending
-      // a spam-looking verification email from its default sender.
-      // CDK defaults autoVerify to true when signInAliases.email is set, so
-      // we must override explicitly.
-      autoVerify: { email: false, phone: false },
+      // Sign-up emails a code that proves the address (#702): the account
+      // can't sign in until POST /att/api/auth/signup/confirm. Before this,
+      // signUp confirmed every account at once with email_verified=true, so
+      // anyone could hold an address they didn't own. Updates in place.
+      autoVerify: { email: true, phone: false },
+      userVerification: {
+        emailSubject: 'Your paddlesnitch code',
+        emailBody: 'Your paddlesnitch code is {####}. If you didn’t ask for it, ignore this email.',
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
       passwordPolicy: {
         minLength: 8,
         requireUppercase: true,

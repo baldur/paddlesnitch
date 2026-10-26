@@ -19,90 +19,24 @@ struct SignInView: View {
     @FocusState private var focus: Field?
 
     enum Field: Hashable {
-        case email, name, password
+        case email, name, password, code
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if account.signInAgainWithStrava {
-                        // Its sign-in email is a placeholder: the password
-                        // form can't work, so say why and offer Strava first.
-                        Text("Sign in with Strava again to delete your account.")
-                            .font(.plexSans(.body))
-                            .foregroundStyle(Palette.fg)
-                            .accessibilityIdentifier("sign-in-again-strava")
-                        if !account.signInAgainWithStrava { strava }
-                    }
-                    Picker("Sign in or create an account", selection: $form.mode) {
-                        Text("Sign in").tag(SignInForm.Mode.signIn)
-                        Text("Create account").tag(SignInForm.Mode.createAccount)
-                    }
-                    .pickerStyle(.segmented)
-
-                    field("Email") {
-                        TextField("", text: $form.email)
-                            .textContentType(.username)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($focus, equals: .email)
-                            .submitLabel(.next)
-                            .onSubmit { focus = form.mode == .createAccount ? .name : .password }
-                    }
-                    if form.mode == .createAccount {
-                        field("Display name", help: SignInForm.displayNameHelp) {
-                            TextField("", text: $form.displayName)
-                                .textContentType(.nickname)
-                                .focused($focus, equals: .name)
-                                .submitLabel(.next)
-                                .onSubmit { focus = .password }
-                        }
-                    }
-                    field("Password", help: form.mode == .createAccount ? SignInForm.passwordRule : nil) {
-                        SecureField("", text: $form.password)
-                            .textContentType(form.mode == .createAccount ? .newPassword : .password)
-                            .focused($focus, equals: .password)
-                            .submitLabel(.go)
-                            .onSubmit(submit)
-                    }
-                    if form.mode == .createAccount {
-                        terms
-                    }
-                    if let notice = form.notice {
-                        Text(notice)
-                            .font(.plexSans(.body))
-                            .foregroundStyle(Palette.fg)
-                            .accessibilityIdentifier("sign-in-notice")
-                    }
-                    if let error = form.error {
-                        Text(error)
-                            .font(.plexSans(.body))
-                            .foregroundStyle(Palette.red)
-                            .accessibilityIdentifier("sign-in-error")
-                    }
-                    Button(action: submit) {
-                        Text(form.buttonTitle)
-                            .font(.plexSans(.body, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Palette.primary)
-                    .disabled(form.busy)
-                    .accessibilityIdentifier("sign-in-submit")
-                    if form.mode == .signIn {
-                        Button("Forgot password?") { forgotPassword = true }
-                            .font(.plexSans(.body))
-                            .foregroundStyle(Palette.primaryText)
-                            .frame(minHeight: 44)
-                    }
-                    strava
+                if case .code = form.step {
+                    EmailCodeStepView(form: form, account: account, focus: $focus, signedIn: { dismiss() })
+                        .padding(16)
+                } else {
+                    formStep.padding(16)
                 }
-                .padding(16)
             }
+            // Drag the keyboard away to see what's under it (the number pad
+            // covers half the code step).
+            .scrollDismissesKeyboard(.interactively)
             .background(Palette.bg)
-            .navigationTitle(form.mode == .signIn ? "Sign in" : "Create account")
+            .navigationTitle(form.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -130,6 +64,82 @@ struct SignInView: View {
                 startedStrava = true
                 signInWithStrava()
             }
+        }
+    }
+
+    private var formStep: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if account.signInAgainWithStrava {
+                // Its sign-in email is a placeholder: the password form
+                // can't work, so say why; Strava starts by itself.
+                Text("Sign in with Strava again to delete your account.")
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.fg)
+                    .accessibilityIdentifier("sign-in-again-strava")
+            }
+            Picker("Sign in or create an account", selection: $form.mode) {
+                Text("Sign in").tag(SignInForm.Mode.signIn)
+                Text("Create account").tag(SignInForm.Mode.createAccount)
+            }
+            .pickerStyle(.segmented)
+
+            field("Email") {
+                TextField("", text: $form.email)
+                    .textContentType(.username)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focus, equals: .email)
+                    .submitLabel(.next)
+                    .onSubmit { focus = form.mode == .createAccount ? .name : .password }
+            }
+            if form.mode == .createAccount {
+                field("Display name", help: SignInForm.displayNameHelp) {
+                    TextField("", text: $form.displayName)
+                        .textContentType(.nickname)
+                        .focused($focus, equals: .name)
+                        .submitLabel(.next)
+                        .onSubmit { focus = .password }
+                }
+            }
+            field("Password", help: form.mode == .createAccount ? SignInForm.passwordRule : nil) {
+                SecureField("", text: $form.password)
+                    .textContentType(PaddlesnitchApp.password(form.mode == .createAccount ? .newPassword : .password))
+                    .focused($focus, equals: .password)
+                    .submitLabel(.go)
+                    .onSubmit(submit)
+            }
+            if form.mode == .createAccount {
+                terms
+            }
+            if let notice = form.notice {
+                Text(notice)
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.fg)
+                    .accessibilityIdentifier("sign-in-notice")
+            }
+            if let error = form.error {
+                Text(error)
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.red)
+                    .accessibilityIdentifier("sign-in-error")
+            }
+            Button(action: submit) {
+                Text(form.buttonTitle)
+                    .font(.plexSans(.body, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Palette.primary)
+            .disabled(form.busy)
+            .accessibilityIdentifier("sign-in-submit")
+            if form.mode == .signIn {
+                Button("Forgot password?") { forgotPassword = true }
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.primaryText)
+                    .frame(minHeight: 44)
+            }
+            strava
         }
     }
 

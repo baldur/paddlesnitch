@@ -67,6 +67,11 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(text(containing: "You must agree to the Terms of Service").waitForExistence(timeout: 10))
         element("terms-checkbox").tap()
         app.buttons["sign-in-submit"].tap()
+        // Since #702 the emailed code proves the address first.
+        XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
+        declineSavingPassword()
+        typeWhenFocused("123456", into: app.textFields["code-field"])
+        scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed up and in")
     }
 

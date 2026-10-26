@@ -49,6 +49,13 @@ struct PaddlesnitchApp: App {
 
     static var usesSampleServer: Bool { ProcessInfo.processInfo.arguments.contains("-SampleServer") }
 
+    /// A password field's autofill type. Not with the sample server (UI
+    /// tests): there iOS's "Use Strong Password?" and "Save Password?"
+    /// cover the screen and swallow keys, differently on each iOS.
+    static func password(_ type: UITextContentType) -> UITextContentType? {
+        usesSampleServer ? nil : type
+    }
+
     static var baseURL: URL {
         #if DEBUG
             if let override = ProcessInfo.processInfo.environment["PADDLESNITCH_BASE_URL"],

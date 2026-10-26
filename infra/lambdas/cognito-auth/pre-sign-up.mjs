@@ -29,7 +29,12 @@ async function usersWithEmail(userPoolId, email) {
 
 const CHECKED = new Set(['PreSignUp_ExternalProvider', 'PreSignUp_SignUp', 'PreSignUp_AdminCreateUser'])
 
-export async function handler(event, deps = { usersWithEmail }) {
+// Lambda calls handler(event, context): the second argument is Lambda's
+// context, never ours. (It once was `deps = {…}`, which Lambda filled with its
+// context, so every check died with "usersWithEmail is not a function".)
+export const handler = (event) => check(event, { usersWithEmail })
+
+export async function check(event, deps) {
   if (!CHECKED.has(event.triggerSource)) return event
   const attrs = event.request?.userAttributes ?? {}
   const email = (attrs.email ?? '').trim().toLowerCase()
