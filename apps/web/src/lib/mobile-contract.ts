@@ -66,7 +66,8 @@ export function formatCases() {
     fmtDist: cases((m: number | null) => fmtDist(m ?? undefined), [null, 0, 999.4, 999.5, 1000, 1234.5, 1005, 84210]),
     // fmtAgo counts back from `now` (both ISO): seconds below 90, minutes below 90, hours below 48, then days.
     fmtAgo: cases((i: { at: string | null; now: string }) => fmtAgo(i.at ?? undefined, Date.parse(i.now)),
-      [0, 89, 90, 5399, 5400, 172799, 172800, 864000, -60].map(s => ({ at: new Date(Date.parse('2026-10-25T12:00:00Z') - s * 1000).toISOString(), now: '2026-10-25T12:00:00Z' }))
+      [0, 89, 90, 5399, 5400, 172799, 172800, 864000, -60]
+        .map((s): { at: string | null; now: string } => ({ at: new Date(Date.parse('2026-10-25T12:00:00Z') - s * 1000).toISOString(), now: '2026-10-25T12:00:00Z' }))
         .concat([{ at: null, now: '2026-10-25T12:00:00Z' }, { at: 'not a date', now: '2026-10-25T12:00:00Z' }])),
     // In the viewer's time zone, given as `zone` (IANA name).
     fmtDayTime: cases((i: { at: string; zone: string }) => inZone(i.zone, () => fmtDayTime(i.at)), [
