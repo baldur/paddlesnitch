@@ -48,6 +48,7 @@ import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.PsColor
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -63,15 +64,18 @@ fun ForgotPasswordScreen(
     onPasswordSet: (email: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Milliseconds, for the bot check; tests drive it. */
+    clock: () -> Long = SystemClock::elapsedRealtime,
 ) {
-    var address by rememberSaveable { mutableStateOf(email) }
+    // Not in saved state: an email and a live code together would set a new password.
+    var address by remember { mutableStateOf(email) }
     var codeSent by rememberSaveable { mutableStateOf(false) }
-    var code by rememberSaveable { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     // How long the screen has been open: the server's check against bots.
-    val openedAt = rememberSaveable { SystemClock.elapsedRealtime() }
+    val openedAt = remember { clock() }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     val codeFocus = remember { FocusRequester() }
@@ -81,7 +85,10 @@ fun ForgotPasswordScreen(
         if (address.isBlank()) { error = "Enter your email."; return }
         busy = true; error = null
         scope.launch {
-            runCatching { api.requestPasswordReset(address.trim(), SystemClock.elapsedRealtime() - openedAt) }
+            // The email often arrives filled in, so a tap can come within the server's 2 s bot check,
+            // which then quietly sends nothing. Wait out the rest, then send the true time.
+            (MIN_OPEN_MS - (clock() - openedAt)).takeIf { it > 0 }?.let { delay(it) }
+            runCatching { api.requestPasswordReset(address.trim(), clock() - openedAt) }
                 // On to the code whether or not the account exists: the next step looks the same either way.
                 .onSuccess { codeSent = true; code = "" }
                 .onFailure { error = it.shown("Couldn’t send the reset code. Please try again.") }
@@ -140,3 +147,6 @@ fun ForgotPasswordScreen(
         TextButton(onClick = onBack, enabled = !busy, colors = link, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Back to sign in") }
     }
 }
+
+/** The server's bot check refuses a reset request sooner than this after the screen opened (apps/web/src/lib/anti-bot.ts). */
+internal const val MIN_OPEN_MS = 2_000L

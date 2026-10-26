@@ -57,7 +57,8 @@ class ForgotPasswordScreenTest {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
             PaddlesnitchTheme {
                 Surface(color = PsColor.bg) {
-                    ForgotPasswordScreen(api, email, onSignedIn = { signedIn = it }, onPasswordSet = { did += "set $it" }, onBack = { did += "back" })
+                    ForgotPasswordScreen(api, email, onSignedIn = { signedIn = it }, onPasswordSet = { did += "set $it" }, onBack = { did += "back" },
+                        clock = { compose.mainClock.currentTime })
                 }
             }
         }
@@ -67,7 +68,11 @@ class ForgotPasswordScreenTest {
         answer(200, """{"ok":true}""")
         compose.onNodeWithText("Send code").performClick()
         waitFor("Set a new password")
-        assertEquals("/att/api/auth/password-reset/request", server.takeRequest().url.encodedPath)
+        val sent = server.takeRequest()
+        assertEquals("/att/api/auth/password-reset/request", sent.url.encodedPath)
+        // Tapped at once with the email filled in: held until the server's bot check would pass.
+        val elapsed = Regex("\"elapsedMs\":(\\d+)").find(sent.body!!.utf8())!!.groupValues[1].toLong()
+        assertTrue("elapsedMs was $elapsed", elapsed >= MIN_OPEN_MS)
     }
 
     private fun enterCodeAndPassword() {
@@ -107,9 +112,9 @@ class ForgotPasswordScreenTest {
     @Test fun aWrongCodeSaysWhyAndStays() {
         show()
         sendCode()
-        answer(400, """{"error":"That code is wrong or has expired. Request a new one."}""")
+        answer(400, """{"error":"That code is not valid. Check your email and try again."}""")
         enterCodeAndPassword()
-        waitFor("That code is wrong or has expired. Request a new one.")
+        waitFor("That code is not valid. Check your email and try again.")
         compose.onNodeWithTag("reset-error").onChildren().assertCountEquals(1)
         compose.onNodeWithText("Set a new password").assertExists()
         assertTrue(signedIn == null)
@@ -135,5 +140,36 @@ class ForgotPasswordScreenTest {
         show(fontScale = 2f)
         sendCode()
         compose.onRoot().captureRoboImage()
+    }
+
+    @Test fun theAppsWaitMatchesTheServersBotCheck() {
+        val server = File("../../../apps/web/src/lib/anti-bot.ts").readText()
+        assertEquals(MIN_OPEN_MS, Regex("MIN_ELAPSED_MS = (\\d+)").find(server)!!.groupValues[1].toLong())
+    }
+
+    @Test fun nothingIsSentWithoutAnEmail() {
+        show(email = "")
+        compose.onNodeWithText("Send code").performClick()
+        waitFor("Enter your email.")
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test fun nothingIsSentWithoutSixDigitsAndAPassword() {
+        show()
+        sendCode()
+        compose.onNodeWithTag("reset-code").performTextInput("123")
+        compose.onNodeWithText("Reset password").performScrollTo().performClick()
+        waitFor("Enter the 6-digit code from the email.")
+        compose.onNodeWithTag("reset-code").performTextInput("456")
+        compose.onNodeWithText("Reset password").performScrollTo().performClick()
+        waitFor("Choose a new password.")
+        assertEquals(1, server.requestCount) // only the code request
+    }
+
+    @Test fun cancelAndBackToSignInBothGoBack() {
+        show()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Back to sign in").performScrollTo().performClick()
+        assertEquals(listOf("back", "back"), did)
     }
 }

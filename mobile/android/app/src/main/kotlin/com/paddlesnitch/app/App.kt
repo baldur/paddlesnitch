@@ -74,7 +74,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     var signedIn by remember { mutableStateOf(api.signedIn) }
     var signingIn by rememberSaveable { mutableStateOf(false) }
     // Forgot password, inside signing in: the email it started with, and what the sign-in screen says after.
-    var forgotFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var forgotFor by remember { mutableStateOf<String?>(null) } // an email: kept out of saved state
     var resetNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var needsTerms by rememberSaveable { mutableStateOf(false) }
     var inAccount by rememberSaveable { mutableStateOf(false) }

@@ -51,9 +51,22 @@ class PasswordResetApiTest {
     }
 
     @Test fun aWrongCodeSaysWhyAndSignsNothingIn() = runTest {
-        answer(400, """{"error":"That code is wrong or has expired. Request a new one."}""")
+        answer(400, """{"error":"That code is not valid. Check your email and try again."}""")
         val e = runCatching { api.confirmPasswordReset("pat@example.com", "000000", "Secret123") }.exceptionOrNull() as ApiFailure
-        assertEquals("That code is wrong or has expired. Request a new one.", e.message)
+        assertEquals("That code is not valid. Check your email and try again.", e.message)
+        assertFalse(api.signedIn)
+    }
+
+    @Test fun signedInButWhoItIsCantBeReadMeansSignInAgainAndKeepsNoTokens() = runTest {
+        answer(200, fixture("auth.password-reset-confirm"))
+        answer(500, "")
+        assertNull(api.confirmPasswordReset("pat@example.com", "123456", "Secret123"))
+        assertFalse(api.signedIn)
+    }
+
+    @Test fun signedInWithoutTokensMeansSignInAgain() = runTest {
+        answer(200, """{"ok":true,"signedIn":true}""")
+        assertNull(api.confirmPasswordReset("pat@example.com", "123456", "Secret123"))
         assertFalse(api.signedIn)
     }
 }
