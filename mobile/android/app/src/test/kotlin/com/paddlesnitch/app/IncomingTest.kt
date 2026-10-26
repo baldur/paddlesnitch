@@ -34,6 +34,13 @@ class IncomingTest {
         assertEquals(Incoming.StravaReturn(back), incoming(view, back, null))
     }
 
+    @Test fun connectingStravaComesBackApartFromSigningIn() {
+        val back = "com.paddlesnitch.app:/account/strava?code=abc"
+        assertEquals(Incoming.StravaConnectReturn(back), incoming(view, back, null))
+        assertEquals(Incoming.StravaConnectReturn("com.paddlesnitch.app:/account/strava?strava=denied"), incoming(view, "com.paddlesnitch.app:/account/strava?strava=denied", null))
+        assertEquals(Incoming.StravaReturn("com.paddlesnitch.app:/account/stravax?code=1"), incoming(view, "com.paddlesnitch.app:/account/stravax?code=1", null)) // that exact path only
+    }
+
     @Test fun aFileOpenedOrSharedFromAnotherAppIsAdded() {
         assertEquals(Incoming.AddFile("content://files/1"), incoming(view, "content://files/1", null))
         assertEquals(Incoming.AddFile("content://files/2"), incoming(send, null, "content://files/2"))

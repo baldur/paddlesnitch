@@ -8,6 +8,8 @@ import java.net.URI
 sealed interface Incoming : Serializable {
     /** Strava sign-in coming back from the Custom Tab. */
     data class StravaReturn(val uri: String) : Incoming
+    /** Connecting Strava to the signed-in account coming back from the Custom Tab (com.paddlesnitch.app:/account/strava). */
+    data class StravaConnectReturn(val uri: String) : Incoming
     /** A paddlesnitch.com link to one paddle. */
     data class OpenPaddle(val id: String) : Incoming
     /** Another paddlesnitch.com link the app has no screen for: it opens in the browser. */
@@ -29,6 +31,7 @@ fun incoming(action: String?, data: String?, stream: String?): Incoming? = when 
 }
 
 private fun viewed(data: String): Incoming? {
+    if (data.substringBefore('?') == "${StravaSignIn.SCHEME}:/account/strava") return Incoming.StravaConnectReturn(data)
     if (data.startsWith("${StravaSignIn.SCHEME}:")) return Incoming.StravaReturn(data)
     if (data.startsWith("content:")) return Incoming.AddFile(data)
     val uri = runCatching { URI(data) }.getOrNull() ?: return null

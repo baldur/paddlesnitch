@@ -59,3 +59,8 @@ time and isn't obvious from the code.
 - Robolectric doesn't throw when there's no browser. A Custom Tab launch is
   recorded instead: check it with
   `Shadows.shadowOf(activity).nextStartedActivity`.
+- Strava connect (`account/StravaConnect.kt`) ends on
+  `com.paddlesnitch.app:/account/strava`. `Incoming` must match that before the
+  sign-in return, since the manifest's scheme filter catches both. A return with
+  no stored connect verifier is ignored (anyone can open the address), and
+  `Reauth.After.ConnectStrava` brings a fresh sign-in back to Account.
