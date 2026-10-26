@@ -4,8 +4,10 @@
 // has an account is refused (owner: link Google only from Account), and so is
 // an email or Strava sign-up whose email belongs to a Google account. Google
 // accounts must bring an email Google has verified.
-import { describe, it, expect } from 'vitest'
-import { handler } from '../../../../infra/lambdas/cognito-auth/pre-sign-up.mjs'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+// The trigger's own copy of the SDK (infra/node_modules), so the spy is on the client it uses.
+import { CognitoIdentityProviderClient } from '../../../../infra/node_modules/@aws-sdk/client-cognito-identity-provider'
+import { check as handler, handler as lambdaEntry } from '../../../../infra/lambdas/cognito-auth/pre-sign-up.mjs'
 
 const event = (triggerSource: string, email = 'pat@example.com', verified = 'true') =>
   ({ triggerSource, userPoolId: 'pool', request: { userAttributes: { email, email_verified: verified } }, response: {} })
@@ -51,5 +53,29 @@ describe('PreSignUp: one account per email', () => {
     expect(asked).toBe('pat@example.com')
     const never = { usersWithEmail: async () => { throw new Error('looked up') } }
     expect(await handler(event('PreSignUp_SomethingElse'), never)).toBeTruthy()
+  })
+
+  // Production, 2026-10-26: Lambda passes its context as the second argument,
+  // which had replaced our lookup and failed every Google sign-up.
+  describe('as Lambda calls it: handler(event, context)', () => {
+    afterEach(() => vi.restoreAllMocks())
+    const lambdaHandler = lambdaEntry as unknown as (event: unknown, context: unknown) => Promise<unknown>
+    const lambdaContext = { functionName: 'att-cognito-pre-sign-up', awsRequestId: 'r', getRemainingTimeInMillis: () => 5000 }
+    const users = (list: { UserStatus: string }[]) =>
+      vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async () => ({ Users: list })) as never)
+
+    it('looks the email up itself and lets a new one through', async () => {
+      const spy = users([])
+      expect(await lambdaHandler(event(GOOGLE), lambdaContext)).toMatchObject({ triggerSource: GOOGLE })
+      expect(spy).toHaveBeenCalledOnce()
+      const input = (spy.mock.calls[0][0] as unknown as { input: { UserPoolId: string; Filter: string } }).input
+      expect(input.UserPoolId).toBe('pool')
+      expect(input.Filter).toBe('email = "pat@example.com"')
+    })
+
+    it('still refuses an email that has an account', async () => {
+      users([{ UserStatus: 'CONFIRMED' }])
+      await expect(lambdaHandler(event(GOOGLE), lambdaContext)).rejects.toThrow('ACCOUNT_EXISTS')
+    })
   })
 })

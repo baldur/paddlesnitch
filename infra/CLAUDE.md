@@ -64,6 +64,10 @@ rm "$SECRET_FILE"
 
 The Lambda IAM role has `ssm:GetParameter` on the parameter ARNs **and** `kms:Decrypt` on `alias/aws/ssm` (scoped via `kms:ViaService = ssm.<region>.amazonaws.com`). Without the KMS grant, SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`, ~240 chars) instead of failing — which the runtime would then forward to Strava as the "secret".
 
+## Pool email: sign-up codes and resets (#702)
+
+The pool sends its own email with **Cognito's sender** (`UserPoolEmail.withCognito`, 50 a day for the whole pool, from no-reply@verificationemail.com), because SES is in the sandbox (#23). Since 2026-10-26 that is **sign-up codes** (`autoVerify: { email: true }`, subject "Your paddlesnitch code", same neutral body for resets) **and password-reset codes**, sharing the 50. Self sign-up is open (the client id is public), so someone could spend the day's emails by signing up repeatedly; if that happens, the fix is SES production access or a CloudWatch alarm on Cognito's email throttling, not turning codes off. Check what's live: `aws cognito-idp describe-user-pool --user-pool-id eu-west-1_BHyKJ0toh --query 'UserPool.[AutoVerifiedAttributes,VerificationMessageTemplate]'`.
+
 ## Sign in with Google (#697)
 
 Cognito's hosted sign-in does the Google part; the app only sends people there and swaps the code (`apps/web/CLAUDE.md` § Sign-in flows). In `att-stack.ts`:
@@ -88,10 +92,10 @@ rm "$SECRET_FILE"
 
 Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
 - **Branding:** app name paddlesnitch; home, `/privacy` and `/terms` links; authorized domains `paddlesnitch.com` and the Cognito domain. No logo (a logo needs Google's review).
-- **Audience:** External, in **Testing**. Only listed test users (the owner's handful, managed in the console) can sign in until it is published, and publishing is the owner's call.
+- **Audience:** External, **In production** since 2026-10-26 (published by the owner): anyone with a Google account can sign in. No review was needed: no logo, two domains, only the basic scopes. Adding a logo or a sensitive scope would need Google's review. "Back to testing" on the Audience page undoes it.
 - **Client** "paddlesnitch Cognito" (Web): redirect URI `https://paddlesnitch.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse`, JavaScript origin the Cognito domain. Its ID is in SSM and its secret in Secrets Manager (above). Google shows a secret only once: to rotate it, make a new one in the console and `aws secretsmanager put-secret-value` it, never in chat or the repo.
 
-**The button is off until the `GOOGLE_SIGNIN` repository variable is `1`** (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
+**The button shows only while the `GOOGLE_SIGNIN` repository variable is `1`** (set 2026-10-26; delete it and redeploy to hide the button) (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
 
 **Strava is off while the `STRAVA_OFF` repository variable is `1`** (deploy.yml → `NEXT_PUBLIC_STRAVA_OFF`; apps/web/CLAUDE.md § sign-in flow 6). Delete the variable and redeploy to turn it back on.
 

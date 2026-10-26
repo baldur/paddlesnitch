@@ -5,7 +5,7 @@ import { freshEmail, signUpFlow } from '../helpers'
 // authenticated home page (the platform front door `/`, which renders the
 // signed-in paddle dashboard). Covers:
 //   - signup form submission with the ToS checkbox
-//   - automatic sign-in (cookies set on signup response)
+//   - the emailed code that proves the address (#702), then sign-in
 //   - redirect to / and the page actually rendering
 //
 // This is the cheapest happy-path smoke test. If it breaks, almost

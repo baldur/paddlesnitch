@@ -7,6 +7,7 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
 import { POST as signup } from '@/app/att/api/auth/signup/route'
+import { signUpConfirmed } from './signup-flow'
 import { GET as getMyTos, POST as acceptTos } from '@/app/api/account/tos/route'
 import { GET as getTosDoc } from '@/app/att/api/legal/tos/route'
 import { cookies } from 'next/headers'
@@ -56,12 +57,12 @@ describe('Terms of Service — signup gating', () => {
 
   it('accepts signup with the current ToS version and records the consent', async () => {
     const email = freshEmail()
-    const signupRes = await signup(jsonReq('POST', {
+    const signupRes = await signUpConfirmed({
       email,
       displayName: 'Consented',
       password: 'Password123',
       acceptedTosVersion: CURRENT_TOS_VERSION,
-    }))
+    })
     expect(signupRes.status).toBe(201)
 
     const setCookie = signupRes.headers.get('set-cookie') ?? ''

@@ -6,6 +6,8 @@
     "errors": [
       400,
       401,
+      403,
+      429,
       500
     ]
   },
@@ -31,10 +33,21 @@
   "POST /att/api/auth/signup": {
     "auth": "public",
     "input": "Signup",
-    "output": "SignIn",
+    "output": "CodeSent",
     "errors": [
       400,
       409,
+      422,
+      429,
+      500
+    ]
+  },
+  "POST /att/api/auth/signup/confirm": {
+    "auth": "public",
+    "input": "SignupConfirm",
+    "output": "SignIn",
+    "errors": [
+      400,
       422,
       500
     ]

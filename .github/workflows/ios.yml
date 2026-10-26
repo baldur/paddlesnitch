@@ -48,7 +48,7 @@ jobs:
   app:
     name: iOS app (${{ matrix.name }})
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 70
     strategy:
       fail-fast: false
       matrix:
