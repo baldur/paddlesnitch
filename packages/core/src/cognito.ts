@@ -654,6 +654,9 @@ export function sessionOfFreshToken(idToken: string): string | null {
   }
 }
 
+/** A boolean claim: Cognito sends true, federated tokens may say 'true'. Anything else (missing included) is false. */
+export const claimIsTrue = (v: unknown): boolean => v === true || v === 'true'
+
 export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
   try {
     const claims = await getVerifier().verify(idToken)
@@ -668,7 +671,7 @@ export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
       id: String(claims.sub),
       email,
       displayName: name,
-      emailVerified: claims.email_verified === true || claims.email_verified === 'true',
+      emailVerified: claimIsTrue(claims.email_verified),
     }
   } catch {
     return null

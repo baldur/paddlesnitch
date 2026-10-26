@@ -11,7 +11,7 @@ vi.mock('@/lib/app-signin', async (orig) => ({ ...(await orig<typeof import('@/l
 vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefined, delete: vi.fn(), set: vi.fn() })) }))
 
 import { getRequestUser } from '@/lib/auth'
-import { verifyIdToken } from '@/lib/cognito'
+import { verifyIdToken, claimIsTrue } from '@paddlesnitch/core/cognito'
 import { buildAccountExport } from '@/lib/account-export'
 import { saveBetaApplication, getBetaApplication } from '@/lib/beta-signups'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
@@ -30,6 +30,11 @@ describe('an email the account never proved', () => {
   it('a real sign-in token carries email_verified', async () => {
     const me = await makeUser('Me')
     expect(await verifyIdToken(me.idToken)).toMatchObject({ email: me.email, emailVerified: true })
+  })
+
+  it('only true or "true" counts as verified; false, "false" and a missing claim don\'t', () => {
+    expect([true, 'true'].map(claimIsTrue)).toEqual([true, true])
+    expect([false, 'false', undefined, null, 1, 'TRUE'].map(claimIsTrue)).toEqual([false, false, false, false, false, false])
   })
 
   it('doesn\'t bring someone else\'s beta application into the export', async () => {

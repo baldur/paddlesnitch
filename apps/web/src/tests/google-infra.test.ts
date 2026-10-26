@@ -55,6 +55,9 @@ describe('the pool proves an email address on sign-up (#702)', () => {
   it('emails a code on sign-up, through Cognito\'s own sender', () => {
     expect(stack).toContain('autoVerify: { email: true, phone: false }')
     expect(stack).not.toContain('autoVerify: { email: false')
+    // #713: a new email takes effect only once confirmed. Email is the username,
+    // so without this an account could become someone else's address.
+    expect(stack).toContain('keepOriginal: { email: true }')
     expect(stack).toContain("emailSubject: 'Your paddlesnitch code'")
     expect(stack).toContain("UserPoolEmail.withCognito(")
   })
