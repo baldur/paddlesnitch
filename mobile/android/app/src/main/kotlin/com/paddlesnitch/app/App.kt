@@ -56,6 +56,7 @@ import com.paddlesnitch.app.paddles.sampleFile
 import com.paddlesnitch.app.tracker.TrackerSetupScreen
 import com.paddlesnitch.app.tracker.TrackersScreen
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -210,13 +211,13 @@ private fun MyPaddles(
             .onSuccess { list = it }
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
-    val account: @Composable () -> Unit = { TextButton(onClick = onAccount) { Text("Account") } }
+    val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened, action = {
             Row {
-                TextButton(onClick = pick, enabled = !adding) { Text("Add paddle") }
+                TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
             }
         })

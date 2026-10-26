@@ -22,10 +22,11 @@ time and isn't obvious from the code.
   `adb shell am start -a android.intent.action.VIEW -d https://paddlesnitch.com/paddles/<id> com.paddlesnitch.app.debug`.
 - `adb exec-out screencap` gives a black image when the phone is locked
   (`dumpsys power` shows `mWakefulness=Dozing`).
-- `TextButton` takes its text colour from M3 `primary`, which is `PsColor.primary`
-  (#0369a1, ~3:1 on the dark ground). Give text buttons
-  `ButtonDefaults.textButtonColors(contentColor = PsColor.primaryText)`.
-  Older screens still use the dark one.
+- M3 colours text and outlined buttons with `primary`, which is the filled-button
+  blue (`PsColor.primary` #0369a1, about 3:1 on the dark ground). Every
+  `TextButton` and `OutlinedButton` passes `colors = textColors()` or
+  `outlinedColors()` (`ui/Buttons.kt`), or its own; `ButtonColoursTest` fails on
+  one that doesn't. Tabs pass `selectedContentColor = PsColor.primaryText`.
 - TalkBack reads a change inside a live region it already knows, not a node
   that has just appeared. Keep the live-region container in the layout even
   when it's empty (`AddPaddleCard(card = null)`).

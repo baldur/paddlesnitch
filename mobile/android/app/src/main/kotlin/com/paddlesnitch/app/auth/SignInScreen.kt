@@ -54,6 +54,7 @@ import com.paddlesnitch.app.api.Constants
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.launch
 
 /**
@@ -129,13 +130,13 @@ fun SignInScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (creating) "Create account" else "Sign in", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = onCancel, colors = textColors()) { Text("Cancel") }
         }
         // Why they're here, as a notice rather than an error (the website's role="status" box).
         if (notice != null) Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { Notice(notice) }
         SecondaryTabRow(selectedTabIndex = if (creating) 1 else 0) {
-            Tab(selected = !creating, onClick = { creating = false; error = null }, text = { Text("Sign in") })
-            Tab(selected = creating, onClick = { creating = true; error = null }, text = { Text("Create account") })
+            Tab(selected = !creating, onClick = { creating = false; error = null }, selectedContentColor = PsColor.primaryText, unselectedContentColor = PsColor.muted, text = { Text("Sign in") })
+            Tab(selected = creating, onClick = { creating = true; error = null }, selectedContentColor = PsColor.primaryText, unselectedContentColor = PsColor.muted, text = { Text("Create account") })
         }
         OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next))
@@ -148,7 +149,7 @@ fun SignInScreen(
         if (creating) Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(agreed, { agreed = it })
             Text("I agree to the ", fontSize = MaterialTheme.typography.bodyMedium.fontSize)
-            TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
+            TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
         }
         error?.let {
             Text(it, color = PsColor.red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -161,7 +162,7 @@ fun SignInScreen(
                 else -> "Sign in"
             })
         }
-        if (!creating) TextButton(onClick = { onForgot(email.trim()) }) { Text("Forgot password?") }
+        if (!creating) TextButton(onClick = { onForgot(email.trim()) }, colors = textColors()) { Text("Forgot password?") }
         HorizontalDivider(color = PsColor.border)
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Or use your Strava account", color = PsColor.muted)

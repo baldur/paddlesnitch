@@ -93,6 +93,7 @@ import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
+import com.paddlesnitch.app.ui.outlinedColors
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -253,7 +254,7 @@ private fun Details(api: AccountApi, user: AuthUser, act: Act) {
         supportingText = { Text("You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {
+        OutlinedButton(colors = outlinedColors(), enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {
             run("Couldn’t save the email. Please try again.", "Saved.") { saved = api.setContact(email.trim()).contact?.email }
         }) { Text(if (working) "Saving…" else if (saved != null) "Update" else "Save") }
         if (saved != null) TextButton(enabled = !working, colors = linkColors(), modifier = Modifier.testTag("contact-remove"), onClick = {
@@ -298,7 +299,7 @@ private fun PublicProfile(api: AccountApi, user: AuthUser, act: Act, onPreview: 
         supportingText = { Text("A short link like /profile/${handle ?: "your-handle"}. Lowercase letters, numbers and hyphens, 3–30 characters.") },
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(enabled = !saving && input.isNotBlank() && input.trim() != handle, modifier = Modifier.testTag("handle-save"), onClick = {
+        OutlinedButton(colors = outlinedColors(), enabled = !saving && input.isNotBlank() && input.trim() != handle, modifier = Modifier.testTag("handle-save"), onClick = {
             busy("Couldn’t save your handle. Please try again.", "Saved.") { handle = api.claimHandle(input.trim()).handle; input = handle.orEmpty() }
         }) { Text(if (saving) "Saving…" else if (handle != null) "Change" else "Save") }
         if (handle != null) TextButton(enabled = !saving, colors = linkColors(), modifier = Modifier.testTag("handle-remove"), onClick = {
@@ -334,7 +335,7 @@ private fun YourData(api: AccountApi, act: Act) {
     }
     Section("Your data")
     Text("Download everything we hold about you as a JSON file: your account, paddles and diary notes, trials, courses and results, groups, and trackers. This is your right of access (UK GDPR Art. 15) and to data portability (Art. 20).", color = PsColor.muted)
-    OutlinedButton(enabled = !working, onClick = {
+    OutlinedButton(colors = outlinedColors(), enabled = !working, onClick = {
         working = true; message = null
         act("Couldn’t prepare your download. Please try again.", { message = it; failed = true; file.delete(); working = false }) {
             val name = api.exportAccount(file)
@@ -423,7 +424,7 @@ private fun StravaSection(
         when {
             // The notice takes the button's place, as on the website.
             needsSignIn -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp), colors = outlinedColors()) {
                     Text(if (leaving) "Sign in again…" else "Sign in again")
                 }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { needsSignIn = false }) { Text("Cancel") }
@@ -583,7 +584,7 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
                     Text(if (state == Deleting.Checking) "Checking…" else "Delete my account")
                 }
             Deleting.NeedsSignIn -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() },
+                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, colors = outlinedColors(),
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
                 LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
