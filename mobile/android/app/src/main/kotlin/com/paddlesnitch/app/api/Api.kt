@@ -43,6 +43,13 @@ interface AccountApi {
     suspend fun deleteAccount()
     suspend fun exportAccount(into: java.io.File): String
     suspend fun signedInPage(next: String): String
+    // Strava for a signed-in account (mobile/contract/README.md § Strava, signed in).
+    suspend fun stravaStatus(): StravaStatus
+    /** The Strava page to open; 403 reauth when the sign-in is too old, 503 when Strava isn't set up. */
+    suspend fun stravaConnect(challenge: String): WebPage
+    suspend fun stravaConnectFinish(code: String, verifier: String): StravaStatus
+    suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport
+    suspend fun stravaDisconnect(): Ok
 }
 
 /** The session ended (the refresh token expired or was revoked): sign in again. */
@@ -116,6 +123,15 @@ class Api(
     override suspend fun contact(): Contact = account("GET", "api/account/contact", null, Contact.serializer())
     override suspend fun setContact(email: String): Contact = account("POST", "api/account/contact", """{"email":${str(email)}}""", Contact.serializer())
     override suspend fun removeContact(): Ok = account("DELETE", "api/account/contact", null, Ok.serializer())
+
+    override suspend fun stravaStatus(): StravaStatus = account("GET", "att/api/strava/status", null, StravaStatus.serializer())
+    override suspend fun stravaConnect(challenge: String): WebPage =
+        account("POST", "att/api/strava/app-connect", """{"challenge":${str(challenge)}}""", WebPage.serializer())
+    override suspend fun stravaConnectFinish(code: String, verifier: String): StravaStatus =
+        account("POST", "att/api/strava/app-connect/finish", """{"code":${str(code)},"verifier":${str(verifier)}}""", StravaStatus.serializer())
+    override suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport =
+        account("POST", "att/api/strava/auto-import", """{"enabled":$enabled}""", StravaAutoImport.serializer())
+    override suspend fun stravaDisconnect(): Ok = account("POST", "att/api/strava/disconnect", null, Ok.serializer())
 
     override suspend fun accountStatus(): AccountStatus = account("GET", "api/account", null, AccountStatus.serializer())
 

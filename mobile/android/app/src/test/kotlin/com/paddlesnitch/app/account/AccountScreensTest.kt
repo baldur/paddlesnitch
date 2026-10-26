@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -17,6 +19,11 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import org.robolectric.Shadows
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -32,7 +39,12 @@ import androidx.compose.ui.unit.Density
 import androidx.core.app.ActivityOptionsCompat
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.api.AccountApi
+import com.paddlesnitch.app.api.StravaAutoImport
+import com.paddlesnitch.app.api.StravaStatus
+import com.paddlesnitch.app.api.WebPage
+import com.paddlesnitch.app.auth.VerifierStore
 import com.paddlesnitch.app.api.AccountStatus
 import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.AuthUser
@@ -74,6 +86,9 @@ class FakeAccountApi(
     var reauthOnDelete: Boolean = false,
     /** The recent-sign-in check fails. */
     var failStatus: Boolean = false,
+    var strava: StravaStatus = StravaStatus(connected = false),
+    /** Connecting Strava answers 403 {reauth: true}. */
+    var stravaReauth: Boolean = false,
 ) : AccountApi {
     val calls = mutableListOf<String>()
     private fun check() { if (signedOut) throw SignedOut() }
@@ -100,6 +115,15 @@ class FakeAccountApi(
     }
     override suspend fun exportAccount(into: File) = answer("export") { into.writeText("""{"account":{}}"""); "paddlesnitch-export-2026-10-25.json" }
     override suspend fun signedInPage(next: String) = "https://paddlesnitch.com$next"
+    override suspend fun stravaStatus(): StravaStatus { check(); return strava } // its own load, apart from failLoads
+    override suspend fun stravaConnect(challenge: String): WebPage {
+        if (stravaReauth) { calls += "strava connect"; throw ApiFailure("For your safety, connecting Strava needs a recent sign-in. Please sign in again.", 403, reauth = true) }
+        return answer("strava connect") { WebPage("https://www.strava.com/oauth/authorize?x") }
+    }
+    override suspend fun stravaConnectFinish(code: String, verifier: String) =
+        answer("strava finish $code") { StravaStatus(true, StravaStatus.Athlete(12345678, "Pat on Strava"), true).also { strava = it } }
+    override suspend fun setStravaAutoImport(enabled: Boolean) = answer("auto-import $enabled") { StravaAutoImport(enabled) }
+    override suspend fun stravaDisconnect() = answer("strava disconnect") { strava = StravaStatus(connected = false); Ok(true) }
 }
 
 /** Answers the system save dialog: records the name it was opened with, then picks [pick] (null = cancelled). */
@@ -125,9 +149,19 @@ class AccountScreensTest {
             PaddlesnitchTheme { Surface(color = PsColor.bg) { content() } }
         }
     }
-    private fun account(api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null), resumeDelete: Boolean = false) = show(fontScale, saveDialog) {
+    private val verifiers = object : VerifierStore {
+        var v: String? = null
+        override fun put(verifier: String) { v = verifier }
+        override fun take() = v.also { v = null }
+    }
+    private fun account(
+        api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null), resumeDelete: Boolean = false,
+        stravaReturn: MutableState<String?> = mutableStateOf(null),
+    ) = show(fontScale, saveDialog) {
         AccountScreen(api, onBack = {}, onTracker = {}, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" },
-            resumeDelete = resumeDelete, onDeleteResumed = { did += "resumed" }, onSignInAgain = { id, email, strava -> did += "sign in again $id $email ${if (strava) "with Strava" else "with email"}" })
+            resume = if (resumeDelete) Reauth.After.Delete else null, onResumed = { did += "resumed" },
+            onSignInAgain = { id, email, strava, then -> did += "sign in again $id $email ${if (strava) "with Strava" else "with email"}" + if (then == Reauth.After.ConnectStrava) " to connect Strava" else "" },
+            stravaReturn = stravaReturn.value, onStravaReturnHandled = { stravaReturn.value = null }, connectVerifiers = verifiers)
     }
     private fun waitFor(text: String) = compose.waitUntil { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
 
@@ -412,5 +446,89 @@ class AccountScreensTest {
         compose.onNodeWithText("I have read and agree to the Terms of Service and Privacy Policy.").performClick()
         compose.onNodeWithText("Continue").performClick()
         compose.waitUntil { did == listOf("signed out") }
+    }
+
+    private fun connected() = StravaStatus(true, StravaStatus.Athlete(12345678, "Pat on Strava"), true)
+
+    @Test fun stravaNotConnectedOffersStravasOwnButton() {
+        account(FakeAccountApi())
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test fun stravaConnectedShowsWhoWithAutoImportAndAttribution() {
+        account(FakeAccountApi(strava = connected()))
+        waitFor("Pat on Strava")
+        compose.onNodeWithText("Auto-import new paddles").assertExists()
+        compose.onNodeWithContentDescription("Powered by Strava").assertExists()
+        compose.onNodeWithContentDescription("Powered by Strava").performScrollTo()
+        compose.onRoot().captureRoboImage()
+    }
+
+    @Test fun turningAutoImportOffAsksTheServerAndPutsItBackIfRefused() {
+        val api = FakeAccountApi(strava = connected())
+        account(api)
+        waitFor("Auto-import new paddles")
+        compose.onNodeWithText("Auto-import new paddles").performScrollTo().performClick()
+        compose.waitUntil { "auto-import false" in api.calls }
+        compose.onNode(hasText("Auto-import new paddles", substring = true) and isToggleable()).assertIsOff()
+        api.refuse = "Couldn’t change auto-import. Please try again."
+        compose.onNodeWithText("Auto-import new paddles").performClick()
+        waitFor("Couldn’t change auto-import. Please try again.")
+        compose.onNode(hasText("Auto-import new paddles", substring = true) and isToggleable()).assertIsOff()
+    }
+
+    @Test fun disconnectingStrava() {
+        val api = FakeAccountApi(strava = connected())
+        account(api)
+        waitFor("Disconnect")
+        compose.onNodeWithText("Disconnect").performScrollTo().performClick()
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue("strava disconnect" in api.calls)
+    }
+
+    @Test fun connectingStravaOpensStravaThenFinishesWhenItComesBack() {
+        val api = FakeAccountApi()
+        val back = mutableStateOf<String?>(null)
+        account(api, stravaReturn = back)
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Connect with Strava").performScrollTo().performClick()
+        compose.waitUntil { "strava connect" in api.calls }
+        compose.waitForIdle()
+        assertTrue(Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString().startsWith("https://www.strava.com/oauth/authorize"))
+        back.value = "com.paddlesnitch.app:/account/strava?code=abc"
+        waitFor("Strava connected.")
+        waitFor("Pat on Strava")
+        assertTrue("strava finish abc" in api.calls)
+        assertEquals(null, back.value)
+    }
+
+    @Test fun aStravaReturnTheAppDidntStartIsIgnored() {
+        val api = FakeAccountApi()
+        account(api, stravaReturn = mutableStateOf("com.paddlesnitch.app:/account/strava?code=planted"))
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        assertFalse(api.calls.any { it.startsWith("strava finish") })
+        compose.onNodeWithText("Strava connected.").assertDoesNotExist()
+    }
+
+    @Test fun stravaSaidNoInTheWebsitesWords() {
+        val api = FakeAccountApi()
+        val back = mutableStateOf<String?>(null)
+        account(api, stravaReturn = back)
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Connect with Strava").performScrollTo().performClick()
+        compose.waitUntil { "strava connect" in api.calls }
+        back.value = "com.paddlesnitch.app:/account/strava?strava=denied"
+        waitFor("You cancelled connecting Strava.")
+    }
+
+    @Test fun connectingStravaLongAfterSigningInAsksToSignInAgain() {
+        val api = FakeAccountApi(stravaReauth = true)
+        account(api)
+        compose.waitUntil { compose.onAllNodes(hasContentDescription("Connect with Strava")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Connect with Strava").performScrollTo().performClick()
+        waitFor("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
+        compose.onAllNodesWithText("Sign in again")[0].performScrollTo().performClick()
+        assertEquals(listOf("sign in again u-123 pat@example.com with email to connect Strava"), did)
     }
 }

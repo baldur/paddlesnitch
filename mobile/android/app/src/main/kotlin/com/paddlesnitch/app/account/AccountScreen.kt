@@ -2,6 +2,14 @@ package com.paddlesnitch.app.account
 
 import android.content.Context
 import android.net.Uri
+import com.paddlesnitch.app.auth.VerifierStore
+import com.paddlesnitch.app.api.StravaStatus
+import com.paddlesnitch.app.Reauth
+import com.paddlesnitch.app.R
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.Image
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
@@ -77,7 +85,6 @@ data class AccountLink(val label: String, val path: String, val signedIn: Boolea
 
 /** What the app still leaves to the website (the next C5 parts bring these into the app). */
 val accountPages = listOf(
-    AccountLink("Strava", "/account#strava"),
     AccountLink("Your trackers", "/devices"),
 )
 val aboutPages = listOf(
@@ -105,13 +112,18 @@ fun clearExport(context: Context) { exportFile(context).delete() }
 fun AccountScreen(
     api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Back from signing in again to delete: open Delete account at once. */
-    resumeDelete: Boolean = false, onDeleteResumed: () -> Unit = {},
-    /** Sign out and in again (Strava when [strava]), then come back with [resumeDelete]. */
-    onSignInAgain: (userId: String, email: String?, strava: Boolean) -> Unit = { _, _, _ -> },
+    /** Back from signing in again: open Delete account, or show Strava, at once. */
+    resume: Reauth.After? = null, onResumed: () -> Unit = {},
+    /** Sign out and in again (Strava when [strava]), then come back with [resume]. */
+    onSignInAgain: (userId: String, email: String?, strava: Boolean, then: Reauth.After) -> Unit = { _, _, _, _ -> },
+    /** Connecting Strava came back to the app (com.paddlesnitch.app:/account/strava…). */
+    stravaReturn: String? = null, onStravaReturnHandled: () -> Unit = {},
+    /** Keeps the connect verifier; SharedPreferences unless a test gives one. */
+    connectVerifiers: VerifierStore? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val connect = remember { StravaConnect(api, connectVerifiers ?: PrefsConnectVerifierStore(context)) }
     var user by remember { mutableStateOf<AuthUser?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -144,12 +156,16 @@ fun AccountScreen(
             } else Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@Column
         }
+        fun signInAgain(then: Reauth.After) { val strava = isPlaceholderEmail(u.email); onSignInAgain(u.id, u.email.takeUnless { strava }, strava, then) }
         Message(error, red = true)
         Details(api, u, ::act)
         Divider()
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
-        Section("Strava and trackers")
+        StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
+            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onOlderPaddles = { open(AccountLink("", "/account#strava")) })
+        Divider()
+        Section("Trackers")
         Link("Set up or sync a tracker", onClick = onTracker)
         Text("These open on paddlesnitch.com, already signed in.", color = PsColor.muted)
         accountPages.forEach { Link("${it.label} ↗") { open(it) } }
@@ -159,8 +175,7 @@ fun AccountScreen(
         Divider()
         YourData(api, ::act)
         Divider()
-        DeleteAccount(api, ::act, resumeDelete, onDeleteResumed,
-            onSignInAgain = { val strava = isPlaceholderEmail(u.email); onSignInAgain(u.id, u.email.takeUnless { strava }, strava) }, onDeleted)
+        DeleteAccount(api, ::act, resume == Reauth.After.Delete, onResumed, onSignInAgain = { signInAgain(Reauth.After.Delete) }, onDeleted)
     }
 }
 
@@ -168,10 +183,10 @@ private typealias Act = (fallback: String, onError: (String) -> Unit, work: susp
 
 /** A message screen readers hear when it changes: the live region stays in the layout even when empty. */
 @Composable
-private fun Message(text: String?, red: Boolean = false, tag: String? = null) =
+private fun Message(text: String?, red: Boolean = false, tag: String? = null, green: Boolean = false) =
     Box(Modifier.fillMaxWidth().semantics { liveRegion = if (red) LiveRegionMode.Assertive else LiveRegionMode.Polite }
         .then(if (tag != null) Modifier.testTag(tag) else Modifier)) {
-        if (text != null) Text(text, color = if (red) PsColor.red else PsColor.muted)
+        if (text != null) Text(text, color = if (red) PsColor.red else if (green) PsColor.green else PsColor.muted)
     }
 
 /** A section's own load, so a failed load never looks like "nothing set". */
@@ -311,6 +326,120 @@ private fun YourData(api: AccountApi, act: Act) {
         }
     }) { Text(if (working) "Downloading…" else "Download my data") }
     Message(message, red = failed, tag = "data-message")
+}
+
+/**
+ * Strava, as the website's Account section: connect (Strava's consent page in a
+ * Custom Tab), who is connected, auto-import, disconnect. Older paddles are still
+ * brought in on the website.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StravaSection(
+    api: AccountApi, act: Act, connect: StravaConnect, resume: Boolean, onResumed: () -> Unit,
+    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onOlderPaddles: () -> Unit,
+) {
+    val context = LocalContext.current
+    val load = remember { Load() }
+    var status by remember { mutableStateOf<StravaStatus?>(null) }
+    var working by remember { mutableStateOf(false) }
+    var needsSignIn by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    val view = remember { BringIntoViewRequester() }
+    fun say(text: String?, error: Boolean) { message = text; failed = error }
+    LaunchedEffect(load.attempt) {
+        load.failed = null
+        act("Couldn’t check Strava. Please try again.", { load.failed = it }) { status = api.stravaStatus(); load.done = true }
+    }
+    // Back from Strava: a cue to finish (only a connect this app started), then the server's own status.
+    LaunchedEffect(stravaReturn) {
+        val back = stravaReturn?.let(Uri::parse) ?: return@LaunchedEffect
+        onReturnHandled()
+        working = true
+        act(stravaConnectResult("exchange_failed"), { say(it, true); working = false }) {
+            try {
+                val now = connect.finish(back.getQueryParameter("code"), back.getQueryParameter("strava"))
+                if (now != null) { status = now; say(stravaConnectResult("connected"), false) }
+            } catch (e: ApiFailure) {
+                if (!e.reauth) throw e
+                needsSignIn = true
+            }
+            working = false
+            runCatching { view.bringIntoView() }
+        }
+    }
+    LaunchedEffect(resume) { if (resume) { onResumed(); runCatching { view.bringIntoView() } } }
+    fun start() {
+        working = true; say(null, false)
+        act(stravaConnectResult("exchange_failed"), { say(it, true); working = false }) {
+            try {
+                val url = connect.start()
+                if (openTab(context, url).isFailure) say("There’s no web browser on this phone to open Strava in.", true)
+            } catch (e: ApiFailure) {
+                if (!e.reauth) throw e
+                needsSignIn = true
+            }
+            working = false
+        }
+    }
+
+    Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Section("Strava")
+        Text("Connect Strava to bring in your paddles and trial results without exporting files, and to sign in with Strava. We only read your activities; we never post.", color = PsColor.muted)
+        // Always in the layout, so TalkBack reads what happened.
+        Message(message, red = failed, green = !failed, tag = "strava-message")
+        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (needsSignIn) Notice("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
+        }
+        if (needsSignIn) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (leaving) "Sign in again…" else "Sign in again")
+            }
+            TextButton(enabled = !leaving, colors = linkColors(), onClick = { needsSignIn = false }) { Text("Cancel") }
+        }
+        val s = status
+        when {
+            !load.done -> LoadState(load)
+            s == null || !s.connected ->
+                // Strava's own button, unaltered (their brand guidelines).
+                Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
+                    modifier = Modifier.height(48.dp).alpha(if (working) 0.5f else 1f).clickable(enabled = !working && !needsSignIn, role = Role.Button, onClick = ::start))
+            else -> {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Connected", color = PsColor.green, style = MaterialTheme.typography.bodySmall)
+                        Text(s.athlete?.name.orEmpty())
+                    }
+                    TextButton(enabled = !working, colors = linkColors(), onClick = {
+                        working = true; say(null, false)
+                        act("Couldn’t disconnect Strava. Please try again.", { say(it, true) }) {
+                            api.stravaDisconnect(); status = StravaStatus(connected = false)
+                        }.invokeOnCompletion { working = false }
+                    }) { Text(if (working) "Disconnecting…" else "Disconnect") }
+                }
+                val on = s.autoImport ?: true
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !working, role = Role.Switch) {
+                    // At once, and back again if the server says no.
+                    status = s.copy(autoImport = !on); say(null, false)
+                    act("Couldn’t change auto-import. Please try again.", { status = status?.copy(autoImport = on); say(it, true) }) {
+                        status = status?.copy(autoImport = api.setStravaAutoImport(!on).autoImport)
+                    }
+                }.semantics(mergeDescendants = true) { toggleableState = ToggleableState(on) }, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Auto-import new paddles")
+                        Text("New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.", color = PsColor.muted)
+                    }
+                    Switch(checked = on, onCheckedChange = null, enabled = !working)
+                }
+                Link("Bring in older paddles ↗", onClick = onOlderPaddles)
+                // Attribution: this row shows the athlete's Strava profile name.
+                Image(painterResource(R.drawable.powered_by_strava), contentDescription = "Powered by Strava", modifier = Modifier.height(20.dp))
+                Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted)
+            }
+        }
+    }
 }
 
 /** What the Delete account section shows. */

@@ -12,14 +12,14 @@ class ReauthTest {
 
     @Test fun nobodySigningInAgainHasNoNoticeAndNothingToResume() {
         assertNull(Reauth().notice)
-        assertFalse(Reauth().signedIn("u-1").resumeDelete) // an ordinary sign-in never opens Delete
+        assertNull(Reauth().signedIn("u-1").resume) // an ordinary sign-in never opens Delete
     }
 
     @Test fun theSameAccountComesBackToDeleteOnce() {
         val back = asked.signedIn("u-1")
-        assertTrue(back.resumeDelete)
+        assertEquals(Reauth.After.Delete, back.resume)
         assertFalse(back.signingInAgain)
-        assertFalse(back.resumed().resumeDelete) // the next visit to Account is an ordinary one
+        assertNull(back.resumed().resume) // the next visit to Account is an ordinary one
     }
 
     @Test fun anotherAccountSigningInStartsAtHomeNotOnDelete() {
@@ -34,5 +34,12 @@ class ReauthTest {
     @Test fun theNoticeSaysWhyAndPointsStravaAccountsAtStrava() {
         assertEquals("For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back to Delete account.", asked.notice)
         assertTrue(Reauth().start("u-1", strava = true).notice!!.contains("Sign in with Strava below"))
+    }
+
+    @Test fun connectingStravaComesBackToAccountWithItsOwnReason() {
+        val strava = Reauth().start("u-1", strava = false, then = Reauth.After.ConnectStrava)
+        assertEquals("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.", strava.notice)
+        assertEquals(Reauth.After.ConnectStrava, strava.signedIn("u-1").resume)
+        assertNull(strava.signedIn("someone-else").resume)
     }
 }

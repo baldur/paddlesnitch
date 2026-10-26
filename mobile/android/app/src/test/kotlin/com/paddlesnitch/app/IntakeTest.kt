@@ -73,6 +73,12 @@ class IntakeTest {
         assertEquals(Do.StravaReturn("com.paddlesnitch.app:/x"), Intake().arrived(Incoming.StravaReturn("com.paddlesnitch.app:/x"), false).second)
     }
 
+    @Test fun aStravaConnectReturnIsForTheSignedInAccountOnly() {
+        val back = Incoming.StravaConnectReturn("com.paddlesnitch.app:/account/strava?code=abc")
+        assertEquals(Do.StravaConnectReturn(back.uri), Intake().arrived(back, signedIn = true).second)
+        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = false).second) // nobody started one: ignore it
+    }
+
     @Test fun theBrowserNamedIsNeverThisAppOrTheChooser() {
         val self = "com.paddlesnitch.app"
         assertEquals("com.android.chrome", chooseBrowser("com.android.chrome", "org.mozilla.firefox", self))
