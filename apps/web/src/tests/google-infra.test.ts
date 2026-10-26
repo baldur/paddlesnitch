@@ -50,3 +50,12 @@ describe('Sign in with Google in the stack', () => {
     expect(deploy).toContain('NEXT_PUBLIC_GOOGLE_SIGNIN: ${{ vars.GOOGLE_SIGNIN }}')
   })
 })
+
+describe('the pool proves an email address on sign-up (#702)', () => {
+  it('emails a code on sign-up, through Cognito\'s own sender', () => {
+    expect(stack).toContain('autoVerify: { email: true, phone: false }')
+    expect(stack).not.toContain('autoVerify: { email: false')
+    expect(stack).toContain("emailSubject: 'Your paddlesnitch code'")
+    expect(stack).toContain("UserPoolEmail.withCognito(")
+  })
+})

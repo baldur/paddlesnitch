@@ -154,12 +154,14 @@ actor RefreshCounter {
         #expect(account.user?.needsTerms == true)
     }
 
-    @Test func creatingAnAccountAgreesToTheCurrentTerms() async throws {
+    /// Since #702 creating an account emails a code and signs nobody in.
+    @Test func creatingAnAccountAgreesToTheCurrentTermsAndSendsACode() async throws {
         let account = account()
-        try await account.createAccount(email: "new@example.com", displayName: "New", password: "Secret123")
+        let sent = try await account.createAccount(email: "new@example.com", displayName: "New", password: "Secret123")
         let body = try #require(server.requests.last?.httpBody)
         #expect(try JSONDecoder().decode(Signup.self, from: body).acceptedTosVersion == Constants.tosVersion)
-        #expect(account.user != nil)
+        #expect(sent.email == "new@example.com")
+        #expect(account.user == nil, "not until the code")
     }
 
     @Test func callsAfterSigningInGoAsTheUser() async throws {

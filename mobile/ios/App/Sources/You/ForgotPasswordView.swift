@@ -62,7 +62,7 @@ struct ForgotPasswordView: View {
                     }
                     FormField(label: "New password", help: SignInForm.passwordRule) {
                         SecureField("", text: $form.password)
-                            .textContentType(.newPassword)
+                            .textContentType(PaddlesnitchApp.password(.newPassword))
                             .focused($focus, equals: .password)
                             .submitLabel(.go)
                             .onSubmit(submit)

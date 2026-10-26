@@ -59,6 +59,10 @@
     "call": "POST /att/api/auth/login",
     "schema": "SignIn"
   },
+  "auth.login.needs-code.json": {
+    "call": "POST /att/api/auth/login",
+    "schema": "ApiError"
+  },
   "auth.login.needs-terms.json": {
     "call": "POST /att/api/auth/login",
     "schema": "SignIn"
@@ -74,6 +78,14 @@
   "auth.refresh.json": {
     "call": "POST /att/api/auth/refresh",
     "schema": "Refreshed"
+  },
+  "auth.signup.json": {
+    "call": "POST /att/api/auth/signup",
+    "schema": "CodeSent"
+  },
+  "auth.too-many-codes.json": {
+    "call": "POST /att/api/auth/signup",
+    "schema": "ApiError"
   },
   "me.signed-in.json": {
     "call": "me",
