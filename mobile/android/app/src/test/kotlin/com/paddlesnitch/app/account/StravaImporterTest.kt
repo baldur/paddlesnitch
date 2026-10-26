@@ -6,6 +6,7 @@ import com.paddlesnitch.app.api.HistoryPaddle
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.api.StravaImport
 import java.time.ZoneOffset
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -76,5 +77,28 @@ class StravaImporterTest {
             importStatus(ImportProgress(1, 3, 1, stopped = ImportProgress.Stopped.DailyLimit), "x", utc))
         assertEquals("Couldn’t bring in all your Strava paddles (1 of 3). Please try again later.",
             importStatus(ImportProgress(1, 3, 1, stopped = ImportProgress.Stopped.Error), "x", utc))
+        // Stopped before anything was listed: no "0 of 0".
+        assertEquals("Strava’s limit for today is used up. Please try again tomorrow.", importStatus(ImportProgress(0, 0, 0, stopped = ImportProgress.Stopped.DailyLimit), "x", utc))
+        assertEquals("Couldn’t bring in your Strava paddles. Please try again later.", importStatus(ImportProgress(0, 0, 0, stopped = ImportProgress.Stopped.Error), "x", utc))
+    }
+
+    @Test fun talkBackHearsOnlyWhenItStartsWaitsStopsOrEnds() {
+        val utc = ZoneOffset.UTC
+        assertEquals("Bringing in your paddles from Strava.", importAnnouncement(ImportProgress(0, 40, 0), "your paddles", utc))
+        assertEquals("Bringing in your paddles from Strava.", importAnnouncement(ImportProgress(17, 40, 12), "your paddles", utc)) // not every paddle
+        assertEquals("Added 30 paddles from Strava.", importAnnouncement(ImportProgress(40, 40, 30), "your paddles", utc))
+        assertTrue(importAnnouncement(ImportProgress(17, 40, 12, waitUntil = 0), "your paddles", utc).startsWith("Strava asks us to slow down."))
+    }
+
+    @Test fun leavingTheScreenStopsTheImportMidWait() = runTest {
+        val waiting = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val stuck = StravaImporter(api, now = { clock }, sleep = { waiting.complete(Unit); kotlinx.coroutines.awaitCancellation() })
+        answer(imported, rateLimited, imported, imported)
+        val job = launch { stuck.run(items) { progress += it } }
+        waiting.await()
+        job.cancel(); job.join()
+        assertTrue(job.isCancelled)
+        assertEquals(listOf(1L, 2L), sent) // nothing more after leaving
+        assertTrue(progress.none { it.stopped != null }) // it stopped; it didn't fail
     }
 }

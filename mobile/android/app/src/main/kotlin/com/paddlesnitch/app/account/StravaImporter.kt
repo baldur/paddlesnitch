@@ -65,6 +65,9 @@ class StravaImporter(
 
 /** The website's words for an import's progress; [what] is "your last month" or "your paddles". */
 fun importStatus(p: ImportProgress, what: String, zone: ZoneId = ZoneId.systemDefault()): String = when {
+    // Stopped before anything was listed: no counts to give.
+    p.total == 0 && p.stopped == ImportProgress.Stopped.DailyLimit -> "Strava’s limit for today is used up. Please try again tomorrow."
+    p.total == 0 && p.stopped == ImportProgress.Stopped.Error -> "Couldn’t bring in your Strava paddles. Please try again later."
     p.stopped == ImportProgress.Stopped.DailyLimit ->
         "Strava’s limit for today is used up, so we stopped after ${p.done} of ${p.total}. What came in stays; try again tomorrow for the rest."
     p.stopped == ImportProgress.Stopped.Error -> "Couldn’t bring in all your Strava paddles (${p.done} of ${p.total}). Please try again later."
@@ -74,3 +77,10 @@ fun importStatus(p: ImportProgress, what: String, zone: ZoneId = ZoneId.systemDe
 }
 
 private fun clock(ms: Long, zone: ZoneId) = DateTimeFormatter.ofPattern("HH:mm").withZone(zone).format(Instant.ofEpochMilli(ms))
+
+/**
+ * What TalkBack says: only when the import starts, waits, stops or ends, not at every
+ * paddle (a long import would talk without pause).
+ */
+fun importAnnouncement(p: ImportProgress, what: String, zone: ZoneId = ZoneId.systemDefault()): String =
+    if (p.stopped == null && p.waitUntil == null && p.done < p.total) "Bringing in $what from Strava." else importStatus(p, what, zone)
