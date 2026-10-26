@@ -71,6 +71,7 @@ class IntakeTest {
     @Test fun otherLinksGoWhereTheyBelong() {
         assertEquals(Do.Browser("https://paddlesnitch.com/paddles/new"), Intake().arrived(Incoming.OpenOnWeb("https://paddlesnitch.com/paddles/new"), true).second)
         assertEquals(Do.StravaReturn("com.paddlesnitch.app:/x"), Intake().arrived(Incoming.StravaReturn("com.paddlesnitch.app:/x"), false).second)
+        assertEquals(Do.GoogleReturn("com.paddlesnitch.app:/signin/google?code=1"), Intake().arrived(Incoming.GoogleReturn("com.paddlesnitch.app:/signin/google?code=1"), false).second)
     }
 
     @Test fun aStravaConnectReturnIsForTheSignedInAccountOnly() {

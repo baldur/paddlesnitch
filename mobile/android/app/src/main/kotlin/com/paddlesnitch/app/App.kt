@@ -42,7 +42,9 @@ import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SignedOut
+import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
+import com.paddlesnitch.app.auth.PrefsGoogleVerifierStore
 import com.paddlesnitch.app.auth.PrefsVerifierStore
 import com.paddlesnitch.app.auth.StravaSignIn
 import com.paddlesnitch.app.auth.ForgotPasswordScreen
@@ -88,6 +90,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
+    val googleVerifiers = remember { PrefsGoogleVerifierStore(context) }
+    val google = remember { GoogleSignIn(api, googleVerifiers) }
+    var googleReturn by remember { mutableStateOf<Uri?>(null) }
     var stravaConnectReturn by remember { mutableStateOf<String?>(null) }
     // Links and files waiting to be dealt with, and the add-paddle card (Intake.kt).
     var intake by rememberSaveable { mutableStateOf(Intake()) }
@@ -101,6 +106,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             Intake.Do.SignIn -> signingIn = true
             is Intake.Do.Browser -> openInBrowser(context, d.url)
             is Intake.Do.StravaReturn -> { stravaReturn = Uri.parse(d.uri); signingIn = true }
+            // Anyone can open this address too: only a Google sign-in this app started goes on.
+            is Intake.Do.GoogleReturn -> if (googleVerifiers.pending) { googleReturn = Uri.parse(d.uri); signingIn = true }
             // Anyone can open this address: only a connect this app started changes anything.
             is Intake.Do.StravaConnectReturn -> if (PrefsConnectVerifierStore(context).pending) { stravaConnectReturn = d.uri; inAccount = true; settingUpTracker = false }
             is Intake.Do.Upload -> addPaddle.add(Uri.parse(d.uri))
@@ -146,6 +153,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
+                    google = google, googleReturn = googleReturn, onGoogleReturnHandled = { googleReturn = null },
                     onSignedIn = signedInWith, onCancel = { leaveSignIn() }, modifier = m,
                     prefillEmail = reauthEmail, notice = reauth.notice ?: resetNotice, onForgot = { forgotFor = it },
                     startStrava = reauth.signingInAgain && reauth.strava)

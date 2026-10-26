@@ -74,11 +74,21 @@ import com.paddlesnitch.app.ui.checkboxColors
 import com.paddlesnitch.app.ui.fieldColors
 import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.graphics.Color
+import com.paddlesnitch.app.api.SignInOptions
+import com.paddlesnitch.app.api.shown
+import com.paddlesnitch.app.ui.outlinedColors
 
 /**
  * Sign in or create an account, like the website's /signin: password sign-in,
- * sign-up and Strava. (The email code waits for email delivery, as on the
- * website.) [stravaReturn] is the link Strava sign-in came back on.
+ * sign-up, and Google and Strava when the server has them on ([loadOptions]).
+ * [stravaReturn] and [googleReturn] are the links those came back on.
  */
 @Composable
 fun SignInScreen(
@@ -86,6 +96,9 @@ fun SignInScreen(
     strava: StravaSignIn,
     stravaReturn: Uri?,
     onReturnHandled: () -> Unit,
+    google: GoogleSignIn,
+    googleReturn: Uri?,
+    onGoogleReturnHandled: () -> Unit,
     onSignedIn: (SignIn) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -96,6 +109,8 @@ fun SignInScreen(
     startStrava: Boolean = false,
     /** Forgot password, with the email typed so far. */
     onForgot: (email: String) -> Unit = {},
+    /** Which sign-ins besides email are on; a failure shows email only. */
+    loadOptions: suspend () -> SignInOptions = { api.signInOptions() },
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf(prefillEmail.orEmpty()) }
@@ -124,6 +139,27 @@ fun SignInScreen(
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     val context = LocalContext.current
+
+    // Asked each time the screen opens: Google and Strava can be switched on and off on the server.
+    var options by remember { mutableStateOf<SignInOptions?>(null) }
+    LaunchedEffect(Unit) { options = runCatching { loadOptions() }.getOrNull() }
+    val stravaOn = options?.strava == true
+
+    LaunchedEffect(googleReturn) {
+        val back = googleReturn ?: return@LaunchedEffect
+        busy = true; error = null
+        runCatching { google.finish(back.getQueryParameter("code"), back.getQueryParameter("error"), stravaOn) }
+            .onSuccess { if (it != null) onSignedIn(it) }
+            .onFailure { error = it.shown("Couldn’t sign in with Google. Please try again.") }
+        busy = false
+        onGoogleReturnHandled()
+    }
+
+    fun openGoogle() {
+        error = null
+        runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(google.start())) }
+            .onFailure { error = "There’s no web browser on this phone to open Google in." }
+    }
 
     LaunchedEffect(stravaReturn) {
         val back = stravaReturn ?: return@LaunchedEffect
@@ -248,15 +284,54 @@ fun SignInScreen(
             })
         }
         if (!creating) TextButton(onClick = { onForgot(email.trim()) }, colors = textColors()) { Text("Forgot password?") }
-        HorizontalDivider(color = PsColor.border)
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Or use your Strava account", color = PsColor.muted)
-            // Strava's own button, unaltered (their brand guidelines).
-            Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
-                modifier = Modifier.height(48.dp).clickable(enabled = !busy, role = Role.Button, onClick = ::openStrava))
-            Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.",
-                color = PsColor.muted, textAlign = TextAlign.Center)
+        val o = options ?: return@Column
+        if (o.google || o.strava) {
+            HorizontalDivider(color = PsColor.border)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(when { o.google && o.strava -> "Or use your Google or Strava account"; o.google -> "Or use your Google account"; else -> "Or use your Strava account" }, color = PsColor.muted)
+                if (o.google) GoogleButton(enabled = !busy, onClick = ::openGoogle)
+                // Strava's own button, unaltered (their brand guidelines).
+                if (o.strava) Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
+                    modifier = Modifier.height(48.dp).clickable(enabled = !busy, role = Role.Button, onClick = ::openStrava))
+                if (o.strava) Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.",
+                    color = PsColor.muted, textAlign = TextAlign.Center)
+            }
         }
+        // Accounts made through Strava have no email or password to use instead.
+        if (!o.strava) {
+            HorizontalDivider(color = PsColor.border)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Signed up with Strava? Strava sign-in is off for now. Report an issue and we’ll help you sign in.",
+                    color = PsColor.muted, textAlign = TextAlign.Center)
+                OutlinedButton(onClick = { error = null; if (!reportIssue(context)) error = NO_BROWSER }, colors = outlinedColors(),
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text("Report an issue") }
+            }
+        }
+    }
+}
+
+internal const val NO_BROWSER = "There’s no web browser on this phone to open that in."
+
+/**
+ * The website's issue form, which opens by itself with `?report=1` (README, "When strava
+ * is false"). Signed out, so the plain sign-in page. False when there's no browser.
+ */
+fun reportIssue(context: android.content.Context): Boolean =
+    runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse("${BuildConfig.API_BASE_URL}/signin?report=1")) }.isSuccess
+
+/**
+ * Google's own dark button (their branding guidelines: fill #131314, border #8E918F,
+ * text #E3E3E3, the unaltered G), as the website's GoogleButton.
+ */
+@Composable
+private fun GoogleButton(enabled: Boolean, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, Color(0xFF8E918F)),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF131314), contentColor = Color(0xFFE3E3E3)),
+        modifier = Modifier.heightIn(min = 48.dp)) {
+        Image(painterResource(R.drawable.google_g), contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("Sign in with Google", fontWeight = FontWeight.Medium)
     }
 }
 

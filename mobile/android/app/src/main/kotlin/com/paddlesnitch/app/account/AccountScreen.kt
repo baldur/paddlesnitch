@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import com.paddlesnitch.app.auth.VerifierStore
+import com.paddlesnitch.app.auth.NO_BROWSER
+import com.paddlesnitch.app.auth.reportIssue
 import com.paddlesnitch.app.api.StravaStatus
 import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.R
@@ -147,6 +149,9 @@ fun AccountScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Strava can be switched off on the server (README, "When strava is false"); not knowing counts as off.
+    var stravaOn by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) { stravaOn = runCatching { api.signInOptions().strava }.getOrDefault(false) }
     LaunchedEffect(attempt) {
         loadError = null
         runCatching { api.me().user ?: throw SignedOut() }.onSuccess { user = it }
@@ -181,10 +186,11 @@ fun AccountScreen(
         Divider()
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
-        StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
-            onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onSignedOut = onSignedOut,
-            stravaOnly = isPlaceholderEmail(u.email))
-        Divider()
+        stravaOn?.let { on ->
+            StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
+                onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onSignedOut = onSignedOut,
+                stravaOnly = isPlaceholderEmail(u.email), on = on)
+        }
         Section("Devices")
         Link("Your trackers", onClick = onTrackers)
         Link("Set up or sync a tracker", onClick = onTracker)
@@ -194,7 +200,9 @@ fun AccountScreen(
         Divider()
         YourData(api, ::act)
         Divider()
-        DeleteAccount(api, ::act, resume == Reauth.After.Delete, onResumed, onSignInAgain = { signInAgain(Reauth.After.Delete) }, onDeleted)
+        // Made through Strava, with Strava off: signing out would leave no way back in.
+        DeleteAccount(api, ::act, resume == Reauth.After.Delete, onResumed, onSignInAgain = { signInAgain(Reauth.After.Delete) }, onDeleted,
+            canSignInAgain = !(isPlaceholderEmail(u.email) && stravaOn == false))
     }
 }
 
@@ -358,6 +366,8 @@ private fun StravaSection(
     stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onSignedOut: () -> Unit,
     /** The account signs in only with Strava: disconnecting it is asked about first. */
     stravaOnly: Boolean,
+    /** Strava is switched on: off, the section shows only to an account still connected, as Paused. */
+    on: Boolean = true,
 ) {
     val context = LocalContext.current
     val load = remember { Load() }
@@ -414,6 +424,7 @@ private fun StravaSection(
         }.invokeOnCompletion { working = false }
     }
 
+    if (!on) { PausedStrava(status, working, message, failed, stravaOnly, ::disconnect); return }
     Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("Strava")
         Text("Connect Strava to bring in your paddles and trial results without exporting files, and to sign in with Strava. We only read your activities; we never post.", color = PsColor.muted)
@@ -479,6 +490,28 @@ private fun StravaSection(
                     modifier = Modifier.testTag("strava-end"))
             }
         }
+        Divider()
+    }
+}
+
+/**
+ * Strava switched off: only an account still connected sees it, so it can disconnect (the
+ * website's Account). An account made through Strava keeps its link, its only way back in.
+ */
+@Composable
+private fun PausedStrava(status: StravaStatus?, working: Boolean, message: String?, failed: Boolean, stravaOnly: Boolean, disconnect: () -> Unit) {
+    if (status?.connected != true) return
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Section("Strava")
+        Message(message, red = failed, tag = "strava-message")
+        FlowRow(Modifier.card().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            Text("Paused", color = PsColor.muted, style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+            Text(status.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp).padding(vertical = 12.dp))
+            if (!stravaOnly) TextButton(enabled = !working, colors = linkColors(), onClick = disconnect) { Text(if (working) "Disconnecting…" else "Disconnect") }
+        }
+        Text("Strava isn’t available right now. Paddles you already brought in stay here.", color = PsColor.muted)
+        Divider()
     }
 }
 
@@ -548,6 +581,7 @@ private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, Rounded
 /** What the Delete account section shows. */
 private enum class Deleting { No, Checking, NeedsSignIn, Confirming }
 
+internal const val NO_SIGN_IN_AGAIN = "Strava sign-in is off for now, so you can’t sign in again here. Report an issue and we’ll delete your account for you."
 internal const val RECENT_SIGN_IN = "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
 
 /**
@@ -556,7 +590,10 @@ internal const val RECENT_SIGN_IN = "For your safety, deleting your account need
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed: () -> Unit, onSignInAgain: () -> Unit, onDeleted: () -> Unit) {
+private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed: () -> Unit, onSignInAgain: () -> Unit, onDeleted: () -> Unit,
+    /** False when this account has no way to sign in again (made through Strava, Strava off): Report an issue instead. */
+    canSignInAgain: Boolean = true) {
+    val context = LocalContext.current
     var state by remember { mutableStateOf(Deleting.No) }
     var typed by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
@@ -578,7 +615,7 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
         Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes to one of its admins or members. This happens at once and can't be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
         // Always in the layout, so TalkBack reads the notice when it appears.
         Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
-            if (state == Deleting.NeedsSignIn) Notice(RECENT_SIGN_IN)
+            if (state == Deleting.NeedsSignIn) Notice(if (canSignInAgain) RECENT_SIGN_IN else NO_SIGN_IN_AGAIN)
         }
         when (state) {
             Deleting.No, Deleting.Checking ->
@@ -586,8 +623,10 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
                     Text(if (state == Deleting.Checking) "Checking…" else "Delete my account")
                 }
             Deleting.NeedsSignIn -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, colors = outlinedColors(),
+                if (canSignInAgain) OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, colors = outlinedColors(),
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
+                else OutlinedButton(onClick = { message = if (reportIssue(context)) null else NO_BROWSER }, colors = outlinedColors(),
+                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text("Report an issue") }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
                 LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
             }

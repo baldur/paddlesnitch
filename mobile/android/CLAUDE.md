@@ -93,3 +93,12 @@ time and isn't obvious from the code.
 - Type is IBM Plex, bundled (`res/font`, the same files as iOS; the OFL licence is in
   `assets/licences`). The theme sets Plex Sans for every style (`ui/Type.kt`).
   Numbers and mono labels use `PlexMono`, never `FontFamily.Monospace` (`TypeTest`).
+- Which sign-ins are on comes from `GET /att/api/auth/options`, asked each time sign-in
+  and Account open (`loadOptions`, `AccountApi.signInOptions`). A failure means email
+  only, and Strava counts as off. With Strava off, Account shows Strava only to a connected
+  account, as Paused. An account made with Strava gets Report an issue instead of Sign in
+  again (`reportIssue`: `/signin?report=1`). Screen tests built on MockWebServer must pass
+  their own `loadOptions`, or the options call eats an answer meant for the test.
+- Sign in with Google (`auth/GoogleSignIn.kt`) is PKCE like Strava. The return address is
+  `com.paddlesnitch.app:/signin/google`, and App.kt acts on it only while
+  `PrefsGoogleVerifierStore` holds a verifier from the last 10 minutes.

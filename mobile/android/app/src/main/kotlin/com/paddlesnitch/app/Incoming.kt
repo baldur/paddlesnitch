@@ -1,5 +1,6 @@
 package com.paddlesnitch.app
 
+import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.StravaSignIn
 import java.io.Serializable
 import java.net.URI
@@ -8,6 +9,8 @@ import java.net.URI
 sealed interface Incoming : Serializable {
     /** Strava sign-in coming back from the Custom Tab. */
     data class StravaReturn(val uri: String) : Incoming
+    /** Sign in with Google coming back from the Custom Tab (com.paddlesnitch.app:/signin/google). */
+    data class GoogleReturn(val uri: String) : Incoming
     /** Connecting Strava to the signed-in account coming back from the Custom Tab (com.paddlesnitch.app:/account/strava). */
     data class StravaConnectReturn(val uri: String) : Incoming
     /** A paddlesnitch.com link to one paddle. */
@@ -32,6 +35,7 @@ fun incoming(action: String?, data: String?, stream: String?): Incoming? = when 
 
 private fun viewed(data: String): Incoming? {
     if (data.substringBefore('?') == "${StravaSignIn.SCHEME}:/account/strava") return Incoming.StravaConnectReturn(data)
+    if (data.substringBefore('?') == GoogleSignIn.RETURN) return Incoming.GoogleReturn(data)
     if (data.startsWith("${StravaSignIn.SCHEME}:")) return Incoming.StravaReturn(data)
     if (data.startsWith("content:")) return Incoming.AddFile(data)
     val uri = runCatching { URI(data) }.getOrNull() ?: return null

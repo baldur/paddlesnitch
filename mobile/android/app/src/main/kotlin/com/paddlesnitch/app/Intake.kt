@@ -19,6 +19,7 @@ data class Intake(
         data object SignIn : Do
         data class Browser(val url: String) : Do
         data class StravaReturn(val uri: String) : Do
+        data class GoogleReturn(val uri: String) : Do
         data class StravaConnectReturn(val uri: String) : Do
         data class Upload(val uri: String) : Do
     }
@@ -26,6 +27,7 @@ data class Intake(
     /** A link or a file arrived. [name] is the file's name, if the other app gave one. */
     fun arrived(incoming: Incoming, signedIn: Boolean, name: String? = null): Pair<Intake, Do> = when (incoming) {
         is Incoming.StravaReturn -> this to Do.StravaReturn(incoming.uri)
+        is Incoming.GoogleReturn -> this to Do.GoogleReturn(incoming.uri)
         // Only a signed-in account can have started a connect; anything else is ignored.
         is Incoming.StravaConnectReturn -> this to if (signedIn) Do.StravaConnectReturn(incoming.uri) else Do.Nothing
         is Incoming.OpenOnWeb -> this to Do.Browser(incoming.url)
