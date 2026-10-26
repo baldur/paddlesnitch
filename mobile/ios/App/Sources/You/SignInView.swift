@@ -12,6 +12,8 @@ struct SignInView: View {
     @State private var form = SignInForm()
     @State private var web: URL?
     @State private var forgotPassword = false
+    /// Strava starts by itself once, for a Strava account signing in again.
+    @State private var startedStrava = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @FocusState private var focus: Field?
@@ -24,6 +26,15 @@ struct SignInView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if account.signInAgainWithStrava {
+                        // Its sign-in email is a placeholder: the password
+                        // form can't work, so say why and offer Strava first.
+                        Text("Sign in with Strava again to delete your account.")
+                            .font(.plexSans(.body))
+                            .foregroundStyle(Palette.fg)
+                            .accessibilityIdentifier("sign-in-again-strava")
+                        if !account.signInAgainWithStrava { strava }
+                    }
                     Picker("Sign in or create an account", selection: $form.mode) {
                         Text("Sign in").tag(SignInForm.Mode.signIn)
                         Text("Create account").tag(SignInForm.Mode.createAccount)
@@ -114,6 +125,11 @@ struct SignInView: View {
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
+            // A Strava account signing in again to delete: straight to Strava.
+            if account.signInAgainWithStrava && !startedStrava && !form.busy {
+                startedStrava = true
+                signInWithStrava()
+            }
         }
     }
 

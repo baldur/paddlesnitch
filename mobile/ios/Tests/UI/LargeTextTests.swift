@@ -50,14 +50,42 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(app.buttons["forgot-submit"].exists)
     }
 
+    /// Scrolls to each element and checks for clipped text there. For a long
+    /// List: each check resizes the text in place and the List jumps back up,
+    /// so swiping from the top never reached the end of the Account screen.
+    private func checkScreen(at elements: [XCUIElement]) throws {
+        try audit(.textClipped)
+        for element in elements {
+            // Twice over if need be: the last check's jump may have undone
+            // some of the way.
+            for _ in 0..<2 where !(element.exists && isReadable(element)) { scrollToElement(element) }
+            XCTAssertTrue(element.exists, "reached \(element)")
+            try audit(.textClipped)
+        }
+    }
+
     func testAccountAtTheLargestTextSize() throws {
         signInAndWait()
-        tab("You").tap()
-        let row = app.buttons["Account"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10))
-        row.tap()
-        XCTAssertTrue(element("account-terms").waitForExistence(timeout: 10))
-        try checkWholeScreen(last: app.buttons["Delete my account"])
+        openAccount()
+        try checkScreen(at: [
+            app.textFields["profile-handle"], app.buttons["profile-handle-save"], app.buttons["Download my data"],
+            app.buttons["Delete my account"],
+        ])
+    }
+
+    /// A Strava account's contact email block is the tallest row there is.
+    func testAStravaAccountAtTheLargestTextSize() throws {
+        let notice = app.buttons["sample-notice-action"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        notice.tap()
+        scrollToElement(app.buttons["strava-sign-in"]).tap()
+        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
+        openAccount()
+        XCTAssertTrue(app.textFields["contact-email"].waitForExistence(timeout: 10))
+        try checkScreen(at: [
+            app.buttons["contact-email-save"], app.textFields["profile-handle"], app.buttons["profile-handle-save"],
+            app.buttons["Delete my account"],
+        ])
     }
 
     func testSignInAtTheLargestTextSize() throws {

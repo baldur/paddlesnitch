@@ -34,5 +34,12 @@ isn't obvious from the code.
   differ (alerts, dialogs, tab bars). There's no iOS 17 simulator on this Mac.
 - The audit's clipped-text check flags a text field with text in it (our
   Plex font) as clipped when nothing is: zoomed screenshots show the whole
-  text, descenders too. Audit a filled form without `.textClipped`, and check
-  clipping in `LargeTextTests` with the fields empty.
+  text, descenders too. A text field scrolls its text rather than cutting it,
+  so `AppTestCase.audit` ignores that one report on text fields only
+  (`isTextFieldClipWarning`); clipping anywhere else still fails.
+- The audit's clip report on no element also comes from a row half under the
+  navigation or tab bar. `AppTestCase.audit` looks up to three times, moving
+  the page a little before each, and fails only if every look reports it: a
+  real clip is layout and stays. On a long List the largest-text check goes
+  section by section (`checkScreen(at:)`), as each check resizes the text and
+  the List jumps back up.

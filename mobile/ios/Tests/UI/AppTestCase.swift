@@ -111,6 +111,14 @@ class AppTestCase: XCTestCase {
             && ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 18
     }
 
+    /// A text field never cuts its text off: it scrolls it. The audit still
+    /// calls a filled one clipped (our font; zoomed screenshots show every
+    /// letter), so that one report, on a text field only, is ignored.
+    static func isTextFieldClipWarning(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+        issue.auditType == .textClipped
+            && [.textField, .secureTextField].contains(issue.element?.elementType ?? .any)
+    }
+
     /// Wholly in the readable area, or, for an element taller than that area
     /// (a row at the largest text size), its top and its middle are.
     func isReadable(_ element: XCUIElement) -> Bool {
@@ -157,16 +165,22 @@ class AppTestCase: XCTestCase {
     ///   colour pairing from the tokens instead.
     ///
     /// The audit isn't steady (mobile/ios/CLAUDE.md). An issue it can't pin on
-    /// an element comes and goes between runs, so it's asked again and fails
-    /// only if raised twice; a real clip ("NO GPS" cut to "N…") is a layout
-    /// that stays. A slow runner's timeout (code -56) is retried once.
+    /// an element comes and goes, so it's asked up to three times with the
+    /// page moved a little each time, and fails only if raised every time; a
+    /// real clip ("NO GPS" cut to "N…") is layout that stays. A slow
+    /// runner's timeout (code -56) is retried once.
     func audit(
         _ types: XCUIAccessibilityAuditType = XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast]),
         file: StaticString = #filePath, line: UInt = #line
     ) throws {
         var found = try auditIssues(types)
-        if found.pinned.isEmpty && !found.unpinned.isEmpty {
-            keepScreenshot("Audit issue on no element, first time")
+        // A row half under a bar draws a report on no element, and it moves
+        // with the page; a real clip ("NO GPS" → "N…") is layout and stays
+        // through small moves. So: two more looks, the page moved a little
+        // before each, and it fails only if all three report it.
+        for _ in 0..<2 where found.pinned.isEmpty && !found.unpinned.isEmpty {
+            keepScreenshot("Audit issue on no element")
+            nudgePage()
             found = try auditIssues(types)
         }
         let issues = found.pinned + found.unpinned
@@ -182,7 +196,7 @@ class AppTestCase: XCTestCase {
             var unpinned: [String] = []
             do {
                 try app.performAccessibilityAudit(for: types) { issue in
-                    if Self.isIOS17LargeTitleWarning(issue) { return true }
+                    if Self.isIOS17LargeTitleWarning(issue) || Self.isTextFieldClipWarning(issue) { return true }
                     if let element = issue.element {
                         pinned.append("\(issue.compactDescription): \(element.elementType) \"\(element.label)\"")
                     } else {
@@ -201,11 +215,28 @@ class AppTestCase: XCTestCase {
     /// "Audit failed to complete in time", seen on slow CI runners.
     static let auditTimedOut = -56
 
+    /// Moves a scrolling page by about a third of a row; nothing else.
+    private func nudgePage() {
+        let window = app.windows.firstMatch
+        guard window.exists else { return }
+        let from = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+        from.press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+    }
+
     private func keepScreenshot(_ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
+    }
+
+    /// You → Account, signed in.
+    func openAccount() {
+        tab("You").tap()
+        let row = app.buttons["Account"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(app.navigationBars["Account"].waitForExistence(timeout: 10))
     }
 
     /// Tab items, wherever this iOS draws the tab bar.

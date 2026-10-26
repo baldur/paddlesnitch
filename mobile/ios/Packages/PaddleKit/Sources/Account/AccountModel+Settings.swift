@@ -77,11 +77,14 @@ extension AccountModel {
     }
 
     /// "Sign in again" before deleting: signs out, and remembers to come
-    /// straight back to deleting, with the email to sign in with.
-    public func signOutToDelete() async {
+    /// straight back to deleting. A Strava account (its sign-in email is a
+    /// placeholder) signs in again with Strava; any other with its email
+    /// filled in (mobile/contract/README.md, Account).
+    public func signOutToDelete(withStrava: Bool = false) async {
         let email = user?.email
         await signOut()
-        signInAgainEmail = email
+        signInAgainEmail = withStrava ? nil : email
+        signInAgainWithStrava = withStrava
         deleteAfterSignIn = true
     }
 
@@ -89,6 +92,7 @@ extension AccountModel {
     public func deleteResumed() {
         deleteAfterSignIn = false
         signInAgainEmail = nil
+        signInAgainWithStrava = false
     }
 
     /// Erases the account. The refresh token goes with the request so it

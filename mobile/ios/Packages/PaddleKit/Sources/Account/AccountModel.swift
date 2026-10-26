@@ -24,9 +24,10 @@ public final class AccountModel {
     public internal(set) var accountDeleted = false
     /// Signed out to sign in again before deleting: come straight back.
     public internal(set) var deleteAfterSignIn = false
-    /// The email to sign in again with (not for a Strava account's
-    /// placeholder; that waits for the contract's placeholderEmail).
+    /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
+    /// Signing in again to delete goes straight to Strava sign-in.
+    public internal(set) var signInAgainWithStrava = false
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
     public private(set) var client: PaddleClient
     public var user: User? {

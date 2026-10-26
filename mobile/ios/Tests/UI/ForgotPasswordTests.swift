@@ -47,21 +47,15 @@ final class ForgotPasswordTests: AppTestCase {
         XCTAssertEqual(app.textFields["Email"].value as? String, "kim@example.com")
     }
 
-    /// Without the clipped-text check: it flags a text field with text in
-    /// it as clipped when it isn't (the sign-in form does the same once an
-    /// email is typed; mobile/ios/CLAUDE.md). LargeTextTests checks this
-    /// screen for clipping with the field empty.
     func testForgotPasswordPassesTheAccessibilityAudit() throws {
         openForgotPassword(email: "pat@example.com")
         settle()
-        try audit(Self.withoutClipping)
+        try audit()
         app.buttons["forgot-submit"].tap()
         XCTAssertTrue(app.textFields["Code from the email"].waitForExistence(timeout: 10))
         settle()
-        try audit(Self.withoutClipping)
+        try audit()
     }
-
-    static let withoutClipping = XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped])
 
     /// The audit reads text mid-slide as clipped: wait until the pushed
     /// screen's first field stops moving.

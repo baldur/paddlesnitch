@@ -16,7 +16,6 @@ struct YouView: View {
         var id: String { path }
     }
 
-    static let account = [WebPage(title: "Your profile", path: "/profile/me")]
     static let about = [
         WebPage(title: "Privacy policy", path: "/privacy"),
         WebPage(title: "Terms of Service", path: "/terms"),
@@ -45,7 +44,6 @@ struct YouView: View {
                             Text("Account").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
-                        rows(Self.account)
                         Button("Sign out", role: .destructive) { confirmingSignOut = true }
                             .font(.plexSans(.body))
                             .foregroundStyle(Palette.red)

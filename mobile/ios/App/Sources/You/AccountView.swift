@@ -5,9 +5,9 @@ import Paddles
 import SwiftUI
 
 /// The account, native in the app (mobile-apps.md, the owner's 2026-10-25
-/// note), in the website's order: the Terms when they've changed, public
-/// profile (still the website until it moves here too), your data, then
-/// delete. Words follow the website's account page.
+/// note), in the website's order: the Terms when they've changed, your
+/// details, public profile, your data, then delete. Words follow the
+/// website's account page.
 struct AccountView: View {
     let account: AccountModel
     /// Opens the sign-in sheet.
@@ -19,6 +19,13 @@ struct AccountView: View {
     @State private var downloadFailure: String?
     @State private var confirmingDelete = false
     @State private var webPage: YouView.WebPage?
+    @State private var profile: ProfileForm
+
+    init(account: AccountModel, signIn: @escaping () -> Void) {
+        self.account = account
+        self.signIn = signIn
+        _profile = State(initialValue: ProfileForm(account: account))
+    }
 
     struct SharedFile: Identifiable {
         let url: URL
@@ -39,19 +46,8 @@ struct AccountView: View {
     var body: some View {
         List {
             if termsChanged { termsSection }
-            Section {
-                Button {
-                    webPage = YouView.WebPage(title: "Public profile", path: "/account#profile")
-                } label: {
-                    HStack {
-                        Text("Public profile").font(.plexSans(.body)).foregroundStyle(Palette.fg)
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square").foregroundStyle(Palette.muted)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .accessibilityHint("Opens paddlesnitch.com")
-                .listRowBackground(Palette.surface)
+            ProfileSections(account: account, form: profile) { title, path in
+                webPage = YouView.WebPage(title: title, path: path)
             }
             Section {
                 Button {
@@ -86,6 +82,7 @@ struct AccountView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
         .background(Palette.bg)
         .navigationTitle("Account")
         // Back from signing in again to delete: on appearing (You pushed this
@@ -93,6 +90,7 @@ struct AccountView: View {
         // still under the sheet. A sheet can't open while another is
         // closing, so the sign-in sheet goes first.
         .onAppear { resumeDelete() }
+        .task { await profile.load() }
         .onChange(of: account.user?.id) { _, id in
             guard id != nil else { return }
             Task {
@@ -120,7 +118,8 @@ struct AccountView: View {
                 signInAgain: {
                     confirmingDelete = false
                     Task {
-                        await account.signOutToDelete()
+                        // A Strava account signs in again with Strava.
+                        await account.signOutToDelete(withStrava: profile.needsContactEmail)
                         signIn()
                     }
                 })
