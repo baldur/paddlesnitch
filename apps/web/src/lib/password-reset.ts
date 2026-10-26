@@ -9,9 +9,13 @@ import { disconnectStrava } from '@/lib/strava-disconnect'
 // before, its Strava connection goes too: it may be someone else's Strava.
 // The reset itself proves the address from now on.
 export async function afterPasswordReset(email: string): Promise<void> {
+  // If the other sessions couldn't be ended, the account isn't marked proven:
+  // the next reset tries the whole thing again.
+  let signedOut = true
   try {
     await signOutEverywhere(email)
   } catch (err) {
+    signedOut = false
     console.error('[password-reset] couldn’t end the account’s other sessions', err)
   }
   const user = await findUserByEmail(email).catch(err => {
@@ -21,7 +25,7 @@ export async function afterPasswordReset(email: string): Promise<void> {
   if (!user) return
   try {
     if (!(await isEmailProven(user.sub))) await disconnectStrava(user.sub)
-    await markEmailProven(user.sub, 'password_reset')
+    if (signedOut) await markEmailProven(user.sub, 'password_reset')
   } catch (err) {
     console.error('[password-reset] couldn’t finish checking the account', err)
   }

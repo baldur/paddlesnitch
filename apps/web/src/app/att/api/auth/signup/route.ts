@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { startSignUp } from '@/lib/cognito'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
+import { mayEmailCode, TOO_MANY_CODES } from '@/lib/code-email-limit'
 
 const WEAK_PASSWORD = 'Use at least 8 characters, with an uppercase letter, a lowercase letter and a number.'
 
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   const normalised = String(email).toLowerCase().trim()
+  if (!(await mayEmailCode(req, normalised))) return NextResponse.json({ error: TOO_MANY_CODES }, { status: 429 })
   const created = await startSignUp(normalised, String(displayName).trim(), password)
   if ('error' in created) {
     if (created.error === 'email_exists') {

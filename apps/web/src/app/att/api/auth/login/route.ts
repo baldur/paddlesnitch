@@ -4,6 +4,7 @@ import { signedInResponse } from '@/lib/auth'
 import { hasAcceptedCurrent } from '@/lib/tos'
 import { emitMetric } from '@/lib/metrics'
 import { withAction } from '@/lib/action'
+import { mayEmailCode, TOO_MANY_CODES } from '@/lib/code-email-limit'
 
 async function post(req: NextRequest) {
   const { email, password } = await req.json()
@@ -17,6 +18,7 @@ async function post(req: NextRequest) {
   // Right password, but the sign-up code was never entered (#702): send a new
   // one and ask for it (then POST signup/confirm).
   if ('error' in tokens && tokens.error === 'not_confirmed') {
+    if (!(await mayEmailCode(req, normalised))) return NextResponse.json({ error: TOO_MANY_CODES }, { status: 429 })
     const sent = await resendSignUpCode(normalised)
     if ('error' in sent) {
       console.warn('[login] could not resend the sign-up code', sent.error)

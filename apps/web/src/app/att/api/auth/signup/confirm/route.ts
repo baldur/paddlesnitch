@@ -26,6 +26,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Please accept the Terms of Service to create an account.' }, { status: 422 })
   }
 
+  // The password first: only the person who started this sign-up may confirm
+  // it. Signing up again replaces an unconfirmed account (cognito.ts
+  // startSignUp), so without this, someone could start an account on another
+  // person's email and have that person's code confirm it. Cognito says
+  // not_confirmed only when the password is right.
+  const before = await signIn(email, password)
+  if ('error' in before && before.error !== 'not_confirmed') {
+    return NextResponse.json({ error: 'That doesn’t match the account waiting for this code. Please create your account again.' }, { status: 400 })
+  }
+  // Already confirmed (a second tap): nothing to prove here. Don't sign in
+  // from this route, or an account that never proved its email (made before
+  // codes) could be marked proven without one.
+  if (!('error' in before)) {
+    return NextResponse.json({ error: 'Your email is already confirmed. Please sign in.' }, { status: 400 })
+  }
   const confirmed = await confirmSignUp(email, code)
   if ('error' in confirmed) {
     if (confirmed.error === 'invalid_code') {
@@ -37,11 +52,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Couldn’t confirm your email. Please try again.' }, { status: 400 })
   }
 
-  // The password was checked when the code was sent (sign-up) or asked for
-  // (sign-in), but not since: a wrong one here signs nothing in.
   const tokens = await signIn(email, password)
   const user = 'error' in tokens ? null : await verifyIdToken(tokens.idToken)
   if ('error' in tokens || !user) {
+    console.error('[signup] confirmed but could not sign in', 'error' in tokens ? tokens.error : 'no user')
     return NextResponse.json({ error: 'Your email is confirmed. Please sign in.' }, { status: 500 })
   }
 

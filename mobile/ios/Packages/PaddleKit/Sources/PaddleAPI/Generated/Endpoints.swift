@@ -39,7 +39,7 @@ public enum Endpoints {
     public static let postAccountTos = Endpoint<TosAccept, TosAccepted>(
         method: "POST", path: "/api/account/tos", auth: .user, errorStatuses: [401, 422])
     public static let authLogin = Endpoint<Login, SignIn>(
-        method: "POST", path: "/att/api/auth/login", auth: .public, errorStatuses: [400, 401, 500])
+        method: "POST", path: "/att/api/auth/login", auth: .public, errorStatuses: [400, 401, 403, 429, 500])
     public static let authLogout = Endpoint<RefreshToken, Ok>(
         method: "POST", path: "/att/api/auth/logout", auth: .public, errorStatuses: [])
     public static let authOtpRequest = Endpoint<OtpRequest, OtpSession>(
@@ -52,8 +52,10 @@ public enum Endpoints {
         method: "POST", path: "/att/api/auth/password-reset/request", auth: .public, errorStatuses: [400])
     public static let authRefresh = Endpoint<RefreshToken, Refreshed>(
         method: "POST", path: "/att/api/auth/refresh", auth: .public, errorStatuses: [401])
-    public static let authSignup = Endpoint<Signup, SignIn>(
-        method: "POST", path: "/att/api/auth/signup", auth: .public, errorStatuses: [400, 409, 422, 500])
+    public static let authSignup = Endpoint<Signup, CodeSent>(
+        method: "POST", path: "/att/api/auth/signup", auth: .public, errorStatuses: [400, 409, 422, 429, 500])
+    public static let authSignupConfirm = Endpoint<SignupConfirm, SignIn>(
+        method: "POST", path: "/att/api/auth/signup/confirm", auth: .public, errorStatuses: [400, 422, 500])
     public static let authStravaAppToken = Endpoint<StravaAppToken, SignIn>(
         method: "POST", path: "/att/api/auth/strava/app-token", auth: .public, errorStatuses: [400, 401, 500])
     public static let authWebCode = Endpoint<WebPageFor, WebPage>(
@@ -99,7 +101,8 @@ public enum Endpoints {
         case "POST /att/api/auth/password-reset/confirm": try decoder.decode(ResetDone.self, from: data)
         case "POST /att/api/auth/password-reset/request": try decoder.decode(Ok.self, from: data)
         case "POST /att/api/auth/refresh": try decoder.decode(Refreshed.self, from: data)
-        case "POST /att/api/auth/signup": try decoder.decode(SignIn.self, from: data)
+        case "POST /att/api/auth/signup": try decoder.decode(CodeSent.self, from: data)
+        case "POST /att/api/auth/signup/confirm": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/strava/app-token": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/web-code": try decoder.decode(WebPage.self, from: data)
         case "POST /att/api/strava/app-connect": try decoder.decode(WebPage.self, from: data)

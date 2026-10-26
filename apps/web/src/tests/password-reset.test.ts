@@ -9,6 +9,8 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 vi.mock('@/lib/cognito', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/cognito')>()),
   signOutEverywhere: vi.fn(),
+  // The real one, watched: the reset must end sessions before it signs in.
+  signIn: vi.fn((await importOriginal<typeof import('@/lib/cognito')>()).signIn),
 }))
 // The Strava deauthorize call must never leave the test process.
 vi.mock('@paddlesnitch/core/strava', async (importOriginal) => ({
@@ -150,10 +152,14 @@ describe('a password reset ends what the account\'s old holder had', () => {
   it('ends every session, before signing the new password in', async () => {
     const user = await makeUser()
     vi.mocked(cognito.signOutEverywhere).mockClear()
+    vi.mocked(cognito.signIn).mockClear()
     const res = await reset(user.email)
     expect(res.status).toBe(200)
     expect(cognito.signOutEverywhere).toHaveBeenCalledWith(user.email)
     expect((await res.json()).signedIn).toBe(true)
+    // Ending every session after signing in would end the new one too.
+    expect(vi.mocked(cognito.signOutEverywhere).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(cognito.signIn).mock.invocationCallOrder[0])
   })
 
   it('an account that never proved its email loses its Strava connection, and is proven from then on', async () => {
@@ -186,5 +192,18 @@ describe('a password reset ends what the account\'s old holder had', () => {
     expect(cognito.signOutEverywhere).not.toHaveBeenCalled()
     expect(await getStravaTokens(user.id)).not.toBeNull()
   })
-})
 
+  it('when the other sessions can\'t be ended, the reset still works, Strava still goes, and the account isn\'t marked proven', async () => {
+    const user = await makeUser()
+    await connectStrava(user.id, 9004)
+    vi.mocked(cognito.signOutEverywhere).mockRejectedValueOnce(new Error('Cognito down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await reset(user.email)
+    expect(res.status).toBe(200)
+    expect((await res.json()).signedIn).toBe(true)
+    expect(err).toHaveBeenCalled()
+    expect(await getStravaTokens(user.id)).toBeNull()
+    // Not proven: the next reset tries everything again.
+    expect(await getJson(`users/${user.id}/email-proven.json`)).toBeNull()
+  })
+})

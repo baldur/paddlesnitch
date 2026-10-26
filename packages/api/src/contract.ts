@@ -293,10 +293,10 @@ type Rest = { auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodTyp
  * answers with an ApiError.
  */
 export const restRoutes = {
-  'POST /att/api/auth/login': { auth: 'public', input: Login, output: SignIn, errors: [400, 401, 403, 500] },
+  'POST /att/api/auth/login': { auth: 'public', input: Login, output: SignIn, errors: [400, 401, 403, 429, 500] },
   'POST /att/api/auth/otp-request': { auth: 'public', input: OtpRequest, output: OtpSession, errors: [400, 429, 500] },
   'POST /att/api/auth/otp-verify': { auth: 'public', input: OtpVerify, output: SignIn, errors: [400, 500] },
-  'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: CodeSent, errors: [400, 409, 422, 500] },
+  'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: CodeSent, errors: [400, 409, 422, 429, 500] },
   'POST /att/api/auth/signup/confirm': { auth: 'public', input: SignupConfirm, output: SignIn, errors: [400, 422, 500] },
   'POST /att/api/auth/strava/app-token': { auth: 'public', input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
   'POST /att/api/auth/web-code': { auth: 'user', input: WebPageFor, output: WebPage, errors: [401] },

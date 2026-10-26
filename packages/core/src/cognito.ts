@@ -202,13 +202,19 @@ export async function confirmSignUp(email: string, code: string): Promise<{ ok: 
   }
 }
 
+// cognito-local answers operations it doesn't have with this; real Cognito
+// never does. Local dev carries on as if the call worked.
+const localOnlyUnsupported = (err: unknown) => (err as { name?: string })?.name === 'Unsupported'
+
 // A new sign-up code, for someone whose password was right but who never
-// entered the first one. (Not in cognito-local: tests stub it.)
+// entered the first one. cognito-local doesn't have it: there the first code
+// still stands (tests stub it).
 export async function resendSignUpCode(email: string): Promise<{ ok: true } | { error: CognitoError }> {
   try {
     await makeClient().send(new ResendConfirmationCodeCommand({ ClientId: CLIENT_ID, Username: email }))
     return { ok: true }
   } catch (err) {
+    if (localOnlyUnsupported(err)) return { ok: true }
     return { error: classify(err) }
   }
 }
@@ -217,9 +223,13 @@ export async function resendSignUpCode(email: string): Promise<{ ok: true } | { 
 // (#702: a password reset must end a squatter's sessions). ID tokens already
 // issued stay valid until they expire (at most 24 h); hasRecentSignIn still
 // refuses them for deleting or connecting Strava. Throws on failure: the
-// caller decides. (Not in cognito-local: tests stub it.)
+// caller decides. (Not in cognito-local, where it does nothing; tests stub it.)
 export async function signOutEverywhere(email: string): Promise<void> {
-  await makeClient().send(new AdminUserGlobalSignOutCommand({ UserPoolId: USER_POOL_ID, Username: email }))
+  try {
+    await makeClient().send(new AdminUserGlobalSignOutCommand({ UserPoolId: USER_POOL_ID, Username: email }))
+  } catch (err) {
+    if (!localOnlyUnsupported(err)) throw err
+  }
 }
 
 export async function signIn(
@@ -432,7 +442,10 @@ export async function findUserByEmail(email: string): Promise<UserSummary | null
     Filter: `email = "${email.replace(/"/g, '\\"')}"`,
     Limit: 10,
   }))
-  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED')
+  // Nor do accounts whose email isn't verified: an address someone typed but
+  // never proved must not receive another person's invitation (#702).
+  const users = (res.Users ?? []).filter(u => u.UserStatus !== 'UNCONFIRMED'
+    && u.Attributes?.find(a => a.Name === 'email_verified')?.Value === 'true')
   if (users.length > 1) {
     console.warn('[cognito] findUserByEmail: more than one account has this email; refusing to pick one')
     return null

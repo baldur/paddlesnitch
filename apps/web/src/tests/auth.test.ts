@@ -17,6 +17,7 @@ import { resendSignUpCode } from '@/lib/cognito'
 import { getJson } from '@/lib/storage'
 import { readConfirmationCode } from './cognito-db'
 import { signUpConfirmed } from './signup-flow'
+import { putGroup, getGroup, putPendingInvitation, getUserGroupIds } from '@/lib/groups'
 import { POST as login } from '@/app/att/api/auth/login/route'
 import { POST as logout } from '@/app/att/api/auth/logout/route'
 import { GET as me } from '@/app/att/api/auth/me/route'
@@ -89,15 +90,83 @@ describe('POST /att/api/auth/signup', () => {
     expect(res.headers.get('set-cookie')).toBeNull()
   })
 
-  it('the right code with the wrong password confirms the email but signs nothing in', async () => {
+  it('the right code with the wrong password confirms nothing and signs nothing in', async () => {
     const email = freshEmail()
     await signup(jsonReq('http://x/att/api/auth/signup', body(email)))
     const code = await readConfirmationCode(email)
     const res = await confirm(jsonReq('http://x/att/api/auth/signup/confirm', {
       email, code, password: 'NotTheOne123', acceptedTosVersion: CURRENT_TOS_VERSION,
     }))
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(400)
     expect(res.headers.get('set-cookie')).toBeNull()
+    // Still waiting for its code: the right password is asked for one.
+    const later = await login(jsonReq('http://x/att/api/auth/login', { email, password: 'Password123' }))
+    expect(later.status).toBe(403)
+  })
+
+  it('someone who restarts another person\'s sign-up can\'t have that person\'s code confirm it (security review)', async () => {
+    const email = freshEmail()
+    await signup(jsonReq('http://x/att/api/auth/signup', body(email, 'Owner')))
+    // The other person signs up on the same email with their own password,
+    // which replaces the waiting account and sends the owner a new code.
+    await signup(jsonReq('http://x/att/api/auth/signup', { ...body(email, 'Squatter'), password: 'Squatter123' }))
+    const code = await readConfirmationCode(email)
+    // The owner types the newest code with their own password.
+    const res = await confirm(jsonReq('http://x/att/api/auth/signup/confirm', {
+      email, code, password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION,
+    }))
+    expect(res.status).toBe(400)
+    // The squatter's account is still unconfirmed: it can't sign in.
+    const squat = await login(jsonReq('http://x/att/api/auth/login', { email, password: 'Squatter123' }))
+    expect(squat.status).toBe(403)
+    // And the owner can simply start again.
+    expect((await signUpConfirmed(body(email, 'Owner'))).status).toBe(201)
+  })
+
+  it('an account that is already confirmed can\'t be confirmed again (or marked proven without a code)', async () => {
+    const email = freshEmail()
+    const first = await (await signUpConfirmed(body(email))).json()
+    const marker = await getJson(`users/${first.id}/email-proven.json`)
+    const res = await confirm(jsonReq('http://x/att/api/auth/signup/confirm', {
+      email, code: '123456', password: 'Password123', acceptedTosVersion: CURRENT_TOS_VERSION,
+    }))
+    expect(res.status).toBe(400)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(await getJson(`users/${first.id}/email-proven.json`)).toEqual(marker)
+  })
+
+  it('refuses a confirm with missing fields', async () => {
+    const res = await confirm(jsonReq('http://x/att/api/auth/signup/confirm', { email: freshEmail() }))
+    expect(res.status).toBe(400)
+  })
+
+  it('stops sending codes to one address after 5 in an hour', async () => {
+    const email = freshEmail()
+    for (let i = 0; i < 5; i++) {
+      expect((await signup(jsonReq('http://x/att/api/auth/signup', body(email)))).status).toBe(202)
+    }
+    const sixth = await signup(jsonReq('http://x/att/api/auth/signup', body(email)))
+    expect(sixth.status).toBe(429)
+    // Signing in to it doesn't send one either.
+    vi.mocked(resendSignUpCode).mockClear()
+    const asked = await login(jsonReq('http://x/att/api/auth/login', { email, password: 'Password123' }))
+    expect(asked.status).toBe(429)
+    expect(resendSignUpCode).not.toHaveBeenCalled()
+  })
+
+  it('a sign-up joins the groups the email was invited to, once the code is entered', async () => {
+    const email = freshEmail()
+    const now = new Date().toISOString()
+    await putGroup({ id: 'g-invited', name: 'Invited club', description: '', ownerId: 'owner', adminUserIds: [], memberUserIds: [], createdAt: now })
+    await putPendingInvitation({
+      id: 'inv-1', groupId: 'g-invited', role: 'member', invitedBy: 'owner', toEmail: email,
+      createdAt: now, expiresAt: new Date(Date.now() + 86_400_000).toISOString(), status: 'pending',
+    })
+    // Not on starting: nobody has shown the address is theirs yet.
+    await signup(jsonReq('http://x/att/api/auth/signup', body(email)))
+    expect((await getGroup('g-invited'))?.memberUserIds).toEqual([])
+    const out = await (await signUpConfirmed(body(email))).json()
+    expect(await getUserGroupIds(out.id)).toContain('g-invited')
   })
 
   it('confirming needs the current Terms version too', async () => {
@@ -144,6 +213,11 @@ describe('POST /att/api/auth/signup', () => {
     const wrong = await login(jsonReq('http://x/att/api/auth/login', { email, password: 'WrongPassword1' }))
     expect(wrong.status).toBe(401)
     expect(resendSignUpCode).not.toHaveBeenCalled()
+    // When the new code can't be sent, it says so (no code step to wait in).
+    vi.mocked(resendSignUpCode).mockResolvedValueOnce({ error: 'unknown' })
+    const failed = await login(jsonReq('http://x/att/api/auth/login', { email, password: 'Password123' }))
+    expect(failed.status).toBe(500)
+    expect((await failed.json()).needsCode).toBeUndefined()
   })
 
   it('rejects missing fields', async () => {
