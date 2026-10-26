@@ -96,18 +96,6 @@ final class LargeTextTests: AppTestCase {
     }
 
     /// "Confirm your email" (#702) at the largest size, top to bottom.
-    /// Scrolls to each element and checks for clipped text there: each
-    /// check resizes the text in place and a long page jumps back up, so
-    /// swiping from the top can't count on keeping its place.
-    private func checkScreen(at elements: [XCUIElement]) throws {
-        try audit(.textClipped)
-        for element in elements {
-            scrollToElement(element)
-            XCTAssertTrue(element.exists && isReadable(element), "reached \(element)")
-            try audit(.textClipped)
-        }
-    }
-
     func testTheCodeStepAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
         scrollToElement(app.buttons["Create account"].firstMatch).tap()
