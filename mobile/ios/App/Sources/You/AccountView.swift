@@ -56,9 +56,11 @@ struct AccountView: View {
             // The profile arrives after the screen: its rows appear in place
             // rather than animating in (iOS 17's audit measured them mid-move).
             .transaction { $0.animation = nil }
-            if account.options.strava || strava.status?.connected == true {
+            // Paused only when the server said Strava is off; while that's
+            // unknown, as when it's on.
+            if !account.stravaSaidOff || strava.status?.connected == true {
                 StravaSection(
-                    strava: strava, signsInWithStrava: profile.needsContactEmail, stravaOn: account.options.strava,
+                    strava: strava, signsInWithStrava: profile.needsContactEmail, stravaOn: !account.stravaSaidOff,
                     connect: connectStrava
                 ) { signInAgain(then: .connectStrava) }
                 .transaction { $0.animation = nil }

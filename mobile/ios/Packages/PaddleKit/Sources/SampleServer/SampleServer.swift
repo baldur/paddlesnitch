@@ -34,6 +34,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _stravaAutoImport = true
     var _stravaNotConfigured = false
     var _options: SignInOptions? = SignInOptions(google: true, strava: true)
+    var _optionsLater: SignInOptions?
     var _stravaLinkedElsewhere = false
     var _failsStrava = false
     /// Signed in through Strava: the sign-in email is a placeholder.

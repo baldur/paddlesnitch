@@ -84,7 +84,7 @@ struct DeleteAccountView: View {
             .task { await check() }
         }
         .sheet(isPresented: $reporting) {
-            SafariView(url: ReportIssue.url).ignoresSafeArea()
+            SafariView(url: ReportIssue.url(base: PaddlesnitchApp.baseURL)).ignoresSafeArea()
         }
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled(deleting)

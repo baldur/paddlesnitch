@@ -33,14 +33,16 @@ struct OtherWaysIn: View {
                 if options.strava { stravaButton }
             }
             if stravaSaidOff {
-                Divider().overlay(Palette.border)
+                Divider().overlay(Palette.border).padding(.top, options.google ? 12 : 0)
                 muted(Self.stravaOff)
-                Button("Report an issue", action: report)
-                    .buttonStyle(.bordered)
-                    .tint(Palette.primaryText)
-                    .frame(minHeight: 44)
-                    .accessibilityHint("Opens paddlesnitch.com")
-                    .accessibilityIdentifier("report-issue")
+                Button(action: report) {
+                    // On the label: the whole 44 pt is the button.
+                    Text("Report an issue").frame(minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(Palette.primaryText)
+                .accessibilityHint("Opens paddlesnitch.com")
+                .accessibilityIdentifier("report-issue")
             }
         }
         .frame(maxWidth: .infinity)
@@ -73,6 +75,7 @@ struct OtherWaysIn: View {
 /// keeps Strava's (developers.google.com/identity/branding-guidelines).
 struct GoogleButton: View {
     let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
 
     static let fill = Color(red: 0x13 / 255, green: 0x13 / 255, blue: 0x14 / 255)
     static let border = Color(red: 0x8E / 255, green: 0x91 / 255, blue: 0x8F / 255)
@@ -91,16 +94,8 @@ struct GoogleButton: View {
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Self.border))
         }
         .buttonStyle(.plain)
+        // Its colours are Google's, so disabled doesn't dim it by itself.
+        .opacity(isEnabled ? 1 : 0.5)
         .accessibilityIdentifier("google-sign-in")
-    }
-}
-
-/// The website's issue form, which opens by itself on a page with
-/// `?report=1`: for whoever can't sign in, so it needs no account.
-enum ReportIssue {
-    static var url: URL {
-        PaddlesnitchApp.baseURL.appending(path: "signin").appending(queryItems: [
-            URLQueryItem(name: "report", value: "1")
-        ])
     }
 }

@@ -1,5 +1,6 @@
 import Charts
 import DesignSystem
+import PaddleAPI
 import Paddles
 import SwiftUI
 import UniformTypeIdentifiers
@@ -17,8 +18,9 @@ struct PaddleListView: View {
     let openTerms: () -> Void
     /// Adding a paddle from a GPS file, and what came of it.
     let adding: AddPaddleModel
-    /// The server offers Strava (`options`): only then is it a way to add one.
-    let stravaOn: Bool
+    /// What the server offers (`options`): Strava is a way to add one only
+    /// when it's on.
+    let options: SignInOptions
     let openFile: (URL) -> Void
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
@@ -28,7 +30,8 @@ struct PaddleListView: View {
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
-        openTerms: @escaping () -> Void, adding: AddPaddleModel, stravaOn: Bool, openFile: @escaping (URL) -> Void
+        openTerms: @escaping () -> Void, adding: AddPaddleModel, options: SignInOptions,
+        openFile: @escaping (URL) -> Void
     ) {
         self.source = source
         self.sourceID = sourceID
@@ -37,7 +40,7 @@ struct PaddleListView: View {
         self.signIn = signIn
         self.openTerms = openTerms
         self.adding = adding
-        self.stravaOn = stravaOn
+        self.options = options
         self.openFile = openFile
         _model = State(initialValue: PaddleListModel(source: source))
     }
@@ -104,9 +107,7 @@ struct PaddleListView: View {
         case .loaded(let rows) where rows.isEmpty:
             MessageView(
                 title: "No paddles yet",
-                message: stravaOn
-                    ? "Add one from a GPS file, Strava or a time trial. A tracker adds its own."
-                    : "Add one from a GPS file or a time trial. A tracker adds its own.")
+                message: options.noPaddlesYet)
         case .loaded(let rows):
             list(rows)
         }

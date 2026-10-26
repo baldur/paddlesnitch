@@ -50,15 +50,33 @@ public struct GoogleSignInError: Error, Equatable {
 
 extension SignInOptions {
     public static let emailOnly = SignInOptions(google: false, strava: false)
+
+    /// The empty Paddles list: Strava is a way to add one only when it's on.
+    public var noPaddlesYet: String {
+        strava
+            ? "Add one from a GPS file, Strava or a time trial. A tracker adds its own."
+            : "Add one from a GPS file or a time trial. A tracker adds its own."
+    }
+}
+
+/// The website's issue form, which opens by itself on a page with
+/// `?report=1`: for whoever can't sign in, so it needs no account and
+/// carries nothing about them.
+public enum ReportIssue {
+    public static func url(base: URL) -> URL {
+        base.appending(path: "signin").appending(queryItems: [URLQueryItem(name: "report", value: "1")])
+    }
 }
 
 extension AccountModel {
     /// Asks which ways in the server offers. Every screen that shows Google
     /// or Strava asks when it opens: sign in, Account, Add paddle.
     public func loadOptions() async {
-        let answer = try? await anonymous.send(Endpoints.getAuthOptions, NoInput())
-        options = answer ?? .emailOnly
-        stravaSaidOff = answer?.strava == false
+        // A failed ask keeps the last answer: only a first ask that fails
+        // leaves email only.
+        guard let answer = try? await anonymous.send(Endpoints.getAuthOptions, NoInput()) else { return }
+        options = answer
+        stravaSaidOff = !answer.strava
     }
 
     /// Google sign-in. `browser` opens the page and answers the link it came

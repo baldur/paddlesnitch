@@ -56,6 +56,11 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Said out loud: a Google or Strava refusal shows above the form,
+        // out of sight from the buttons below it.
+        .onChange(of: form.error) { _, error in
+            if let error { AccessibilityNotification.Announcement(error).post() }
+        }
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
@@ -150,7 +155,7 @@ struct SignInView: View {
             OtherWaysIn(
                 options: account.options, stravaSaidOff: account.stravaSaidOff, busy: form.busy,
                 google: signInWithGoogle, strava: signInWithStrava,
-                report: { web = ReportIssue.url })
+                report: { web = ReportIssue.url(base: PaddlesnitchApp.baseURL) })
         }
     }
 

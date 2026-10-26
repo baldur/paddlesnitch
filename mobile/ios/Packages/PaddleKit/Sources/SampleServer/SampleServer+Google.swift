@@ -10,8 +10,20 @@ extension SampleServer {
         set { lock.withLock { _options = newValue } }
     }
 
+    /// What every ask after the first answers: options that change while
+    /// the app runs, to show each screen asks again.
+    public var optionsLater: SignInOptions? {
+        get { lock.withLock { _optionsLater } }
+        set { lock.withLock { _optionsLater = newValue } }
+    }
+
     func google(path: String, body: Data) throws -> (Int, Data) {
         if path == "/att/api/auth/options" {
+            let options = lock.withLock {
+                let now = _options
+                if let later = _optionsLater { _options = later }
+                return now
+            }
             guard let options else { return (500, Data(#"{"error":"Something went wrong."}"#.utf8)) }
             return (200, try JSONEncoder.paddlesnitch.encode(options))
         }

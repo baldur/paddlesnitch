@@ -112,19 +112,42 @@ import Testing
             URL(string: "com.paddlesnitch.app:/signin/google?error=google_account_exists") ?? URL(filePath: "/")
         }
         #expect(form.error?.hasSuffix("with your email or Strava instead.") == true)
+        #expect(!account.stravaSaidOff)
+        server.options = SignInOptions(google: true, strava: false)
+        await account.loadOptions()
+        _ = await form.signInWithGoogle(to: account) { _ in
+            URL(string: "com.paddlesnitch.app:/signin/google?error=google_account_exists") ?? URL(filePath: "/")
+        }
+        #expect(form.error == "You already have an account with this email. Sign in with your email instead.")
     }
 
-    @Test func optionsAreEmailOnlyUntilAskedAndWhenAskingFails() async {
+    @Test func optionsAreEmailOnlyUntilAnsweredAndAFailedAskKeepsTheLastAnswer() async {
         let account = account()
-        #expect(account.options == .emailOnly)
+        server.options = nil
+        await account.loadOptions()
+        #expect(account.options == .emailOnly, "never answered: email only")
+        #expect(!account.stravaSaidOff, "unknown isn't off: don't say Strava is off")
         server.options = SignInOptions(google: true, strava: false)
         await account.loadOptions()
         #expect(account.options == SignInOptions(google: true, strava: false))
         #expect(account.stravaSaidOff)
         server.options = nil
         await account.loadOptions()
-        #expect(account.options == .emailOnly)
-        #expect(!account.stravaSaidOff, "unknown isn't off: don't say Strava is off")
+        #expect(account.options == SignInOptions(google: true, strava: false), "kept")
+        server.options = SignInOptions(google: true, strava: true)
+        await account.loadOptions()
+        #expect(!account.stravaSaidOff)
+    }
+
+    @Test func theEmptyListMentionsStravaOnlyWhenItsOn() {
+        #expect(SignInOptions(google: true, strava: true).noPaddlesYet.contains("Strava"))
+        #expect(!SignInOptions(google: true, strava: false).noPaddlesYet.contains("Strava"))
+        #expect(!SignInOptions.emailOnly.noPaddlesYet.contains("Strava"))
+    }
+
+    @Test func reportAnIssueIsTheWebsitesFormAndCarriesNothingAboutYou() {
+        let url = ReportIssue.url(base: URL(string: "https://paddlesnitch.com") ?? URL(filePath: "/"))
+        #expect(url.absoluteString == "https://paddlesnitch.com/signin?report=1")
     }
 
     @Test func theOptionsFixturesDecode() throws {

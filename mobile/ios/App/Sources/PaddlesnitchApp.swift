@@ -43,6 +43,10 @@ struct PaddlesnitchApp: App {
         if arguments.contains("-StravaAccount") { server.placeholderEmail = true }
         // UI tests: Strava switched off on the server, as production now.
         if arguments.contains("-StravaOff") { server.options = SignInOptions(google: true, strava: false) }
+        // UI tests: Strava goes off after the app's first ask.
+        if arguments.contains("-StravaOffLater") { server.optionsLater = SignInOptions(google: true, strava: false) }
+        // UI tests: asking which ways in are on fails.
+        if arguments.contains("-OptionsFail") { server.options = nil }
         // UI tests: Strava was connected before it was switched off.
         if arguments.contains("-StravaConnected") { server.stravaConnected = true }
         let transport: any HTTPTransport = sample ? server : URLSession.shared

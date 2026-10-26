@@ -31,7 +31,7 @@ struct RootView: View {
             PaddleListView(
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
                 needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
-                openTerms: { termsOpen = true }, adding: adding, stravaOn: account.options.strava,
+                openTerms: { termsOpen = true }, adding: adding, options: account.options,
                 openFile: { url in Task { await open(url) } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
