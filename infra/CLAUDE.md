@@ -92,10 +92,10 @@ rm "$SECRET_FILE"
 
 Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
 - **Branding:** app name paddlesnitch; home, `/privacy` and `/terms` links; authorized domains `paddlesnitch.com` and the Cognito domain. No logo (a logo needs Google's review).
-- **Audience:** External, in **Testing**. Only listed test users (the owner's handful, managed in the console) can sign in until it is published, and publishing is the owner's call.
+- **Audience:** External, **In production** since 2026-10-26 (published by the owner): anyone with a Google account can sign in. No review was needed: no logo, two domains, only the basic scopes. Adding a logo or a sensitive scope would need Google's review. "Back to testing" on the Audience page undoes it.
 - **Client** "paddlesnitch Cognito" (Web): redirect URI `https://paddlesnitch.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse`, JavaScript origin the Cognito domain. Its ID is in SSM and its secret in Secrets Manager (above). Google shows a secret only once: to rotate it, make a new one in the console and `aws secretsmanager put-secret-value` it, never in chat or the repo.
 
-**The button is off until the `GOOGLE_SIGNIN` repository variable is `1`** (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
+**The button shows only while the `GOOGLE_SIGNIN` repository variable is `1`** (set 2026-10-26; delete it and redeploy to hide the button) (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
 
 ## Inbound email — privacy@paddlesnitch.com
 
