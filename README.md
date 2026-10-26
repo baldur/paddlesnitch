@@ -27,6 +27,7 @@ packages/waterways  the river planner (/plan): waterway network, routing, locks
 firmware/           the tracker — C++/PlatformIO, NOT part of the pnpm workspace
 mobile/             the Android and iPhone apps, and the contract they share
 games/              the browser games at /games — plain HTML/JS, no build
+recorder-core/      the C recorder the tracker and both phones share (fixtures, host build)
 infra/              AWS CDK — CloudFront, Lambda, S3, Cognito, SES
 ```
 
@@ -98,8 +99,8 @@ full map is [`docs/agents.md`](docs/agents.md); the short version:
   does changes that cross areas itself, and runs the reviewers before every
   pull request.
 - **Builders** each own one area and edit only that: `android`, `ios`,
-  `firmware`, `motion-core` (the motion maths, and the shared recorder core
-  now being built) and `game`. Everything else (the web app, packages, infra, the mobile
+  `firmware`, `motion-core` (the motion maths and the shared recorder core,
+  `recorder-core/`) and `game`. Everything else (the web app, packages, infra, the mobile
   contract) is `lead`'s.
 - **Reviewers** check a change and report, never edit: `tester`,
   `security-privacy`, `design-usability` and `copy-style`. `lead`'s pull

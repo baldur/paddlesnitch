@@ -12,7 +12,7 @@ and neither app's source is ever the reference.
 | `fixtures/api/` | Golden answers per procedure, which both apps must decode | By hand, from synthetic paddles run through the real analysis; checked against the schemas by `pnpm test` |
 | `fixtures/tracker/` | The tracker's Bluetooth protocol: UUIDs, layout, what each item replies, what each write sends, DATA pages, upload receipts, the waits | By hand, from `firmware/include/ble_about.h`, `firmware/src/ble.cpp` and the website's `lib/tracker-ble.ts`; checked against all three by `pnpm test`. See its README |
 | `telemetry.md` + `fixtures/telemetry/` | The `x-paddlesnitch-app` header on every request, `app_open`, and crash reports sent on the next start | By hand; replayed against the real endpoint by `pnpm test` |
-| `fixtures/` (rest) | Recording CSV | Phase C3 (not yet) |
+| `fixtures/` (rest) | Recording CSV | Phase C3 (not yet). The CSV and motion sidecar the phones write are pinned byte for byte by `recorder-core/fixtures/` (motion-core; format in its README) |
 
 **Don't edit `api/` or `tokens/` by hand.** Change the source, run
 `pnpm mobile:contract`, commit the result. `pnpm test` fails while they differ.
