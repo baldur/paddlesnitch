@@ -9,6 +9,8 @@ struct RootView: View {
     let account: AccountModel
     let samples: SamplePaddles
     @State private var signingIn = false
+    /// From opening until it has finished closing (not just asked to close).
+    @State private var signInSheetUp = false
     @State private var termsOpen = false
     @State private var selectedTab = "paddles"
     @State private var adding: AddPaddleModel
@@ -51,11 +53,14 @@ struct RootView: View {
         .sheet(
             isPresented: $signingIn,
             onDismiss: {
+                signInSheetUp = false
                 // Closed without signing in again: don't jump back later.
                 if account.user == nil && account.afterSignIn != nil { account.resumed() }
             },
             content: { SignInView(account: account) }
         )
+        .onChange(of: signingIn) { _, opening in if opening { signInSheetUp = true } }
+        .environment(\.signInSheetUp, signInSheetUp)
         .sheet(isPresented: $termsOpen) {
             NavigationStack {
                 List {
@@ -103,4 +108,10 @@ struct RootView: View {
     private var source: any PaddlesSource {
         account.user == nil ? samples : ServerPaddles(client: account.client)
     }
+}
+
+extension EnvironmentValues {
+    /// The sign-in sheet is up or still closing: another sheet can't open
+    /// yet (iOS drops it without a word).
+    @Entry var signInSheetUp = false
 }

@@ -74,6 +74,8 @@ struct YouView: View {
                         Text("Version").foregroundStyle(Palette.fg)
                         Spacer()
                         Text(Self.version).foregroundStyle(Palette.muted)
+                            // iOS 17's audit cut it short (text clipped).
+                            .fixedSize()
                     }
                     .font(.plexSans(.body))
                     .accessibilityElement(children: .combine)

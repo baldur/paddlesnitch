@@ -53,3 +53,7 @@ isn't obvious from the code.
   (`LargeTextTests.checkScreen`) only reports pinned to an element fail; the
   screenshots are kept. Everywhere else (`checkWholeScreen`, the screens'
   audits) element-less reports still fail: the real "N…" clip came as one.
+- Open a sheet from a sheet's result only once the first has finished
+  closing (`onDismiss`, passed down as `signInSheetUp`), never after a fixed
+  delay: iOS 17 on CI took longer than 700 ms, and a sheet asked to open
+  while another closes is dropped without a word.
