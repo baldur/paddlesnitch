@@ -165,4 +165,27 @@ import Testing
         account.resumed()
         #expect(!account.signInAgainWithStrava)
     }
+
+    @Test func signingInAgainComesBackToConnectingStrava() async throws {
+        let account = try await signedIn()
+        await account.signOutToSignInAgain(then: .connectStrava)
+        #expect(account.afterSignIn == .connectStrava)
+        try await account.signIn(email: "pat@example.com", password: SampleServer.password)
+        #expect(account.resumeAfterSignIn() == .connectStrava)
+        #expect(account.afterSignIn == nil)
+        #expect(account.signInAgainUserId == nil)
+    }
+
+    /// Someone else signing in on the phone isn't taken into the last
+    /// person's delete or Strava connect.
+    @Test func anotherAccountSigningInDoesntResume() async throws {
+        let account = try await signedIn()
+        await account.signOutToSignInAgain(then: .connectStrava)
+        // The sample server gives every account one id: stand in for a
+        // different person having signed out.
+        account.signInAgainUserId = "someone-else"
+        try await account.signIn(email: "pat@example.com", password: SampleServer.password)
+        #expect(account.resumeAfterSignIn() == nil)
+        #expect(account.afterSignIn == nil, "dropped, not kept for later")
+    }
 }

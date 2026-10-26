@@ -56,8 +56,10 @@ struct AccountView: View {
             // The profile arrives after the screen: its rows appear in place
             // rather than animating in (iOS 17's audit measured them mid-move).
             .transaction { $0.animation = nil }
-            StravaSection(strava: strava, connect: connectStrava) { signInAgain(then: .connectStrava) }
-                .transaction { $0.animation = nil }
+            StravaSection(
+                strava: strava, signsInWithStrava: profile.needsContactEmail, connect: connectStrava
+            ) { signInAgain(then: .connectStrava) }
+            .transaction { $0.animation = nil }
             Section {
                 Button {
                     Task { await download() }
@@ -99,8 +101,17 @@ struct AccountView: View {
         // screen still under the sheet. A sheet can't open while another is
         // closing, so the sign-in sheet goes first.
         .onAppear { resume() }
-        .task { await profile.load() }
-        .task { await strava.load() }
+        .onChange(of: StravaSection.announcement(strava)) { _, words in
+            guard let words else { return }
+            // After Strava's page has closed, so VoiceOver doesn't drop it.
+            Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                AccessibilityNotification.Announcement(words).post()
+            }
+        }
+        // Again for whoever signs in, so nothing of the last account stays.
+        .task(id: account.user?.id) { await profile.load() }
+        .task(id: account.user?.id) { await strava.load() }
         .onChange(of: account.user?.id) { _, id in
             guard id != nil else { return }
             Task {
@@ -141,8 +152,7 @@ struct AccountView: View {
     }
 
     private func resume() {
-        guard account.user != nil, let next = account.afterSignIn else { return }
-        account.resumed()
+        guard let next = account.resumeAfterSignIn() else { return }
         switch next {
         case .delete: confirmingDelete = true
         case .connectStrava: connectStrava()

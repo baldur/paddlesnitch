@@ -19,7 +19,7 @@ public final class StravaConnection {
     public private(set) var needsRecentSignIn = false
 
     public enum Busy: Equatable, Sendable {
-        case connecting, autoImport, disconnecting
+        case checking, connecting, autoImport, disconnecting
     }
 
     public enum Flash: Equatable, Sendable {
@@ -34,11 +34,13 @@ public final class StravaConnection {
     }
 
     public func load() async {
+        if busy == nil { busy = .checking }
+        defer { if busy == .checking { busy = nil } }
         do {
             status = try await account.client.send(Endpoints.getStravaStatus, NoInput())
             loadFailure = nil
         } catch {
-            loadFailure = ProfileForm.failure("Couldn't check Strava.", error)
+            loadFailure = ProfileForm.failure("Couldn’t check Strava.", error)
         }
     }
 
@@ -63,7 +65,7 @@ public final class StravaConnection {
         } catch PaddleAPIError.rejected(_, 503, _) {
             return fail("not_configured", final: true)
         } catch {
-            return failed(ProfileForm.failure("Couldn't connect Strava.", error))
+            return failed(ProfileForm.failure("Couldn’t connect Strava.", error))
         }
         let callback: URL
         do {
@@ -94,7 +96,7 @@ public final class StravaConnection {
         } catch PaddleAPIError.rejected(_, 400, _) {
             fail("exchange_failed")
         } catch {
-            failed(ProfileForm.failure("Couldn't connect Strava.", error))
+            failed(ProfileForm.failure("Couldn’t connect Strava.", error))
         }
     }
 
@@ -107,7 +109,7 @@ public final class StravaConnection {
                 Endpoints.stravaAutoImport, StravaAutoImportSet(enabled: enabled))
             status?.autoImport = answer.autoImport
         } catch {
-            failed(ProfileForm.failure("Couldn't change auto-import.", error))
+            failed(ProfileForm.failure("Couldn’t change auto-import.", error))
         }
     }
 
@@ -119,7 +121,7 @@ public final class StravaConnection {
             _ = try await account.client.send(Endpoints.stravaDisconnect, NoInput())
             status = StravaStatus(connected: false)
         } catch {
-            failed(ProfileForm.failure("Couldn't disconnect Strava.", error))
+            failed(ProfileForm.failure("Couldn’t disconnect Strava.", error))
         }
     }
 

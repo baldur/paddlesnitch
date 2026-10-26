@@ -31,7 +31,7 @@ struct SignInView: View {
                         // form can't work, so say why and offer Strava first.
                         Text(
                             account.afterSignIn == .connectStrava
-                                ? "Sign in with Strava again to connect Strava."
+                                ? "Sign in with Strava again, then connect it."
                                 : "Sign in with Strava again to delete your account."
                         )
                         .font(.plexSans(.body))

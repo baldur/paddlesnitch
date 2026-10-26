@@ -25,6 +25,8 @@ public final class AccountModel {
     /// Signed out to sign in again before deleting or connecting Strava:
     /// come straight back to it.
     public internal(set) var afterSignIn: AfterSignIn?
+    /// Who signed out to sign in again: only they come straight back.
+    public internal(set) var signInAgainUserId: String?
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
     /// Signing in again goes straight to Strava sign-in.

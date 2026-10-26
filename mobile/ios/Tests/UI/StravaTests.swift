@@ -18,6 +18,9 @@ final class StravaTests: AppTestCase {
         wait(for: [off], timeout: 10)
 
         scrollToElement(app.buttons["Disconnect"]).tap()
+        let confirm = app.buttons["Disconnect Strava"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "asks first")
+        confirm.tap()
         XCTAssertTrue(scrollToElement(app.buttons["strava-connect"]).waitForExistence(timeout: 10))
     }
 

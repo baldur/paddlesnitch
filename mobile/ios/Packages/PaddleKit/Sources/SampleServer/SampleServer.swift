@@ -33,6 +33,8 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _stravaConnected = false
     var _stravaAutoImport = true
     var _stravaNotConfigured = false
+    var _stravaLinkedElsewhere = false
+    var _failsStrava = false
     /// Signed in through Strava: the sign-in email is a placeholder.
     public var placeholderEmail: Bool {
         get { lock.withLock { _placeholderEmail } }

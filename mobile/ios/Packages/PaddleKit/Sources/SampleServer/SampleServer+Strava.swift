@@ -10,6 +10,20 @@ extension SampleServer {
         set { lock.withLock { _stravaNotConfigured = newValue } }
     }
 
+    /// This Strava account is on another paddlesnitch account: finishing
+    /// answers 409.
+    public var stravaLinkedElsewhere: Bool {
+        get { lock.withLock { _stravaLinkedElsewhere } }
+        set { lock.withLock { _stravaLinkedElsewhere = newValue } }
+    }
+
+    /// Make status, auto-import and disconnect fail, as when the server is
+    /// down.
+    public var failsStrava: Bool {
+        get { lock.withLock { _failsStrava } }
+        set { lock.withLock { _failsStrava = newValue } }
+    }
+
     /// Already connected, as an account that connected on the website.
     public var stravaConnected: Bool {
         get { lock.withLock { _stravaConnected } }
@@ -21,6 +35,9 @@ extension SampleServer {
             return (401, try fixture("account.error"))
         }
         let body = request.httpBody ?? Data()
+        if failsStrava && path != "/att/api/strava/app-connect" && path != "/att/api/strava/app-connect/finish" {
+            return (502, Data("<html>Bad gateway</html>".utf8))
+        }
         switch path {
         case "/att/api/strava/app-connect":
             return try connect(body)
@@ -28,6 +45,7 @@ extension SampleServer {
             // A code from `stravaConnectBrowser` carries its challenge, so
             // this checks the verifier the way the server does.
             let finish = try JSONDecoder().decode(StravaConnectFinish.self, from: body)
+            if let refused = finishRefused() { return refused }
             guard finish.code == "sample." + Self.challenge(finish.verifier) else {
                 return (400, Data(#"{"error":"That didn’t work. Please start again."}"#.utf8))
             }
@@ -46,6 +64,19 @@ extension SampleServer {
             break
         }
         return (200, try JSONEncoder.paddlesnitch.encode(stravaStatus))
+    }
+
+    /// The sign-in went stale while Strava's page was open, or the Strava
+    /// account is someone else's.
+    private func finishRefused() -> (Int, Data)? {
+        guard signInIsRecent else {
+            let words = "For your safety, connecting Strava needs a recent sign-in. Please sign in again."
+            return (403, Data(#"{"error":"\#(words)","reauth":true}"#.utf8))
+        }
+        guard !stravaLinkedElsewhere else {
+            return (409, Data(#"{"error":"\#(Constants.stravaConnectResults["linked_elsewhere"] ?? "")"}"#.utf8))
+        }
+        return nil
     }
 
     private var stravaStatus: StravaStatus {

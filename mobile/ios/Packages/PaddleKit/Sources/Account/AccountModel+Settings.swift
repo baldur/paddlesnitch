@@ -87,15 +87,27 @@ extension AccountModel {
     /// filled in (mobile/contract/README.md, Account).
     public func signOutToSignInAgain(then next: AfterSignIn, withStrava: Bool = false) async {
         let email = user?.email
+        let id = user?.id
         await signOut()
+        signInAgainUserId = id
         signInAgainEmail = withStrava ? nil : email
         signInAgainWithStrava = withStrava
         afterSignIn = next
     }
 
+    /// What to come straight back to, now signed in again: nothing if
+    /// someone else signed in on this phone (it's cleared either way).
+    public func resumeAfterSignIn() -> AfterSignIn? {
+        guard let next = afterSignIn, let id = user?.id else { return nil }
+        let same = id == signInAgainUserId
+        resumed()
+        return same ? next : nil
+    }
+
     /// Back where they were after signing in again (or they gave up).
     public func resumed() {
         afterSignIn = nil
+        signInAgainUserId = nil
         signInAgainEmail = nil
         signInAgainWithStrava = false
     }

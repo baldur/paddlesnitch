@@ -8,6 +8,9 @@ import SwiftUI
 /// website for now.
 struct StravaSection: View {
     let strava: StravaConnection
+    /// Made through Strava (its sign-in email is a placeholder): Strava is
+    /// its only way in (#712).
+    var signsInWithStrava = false
     let connect: () -> Void
     /// A sign-in from the last 10 minutes is needed: sign out and back in.
     let signInAgain: () -> Void
@@ -20,6 +23,14 @@ struct StravaSection: View {
     static let autoImportHelp = "New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves."
     static let disconnectHelp =
         "You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava."
+
+    static let disconnectConfirm =
+        "New paddles stop coming in from Strava, and you can’t sign in with Strava until you connect it again."
+    /// Signing in with Strava again would make a new, empty account (#712).
+    static let disconnectOnlyWayIn =
+        "You sign in to this account with Strava. Once it’s disconnected, you can’t sign in to this account again."
+
+    @State private var confirmingDisconnect = false
 
     var body: some View {
         Section {
@@ -34,12 +45,14 @@ struct StravaSection: View {
             if let status = strava.status {
                 if status.connected {
                     connected(status)
-                } else if strava.flash == nil || strava.canTryAgain {
+                } else if !strava.needsRecentSignIn && (strava.flash == nil || strava.canTryAgain) {
                     connectButton
+                    if strava.busy == .connecting { text("Connecting…", tone: Palette.muted) }
                 }
             } else if let failure = strava.loadFailure {
                 text(failure, tone: Palette.red)
-                Button("Try again") { Task { await strava.load() } }
+                Button(strava.busy == nil ? "Try again" : "Checking…") { Task { await strava.load() } }
+                    .disabled(strava.busy != nil)
                     .frame(minHeight: 44)
                     .listRowBackground(Palette.surface)
             } else {
@@ -70,22 +83,17 @@ struct StravaSection: View {
         HStack(spacing: 8) {
             Text("Connected")
                 .font(.plexSans(.subheadline, weight: .medium))
+                .fixedSize()
                 .foregroundStyle(Palette.green)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.green.opacity(0.5)))
-            Text(status.athlete?.name ?? "").foregroundStyle(Palette.fg)
-                .fixedSize(horizontal: false, vertical: true)
+            if let name = status.athlete?.name {
+                Text(name).foregroundStyle(Palette.fg).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("strava-connected")
-        .listRowBackground(Palette.surface)
-        Button {
-            Task { await strava.disconnect() }
-        } label: {
-            Text(strava.busy == .disconnecting ? "Disconnecting…" : "Disconnect").frame(minHeight: 44)
-        }
-        .disabled(strava.busy != nil)
         .listRowBackground(Palette.surface)
         Toggle(
             isOn: Binding(
@@ -98,18 +106,39 @@ struct StravaSection: View {
         .disabled(strava.busy != nil)
         .accessibilityHint(Self.autoImportHelp)
         .accessibilityIdentifier("strava-auto-import")
+        .listRowSeparator(.hidden, edges: .bottom)
         .listRowBackground(Palette.surface)
         // Its own row: two lines of help inside the switch's label drew the
         // audit's clip report.
         Text(Self.autoImportHelp).font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityHidden(true)
+            .listRowSeparator(.hidden, edges: .top)
             .listRowBackground(Palette.surface)
         // Attribution: the row above shows the athlete's Strava name.
         Image("PoweredByStrava").resizable().scaledToFit().frame(height: 20)
             .accessibilityLabel("Powered by Strava")
             .listRowBackground(Palette.surface)
-        text(Self.disconnectHelp, tone: Palette.muted)
+        disconnectButton
+        text(Self.disconnectHelp, tone: Palette.muted).listRowSeparator(.hidden, edges: .top)
+    }
+
+    /// Last, by what it does: the quieter action, next to its consequence.
+    private var disconnectButton: some View {
+        Button {
+            confirmingDisconnect = true
+        } label: {
+            Text(strava.busy == .disconnecting ? "Disconnecting…" : "Disconnect").frame(minHeight: 44)
+        }
+        .disabled(strava.busy != nil)
+        .listRowSeparator(.hidden, edges: .bottom)
+        .listRowBackground(Palette.surface)
+        .confirmationDialog("Disconnect Strava?", isPresented: $confirmingDisconnect, titleVisibility: .visible) {
+            Button("Disconnect Strava", role: .destructive) { Task { await strava.disconnect() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(signsInWithStrava ? Self.disconnectOnlyWayIn : Self.disconnectConfirm)
+        }
     }
 
     private func flashRow(_ flash: StravaConnection.Flash) -> some View {
@@ -118,9 +147,17 @@ struct StravaSection: View {
             case .done(let words): (words, Palette.green)
             case .failed(let words): (words, Palette.red)
             }
-        return text(words, tone: tone)
-            .accessibilityIdentifier("strava-flash")
-            .onAppear { AccessibilityNotification.Announcement(words).post() }
+        return text(words, tone: tone).accessibilityIdentifier("strava-flash")
+    }
+
+    /// Said once per change (not on each appearance of a lazy row): the
+    /// result, or that a new sign-in is needed.
+    static func announcement(_ strava: StravaConnection) -> String? {
+        if strava.needsRecentSignIn { return reauth }
+        switch strava.flash {
+        case .done(let words), .failed(let words): return words
+        case nil: return nil
+        }
     }
 
     private func text(_ words: String, tone: Color) -> some View {
