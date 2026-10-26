@@ -282,7 +282,7 @@ function AccountPageInner() {
     setErr('')
     // Made through Strava, and Strava is off: signing out would leave no way back in.
     if (!STRAVA && isSyntheticStravaEmail(user.email)) {
-      setErr('Strava sign-in is off for now, so you can’t sign in again here. Report an issue and we’ll delete your account for you.')
+      setErr('Strava sign-in is off for now, so you can’t sign in again here. Report an issue asking us to delete your account. We’ll know it’s yours, so leave out your name and email: reports are public.')
       return
     }
     setWorking(then === 'delete' ? 'delete' : 'strava')
