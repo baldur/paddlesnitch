@@ -75,6 +75,8 @@ fun SignInScreen(
     notice: String? = null,
     /** Open Strava straight away (signing in again with an account made with Strava). */
     startStrava: Boolean = false,
+    /** Forgot password, with the email typed so far. */
+    onForgot: (email: String) -> Unit = {},
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf(prefillEmail.orEmpty()) }
@@ -159,7 +161,7 @@ fun SignInScreen(
                 else -> "Sign in"
             })
         }
-        if (!creating) TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/signin/forgot") }) { Text("Forgot password?") }
+        if (!creating) TextButton(onClick = { onForgot(email.trim()) }) { Text("Forgot password?") }
         HorizontalDivider(color = PsColor.border)
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Or use your Strava account", color = PsColor.muted)
