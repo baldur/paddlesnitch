@@ -173,13 +173,15 @@ class TrackersScreenTest {
         waitFor("No recordings yet")
     }
 
-    @Test fun aRecordingWithNoFixOrStartShowsWhenItCameIn() {
+    @Test fun theContractsRecordingsAPaddleAndOneWithNoFix() {
         val fixture = ApiJson.decodeFromString(RecordingList.serializer(), File("../../contract/fixtures/api/account.devices-sessions.json").readText()).sessions
         show(FakeAccountApi(recordingList = fixture))
         waitFor("Tracker C0FFEE01")
         compose.onNodeWithTag("tracker-C0FFEE01").performClick()
         waitFor("not a paddle · track_20261024_1800.csv")
         compose.onNodeWithText(fmtDayTime("2026-10-24T19:00:00.000Z")).assertExists() // uploadedAt, no distance
+        compose.onNodeWithTag("recording-rec-river").performClick() // the fixture's paddle opens
+        assertEquals(listOf("paddle pdl_8Kq2Zr"), did)
     }
 
     @Test fun removeCanBeCalledOffAndSaysWhenItsDone() {

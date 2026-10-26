@@ -223,7 +223,7 @@ class AccountApiTest {
         assertFalse(list.summaries.last().linked)
 
         answer(200, fixture("account.devices-sessions"))
-        assertTrue(api.recordings().sessions.isNotEmpty())
+        assertEquals("pdl_8Kq2Zr", api.recordings().sessions.first().paddleId)
         assertEquals(Triple("GET", "/api/account/devices/sessions", ""), sent())
 
         answer(200, """{"ok":true}""")
