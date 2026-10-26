@@ -145,6 +145,11 @@ export async function POST(req: NextRequest) {
   })
 
   if (!ghRes.ok) {
+    // We broke something: say so (the server-errors alarm emails the owner).
+    // A refused token (401/403: revoked or expired) is dropped from the cache,
+    // so a replaced token in SSM is picked up without waiting for a deploy.
+    console.error('[feedback] GitHub refused the issue:', ghRes.status)
+    if (ghRes.status === 401 || ghRes.status === 403) cachedToken = undefined
     // Don't leak GitHub error details to the customer — they can't act on it.
     return NextResponse.json(
       { error: 'Couldn’t send your report. Please try again later.' },
