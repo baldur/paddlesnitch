@@ -59,6 +59,9 @@
         "bytes",
         "rows"
       ]
+    },
+    "paddleId": {
+      "type": "string"
     }
   },
   "required": [

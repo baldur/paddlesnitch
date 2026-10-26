@@ -14,10 +14,17 @@
         "string",
         "null"
       ]
+    },
+    "summaries": {
+      "type": "array",
+      "items": {
+        "$ref": "TrackerSummary.schema.json"
+      }
     }
   },
   "required": [
     "devices",
-    "stableVersion"
+    "stableVersion",
+    "summaries"
   ]
 }

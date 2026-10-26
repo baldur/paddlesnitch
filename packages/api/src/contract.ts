@@ -242,7 +242,20 @@ export const Tracker = named('Tracker', z.object({
   }).optional(),
   lastCrash: z.object({ at: timestamp(), task: z.string() }).optional(),
 }))
-export const TrackerList = named('TrackerList', z.object({ devices: z.array(Tracker), stableVersion: z.string().nullable() }))
+/** One tracker card, worked out by the server (the website shows the same): removed trackers that still have recordings come too (`linked` false). Already in display order. `quiet` = not heard from for over 2 days; `crash` only within 7 days. */
+export const TrackerSummary = named('TrackerSummary', z.object({
+  deviceId: z.string(),
+  name: z.string(),
+  linked: z.boolean(),
+  recordings: z.int(),
+  motionRecordings: z.int(),
+  distanceMetres: z.int(),
+  latestAt: timestamp().optional(),
+  firmwareState: z.enum(['up_to_date', 'update_pending', 'unknown']),
+  quiet: z.boolean(),
+  crash: z.object({ at: timestamp(), task: z.string() }).optional(),
+}))
+export const TrackerList = named('TrackerList', z.object({ devices: z.array(Tracker), stableVersion: z.string().nullable(), summaries: z.array(TrackerSummary) }))
 const TrackerId = named('TrackerId', z.object({ deviceId: z.string() }))
 /** A recording a tracker uploaded (it also becomes a paddle in Paddles). `motion` once its motion file is in. */
 export const Recording = named('Recording', z.object({
@@ -255,6 +268,8 @@ export const Recording = named('Recording', z.object({
   distanceMetres: z.number().optional(),
   points: z.int(),
   motion: z.object({ uploadedAt: timestamp(), bytes: z.int(), rows: z.int() }).optional(),
+  // The paddle it became, when it did (too short or no track: none).
+  paddleId: z.string().optional(),
 }))
 export const RecordingList = named('RecordingList', z.object({ sessions: z.array(Recording) }))
 
