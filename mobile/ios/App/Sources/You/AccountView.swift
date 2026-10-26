@@ -13,7 +13,6 @@ struct AccountView: View {
     /// Opens the sign-in sheet.
     let signIn: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.signInSheetUp) private var signInSheetUp
     @State private var termsChanged = false
     @State private var downloading = false
     @State private var downloaded: SharedFile?
@@ -95,7 +94,7 @@ struct AccountView: View {
         // on CI took longer than the 700 ms once waited here).
         .onAppear { resumeDelete() }
         .task { await profile.load() }
-        .onChange(of: signInSheetUp) { _, up in if !up { resumeDelete() } }
+        .onChange(of: account.signInSheetUp) { _, up in if !up { resumeDelete() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(
@@ -133,7 +132,7 @@ struct AccountView: View {
     }
 
     private func resumeDelete() {
-        guard account.deleteAfterSignIn, account.user != nil, !signInSheetUp else { return }
+        guard account.deleteAfterSignIn, account.user != nil, !account.signInSheetUp else { return }
         account.deleteResumed()
         confirmingDelete = true
     }

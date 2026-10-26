@@ -24,6 +24,10 @@ public final class AccountModel {
     public internal(set) var accountDeleted = false
     /// Signed out to sign in again before deleting: come straight back.
     public internal(set) var deleteAfterSignIn = false
+    /// The app's sign-in sheet is up or still closing: another sheet can't
+    /// open yet (iOS drops it without a word). Set by the app; kept here, as
+    /// iOS 17 doesn't pass environment changes to pushed screens.
+    public var signInSheetUp = false
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
     /// Signing in again to delete goes straight to Strava sign-in.

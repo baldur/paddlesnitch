@@ -54,6 +54,7 @@ isn't obvious from the code.
   screenshots are kept. Everywhere else (`checkWholeScreen`, the screens'
   audits) element-less reports still fail: the real "N…" clip came as one.
 - Open a sheet from a sheet's result only once the first has finished
-  closing (`onDismiss`, passed down as `signInSheetUp`), never after a fixed
-  delay: iOS 17 on CI took longer than 700 ms, and a sheet asked to open
-  while another closes is dropped without a word.
+  closing (`onDismiss`, kept as `AccountModel.signInSheetUp`), never after a
+  fixed delay: iOS 17 on CI took longer than 700 ms, and a sheet asked to
+  open while another closes is dropped without a word. Not through the
+  environment: iOS 17 doesn't pass its changes to pushed screens.
