@@ -9,10 +9,16 @@ extension SampleServer {
         case "/att/api/auth/signup":
             let signup = try JSONDecoder().decode(Signup.self, from: body)
             guard signup.acceptedTosVersion == Constants.tosVersion else {
-                return (422, Data(#"{"error":"The Terms of Service have changed. Update the app to sign up."}"#.utf8))
+                return (422, Data(#"{"error":"Please accept the Terms of Service to create an account."}"#.utf8))
             }
-            lock.withLock { _waitingForCode[signup.email] = signup.password }
-            return (202, Data(#"{"needsCode":true,"email":"\#(signup.email)"}"#.utf8))
+            if lock.withLock({ _tooManyCodes }) { return (429, try fixture("auth.too-many-codes")) }
+            lock.withLock {
+                _waitingForCode[signup.email] = signup.password
+                _unconfirmed.insert(signup.email)
+            }
+            var sent = try JSONDecoder.paddlesnitch.decode(CodeSent.self, from: try fixture("auth.signup"))
+            sent.email = signup.email
+            return (202, try JSONEncoder.paddlesnitch.encode(sent))
         case "/att/api/auth/signup/confirm":
             return try confirmSignup(body)
         default:
@@ -34,9 +40,15 @@ extension SampleServer {
         }
         lock.withLock {
             _waitingForCode[confirm.email] = nil
+            _unconfirmed.remove(confirm.email)
             _signInIsRecent = true
         }
-        return (201, try signIn("auth.login"))
+        if lock.withLock({ _confirmSignInFails }) {
+            return (500, Data(#"{"error":"Your email is confirmed. Please sign in."}"#.utf8))
+        }
+        return (
+            201, try signIn(confirm.email == Self.unconfirmedOldTermsEmail ? "auth.login.needs-terms" : "auth.login")
+        )
     }
 
     /// Forgot password: `resetCode` works, any other code is wrong.

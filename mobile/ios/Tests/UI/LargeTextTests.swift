@@ -60,6 +60,22 @@ final class LargeTextTests: AppTestCase {
         try checkWholeScreen(last: app.buttons["Delete my account"])
     }
 
+    /// "Confirm your email" (#702) at the largest size, top to bottom.
+    func testTheCodeStepAtTheLargestTextSize() throws {
+        app.buttons["sample-notice-action"].tap()
+        scrollToElement(app.buttons["Create account"].firstMatch).tap()
+        type("new@example.com", into: scrollToElement(app.textFields["Email"]))
+        type("New", into: scrollToElement(app.textFields["Display name"]))
+        type("Secret123", into: scrollToElement(app.secureTextFields["Password"]))
+        scrollToElement(element("terms-checkbox")).tap()
+        scrollToElement(app.buttons["sign-in-submit"]).tap()
+        XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
+        // The code field has the keyboard: drag it away so the page scrolls.
+        element("code-explainer").swipeDown()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        try checkWholeScreen(last: app.buttons["change-email"])
+    }
+
     func testSignInAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))

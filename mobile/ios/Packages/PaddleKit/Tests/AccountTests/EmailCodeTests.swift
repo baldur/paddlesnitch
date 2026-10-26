@@ -135,14 +135,89 @@ import Testing
         #expect(form.title == "Create account")
     }
 
-    @Test func aMissingCodeIsCaughtHere() async {
+    @Test func aCodeThatIsntSixDigitsIsCaughtHere() async {
         let account = account()
         let form = form()
         _ = await createAccount(form, on: account)
         let sent = server.requests.count
-        form.code = " "
+        form.code = "12345"
         #expect(await form.submit(to: account) == false)
-        #expect(form.error == "Enter the code from the email.")
+        #expect(form.error == "Enter the 6-digit code from the email.")
         #expect(server.requests.count == sent)
+    }
+
+    @Test func theCodeKeepsOnlySixDigitsAndEditingClearsTheStatus() async {
+        let form = form()
+        form.email = SampleServer.unconfirmedEmail
+        form.password = SampleServer.password
+        _ = await form.submit(to: account())
+        #expect(form.status != nil)
+        form.code = "12 34-5678"
+        #expect(form.code == "123456")
+        #expect(form.status == nil)
+    }
+
+    /// Confirmed, but the sign-in after it failed (500): back to Sign in with
+    /// the server's words, since a new code would now be refused (409).
+    @Test func confirmedButNotSignedInGoesBackToSignIn() async {
+        let account = account()
+        let form = form()
+        _ = await createAccount(form, on: account)
+        server.confirmSignInFails = true
+        form.code = SampleServer.signupCode
+        #expect(await form.submit(to: account) == false)
+        #expect(form.step == .form)
+        #expect(form.mode == .signIn)
+        #expect(form.error == "Your email is confirmed. Please sign in.")
+        #expect(form.email == "new@example.com")
+    }
+
+    @Test func confirmingAndSendingAreBusySeparately() async {
+        let form = form()
+        _ = await createAccount(form, on: account())
+        #expect(!form.busy && !form.resending)
+        #expect(form.buttonTitle == "Confirm email")
+        #expect(form.newCodeTitle == "Send a new code")
+    }
+
+    /// The code was entered elsewhere meanwhile: asking again signs you in.
+    @Test func aNewCodeAfterConfirmingElsewhereSignsYouIn() async {
+        let account = account()
+        let clock = TestClock(Date(timeIntervalSince1970: 1000))
+        let form = form(clock)
+        form.email = SampleServer.unconfirmedEmail
+        form.password = SampleServer.password
+        _ = await form.submit(to: account)
+        server.confirmElsewhere(SampleServer.unconfirmedEmail)
+        clock.now += 30
+        #expect(await form.sendNewCode(to: account))
+        #expect(account.user != nil)
+    }
+
+    @Test func tooManyCodesIsAnErrorAndDoesntRestartThePause() async {
+        let account = account()
+        let clock = TestClock(Date(timeIntervalSince1970: 1000))
+        let form = form(clock)
+        _ = await createAccount(form, on: account)
+        clock.now += 30
+        let allowedAt = form.nextCodeAt
+        server.tooManyCodes = true
+        #expect(await form.sendNewCode(to: account) == false)
+        #expect(form.error == "We’ve sent this email too many codes. Please wait an hour and try again.")
+        #expect(form.status == nil)
+        #expect(form.nextCodeAt == allowedAt, "the pause isn't restarted")
+    }
+
+    /// From a sign-in the Terms weren't ticked: the answer says whether
+    /// they're out of date.
+    @Test func confirmingFromSignInFollowsNeedsTerms() async {
+        let account = account()
+        let form = form()
+        form.email = SampleServer.unconfirmedOldTermsEmail
+        form.password = SampleServer.password
+        _ = await form.submit(to: account)
+        form.code = SampleServer.signupCode
+        #expect(await form.submit(to: account))
+        #expect(account.user?.needsTerms == true)
     }
 }

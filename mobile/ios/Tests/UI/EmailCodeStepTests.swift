@@ -21,22 +21,22 @@ final class EmailCodeStepTests: AppTestCase {
         XCTAssertTrue(text(containing: "new@example.com").exists)
         XCTAssertFalse(app.buttons["Create account"].exists, "no tabs during the code")
         XCTAssertEqual(app.buttons["sign-in-submit"].label, "Confirm email")
-        XCTAssertFalse(app.buttons["send-new-code"].isEnabled, "30 seconds before another")
+        XCTAssertFalse(scrollToElement(app.buttons["send-new-code"]).isEnabled, "30 seconds before another")
         type("123456", into: app.textFields["code-field"])
-        app.buttons["sign-in-submit"].tap()
+        scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }
 
     func testAWrongCodeSaysSo() {
         startAccount()
         type("000000", into: app.textFields["code-field"])
-        app.buttons["sign-in-submit"].tap()
+        scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(text(containing: "That code is not valid.").waitForExistence(timeout: 10))
     }
 
     func testChangeEmailGoesBackToCreateAccount() {
         startAccount()
-        app.buttons["change-email"].tap()
+        scrollToElement(app.buttons["change-email"]).tap()
         XCTAssertTrue(app.textFields["Display name"].waitForExistence(timeout: 10))
         XCTAssertFalse(element("code-explainer").exists)
     }
@@ -49,7 +49,7 @@ final class EmailCodeStepTests: AppTestCase {
         XCTAssertTrue(text(containing: "Confirm your email first.").exists)
         XCTAssertFalse(element("sign-in-error").exists, "a status, not an error")
         type("123456", into: app.textFields["code-field"])
-        app.buttons["sign-in-submit"].tap()
+        scrollToElement(app.buttons["sign-in-submit"]).tap()
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }
 

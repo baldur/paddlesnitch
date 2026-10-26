@@ -31,9 +31,18 @@ public final class SignInForm {
     public var displayName = ""
     public var password = ""
     public var agreedToTerms = false
-    public var code = ""
+    /// Digits only, six at most; editing it puts the last status away.
+    public var code = "" {
+        didSet {
+            let digits = String(code.filter(\.isNumber).prefix(6))
+            if digits != code { code = digits }
+            if code != oldValue { status = nil }
+        }
+    }
     public private(set) var step: Step = .form
     public private(set) var busy = false
+    /// Sending a new code: its own flag, so only that button says "Sending…".
+    public private(set) var resending = false
     public private(set) var error: String?
     /// Not an error: "Your new password is set. Please sign in."
     public private(set) var notice: String?
@@ -62,9 +71,11 @@ public final class SignInForm {
     }
 
     public var codeExplainer: String {
-        "We've emailed a 6-digit code to \(email) to check the address is yours. "
-            + "It can take a minute; look in spam if it doesn't arrive."
+        "We’ve emailed a 6-digit code to \(email) to check the address is yours. "
+            + "It can take a minute; look in spam if it doesn’t arrive."
     }
+
+    public var newCodeTitle: String { resending ? "Sending…" : "Send a new code" }
 
     /// Back from forgot password with the new one set but not signed in.
     public func passwordWasReset(email: String) {
@@ -123,9 +134,8 @@ public final class SignInForm {
     }
 
     private func confirm(to account: AccountModel, origin: Mode) async -> Bool {
-        let code = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !code.isEmpty else {
-            error = "Enter the code from the email."
+        guard code.count == 6 else {
+            error = "Enter the 6-digit code from the email."
             return false
         }
         busy = true
@@ -136,9 +146,16 @@ public final class SignInForm {
                 email: email, code: code, password: password, agreedToTerms: origin == .createAccount)
             password = ""
             return true
+        } catch PaddleAPIError.rejected(let message, 500, _) {
+            // Confirmed, but the sign-in after it failed: sign in from the
+            // form (a new code would now be refused, 409).
+            changeEmail()
+            mode = .signIn
+            self.error = message
+            return false
         } catch {
             status = nil
-            self.error = Self.message(for: error, fallback: "Couldn't confirm your email. Please try again.")
+            self.error = Self.message(for: error, fallback: "Couldn’t confirm your email. Please try again.")
             return false
         }
     }
@@ -148,11 +165,11 @@ public final class SignInForm {
     /// elsewhere meanwhile).
     @discardableResult
     public func sendNewCode(to account: AccountModel) async -> Bool {
-        guard case .code(let origin) = step, canSendNewCode else { return false }
-        busy = true
+        guard case .code(let origin) = step, canSendNewCode, !busy, !resending else { return false }
+        resending = true
         error = nil
         status = nil
-        defer { busy = false }
+        defer { resending = false }
         do {
             if origin == .createAccount {
                 try await account.createAccount(
@@ -165,7 +182,7 @@ public final class SignInForm {
             }
         } catch PaddleAPIError.codeNeeded {
         } catch {
-            self.error = Self.message(for: error, fallback: "Couldn't send a new code. Please try again.")
+            self.error = Self.message(for: error, fallback: "Couldn’t send a new code. Please try again.")
             return false
         }
         code = ""

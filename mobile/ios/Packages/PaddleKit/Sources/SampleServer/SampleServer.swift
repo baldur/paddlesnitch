@@ -27,6 +27,25 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     private var _failsAccountDelete = false
     var _signInIsRecent = true
     var _waitingForCode: [String: String] = [:]
+    var _unconfirmed: Set<String> = [SampleServer.unconfirmedEmail, SampleServer.unconfirmedOldTermsEmail]
+    var _tooManyCodes = false
+    var _confirmSignInFails = false
+    /// Sign-up and sign-in answer 429 "too many codes".
+    public var tooManyCodes: Bool {
+        get { lock.withLock { _tooManyCodes } }
+        set { lock.withLock { _tooManyCodes = newValue } }
+    }
+    /// The code confirms the email, but the sign-in after it fails (500).
+    public var confirmSignInFails: Bool {
+        get { lock.withLock { _confirmSignInFails } }
+        set { lock.withLock { _confirmSignInFails = newValue } }
+    }
+    /// The code was entered somewhere else: signing in now works.
+    public func confirmElsewhere(_ email: String) {
+        _ = lock.withLock { _unconfirmed.remove(email) }
+    }
+    /// Unconfirmed, and on Terms older than the current ones.
+    public static let unconfirmedOldTermsEmail = "ola@example.com"
     /// Sign-up codes (#702): this one works; any other is wrong.
     public static let signupCode = "123456"
     public static let wrongSignupCodeMessage = "That code is not valid. Check your email and try again."
@@ -109,10 +128,10 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         case "/att/api/auth/login":
             let login = try JSONDecoder().decode(Login.self, from: body)
             guard login.password == Self.password else { return (401, try fixture("auth.error")) }
-            if login.email == Self.unconfirmedEmail {
+            if lock.withLock({ _tooManyCodes }) { return (429, try fixture("auth.too-many-codes")) }
+            if lock.withLock({ _unconfirmed.contains(login.email) }) {
                 lock.withLock { _waitingForCode[login.email] = login.password }
-                let words = "Confirm your email first. We’ve sent you a new code."
-                return (403, Data(#"{"error":"\#(words)","needsCode":true}"#.utf8))
+                return (403, try fixture("auth.login.needs-code"))
             }
             lock.withLock {
                 _termsAccepted = login.email != Self.needsTermsEmail
