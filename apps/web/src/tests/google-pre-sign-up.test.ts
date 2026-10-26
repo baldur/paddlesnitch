@@ -68,6 +68,9 @@ describe('PreSignUp: one account per email', () => {
       const spy = users([])
       expect(await lambdaHandler(event(GOOGLE), lambdaContext)).toMatchObject({ triggerSource: GOOGLE })
       expect(spy).toHaveBeenCalledOnce()
+      const input = (spy.mock.calls[0][0] as unknown as { input: { UserPoolId: string; Filter: string } }).input
+      expect(input.UserPoolId).toBe('pool')
+      expect(input.Filter).toBe('email = "pat@example.com"')
     })
 
     it('still refuses an email that has an account', async () => {
