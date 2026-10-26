@@ -90,3 +90,6 @@ time and isn't obvious from the code.
   Recordings, firmware and last-seen are looked up by id from the same answer, never
   added up in the app. Anything with "ago" in a golden takes an injected `now`, or
   the golden fails the next day.
+- Type is IBM Plex, bundled (`res/font`, the same files as iOS; the OFL licence is in
+  `assets/licences`). The theme sets Plex Sans for every style (`ui/Type.kt`).
+  Numbers and mono labels use `PlexMono`, never `FontFamily.Monospace` (`TypeTest`).

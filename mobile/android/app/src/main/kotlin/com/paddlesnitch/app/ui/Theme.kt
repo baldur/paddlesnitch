@@ -22,5 +22,5 @@ private val scheme = darkColorScheme(
 
 @Composable
 fun PaddlesnitchTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, content = content)
+    MaterialTheme(colorScheme = scheme, typography = plexTypography(), content = content)
 }
