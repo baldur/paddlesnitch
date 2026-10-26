@@ -128,6 +128,7 @@ Claude Code loads this file in every session, and a nested `CLAUDE.md` when the 
 | [`.github/CLAUDE.md`](.github/CLAUDE.md) | The customer-issue automation (intake, fast loop, clean-up) |
 | [`firmware/CLAUDE.md`](firmware/CLAUDE.md) | The tracker firmware |
 | [`games/CLAUDE.md`](games/CLAUDE.md) | The browser games, and how the site serves them |
+| [`recorder-core/CLAUDE.md`](recorder-core/CLAUDE.md) | The shared C recorder core (API, fixtures, adapter rules) the tracker and both phones use |
 | `mobile/android/CLAUDE.md`, `mobile/ios/CLAUDE.md` | Lessons for the native apps |
 | [`docs/features/README.md`](docs/features/README.md) | Index of feature design records and their status |
 | [`docs/features/devices-platform.md`](docs/features/devices-platform.md) | Full reference for trackers on the platform (pairing, uploads, OTA, Bluetooth, fleet, crash reports) |

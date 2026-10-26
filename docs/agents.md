@@ -17,7 +17,7 @@ platform's own window only when that platform has a lot of work going on.
 | `android` | builder | window | `mobile/android/` | `../paddlesnitch-android` |
 | `ios` | builder | window | `mobile/ios/` | `../paddlesnitch-ios` |
 | `firmware` | builder | helper, or a window when busy | `firmware/` | `../paddlesnitch-firmware` |
-| `motion-core` | builder | helper, or a window when busy | `recorder-core/` (once it exists), `packages/timing/src/{cadence,attitude,device}.ts` | `../paddlesnitch-motion-core` |
+| `motion-core` | builder | helper, or a window when busy | `recorder-core/`, `packages/timing/src/{cadence,attitude,device}.ts` | `../paddlesnitch-motion-core` |
 | `game` | builder | helper, or a window when busy | `games/` | `../paddlesnitch-game` |
 | `tester` | reviewer | helper | nothing (reports) | none |
 | `security-privacy` | reviewer | helper | nothing (reports) | none |
@@ -97,7 +97,7 @@ The owner runs everything in one herdr workspace, a tab per role.
 6. **The owner merges.** Say which PRs depend on which and the order to merge.
    Firmware PRs always wait for the owner (a merge releases to trackers).
 7. **CI is the referee.** The shared fixtures (`mobile/contract/fixtures/`, and
-   the recorder-core fixtures once they exist) must pass on every platform. A
+   `recorder-core/fixtures/`) must pass on every platform. A
    red build beats an agent remembering a rule.
 
 ## Where each role's knowledge lives
