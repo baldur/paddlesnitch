@@ -16,11 +16,13 @@ import Testing
 
     /// A case's input, kept as JSON so each function reads it its own way.
     enum JSONValue: Decodable, Sendable, CustomStringConvertible {
-        case number(Double), string(String), object(Data)
+        case number(Double), string(String), object(Data), null
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.singleValueContainer()
-            if let number = try? container.decode(Double.self) {
+            if container.decodeNil() {
+                self = .null
+            } else if let number = try? container.decode(Double.self) {
                 self = .number(number)
             } else if let string = try? container.decode(String.self) {
                 self = .string(string)
@@ -36,6 +38,7 @@ import Testing
             case .number(let n): "\(n)"
             case .string(let s): s
             case .object(let d): String(bytes: d, encoding: .utf8) ?? "?"
+            case .null: "null"
             }
         }
     }
@@ -67,16 +70,13 @@ import Testing
     }
 
     func answer(_ test: Case) throws -> String {
+        if Self.dateFunctions.contains(test.function) { return try dates(test) }
         switch (test.function, test.input) {
         case ("fmtDur", .number(let seconds)): return Format.minutesSeconds(seconds)
         case ("fmtClock", .number(let seconds)): return Format.clock(seconds)
         case ("split500", .number(let speed)): return Format.split500(speed: speed)
         case ("compassPoint", .number(let degrees)): return Format.compass(degrees: degrees)
         case ("roundStrokes", .number(let count)): return Format.strokes(count)
-        // The web takes a string and gives back anything it can't parse; the
-        // app only ever formats a Date, so an unparseable input stays as is.
-        case ("fmtWeekday", .string(let text)): return date(text).map(Format.weekday) ?? text
-        case ("fmtMonth", .string(let text)): return date(text).map(Format.month) ?? text
         case ("paddleKm", .object(let data)):
             let input = try JSONDecoder().decode(PaddleKmInput.self, from: data)
             return Format.distance(km: input.distanceKm, noGps: input.noGps == true)
@@ -87,6 +87,54 @@ import Testing
             Issue.record("format.json has \(test.function), which the app doesn't port yet")
             return ""
         }
+    }
+
+    static let dateFunctions: Set = ["fmtWeekday", "fmtMonth", "fmtDay", "fmtDist", "fmtAgo", "fmtDayTime"]
+
+    /// Dates and the tracker pages' formatters. The web takes a string and
+    /// gives back anything it can't parse; the app only ever formats a Date,
+    /// so an unparseable input stays as is.
+    func dates(_ test: Case) throws -> String {
+        switch (test.function, test.input) {
+        case ("fmtWeekday", .string(let text)): return date(text).map(Format.weekday) ?? text
+        case ("fmtMonth", .string(let text)): return date(text).map(Format.month) ?? text
+        case ("fmtDay", .null): return Format.day(nil)
+        case ("fmtDay", .string(let text)): return (date(text) ?? day(text)).map(Format.day) ?? text
+        case ("fmtDist", .null): return Format.distance(metres: nil)
+        case ("fmtDist", .number(let metres)): return Format.distance(metres: metres)
+        case ("fmtAgo", .object(let data)): return try ago(data)
+        case ("fmtDayTime", .object(let data)): return try dayTime(data)
+        default:
+            Issue.record("\(test.function) with an input the port doesn't take: \(test.input)")
+            return ""
+        }
+    }
+
+    func ago(_ data: Data) throws -> String {
+        let input = try JSONDecoder().decode(AgoInput.self, from: data)
+        guard let now = date(input.now) else { return "?" }
+        return Format.ago(input.at.flatMap(date), now: now)
+    }
+
+    func dayTime(_ data: Data) throws -> String {
+        let input = try JSONDecoder().decode(DayTimeInput.self, from: data)
+        guard let at = date(input.at), let zone = TimeZone(identifier: input.zone) else { return input.at }
+        return Format.dayTime(at, zone: zone)
+    }
+
+    struct AgoInput: Decodable {
+        let at: String?
+        let now: String
+    }
+
+    struct DayTimeInput: Decodable {
+        let at: String
+        let zone: String
+    }
+
+    /// A date on its own ("2026-09-13"), as the UTC day.
+    func day(_ text: String) -> Date? {
+        try? Date.ISO8601FormatStyle(timeZone: .gmt).year().month().day().parse(text)
     }
 
     struct PaddleKmInput: Decodable {
