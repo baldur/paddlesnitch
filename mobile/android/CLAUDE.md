@@ -77,3 +77,7 @@ time and isn't obvious from the code.
   A reset that signs in returns a `SignIn` built from `me`, so App.kt's one
   `signedInWith` handles it like any sign-in: reauth, intake and the Terms check
   on start.
+- Trackers (`tracker/TrackersScreen.kt`) show the server's `summaries` as they are.
+  Recordings, firmware and last-seen are looked up by id from the same answer, never
+  added up in the app. Anything with "ago" in a golden takes an injected `now`, or
+  the golden fails the next day.

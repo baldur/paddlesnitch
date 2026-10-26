@@ -41,6 +41,10 @@ import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.api.AccountApi
+import com.paddlesnitch.app.api.ApiJson
+import com.paddlesnitch.app.api.Recording
+import com.paddlesnitch.app.api.RecordingList
+import com.paddlesnitch.app.api.TrackerList
 import com.paddlesnitch.app.api.HistoryPaddle
 import com.paddlesnitch.app.api.HistorySpan
 import com.paddlesnitch.app.api.StravaHistory
@@ -105,6 +109,9 @@ class FakeAccountApi(
     /** When set, each import waits for it (to see the screen mid-import). */
     var importGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null,
     var historyFails: Boolean = false,
+    var trackerList: TrackerList = ApiJson.decodeFromString(TrackerList.serializer(), java.io.File("../../contract/fixtures/api/account.devices.json").readText()),
+    var recordingList: List<Recording> = emptyList(),
+    var failTrackers: Boolean = false,
 ) : AccountApi {
     val calls = mutableListOf<String>()
     private fun check() { if (signedOut) throw SignedOut() }
@@ -155,6 +162,9 @@ class FakeAccountApi(
         }
     }
     override suspend fun stravaHistoryDone() = answer("history done") { Ok(true) }
+    override suspend fun trackers(): TrackerList { check(); calls += "trackers"; if (failTrackers) throw ApiFailure("x", 500, generic = true); return trackerList }
+    override suspend fun recordings() = load { RecordingList(recordingList) }
+    override suspend fun removeTracker(deviceId: String) = answer("remove $deviceId") { Ok(true) }
     override suspend fun stravaDisconnect() = answer("strava disconnect") { strava = StravaStatus(connected = false); Ok(true) }
 }
 

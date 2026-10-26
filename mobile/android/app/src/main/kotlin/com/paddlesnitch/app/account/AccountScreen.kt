@@ -102,10 +102,7 @@ import kotlinx.coroutines.withContext
 /** A website page, and whether it needs the website's sign-in. */
 data class AccountLink(val label: String, val path: String, val signedIn: Boolean = true)
 
-/** What the app still leaves to the website (the next C5 parts bring these into the app). */
-val accountPages = listOf(
-    AccountLink("Your trackers", "/devices"),
-)
+/** Help and the legal pages, which stay on the website. */
 val aboutPages = listOf(
     AccountLink("Help", "/help", signedIn = false),
     AccountLink("Privacy", "/privacy", signedIn = false),
@@ -129,7 +126,7 @@ fun clearExport(context: Context) { exportFile(context).delete() }
  */
 @Composable
 fun AccountScreen(
-    api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
+    api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onTrackers: () -> Unit = {}, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
     /** Back from signing in again: open Delete account, or show Strava, at once. */
     resume: Reauth.After? = null, onResumed: () -> Unit = {},
@@ -186,9 +183,8 @@ fun AccountScreen(
             stravaOnly = isPlaceholderEmail(u.email))
         Divider()
         Section("Trackers")
+        Link("Your trackers", onClick = onTrackers)
         Link("Set up or sync a tracker", onClick = onTracker)
-        Text("These open on paddlesnitch.com, already signed in.", color = PsColor.muted)
-        accountPages.forEach { Link("${it.label} ↗") { open(it) } }
         Divider()
         aboutPages.forEach { Link("${it.label} ↗") { open(it) } }
         Link("Sign out", onClick = onSignOut)
