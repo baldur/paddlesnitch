@@ -15,7 +15,6 @@ struct AccountView: View {
     let signIn: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
-    @Environment(\.signInSheetUp) private var signInSheetUp
     @State private var termsChanged = false
     @State private var downloading = false
     @State private var downloaded: SharedFile?
@@ -113,7 +112,7 @@ struct AccountView: View {
         // Again for whoever signs in, so nothing of the last account stays.
         .task(id: account.user?.id) { await profile.load() }
         .task(id: account.user?.id) { await strava.load() }
-        .onChange(of: signInSheetUp) { _, up in if !up { resume() } }
+        .onChange(of: account.signInSheetUp) { _, up in if !up { resume() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(
@@ -147,7 +146,7 @@ struct AccountView: View {
     }
 
     private func resume() {
-        guard !signInSheetUp, let next = account.resumeAfterSignIn() else { return }
+        guard !account.signInSheetUp, let next = account.resumeAfterSignIn() else { return }
         switch next {
         case .delete: confirmingDelete = true
         case .connectStrava: connectStrava()

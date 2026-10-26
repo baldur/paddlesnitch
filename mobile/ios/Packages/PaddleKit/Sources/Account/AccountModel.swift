@@ -27,6 +27,10 @@ public final class AccountModel {
     public internal(set) var afterSignIn: AfterSignIn?
     /// Who signed out to sign in again: only they come straight back.
     public internal(set) var signInAgainUserId: String?
+    /// The app's sign-in sheet is up or still closing: another sheet can't
+    /// open yet (iOS drops it without a word). Set by the app; kept here, as
+    /// iOS 17 doesn't pass environment changes to pushed screens.
+    public var signInSheetUp = false
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
     /// Signing in again goes straight to Strava sign-in.
