@@ -7,7 +7,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -35,6 +37,16 @@ class FormatFixturesTest {
             noPaddleMessage(ApiJson.decodeFromJsonElement(NoPaddleReason.serializer(), o.getValue("reason")), o.getValue("hasMotion").jsonPrimitive.boolean)
         },
         "roundStrokes" to { i -> roundStrokes(i.jsonPrimitive.double) },
+        "fmtDay" to { i -> fmtDay(i.jsonPrimitive.contentOrNull) },
+        "fmtDist" to { i -> fmtDist(i.jsonPrimitive.doubleOrNull) },
+        "fmtAgo" to { i ->
+            val o = i.jsonObject
+            fmtAgo(o["at"]?.jsonPrimitive?.contentOrNull, java.time.OffsetDateTime.parse(o.getValue("now").jsonPrimitive.content).toInstant().toEpochMilli())
+        },
+        "fmtDayTime" to { i ->
+            val o = i.jsonObject
+            fmtDayTime(o.getValue("at").jsonPrimitive.content, java.time.ZoneId.of(o.getValue("zone").jsonPrimitive.content))
+        },
     )
 
     @Test
