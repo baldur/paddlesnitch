@@ -179,12 +179,15 @@ class AppTestCase: XCTestCase {
     }
 
     /// Wholly in the readable area, or, for an element taller than that area
-    /// (a row at the largest text size), its top and its middle are.
+    /// (a row at the largest text size), its top is in the area with room
+    /// under it, so it fills the rest. (Its middle can't be on screen with its
+    /// top once it's twice the area's height: a tracker card at the largest
+    /// size. The window is wider than one swipe, so scrolling can't hop over it.)
     func isReadable(_ element: XCUIElement) -> Bool {
         let area = readableArea
         let frame = element.frame
         if frame.height <= area.height { return area.contains(frame) }
-        return frame.minY >= area.minY && area.contains(CGPoint(x: frame.midX, y: frame.midY))
+        return frame.minY >= area.minY && frame.minY <= area.maxY - 88
     }
 
     func open(_ paddle: String, file: StaticString = #filePath, line: UInt = #line) {
