@@ -221,6 +221,7 @@ struct TrackerDetailView: View {
                 "Each paddle opens in Paddles. A recording where the boat barely moved, like a test at home, stays here."
             )
             .font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -231,6 +232,8 @@ struct TrackerDetailView: View {
                 row.paddleID == nil ? Palette.muted : Palette.fg)
             Text(row.detail).font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
         }
+        // Full height: iOS 17 cut both lines short (its audit: text clipped).
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
     }
 

@@ -90,13 +90,20 @@ class AppTestCase: XCTestCase {
         _ = app.windows.firstMatch.waitForExistence(timeout: 10)
         for _ in 0..<10 {
             if target.exists && isReadable(target) { break }
-            if target.exists && target.frame.minY < readableArea.minY {
-                app.swipeDown()
-            } else {
-                app.swipeUp()
-            }
+            scrollPage(up: !(target.exists && target.frame.minY < readableArea.minY))
         }
         return target
+    }
+
+    /// A swipe from the side margin, outside every row: a swipe from the
+    /// middle started on a tracker card at the largest text size and opened
+    /// it (CI, iOS 26.5).
+    func scrollPage(up: Bool) {
+        let window = app.windows.firstMatch
+        let low = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.75))
+        let high = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.3))
+        let (from, to) = up ? (low, high) : (high, low)
+        from.press(forDuration: 0.01, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0)
     }
 
     /// iOS 17 predicts that a navigation bar's large title (a one-line UIKit
