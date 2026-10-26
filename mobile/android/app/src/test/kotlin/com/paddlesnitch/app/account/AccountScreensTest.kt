@@ -163,7 +163,8 @@ class FakeAccountApi(
     }
     override suspend fun stravaHistoryDone() = answer("history done") { Ok(true) }
     override suspend fun trackers(): TrackerList { check(); calls += "trackers"; if (failTrackers) throw ApiFailure("x", 500, generic = true); return trackerList }
-    override suspend fun recordings() = load { RecordingList(recordingList) }
+    var failRecordings: Boolean = false
+    override suspend fun recordings(): RecordingList { check(); if (failRecordings) throw ApiFailure("x", 500, generic = true); return RecordingList(recordingList) }
     override suspend fun removeTracker(deviceId: String) = answer("remove $deviceId") { Ok(true) }
     override suspend fun stravaDisconnect() = answer("strava disconnect") { strava = StravaStatus(connected = false); Ok(true) }
 }
@@ -200,7 +201,7 @@ class AccountScreensTest {
         api: FakeAccountApi, fontScale: Float = 1f, saveDialog: FakeSaveDialog = FakeSaveDialog(null), resumeDelete: Boolean = false,
         stravaReturn: MutableState<String?> = mutableStateOf(null), resume: Reauth.After? = if (resumeDelete) Reauth.After.Delete else null,
     ) = show(fontScale, saveDialog) {
-        AccountScreen(api, onBack = {}, onTracker = {}, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" },
+        AccountScreen(api, onBack = {}, onTracker = {}, onTrackers = { did += "trackers" }, onSignOut = { did += "sign out" }, onSignedOut = { did += "signed out" }, onDeleted = { did += "deleted" },
             resume = resume, onResumed = { did += "resumed" },
             onSignInAgain = { id, email, strava, then -> did += "sign in again $id $email ${if (strava) "with Strava" else "with email"}" + if (then == Reauth.After.ConnectStrava) " to connect Strava" else "" },
             stravaReturn = stravaReturn.value, onStravaReturnHandled = { stravaReturn.value = null }, connectVerifiers = verifiers)
@@ -302,7 +303,7 @@ class AccountScreensTest {
     @Test fun anAccountThatWontLoadCanBeTriedAgainAndShowsNothingToActOn() {
         val api = FakeAccountApi()
         show { AccountScreen(object : AccountApi by api { override suspend fun me(): Me = throw ApiFailure("x", 500, generic = true) },
-            onBack = {}, onTracker = {}, onSignOut = {}, onSignedOut = {}, onDeleted = {}) }
+            onBack = {}, onTracker = {}, onTrackers = {}, onSignOut = {}, onSignedOut = {}, onDeleted = {}) }
         waitFor("Couldn’t load your account. Please try again.")
         compose.onNodeWithText("Try again").assertExists()
         compose.onNodeWithText("Delete my account").assertDoesNotExist()
@@ -770,5 +771,12 @@ class AccountScreensTest {
         compose.waitUntil { "history year" in api.calls }
         compose.waitForIdle()
         compose.onNodeWithTag("older-import").assertDoesNotExist()
+    }
+
+    @Test fun yourTrackersOpensTheTrackersScreen() {
+        account(FakeAccountApi())
+        waitFor("Your trackers")
+        compose.onNodeWithText("Your trackers").performScrollTo().performClick()
+        assertEquals(listOf("trackers"), did)
     }
 }

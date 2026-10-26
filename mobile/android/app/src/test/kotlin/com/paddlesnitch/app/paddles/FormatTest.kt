@@ -52,5 +52,9 @@ class FormatTest {
         assertEquals("2d ago", fmtAgo("2026-10-23T11:00:00Z", now))
         assertEquals("never", fmtAgo(null, now))
         assertEquals("0s ago", fmtAgo("2026-10-25T12:00:30Z", now)) // a clock a little ahead
+        assertEquals("1m ago", fmtAgo("2026-10-25T11:58:30Z", now)) // 90 s
+        assertEquals("1h ago", fmtAgo("2026-10-25T10:30:00Z", now)) // 90 m
+        assertEquals("2d ago", fmtAgo("2026-10-23T12:00:00Z", now)) // 48 h
+        assertEquals("never", fmtAgo("yesterday", now))
     }
 }

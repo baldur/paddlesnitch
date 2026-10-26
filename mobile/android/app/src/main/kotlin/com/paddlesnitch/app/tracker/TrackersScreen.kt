@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -74,51 +76,73 @@ fun TrackersScreen(
     var list by remember { mutableStateOf<TrackerList?>(null) }
     var recordings by remember { mutableStateOf<List<Recording>?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
+    var recordingsFailed by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    var removed by remember { mutableStateOf<String?>(null) }
+    // Kept here, so coming back from a tracker returns to the same place in the list.
+    val scroll = rememberScrollState()
     LaunchedEffect(attempt) {
-        failed = null
-        runCatching { api.trackers() to api.recordings().sessions }
-            .onSuccess { (l, r) -> list = l; recordings = r }
+        failed = null; recordingsFailed = null
+        runCatching { api.trackers() }
+            .onSuccess { list = it }
             // A failed load is said as such: "no trackers" would tell owners they have none.
             .onFailure { if (it is SignedOut) onSignedOut() else failed = it.shown("Couldn’t load your trackers. Please try again.") }
+        // Apart, so a failure here still shows the trackers; it's said on a tracker's own page.
+        runCatching { api.recordings().sessions }
+            .onSuccess { recordings = it }
+            .onFailure { if (it is SignedOut) onSignedOut() else recordingsFailed = it.shown("Couldn’t load the recordings. Please try again.") }
     }
     val l = list
     val shown = open?.let { id -> l?.summaries?.firstOrNull { it.deviceId == id } }
     if (shown != null && l != null) {
         BackHandler { open = null }
-        TrackerScreen(api, shown, l.devices.firstOrNull { it.deviceId == shown.deviceId }, recordings.orEmpty().filter { it.deviceId == shown.deviceId },
-            onBack = { open = null }, onRemoved = { open = null; attempt++ }, onSignedOut = onSignedOut, onOpenPaddle = onOpenPaddle, modifier = modifier)
+        TrackerScreen(api, shown, l.devices.firstOrNull { it.deviceId == shown.deviceId }, recordings?.filter { it.deviceId == shown.deviceId },
+            recordingsFailed, onRetry = { attempt++ },
+            onBack = { open = null }, onRemoved = { open = null; removed = "Tracker removed."; attempt++ }, onSignedOut = onSignedOut, onOpenPaddle = onOpenPaddle, modifier = modifier)
         return
     }
-    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxWidth().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Header("Trackers", onBack)
         Text("Your paddlesnitch trackers and what each one has recorded.", color = PsColor.muted)
+        // Always in the layout, so TalkBack hears that a tracker was removed.
+        Box(Modifier.fillMaxWidth().testTag("trackers-message").semantics { liveRegion = LiveRegionMode.Polite }) { removed?.let { Text(it, color = PsColor.green) } }
         when {
             failed != null -> {
                 Text(failed!!, color = PsColor.red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
                 Button(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
             }
-            l == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            l == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.semantics { contentDescription = "Loading your trackers" })
+            }
             l.summaries.isEmpty() -> Column(Modifier.card().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("No trackers yet", fontWeight = FontWeight.Medium)
                 Text("A paddlesnitch tracker records your paddle and uploads it over WiFi by itself. Add one with the code on its screen.", color = PsColor.muted)
+                SetUp(onSetUp)
             }
             else -> {
                 l.summaries.forEach { s -> TrackerCard(s, l.devices.firstOrNull { it.deviceId == s.deviceId }, now(), onOpen = { open = s.deviceId }) }
                 Text("Each tracker’s paddles appear in Paddles by themselves. To remove a tracker, open it.", color = PsColor.muted)
             }
         }
-        OutlinedButton(onClick = onSetUp, modifier = Modifier.heightIn(min = 48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.primaryText)) { Text("Set up or sync a tracker") }
+        if (l?.summaries?.isEmpty() != true) SetUp(onSetUp)
     }
 }
+
+@Composable
+private fun SetUp(onSetUp: () -> Unit) = OutlinedButton(onClick = onSetUp, modifier = Modifier.heightIn(min = 48.dp),
+    colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.primaryText)) { Text("Set up or sync a tracker") }
+
+/** The arrow on something that opens, as the website's Chevron; TalkBack has the button role instead. */
+@Composable
+private fun Chevron() = Text("›", color = PsColor.muted, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.clearAndSetSemantics {})
 
 /** One tracker, as the website's card: every number from the summary; the version and last word from its device record. */
 @Composable
 private fun TrackerCard(s: TrackerSummary, device: Tracker?, now: Long, onOpen: () -> Unit) {
-    Column(Modifier.card().clickable(role = Role.Button, onClick = onOpen).padding(horizontal = 16.dp, vertical = 12.dp).testTag("tracker-${s.deviceId}"),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.card().clickable(role = Role.Button, onClick = onOpen).padding(horizontal = 16.dp, vertical = 12.dp).testTag("tracker-${s.deviceId}"),
+        verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             Text(s.name, fontWeight = FontWeight.Medium)
             if (!s.linked) Badge("removed")
@@ -127,6 +151,8 @@ private fun TrackerCard(s: TrackerSummary, device: Tracker?, now: Long, onOpen: 
         Text(recordingsLine(s), color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
         // The id is for support, not for recognising your tracker: last, small.
         Text(s.deviceId + (device?.model?.let { " · $it" } ?: ""), color = PsColor.muted, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
+    }
+    Chevron()
     }
 }
 
@@ -145,7 +171,11 @@ private fun statusLine(s: TrackerSummary, device: Tracker?, now: Long) = buildAn
         else -> {} // unknown: never shown as up to date
     }
     withStyle(SpanStyle(color = PsColor.muted)) { append(" · seen ") }
-    withStyle(SpanStyle(color = if (s.quiet) PsColor.red else PsColor.fg)) { append(fmtAgo(device?.lastSeenAt, now)) }
+    withStyle(SpanStyle(color = if (s.quiet) PsColor.red else PsColor.fg)) {
+        append(fmtAgo(device?.lastSeenAt, now))
+        // In words too, not by colour alone.
+        if (s.quiet) append(" · quiet")
+    }
     val c = s.crash
     if (c != null) withStyle(SpanStyle(color = PsColor.red)) {
         append(" · crashed ${fmtAgo(c.at, now)}")
@@ -167,7 +197,7 @@ internal fun recordingsLine(s: TrackerSummary): String {
 /** One tracker: what it has recorded, and Remove. */
 @Composable
 private fun TrackerScreen(
-    api: AccountApi, s: TrackerSummary, device: Tracker?, recordings: List<Recording>,
+    api: AccountApi, s: TrackerSummary, device: Tracker?, recordings: List<Recording>?, recordingsFailed: String?, onRetry: () -> Unit,
     onBack: () -> Unit, onRemoved: () -> Unit, onSignedOut: () -> Unit, onOpenPaddle: (String) -> Unit, modifier: Modifier,
 ) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -178,15 +208,29 @@ private fun TrackerScreen(
             color = PsColor.muted, modifier = Modifier.card().padding(16.dp))
         Text("Recordings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         Text("Each paddle opens in Paddles. A recording where the boat barely moved (a test at home) stays here.", color = PsColor.muted)
-        if (recordings.isEmpty()) Text("No recordings yet. The tracker uploads them by itself when it’s switched on in range of your WiFi.", color = PsColor.muted)
-        recordings.forEach { r ->
+        when {
+            recordingsFailed != null -> {
+                Text(recordingsFailed, color = PsColor.red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
+                Button(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
+            }
+            recordings == null -> CircularProgressIndicator(Modifier.semantics { contentDescription = "Loading the recordings" })
+            recordings.isEmpty() -> Text("No recordings yet. The tracker uploads them by itself when it’s switched on in range of your WiFi.", color = PsColor.muted)
+        }
+        recordings.orEmpty().forEach { r ->
             val paddle = r.paddleId
-            Column(Modifier.card().then(if (paddle != null) Modifier.clickable(role = Role.Button) { onOpenPaddle(paddle) } else Modifier)
-                .padding(horizontal = 16.dp, vertical = 12.dp).testTag("recording-${r.sessionId}")) {
-                Text(fmtDayTime(r.startedAt ?: r.uploadedAt) + (r.distanceMetres?.takeIf { it > 0 }?.let { " · ${fmtDist(it)}" } ?: ""))
-                // As the website: a paddle (with boat motion), or not a paddle, with its file name for support.
-                Text(if (paddle != null) "paddle" + (if (r.motion != null) " · with boat motion" else "") else "not a paddle · ${r.filename}",
-                    color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
+            val line = fmtDayTime(r.startedAt ?: r.uploadedAt) + (r.distanceMetres?.takeIf { it > 0 }?.let { " · ${fmtDist(it)}" } ?: "")
+            if (paddle != null) Row(Modifier.card().clickable(role = Role.Button) { onOpenPaddle(paddle) }
+                .padding(horizontal = 16.dp, vertical = 12.dp).testTag("recording-${r.sessionId}"), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(line)
+                    Text("paddle" + (if (r.motion != null) " · with boat motion" else ""), color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
+                }
+                Chevron()
+            }
+            // Not a paddle: nothing to open here yet, so it doesn't look like a button.
+            else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("recording-${r.sessionId}")) {
+                Text(line, color = PsColor.muted)
+                Text("not a paddle · ${r.filename}", color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
             }
         }
         if (s.linked) RemoveTracker(api, s.deviceId, onRemoved, onSignedOut)

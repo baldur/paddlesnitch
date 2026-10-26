@@ -17,6 +17,11 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.paddlesnitch.app.account.FakeAccountApi
 import com.paddlesnitch.app.api.Recording
 import com.paddlesnitch.app.api.TrackerList
+import java.io.File
+import com.paddlesnitch.app.paddles.fmtDayTime
+import com.paddlesnitch.app.api.RecordingList
+import com.paddlesnitch.app.api.ApiJson
+import com.paddlesnitch.app.api.TrackerSummary
 import com.paddlesnitch.app.ui.PaddlesnitchTheme
 import com.paddlesnitch.app.ui.PsColor
 import org.junit.Assert.assertEquals
@@ -59,6 +64,8 @@ class TrackersScreenTest {
         compose.onNodeWithText("update pending (0.18.2)", substring = true).assertExists()
         compose.onNodeWithText("seen 1h ago", substring = true).assertExists()
         compose.onNodeWithText("crashed 4d ago (uplink)", substring = true).assertExists() // the recent crash, from the summary
+        compose.onNodeWithText("seen 4d ago · quiet", substring = true).assertExists() // in words, not colour alone
+        compose.onNodeWithText("· beta", substring = true).assertExists()
         compose.onNodeWithText("removed").assertExists()
         compose.onRoot().captureRoboImage()
     }
@@ -131,5 +138,60 @@ class TrackersScreenTest {
         compose.onNodeWithText("Remove").performScrollTo().performClick()
         waitFor("Couldn’t remove the tracker. Please try again.")
         compose.onNodeWithText("Recordings").assertExists()
+    }
+
+    private fun summary(recordings: Long, distance: Long = 0, motion: Long = 0, latest: String? = null) =
+        TrackerSummary("C0FFEE09", "Tracker C0FFEE09", true, recordings, motion, distance, latest, TrackerSummary.FirmwareState.Unknown, false)
+
+    @Test fun theRecordingsLineInEachCase() {
+        assertEquals("no recordings yet", recordingsLine(summary(0, latest = "2026-10-24T16:05:00Z")))
+        assertEquals("1 recording", recordingsLine(summary(1)))
+        assertEquals("1 recording · 640 m · 1 with boat motion · latest 24 Oct 2026", recordingsLine(summary(1, 640, 1, "2026-10-24T16:05:00Z")))
+    }
+
+    @Test fun anUnknownVersionIsNeverShownAsUpToDate() {
+        show(FakeAccountApi(trackerList = TrackerList(emptyList(), null, listOf(summary(1)))))
+        waitFor("firmware unknown · seen never")
+        compose.onNodeWithText("up to date", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("update pending", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun anEndedSessionGoesBackToSigningIn() {
+        show(FakeAccountApi(signedOut = true))
+        compose.waitUntil(5_000) { "signed out" in did }
+    }
+
+    @Test fun recordingsThatWontLoadStillShowTheTrackers() {
+        val api = FakeAccountApi().apply { failRecordings = true }
+        show(api)
+        waitFor("Tracker C0FFEE01")
+        compose.onNodeWithText("Couldn’t load your trackers. Please try again.").assertDoesNotExist()
+        compose.onNodeWithTag("tracker-C0FFEE01").performClick()
+        waitFor("Couldn’t load the recordings. Please try again.")
+        api.failRecordings = false
+        compose.onNodeWithText("Try again").performScrollTo().performClick()
+        waitFor("No recordings yet")
+    }
+
+    @Test fun aRecordingWithNoFixOrStartShowsWhenItCameIn() {
+        val fixture = ApiJson.decodeFromString(RecordingList.serializer(), File("../../contract/fixtures/api/account.devices-sessions.json").readText()).sessions
+        show(FakeAccountApi(recordingList = fixture))
+        waitFor("Tracker C0FFEE01")
+        compose.onNodeWithTag("tracker-C0FFEE01").performClick()
+        waitFor("not a paddle · track_20261024_1800.csv")
+        compose.onNodeWithText(fmtDayTime("2026-10-24T19:00:00.000Z")).assertExists() // uploadedAt, no distance
+    }
+
+    @Test fun removeCanBeCalledOffAndSaysWhenItsDone() {
+        val api = FakeAccountApi()
+        show(api)
+        waitFor("Tracker C0FFEE01")
+        compose.onNodeWithTag("tracker-C0FFEE01").performClick()
+        compose.onNodeWithText("Remove tracker").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Remove tracker").assertExists()
+        compose.onNodeWithText("Remove tracker").performScrollTo().performClick()
+        compose.onNodeWithText("Remove").performScrollTo().performClick()
+        waitFor("Tracker removed.")
     }
 }

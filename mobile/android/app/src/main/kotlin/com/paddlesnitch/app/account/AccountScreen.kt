@@ -126,7 +126,7 @@ fun clearExport(context: Context) { exportFile(context).delete() }
  */
 @Composable
 fun AccountScreen(
-    api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onTrackers: () -> Unit = {}, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
+    api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onTrackers: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
     /** Back from signing in again: open Delete account, or show Strava, at once. */
     resume: Reauth.After? = null, onResumed: () -> Unit = {},
