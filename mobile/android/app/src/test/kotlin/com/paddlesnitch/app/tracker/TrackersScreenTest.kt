@@ -67,6 +67,7 @@ class TrackersScreenTest {
         compose.onNodeWithText("seen 4d ago · quiet", substring = true).assertExists() // in words, not colour alone
         compose.onNodeWithText("· beta", substring = true).assertExists()
         compose.onNodeWithText("removed").assertExists()
+        compose.onNodeWithText("Devices").assertExists() // the place is Devices, as on the website; a tracker is the thing
         compose.onRoot().captureRoboImage()
     }
 
@@ -99,6 +100,7 @@ class TrackersScreenTest {
         waitFor("Tracker C0FFEE01")
         compose.onNodeWithTag("tracker-C0FFEE01").performClick()
         waitFor("Recordings")
+        compose.onNodeWithText("Devices").assertExists() // back to Devices
         compose.onNodeWithText("paddle · with boat motion").assertExists()
         compose.onNodeWithText("not a paddle · track_rec-desk.csv").assertExists()
         compose.onNodeWithTag("recording-rec-other").assertDoesNotExist() // another tracker's

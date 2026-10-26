@@ -776,6 +776,7 @@ class AccountScreensTest {
     @Test fun yourTrackersOpensTheTrackersScreen() {
         account(FakeAccountApi())
         waitFor("Your trackers")
+        compose.onNodeWithText("Devices").assertExists() // the section is named as on the website
         compose.onNodeWithText("Your trackers").performScrollTo().performClick()
         assertEquals(listOf("trackers"), did)
     }
