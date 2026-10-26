@@ -13,6 +13,7 @@ struct AccountView: View {
     /// Opens the sign-in sheet.
     let signIn: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.signInSheetUp) private var signInSheetUp
     @State private var termsChanged = false
     @State private var downloading = false
     @State private var downloaded: SharedFile?
@@ -89,18 +90,12 @@ struct AccountView: View {
         .background(Palette.bg)
         .navigationTitle("Account")
         // Back from signing in again to delete: on appearing (You pushed this
-        // screen again), or when the sign-in comes back with this screen
-        // still under the sheet. A sheet can't open while another is
-        // closing, so the sign-in sheet goes first.
+        // screen again), or once the sign-in sheet has finished closing. A
+        // sheet asked to open while another is closing never opens (iOS 17
+        // on CI took longer than the 700 ms once waited here).
         .onAppear { resumeDelete() }
         .task { await profile.load() }
-        .onChange(of: account.user?.id) { _, id in
-            guard id != nil else { return }
-            Task {
-                try? await Task.sleep(for: .milliseconds(700))
-                resumeDelete()
-            }
-        }
+        .onChange(of: signInSheetUp) { _, up in if !up { resumeDelete() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(
@@ -138,7 +133,7 @@ struct AccountView: View {
     }
 
     private func resumeDelete() {
-        guard account.deleteAfterSignIn, account.user != nil else { return }
+        guard account.deleteAfterSignIn, account.user != nil, !signInSheetUp else { return }
         account.deleteResumed()
         confirmingDelete = true
     }
