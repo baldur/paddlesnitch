@@ -9,7 +9,11 @@
       "lastSeenAt": "2026-10-25T07:02:11.000Z",
       "beta": true,
       "targetVersion": "0.19.3",
-      "health": { "at": "2026-10-25T07:02:11.000Z", "kind": "heartbeat", "resetReason": "poweron" }
+      "health": {
+        "at": "2026-10-25T07:02:11.000Z",
+        "kind": "heartbeat",
+        "resetReason": "poweron"
+      }
     },
     {
       "deviceId": "C0FFEE02",
@@ -19,9 +23,56 @@
       "linkedAt": "2026-08-01T10:00:00.000Z",
       "lastSeenAt": "2026-10-20T18:44:00.000Z",
       "targetVersion": "0.18.2",
-      "health": { "at": "2026-10-20T18:44:00.000Z", "kind": "boot", "resetReason": "panic", "crashTask": "uplink" },
-      "lastCrash": { "at": "2026-10-20T18:43:58.000Z", "task": "uplink" }
+      "health": {
+        "at": "2026-10-20T18:44:00.000Z",
+        "kind": "boot",
+        "resetReason": "panic",
+        "crashTask": "uplink"
+      },
+      "lastCrash": {
+        "at": "2026-10-20T18:43:58.000Z",
+        "task": "uplink"
+      }
     }
   ],
-  "stableVersion": "0.18.2"
+  "stableVersion": "0.18.2",
+  "summaries": [
+    {
+      "deviceId": "C0FFEE01",
+      "name": "Tracker C0FFEE01",
+      "linked": true,
+      "recordings": 12,
+      "motionRecordings": 9,
+      "distanceMetres": 84210,
+      "latestAt": "2026-10-24T16:05:00.000Z",
+      "firmwareState": "up_to_date",
+      "quiet": false
+    },
+    {
+      "deviceId": "C0FFEE02",
+      "name": "Tracker C0FFEE02",
+      "linked": true,
+      "recordings": 3,
+      "motionRecordings": 0,
+      "distanceMetres": 15400,
+      "latestAt": "2026-10-20T17:30:00.000Z",
+      "firmwareState": "update_pending",
+      "quiet": true,
+      "crash": {
+        "at": "2026-10-20T18:43:58.000Z",
+        "task": "uplink"
+      }
+    },
+    {
+      "deviceId": "BADC0DE9",
+      "name": "Tracker BADC0DE9",
+      "linked": false,
+      "recordings": 2,
+      "motionRecordings": 1,
+      "distanceMetres": 9800,
+      "latestAt": "2026-07-14T09:12:00.000Z",
+      "firmwareState": "unknown",
+      "quiet": false
+    }
+  ]
 }

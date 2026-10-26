@@ -7,9 +7,11 @@ import Foundation
 public struct TrackerList: Codable, Hashable, Sendable {
     public var devices: [Tracker]
     public var stableVersion: String?
+    public var summaries: [TrackerSummary]
 
-    public init(devices: [Tracker], stableVersion: String? = nil) {
+    public init(devices: [Tracker], stableVersion: String? = nil, summaries: [TrackerSummary]) {
         self.devices = devices
         self.stableVersion = stableVersion
+        self.summaries = summaries
     }
 }

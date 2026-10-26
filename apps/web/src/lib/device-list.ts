@@ -1,5 +1,6 @@
 import { listUserDevices, listUserDeviceSessions, getDeviceHealth, getLastCrash } from '@/lib/devices'
 import { getChannelVersion, getBetaDeviceIds, versionForDevice } from '@/lib/firmware'
+import { trackerSummaries } from '@/lib/device-view'
 
 // The signed-in user's trackers as DEVICES shows them: GET /api/account/devices
 // answers with this, and the page puts it in its first HTML.
@@ -9,6 +10,11 @@ import { getChannelVersion, getBetaDeviceIds, versionForDevice } from '@/lib/fir
 // business in a client bundle. Serialise the fields explicitly so a field added
 // to DeviceRecord later isn't published by accident.
 export async function deviceList(userId: string) {
+  const { sessions: _sessions, ...list } = await devicesPageData(userId)
+  return list
+}
+
+async function trackersOf(userId: string) {
   const beta = await getBetaDeviceIds().catch(() => new Set<string>())
   const devices = await Promise.all((await listUserDevices(userId)).map(async d => {
     // What this tracker should run: a beta tracker may be ahead of stable.
@@ -33,8 +39,9 @@ export async function deviceList(userId: string) {
   return { devices, stableVersion }
 }
 
-// Everything DEVICES needs, in one go, for its first HTML.
+// Everything DEVICES needs, in one go, for its first HTML. `summaries` is each
+// card already worked out, for the apps (and the same rules as the page).
 export async function devicesPageData(userId: string) {
-  const [list, sessions] = await Promise.all([deviceList(userId), listUserDeviceSessions(userId)])
-  return { ...list, sessions }
+  const [list, sessions] = await Promise.all([trackersOf(userId), listUserDeviceSessions(userId)])
+  return { ...list, summaries: trackerSummaries(list.devices, sessions, list.stableVersion), sessions }
 }
