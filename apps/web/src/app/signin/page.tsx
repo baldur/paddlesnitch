@@ -83,6 +83,11 @@ function AuthForm() {
   // "Send a new code" repeats that same request.
   const [confirming, setConfirming] = useState<'signup' | 'signin' | null>(null)
   const [signupCode, setSignupCode] = useState('')
+  // A new code: sending, what happened (a status, not an error), and a pause
+  // before the next one (every code is an email from a small daily allowance).
+  const [resending, setResending] = useState(false)
+  const [codeStatus, setCodeStatus] = useState('')
+  const [coolingDown, setCoolingDown] = useState(false)
   const [otpSession, setOtpSession] = useState('')
   const [otpCode, setOtpCode] = useState('')
   // Anti-bot fields for the passwordless code request (which sends an email):
@@ -105,8 +110,12 @@ function AuthForm() {
         signedIn(data?.needsTerms ? termsAcceptPath(next) : next)
       } else {
         const data = await res.json()
-        if (data?.needsCode) { setConfirming('signin'); setSignupCode('') }
-        setError(data?.needsCode ? '' : (data.error ?? 'Couldn’t sign you in. Please try again.'))
+        if (data?.needsCode) {
+          setConfirming('signin')
+          setSignupCode('')
+          setCodeStatus(data.error)
+          startCooldown()
+        } else setError(data.error ?? 'Couldn’t sign you in. Please try again.')
         setLoading(false)
       }
     } catch {
@@ -115,8 +124,13 @@ function AuthForm() {
     }
   }
 
-  const handleSignUp = async (e?: React.FormEvent) => {
-    e?.preventDefault()
+  const startCooldown = () => {
+    setCoolingDown(true)
+    setTimeout(() => setCoolingDown(false), 30_000)
+  }
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError('')
     if (!tosAccepted) {
       setError('You must agree to the Terms of Service to create an account.')
@@ -132,6 +146,8 @@ function AuthForm() {
       if (res.ok) {
         setConfirming('signup')
         setSignupCode('')
+        setCodeStatus('')
+        startCooldown()
         setLoading(false)
       } else {
         const data = await res.json()
@@ -152,16 +168,19 @@ function AuthForm() {
       const res = await fetch('/att/api/auth/signup/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code: signupCode, password, acceptedTosVersion: CURRENT_TOS_VERSION }),
+        // The Terms were ticked on Create account. Coming from Sign in they
+        // weren't (on this visit): the Terms page asks if they're out of date.
+        body: JSON.stringify({ email, code: signupCode, password, ...(confirming === 'signup' ? { acceptedTosVersion: CURRENT_TOS_VERSION } : {}) }),
       })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
-        signedIn(next)
+        signedIn(data?.needsTerms ? termsAcceptPath(next) : next)
         return
       }
-      const data = await res.json().catch(() => ({}))
+      setCodeStatus('')
       setError(data?.error ?? 'Couldn’t confirm your email. Please try again.')
       // Confirmed, but signing in failed: the Sign in form takes it from here.
-      if (res.status === 500) { setConfirming(null); setTab('signin') }
+      if (res.status === 500) { setConfirming(null); setTab('signin'); focusLater('signin-password') }
       setLoading(false)
     } catch {
       setError('Couldn’t reach the server. Check your connection and try again.')
@@ -169,10 +188,52 @@ function AuthForm() {
     }
   }
 
-  const sendNewCode = () => {
+  const focusLater = (id: string) => requestAnimationFrame(() => document.getElementById(id)?.focus())
+
+  // Repeats the request that sent the first code: Create account starts again
+  // (which replaces the unconfirmed account), Sign in asks again.
+  const sendNewCode = async () => {
     setError('')
-    if (confirming === 'signup') void handleSignUp()
-    else void handleSignIn({ preventDefault() {} } as React.FormEvent)
+    setCodeStatus('')
+    setResending(true)
+    try {
+      const res = confirming === 'signup'
+        ? await fetch('/att/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, displayName, password, acceptedTosVersion: CURRENT_TOS_VERSION }),
+        })
+        : await fetch('/att/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && confirming === 'signin') {
+        // Someone entered the code meanwhile (another tab): signed in.
+        signedIn(data?.needsTerms ? termsAcceptPath(next) : next)
+        return
+      }
+      if (res.ok || data?.needsCode) {
+        setSignupCode('')
+        setCodeStatus('We’ve sent a new code. You can ask for another in 30 seconds.')
+        startCooldown()
+        focusLater('signup-code')
+      } else {
+        setError(data?.error ?? 'Couldn’t send a new code. Please try again.')
+      }
+    } catch {
+      setError('Couldn’t reach the server. Check your connection and try again.')
+    } finally {
+      setResending(false)
+    }
+  }
+
+  const changeEmail = () => {
+    setConfirming(null)
+    setError('')
+    setCodeStatus('')
+    focusLater(tab === 'signup' ? 'signup-email' : 'signin-email')
   }
 
   const handleOtpRequest = async (e: React.FormEvent) => {
@@ -238,13 +299,13 @@ function AuthForm() {
 
   return (
     <Page width="narrow" className="max-w-md">
-      <PageHeader title={tab === 'signup' ? 'Create account' : 'Sign in'} />
+      <PageHeader title={confirming ? 'Confirm your email' : tab === 'signup' ? 'Create account' : 'Sign in'} />
 
       <div className="flex flex-col gap-6">
         {notice && (
           <p role="status" className="rounded-control border border-border bg-surface p-3 text-sm text-fg">{notice}</p>
         )}
-        <Segmented
+        {!confirming && <Segmented
           label="Sign in or create an account"
           value={tab}
           onChange={switchTab}
@@ -253,13 +314,16 @@ function AuthForm() {
             { value: 'signup', label: 'Create account' },
             ...(EMAIL_DELIVERY ? [{ value: 'code' as const, label: 'Email code' }] : []),
           ]}
-        />
+        />}
 
         {confirming && (
           <form onSubmit={handleConfirm} className="flex flex-col gap-4">
             <p className="text-base text-muted">
-              We&apos;ve emailed a 6-digit code to <strong className="text-fg">{email}</strong>, to check the address is yours. It may take a minute, and may land in spam.
+              We&apos;ve emailed a 6-digit code to <strong className="text-fg [overflow-wrap:anywhere]">{email}</strong> to check the address is yours. It can take a minute; look in spam if it doesn&apos;t arrive.
             </p>
+            {codeStatus && (
+              <p role="status" className="rounded-control border border-border bg-surface p-3 text-sm text-fg">{codeStatus}</p>
+            )}
             <Field label="Code" htmlFor="signup-code">
               <input
                 id="signup-code"
@@ -268,24 +332,25 @@ function AuthForm() {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="\d{6}"
-                maxLength={6}
                 value={signupCode}
-                onChange={e => setSignupCode(e.target.value.trim())}
+                onChange={e => { setSignupCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setCodeStatus('') }}
                 className={`${inputClass} tabular`}
                 placeholder="000000"
                 autoFocus
               />
             </Field>
             {errorBox}
-            <button type="submit" disabled={loading} className={buttonClass('primary', 'md', 'w-full')}>
-              {loading ? 'Confirming…' : 'Confirm'}
+            <button type="submit" disabled={loading || resending} className={buttonClass('primary', 'md', 'w-full')}>
+              {loading ? 'Confirming…' : 'Confirm email'}
             </button>
-            <p className="text-sm text-muted text-center">
-              Didn&apos;t arrive?{' '}
-              <button type="button" onClick={sendNewCode} disabled={loading} className="tt-link">Send a new code</button>
-              {' '}or{' '}
-              <button type="button" onClick={() => { setConfirming(null); setError('') }} className="tt-link">change your email</button>
-            </p>
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={sendNewCode} disabled={loading || resending || coolingDown} className={buttonClass('quiet', 'md', 'w-full')}>
+                {resending ? 'Sending…' : 'Send a new code'}
+              </button>
+              <button type="button" onClick={changeEmail} disabled={loading || resending} className={buttonClass('quiet', 'md', 'w-full')}>
+                Change email
+              </button>
+            </div>
           </form>
         )}
 
@@ -399,6 +464,7 @@ function AuthForm() {
                   id="otp-code"
                   type="text"
                   required
+                  autoComplete="one-time-code"
                   inputMode="numeric"
                   pattern="\d{6}"
                   maxLength={6}

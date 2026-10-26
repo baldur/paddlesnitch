@@ -19,7 +19,6 @@
   "required": [
     "email",
     "code",
-    "password",
-    "acceptedTosVersion"
+    "password"
   ]
 }

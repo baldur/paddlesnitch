@@ -166,7 +166,8 @@ const OtpVerify = named('OtpVerify', z.object({ email: z.string(), session: z.st
 const Signup = named('Signup', z.object({ email: z.string(), displayName: z.string(), password: z.string(), acceptedTosVersion: z.string() }))
 /** Sign-up has begun: a 6-digit code has gone to `email`. Nothing is signed in until signup/confirm. */
 export const CodeSent = named('CodeSent', z.object({ needsCode: z.literal(true), email: z.string() }))
-const SignupConfirm = named('SignupConfirm', z.object({ email: z.string(), code: z.string(), password: z.string(), acceptedTosVersion: z.string() }))
+// acceptedTosVersion: send it when the Terms were just ticked (Create account); leave it out when the code step came from signing in, and follow needsTerms in the answer.
+const SignupConfirm = named('SignupConfirm', z.object({ email: z.string(), code: z.string(), password: z.string(), acceptedTosVersion: z.string().optional() }))
 const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }))
 const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
 export const WebPage = named('WebPage', z.object({ url: z.string() }))

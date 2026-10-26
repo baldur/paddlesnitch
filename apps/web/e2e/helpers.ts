@@ -35,7 +35,7 @@ export async function signUpFlow(
   // The code that proves the address (#702): cognito-local keeps it in its
   // database rather than emailing it.
   await page.getByLabel('Code', { exact: true }).fill(await signUpCode(email))
-  await page.getByRole('button', { name: 'Confirm', exact: true }).click()
+  await page.getByRole('button', { name: 'Confirm email', exact: true }).click()
   // Signed in, / redirects to /paddles (the signed-in home). Wait for where we
   // end up: checking '/' raced the redirect and flaked.
   await expect(page).toHaveURL('/paddles', { timeout: 10_000 })

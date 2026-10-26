@@ -107,6 +107,17 @@ describe('POST /att/api/auth/signup', () => {
     expect(res.status).toBe(422)
   })
 
+  it('confirming from a sign-in leaves the Terms to the Terms page (no version sent, needsTerms answered)', async () => {
+    const email = freshEmail()
+    await signup(jsonReq('http://x/att/api/auth/signup', body(email)))
+    const code = await readConfirmationCode(email)
+    const res = await confirm(jsonReq('http://x/att/api/auth/signup/confirm', { email, code, password: 'Password123' }))
+    expect(res.status).toBe(201)
+    const out = await res.json()
+    expect(out.needsTerms).toBe(true)
+    expect(await getJson(`users/${out.id}/tos-consent.json`)).toBeNull()
+  })
+
   it('an account whose code was never entered does not hold the email: signing up again replaces it', async () => {
     const email = freshEmail()
     // Someone who doesn't own the address starts an account on it...

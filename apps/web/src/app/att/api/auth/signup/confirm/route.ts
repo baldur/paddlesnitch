@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { confirmSignUp, signIn, verifyIdToken } from '@/lib/cognito'
 import { signedInResponse } from '@/lib/auth'
-import { recordAcceptance } from '@/lib/tos'
+import { recordAcceptance, hasAcceptedCurrent } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { applyPendingInvitations } from '@/lib/pending-invitations'
 import { markEmailProven } from '@/lib/email-proven'
@@ -18,7 +18,11 @@ export async function POST(req: NextRequest) {
   if (!email || !code || !password) {
     return NextResponse.json({ error: 'Enter the code from the email.' }, { status: 400 })
   }
-  if (body?.acceptedTosVersion !== CURRENT_TOS_VERSION) {
+  // From Create account the Terms were just ticked: the version comes along and
+  // is recorded. From Sign in (an older, never-confirmed sign-up) nothing was
+  // ticked on this visit: no version, and needsTerms says whether to ask.
+  const terms = body?.acceptedTosVersion
+  if (terms !== undefined && terms !== CURRENT_TOS_VERSION) {
     return NextResponse.json({ error: 'Please accept the Terms of Service to create an account.' }, { status: 422 })
   }
 
@@ -44,10 +48,12 @@ export async function POST(req: NextRequest) {
   // Recorded before the cookie goes back, so the first signed-in request has
   // them. A failure is logged and doesn't block: the Terms gate would ask again
   // at the next sign-in, and an invitation can be sent again.
-  try {
-    await recordAcceptance(user.id, CURRENT_TOS_VERSION)
-  } catch (err) {
-    console.error('[signup] recordAcceptance failed', err)
+  if (terms) {
+    try {
+      await recordAcceptance(user.id, CURRENT_TOS_VERSION)
+    } catch (err) {
+      console.error('[signup] recordAcceptance failed', err)
+    }
   }
   try {
     await markEmailProven(user.id, 'sign_up_code')
@@ -62,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   emitMetric('signup')
   return signedInResponse(req,
-    { id: user.id, email, displayName: user.displayName },
+    { id: user.id, email, displayName: user.displayName, ...(terms ? {} : { needsTerms: !(await hasAcceptedCurrent(user.id)) }) },
     tokens.idToken, tokens.refreshToken, { status: 201 },
   )
 }

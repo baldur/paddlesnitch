@@ -96,7 +96,7 @@ just accepted the Terms).
 | `POST /att/api/auth/otp-request` | `{email, website: "", elapsedMs}` | `{session}`: emails a 6-digit code (makes the account if new) |
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
 | `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 202 `{needsCode: true, email}`: a 6-digit code has gone to the email, nothing is signed in yet (#702). 409 = a confirmed account has this email; 422 if `acceptedTosVersion` isn't current. Calling it again sends a new code |
-| `POST /att/api/auth/signup/confirm` | `{email, code, password, acceptedTosVersion}` | 201, as login. 400 = wrong or expired code (ask again or send a new one) |
+| `POST /att/api/auth/signup/confirm` | `{email, code, password, acceptedTosVersion?}` | 201, as login. Send `acceptedTosVersion` when the Terms were just ticked (Create account); leave it out when the code step came from a 403 sign-in, and then follow `needsTerms`. 400 = wrong or expired code (ask again, or send a new code by repeating the sign-up or sign-in) |
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
