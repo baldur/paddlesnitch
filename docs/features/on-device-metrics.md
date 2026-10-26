@@ -146,9 +146,10 @@ ESP32-S3. Confirm once on the bench build.
      in CI, and a Swift package. Replaying the 13 and 16 Sep captures matched
      the raw motion file and every GPS column byte for byte (details in
      `recorder-core/CLAUDE.md`).
-   - **1b, next:** the tracker links the core (PlatformIO, `pio test -e
-     native` on the fixtures) and its own copy goes; the Android CMake and JNI
-     wrapper; the WASM build.
+   - **1b, in progress:** done so far are the PlatformIO manifest, the CMake
+     file and CI guards against fused multiply-adds on the Android and ESP32-S3
+     builds. Next: the WASM build (with the fixtures run under Node), and the
+     tracker switching to the core (`firmware`).
 2. **Stroke rate** in the core as a stream; the server switches to the WASM
    build and `cadence.ts` goes once its tests pass against it.
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.
