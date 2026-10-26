@@ -146,7 +146,9 @@ Google sign-in.
 **When `strava` is false** (Strava switched off; ask `options` on these
 screens too, not only on sign-in), do as the website does:
 - Sign in: no Strava button. Under the form: "Signed up with Strava? Strava
-  sign-in is off for now. Report an issue and we’ll help you sign in."
+  sign-in is off for now. Report an issue and we’ll help you sign in." Its
+  Report an issue button opens `/signin?report=1` in the in-app browser: the
+  website's issue form opens by itself on any page with `?report=1`.
 - Account: no Strava section unless `strava/status` says connected. Then a
   neutral "Paused" badge, "Strava isn’t available right now. Paddles you
   already brought in stay here.", and Disconnect, except on a `placeholderEmail`
@@ -154,7 +156,7 @@ screens too, not only on sign-in), do as the website does:
   paddles, no Connect.
 - Add paddle: no Strava choice.
 - Sign in again (before deleting): a `placeholderEmail` account can't, so offer
-  Report an issue instead.
+  Report an issue instead (`/signin?report=1`, as above).
 
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that
