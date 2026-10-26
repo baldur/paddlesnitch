@@ -185,7 +185,7 @@ fun AccountScreen(
             onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onSignedOut = onSignedOut,
             stravaOnly = isPlaceholderEmail(u.email))
         Divider()
-        Section("Trackers")
+        Section("Devices")
         Link("Your trackers", onClick = onTrackers)
         Link("Set up or sync a tracker", onClick = onTracker)
         Divider()

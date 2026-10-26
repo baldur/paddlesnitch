@@ -103,7 +103,7 @@ fun TrackersScreen(
         return
     }
     Column(modifier.fillMaxWidth().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Header("Trackers", onBack)
+        Header("Devices", onBack)
         Text("Your paddlesnitch trackers and what each one has recorded.", color = PsColor.muted)
         // Always in the layout, so TalkBack hears that a tracker was removed.
         Box(Modifier.fillMaxWidth().testTag("trackers-message").semantics { liveRegion = LiveRegionMode.Polite }) { removed?.let { Text(it, color = PsColor.green) } }
@@ -201,7 +201,7 @@ private fun TrackerScreen(
     onBack: () -> Unit, onRemoved: () -> Unit, onSignedOut: () -> Unit, onOpenPaddle: (String) -> Unit, modifier: Modifier,
 ) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Header(s.name, onBack, back = "Trackers")
+        Header(s.name, onBack, back = "Devices")
         Text(listOfNotNull(s.deviceId, device?.model, device?.firmware?.let { "firmware $it" }, device?.lastSeenAt?.let { "last seen ${fmtDay(it)}" }).joinToString(" · "),
             color = PsColor.muted, style = MaterialTheme.typography.bodySmall, fontFamily = PlexMono)
         if (!s.linked) Text("This tracker is no longer on your account, but its recordings are still yours. Add it again to get new ones.",
