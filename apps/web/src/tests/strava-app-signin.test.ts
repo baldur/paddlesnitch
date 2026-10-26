@@ -167,6 +167,8 @@ describe('website pages from a signed-in app (web codes)', () => {
     expect(auth.setAuthCookies).toHaveBeenCalledWith(expect.anything(), 'id-token', 'refresh-token')
     // The session it made is recorded: it never counts as a recent sign-in.
     expect(await listKeys('users/sub-1/link-sessions/')).toHaveLength(1)
+    // And the browser is marked as signed in by a link, for this account.
+    expect(res.headers.getSetCookie().find(c => c.startsWith('tt_from_link='))).toMatch(/^tt_from_link=sub-1;.*HttpOnly/i)
     const again = new URL((await open(code)).headers.get('location')!)
     expect(again.pathname).toBe('/signin')
     expect(again.searchParams.get('error')).toBe('app_link_expired')
@@ -184,6 +186,28 @@ describe('website pages from a signed-in app (web codes)', () => {
   it('lasts a minute', async () => {
     const code = await createWebCode('baldur@example.com', 'sub-1', Date.now() - 61_000)
     expect(new URL((await open(code)).headers.get('location')!).pathname).toBe('/signin')
+  })
+
+  it('opens pages only, never a server route (a link someone else made must not start anything)', async () => {
+    for (const next of [
+      '/att/api/strava/connect?app=1', '/att/api/strava/connect', '/api/account/export', '/api', '/att/api',
+      // Paths the browser resolves to a route (tester review, C5).
+      '/att/./api/strava/connect', '/x/../att/api/strava/connect', '/att/%2e/api/strava/connect', '/att\\api/strava/connect',
+      '/ATT/API/strava/connect', '/att/api/../api/strava/connect',
+    ]) {
+      const code = await createWebCode('baldur@example.com', 'sub-1')
+      expect(new URL((await open(code, next)).headers.get('location')!).pathname, next).toBe('/')
+    }
+    // Pages whose names merely start the same way still open.
+    const code = await createWebCode('baldur@example.com', 'sub-1')
+    expect(new URL((await open(code, '/apiary')).headers.get('location')!).pathname).toBe('/apiary')
+    // A page keeps its query and anchor.
+    const withHash = await createWebCode('baldur@example.com', 'sub-1')
+    const loc = new URL((await open(withHash, '/account?tab=1#delete')).headers.get('location')!)
+    expect(loc.pathname + loc.search + loc.hash).toBe('/account?tab=1#delete')
+    vi.mocked(auth.bearerUser).mockResolvedValue({ id: 'sub-1', email: 'baldur@example.com', displayName: 'Baldur' })
+    const minted = await mintWebCode(new NextRequest('http://x/att/api/auth/web-code', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ next: '/att/api/strava/connect' }) }))
+    expect(new URL((await minted.json()).url).searchParams.get('next')).toBe('/')
   })
 
   it('never sends anyone off the site', async () => {

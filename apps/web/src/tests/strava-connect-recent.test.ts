@@ -15,7 +15,7 @@ vi.mock('@/lib/strava', async importOriginal => ({
 }))
 
 import { cookies } from 'next/headers'
-import { GET as connect } from '@/app/att/api/strava/connect/route'
+import { POST as connect } from '@/app/att/api/strava/connect/route'
 import { GET as callback } from '@/app/att/api/strava/callback/route'
 import { markLinkSession } from '@/lib/app-signin'
 import { getUserIdByAthleteId } from '@/lib/strava-storage'
@@ -29,25 +29,26 @@ function jar(c: Record<string, string>) {
   vi.mocked(cookies).mockResolvedValue({ get: (n: string) => (c[n] ? { name: n, value: c[n] } : undefined) } as never)
 }
 const get = (url: string) => new NextRequest(`http://localhost${url}`)
+const post = (url: string) => new NextRequest(`http://localhost${url}`, { method: 'POST', headers: { origin: 'http://localhost' } })
 const where = (res: Response) => { const u = new URL(res.headers.get('location')!); return u.origin === 'http://localhost' ? u.pathname + u.search : u.origin }
 
 describe('connecting Strava needs a recent sign-in', () => {
   it('a fresh sign-in goes to Strava', async () => {
     jar({ tt_id: pat.idToken })
-    expect(where(await connect(get('/att/api/strava/connect')))).toBe('https://www.strava.com')
+    expect(where(await connect(post('/att/api/strava/connect')))).toBe('https://www.strava.com')
   })
 
   it('an old sign-in, or a session a web-code link made, is sent to sign in again, and nothing starts', async () => {
     jar({ tt_id: pat.idToken })
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(Date.now() + 11 * 60_000)
-    const old = await connect(get('/att/api/strava/connect'))
+    const old = await connect(post('/att/api/strava/connect'))
     expect(where(old)).toBe('/account?strava=reauth')
     expect(old.headers.getSetCookie().some(c => c.startsWith('strava_state='))).toBe(false)
     vi.useRealTimers()
     const claims = JSON.parse(Buffer.from(pat.idToken.split('.')[1], 'base64url').toString())
     await markLinkSession(pat.id, claims.origin_jti ?? claims.jti)
-    expect(where(await connect(get('/att/api/strava/connect')))).toBe('/account?strava=reauth')
+    expect(where(await connect(post('/att/api/strava/connect')))).toBe('/account?strava=reauth')
   })
 
   it('the callback checks again, and links nothing for an old sign-in', async () => {

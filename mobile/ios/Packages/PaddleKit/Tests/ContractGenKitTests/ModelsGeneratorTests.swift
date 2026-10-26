@@ -171,6 +171,26 @@ import Testing
         #expect(swift.contains(#"public static let tosVersion = "002""#))
     }
 
+    /// A table of words (stravaConnectResults): result → what to say.
+    @Test func aTableOfStringsBecomesADictionarySortedByKey() throws {
+        let swift = try #require(
+            try ModelsGenerator.generate(
+                schemas: [:], procedures: noProcedures,
+                constants: Data(#"{"results":{"denied":"You cancelled.","connected":"Say \"hi\"."}}"#.utf8)
+            )["Constants.swift"])
+        #expect(
+            swift.contains(
+                #"public static let results: [String: String] = ["connected": "Say \"hi\".", "denied": "You cancelled."]"#
+            ))
+    }
+
+    @Test func aTableWithANonStringIsRefused() {
+        #expect(throws: ModelsGenerator.Failure.self) {
+            try ModelsGenerator.generate(
+                schemas: [:], procedures: noProcedures, constants: Data(#"{"t":{"a":1}}"#.utf8))
+        }
+    }
+
     @Test func aConstantThatIsntAStringIsRefused() {
         #expect(throws: ModelsGenerator.Failure.self) {
             try ModelsGenerator.generate(schemas: [:], procedures: noProcedures, constants: Data(#"{"n":2}"#.utf8))

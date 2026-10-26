@@ -1,3 +1,12 @@
 {
-  "tosVersion": "002"
+  "tosVersion": "002",
+  "stravaConnectResults": {
+    "connected": "Strava connected.",
+    "denied": "You cancelled connecting Strava.",
+    "state_mismatch": "Couldn’t connect Strava. Please try again.",
+    "exchange_failed": "Couldn’t connect Strava. Please try again.",
+    "not_configured": "Couldn’t connect Strava right now. Please try again later.",
+    "linked_elsewhere": "Couldn’t connect Strava. It’s already connected to another paddlesnitch account. Sign in to that account and disconnect it there.",
+    "use_app": "Couldn’t connect Strava here. Connect it in the paddlesnitch app instead."
+  }
 }

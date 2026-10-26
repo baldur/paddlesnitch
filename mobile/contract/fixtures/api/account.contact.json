@@ -1,1 +1,7 @@
-{ "contact": { "email": "pat@example.com", "addedAt": "2026-10-25T16:20:00.000Z" } }
+{
+  "contact": {
+    "email": "pat@example.com",
+    "addedAt": "2026-10-25T16:20:00.000Z"
+  },
+  "placeholderEmail": false
+}

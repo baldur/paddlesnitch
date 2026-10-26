@@ -231,5 +231,52 @@
     "errors": [
       401
     ]
+  },
+  "GET /att/api/strava/status": {
+    "auth": "user",
+    "input": null,
+    "output": "StravaStatus",
+    "errors": [
+      401
+    ]
+  },
+  "POST /att/api/strava/app-connect": {
+    "auth": "user",
+    "input": "StravaConnectStart",
+    "output": "WebPage",
+    "errors": [
+      400,
+      401,
+      403,
+      503
+    ]
+  },
+  "POST /att/api/strava/app-connect/finish": {
+    "auth": "user",
+    "input": "StravaConnectFinish",
+    "output": "StravaStatus",
+    "errors": [
+      400,
+      401,
+      403,
+      409
+    ]
+  },
+  "POST /att/api/strava/auto-import": {
+    "auth": "user",
+    "input": "StravaAutoImportSet",
+    "output": "StravaAutoImport",
+    "errors": [
+      400,
+      401
+    ]
+  },
+  "POST /att/api/strava/disconnect": {
+    "auth": "user",
+    "input": null,
+    "output": "Ok",
+    "errors": [
+      401
+    ]
   }
 }

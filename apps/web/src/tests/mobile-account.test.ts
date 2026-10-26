@@ -137,7 +137,7 @@ describe('the account routes the apps call', () => {
       'GET /api/account/handle': { available: true, slug: 'pat-paddles' },
       'PUT /api/account/handle': { public: true, handle: 'pat-paddles' },
       'DELETE /api/account/handle': { public: true },
-      'GET /api/account/contact': { contact: null },
+      'GET /api/account/contact': { contact: null, placeholderEmail: false },
       'POST /api/account/contact': { contact: { email: 'pat@example.com', addedAt: expect.any(String) } },
       'DELETE /api/account/contact': { ok: true },
     }
@@ -176,6 +176,12 @@ describe('what the Account screens do', () => {
     await fits(ApiError, await claimHandle(req('PUT', '/api/account/handle', pat.idToken, { handle: 'river-sam' })), 400)
     await fits(ApiError, await setContact(req('POST', '/api/account/contact', pat.idToken, { email: 'nope' })), 400)
     await fits(ApiError, await setProfile(req('PATCH', '/api/account/profile', pat.idToken, { public: 'yes' })), 400)
+  })
+
+  it('contact: says when the sign-in email is a Strava placeholder, so the apps offer a contact email', async () => {
+    const strava = await makeUser('Strava Person', { email: `strava-${Date.now()}${Math.floor(Math.random() * 1e6)}@noreply.paddlesnitch.com` })
+    expect(await (await getContact(req('GET', '/api/account/contact', strava.idToken))).json()).toMatchObject({ placeholderEmail: true })
+    expect(await (await getContact(req('GET', '/api/account/contact', pat.idToken))).json()).toMatchObject({ placeholderEmail: false })
   })
 
   it('delete account: erases it and revokes the refresh token the app sends', async () => {

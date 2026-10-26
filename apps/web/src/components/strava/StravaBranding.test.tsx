@@ -18,11 +18,13 @@ describe('Strava brand components (#107)', () => {
     expect(html).toContain('href="/att/api/auth/strava/init?next=%2Fatt"')
   })
 
-  it('the connect button links to the connect flow with the same artwork', () => {
-    const html = renderToStaticMarkup(<StravaButton href="/att/api/strava/connect" />)
+  it('the connect button POSTs a form to the connect flow, with the same artwork and name', () => {
+    const html = renderToStaticMarkup(<StravaButton href="/att/api/strava/connect" post />)
     expect(html).toContain('/strava/connect-with-strava.svg')
-    expect(html).toContain('alt="Connect with Strava"')
-    expect(html).toContain('href="/att/api/strava/connect"')
+    expect(html).toContain('aria-label="Connect with Strava"')
+    expect(html).toContain('method="post"')
+    expect(html).toContain('action="/att/api/strava/connect"')
+    expect(html).not.toContain('<a ')
   })
 
   it('powered-by renders the attribution logo', () => {

@@ -28,6 +28,8 @@ public enum Endpoints {
         method: "GET", path: "/api/account/profile", auth: .user, errorStatuses: [401])
     public static let getAccountTos = Endpoint<NoInput, TosStatus>(
         method: "GET", path: "/api/account/tos", auth: .user, errorStatuses: [401])
+    public static let getStravaStatus = Endpoint<NoInput, StravaStatus>(
+        method: "GET", path: "/att/api/strava/status", auth: .user, errorStatuses: [401])
     public static let patchAccountProfile = Endpoint<ProfileVisibility, ProfileSettings>(
         method: "PATCH", path: "/api/account/profile", auth: .user, errorStatuses: [400, 401])
     public static let postAccountContact = Endpoint<ContactEmail, Contact>(
@@ -56,6 +58,14 @@ public enum Endpoints {
         method: "POST", path: "/att/api/auth/strava/app-token", auth: .public, errorStatuses: [400, 401, 500])
     public static let authWebCode = Endpoint<WebPageFor, WebPage>(
         method: "POST", path: "/att/api/auth/web-code", auth: .user, errorStatuses: [401])
+    public static let stravaAppConnect = Endpoint<StravaConnectStart, WebPage>(
+        method: "POST", path: "/att/api/strava/app-connect", auth: .user, errorStatuses: [400, 401, 403, 503])
+    public static let stravaAppConnectFinish = Endpoint<StravaConnectFinish, StravaStatus>(
+        method: "POST", path: "/att/api/strava/app-connect/finish", auth: .user, errorStatuses: [400, 401, 403, 409])
+    public static let stravaAutoImport = Endpoint<StravaAutoImportSet, StravaAutoImport>(
+        method: "POST", path: "/att/api/strava/auto-import", auth: .user, errorStatuses: [400, 401])
+    public static let stravaDisconnect = Endpoint<NoInput, Ok>(
+        method: "POST", path: "/att/api/strava/disconnect", auth: .user, errorStatuses: [401])
     public static let analyse = Endpoint<NoInput, Analysed>(
         method: "POST", path: "/paddles/api/analyse", auth: .user, errorStatuses: [400, 401, 422, 500])
     public static let putAccountHandle = Endpoint<HandleClaim, ProfileSettings>(
@@ -77,6 +87,7 @@ public enum Endpoints {
         case "GET /api/account/handle": try decoder.decode(HandleAvailability.self, from: data)
         case "GET /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "GET /api/account/tos": try decoder.decode(TosStatus.self, from: data)
+        case "GET /att/api/strava/status": try decoder.decode(StravaStatus.self, from: data)
         case "PATCH /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "POST /api/account/contact": try decoder.decode(Contact.self, from: data)
         case "POST /api/account/export": try decoder.decode(DownloadLink.self, from: data)
@@ -91,6 +102,10 @@ public enum Endpoints {
         case "POST /att/api/auth/signup": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/strava/app-token": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/web-code": try decoder.decode(WebPage.self, from: data)
+        case "POST /att/api/strava/app-connect": try decoder.decode(WebPage.self, from: data)
+        case "POST /att/api/strava/app-connect/finish": try decoder.decode(StravaStatus.self, from: data)
+        case "POST /att/api/strava/auto-import": try decoder.decode(StravaAutoImport.self, from: data)
+        case "POST /att/api/strava/disconnect": try decoder.decode(Ok.self, from: data)
         case "POST /paddles/api/analyse": try decoder.decode(Analysed.self, from: data)
         case "PUT /api/account/handle": try decoder.decode(ProfileSettings.self, from: data)
         default: throw ProcedureError.unknownPath(route)

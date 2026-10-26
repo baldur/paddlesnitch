@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getRequestUser } from '@/lib/auth'
 import { revoke } from '@/lib/strava'
-import { getStravaTokens, deleteStravaTokens, deleteAthleteIndex } from '@/lib/strava-storage'
+import { getStravaTokens, deleteStravaTokens, deleteAthleteIndex, getUserIdByAthleteId } from '@/lib/strava-storage'
 
-export async function POST() {
-  const user = await getAuthUser()
+export async function POST(req: Request) {
+  const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const tokens = await getStravaTokens(user.id)
@@ -14,7 +14,8 @@ export async function POST() {
     await revoke(tokens.accessToken)
     // Drop the reverse index too so a future Strava sign-in for this athlete
     // doesn't auto-land on an account the user explicitly unlinked.
-    if (tokens.athleteId) await deleteAthleteIndex(tokens.athleteId)
+    // Only when it points here: it may belong to another account by now.
+    if (tokens.athleteId && (await getUserIdByAthleteId(tokens.athleteId)) === user.id) await deleteAthleteIndex(tokens.athleteId)
   }
   await deleteStravaTokens(user.id)
   return NextResponse.json({ ok: true })

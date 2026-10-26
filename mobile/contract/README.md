@@ -105,7 +105,7 @@ just accepted the Terms).
 **Website pages, signed in.** For a page only the website has (account
 details, delete account…), `POST /att/api/auth/web-code {next: "/account#delete"}`
 with the Bearer token answers `{url}`; open it in the in-app browser within a
-minute. It works once and signs the website in as the app's person.
+minute. It works once and signs the website in as the app's person. `next` must be a page: a server route (`/api/…`, `/att/api/…`) opens the home page instead.
 
 **Strava.** Make a PKCE verifier (32 random bytes, base64url without padding)
 and its challenge (`base64url(sha256(verifier))`, 43 characters). Open
@@ -146,7 +146,7 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/handle?check=<handle>` | | `{available, slug?}` or `{available: false, reason}`: show `reason` as it is |
 | `PUT /api/account/handle` | `{handle}` | as profile; 400 with the reason if it's taken or not allowed |
 | `DELETE /api/account/handle` | | as profile, without `handle` |
-| `GET /api/account/contact` | | `{contact: {email, addedAt} \| null}`: a contact email, for accounts made through Strava |
+| `GET /api/account/contact` | | `{contact: {email, addedAt} \| null, placeholderEmail}`: show "Contact email" only when `placeholderEmail` is true (the account was made through Strava, which never shares an email), as the website does |
 | `POST /api/account/contact` | `{email}` | as GET; 400 if it doesn't look like an email |
 | `DELETE /api/account/contact` | | `{ok: true}` |
 | `GET /api/account/devices` | | `{devices: Tracker[], stableVersion}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash |
@@ -154,7 +154,54 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId` |
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
-are in `fixtures/tracker/README.md`. Forgot password is under Signing in. Strava comes next in C5.
+are in `fixtures/tracker/README.md`. Forgot password is under Signing in; Strava has its own section below.
+
+## Strava, signed in
+
+**Connect** shows Strava's own consent page, so it needs a browser. It works
+like Strava sign-in, with the account's Bearer token added:
+
+1. Make a PKCE verifier and challenge (as in Signing in). Send
+   `POST /att/api/strava/app-connect {challenge}` with the Bearer token. It
+   answers `{url}`.
+   A 403 `{reauth: true}` means the last real sign-in is over 10 minutes old:
+   sign in again first (as for deleting the account).
+2. Open `url` in the in-app browser: an Android Custom Tab, or iOS
+   `ASWebAuthenticationSession` with callback scheme `com.paddlesnitch.app`.
+   It ends on `com.paddlesnitch.app:/account/strava` with one of:
+   - `?code=<code>`: Strava said yes. Nothing is saved yet.
+   - `?strava=<key>`: it didn't work: `denied`, `exchange_failed`,
+     `linked_elsewhere`, or `state_mismatch` (the page was left open over
+     10 minutes). Show the words for that key from `api/constants.json`
+     `stravaConnectResults`. Offer to try again, except for `linked_elsewhere`.
+   - A 503 from step 1 is `not_configured`: don't open a browser.
+3. Within 5 minutes, send `POST /att/api/strava/app-connect/finish {code, verifier}`
+   with the Bearer token. Only now is Strava connected, and it answers the
+   new status. A code works once, and only for the person who started it with
+   that verifier. A 400 means start again; a 409 is `linked_elsewhere`.
+
+Anyone can open the app's address, so ignore a `?code=` or `?strava=` when
+the app didn't start a connect, and treat a result as a cue to ask
+`GET /att/api/strava/status`, never as proof. A Strava account that is
+already connected to another paddlesnitch account is never moved
+(`linked_elsewhere`).
+
+| Call | Body | Answer |
+|---|---|---|
+| `GET /att/api/strava/status` | | `{connected, athlete?: {id, name}, autoImport?}`; 401 if the Bearer token is expired or invalid (with no token at all it answers `{connected: false}`, for the website) |
+| `POST /att/api/strava/auto-import` | `{enabled}` | `{autoImport}`: new Strava paddles come in by themselves (on by default) |
+| `POST /att/api/strava/disconnect` | | `{ok: true}`: Strava is told, and the tokens are deleted |
+
+**Older paddles** are tRPC (`procedures.json`), driven by the open screen as
+the website does it:
+1. `sources.stravaHistory {since: "first" | "months3" | "year" | "all"}`
+   lists what isn't in yet, oldest first. `first` means the last month.
+   Connecting brings that in once by itself; `firstImportDone` says it has.
+2. `sources.importStravaPaddle {id, sport, startDate}` for each one, one at a
+   time. `imported` or `duplicate` give the paddle's `sessionId`. If `skipped`
+   comes back with `rate_limited`, or the list says `rate_limited`, wait for
+   Strava's next quarter hour (:00, :15, :30, :45) and carry on.
+3. `sources.stravaHistoryDone` when the list is finished.
 
 ## fixtures/api/
 

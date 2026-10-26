@@ -6,9 +6,11 @@ import Foundation
 
 public struct Contact: Codable, Hashable, Sendable {
     public var contact: Contact?
+    public var placeholderEmail: Bool?
 
-    public init(contact: Contact? = nil) {
+    public init(contact: Contact? = nil, placeholderEmail: Bool? = nil) {
         self.contact = contact
+        self.placeholderEmail = placeholderEmail
     }
 
     public struct Contact: Codable, Hashable, Sendable {

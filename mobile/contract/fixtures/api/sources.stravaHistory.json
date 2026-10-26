@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "toImport": [
+    { "id": 12000000001, "name": "Morning paddle", "sport": "Kayaking", "startDate": "2026-07-04T06:30:00Z", "distanceMetres": 8123.4 },
+    { "id": 12000000002, "name": "Club sprints", "sport": "Rowing", "startDate": "2026-07-09T18:05:00Z", "distanceMetres": 6040 }
+  ],
+  "alreadyIn": 3,
+  "firstImportDone": true
+}

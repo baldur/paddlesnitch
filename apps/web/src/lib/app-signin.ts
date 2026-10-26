@@ -11,6 +11,8 @@ import { requestSignIn } from '@paddlesnitch/core/auth'
 // and a code caught by another app on the phone is useless without the verifier.
 
 export const APP_RETURN_URL = 'com.paddlesnitch.app:/signin/strava'
+/** Where connecting Strava from a signed-in app ends: `?code=` to collect at app-connect/finish, or `?strava=<key>` (lib/strava-connect-results.ts) when it didn't work. */
+export const APP_STRAVA_URL = 'com.paddlesnitch.app:/account/strava'
 const CODE_TTL_MS = 5 * 60_000
 
 type Pending = { email: string; userId: string; challenge: string; expiresAt: number }
@@ -44,6 +46,8 @@ export async function redeemAppCode(code: string, verifier: string, now = Date.n
 // Bearer token and opens /att/api/auth/web-code?code=…&next=… in the in-app
 // browser, which turns it into the website's cookies. It sits in a URL, so it
 // lasts a minute and works once.
+/** Set by web-code on the browser it signs in: the account it was signed in as. */
+export const FROM_LINK_COOKIE = 'tt_from_link'
 const WEB_PREFIX = 'auth/web-codes/'
 const WEB_CODE_TTL_MS = 60_000
 

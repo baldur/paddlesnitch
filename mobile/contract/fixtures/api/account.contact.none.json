@@ -1,1 +1,4 @@
-{ "contact": null }
+{
+  "contact": null,
+  "placeholderEmail": true
+}

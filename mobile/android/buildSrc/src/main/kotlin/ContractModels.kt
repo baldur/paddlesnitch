@@ -18,6 +18,15 @@ import java.io.File
  * Models are for decoding; `oneOf` cases don't write their `kind` back.
  */
 object ContractModels {
+    /** A string as Kotlin source (constants carry words shown to people, so `"`, `\` and `$` must survive). */
+    private fun lit(v: Any?): String = if (v is String) "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$") + "\"" else v.toString()
+
+    /** One api/constants.json entry: a `const val`, or a `Map` for a table of words (e.g. stravaConnectResults). */
+    private fun constant(k: String, v: Any?): String = when (v) {
+        is Map<*, *> -> "    val $k: Map<String, String> = mapOf(" + v.entries.joinToString(", ") { (a, b) -> "${lit(a)} to ${lit(b)}" } + ")"
+        else -> "    const val $k = ${lit(v)}"
+    }
+
     fun generate(apiDir: File, packageName: String): String {
         @Suppress("UNCHECKED_CAST")
         val schemas = apiDir.listFiles { f -> f.name.endsWith(".schema.json") }!!
@@ -28,7 +37,7 @@ object ContractModels {
         @Suppress("UNCHECKED_CAST")
         val constants = apiDir.resolve("constants.json").takeIf { it.exists() }
             ?.let { JsonSlurper().parse(it) as Map<String, Any?> }.orEmpty()
-            .entries.joinToString("\n") { (k, v) -> "    const val $k = ${if (v is String) "\"$v\"" else v}" }
+            .entries.joinToString("\n") { (k, v) -> constant(k, v) }
         return """
             |// Generated from mobile/contract/api by buildSrc/ContractModels.kt. Do not edit.
             |@file:Suppress("unused")

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequestUser } from '@/lib/auth'
 import { getUserContact, putUserContactEmail, clearUserContact } from '@/lib/contact'
+import { isSyntheticStravaEmail } from '@/lib/strava-account'
 
 // GET /api/account/contact
 // Returns the viewer's optional contact email, plus a flag indicating
@@ -10,7 +11,8 @@ export async function GET(req: Request) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const contact = await getUserContact(user.id)
-  return NextResponse.json({ contact: contact ?? null })
+  // The apps show "Contact email" from this, so they don't copy the rule.
+  return NextResponse.json({ contact: contact ?? null, placeholderEmail: isSyntheticStravaEmail(user.email) })
 }
 
 // POST /api/account/contact  { email }

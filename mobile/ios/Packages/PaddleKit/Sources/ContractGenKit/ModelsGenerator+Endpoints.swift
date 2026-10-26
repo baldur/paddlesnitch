@@ -36,17 +36,31 @@ extension ModelsGenerator {
     }
 
     /// `Constants.swift` from constants.json: values the server decides, like
-    /// the Terms version sign-up must agree to. Strings only, for now.
+    /// the Terms version sign-up must agree to. Strings, or a table of strings
+    /// (`stravaConnectResults`: result → words) as `[String: String]`.
     static func constantsFile(_ data: Data) throws -> String {
         let constants = try JSONDecoder().decode([String: JSON].self, from: data).sorted(by: { $0.key < $1.key })
         var out = header + "/// Values the server decides, from mobile/contract/api/constants.json.\n"
         out += "public enum Constants {\n"
         for (key, value) in constants {
-            guard Naming.isIdentifier(key), let text = value.string else {
-                throw Failure.unsupported(
-                    type: "constants.json", reason: "\(key) must be a string with an identifier name")
+            guard Naming.isIdentifier(key) else {
+                throw Failure.unsupported(type: "constants.json", reason: "\(key) isn't an identifier")
             }
-            out += "    public static let \(Naming.escaped(key)) = \(literal(text))\n"
+            if let text = value.string {
+                out += "    public static let \(Naming.escaped(key)) = \(literal(text))\n"
+            } else if let table = value.object {
+                let pairs = try table.sorted(by: { $0.key < $1.key }).map { name, words in
+                    guard let words = words.string else {
+                        throw Failure.unsupported(type: "constants.json", reason: "\(key).\(name) must be a string")
+                    }
+                    return "\(literal(name)): \(literal(words))"
+                }
+                out +=
+                    "    public static let \(Naming.escaped(key)): [String: String] = [\(pairs.joined(separator: ", "))]\n"
+            } else {
+                throw Failure.unsupported(
+                    type: "constants.json", reason: "\(key) must be a string or a table of strings")
+            }
         }
         return out + "}\n"
     }
