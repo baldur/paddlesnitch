@@ -54,6 +54,17 @@ import com.paddlesnitch.app.api.Constants
 import com.paddlesnitch.app.api.SignIn
 import com.paddlesnitch.app.ui.Notice
 import com.paddlesnitch.app.ui.PsColor
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.remember
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.text.font.FontFamily
+import com.paddlesnitch.app.api.ApiFailure
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -83,6 +94,15 @@ fun SignInScreen(
     var agreed by rememberSaveable { mutableStateOf(false) }
     var busy by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    // The sign-up code (#702): which request sent it ("signup" or "signin"), the code typed,
+    // what happened to the last send (a status, not an error), and a pause between sends.
+    var confirming by rememberSaveable { mutableStateOf<String?>(null) }
+    var code by rememberSaveable { mutableStateOf("") }
+    var codeStatus by rememberSaveable { mutableStateOf<String?>(null) }
+    var coolingDown by rememberSaveable { mutableStateOf(false) }
+    var resending by remember { mutableStateOf(false) }
+    // Every code is an email from a small daily allowance.
+    LaunchedEffect(coolingDown) { if (coolingDown) { delay(30_000); coolingDown = false } }
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     val context = LocalContext.current
@@ -114,23 +134,71 @@ fun SignInScreen(
         scope.launch {
             // Constants.tosVersion comes from mobile/contract/api/constants.json; if the
             // Terms change before an app update, the server's 422 says why.
-            runCatching { if (creating) api.signUp(email.trim(), name.trim(), password, Constants.tosVersion) else api.login(email.trim(), password) }
-                .onSuccess(onSignedIn)
+            if (creating) runCatching { api.signUp(email.trim(), name.trim(), password, Constants.tosVersion) }
+                .onSuccess { confirming = "signup"; code = ""; codeStatus = null; coolingDown = true }
                 .onFailure { error = it.message }
+            else runCatching { api.login(email.trim(), password) }
+                .onSuccess(onSignedIn)
+                .onFailure {
+                    // The right password for an account whose code was never entered: a new code has gone out.
+                    if (it is ApiFailure && it.needsCode) { confirming = "signin"; code = ""; codeStatus = it.message; coolingDown = true }
+                    else error = it.message
+                }
             busy = false
         }
     }
+
+    fun confirm() {
+        if (code.length != 6) { error = "Enter the 6-digit code from the email."; return }
+        busy = true; error = null
+        scope.launch {
+            // The Terms were ticked on Create account; coming from Sign in they weren't, so needsTerms decides.
+            runCatching { api.confirmSignUp(email.trim(), code, password, Constants.tosVersion.takeIf { confirming == "signup" }) }
+                .onSuccess(onSignedIn)
+                .onFailure {
+                    codeStatus = null; error = it.message
+                    // Confirmed, but signing in failed: the Sign in form takes it from here.
+                    if (it is ApiFailure && it.status == 500) { confirming = null; creating = false }
+                }
+            busy = false
+        }
+    }
+
+    /** Repeats the request that sent the first code: Create account again, or Sign in again. */
+    fun sendNewCode() {
+        resending = true; error = null; codeStatus = null
+        scope.launch {
+            runCatching { if (confirming == "signup") { api.signUp(email.trim(), name.trim(), password, Constants.tosVersion); null } else api.login(email.trim(), password) }
+                .onSuccess { signedIn ->
+                    // The code was entered meanwhile (on another device): signed in.
+                    if (signedIn != null) onSignedIn(signedIn)
+                    else { code = ""; codeStatus = NEW_CODE_SENT; coolingDown = true }
+                }
+                .onFailure {
+                    if (it is ApiFailure && it.needsCode) { code = ""; codeStatus = NEW_CODE_SENT; coolingDown = true }
+                    else error = it.message ?: "Couldn’t send a new code. Please try again."
+                }
+            resending = false
+        }
+    }
+
+    fun changeEmail() { confirming = null; error = null; codeStatus = null }
 
     Column(
         modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (creating) "Create account" else "Sign in", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(if (confirming != null) "Confirm your email" else if (creating) "Create account" else "Sign in", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             TextButton(onClick = onCancel) { Text("Cancel") }
         }
         // Why they're here, as a notice rather than an error (the website's role="status" box).
         if (notice != null) Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { Notice(notice) }
+        if (confirming != null) {
+            CodeStep(email.trim(), code, { code = it.filter(Char::isDigit).take(6); codeStatus = null }, codeStatus, error,
+                busy = busy, resending = resending, coolingDown = coolingDown, onConfirm = ::confirm, onNewCode = ::sendNewCode, onChangeEmail = ::changeEmail)
+            return@Column
+        }
         SecondaryTabRow(selectedTabIndex = if (creating) 1 else 0) {
             Tab(selected = !creating, onClick = { creating = false; error = null }, text = { Text("Sign in") })
             Tab(selected = creating, onClick = { creating = true; error = null }, text = { Text("Create account") })
@@ -172,3 +240,30 @@ fun SignInScreen(
     }
 }
 
+internal const val NEW_CODE_SENT = "We’ve sent a new code. You can ask for another in 30 seconds."
+
+/** "Confirm your email", as the website's code step: no tabs, the code, and ways to get a new one. */
+@Composable
+private fun CodeStep(
+    email: String, code: String, onCode: (String) -> Unit, status: String?, error: String?,
+    busy: Boolean, resending: Boolean, coolingDown: Boolean, onConfirm: () -> Unit, onNewCode: () -> Unit, onChangeEmail: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    Text("We’ve emailed a 6-digit code to $email to check the address is yours. It can take a minute; look in spam if it doesn’t arrive.", color = PsColor.muted)
+    // Always in the layout, so TalkBack reads each new status.
+    Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) { if (status != null) Notice(status) }
+    OutlinedTextField(code, onCode, label = { Text("Code") }, singleLine = true, placeholder = { Text("000000") },
+        textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("signup-code").semantics { contentType = ContentType.SmsOtpCode },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onConfirm() }))
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive }) { if (error != null) Text(error, color = PsColor.red) }
+    Button(onClick = onConfirm, enabled = !busy && !resending, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(if (busy) "Confirming…" else "Confirm email")
+    }
+    TextButton(onClick = onNewCode, enabled = !busy && !resending && !coolingDown, colors = ButtonDefaults.textButtonColors(contentColor = PsColor.primaryText),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (resending) "Sending…" else "Send a new code") }
+    TextButton(onClick = onChangeEmail, enabled = !busy && !resending, colors = ButtonDefaults.textButtonColors(contentColor = PsColor.primaryText),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Change email") }
+}

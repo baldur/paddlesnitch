@@ -18,8 +18,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 /** Something to tell the person, in the server's own words when it gave some. */
 /** [generic]: the server said nothing we can show, so the caller's own words ([shown]) say what failed. */
-/** [reauth]: the server wants a sign-in from the last few minutes first (deleting the account). */
-class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false, val reauth: Boolean = false) : Exception(message)
+/**
+ * [reauth]: the server wants a sign-in from the last few minutes first (deleting the account).
+ * [needsCode]: the password was right but the sign-up code was never entered; a new one has gone out.
+ */
+class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false, val reauth: Boolean = false, val needsCode: Boolean = false) : Exception(message)
 
 /** What to show for a failure: the server's or the app's own words, else [fallback]. Never a status code. */
 fun Throwable.shown(fallback: String): String =
@@ -69,8 +72,17 @@ class Api(
     suspend fun login(email: String, password: String): SignIn =
         signIn("/att/api/auth/login", """{"email":${str(email)},"password":${str(password)}}""")
 
-    suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): SignIn =
-        signIn("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}""")
+    /**
+     * Create account (#702): a 6-digit code goes to [email] and nothing is signed in
+     * until [confirmSignUp]. Calling it again sends a new code.
+     */
+    suspend fun signUp(email: String, displayName: String, password: String, tosVersion: String): CodeSent =
+        read(post("/att/api/auth/signup", """{"email":${str(email)},"displayName":${str(displayName)},"password":${str(password)},"acceptedTosVersion":${str(tosVersion)}}"""), CodeSent.serializer())
+
+    /** The emailed code proves the address and signs in. [tosVersion] only when the Terms were just ticked (Create account). */
+    suspend fun confirmSignUp(email: String, code: String, password: String, tosVersion: String?): SignIn =
+        signIn("/att/api/auth/signup/confirm", """{"email":${str(email)},"code":${str(code)},"password":${str(password)}""" +
+            (tosVersion?.let { ""","acceptedTosVersion":${str(it)}""" } ?: "") + "}")
 
     /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
     fun stravaStartUrl(challenge: String): String =
@@ -248,7 +260,7 @@ class Api(
         val said = error?.error
         // A request over ~4.6 MB is refused before our code sees it (prepareUpload stops short of that).
         if (said == null && res.code == 413) return ApiFailure(com.paddlesnitch.app.paddles.TOO_BIG, 413)
-        return if (said != null) ApiFailure(said, res.code, reauth = error.reauth == true) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
+        return if (said != null) ApiFailure(said, res.code, reauth = error.reauth == true, needsCode = error.needsCode == true) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
     }
 
     private fun str(s: String) = kotlinx.serialization.json.JsonPrimitive(s).toString()

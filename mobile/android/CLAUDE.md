@@ -59,3 +59,8 @@ time and isn't obvious from the code.
 - Robolectric doesn't throw when there's no browser. A Custom Tab launch is
   recorded instead: check it with
   `Shadows.shadowOf(activity).nextStartedActivity`.
+- Email sign-up proves the address with a code (#702). `signUp` answers
+  `CodeSent`, and `confirmSignUp` signs in. A login 403 with `needsCode` opens the
+  same "Confirm your email" step. In Compose tests, `compose.mainClock.advanceTimeBy`
+  drives a `LaunchedEffect` `delay`, such as the 30-second pause between codes
+  (`SignUpCodeScreenTest`).
