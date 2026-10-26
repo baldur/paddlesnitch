@@ -23,11 +23,12 @@ class SignUpCodeApiTest {
 
     private fun answer(code: Int, body: String) = server.enqueue(MockResponse.Builder().code(code).body(body).build())
     private fun sent() = server.takeRequest().let { it.url.encodedPath to it.body?.utf8().orEmpty() }
-    private val signedIn = File("../../contract/fixtures/api/auth.login.json").readText()
+    private fun fixture(name: String) = File("../../contract/fixtures/api/$name.json").readText()
+    private val signedIn = fixture("auth.login")
 
     @Test fun creatingAnAccountSendsACodeAndSignsNothingIn() = runTest {
-        answer(202, """{"needsCode":true,"email":"pat@example.com"}""")
-        assertEquals("pat@example.com", api.signUp("pat@example.com", "Pat", "Secret123", "002").email)
+        answer(202, fixture("auth.signup"))
+        assertEquals("sam@example.com", api.signUp("pat@example.com", "Pat", "Secret123", "002").email)
         assertEquals("/att/api/auth/signup" to """{"email":"pat@example.com","displayName":"Pat","password":"Secret123","acceptedTosVersion":"002"}""", sent())
         assertFalse(api.signedIn)
     }
@@ -44,16 +45,25 @@ class SignUpCodeApiTest {
     }
 
     @Test fun aWrongCodeSaysWhy() = runTest {
-        answer(400, """{"error":"That code is wrong or has expired."}""")
+        answer(400, """{"error":"That code is not valid. Check your email and try again."}""")
         val e = runCatching { api.confirmSignUp("pat@example.com", "000000", "Secret123", null) }.exceptionOrNull() as ApiFailure
-        assertEquals("That code is wrong or has expired.", e.message)
+        assertEquals("That code is not valid. Check your email and try again.", e.message)
         assertFalse(api.signedIn)
     }
 
     @Test fun signingInBeforeTheCodeWasEnteredAsksForIt() = runTest {
-        answer(403, """{"error":"We’ve sent a code to your email. Enter it to finish creating your account.","needsCode":true}""")
+        answer(403, fixture("auth.login.needs-code"))
         val e = runCatching { api.login("pat@example.com", "Secret123") }.exceptionOrNull() as ApiFailure
         assertTrue(e.needsCode)
+        assertEquals("Confirm your email first. We’ve sent you a new code.", e.message)
         assertFalse(api.signedIn)
+    }
+
+    @Test fun tooManyCodesIsARefusalNotACodeSent() = runTest {
+        answer(429, fixture("auth.too-many-codes"))
+        val e = runCatching { api.signUp("pat@example.com", "Pat", "Secret123", "002") }.exceptionOrNull() as ApiFailure
+        assertEquals(429, e.status)
+        assertFalse(e.needsCode)
+        assertEquals("We’ve sent this email too many codes. Please wait an hour and try again.", e.message)
     }
 }
