@@ -63,7 +63,7 @@ struct ProfileSections: View {
                 Button {
                     Task { await form.togglePublic() }
                 } label: {
-                    Text(form.publicButton).frame(minHeight: 44)
+                    Text(form.publicButton).fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
                 }
                 .disabled(form.busy != nil)
                 .listRowBackground(Palette.surface)
@@ -118,6 +118,7 @@ struct ProfileSections: View {
                     .onSubmit { Task { await form.saveHandle() } }
             }
             Text(form.handleHelp).font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
             buttonRow {
                 Button {
                     focus = nil
@@ -177,6 +178,7 @@ struct ProfileSections: View {
                     .onSubmit { Task { await form.saveContact() } }
             }
             Text(Self.contactHelp).font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
             buttonRow {
                 Button {
                     focus = nil
@@ -225,6 +227,9 @@ struct ProfileSections: View {
     private func text(_ words: String, muted: Bool = false, failed: Bool = false) -> some View {
         Text(words).font(.plexSans(.subheadline))
             .foregroundStyle(failed ? Palette.red : muted ? Palette.muted : Palette.fg)
+            // Its full height: a List row sized short cut long text off
+            // at the largest sizes (the audit, iOS 17 and 26).
+            .fixedSize(horizontal: false, vertical: true)
             .listRowBackground(Palette.surface)
     }
 

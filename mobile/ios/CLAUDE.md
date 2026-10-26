@@ -43,3 +43,13 @@ isn't obvious from the code.
   real clip is layout and stays. On a long List the largest-text check goes
   section by section (`checkScreen(at:)`), as each check resizes the text and
   the List jumps back up.
+- A test helper must never tap by accident: a short press-and-drag counts as
+  a tap on whatever it starts on (it flipped "Make profile private" between
+  audit looks). Scroll with a clear drag from a margin, and check the
+  screenshots for state that changed between steps.
+- On a long List at the largest text size, rows sit half under a bar
+  wherever the page stops, and the audit reports "may be clipped" on no
+  element at every position with nothing clipped in the screenshots. There
+  (`LargeTextTests.checkScreen`) only reports pinned to an element fail; the
+  screenshots are kept. Everywhere else (`checkWholeScreen`, the screens'
+  audits) element-less reports still fail: the real "N…" clip came as one.

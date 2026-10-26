@@ -49,6 +49,9 @@ struct AccountView: View {
             ProfileSections(account: account, form: profile) { title, path in
                 webPage = YouView.WebPage(title: title, path: path)
             }
+            // The profile arrives after the screen: its rows appear in place
+            // rather than animating in (iOS 17's audit measured them mid-move).
+            .transaction { $0.animation = nil }
             Section {
                 Button {
                     Task { await download() }

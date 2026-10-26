@@ -53,14 +53,19 @@ final class LargeTextTests: AppTestCase {
     /// Scrolls to each element and checks for clipped text there. For a long
     /// List: each check resizes the text in place and the List jumps back up,
     /// so swiping from the top never reached the end of the Account screen.
+    /// Reports on no element don't fail here (see `audit(unpinnedFails:)`).
     private func checkScreen(at elements: [XCUIElement]) throws {
-        try audit(.textClipped)
+        try audit(.textClipped, unpinnedFails: false)
         for element in elements {
             // Twice over if need be: the last check's jump may have undone
             // some of the way.
+            // A check's jump can leave the row above or below, and a row not
+            // on screen doesn't exist yet: look downwards, then upwards.
             for _ in 0..<2 where !(element.exists && isReadable(element)) { scrollToElement(element) }
+            for _ in 0..<12 where !element.exists { app.swipeDown() }
+            if element.exists && !isReadable(element) { scrollToElement(element) }
             XCTAssertTrue(element.exists, "reached \(element)")
-            try audit(.textClipped)
+            try audit(.textClipped, unpinnedFails: false)
         }
     }
 

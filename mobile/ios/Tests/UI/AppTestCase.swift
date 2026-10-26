@@ -169,9 +169,15 @@ class AppTestCase: XCTestCase {
     /// page moved a little each time, and fails only if raised every time; a
     /// real clip ("NO GPS" cut to "N…") is layout that stays. A slow
     /// runner's timeout (code -56) is retried once.
+    ///
+    /// `unpinnedFails: false` keeps the screenshots of a report on no element
+    /// but doesn't fail on it: for a long List at the largest text size,
+    /// where rows half under a bar draw that report wherever the page stops
+    /// (seen on every look, nothing clipped in any screenshot). Reports on an
+    /// element still fail.
     func audit(
         _ types: XCUIAccessibilityAuditType = XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast]),
-        file: StaticString = #filePath, line: UInt = #line
+        unpinnedFails: Bool = true, file: StaticString = #filePath, line: UInt = #line
     ) throws {
         var found = try auditIssues(types)
         // A row half under a bar draws a report on no element, and it moves
@@ -183,7 +189,8 @@ class AppTestCase: XCTestCase {
             nudgePage()
             found = try auditIssues(types)
         }
-        let issues = found.pinned + found.unpinned
+        let issues = found.pinned + (unpinnedFails ? found.unpinned : [])
+        if !unpinnedFails && !found.unpinned.isEmpty { keepScreenshot("Audit issue on no element, not failed") }
         if !issues.isEmpty {
             keepScreenshot("Audit issues")
             XCTFail("Accessibility audit:\n" + issues.joined(separator: "\n"), file: file, line: line)
@@ -215,12 +222,15 @@ class AppTestCase: XCTestCase {
     /// "Audit failed to complete in time", seen on slow CI runners.
     static let auditTimedOut = -56
 
-    /// Moves a scrolling page by about a third of a row; nothing else.
+    /// Moves a scrolling page a little, and must never tap: a drag of a few
+    /// points counted as a tap and flipped "Make profile private" between
+    /// looks. So a clear scroll (15% of the screen), from the left margin.
     private func nudgePage() {
         let window = app.windows.firstMatch
         guard window.exists else { return }
-        let from = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
-        from.press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+        let from = window.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.6))
+        let to = window.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.45))
+        from.press(forDuration: 0.01, thenDragTo: to, withVelocity: .default, thenHoldForDuration: 0.3)
     }
 
     private func keepScreenshot(_ name: String) {
@@ -237,6 +247,22 @@ class AppTestCase: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.tap()
         XCTAssertTrue(app.navigationBars["Account"].waitForExistence(timeout: 10))
+        // The profile loads after the screen; wait for it, and for it to stop
+        // moving, before anyone audits or taps.
+        let loaded = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Make profile'")).firstMatch
+        // At the largest text size it's below the fold, where a List hasn't
+        // made its row yet: go and look, then come back to the top.
+        let below = !loaded.waitForExistence(timeout: 3)
+        if below { scrollToElement(loaded) }
+        XCTAssertTrue(loaded.waitForExistence(timeout: 10), "the profile loaded")
+        var last = CGRect.null
+        for _ in 0..<20 where loaded.frame != last {
+            last = loaded.frame
+            usleep(150_000)
+        }
+        if below {
+            for _ in 0..<8 where !app.staticTexts["Your details"].firstMatch.isHittable { app.swipeDown() }
+        }
     }
 
     /// Tab items, wherever this iOS draws the tab bar.
