@@ -99,6 +99,8 @@ Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
 
 **Strava is off while the `STRAVA_OFF` repository variable is `1`** (deploy.yml → `NEXT_PUBLIC_STRAVA_OFF`; apps/web/CLAUDE.md § sign-in flow 6). Delete the variable and redeploy to turn it back on.
 
+**A new email waits for its code** (`keepOriginal: { email: true }`, #713). Email is the pool's username, so without it anyone could change their email (Cognito's public client allows it) to an address nobody had signed up with and *become* that address: AdminGetUser by it finds them, the owner's sign-up fails with "User already exists", and our "set email_verified" call by email lands on them. Proved on a throwaway pool on 2026-10-26, and so was the fix: the change stays pending until the code is entered, the owner signs up separately, and AdminCreateUser and admin email updates still work. Google writes the email on every sign-in; if Google sign-in ever fails with an attribute error, this setting is the first suspect (switching it off updates the pool in place).
+
 ## Inbound email — privacy@paddlesnitch.com
 
 Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded to the human inbox by the `att-email-forwarder` Lambda.

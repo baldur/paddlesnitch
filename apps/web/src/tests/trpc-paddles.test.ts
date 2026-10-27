@@ -136,6 +136,8 @@ describe('paddles get / setNote / delete round-trip', () => {
 describe('me', () => {
   it('returns the current user, or null when signed out', async () => {
     expect(await createCaller({ user: USER }).me()).toEqual({ user: USER })
+    // Only the contract's fields: whether the email is verified stays on the server (#713).
+    expect(await createCaller({ user: { ...USER, emailVerified: true } }).me()).toEqual({ user: USER })
     expect(await createCaller({ user: null }).me()).toEqual({ user: null })
   })
 })

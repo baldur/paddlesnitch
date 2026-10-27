@@ -3,6 +3,28 @@ import PaddleAPI
 
 /// The emailed codes: sign-up's (#702) and forgot password's.
 extension SampleServer {
+    /// Sign-up and sign-in answer 429 "too many codes".
+    public var tooManyCodes: Bool {
+        get { lock.withLock { _tooManyCodes } }
+        set { lock.withLock { _tooManyCodes = newValue } }
+    }
+    /// The code confirms the email, but the sign-in after it fails (500).
+    public var confirmSignInFails: Bool {
+        get { lock.withLock { _confirmSignInFails } }
+        set { lock.withLock { _confirmSignInFails = newValue } }
+    }
+    /// The code was entered somewhere else: signing in now works.
+    public func confirmElsewhere(_ email: String) {
+        _ = lock.withLock { _unconfirmed.remove(email) }
+    }
+    /// Unconfirmed, and on Terms older than the current ones.
+    public static let unconfirmedOldTermsEmail = "ola@example.com"
+    /// Sign-up codes (#702): this one works; any other is wrong.
+    public static let signupCode = "123456"
+    public static let wrongSignupCodeMessage = "That code is not valid. Check your email and try again."
+    /// An account whose sign-up code was never entered: signing in asks for it.
+    public static let unconfirmedEmail = "una@example.com"
+
     /// Sign-up (#702): a code instead of a sign-in, then the code.
     func signup(path: String, body: Data) throws -> (Int, Data) {
         switch path {
