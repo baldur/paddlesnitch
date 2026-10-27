@@ -14,15 +14,18 @@ import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Field, inputClass } from '@paddlesnitch/ui/Form'
 import { Badge, Chevron, EmptyState, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
-import { stravaOn } from '@/lib/sign-in-options'
+import { googleSignInOn, stravaOn } from '@/lib/sign-in-options'
+import GoogleConnect from '@/components/GoogleConnect'
 
 // Strava is switched off in some builds (lib/sign-in-options.ts).
 const STRAVA = stravaOn()
+const GOOGLE_SIGNIN = googleSignInOn()
 
 // The page's sections, in order, for the in-page jump list (sm and up).
 const SECTIONS: [string, string][] = [
   ['details', 'Your details'],
   ['profile', 'Public profile'],
+  ['google', 'Google'],
   ['strava', 'Strava'],
   ['devices', 'Devices'],
   ['data', 'Your data'],
@@ -60,8 +63,9 @@ function AccountPageInner() {
   // Shown inside the Delete account / Strava sections, where the person is looking.
   const [deleteError, setDeleteError] = useState('')
   const [stravaSignInError, setStravaSignInError] = useState('')
+  const [googleSignInError, setGoogleSignInError] = useState('')
   const [confirmText, setConfirmText] = useState('')
-  const [working, setWorking] = useState<'export' | 'delete' | 'strava' | 'contact' | null>(null)
+  const [working, setWorking] = useState<'export' | 'delete' | 'strava' | 'google' | 'contact' | null>(null)
   const [error, setError] = useState('')
   const [strava, setStrava] = useState<StravaStatus | undefined>(undefined)
   const [contactEmail, setContactEmail] = useState<string>('')
@@ -276,17 +280,17 @@ function AccountPageInner() {
   }
 
   // Sign out, then sign in again the way this account does, and come back here.
-  async function signInAgain(then: 'delete' | 'strava') {
+  async function signInAgain(then: 'delete' | 'strava' | 'google') {
     if (!user) return
-    const setErr = then === 'delete' ? setDeleteError : setStravaSignInError
+    const setErr = then === 'delete' ? setDeleteError : then === 'google' ? setGoogleSignInError : setStravaSignInError
     setErr('')
     // Made through Strava, and Strava is off: signing out would leave no way back in.
     if (!STRAVA && isSyntheticStravaEmail(user.email)) {
       setErr('Strava sign-in is off for now, so you can’t sign in again here. Report an issue asking us to delete your account. We’ll know it’s yours, so leave out your name and email: reports are public.')
       return
     }
-    setWorking(then === 'delete' ? 'delete' : 'strava')
-    const back = then === 'delete' ? '/account?resume=delete#delete' : '/account#strava'
+    setWorking(then === 'delete' ? 'delete' : then === 'google' ? 'google' : 'strava')
+    const back = then === 'delete' ? '/account?resume=delete#delete' : then === 'google' ? '/account#google' : '/account#strava'
     const out = await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => null)
     if (!out?.ok) {
       setErr('Couldn’t start signing in again. Please try again.')
@@ -344,7 +348,7 @@ function AccountPageInner() {
 
             {/* In-page jump list, from sm up: the page is long. */}
             <nav aria-label="On this page" className="hidden sm:flex flex-wrap gap-x-5 gap-y-1 text-sm -mt-4">
-              {SECTIONS.filter(([id]) => id !== 'strava' || STRAVA || strava?.connected).map(([id, label]) => (
+              {SECTIONS.filter(([id]) => (id !== 'strava' || STRAVA || strava?.connected) && (id !== 'google' || GOOGLE_SIGNIN)).map(([id, label]) => (
                 <a key={id} href={`#${id}`} className="text-muted hover:text-fg">{label}</a>
               ))}
             </nav>
@@ -465,6 +469,12 @@ function AccountPageInner() {
                 {handleMsg && <p className={msgClass}>{handleMsg}</p>}
               </div>
             </section>
+
+            {GOOGLE_SIGNIN && (
+              <>
+                <GoogleConnect onSignInAgain={() => signInAgain('google')} signingIn={working === 'google'} signInError={googleSignInError} />
+              </>
+            )}
 
             {/* Strava switched off: shown only to people still connected, so they can disconnect. */}
             {(STRAVA || strava?.connected) && (
