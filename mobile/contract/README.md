@@ -138,6 +138,7 @@ The keys and what to say for them, as on the website:
 | `google_denied` | You cancelled the Google sign-in. |
 | `google_failed` | Couldn’t sign in with Google. Please try again. |
 | `google_not_configured` | Google sign-in isn’t available right now. |
+| `google_linked` | Google is now connected to your account. Sign in with Google again. (Someone who started Connect Google on the website and then signed in with Google: start Google sign-in again, and it opens their account.) |
 
 A Google account has no password here: don't offer "Forgot password" for it.
 Ignore a `?code=` or `?error=` on that address when the app didn't start a

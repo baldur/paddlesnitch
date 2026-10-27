@@ -76,6 +76,7 @@ export async function buildAccountExport(user: AuthUser) {
       displayName: user.displayName,
       // Cognito also keeps the Google account's ID for an account that signs in with Google (#697).
       ...((await findUserBySub(user.id))?.google ? { signsInWithGoogle: true } : {}),
+      ...((await findUserBySub(user.id))?.googleLinked ? { googleConnected: true } : {}),
     },
     ownedCourses,
     ownedTrials,
