@@ -44,7 +44,9 @@ function AuthForm() {
     ? 'For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back to Delete account.'
     : searchParams.get('reason') === 'reauth_strava'
       ? 'For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
-      : ''
+      : searchParams.get('reason') === 'reauth_google'
+        ? 'For your safety, connecting Google needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
+        : ''
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   // ToS acceptance is mandatory on signup; the checkbox lives just above

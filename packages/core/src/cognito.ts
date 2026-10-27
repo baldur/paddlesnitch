@@ -414,6 +414,8 @@ type UserSummary = {
   sub: string; email: string; displayName: string
   /** Signs in with Google (username `Google_<id>`): our email-based sign-ins can't reach it. */
   google?: true
+  /** An email account with a Google login connected to it (Connect Google). */
+  googleLinked?: true
 }
 
 function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
@@ -423,6 +425,7 @@ function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array
     email: attr('email'),
     displayName: attr('name') || (attr('email').split('@')[0]),
     ...(user.Username?.startsWith('Google_') ? { google: true as const } : {}),
+    ...(/"providerName"\s*:\s*"Google"/.test(attr('identities')) && !user.Username?.startsWith('Google_') ? { googleLinked: true as const } : {}),
   }
 }
 
@@ -475,6 +478,21 @@ export async function findUserBySub(sub: string): Promise<UserSummary | null> {
     console.warn('[cognito] findUserBySub failed', err)
     return null
   }
+}
+
+/**
+ * A Google account Cognito made in the last `withinMs`: Connect Google with a
+ * Google account whose email isn't this account's makes one, which nobody
+ * asked for (google/callback deletes it).
+ */
+export async function isNewGoogleAccount(sub: string, withinMs: number, now = Date.now()): Promise<boolean> {
+  const res = await makeClient().send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  const u = res.Users?.[0]
+  return !!u?.Username?.startsWith('Google_') && !!u.UserCreateDate && now - u.UserCreateDate.getTime() < withinMs
 }
 
 // Whether an account with this sub exists. Unlike findUserBySub it never

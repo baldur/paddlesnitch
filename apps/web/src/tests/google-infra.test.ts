@@ -42,7 +42,10 @@ describe('Sign in with Google in the stack', () => {
     expect(stack).toContain('COGNITO_DOMAIN: hostedDomain.baseUrl()')
     expect(stack).toContain('userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp)')
     // Its lookup reaches this pool only (the AWS account is shared).
-    expect(stack).toContain("actions: ['cognito-idp:ListUsers'], resources: [userPool.userPoolArn]")
+    expect(stack).toContain("actions: ['cognito-idp:ListUsers', 'cognito-idp:AdminLinkProviderForUser'], resources: [userPool.userPoolArn]")
+    // Connect Google: it reads and deletes only the notes in the data bucket.
+    expect(stack).toContain("actions: ['s3:GetObject', 's3:DeleteObject'], resources: [dataBucket.arnForObjects('auth/google-links/*')]")
+    expect(stack).toMatch(/handler: 'pre-sign-up.handler'[\s\S]{0,300}environment: \{ DATA_BUCKET: dataBucket.bucketName \}/)
     expect(stack).not.toContain('userpool/*')
   })
 

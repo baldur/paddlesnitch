@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 // The trigger's own copy of the SDK (infra/node_modules), so the spy is on the client it uses.
 import { CognitoIdentityProviderClient } from '../../../../infra/node_modules/@aws-sdk/client-cognito-identity-provider'
-import { check as handler, handler as lambdaEntry } from '../../../../infra/lambdas/cognito-auth/pre-sign-up.mjs'
+import { check as handler, handler as lambdaEntry, linkKey } from '../../../../infra/lambdas/cognito-auth/pre-sign-up.mjs'
 
 const event = (triggerSource: string, email = 'pat@example.com', verified = 'true') =>
   ({ triggerSource, userPoolId: 'pool', request: { userAttributes: { email, email_verified: verified } }, response: {} })
@@ -85,6 +85,53 @@ describe('PreSignUp: one account per email', () => {
     it('still refuses an email that has an account', async () => {
       users([{ UserStatus: 'CONFIRMED' }])
       await expect(lambdaHandler(event(GOOGLE), lambdaContext)).rejects.toThrow('ACCOUNT_EXISTS')
+    })
+  })
+
+  // Connect Google (lib/google-link.ts): the one way a Google login joins an account.
+  describe('Connect Google: a note from the signed-in account links instead of refusing', () => {
+    const owner = { Username: 'u-1234', UserStatus: 'CONFIRMED', Attributes: [{ Name: 'email_verified', Value: 'true' }, { Name: 'sub', Value: 'sub-owner' }] }
+    const googleEvent = { ...event(GOOGLE), userName: 'Google_10987654321' }
+    const deps = (note: unknown, users: unknown[] = [owner]) => {
+      const calls = { linked: [] as unknown[][], took: [] as string[] }
+      return {
+        calls,
+        d: {
+          usersWithEmail: async () => users as never[],
+          takeLinkNote: async (email: string) => { calls.took.push(email); return note },
+          linkGoogle: async (...a: unknown[]) => { calls.linked.push(a) },
+        },
+      }
+    }
+    const fresh = { userId: 'sub-owner', expiresAt: Date.now() + 60_000 }
+
+    it('links the Google login to the account the note names, and stops the sign-up with LINKED', async () => {
+      const { d, calls } = deps(fresh)
+      await expect(handler(googleEvent, d)).rejects.toThrow('LINKED')
+      expect(calls.linked).toEqual([['pool', 'u-1234', '10987654321']])
+      expect(calls.took).toEqual(['pat@example.com'])
+    })
+
+    it('refuses as before with no note, a note for another account, or one that ran out', async () => {
+      for (const note of [null, { ...fresh, userId: 'someone-else' }, { ...fresh, expiresAt: Date.now() - 1 }]) {
+        const { d, calls } = deps(note)
+        await expect(handler(googleEvent, d)).rejects.toThrow('ACCOUNT_EXISTS')
+        expect(calls.linked).toEqual([])
+      }
+    })
+
+    it('never links to another Google account, and never reads a note for an email sign-up', async () => {
+      const g = deps(fresh, [{ ...owner, Username: 'Google_555' }])
+      await expect(handler(googleEvent, g.d)).rejects.toThrow('ACCOUNT_EXISTS')
+      expect(g.calls.linked).toEqual([])
+      const e = deps(fresh)
+      await expect(handler(event('PreSignUp_SignUp'), e.d)).rejects.toThrow('ACCOUNT_EXISTS')
+      expect(e.calls.took).toEqual([])
+    })
+
+    it('reads the note where the website leaves it', async () => {
+      const { linkNoteKey } = await import('@/lib/google-link')
+      expect(linkKey(' Pat@Example.com ')).toBe(linkNoteKey('pat@example.com'))
     })
   })
 })

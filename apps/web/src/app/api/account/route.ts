@@ -9,6 +9,7 @@ import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
 import { eraseFeedbackContactsForUser } from '@/lib/feedback-contacts'
 import { eraseBetaApplication } from '@/lib/beta-signups'
+import { linkNoteKey } from '@/lib/google-link'
 import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
@@ -135,6 +136,8 @@ export async function DELETE(req: Request) {
   await eraseFeedbackContactsForUser(user.id)
   // Keyed by email: only an address the account has proved is theirs (#713).
   if (user.emailVerified) await eraseBetaApplication(user.email)
+  // A Connect Google note left in the last 10 minutes (lib/google-link.ts).
+  await deleteObject(linkNoteKey(user.email))
   const strava = await getStravaTokens(user.id)
   if (strava) await revokeStrava(strava.accessToken)
   // A Strava sign-in account may have no tokens left, but its synthetic email
