@@ -14,6 +14,7 @@ final class EmailCodeStepTests: AppTestCase {
         app.buttons["sign-in-submit"].tap()
         XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
         declineSavingPassword()
+        waitForTheCodeKeyboard()
     }
 
     func testCreatingAnAccountAsksForTheCodeWithoutTabs() {
@@ -27,21 +28,20 @@ final class EmailCodeStepTests: AppTestCase {
         typeWhenFocused("123456", into: app.textFields["code-field"])
         dismissKeyboard()
         XCTAssertFalse(scrollToElement(app.buttons["send-new-code"]).isEnabled, "30 seconds before another")
-        scrollToElement(app.buttons["sign-in-submit"]).tap()
+        tapWhenClear(app.buttons["sign-in-submit"])
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }
 
     func testAWrongCodeSaysSo() {
         startAccount()
         typeWhenFocused("000000", into: app.textFields["code-field"])
-        scrollToElement(app.buttons["sign-in-submit"]).tap()
+        tapWhenClear(app.buttons["sign-in-submit"])
         XCTAssertTrue(text(containing: "That code is not valid.").waitForExistence(timeout: 10))
     }
 
     func testChangeEmailGoesBackToCreateAccount() {
         startAccount()
-        dismissKeyboard()
-        scrollToElement(app.buttons["change-email"]).tap()
+        tapWhenClear(app.buttons["change-email"])
         XCTAssertTrue(app.textFields["Display name"].waitForExistence(timeout: 10))
         XCTAssertFalse(element("code-explainer").exists)
     }
@@ -55,7 +55,7 @@ final class EmailCodeStepTests: AppTestCase {
         XCTAssertTrue(text(containing: "Confirm your email first.").exists)
         XCTAssertFalse(element("sign-in-error").exists, "a status, not an error")
         typeWhenFocused("123456", into: app.textFields["code-field"])
-        scrollToElement(app.buttons["sign-in-submit"]).tap()
+        tapWhenClear(app.buttons["sign-in-submit"])
         XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
     }
 
