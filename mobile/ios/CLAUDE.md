@@ -86,6 +86,7 @@ isn't obvious from the code.
   You's path is a `NavigationPath`, so a pushed screen can add its own routes.
 - iOS 17's audit cuts long text in List rows and section footers where newer
   iOS doesn't: give every sentence `.fixedSize(horizontal: false, vertical: true)`.
-- Test scrolls start in the side margin (`swipe(up:)`), outside every
+- Test scrolls start in the right margin (`swipe(up:)`), outside every
   row: `app.swipeUp()` starts mid-screen, and at the largest text size it
-  landed on a tracker card and opened it.
+  landed on a tracker card and opened it. Not the left margin: the back
+  gesture has it, and in the sign-in sheet a drag there scrolled nothing.

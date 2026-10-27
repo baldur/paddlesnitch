@@ -150,8 +150,10 @@ class AppTestCase: XCTestCase {
     func swipe(up: Bool) {
         let window = app.windows.firstMatch
         guard app.keyboards.firstMatch.exists else {
-            let low = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.75))
-            let high = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.3))
+            // The right margin: the left edge belongs to the back gesture,
+            // and in the sign-in sheet a drag there scrolled nothing.
+            let low = window.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.75))
+            let high = window.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.3))
             let (from, to) = up ? (low, high) : (high, low)
             from.press(forDuration: 0.01, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0)
             return

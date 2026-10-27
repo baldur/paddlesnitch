@@ -130,8 +130,9 @@ final class LargeTextTests: AppTestCase {
         app.launch()
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
-        try checkWholeScreen(last: app.buttons["email-us"])
-        XCTAssertTrue(app.buttons["google-sign-in"].exists)
+        // Element by element: each check resizes the text and the sheet
+        // jumps back to the top, so swiping from the top never got there.
+        try checkScreen(at: [app.buttons["sign-in-submit"], app.buttons["google-sign-in"], app.buttons["email-us"]])
     }
 
     /// Strava off on a connected account: "Paused" and Disconnect.
@@ -140,9 +141,7 @@ final class LargeTextTests: AppTestCase {
         app.launchArguments = ["-SampleServer", "-ResetAccount", "-StravaOff", "-StravaConnected"] + launchArguments
         app.launch()
         signInAndWait()
-        tab("You").tap()
-        scrollToElement(app.buttons["Account"]).tap()
-        XCTAssertTrue(element("account-terms").waitForExistence(timeout: 10))
+        openAccount()
         try checkScreen(at: [element("strava-connected"), app.buttons["Disconnect"]])
     }
 
