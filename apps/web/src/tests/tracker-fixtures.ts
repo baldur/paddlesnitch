@@ -62,3 +62,27 @@ export function lostTrackCsv(seconds: number, lostAfterS: number, kmh: number, o
   return [header, ...rows.map((r, i) => (i <= lostAfterS ? r : `${r.split(',').slice(0, 2).join(',')},0,,,`))].join('\n')
 }
 
+
+/**
+ * A motion file shaped like a kayak: the hull rocks with an alternating
+ * stroke (`strokesPerMin`, default 60), a little further to one side, and the
+ * bow pitches. Gravity in the accelerometer, the rates in the gyro, so boat
+ * motion (roll, pitch, evenness) has something real to measure. The app
+ * contract's boat-motion fixtures are made from it.
+ */
+export function boatSidecar(seconds: number, hz: number, startMs = 0): string {
+  const rows: string[] = []
+  let seed = 11
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed / 0x7fffffff - 0.5) * 2 }
+  const P = 1.0, rad = Math.PI / 180
+  const roll = (t: number) => { const s = Math.sin(Math.PI * t / P); return (s > 0 ? 9.5 : 7.5) * s * (1 + 0.15 * Math.sin(t / 37)) }
+  const pitch = (t: number) => 2.2 * Math.sin(2 * Math.PI * t / P + 0.6) + 0.4 * Math.sin(t / 5)
+  for (let i = 0; i < seconds * hz; i++) {
+    const t = i / hz, r = roll(t) * rad, p = pitch(t) * rad, dt = 1 / hz
+    const gx = (roll(t + dt) - roll(t)) / dt, gy = (pitch(t + dt) - pitch(t)) / dt
+    const n = () => 0.01 * rnd()
+    rows.push([startMs + Math.round(t * 1000), (-Math.sin(p) + n()).toFixed(4), (Math.sin(r) * Math.cos(p) + n()).toFixed(4), (Math.cos(r) * Math.cos(p) + n()).toFixed(4),
+      (gx + rnd()).toFixed(3), (gy + rnd()).toFixed(3), (0.5 * rnd()).toFixed(3)].join(','))
+  }
+  return [HEADER, ...rows].join('\n')
+}

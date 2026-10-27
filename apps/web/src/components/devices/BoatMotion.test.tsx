@@ -31,7 +31,7 @@ describe('boat motion', () => {
     const text = await render(<BoatMotion attitude={r.attitude} strokeRate={60.1} />)
     expect(text).toContain(`${r.attitude.rollRmsDeg}°`)
     expect(text).toContain(`${Math.round(Math.abs(r.attitude.symmetry.imbalancePct))}%`)
-    expect(text).toContain('60')
+    expect(text).toMatch(/Stroke rate60spm/)
   })
 
   it("keeps the engine's reason out of the paddler's box; it's under Technical details", async () => {

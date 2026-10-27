@@ -204,57 +204,76 @@ golden answers are `fixtures/api/account.*.json`.
 
 ### Boat motion
 
-The website's `/paddles/[id]/motion`. Only a paddle whose `paddles.get` has
-`source.type === "device"` with `deviceId` and `deviceSessionId` has one: call
+The website's `/paddles/[id]/motion`. **Offer it only on your own paddle** (the
+route is owner-only; a buddy's paddle has no Motion button, as on the website)
+whose `paddles.get` has `source.type === "device"` with `deviceId` and
+`deviceSessionId`. Call
 `GET /api/account/devices/sessions/<deviceSessionId>?deviceId=<deviceId>`
 (URL-encode both). Every number comes from the server; the app draws. With
 the `x-paddlesnitch-app` header the answer is only `{attitude, cadence}` (the
 website also gets its technical details, with raw GPS rows the apps don't need).
-It sends an `ETag`: send it back as `If-None-Match` and a 304 with no body
-means "what you have is current". The website's "← Paddle" link and its
-Technical details panel are not part of the app screen.
+Ignore `cadence` on this screen: the Stroke rate tile uses the paddle's own
+`result.avgSR`. It sends an `ETag` (and `Vary: x-paddlesnitch-app`): send it
+back as `If-None-Match` and a 304 with no body means "what you have is
+current". 401 is handled as on every account route. The website's
+"← Paddle" link and its Technical details panel are not part of the app screen.
 
 | State | What to show (the website's words) |
 |---|---|
 | Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
 | `paddles.get` fails or finds nothing | Title "We can't find this paddle", button Back to Paddles |
 | Loading | "Loading" |
-| Call failed, or 404 | "Couldn’t read the tracker’s recording. Please try again." |
-| `attitude` null, or `attitude.available` false | "No boat motion for this recording." then `noMotionCopy` (format.json: null = the motion file hasn't arrived, else it couldn't be measured). Never show `reason`: it is the engine's English, for engineers |
-| `attitude.available` | The tiles, the three charts and the two notes below |
+| Call failed, or 404 | "Couldn’t read the tracker’s recording. Please try again." with pull-to-refresh or a Try again button (the website has neither: it is reloaded) |
+| `attitude` null, or `attitude.available` false | "No boat motion for this recording." (as the box's title) then `noMotionCopy` (format.json: no `attitude`, or an empty `reason` = the motion file hasn't arrived; a `reason` = it couldn't be measured). Never show `reason` itself: it is the engine's English, for engineers |
+| `attitude.available` | The tiles, the three charts and the two notes below, in that order |
 
 Page title "Boat motion", with the paddle's `paddledAt` as `fmtDayTime` above it.
 
-**Tiles** (label, value, note under it):
+**Tiles**, two columns on a phone (four from 640 pt wide), each a card
+(`surface`, `border`, the control radius). Label as a mono uppercase
+eyebrow (`muted`), value in mono, larger, `fg`, note under it in small
+`muted`. Labels wrap at large text sizes; never truncate them. Each tile is
+one accessibility element, read as label, value, note, with "°" spoken as
+"degrees" and "spm" as "strokes per minute".
 - Side-to-side roll: `rollRmsDeg` + "°", "typical lean"
 - Bow-to-stern pitch: `pitchRmsDeg` + "°", "typical tilt"
 - Evenness: `fmtEvenness(symmetry.imbalancePct)`, "uneven"; `symmetry` null: "—" and no note
 - Stroke rate: the paddle's `result.avgSR` rounded, "spm"; null: "—", "not measured"
 
-**Charts** (title, then caption under the chart). Roll is the split colour,
-pitch the green; angles in degrees, `t` in milliseconds. Y-axis ticks read
-"N°" every 5° when the range passes 12°, every 3° past 6°, else every 2°.
-Ticks are the plain number (a hyphen for minus: "-6°"); only the
-histogram's left label uses U+2212. Each chart's accessibility label is given
-after it.
-- "Through the session" from `envelope`: a band per bucket from min to max, roll
-  over pitch, y from −`plotBoundDeg` to +`plotBoundDeg` (10 when null), values
-  beyond clamped to the edge, and then the axis note "a few moments went past
-  ±N° and are clipped here". X labels "0 min" and the length in whole minutes.
-  Legend "roll" and "pitch". Label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
+**Charts**: each a square-cornered panel (`surface`, `border`) with its title
+as a heading above the chart and its caption (small, `muted`) below. Each
+chart is one image element with the accessibility label given below; its
+axis text is hidden from the screen reader. Colours by token: roll `split`,
+pitch `green`, the mirrored line `red`, gridlines `border`, the zero line and
+all chart text `muted` (mono). Angles in degrees, `t` in milliseconds. The
+website draws them about 3.5 wide to 1 high. Y-axis ticks are `axisTicks`
+(format.json) of the chart's bound, labelled with the plain number and "°"
+(a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
+- "Through the session" from `envelope`: a band per bucket from min to max
+  (roll at 0.5 opacity over pitch at 0.28), y from −`plotBoundDeg` to
+  +`plotBoundDeg` (10 when null), values beyond clamped to the edge, and then
+  the axis note "a few moments went past ±N° and are clipped here". X labels
+  "0 min" and the length in whole minutes. Legend "roll" and "pitch".
+  Accessibility label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
   Caption: "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
-- "Stroke shape" from `excerpt`: two lines, scaled to its largest value ×1.1.
-  Label "<seconds> s at <sampleRateHz> Hz". Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
+- "Stroke shape" from `excerpt`: roll and pitch lines, y bound = the largest
+  absolute value (at least 1°) ×1.1. X-axis label "<seconds, rounded> s at
+  <sampleRateHz> Hz" (leave out " at … Hz" when `sampleRateHz` is null).
+  Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
   Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
-- "Where the boat spent its time" from `rollHistogram`: bars by `centreDeg`,
-  plus a dashed red line of the same counts flipped about 0 (each bin takes the
-  count of the bin nearest `-centreDeg`). Labels "level" at 0, "−N°" (U+2212)
-  at the left and "+N°" at the right (N = the largest `|centreDeg|`, rounded),
-  legend "actual" and "mirrored". Accessibility label: "Distribution of boat lean, with the mirrored distribution overlaid to show evenness". Caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
+- "Where the boat spent its time" from `rollHistogram`: bars by `centreDeg`
+  (`split` at 0.45), plus a dashed `red` line of the same counts flipped
+  about 0 (each bin takes the count of the bin nearest `-centreDeg`). Labels
+  "level" at 0, "−N°" (U+2212) at the left and "+N°" at the right (N = the
+  largest `|centreDeg|`, at least 1, rounded), legend "actual" and "mirrored".
+  Accessibility label: "Distribution of boat lean, with the mirrored distribution overlaid to show evenness".
+  Caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
 
-A chart with fewer than 2 points (histogram: no bins) is left out.
+A chart with fewer than 2 points (histogram: no bins) draws nothing, but its
+panel, title and caption stay, as on the website.
 
-**Notes** under the charts:
+**Notes** under the charts, one card (`surface`, `border`, control radius),
+small `muted` text with the lead-in in `fg`:
 - "**Reading this.** Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly."
 - "**What this can't tell you.** We can't tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." and, when `axisConfident` is false, " Roll and pitch were hard to tell apart in this recording."
 
@@ -376,6 +395,7 @@ even), 22.5° on the compass.
 | `noPaddleMessage` | `{reason, hasMotion}` | why a recording has no route (`reason` is a `NoPaddleReason`) |
 | `noMotionCopy` | the answer's `attitude` (null, or one with `available: false`) | why a tracker paddle has no boat motion |
 | `fmtEvenness` | `symmetry.imbalancePct` | the Evenness tile: its size, rounded, with % |
+| `axisTicks` | a chart's ±bound, degrees | the y-axis ticks: every multiple of the step (2°, 3° past 6°, 5° past 12°) within the bound |
 
 ## tokens/
 
