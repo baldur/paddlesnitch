@@ -169,15 +169,20 @@ class AppTestCase: XCTestCase {
         return target
     }
 
-    /// A swipe from the middle of the screen, or, with the keyboard up, from
-    /// the middle of what's above it (a swipe on the keyboard moves nothing).
+    /// A swipe from the side margin, outside every row (a swipe from the
+    /// middle started on a tracker card at the largest text size and opened
+    /// it), or, with the keyboard up, from the middle of what's above it (a
+    /// swipe on the keyboard moves nothing).
     func swipe(up: Bool) {
+        let window = app.windows.firstMatch
         guard app.keyboards.firstMatch.exists else {
-            if up { app.swipeUp() } else { app.swipeDown() }
+            let low = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.75))
+            let high = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.3))
+            let (from, to) = up ? (low, high) : (high, low)
+            from.press(forDuration: 0.01, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0)
             return
         }
         let area = readableArea
-        let window = app.windows.firstMatch
         func point(_ y: CGFloat) -> XCUICoordinate {
             window.coordinate(withNormalizedOffset: .zero)
                 .withOffset(CGVector(dx: area.midX - window.frame.minX, dy: y - window.frame.minY))
@@ -200,12 +205,15 @@ class AppTestCase: XCTestCase {
     }
 
     /// Wholly in the readable area, or, for an element taller than that area
-    /// (a row at the largest text size), its top and its middle are.
+    /// (a row at the largest text size), its top is in the area with room
+    /// under it, so it fills the rest. (Its middle can't be on screen with its
+    /// top once it's twice the area's height: a tracker card at the largest
+    /// size. The window is wider than one swipe, so scrolling can't hop over it.)
     func isReadable(_ element: XCUIElement) -> Bool {
         let area = readableArea
         let frame = element.frame
         if frame.height <= area.height { return area.contains(frame) }
-        return frame.minY >= area.minY && area.contains(CGPoint(x: frame.midX, y: frame.midY))
+        return frame.minY >= area.minY && frame.minY <= area.maxY - 88
     }
 
     func open(_ paddle: String, file: StaticString = #filePath, line: UInt = #line) {

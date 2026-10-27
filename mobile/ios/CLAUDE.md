@@ -50,3 +50,13 @@ isn't obvious from the code.
   `pgrep -f "xcodebuild test"` also matches the waiting shells' own command
   lines, and two of them wait on each other forever. A download
   (`xcodebuild -downloadPlatform`) is an xcodebuild too.
+- Push screens by value, with the destination declared on a screen that
+  stays in the stack (`navigationDestination(for:)`). On iOS 17 a
+  `NavigationLink { destination }` two screens under a typed path hung
+  opening a paddle (CI: "App event loop idle notification not received").
+  You's path is a `NavigationPath`, so a pushed screen can add its own routes.
+- iOS 17's audit cuts long text in List rows and section footers where newer
+  iOS doesn't: give every sentence `.fixedSize(horizontal: false, vertical: true)`.
+- Test scrolls start in the side margin (`swipe(up:)`), outside every
+  row: `app.swipeUp()` starts mid-screen, and at the largest text size it
+  landed on a tracker card and opened it.

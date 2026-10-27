@@ -74,11 +74,24 @@ import com.paddlesnitch.app.ui.checkboxColors
 import com.paddlesnitch.app.ui.fieldColors
 import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
+import com.paddlesnitch.app.api.SignInOptions
+import com.paddlesnitch.app.api.shown
+import com.paddlesnitch.app.ui.outlinedColors
 
 /**
  * Sign in or create an account, like the website's /signin: password sign-in,
- * sign-up and Strava. (The email code waits for email delivery, as on the
- * website.) [stravaReturn] is the link Strava sign-in came back on.
+ * sign-up, and Google and Strava when the server has them on ([loadOptions]).
+ * [stravaReturn] and [googleReturn] are the links those came back on.
  */
 @Composable
 fun SignInScreen(
@@ -86,6 +99,9 @@ fun SignInScreen(
     strava: StravaSignIn,
     stravaReturn: Uri?,
     onReturnHandled: () -> Unit,
+    google: GoogleSignIn,
+    googleReturn: Uri?,
+    onGoogleReturnHandled: () -> Unit,
     onSignedIn: (SignIn) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -96,6 +112,8 @@ fun SignInScreen(
     startStrava: Boolean = false,
     /** Forgot password, with the email typed so far. */
     onForgot: (email: String) -> Unit = {},
+    /** Which sign-ins besides email are on; a failure shows email only. */
+    loadOptions: suspend () -> SignInOptions = { api.signInOptions() },
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf(prefillEmail.orEmpty()) }
@@ -125,6 +143,37 @@ fun SignInScreen(
     val uri = LocalUriHandler.current
     val context = LocalContext.current
 
+    // Asked each time the screen opens: Google and Strava can be switched on and off on the server.
+    var options by remember { mutableStateOf<SignInOptions?>(null) }
+    var optionsKnown by remember { mutableStateOf(false) }
+    var optionsAttempt by remember { mutableIntStateOf(0) }
+    var optionsFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(optionsAttempt) {
+        optionsFailed = false
+        runCatching { loadOptions() }.onSuccess { options = it }.onFailure { optionsFailed = true }
+        optionsKnown = true
+    }
+    var emailError by remember { mutableStateOf<String?>(null) }
+
+    // After the options, whose Strava switch decides the words of an error.
+    // Waits inside one run: keyed on optionsKnown too, it would run again and wipe its own result.
+    LaunchedEffect(googleReturn) {
+        val back = googleReturn ?: return@LaunchedEffect
+        snapshotFlow { optionsKnown }.first { it }
+        busy = true; error = null
+        runCatching { google.finish(back.getQueryParameter("code"), back.getQueryParameter("error"), strava = options?.strava == true) } // read now, not as first composed
+            .onSuccess { if (it != null) onSignedIn(it) }
+            .onFailure { error = it.shown("Couldn’t sign in with Google. Please try again.") }
+        busy = false
+        onGoogleReturnHandled()
+    }
+
+    fun openGoogle() {
+        error = null
+        runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(google.start())) }
+            .onFailure { google.cancel(); error = "Couldn’t open Google sign-in. Turn on or install a web browser, then try again." }
+    }
+
     LaunchedEffect(stravaReturn) {
         val back = stravaReturn ?: return@LaunchedEffect
         busy = true; error = null
@@ -138,7 +187,7 @@ fun SignInScreen(
     fun openStrava() {
         error = null
         runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(strava.start())) }
-            .onFailure { error = "There’s no web browser on this phone to open Strava in." }
+            .onFailure { error = "Couldn’t open Strava. Turn on or install a web browser, then try again." }
     }
 
     // Once, not again on rotation; a missing browser shows here, as from the button.
@@ -236,8 +285,9 @@ fun SignInScreen(
             Text("I agree to the ", fontSize = MaterialTheme.typography.bodyMedium.fontSize)
             TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
         }
-        error?.let {
-            Text(it, color = PsColor.red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        // Always in the layout, so TalkBack reads each new error.
+        Box(Modifier.fillMaxWidth().testTag("signin-error").semantics { liveRegion = LiveRegionMode.Polite }) {
+            error?.let { Text(it, color = PsColor.red) }
         }
         Button(onClick = ::submit, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text(when {
@@ -248,15 +298,68 @@ fun SignInScreen(
             })
         }
         if (!creating) TextButton(onClick = { onForgot(email.trim()) }, colors = textColors()) { Text("Forgot password?") }
-        HorizontalDivider(color = PsColor.border)
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Or use your Strava account", color = PsColor.muted)
-            // Strava's own button, unaltered (their brand guidelines).
-            Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
-                modifier = Modifier.height(48.dp).clickable(enabled = !busy, role = Role.Button, onClick = ::openStrava))
-            Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.",
-                color = PsColor.muted, textAlign = TextAlign.Center)
+        // Failed: the email form, and a way to ask again (a Strava-made account needs the line below).
+        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (optionsFailed) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                HorizontalDivider(color = PsColor.border)
+                Text("Couldn’t load the other ways to sign in.", color = PsColor.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
+                TextButton(onClick = { optionsAttempt++ }, colors = textColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
+            }
         }
+        val o = options ?: return@Column
+        if (o.google || o.strava) {
+            HorizontalDivider(color = PsColor.border)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(when { o.google && o.strava -> "Or use your Google or Strava account"; o.google -> "Or use your Google account"; else -> "Or use your Strava account" }, color = PsColor.muted)
+                if (o.google) GoogleButton(enabled = !busy, onClick = ::openGoogle)
+                // Strava's own button, unaltered (their brand guidelines).
+                if (o.strava) Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
+                    modifier = Modifier.height(48.dp).clickable(enabled = !busy, role = Role.Button, onClick = ::openStrava))
+                if (o.strava) Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.",
+                    color = PsColor.muted, textAlign = TextAlign.Center)
+            }
+        }
+        // Accounts made through Strava have no email or password to use instead.
+        if (!o.strava) {
+            HorizontalDivider(color = PsColor.border)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Email, not the public issue form: people would put their name and email in a report.
+                Text("Signed up with Strava? Strava sign-in is off for now. Email us and we’ll help you sign in.",
+                    color = PsColor.muted, textAlign = TextAlign.Center)
+                OutlinedButton(onClick = { emailError = if (emailUs(context)) null else NO_EMAIL_APP }, enabled = !busy, colors = outlinedColors(),
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text("Email us") }
+                // Next to the button that failed, not up by the form.
+                Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                    emailError?.let { Text(it, color = PsColor.red, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
+                }
+            }
+        }
+    }
+}
+
+internal const val NO_BROWSER_REPORT = "Couldn’t open the issue form. Turn on or install a web browser, then try again."
+internal const val NO_EMAIL_APP = "Couldn’t open an email app. Please email privacy@paddlesnitch.com."
+internal const val EMAIL_US = "mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava"
+
+/** Help signing in without Strava (README, "When strava is false"). False when there's no email app. */
+fun emailUs(context: android.content.Context): Boolean =
+    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO, Uri.parse(EMAIL_US))) }.isSuccess
+
+/**
+ * Google's own dark button (their branding guidelines: fill #131314, border #8E918F,
+ * text #E3E3E3, the unaltered G), as the website's GoogleButton.
+ */
+@Composable
+private fun GoogleButton(enabled: Boolean, onClick: () -> Unit) {
+    // Disabled, the whole button fades, so it still looks like Google's (the G can't be tinted).
+    OutlinedButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, Color(0xFF8E918F)),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF131314), contentColor = Color(0xFFE3E3E3),
+            disabledContainerColor = Color(0xFF131314), disabledContentColor = Color(0xFFE3E3E3)),
+        modifier = Modifier.heightIn(min = 48.dp).alpha(if (enabled) 1f else 0.5f)) {
+        Image(painterResource(R.drawable.google_g), contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("Sign in with Google", fontWeight = FontWeight.Medium)
     }
 }
 

@@ -6,6 +6,7 @@ import {
   deleteStravaTokens, deleteAthleteIndex, stravaAccessRevoked,
 } from '@paddlesnitch/core/strava-storage'
 import { importStravaActivity } from '@paddlesnitch/analysis/strava-import'
+import { stravaOn } from '@/lib/sign-in-options'
 
 export type StravaEvent = {
   object_type?: 'activity' | 'athlete'
@@ -41,6 +42,10 @@ export async function processStravaEvent(ev: StravaEvent): Promise<void> {
   // A new activity → auto-import it as a paddle if the owner is a connected
   // user who has auto-import enabled. importStravaActivity filters to water
   // sports and de-dupes, so non-paddles / re-sends are no-ops.
+  // Strava switched off (lib/sign-in-options.ts): nothing new comes in.
+  // Deauthorisations above are still honoured.
+  if (!stravaOn()) return
+
   if (ev.object_type === 'activity' && ev.aspect_type === 'create' && ev.object_id) {
     const userId = await getUserIdByAthleteId(ownerId)
     if (!userId) return                                   // not one of our users

@@ -12,6 +12,7 @@ import { fmtDay } from '@paddlesnitch/core/format'
 import { fmtClock } from '@paddlesnitch/analysis/analysis'
 import { projectRoute } from '@paddlesnitch/timing/geo'
 import { SAMPLE_PADDLE, type RouteKind, type SamplePaddle } from './home-sample-paddle'
+import { stravaOn } from '@/lib/sign-in-options'
 
 const DEFAULT_METADATA: Metadata = {
   title: 'paddlesnitch.com — tools for the river',
@@ -103,7 +104,7 @@ export function LandingContent({ variant }: { variant?: string } = {}) {
             See what happened on every paddle.
           </h1>
           <p className="text-base text-muted max-w-prose">
-            Upload a GPS file, bring it in from Strava, or let the tracker send it.
+            {stravaOn() ? 'Upload a GPS file, bring it in from Strava, or let the tracker send it.' : 'Upload a GPS file, or let the tracker send it.'}
             You get your pace, stroke rate, efforts and rests on a map, and a short summary.
           </p>
           <div className="flex flex-wrap gap-2 mt-2">

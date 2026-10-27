@@ -1,5 +1,8 @@
 import {
   CognitoIdentityProviderClient,
+  GetUserAttributeVerificationCodeCommand,
+  VerifyUserAttributeCommand,
+  AdminDisableProviderForUserCommand,
   SignUpCommand,
   AdminConfirmSignUpCommand,
   AdminUpdateUserAttributesCommand,
@@ -414,6 +417,21 @@ type UserSummary = {
   sub: string; email: string; displayName: string
   /** Signs in with Google (username `Google_<id>`): our email-based sign-ins can't reach it. */
   google?: true
+  /** An email account with a Google login connected to it (Connect Google). */
+  googleLinked?: true
+  /** That Google login's id (Disconnect needs it). */
+  googleId?: string
+}
+
+// The Google login connected to an email account, from Cognito's `identities` attribute.
+function linkedGoogleId(identities: string, username?: string): string | null {
+  if (!identities || username?.startsWith('Google_')) return null
+  try {
+    const list = JSON.parse(identities) as { providerName?: string; userId?: string }[]
+    return list.find(i => i.providerName === 'Google' && i.userId)?.userId ?? null
+  } catch {
+    return null
+  }
 }
 
 function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
@@ -423,6 +441,7 @@ function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array
     email: attr('email'),
     displayName: attr('name') || (attr('email').split('@')[0]),
     ...(user.Username?.startsWith('Google_') ? { google: true as const } : {}),
+    ...(linkedGoogleId(attr('identities'), user.Username) ? { googleLinked: true as const, googleId: linkedGoogleId(attr('identities'), user.Username)! } : {}),
   }
 }
 
@@ -474,6 +493,66 @@ export async function findUserBySub(sub: string): Promise<UserSummary | null> {
     // so the trial admin page can still render — names just go blank.
     console.warn('[cognito] findUserBySub failed', err)
     return null
+  }
+}
+
+/**
+ * A Google account Cognito made in the last `withinMs`: Connect Google with a
+ * Google account whose email isn't this account's makes one, which nobody
+ * asked for (google/callback deletes it).
+ */
+export async function isNewGoogleAccount(sub: string, withinMs: number, now = Date.now()): Promise<boolean> {
+  const res = await makeClient().send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  const u = res.Users?.[0]
+  return !!u?.Username?.startsWith('Google_') && !!u.UserCreateDate && now - u.UserCreateDate.getTime() < withinMs
+}
+
+/**
+ * Proving the account's email from Account (Connect Google needs it): Cognito
+ * emails a code with its own sender, as for password resets. It needs the
+ * user's access token, which the refresh token gives.
+ */
+export async function accessTokenFrom(refreshToken: string): Promise<string | null> {
+  try {
+    const res = await makeClient().send(new InitiateAuthCommand({ AuthFlow: 'REFRESH_TOKEN_AUTH', ClientId: CLIENT_ID, AuthParameters: { REFRESH_TOKEN: refreshToken } }))
+    return res.AuthenticationResult?.AccessToken ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function sendEmailProofCode(accessToken: string): Promise<{ ok: true } | { error: CognitoError }> {
+  try {
+    await makeClient().send(new GetUserAttributeVerificationCodeCommand({ AccessToken: accessToken, AttributeName: 'email' }))
+    return { ok: true }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+export async function confirmEmailProof(accessToken: string, code: string): Promise<{ ok: true } | { error: CognitoError }> {
+  try {
+    await makeClient().send(new VerifyUserAttributeCommand({ AccessToken: accessToken, AttributeName: 'email', Code: code }))
+    return { ok: true }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+/** Disconnect a Google login from the email account it was connected to. Already gone is done. */
+export async function disconnectGoogle(googleId: string): Promise<void> {
+  try {
+    await makeClient().send(new AdminDisableProviderForUserCommand({
+      UserPoolId: USER_POOL_ID,
+      User: { ProviderName: 'Google', ProviderAttributeName: 'Cognito_Subject', ProviderAttributeValue: googleId },
+    }))
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'UserNotFoundException') return
+    throw err
   }
 }
 
@@ -654,6 +733,9 @@ export function sessionOfFreshToken(idToken: string): string | null {
   }
 }
 
+/** A boolean claim: Cognito sends true, federated tokens may say 'true'. Anything else (missing included) is false. */
+export const claimIsTrue = (v: unknown): boolean => v === true || v === 'true'
+
 export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
   try {
     const claims = await getVerifier().verify(idToken)
@@ -668,6 +750,7 @@ export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
       id: String(claims.sub),
       email,
       displayName: name,
+      emailVerified: claimIsTrue(claims.email_verified),
     }
   } catch {
     return null

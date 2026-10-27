@@ -8,9 +8,15 @@ import { requestSignIn } from '@paddlesnitch/core/auth'
 // scheme (RFC 8252: a Custom Tab or ASWebAuthenticationSession hands it back
 // reliably, and debug builds and an iPhone without the Apple team ID can use
 // it); the app swaps code + verifier for tokens. Tokens never appear in a URL,
-// and a code caught by another app on the phone is useless without the verifier.
+// and a code caught by another app on the phone is useless without the verifier,
+// as long as the real app made the challenge. Anyone can make one, so a flow
+// must not finish from a link alone: Strava always shows its consent page, and
+// Google from an app goes through a tap on /signin/google-app (security review,
+// 2026-10-26).
 
 export const APP_RETURN_URL = 'com.paddlesnitch.app:/signin/strava'
+/** Where Sign in with Google from an app ends: `?code=` (Cognito's own, to swap at google/app-token) or `?error=<key>`. */
+export const APP_GOOGLE_URL = 'com.paddlesnitch.app:/signin/google'
 /** Where connecting Strava from a signed-in app ends: `?code=` to collect at app-connect/finish, or `?strava=<key>` (lib/strava-connect-results.ts) when it didn't work. */
 export const APP_STRAVA_URL = 'com.paddlesnitch.app:/account/strava'
 const CODE_TTL_MS = 5 * 60_000

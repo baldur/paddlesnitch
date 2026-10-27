@@ -95,7 +95,13 @@ Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
 - **Audience:** External, **In production** since 2026-10-26 (published by the owner): anyone with a Google account can sign in. No review was needed: no logo, two domains, only the basic scopes. Adding a logo or a sensitive scope would need Google's review. "Back to testing" on the Audience page undoes it.
 - **Client** "paddlesnitch Cognito" (Web): redirect URI `https://paddlesnitch.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse`, JavaScript origin the Cognito domain. Its ID is in SSM and its secret in Secrets Manager (above). Google shows a secret only once: to rotate it, make a new one in the console and `aws secretsmanager put-secret-value` it, never in chat or the repo.
 
+**Connect Google** (Account) goes through the PreSignUp trigger: it reads `auth/google-links/*` in the data bucket (GetObject/DeleteObject on that prefix only, `DATA_BUCKET` env) and may call `AdminLinkProviderForUser` (apps/web/CLAUDE.md § Sign in with Google).
+
 **The button shows only while the `GOOGLE_SIGNIN` repository variable is `1`** (set 2026-10-26; delete it and redeploy to hide the button) (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
+
+**Strava is off while the `STRAVA_OFF` repository variable is `1`** (deploy.yml → `NEXT_PUBLIC_STRAVA_OFF`; apps/web/CLAUDE.md § sign-in flow 6). Delete the variable and redeploy to turn it back on.
+
+**A new email waits for its code** (`keepOriginal: { email: true }`, #713). Email is the pool's username, so without it anyone could change their email (Cognito's public client allows it) to an address nobody had signed up with and *become* that address: AdminGetUser by it finds them, the owner's sign-up fails with "User already exists", and our "set email_verified" call by email lands on them. Proved on a throwaway pool on 2026-10-26, and so was the fix: the change stays pending until the code is entered, the owner signs up separately, and AdminCreateUser and admin email updates still work. Google writes the email on every sign-in; if Google sign-in ever fails with an attribute error, this setting is the first suspect (switching it off updates the pool in place).
 
 ## Inbound email — privacy@paddlesnitch.com
 

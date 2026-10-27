@@ -12,7 +12,8 @@ import { gamesRouter } from './routers/games'
 // File uploads (multipart) stay REST; firmware device endpoints stay REST.
 export const appRouter = router({
   // Auth probe: the current user or null (never throws — used to gate UI).
-  me: publicProcedure.query(({ ctx }) => ({ user: ctx.user })),
+  // The contract's AuthUser: id, email, name (emailVerified stays on the server).
+  me: publicProcedure.query(({ ctx }) => ({ user: ctx.user ? { id: ctx.user.id, email: ctx.user.email, displayName: ctx.user.displayName } : null })),
   paddles: paddlesRouter,
   sources: sourcesRouter,
   similar: similarRouter,

@@ -62,6 +62,21 @@
       500
     ]
   },
+  "GET /att/api/auth/options": {
+    "auth": "public",
+    "input": null,
+    "output": "SignInOptions",
+    "errors": []
+  },
+  "POST /att/api/auth/google/app-token": {
+    "auth": "public",
+    "input": "GoogleAppToken",
+    "output": "SignIn",
+    "errors": [
+      400,
+      401
+    ]
+  },
   "POST /att/api/auth/web-code": {
     "auth": "user",
     "input": "WebPageFor",

@@ -181,6 +181,12 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // Connect Google notes (apps/web/src/lib/google-link.ts): 10 minutes, one use.
+        id: 'expire-google-link-notes',
+        prefix: 'auth/google-links/',
+        expiration: cdk.Duration.days(1),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Prepared "Download my data" files: fetched within minutes of being made.
         id: 'expire-account-exports',
         prefix: 'exports/',
@@ -294,6 +300,14 @@ export class AttStack extends cdk.Stack {
       // signUp confirmed every account at once with email_verified=true, so
       // anyone could hold an address they didn't own. Updates in place.
       autoVerify: { email: true, phone: false },
+      // A new email takes effect only once a code sent to it is entered (#713).
+      // Email is the username here, so without this anyone could set their
+      // email to an address nobody has signed up with yet and become that
+      // address: the owner's sign-up then fails ("User already exists").
+      // Tested on a throwaway pool, 2026-10-26: the change stays pending, the
+      // owner signs up as a separate account, and our admin calls (Strava's
+      // AdminCreateUser, setting email_verified) still work. Updates in place.
+      keepOriginal: { email: true },
       userVerification: {
         emailSubject: 'Your paddlesnitch code',
         emailBody: 'Your paddlesnitch code is {####}. If you didn’t ask for it, ignore this email.',
@@ -410,6 +424,8 @@ export class AttStack extends cdk.Stack {
       handler: 'pre-sign-up.handler',
       code: lambda.Code.fromAsset(lambdaDir),
       timeout: cdk.Duration.seconds(5),
+      // Connect Google reads the server's note here (auth/google-links/).
+      environment: { DATA_BUCKET: dataBucket.bucketName },
     })
     userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp)
     // Only this pool (the account is shared with other projects). A separate
@@ -417,7 +433,11 @@ export class AttStack extends cdk.Stack {
     // depends on its triggers, depend on itself.
     new iam.Policy(this, 'PreSignUpListUsers', {
       roles: [preSignUp.role!],
-      statements: [new iam.PolicyStatement({ actions: ['cognito-idp:ListUsers'], resources: [userPool.userPoolArn] })],
+      statements: [
+        new iam.PolicyStatement({ actions: ['cognito-idp:ListUsers', 'cognito-idp:AdminLinkProviderForUser'], resources: [userPool.userPoolArn] }),
+        // Connect Google: only the notes, read once and deleted.
+        new iam.PolicyStatement({ actions: ['s3:GetObject', 's3:DeleteObject'], resources: [dataBucket.arnForObjects('auth/google-links/*')] }),
+      ],
     })
 
     const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {

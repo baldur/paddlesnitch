@@ -38,6 +38,21 @@ describe('shared FeedbackWidget ↔ header trigger', () => {
     expect(container.querySelector('textarea')).not.toBeNull()
   })
 
+  it('opens by itself on a page opened with ?report=1 (the apps link there)', async () => {
+    window.history.replaceState(null, '', '/signin?report=1')
+    try {
+      await mount(<FeedbackWidget />)
+      expect(container.querySelector('textarea')).not.toBeNull()
+    } finally {
+      window.history.replaceState(null, '', '/')
+    }
+  })
+
+  it('stays closed without it', async () => {
+    await mount(<FeedbackWidget />)
+    expect(container.querySelector('textarea')).toBeNull()
+  })
+
   it('the footer Report button opens it (the way in on phones, where the floating button is hidden)', async () => {
     await mount(<><ReportIssueButton /><FeedbackWidget /></>)
     const floating = container.querySelector('button[aria-label="Report an issue"]')!

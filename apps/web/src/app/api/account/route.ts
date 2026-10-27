@@ -4,11 +4,12 @@ import { getRequestUser, clearAuthCookies } from '@/lib/auth'
 import { hasRecentSignIn } from '@/lib/app-signin'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { unindexEntries } from '@/lib/entries'
-import { deleteUserBySub, revoke } from '@/lib/cognito'
+import { deleteUserBySub, disconnectGoogle, findUserBySub, revoke } from '@/lib/cognito'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
 import { eraseFeedbackContactsForUser } from '@/lib/feedback-contacts'
 import { eraseBetaApplication } from '@/lib/beta-signups'
+import { linkNoteKey } from '@/lib/google-link'
 import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
@@ -133,7 +134,10 @@ export async function DELETE(req: Request) {
   await erasePortages(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
-  await eraseBetaApplication(user.email)
+  // Keyed by email: only an address the account has proved is theirs (#713).
+  if (user.emailVerified) await eraseBetaApplication(user.email)
+  // A Connect Google note left in the last 10 minutes (lib/google-link.ts).
+  await deleteObject(linkNoteKey(user.email))
   const strava = await getStravaTokens(user.id)
   if (strava) await revokeStrava(strava.accessToken)
   // A Strava sign-in account may have no tokens left, but its synthetic email
@@ -162,6 +166,9 @@ export async function DELETE(req: Request) {
   const refreshToken = cookieStore.get('tt_refresh')?.value
     ?? (typeof body.refreshToken === 'string' ? body.refreshToken : undefined)
   if (refreshToken) await revoke(refreshToken)
+  // A Google login connected on Account stops opening anything first.
+  const linked = (await findUserBySub(user.id))?.googleId
+  if (linked) await disconnectGoogle(linked)
   // By sub: a Google account's username isn't its email.
   await deleteUserBySub(user.id)
 

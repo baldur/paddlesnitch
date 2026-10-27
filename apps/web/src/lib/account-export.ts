@@ -76,6 +76,7 @@ export async function buildAccountExport(user: AuthUser) {
       displayName: user.displayName,
       // Cognito also keeps the Google account's ID for an account that signs in with Google (#697).
       ...((await findUserBySub(user.id))?.google ? { signsInWithGoogle: true } : {}),
+      ...((await findUserBySub(user.id))?.googleLinked ? { googleConnected: true } : {}),
     },
     ownedCourses,
     ownedTrials,
@@ -90,7 +91,8 @@ export async function buildAccountExport(user: AuthUser) {
     // Buddies (ids), requests both ways, and whether buddies see your paddles.
     buddies: await exportBuddies(user.id),
     issueReports: await listFeedbackContactsForUser(user.id),
-    betaApplication: await getBetaApplication(user.email),
+    // Keyed by email: only an address the account has proved is theirs (#713).
+    betaApplication: user.emailVerified ? await getBetaApplication(user.email) : null,
     notes: [
       'This file contains all personal data paddlesnitch.com holds about you.',
       'Heart rate is never stored. Stroke rate is kept when your file has it.',
