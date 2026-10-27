@@ -73,6 +73,13 @@ class IntakeTest {
         assertEquals(Do.StravaReturn("com.paddlesnitch.app:/x"), Intake().arrived(Incoming.StravaReturn("com.paddlesnitch.app:/x"), false).second)
     }
 
+    @Test fun aGoogleReturnCountsOnlyWhenThisAppStartedOneWhileSignedOut() {
+        val back = Incoming.GoogleReturn("com.paddlesnitch.app:/signin/google?code=1")
+        assertEquals(Do.GoogleReturn(back.uri), Intake().arrived(back, signedIn = false, googlePending = true).second)
+        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = false, googlePending = false).second) // a link alone
+        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = true, googlePending = true).second) // already signed in another way
+    }
+
     @Test fun aStravaConnectReturnIsForTheSignedInAccountOnly() {
         val back = Incoming.StravaConnectReturn("com.paddlesnitch.app:/account/strava?code=abc")
         assertEquals(Do.StravaConnectReturn(back.uri), Intake().arrived(back, signedIn = true).second)
