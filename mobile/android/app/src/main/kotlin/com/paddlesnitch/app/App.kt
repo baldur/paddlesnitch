@@ -42,7 +42,9 @@ import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SignedOut
+import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
+import com.paddlesnitch.app.auth.PrefsGoogleVerifierStore
 import com.paddlesnitch.app.auth.PrefsVerifierStore
 import com.paddlesnitch.app.auth.StravaSignIn
 import com.paddlesnitch.app.auth.ForgotPasswordScreen
@@ -88,6 +90,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     val scope = rememberCoroutineScope()
     val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
+    val googleVerifiers = remember { PrefsGoogleVerifierStore(context) }
+    val google = remember { GoogleSignIn(api, googleVerifiers) }
+    var googleReturn by remember { mutableStateOf<Uri?>(null) }
     var stravaConnectReturn by remember { mutableStateOf<String?>(null) }
     // Links and files waiting to be dealt with, and the add-paddle card (Intake.kt).
     var intake by rememberSaveable { mutableStateOf(Intake()) }
@@ -101,6 +106,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             Intake.Do.SignIn -> signingIn = true
             is Intake.Do.Browser -> openInBrowser(context, d.url)
             is Intake.Do.StravaReturn -> { stravaReturn = Uri.parse(d.uri); signingIn = true }
+            is Intake.Do.GoogleReturn -> { googleReturn = Uri.parse(d.uri); signingIn = true }
             // Anyone can open this address: only a connect this app started changes anything.
             is Intake.Do.StravaConnectReturn -> if (PrefsConnectVerifierStore(context).pending) { stravaConnectReturn = d.uri; inAccount = true; settingUpTracker = false }
             is Intake.Do.Upload -> addPaddle.add(Uri.parse(d.uri))
@@ -112,7 +118,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         incoming.value = null
         if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; inTrackers = false; settingUpTracker = false }
         val name = (it as? Incoming.AddFile)?.let { f -> withContext(Dispatchers.IO) { displayName(context, Uri.parse(f.uri)) } }
-        run(intake.arrived(it, signedIn, name))
+        run(intake.arrived(it, signedIn, name, googlePending = googleVerifiers.pending))
     }
     fun forgetReauth() { reauth = reauth.cleared(); reauthEmail = null }
     fun leaveSignIn() { signingIn = false; forgotFor = null; resetNotice = null; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
@@ -120,7 +126,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
-    fun signedOut() { signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); forgetReauth() }
+    fun signedOut() { signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
@@ -133,7 +139,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 // Signed in, from the sign-in screen or a password reset.
                 val signedInWith: (com.paddlesnitch.app.api.SignIn) -> Unit = {
                     if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resume != null }
-                    forgotFor = null; resetNotice = null
+                    forgotFor = null; resetNotice = null; googleVerifiers.clear() // signed in some other way: a late Google return means nothing
                     signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn())
                 }
                 val forgot = forgotFor
@@ -146,6 +152,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                 }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
+                    google = google, googleReturn = googleReturn, onGoogleReturnHandled = { googleReturn = null },
                     onSignedIn = signedInWith, onCancel = { leaveSignIn() }, modifier = m,
                     prefillEmail = reauthEmail, notice = reauth.notice ?: resetNotice, onForgot = { forgotFor = it },
                     startStrava = reauth.signingInAgain && reauth.strava)

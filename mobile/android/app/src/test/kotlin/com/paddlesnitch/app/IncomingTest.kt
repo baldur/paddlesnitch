@@ -41,6 +41,13 @@ class IncomingTest {
         assertEquals(Incoming.StravaReturn("com.paddlesnitch.app:/account/stravax?code=1"), incoming(view, "com.paddlesnitch.app:/account/stravax?code=1", null)) // that exact path only
     }
 
+    @Test fun signingInWithGoogleComesBackOnItsOwnPath() {
+        val back = "com.paddlesnitch.app:/signin/google?code=abc"
+        assertEquals(Incoming.GoogleReturn(back), incoming(view, back, null))
+        assertEquals(Incoming.GoogleReturn("com.paddlesnitch.app:/signin/google?error=google_denied"), incoming(view, "com.paddlesnitch.app:/signin/google?error=google_denied", null))
+        assertEquals(Incoming.StravaReturn("com.paddlesnitch.app:/signin/googlex?code=1"), incoming(view, "com.paddlesnitch.app:/signin/googlex?code=1", null)) // that exact path only
+    }
+
     @Test fun aFileOpenedOrSharedFromAnotherAppIsAdded() {
         assertEquals(Incoming.AddFile("content://files/1"), incoming(view, "content://files/1", null))
         assertEquals(Incoming.AddFile("content://files/2"), incoming(send, null, "content://files/2"))

@@ -67,6 +67,14 @@
     "call": "POST /att/api/auth/login",
     "schema": "SignIn"
   },
+  "auth.options.email-only.json": {
+    "call": "GET /att/api/auth/options",
+    "schema": "SignInOptions"
+  },
+  "auth.options.json": {
+    "call": "GET /att/api/auth/options",
+    "schema": "SignInOptions"
+  },
   "auth.otp-verify.retry.json": {
     "call": "POST /att/api/auth/otp-verify",
     "schema": "ApiError"

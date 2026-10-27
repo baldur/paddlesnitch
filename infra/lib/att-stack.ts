@@ -294,6 +294,14 @@ export class AttStack extends cdk.Stack {
       // signUp confirmed every account at once with email_verified=true, so
       // anyone could hold an address they didn't own. Updates in place.
       autoVerify: { email: true, phone: false },
+      // A new email takes effect only once a code sent to it is entered (#713).
+      // Email is the username here, so without this anyone could set their
+      // email to an address nobody has signed up with yet and become that
+      // address: the owner's sign-up then fails ("User already exists").
+      // Tested on a throwaway pool, 2026-10-26: the change stays pending, the
+      // owner signs up as a separate account, and our admin calls (Strava's
+      // AdminCreateUser, setting email_verified) still work. Updates in place.
+      keepOriginal: { email: true },
       userVerification: {
         emailSubject: 'Your paddlesnitch code',
         emailBody: 'Your paddlesnitch code is {####}. If you didn’t ask for it, ignore this email.',
