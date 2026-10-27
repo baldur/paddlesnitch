@@ -186,7 +186,7 @@ private fun Motion(a: BoatMotion, avgSR: Double?) {
         "Distribution of boat lean, with the mirrored distribution overlaid to show evenness", 3.9f, h != null && h.bins.isNotEmpty()) { t -> histogram(h!!, t) }
     Column(Modifier.box().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Lead("Reading this.", " Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly.")
-        Lead("What this can’t tell you.", " We can’t tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." +
+        Lead("What this can't tell you.", " We can't tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." +
             if (!a.axisConfident) " Roll and pitch were hard to tell apart in this recording." else "")
     }
 }

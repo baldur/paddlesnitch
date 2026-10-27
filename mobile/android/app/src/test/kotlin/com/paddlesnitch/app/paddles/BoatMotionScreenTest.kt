@@ -77,7 +77,7 @@ class BoatMotionScreenTest {
         golden("measured")
         compose.onNodeWithText("Bars show how often", substring = true).performScrollTo()
         golden("measured.histogram")
-        compose.onNodeWithText("What this can’t tell you.", substring = true).performScrollTo()
+        compose.onNodeWithText("What this can't tell you.", substring = true).performScrollTo()
         golden("measured.notes")
     }
 
