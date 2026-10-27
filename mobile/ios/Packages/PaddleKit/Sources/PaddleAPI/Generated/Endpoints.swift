@@ -28,6 +28,8 @@ public enum Endpoints {
         method: "GET", path: "/api/account/profile", auth: .user, errorStatuses: [401])
     public static let getAccountTos = Endpoint<NoInput, TosStatus>(
         method: "GET", path: "/api/account/tos", auth: .user, errorStatuses: [401])
+    public static let getAuthOptions = Endpoint<NoInput, SignInOptions>(
+        method: "GET", path: "/att/api/auth/options", auth: .public, errorStatuses: [])
     public static let getStravaStatus = Endpoint<NoInput, StravaStatus>(
         method: "GET", path: "/att/api/strava/status", auth: .user, errorStatuses: [401])
     public static let patchAccountProfile = Endpoint<ProfileVisibility, ProfileSettings>(
@@ -38,6 +40,8 @@ public enum Endpoints {
         method: "POST", path: "/api/account/export", auth: .user, errorStatuses: [401])
     public static let postAccountTos = Endpoint<TosAccept, TosAccepted>(
         method: "POST", path: "/api/account/tos", auth: .user, errorStatuses: [401, 422])
+    public static let authGoogleAppToken = Endpoint<GoogleAppToken, SignIn>(
+        method: "POST", path: "/att/api/auth/google/app-token", auth: .public, errorStatuses: [400, 401])
     public static let authLogin = Endpoint<Login, SignIn>(
         method: "POST", path: "/att/api/auth/login", auth: .public, errorStatuses: [400, 401, 403, 429, 500])
     public static let authLogout = Endpoint<RefreshToken, Ok>(
@@ -89,11 +93,13 @@ public enum Endpoints {
         case "GET /api/account/handle": try decoder.decode(HandleAvailability.self, from: data)
         case "GET /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "GET /api/account/tos": try decoder.decode(TosStatus.self, from: data)
+        case "GET /att/api/auth/options": try decoder.decode(SignInOptions.self, from: data)
         case "GET /att/api/strava/status": try decoder.decode(StravaStatus.self, from: data)
         case "PATCH /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "POST /api/account/contact": try decoder.decode(Contact.self, from: data)
         case "POST /api/account/export": try decoder.decode(DownloadLink.self, from: data)
         case "POST /api/account/tos": try decoder.decode(TosAccepted.self, from: data)
+        case "POST /att/api/auth/google/app-token": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/login": try decoder.decode(SignIn.self, from: data)
         case "POST /att/api/auth/logout": try decoder.decode(Ok.self, from: data)
         case "POST /att/api/auth/otp-request": try decoder.decode(OtpSession.self, from: data)

@@ -84,7 +84,7 @@ every API call.
 
 The types are in `api/` like the rest (`SignIn`, `OtpSession`, `Refreshed`,
 `Ok`, `ApiError`; inputs `Login`, `OtpRequest`, `OtpVerify`, `Signup`,
-`RefreshToken`, `StravaAppToken`), and `api/rest.json` maps each `"<METHOD> <path>"` to its
+`RefreshToken`, `StravaAppToken`, `GoogleAppToken`, `SignInOptions`), and `api/rest.json` maps each `"<METHOD> <path>"` to its
 `auth` (`user` = send `Authorization: Bearer`), input, output and the statuses
 that answer an `ApiError`. Golden answers:
 `fixtures/api/auth.*.json` (sign-up: `auth.signup.json`, `auth.login.needs-code.json`, `auth.too-many-codes.json`). `needsTerms` is missing on sign-up (the account has
@@ -97,7 +97,9 @@ just accepted the Terms).
 | `POST /att/api/auth/otp-verify` | `{email, session, code}` | as login; 400 with a new `session` if the code was wrong but tries remain |
 | `POST /att/api/auth/signup` | `{email, displayName, password, acceptedTosVersion}` | 202 `{needsCode: true, email}`: a 6-digit code has gone to the email, nothing is signed in yet (#702). 409 = a confirmed account has this email; 422 if `acceptedTosVersion` isn't current. Calling it again sends a new code |
 | `POST /att/api/auth/signup/confirm` | `{email, code, password, acceptedTosVersion?}` | 201, as login. 500 "Your email is confirmed. Please sign in." = confirmed but the sign-in failed: go back to the Sign in form with that message (sending a new code would now answer 409). 429 never here; signup and login answer 429 with `auth.too-many-codes.json` (show it as an error, don't restart the pause). Send `acceptedTosVersion` when the Terms were just ticked (Create account); leave it out when the code step came from a 403 sign-in, and then follow `needsTerms`. 400 = wrong or expired code (ask again, or send a new code by repeating the sign-up or sign-in) |
+| `GET /att/api/auth/options` | | `{google, strava}`: which buttons to show besides email. Ask each time the sign-in screen opens; if the call fails, show email only |
 | `POST /att/api/auth/strava/app-token` | `{code, verifier}` | as login; 401 = the code is spent or expired, start again |
+| `POST /att/api/auth/google/app-token` | `{code, verifier}` | as login; 401 = the code is spent, expired or not from this verifier: start again |
 | `POST /att/api/auth/refresh` | `{refreshToken}` | `{idToken}`; 401 = sign in again |
 | `POST /att/api/auth/logout` | `{refreshToken}` | `{ok: true}`; the refresh token stops working |
 | `POST /att/api/auth/password-reset/request` | `{email, website: "", elapsedMs}` | `{ok: true}` whether or not the account exists (it never says); if it does, a 6-digit code goes to that email |
@@ -119,6 +121,50 @@ keys the website's `/signin?error=` shows). Swap the code and the verifier at
 spends it. The app's own scheme, not an app link, so it works in debug builds
 and on iPhone before the Apple team ID exists; the verifier is what makes a
 code caught by another app useless (RFC 8252).
+
+**Google** works the same way, with its own addresses. Show it only when
+`options` says `google: true` (and Strava only when `strava: true`). Open
+`/att/api/auth/google/init?challenge=<challenge>`. It first shows a page with a
+"Sign in with Google" button, so a link alone can't finish a sign-in for the app;
+the person taps it once. It ends on
+`com.paddlesnitch.app:/signin/google?code=<code>` or `?error=<key>`, and you
+swap the code and verifier at `google/app-token` (within 5 minutes, once).
+The keys and what to say for them, as on the website:
+
+| `error` | Say |
+|---|---|
+| `google_account_exists` | You already have an account with this email. Sign in with your email instead. (With `strava: true`: "…with your email or Strava instead.") |
+| `google_no_email` | Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead. |
+| `google_denied` | You cancelled the Google sign-in. |
+| `google_failed` | Couldn’t sign in with Google. Please try again. |
+| `google_not_configured` | Google sign-in isn’t available right now. |
+
+A Google account has no password here: don't offer "Forgot password" for it.
+Ignore a `?code=` or `?error=` on that address when the app didn't start a
+Google sign-in.
+
+**When `strava` is false** (Strava switched off; ask `options` on these
+screens too, not only on sign-in), do as the website does:
+- Sign in: no Strava button. Under the form: "Signed up with Strava? Strava
+  sign-in is off for now. Email us and we’ll help you sign in." and an
+  "Email us" button: `mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava`.
+  Not Report an issue: reports are public, and people would put their name
+  and email in them.
+- Account: no Strava section unless `strava/status` says connected. Then a
+  neutral "Paused" badge, "Strava isn’t available right now. Paddles you
+  already brought in stay here.", and Disconnect, except on a `placeholderEmail`
+  account (its Strava link is its only way back in). No auto-import, no older
+  paddles, no Connect.
+- Add paddle: no Strava choice.
+- Sign in again (before deleting): a `placeholderEmail` account can't. Say
+  "Strava sign-in is off for now, so you can’t sign in again here. Report an
+  issue asking us to delete your account. We’ll know it’s yours, so leave out
+  your name and email: reports are public." and open `/account?report=1`
+  through `web-code`, so the report is filed signed in, as that account (the
+  website's issue form opens by itself on any page with `?report=1`).
+- If `options` fails, show the email form and "Couldn’t load the other ways to
+  sign in." with Try again, so a Strava-made account can still reach the line
+  above.
 
 `website` and `elapsedMs` are the anti-bot fields the website's forms send: an
 empty honeypot, and the milliseconds since the form appeared. A call that
