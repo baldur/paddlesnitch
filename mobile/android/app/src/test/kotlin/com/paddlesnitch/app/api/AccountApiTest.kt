@@ -236,4 +236,69 @@ class AccountApiTest {
             {"sessionId":"rec-desk","deviceId":"C0FFEE01","filename":"d.csv","uploadedAt":"2026-10-24T19:00:00.000Z","points":0}]}""")
         assertEquals(listOf("pdl-river", null), api.recordings().sessions.map { it.paddleId })
     }
+
+    @Test fun boatMotionIsAskedForByRecordingAndTracker() = runTest {
+        answer(200, fixture("account.devices-session"), "ETag" to "\"m-1\"")
+        val m = api.recordingMotion("S 12", "a1b2/c3")
+        assertEquals(5.8, m.attitude!!.rollRmsDeg!!, 0.0)
+        val req = server.takeRequest()
+        assertEquals("/api/account/devices/sessions/S%2012?deviceId=a1b2%2Fc3", req.url.encodedPath + "?" + req.url.encodedQuery)
+        assertEquals("Bearer id-1", req.headers["Authorization"])
+        assertEquals("android/0.1.0", req.headers["x-paddlesnitch-app"])
+        assertNull(req.headers["If-None-Match"])
+    }
+
+    @Test fun aRepeatBoatMotionVisitSendsTheETagAndA304KeepsWhatWeHave() = runTest {
+        answer(200, fixture("account.devices-session"), "ETag" to "\"m-1\"")
+        val first = api.recordingMotion("S0012", "a1b2c3d4e5f6")
+        server.takeRequest()
+        answer(304, "")
+        assertEquals(first, api.recordingMotion("S0012", "a1b2c3d4e5f6"))
+        assertEquals("\"m-1\"", server.takeRequest().headers["If-None-Match"])
+    }
+
+    @Test fun boatMotionThatIsntYoursIsA404() = runTest {
+        answer(404, fixture("account.devices-session.not-found"))
+        val e = runCatching { api.recordingMotion("S0099", "a1b2c3d4e5f6") }.exceptionOrNull() as ApiFailure
+        assertEquals(404, e.status)
+    }
+
+    @Test fun aNewAnswerReplacesTheOneKept() = runTest {
+        answer(200, fixture("account.devices-session"), "ETag" to "\"m-1\"")
+        api.recordingMotion("S0012", "a1b2c3d4e5f6"); server.takeRequest()
+        answer(200, fixture("account.devices-session.no-motion"), "ETag" to "\"m-2\"")
+        assertNull(api.recordingMotion("S0012", "a1b2c3d4e5f6").attitude); server.takeRequest()
+        answer(304, "")
+        assertNull(api.recordingMotion("S0012", "a1b2c3d4e5f6").attitude)
+        assertEquals("\"m-2\"", server.takeRequest().headers["If-None-Match"])
+    }
+
+    @Test fun a304WithNothingKeptIsAFailureNotACrash() = runTest {
+        answer(304, "")
+        val e = runCatching { api.recordingMotion("S0012", "a1b2c3d4e5f6") }.exceptionOrNull()
+        assertTrue(e is ApiFailure)
+    }
+
+    @Test fun theRetryAfterARefreshStillSendsTheETag() = runTest {
+        answer(200, fixture("account.devices-session"), "ETag" to "\"m-1\"")
+        api.recordingMotion("S0012", "a1b2c3d4e5f6"); server.takeRequest()
+        answer(401, "")
+        answer(200, """{"idToken":"id-2"}""")
+        answer(304, "")
+        assertEquals(5.8, api.recordingMotion("S0012", "a1b2c3d4e5f6").attitude!!.rollRmsDeg!!, 0.0)
+        assertEquals("\"m-1\"", server.takeRequest().headers["If-None-Match"])
+        server.takeRequest()
+        assertEquals("\"m-1\"", server.takeRequest().headers["If-None-Match"])
+    }
+
+    @Test fun signingOutForgetsKeptMotion() = runTest {
+        answer(200, fixture("account.devices-session"), "ETag" to "\"m-1\"")
+        api.recordingMotion("S0012", "a1b2c3d4e5f6"); server.takeRequest()
+        answer(200, "{}")
+        api.signOut(); server.takeRequest()
+        tokens.save("id-3", "r-3")
+        answer(200, fixture("account.devices-session"))
+        api.recordingMotion("S0012", "a1b2c3d4e5f6")
+        assertNull(server.takeRequest().headers["If-None-Match"])
+    }
 }

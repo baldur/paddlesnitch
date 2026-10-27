@@ -13,6 +13,8 @@ import { z } from 'zod'
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 import { BOAT_CLASSES, type BoatClass } from '@paddlesnitch/core/types'
 import type { AppRouter } from './root'
+import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
+import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 
 export const contractRegistry = z.registry<{ id: string }>()
 const named = <T extends z.ZodType>(id: string, schema: T): T => { contractRegistry.add(schema, { id }); return schema }
@@ -283,6 +285,59 @@ export const Recording = named('Recording', z.object({
 }))
 export const RecordingList = named('RecordingList', z.object({ sessions: z.array(Recording) }))
 
+// Boat motion for a tracker paddle (the website's /paddles/[id]/motion): the
+// server works out every number; the apps only draw. Angles are degrees, `t`
+// is milliseconds on the recording's own clock.
+const AttitudeBucket = named('AttitudeBucket', z.object({ t: z.number(), rollMin: z.number(), rollMax: z.number(), pitchMin: z.number(), pitchMax: z.number() }))
+const AttitudeSample = named('AttitudeSample', z.object({ t: z.number(), roll: z.number(), pitch: z.number() }))
+const RollHistogram = named('RollHistogram', z.object({ binWidthDeg: z.number(), bins: z.array(z.object({ centreDeg: z.number(), count: z.int() })) }))
+/** Deliberately not left/right: the tracker can't tell port from starboard. `imbalancePct` is signed; show its size. */
+const AttitudeSymmetry = named('AttitudeSymmetry', z.object({ sideADeg: z.number(), sideBDeg: z.number(), imbalancePct: z.number() }))
+/** Roll, pitch and evenness. `available` false: nothing to draw; `reason` says why in technical words. */
+export const BoatMotion = named('BoatMotion', z.object({
+  available: z.boolean(),
+  reason: z.string(),
+  sampleRateHz: z.number().nullable(),
+  samples: z.int(),
+  // The whole session as min/max bands (Through the session).
+  envelope: z.array(AttitudeBucket),
+  // About 30 s at full rate (Stroke shape).
+  excerpt: z.array(AttitudeSample),
+  // Where the boat spent its time.
+  rollHistogram: RollHistogram.nullable(),
+  rollRmsDeg: z.number().nullable(),
+  pitchRmsDeg: z.number().nullable(),
+  rollP5Deg: z.number().nullable(),
+  rollP95Deg: z.number().nullable(),
+  // The envelope chart's ±bound; values past it are clipped to the edge.
+  plotBoundDeg: z.number().nullable(),
+  rollToPitchRatio: z.number().nullable(),
+  // False: roll and pitch were hard to tell apart (add the website's sentence).
+  axisConfident: z.boolean(),
+  symmetry: AttitudeSymmetry.nullable(),
+  excludedWindows: z.int(),
+  excludedSeconds: z.number(),
+}))
+const StrokeRateWindow = named('StrokeRateWindow', z.object({
+  tMs: z.number(), cyclesPerMin: z.number(), strokesPerMin: z.number(), alternating: z.boolean(), confidence: z.number(),
+}))
+/** Stroke rate measured from the motion file. */
+export const MotionStrokeRate = named('MotionStrokeRate', z.object({
+  available: z.boolean(),
+  reason: z.string(),
+  sampleRateHz: z.number().nullable(),
+  rows: z.int(),
+  medianStrokesPerMin: z.number().nullable(),
+  windows: z.array(StrokeRateWindow),
+}))
+/** `attitude` and `cadence` are null when the motion file hasn't arrived (or never will). With the app header this is the whole answer. */
+export const RecordingMotion = named('RecordingMotion', z.object({
+  attitude: BoatMotion.nullable(),
+  cadence: MotionStrokeRate.nullable(),
+}))
+/** Which tracker: `source.deviceId` from paddles.get. The recording is `source.deviceSessionId`, in the path. */
+const RecordingOf = named('RecordingOf', z.object({ deviceId: z.string() }))
+
 // Strava for a signed-in account: connected or not, auto-import, disconnect,
 // and bringing in older paddles one at a time. Connecting itself is a browser
 // page (README, "Strava, signed in").
@@ -342,6 +397,7 @@ export const restRoutes = {
   'GET /api/account/devices': { auth: 'user', input: null, output: TrackerList, errors: [401] },
   'DELETE /api/account/devices': { auth: 'user', input: TrackerId, output: Ok, errors: [401, 404] },
   'GET /api/account/devices/sessions': { auth: 'user', input: null, output: RecordingList, errors: [401] },
+  'GET /api/account/devices/sessions/{sessionId}': { auth: 'user', input: RecordingOf, output: RecordingMotion, errors: [401, 404] },
   'GET /att/api/strava/status': { auth: 'user', input: null, output: StravaStatus, errors: [401] },
   'POST /att/api/strava/app-connect': { auth: 'user', input: StravaConnectStart, output: WebPage, errors: [400, 401, 403, 503] },
   'POST /att/api/strava/app-connect/finish': { auth: 'user', input: StravaConnectFinish, output: StravaStatus, errors: [400, 401, 403, 409] },
@@ -409,6 +465,9 @@ check<Same<keyof z.infer<typeof StravaImport>, KeysOf<Out['sources']['importStra
 check<Same<z.infer<typeof StravaHistoryFor>, In['sources']['stravaHistory']>>()
 check<Same<z.infer<typeof StravaPaddleFor>, In['sources']['importStravaPaddle']>>()
 check<Same<Out['sources']['stravaHistoryDone'], z.infer<typeof Ok>>>()
+// Boat motion is exactly what the timing package works out.
+check<Same<z.infer<typeof BoatMotion>, AttitudeReport>>()
+check<Same<z.infer<typeof MotionStrokeRate>, CadenceReport>>()
 // And no status or reason the code never sends (Fits alone lets the schema list extra ones).
 type ImportOut = Out['sources']['importStravaPaddle']
 check<Same<z.infer<typeof StravaHistory>['status'], Out['sources']['stravaHistory']['status']>>()

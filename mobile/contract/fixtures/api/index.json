@@ -7,6 +7,22 @@
     "call": "GET /api/account/contact",
     "schema": "Contact"
   },
+  "account.devices-session.json": {
+    "call": "GET /api/account/devices/sessions/{sessionId}",
+    "schema": "RecordingMotion"
+  },
+  "account.devices-session.motion-unusable.json": {
+    "call": "GET /api/account/devices/sessions/{sessionId}",
+    "schema": "RecordingMotion"
+  },
+  "account.devices-session.no-motion.json": {
+    "call": "GET /api/account/devices/sessions/{sessionId}",
+    "schema": "RecordingMotion"
+  },
+  "account.devices-session.not-found.json": {
+    "call": "GET /api/account/devices/sessions/{sessionId}",
+    "schema": "ApiError"
+  },
   "account.devices-sessions.json": {
     "call": "GET /api/account/devices/sessions",
     "schema": "RecordingList"

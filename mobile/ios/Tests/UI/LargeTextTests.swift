@@ -116,6 +116,7 @@ final class LargeTextTests: AppTestCase {
         type("Secret123\n", into: scrollToElement(app.secureTextFields["Password"]))
         XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
         declineSavingPassword()
+        waitForTheCodeKeyboard()
         dismissKeyboard()
         try checkScreen(at: [
             app.textFields["code-field"], app.buttons["sign-in-submit"], app.buttons["send-new-code"],

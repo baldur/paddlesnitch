@@ -66,10 +66,15 @@ extension ModelsGenerator {
     }
 
     /// `POST /att/api/auth/otp-verify` → `authOtpVerify`: the path after
-    /// `/api/`, so `att` (where the route happens to live) doesn't show.
+    /// `/api/`, so `att` (where the route happens to live) doesn't show. A
+    /// path parameter reads as "by" it: `devices/sessions/{sessionId}` →
+    /// `devicesSessionsBySessionId`.
     static func endpointName(_ path: String) -> String {
         let afterAPI = path.components(separatedBy: "/api/").last ?? path
-        return Naming.lowerCamel(afterAPI.replacingOccurrences(of: "/", with: "-"))
+        let segments = afterAPI.split(separator: "/").map { segment in
+            segment.hasPrefix("{") && segment.hasSuffix("}") ? "by-" + segment.dropFirst().dropLast() : segment
+        }
+        return Naming.lowerCamel(segments.joined(separator: "-"))
     }
 
     /// `endpointName`, with the method in front (`getAccountContact`) when

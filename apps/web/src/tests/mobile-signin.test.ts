@@ -124,8 +124,9 @@ describe('the sign-in routes answer what the contract says', () => {
 
   it('every route in rest.json exists', () => {
     for (const route of Object.keys(restRoutes)) {
+      // A {name} in the contract's path is the [name] folder in the app.
       const [, p] = route.split(' ')
-      expect(existsSync(path.join(__dirname, '../app', p, 'route.ts')), route).toBe(true)
+      expect(existsSync(path.join(__dirname, '../app', p.replace(/\{(\w+)\}/g, '[$1]'), 'route.ts')), route).toBe(true)
     }
   })
 

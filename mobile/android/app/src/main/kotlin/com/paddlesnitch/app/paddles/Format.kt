@@ -105,7 +105,7 @@ fun noPaddleMessage(reason: NoPaddleReason, hasMotion: Boolean): String {
 }
 
 /** A number as JavaScript prints it in a template: 12.0 → "12", 12.5 → "12.5". */
-private fun num(x: Double) = if (x % 1.0 == 0.0) x.toLong().toString() else x.toString()
+internal fun num(x: Double) = if (x % 1.0 == 0.0) x.toLong().toString() else x.toString()
 
 /** Kilometres with one decimal, as the logbook writes them ("6.3", "0"). */
 fun km1(km: Double): String = if (km % 1.0 == 0.0) km.toLong().toString() else toFixed(km, 1)
@@ -120,3 +120,21 @@ fun alsoRecordedBy(type: String): String =
 /** About how many strokes: to the hundred from 1,000, with commas ("12,300"). */
 fun roundStrokes(n: Double): String =
     "%,d".format(java.util.Locale.ROOT, if (n >= 1000) Math.round(n / 100) * 100 else Math.round(n))
+
+/** How uneven the boat's rocking was, as a whole percentage (the website's fmtEvenness; 10.5 → "11%"). */
+fun fmtEvenness(imbalancePct: Double): String = "${toFixed(kotlin.math.abs(imbalancePct), 0)}%"
+
+/**
+ * Why there are no boat-motion charts. A `reason` means the motion file came
+ * but couldn't be measured; none means it hasn't arrived. Never show the reason.
+ */
+fun noMotionCopy(attitude: com.paddlesnitch.app.api.BoatMotion?): String =
+    if (!attitude?.reason.isNullOrEmpty()) "We couldn’t measure boat motion in this recording. The tracker may not have been fixed firmly in the boat."
+    else "Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. Older recordings have no motion data."
+
+/** A boat-motion chart's y-axis ticks: every multiple of the step within ±maxDeg (the website's axisTicks). */
+fun axisTicks(maxDeg: Double): List<Int> {
+    val step = if (maxDeg > 12) 5 else if (maxDeg > 6) 3 else 2
+    val top = kotlin.math.floor(maxDeg / step).toInt() * step
+    return (-top..top step step).toList()
+}

@@ -200,6 +200,86 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/devices` | | `{devices: Tracker[], stableVersion, summaries: TrackerSummary[]}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash. **Show the cards from `summaries`**: already in order, removed trackers that still have recordings included (`linked: false`), with the counts, `firmwareState`, `quiet` (over 2 days silent) and `crash` (last 7 days) worked out by the server, the same rules the website uses. Don't recompute them |
 | `DELETE /api/account/devices` | `{deviceId}` | `{ok: true}`: removed; it stops syncing and can be added again. Its recordings and paddles stay. 404 if it isn't this person's |
 | `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId`. `paddleId` on each recording that became a paddle (open it with `paddles.get`); none = too short or no track |
+| `GET /api/account/devices/sessions/{sessionId}?deviceId=` | | `RecordingMotion`: a tracker paddle's boat motion. See **Boat motion** below. 404 if it isn't this person's recording |
+
+### Boat motion
+
+The website's `/paddles/[id]/motion`. **Offer it only on your own paddle** (the
+route is owner-only; a buddy's paddle has no Motion button, as on the website)
+whose `paddles.get` has `source.type === "device"` with `deviceId` and
+`deviceSessionId`. Call
+`GET /api/account/devices/sessions/<deviceSessionId>?deviceId=<deviceId>`
+(URL-encode both). Every number comes from the server; the app draws. With
+the `x-paddlesnitch-app` header the answer is only `{attitude, cadence}` (the
+website also gets its technical details, with raw GPS rows the apps don't need).
+Ignore `cadence` on this screen: the Stroke rate tile uses the paddle's own
+`result.avgSR`. It sends an `ETag` (and `Vary: x-paddlesnitch-app`): send it
+back as `If-None-Match` and a 304 with no body means "what you have is
+current". 401 is handled as on every account route. The back link reads
+"← Paddle", as on the website; its Technical details panel is not part of the
+app screen. Quote the words exactly as they are here, apostrophes included:
+they are the website's.
+
+| State | What to show (the website's words) |
+|---|---|
+| Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
+| `paddles.get` fails or finds nothing | Title "We can't find this paddle", button Back to Paddles |
+| Loading | "Loading" |
+| Call failed, or 404 | "Couldn’t read the tracker’s recording. Please try again." with pull-to-refresh or a Try again button (the website has neither: it is reloaded) |
+| `attitude` null, or `attitude.available` false | "No boat motion for this recording." (as the box's title) then `noMotionCopy` (format.json: no `attitude`, or an empty `reason` = the motion file hasn't arrived; a `reason` = it couldn't be measured). Never show `reason` itself: it is the engine's English, for engineers |
+| `attitude.available` | The tiles, the three charts and the two notes below, in that order |
+
+Page title "Boat motion", with the paddle's `paddledAt` as `fmtDayTime` above it.
+
+**Tiles**, two columns on a phone (four from 640 pt wide), each a card
+(`surface`, `border`, the control radius). Label as a mono uppercase
+eyebrow (`muted`), value in mono, larger, `fg`, note under it in small
+`muted`. Labels wrap at large text sizes; never truncate them. Each tile is
+one accessibility element, read as label, value, note, with "°" spoken as
+"degrees" and "spm" as "strokes per minute".
+- Side-to-side roll: `rollRmsDeg` + "°", "typical lean"
+- Bow-to-stern pitch: `pitchRmsDeg` + "°", "typical tilt"
+- Evenness: `fmtEvenness(symmetry.imbalancePct)`, "uneven"; `symmetry` null: "—" and no note
+- Stroke rate: the paddle's `result.avgSR` rounded, "spm"; null: "—", "not measured"
+
+**Charts**: each a square-cornered panel (`surface`, `border`) with its title
+as a heading above the chart and its caption (small, `muted`) below. Each
+chart is one image element with the accessibility label given below; its
+axis text is hidden from the screen reader. Colours by token: roll `split`,
+pitch `green`, the mirrored line `red`, gridlines `border`, the zero line and
+all chart text `muted` (mono). Angles in degrees, `t` in milliseconds. The
+website draws them about 3.5 wide to 1 high. Y-axis ticks are `axisTicks`
+(format.json) of the chart's bound, labelled with the plain number and "°"
+(a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
+- "Through the session" from `envelope`: a band per bucket from min to max
+  (roll at 0.5 opacity over pitch at 0.28), y from −`plotBoundDeg` to
+  +`plotBoundDeg` (10 when null), values beyond clamped to the edge, and then
+  the axis note "a few moments went past ±N° and are clipped here". X labels
+  "0 min" and the length in whole minutes. Legend "roll" and "pitch".
+  Accessibility label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
+  Caption: "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
+- "Stroke shape" from `excerpt`: roll and pitch lines, y bound = the largest
+  absolute value (at least 1°) ×1.1. X-axis label "<seconds, rounded> s at
+  <sampleRateHz> Hz" (leave out " at … Hz" when `sampleRateHz` is null).
+  Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
+  Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
+- "Where the boat spent its time" from `rollHistogram`: bars by `centreDeg`
+  (`split` at 0.45), plus a dashed `red` line of the same counts flipped
+  about 0 (each bin takes the count of the bin nearest `-centreDeg`). Labels
+  "level" at 0, "−N°" (U+2212) at the left and "+N°" at the right (N = the
+  largest `|centreDeg|`, at least 1, rounded), legend "actual" and "mirrored".
+  Accessibility label: "Distribution of boat lean, with the mirrored distribution overlaid to show evenness".
+  Caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
+
+A chart with fewer than 2 points (histogram: no bins) draws nothing, but its
+panel, title and caption stay, as on the website.
+
+**Notes** under the charts, one card (`surface`, `border`, control radius),
+small `muted` text with the lead-in in `fg`:
+- "**Reading this.** Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly."
+- "**What this can't tell you.** We can't tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." and, when `axisConfident` is false, " Roll and pitch were hard to tell apart in this recording."
+
+Never call the sides left and right (`sideADeg`/`sideBDeg`): the tracker can't tell which is which.
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
 are in `fixtures/tracker/README.md`. Forgot password is under Signing in; Strava has its own section below.
@@ -276,7 +356,10 @@ route shares. So far: `auth.login`, `auth.login.needs-terms`,
 Account answers are `account.<route>[-<what>][.<case>].json`: `account.tos`,
 `account.tos-accepted`, `account.export`, `account.profile`(`.private`),
 `account.handle-check`(`.taken`), `account.contact`(`.none`),
-`account.devices`(`.none`), `account.devices-sessions`, and
+`account.devices`(`.none`), `account.devices-sessions`,
+`account.devices-session` (boat motion: `.json` measured, `.no-motion` no motion
+file yet, `.motion-unusable` measured nothing, `.not-found` the 404; made from
+synthetic data by `tracker-fixtures.ts`, as every fixture here must be: this repo is public), and
 `account.error` (the 401 every account route shares).
 
 `paddles.list` is the Paddles screen as the website draws it, worked out on the
@@ -312,6 +395,9 @@ even), 22.5° on the compass.
 | `paddleKm` | `{distanceKm, noGps?}` | `4.25 km`; `—` for a paddle without a map |
 | `compassPoint` | degrees the wind blows from | one of N, NE … NW |
 | `noPaddleMessage` | `{reason, hasMotion}` | why a recording has no route (`reason` is a `NoPaddleReason`) |
+| `noMotionCopy` | the answer's `attitude` (null, or one with `available: false`) | why a tracker paddle has no boat motion |
+| `fmtEvenness` | `symmetry.imbalancePct` | the Evenness tile: its size, rounded, with % |
+| `axisTicks` | a chart's ±bound, degrees | the y-axis ticks: every multiple of the step (2°, 3° past 6°, 5° past 12°) within the bound |
 
 ## tokens/
 

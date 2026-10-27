@@ -47,6 +47,10 @@ class FormatFixturesTest {
             val o = i.jsonObject
             fmtDayTime(o.getValue("at").jsonPrimitive.content, java.time.ZoneId.of(o.getValue("zone").jsonPrimitive.content))
         },
+        "fmtEvenness" to { i -> fmtEvenness(i.jsonPrimitive.double) },
+        "noMotionCopy" to { i -> noMotionCopy(if (i is kotlinx.serialization.json.JsonNull) null else ApiJson.decodeFromJsonElement(com.paddlesnitch.app.api.BoatMotion.serializer(), motionOf(i.jsonObject))) },
+        // The answer is a list: compared as JSON.
+        "axisTicks" to { i -> kotlinx.serialization.json.JsonArray(axisTicks(i.jsonPrimitive.double).map { kotlinx.serialization.json.JsonPrimitive(it) }).toString() },
     )
 
     @Test
@@ -56,7 +60,13 @@ class FormatFixturesTest {
     fun everyCaseGivesTheWebsitesAnswer() {
         for ((fn, list) in cases) for (c in list.jsonArray) {
             val o = c.jsonObject
-            assertEquals("$fn(${o["in"]})", o.getValue("out").jsonPrimitive.content, ports.getValue(fn)(o.getValue("in")))
+            val out = o.getValue("out")
+            assertEquals("$fn(${o["in"]})", if (out is kotlinx.serialization.json.JsonArray) out.toString() else out.jsonPrimitive.content, ports.getValue(fn)(o.getValue("in")))
         }
     }
+
+    /** The cases give only the fields that matter; the rest of a BoatMotion is filled in empty. */
+    private fun motionOf(given: JsonObject): JsonElement = ApiJson.parseToJsonElement(
+        """{"available":false,"reason":"","sampleRateHz":null,"samples":0,"envelope":[],"excerpt":[],"rollHistogram":null,"rollRmsDeg":null,"pitchRmsDeg":null,"rollP5Deg":null,"rollP95Deg":null,"plotBoundDeg":null,"rollToPitchRatio":null,"axisConfident":false,"symmetry":null,"excludedWindows":0,"excludedSeconds":0}"""
+    ).jsonObject.let { JsonObject(it + given) }
 }

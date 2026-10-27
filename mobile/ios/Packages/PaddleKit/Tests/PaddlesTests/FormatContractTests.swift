@@ -58,6 +58,22 @@ import Testing
     struct Raw: Decodable {
         let `in`: JSONValue
         let out: String
+
+        /// Most answers are text; `axisTicks` answers a list of numbers,
+        /// compared here as "-2,0,2".
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: RawKey.self)
+            self.in = try container.decode(JSONValue.self, forKey: .in)
+            if let numbers = try? container.decode([Double].self, forKey: .out) {
+                out = numbers.map(Self.number).joined(separator: ",")
+            } else {
+                out = try container.decode(String.self, forKey: .out)
+            }
+        }
+
+        static func number(_ value: Double) -> String {
+            value == value.rounded() ? String(Int(value)) : String(value)
+        }
     }
 
     @Test func theFileIsThere() {
@@ -71,6 +87,7 @@ import Testing
 
     func answer(_ test: Case) throws -> String {
         if Self.dateFunctions.contains(test.function) { return try dates(test) }
+        if Self.motionFunctions.contains(test.function) { return try motion(test) }
         switch (test.function, test.input) {
         case ("fmtDur", .number(let seconds)): return Format.minutesSeconds(seconds)
         case ("fmtClock", .number(let seconds)): return Format.clock(seconds)
@@ -85,6 +102,22 @@ import Testing
             return Format.noPaddleMessage(input.reason, hasMotion: input.hasMotion)
         default:
             Issue.record("format.json has \(test.function), which the app doesn't port yet")
+            return ""
+        }
+    }
+
+    static let motionFunctions: Set = ["fmtEvenness", "axisTicks", "noMotionCopy"]
+
+    /// Boat motion's words and axes.
+    func motion(_ test: Case) throws -> String {
+        switch (test.function, test.input) {
+        case ("fmtEvenness", .number(let pct)): return Format.evenness(pct)
+        case ("axisTicks", .number(let bound)): return Format.axisTicks(bound).map(Raw.number).joined(separator: ",")
+        case ("noMotionCopy", .null): return Format.noMotionCopy(reason: nil)
+        case ("noMotionCopy", .object(let data)):
+            return Format.noMotionCopy(reason: try JSONDecoder().decode(NoMotionInput.self, from: data).reason)
+        default:
+            Issue.record("\(test.function) with an input the port doesn't take: \(test.input)")
             return ""
         }
     }
@@ -120,6 +153,10 @@ import Testing
         let input = try JSONDecoder().decode(DayTimeInput.self, from: data)
         guard let at = date(input.at), let zone = TimeZone(identifier: input.zone) else { return input.at }
         return Format.dayTime(at, zone: zone)
+    }
+
+    struct NoMotionInput: Decodable {
+        let reason: String?
     }
 
     struct AgoInput: Decodable {
@@ -185,4 +222,9 @@ enum AnyJSON: Codable, Sendable {
         case .null: try container.encodeNil()
         }
     }
+}
+
+/// format.json's two keys per case.
+enum RawKey: String, CodingKey {
+    case `in`, out
 }

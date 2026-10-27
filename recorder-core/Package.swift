@@ -10,7 +10,7 @@ let package = Package(
         .target(
             name: "RecorderCore",
             path: ".",
-            exclude: ["test", "fixtures", "Makefile", "CMakeLists.txt", "library.json", "CLAUDE.md", "compile_flags.txt"],
+            exclude: ["test", "fixtures", "wasm", "Makefile", "CMakeLists.txt", "library.json", "CLAUDE.md", "compile_flags.txt"],
             sources: ["src"],
             publicHeadersPath: "include"
         ),
