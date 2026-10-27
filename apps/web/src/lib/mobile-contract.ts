@@ -66,7 +66,8 @@ export function formatCases() {
     // Boat motion (the Motion screen). `in` is the answer's `attitude`, cut to what
     // decides the words: null (no motion file yet) or one that measured nothing.
     noMotionCopy: cases((a: { available: false; reason: string } | null) => noMotionCopy(a as AttitudeReport | null), [
-      null, { available: false, reason: 'Motion file has too few samples to describe attitude.' },
+      // An empty reason counts as no reason: the motion file hasn't arrived.
+      null, { available: false, reason: '' }, { available: false, reason: 'Motion file has too few samples to describe attitude.' },
     ]),
     // 0.5 and 10.5 are exact ties: JavaScript rounds them up.
     fmtEvenness: cases(fmtEvenness, [0, 0.3, 0.5, -0.5, 10.49, 10.5, -10.5, 99.6]),

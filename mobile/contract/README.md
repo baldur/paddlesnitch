@@ -215,8 +215,10 @@ website also gets its technical details, with raw GPS rows the apps don't need).
 Ignore `cadence` on this screen: the Stroke rate tile uses the paddle's own
 `result.avgSR`. It sends an `ETag` (and `Vary: x-paddlesnitch-app`): send it
 back as `If-None-Match` and a 304 with no body means "what you have is
-current". 401 is handled as on every account route. The website's
-"← Paddle" link and its Technical details panel are not part of the app screen.
+current". 401 is handled as on every account route. The back link reads
+"← Paddle", as on the website; its Technical details panel is not part of the
+app screen. Quote the words exactly as they are here, apostrophes included:
+they are the website's.
 
 | State | What to show (the website's words) |
 |---|---|
