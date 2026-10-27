@@ -11,10 +11,19 @@ import { check as handler, handler as lambdaEntry } from '../../../../infra/lamb
 
 const event = (triggerSource: string, email = 'pat@example.com', verified = 'true') =>
   ({ triggerSource, userPoolId: 'pool', request: { userAttributes: { email, email_verified: verified } }, response: {} })
-const withUsers = (users: { UserStatus: string }[]) => ({ usersWithEmail: async () => users as never[] })
+// Accounts as ListUsers returns them; email_verified true unless said otherwise.
+const withUsers = (users: { UserStatus: string; verified?: boolean }[]) => ({
+  usersWithEmail: async () => users.map(u => ({ UserStatus: u.UserStatus, Attributes: [{ Name: 'email_verified', Value: u.verified === false ? 'false' : 'true' }] })) as never[],
+})
 const GOOGLE = 'PreSignUp_ExternalProvider'
 
 describe('PreSignUp: one account per email', () => {
+  it('an account that set this email without proving it blocks nobody (#713)', async () => {
+    for (const source of [GOOGLE, 'PreSignUp_SignUp', 'PreSignUp_AdminCreateUser']) {
+      expect(await handler(event(source), withUsers([{ UserStatus: 'CONFIRMED', verified: false }]))).toMatchObject({ triggerSource: source })
+    }
+  })
+
   it('a new email passes every way in', async () => {
     for (const source of [GOOGLE, 'PreSignUp_SignUp', 'PreSignUp_AdminCreateUser']) {
       expect(await handler(event(source), withUsers([]))).toMatchObject({ triggerSource: source })
@@ -62,7 +71,7 @@ describe('PreSignUp: one account per email', () => {
     const lambdaHandler = lambdaEntry as unknown as (event: unknown, context: unknown) => Promise<unknown>
     const lambdaContext = { functionName: 'att-cognito-pre-sign-up', awsRequestId: 'r', getRemainingTimeInMillis: () => 5000 }
     const users = (list: { UserStatus: string }[]) =>
-      vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async () => ({ Users: list })) as never)
+      vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async () => ({ Users: list.map(u => ({ ...u, Attributes: [{ Name: 'email_verified', Value: 'true' }] })) })) as never)
 
     it('looks the email up itself and lets a new one through', async () => {
       const spy = users([])

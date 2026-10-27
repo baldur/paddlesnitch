@@ -66,13 +66,20 @@ struct SignInView: View {
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
         }
         .task {
-            await account.loadOptions()
+            // The ways in first; the sheet is fully up by the time they've
+            // come back. A sign-in that finished while the sheet was still
+            // rising closed it mid-way, and iOS 17 then never called its
+            // onDismiss (CI: deleting didn't come back).
+            async let options: Void = account.loadOptions()
+            try? await Task.sleep(for: .milliseconds(600))
+            await options
             // A Strava account signing in again: straight to Strava, once
             // the server has said Strava is on.
-            if account.signInAgainWithStrava && account.options.strava && !startedStrava && !form.busy {
-                startedStrava = true
-                signInWithStrava()
+            guard account.signInAgainWithStrava && account.options.strava && !startedStrava && !form.busy else {
+                return
             }
+            startedStrava = true
+            signInWithStrava()
         }
     }
 

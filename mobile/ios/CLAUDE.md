@@ -50,7 +50,10 @@ isn't obvious from the code.
   (`pgrep -f "^/Applications/Xcode.app/.*/xcodebuild test"`): a pattern like
   `pgrep -f "xcodebuild test"` also matches the waiting shells' own command
   lines, and two of them wait on each other forever. A download
-  (`xcodebuild -downloadPlatform`) is an xcodebuild too.
+  (`xcodebuild -downloadPlatform`) is an xcodebuild too. Never wait on another
+  queued job by a name in its command (a log file, a script name): its own
+  line holds that name, and two such waits deadlocked three runs for hours.
+  Queue several runs as one script that runs them in turn.
 - The audit's clip report on no element also comes from a row half under the
   navigation or tab bar. `AppTestCase.audit` looks up to three times, moving
   the page a little before each, and fails only if every look reports it: a
@@ -72,3 +75,17 @@ isn't obvious from the code.
   fixed delay: iOS 17 on CI took longer than 700 ms, and a sheet asked to
   open while another closes is dropped without a word. Not through the
   environment: iOS 17 doesn't pass its changes to pushed screens.
+- A sheet closed while it's still opening (a sign-in that finishes at once
+  against the sample server) gets no `onDismiss` on iOS 17. Let a sheet be
+  fully up before it acts by itself, and don't let a flag that only
+  `onDismiss` clears be the only way on.
+- Push screens by value, with the destination declared on a screen that
+  stays in the stack (`navigationDestination(for:)`). On iOS 17 a
+  `NavigationLink { destination }` two screens under a typed path hung
+  opening a paddle (CI: "App event loop idle notification not received").
+  You's path is a `NavigationPath`, so a pushed screen can add its own routes.
+- iOS 17's audit cuts long text in List rows and section footers where newer
+  iOS doesn't: give every sentence `.fixedSize(horizontal: false, vertical: true)`.
+- Test scrolls start in the side margin (`swipe(up:)`), outside every
+  row: `app.swipeUp()` starts mid-screen, and at the largest text size it
+  landed on a tracker card and opened it.

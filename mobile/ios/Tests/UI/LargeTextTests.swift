@@ -95,6 +95,15 @@ final class LargeTextTests: AppTestCase {
         ])
     }
 
+    func testTrackersAtTheLargestTextSize() throws {
+        signInAndWait()
+        tab("You").tap()
+        scrollToElement(app.buttons["Devices"]).tap()
+        XCTAssertTrue(app.navigationBars["Devices"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element("tracker-C0FFEE01").waitForExistence(timeout: 10))
+        try checkScreen(at: [element("tracker-C0FFEE02"), element("tracker-BADC0DE9")])
+    }
+
     /// "Confirm your email" (#702) at the largest size, top to bottom.
     func testTheCodeStepAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()

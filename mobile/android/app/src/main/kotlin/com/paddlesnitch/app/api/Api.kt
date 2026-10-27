@@ -46,6 +46,8 @@ interface AccountApi {
     suspend fun deleteAccount()
     suspend fun exportAccount(into: java.io.File): String
     suspend fun signedInPage(next: String): String
+    /** Which sign-ins are switched on besides email (README § Signing in): Strava may be off. */
+    suspend fun signInOptions(): SignInOptions
     // Strava for a signed-in account (mobile/contract/README.md § Strava, signed in).
     suspend fun stravaStatus(): StravaStatus
     /** The Strava page to open; 403 reauth when the sign-in is too old, 503 when Strava isn't set up. */
@@ -126,6 +128,16 @@ class Api(
 
     suspend fun stravaSignIn(code: String, verifier: String): SignIn =
         signIn("/att/api/auth/strava/app-token", """{"code":${str(code)},"verifier":${str(verifier)}}""")
+
+    /** Where Sign in with Google starts, for the Custom Tab (auth/GoogleSignIn.kt): a page with one button first. */
+    fun googleStartUrl(challenge: String): String =
+        base.newBuilder().encodedPath("/att/api/auth/google/init").addQueryParameter("challenge", challenge).build().toString()
+
+    suspend fun googleSignIn(code: String, verifier: String): SignIn =
+        signIn("/att/api/auth/google/app-token", """{"code":${str(code)},"verifier":${str(verifier)}}""")
+
+    override suspend fun signInOptions(): SignInOptions =
+        read(call(Request.Builder().url(base.newBuilder().addPathSegments("att/api/auth/options").build()).get().build()), SignInOptions.serializer())
 
     suspend fun signOut() {
         val refresh = tokens.refreshToken
