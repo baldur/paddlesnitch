@@ -68,7 +68,11 @@ class SignUpCodeScreenTest {
 
     private fun show(fontScale: Float = 1f) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
-            PaddlesnitchTheme { Surface(color = PsColor.bg) { SignInScreen(api, strava, null, onReturnHandled = {}, onSignedIn = { signedIn += it }, onCancel = {}) } }
+            PaddlesnitchTheme { Surface(color = PsColor.bg) { SignInScreen(api, strava, null, onReturnHandled = {},
+                google = GoogleSignIn(api, NoVerifiers), googleReturn = null, onGoogleReturnHandled = {},
+                onSignedIn = { signedIn += it }, onCancel = {},
+                // Not from the server queue, which holds each test's own answers.
+                loadOptions = { com.paddlesnitch.app.api.SignInOptions(google = false, strava = true) }) } }
         }
     }
 
@@ -197,4 +201,9 @@ class SignUpCodeScreenTest {
         compose.onNodeWithText("Confirm your email").assertDoesNotExist()
         compose.onNode(hasText("Email") and hasSetTextAction()).assertIsFocused()
     }
+}
+
+private object NoVerifiers : VerifierStore {
+    override fun put(verifier: String) {}
+    override fun take(): String? = null
 }
