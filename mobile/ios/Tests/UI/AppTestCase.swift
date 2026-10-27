@@ -90,6 +90,32 @@ class AppTestCase: XCTestCase {
 
     /// Puts the keyboard away: the keyboard's Done (the code step's number
     /// pad has no return key), else a drag down the page.
+    /// The code step's field takes the keyboard by itself, but after "Save
+    /// Password?" iOS gives it back late. Wait for that, so a later
+    /// `dismissKeyboard()` doesn't run before it comes and leave it over the
+    /// buttons (CI: "Change email" not hittable).
+    func waitForTheCodeKeyboard() {
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        let wait = XCTNSPredicateExpectation(predicate: focused, object: app.textFields["code-field"])
+        _ = XCTWaiter.wait(for: [wait], timeout: 5)
+    }
+
+    /// Taps once nothing covers it: the keyboard away, scrolled into view,
+    /// and hittable; a keyboard that came back in between is put away again.
+    func tapWhenClear(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        let hittable = NSPredicate(format: "hittable == true")
+        for _ in 0..<3 {
+            dismissKeyboard()
+            scrollToElement(target)
+            let wait = XCTNSPredicateExpectation(predicate: hittable, object: target)
+            if XCTWaiter.wait(for: [wait], timeout: 2) == .completed {
+                target.tap()
+                return
+            }
+        }
+        XCTFail("\(target) stayed covered", file: file, line: line)
+    }
+
     func dismissKeyboard() {
         let keyboard = app.keyboards.firstMatch
         guard keyboard.exists else { return }
