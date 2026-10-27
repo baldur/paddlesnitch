@@ -105,7 +105,7 @@ fun noPaddleMessage(reason: NoPaddleReason, hasMotion: Boolean): String {
 }
 
 /** A number as JavaScript prints it in a template: 12.0 → "12", 12.5 → "12.5". */
-private fun num(x: Double) = if (x % 1.0 == 0.0) x.toLong().toString() else x.toString()
+internal fun num(x: Double) = if (x % 1.0 == 0.0) x.toLong().toString() else x.toString()
 
 /** Kilometres with one decimal, as the logbook writes them ("6.3", "0"). */
 fun km1(km: Double): String = if (km % 1.0 == 0.0) km.toLong().toString() else toFixed(km, 1)

@@ -108,3 +108,12 @@ time and isn't obvious from the code.
 - Sign in with Google (`auth/GoogleSignIn.kt`) is PKCE like Strava. The return address is
   `com.paddlesnitch.app:/signin/google`, and App.kt acts on it only while
   `PrefsGoogleVerifierStore` holds a verifier from the last 10 minutes.
+- Boat motion (`paddles/BoatMotionScreen.kt`) is offered only on a tracker paddle
+  (`hasBoatMotion`). It draws the server's numbers as they are, and the Stroke rate tile is
+  the paddle's own `result.avgSR`. Charts are Compose `Canvas` with text from a
+  `TextMeasurer`. Size their margins from the measured label text and their height from
+  `fontScale`, never in fixed dp: fixed margins overlapped at large text. Tile labels are
+  long mono words, so tiles go one per row at large text, or they break mid-word.
+  `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
+- A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
+  that starts below the fold, or the second golden repeats the first.

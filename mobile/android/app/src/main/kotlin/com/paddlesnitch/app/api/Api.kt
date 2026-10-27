@@ -163,6 +163,21 @@ class Api(
     /** Writes a paddle's pending coach summary (can take a few seconds); the paddle as it is when already written. */
     suspend fun writeSummary(id: String): AnalysisSession = mutation("paddles.writeSummary", AnalysisSession.serializer(), """{"id":${str(id)}}""")
 
+    /** What a motion answer was, by URL, so a repeat visit sends `If-None-Match` and a 304 reuses it. */
+    private val motionSeen = java.util.concurrent.ConcurrentHashMap<String, Pair<String, RecordingMotion>>()
+
+    /** A tracker paddle's boat motion (README § Boat motion). 404 if it isn't this person's recording. */
+    suspend fun recordingMotion(deviceSessionId: String, deviceId: String): RecordingMotion {
+        val url = base.newBuilder().addPathSegments("api/account/devices/sessions").addPathSegment(deviceSessionId)
+            .addQueryParameter("deviceId", deviceId).build()
+        val seen = motionSeen[url.toString()]
+        val res = authorized { Request.Builder().url(url).header(AUTH, "Bearer $it").apply { seen?.let { s -> header("If-None-Match", s.first) } }.build() }
+        if (res.code == 304 && seen != null) return seen.second
+        val motion = read(res, RecordingMotion.serializer())
+        res.etag?.let { motionSeen[url.toString()] = it to motion }
+        return motion
+    }
+
     // Account (mobile/contract/README.md § Account): the website's /api/account routes with the Bearer token.
     override suspend fun terms(): TosStatus = account("GET", "api/account/tos", null, TosStatus.serializer())
     override suspend fun acceptTerms(): TosAccepted =
@@ -307,11 +322,11 @@ class Api(
         call(Request.Builder().url(base.newBuilder().addPathSegments(path.trimStart('/')).build()).post(body.toRequestBody(jsonType)).build())
 
     /** An answer read in full, so nothing touches the network on the caller's (main) thread. */
-    class Answer(val code: Int, val body: String) { val ok get() = code in 200..299 }
+    class Answer(val code: Int, val body: String, val etag: String? = null) { val ok get() = code in 200..299 }
 
     private suspend fun call(req: Request): Answer = withContext(Dispatchers.IO) {
         try {
-            http.newCall(req.newBuilder().header(APP_HEADER, "android/$appVersion").build()).execute().use { Answer(it.code, it.body.string()) }
+            http.newCall(req.newBuilder().header(APP_HEADER, "android/$appVersion").build()).execute().use { Answer(it.code, it.body.string(), it.header("ETag")) }
         } catch (e: IOException) {
             throw ApiFailure("Couldn’t reach paddlesnitch. Check your connection and try again.")
         }
