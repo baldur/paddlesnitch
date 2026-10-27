@@ -472,8 +472,7 @@ function AccountPageInner() {
 
             {GOOGLE_SIGNIN && (
               <>
-                <GoogleConnect onSignInAgain={() => signInAgain('google')} signingIn={working === 'google'} />
-                {googleSignInError && <p role="alert" className="text-sm text-red -mt-3">{googleSignInError}</p>}
+                <GoogleConnect onSignInAgain={() => signInAgain('google')} signingIn={working === 'google'} signInError={googleSignInError} />
               </>
             )}
 

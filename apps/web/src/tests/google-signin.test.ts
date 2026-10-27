@@ -157,7 +157,7 @@ describe('back from Google', () => {
     const keys = [
       errorKey('access_denied', null), errorKey('invalid_request', 'PreSignUp failed with error NO_EMAIL.'),
       errorKey('invalid_request', 'PreSignUp failed with error EMAIL_UNVERIFIED.'), errorKey('invalid_request', 'PreSignUp failed with error ACCOUNT_EXISTS.'),
-      errorKey('server_error', 'something'), 'google_not_configured',
+      errorKey('server_error', 'something'), 'google_not_configured', errorKey('invalid_request', 'PreSignUp failed with error LINKED.'),
     ]
     expect(keys.slice(0, 5)).toEqual(['google_denied', 'google_no_email', 'google_no_email', 'google_account_exists', 'google_failed'])
     const page = readFileSync(path.join(__dirname, '../app/signin/page.tsx'), 'utf8')

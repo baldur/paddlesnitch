@@ -134,4 +134,70 @@ describe('PreSignUp: one account per email', () => {
       expect(linkKey(' Pat@Example.com ')).toBe(linkNoteKey('pat@example.com'))
     })
   })
+
+  // The real note store and link command, as Lambda runs them (only the AWS
+  // clients are faked: the trigger's own copies, in infra/node_modules).
+  describe('Connect Google, as Lambda runs it', () => {
+    const owner = { Username: 'u-1234', UserStatus: 'CONFIRMED', Attributes: [{ Name: 'email_verified', Value: 'true' }, { Name: 'sub', Value: 'sub-owner' }] }
+    const googleEvent = { ...event(GOOGLE), userName: 'Google_10987654321' }
+    const run = lambdaEntry as unknown as (e: unknown, c: unknown) => Promise<unknown>
+    afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
+
+    async function setup(store: Record<string, string>, s3Error?: string) {
+      vi.stubEnv('DATA_BUCKET', 'data-bucket')
+      const s3 = await import('../../../../infra/node_modules/@aws-sdk/client-s3')
+      const s3calls: { name: string; input: { Bucket: string; Key: string } }[] = []
+      vi.spyOn(s3.S3Client.prototype, 'send').mockImplementation((async (cmd: { constructor: { name: string }; input: { Bucket: string; Key: string } }) => {
+        s3calls.push({ name: cmd.constructor.name, input: cmd.input })
+        if (s3Error) throw Object.assign(new Error(s3Error), { name: s3Error })
+        if (cmd.constructor.name === 'GetObjectCommand') {
+          if (!(cmd.input.Key in store)) throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' })
+          return { Body: { transformToString: async () => store[cmd.input.Key] } }
+        }
+        delete store[cmd.input.Key]
+        return {}
+      }) as never)
+      const idp: { name: string; input: Record<string, unknown> }[] = []
+      vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async (cmd: { constructor: { name: string }; input: Record<string, unknown> }) => {
+        idp.push({ name: cmd.constructor.name, input: cmd.input })
+        return cmd.constructor.name === 'ListUsersCommand' ? { Users: [owner] } : {}
+      }) as never)
+      return { s3calls, idp }
+    }
+
+    it('reads the note, deletes it, and links with Cognito\'s real command; a second Google trip finds no note', async () => {
+      const store: Record<string, string> = { [linkKey('pat@example.com')]: JSON.stringify({ userId: 'sub-owner', expiresAt: Date.now() + 60_000 }) }
+      const { s3calls, idp } = await setup(store)
+      await expect(run(googleEvent, {})).rejects.toThrow('LINKED')
+      expect(s3calls.map(c => c.name)).toEqual(['GetObjectCommand', 'DeleteObjectCommand'])
+      expect(s3calls.every(c => c.input.Bucket === 'data-bucket' && c.input.Key === linkKey('pat@example.com'))).toBe(true)
+      expect(idp.find(c => c.name === 'AdminLinkProviderForUserCommand')?.input).toEqual({
+        UserPoolId: 'pool',
+        DestinationUser: { ProviderName: 'Cognito', ProviderAttributeValue: 'u-1234' },
+        SourceUser: { ProviderName: 'Google', ProviderAttributeName: 'Cognito_Subject', ProviderAttributeValue: '10987654321' },
+      })
+      await expect(run(googleEvent, {})).rejects.toThrow('ACCOUNT_EXISTS')
+    })
+
+    it('no note, an S3 error or a broken note: refused as before, never linked', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      for (const [store, err] of [[{}, undefined], [{}, 'AccessDenied'], [{ [linkKey('pat@example.com')]: 'not json' }, undefined]] as const) {
+        const { s3calls, idp } = await setup({ ...store }, err)
+        await expect(run(googleEvent, {})).rejects.toThrow('ACCOUNT_EXISTS')
+        expect(idp.some(c => c.name === 'AdminLinkProviderForUserCommand')).toBe(false)
+        if (!err && !Object.keys(store).length) expect(s3calls.map(c => c.name)).toEqual(['GetObjectCommand'])
+        vi.restoreAllMocks()
+      }
+    })
+
+    it('two verified holders, an owner without a sub, or no Google id: never linked', async () => {
+      const note = { userId: 'sub-owner', expiresAt: Date.now() + 60_000 }
+      const took: string[] = []
+      const d = (users: unknown[]) => ({ usersWithEmail: async () => users as never[], takeLinkNote: async (e: string) => { took.push(e); return note }, linkGoogle: async () => { throw new Error('must not link') } })
+      await expect(handler(googleEvent, d([owner, { ...owner, Username: 'u-2' }]))).rejects.toThrow('ACCOUNT_EXISTS')
+      expect(took).toEqual([])
+      await expect(handler(googleEvent, d([{ ...owner, Attributes: [{ Name: 'email_verified', Value: 'true' }] }]))).rejects.toThrow('ACCOUNT_EXISTS')
+      await expect(handler({ ...event(GOOGLE) }, d([owner]))).rejects.toThrow('ACCOUNT_EXISTS')
+    })
+  })
 })

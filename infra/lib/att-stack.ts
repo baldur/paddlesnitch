@@ -181,6 +181,12 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // Connect Google notes (apps/web/src/lib/google-link.ts): 10 minutes, one use.
+        id: 'expire-google-link-notes',
+        prefix: 'auth/google-links/',
+        expiration: cdk.Duration.days(1),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Prepared "Download my data" files: fetched within minutes of being made.
         id: 'expire-account-exports',
         prefix: 'exports/',

@@ -13,7 +13,9 @@ vi.mock('@/lib/app-signin', async (orig) => ({ ...(await orig<typeof import('@/l
 vi.mock('@/lib/cognito', async (orig) => ({
   ...(await orig<typeof import('@/lib/cognito')>()),
   findUserBySub: vi.fn(), verifyIdToken: vi.fn(), revoke: vi.fn(async () => {}), isNewGoogleAccount: vi.fn(), deleteUserBySub: vi.fn(async () => {}),
+  disconnectGoogle: vi.fn(async () => {}), accessTokenFrom: vi.fn(async () => 'access'), sendEmailProofCode: vi.fn(async () => ({ ok: true })), confirmEmailProof: vi.fn(async () => ({ ok: true })),
 }))
+vi.mock('@/lib/tos', async (orig) => ({ ...(await orig<typeof import('@/lib/tos')>()), hasAcceptedCurrent: vi.fn(async () => false) }))
 
 import { cookies } from 'next/headers'
 import { getAuthUser, getRequestUser } from '@/lib/auth'
@@ -24,6 +26,11 @@ import { GET as callback } from '@/app/att/api/auth/google/callback/route'
 import { GET as status } from '@/app/api/account/google/route'
 import { linkNoteKey } from '@/lib/google-link'
 import { getJson } from '@/lib/storage'
+import { isEmailProven, markEmailProven } from '@/lib/email-proven'
+import { hasAcceptedCurrent } from '@/lib/tos'
+import { leaveLinkNote } from '@/lib/google-link'
+import { POST as unlink } from '@/app/att/api/auth/google/unlink/route'
+import { POST as emailProof } from '@/app/api/account/email-proof/route'
 
 const DOMAIN = 'https://paddlesnitch.auth.eu-west-1.amazoncognito.com'
 const me = { id: 'sub-me', email: 'me@example.com', displayName: 'Me', emailVerified: true }
@@ -34,6 +41,7 @@ beforeEach(async () => {
   vi.mocked(getAuthUser).mockResolvedValue(me)
   vi.mocked(hasRecentSignIn).mockResolvedValue(true)
   vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me' })
+  await markEmailProven('sub-me', 'sign_up_code')
   jar({})
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
     if (String(url) === `${DOMAIN}/oauth2/token`) return Response.json({ id_token: 'id.tok.en', refresh_token: 'refresh', access_token: 'a' })
@@ -78,9 +86,16 @@ describe('POST /att/api/auth/google/link', () => {
     expect(await getJson(linkNoteKey('me@example.com'))).toBeNull()
   })
 
+  it('an account that never proved its email (made before sign-up codes) can\'t connect: it could hold someone else\'s address', async () => {
+    const { deleteObject } = await import('@/lib/storage')
+    await deleteObject('users/sub-me/email-proven.json')
+    expect(to(await post()).search).toBe('?google=email_unproved')
+    expect(await getJson(linkNoteKey('me@example.com'))).toBeNull()
+  })
+
   it('an email the account never proved, or an account that already has Google, leaves no note', async () => {
     vi.mocked(getAuthUser).mockResolvedValue({ ...me, emailVerified: false })
-    expect(to(await post()).search).toBe('?google=google_failed')
+    expect(to(await post()).search).toBe('?google=email_unproved')
     vi.mocked(getAuthUser).mockResolvedValue(me)
     vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true })
     expect(to(await post()).search).toBe('?google=connected')
@@ -94,10 +109,31 @@ describe('back from a connect trip', () => {
 
   it('LINKED from the trigger is "connected", back on Account, signed in as before', async () => {
     jar(started)
+    await leaveLinkNote('me@example.com', 'sub-me')
     const res = await back('error=invalid_request&error_description=PreSignUp+failed+with+error+LINKED.&state=st')
     expect(to(res).pathname + to(res).search).toBe('/account?google=connected')
     expect(setCookie(res, 'tt_id')).toBeUndefined()
     expect(setCookie(res, 'google_signin_link')).toBe('')
+    // The note was for this trip only.
+    expect(await getJson(linkNoteKey('me@example.com'))).toBeNull()
+  })
+
+  it('a trip that didn\'t link (another Google account) spends the note too', async () => {
+    jar(started)
+    await leaveLinkNote('me@example.com', 'sub-me')
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-new-google', email: 'other@gmail.com', displayName: 'O', emailVerified: true })
+    vi.mocked(cognito.isNewGoogleAccount).mockResolvedValue(false)
+    await back('code=c&state=st')
+    expect(await getJson(linkNoteKey('me@example.com'))).toBeNull()
+  })
+
+  it('a Google account that got past the Terms is never deleted, however new', async () => {
+    jar(started)
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-new-google', email: 'other@gmail.com', displayName: 'O', emailVerified: true })
+    vi.mocked(cognito.isNewGoogleAccount).mockResolvedValue(true)
+    vi.mocked(hasAcceptedCurrent).mockResolvedValueOnce(true)
+    await back('code=c&state=st')
+    expect(cognito.deleteUserBySub).not.toHaveBeenCalled()
   })
 
   it('the trigger refusing (the note ran out) is link_failed; a cancel is google_denied', async () => {
@@ -105,6 +141,33 @@ describe('back from a connect trip', () => {
     expect(to(await back('error=invalid_request&error_description=PreSignUp+failed+with+error+ACCOUNT_EXISTS.&state=st')).search).toBe('?google=link_failed')
     jar(started)
     expect(to(await back('error=access_denied&state=st')).search).toBe('?google=google_denied')
+  })
+
+  it('a Google login with this email that has its own account is linked_elsewhere, never deleted', async () => {
+    jar(started)
+    vi.mocked(getAuthUser).mockResolvedValue(me)
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-old-google', email: 'Me@Example.com', displayName: 'O', emailVerified: true })
+    vi.mocked(cognito.isNewGoogleAccount).mockResolvedValue(false)
+    const res = await back('code=c&state=st')
+    expect(to(res).search).toBe('?google=linked_elsewhere')
+    expect(setCookie(res, 'tt_id')).toBeUndefined()
+  })
+
+  it('a failing clean-up still goes back to Account, signed in as before', async () => {
+    jar(started)
+    vi.mocked(cognito.verifyIdToken).mockResolvedValue({ id: 'sub-new-google', email: 'other@gmail.com', displayName: 'O', emailVerified: true })
+    vi.mocked(cognito.isNewGoogleAccount).mockRejectedValue(new Error('throttled'))
+    vi.mocked(cognito.revoke).mockRejectedValueOnce(new Error('down'))
+    const res = await back('code=c&state=st')
+    expect(to(res).search).toBe('?google=different_email')
+    expect(setCookie(res, 'tt_id')).toBeUndefined()
+  })
+
+  it('a link made on a plain Google sign-in (a connect left half-way) asks them to sign in with Google again', async () => {
+    jar({ google_signin_state: 'st', google_signin_verifier: 'ver', google_signin_next: '/paddles' })
+    const res = await back('error=invalid_request&error_description=PreSignUp+failed+with+error+LINKED.&state=st')
+    expect(to(res).pathname).toBe('/signin')
+    expect(to(res).searchParams.get('error')).toBe('google_linked')
   })
 
   it('a Google account with another email doesn\'t switch accounts, and the one Cognito just made goes', async () => {
@@ -139,11 +202,16 @@ describe('GET /api/account/google', () => {
   it('says whether Google signs in to this account', async () => {
     const ask = async () => (await status(new Request('http://x'))).json()
     vi.mocked(getRequestUser).mockResolvedValue(me)
-    expect(await ask()).toEqual({ signsInWithGoogle: false, connected: false })
+    expect(await ask()).toEqual({ signsInWithGoogle: false, connected: false, email: 'me@example.com', canConnect: true, emailProven: true, canDisconnect: false })
+    vi.mocked(getRequestUser).mockResolvedValue({ ...me, emailVerified: false })
+    expect((await ask()).canConnect).toBe(false)
+    vi.mocked(getRequestUser).mockResolvedValue({ ...me, email: 'strava-123@noreply.paddlesnitch.com' })
+    expect((await ask()).canConnect).toBe(false)
+    vi.mocked(getRequestUser).mockResolvedValue(me)
     vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true })
-    expect(await ask()).toEqual({ signsInWithGoogle: false, connected: true })
+    expect(await ask()).toMatchObject({ signsInWithGoogle: false, connected: true, canConnect: false, canDisconnect: true })
     vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', google: true })
-    expect(await ask()).toEqual({ signsInWithGoogle: true, connected: true })
+    expect(await ask()).toMatchObject({ signsInWithGoogle: true, connected: true, canConnect: false, canDisconnect: false })
     vi.mocked(getRequestUser).mockResolvedValue(null)
     expect((await status(new Request('http://x'))).status).toBe(401)
   })
@@ -156,7 +224,7 @@ describe('what Account knows', () => {
     const users = (u: object) => vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async () => ({ Users: [u] })) as never)
     const attrs = (extra: object[] = []) => [{ Name: 'sub', Value: 's' }, { Name: 'email', Value: 'me@example.com' }, ...extra]
     users({ Username: 'u-1', Attributes: attrs([{ Name: 'identities', Value: '[{"userId":"1098","providerName":"Google","providerType":"Google"}]' }]) })
-    expect(await real.findUserBySub('s')).toMatchObject({ googleLinked: true })
+    expect(await real.findUserBySub('s')).toMatchObject({ googleLinked: true, googleId: '1098' })
     vi.restoreAllMocks()
     users({ Username: 'u-1', Attributes: attrs() })
     expect((await real.findUserBySub('s'))?.googleLinked).toBeUndefined()
@@ -179,6 +247,116 @@ describe('what Account knows', () => {
     for (const k of [...sent]) if (k.startsWith('google_signin')) sent.delete(k) // cookie names
     sent.delete('google_linked') // turned into "connected"
     sent.delete('google_account_exists') // turned into "link_failed"
-    for (const k of sent) expect(ui, k).toMatch(k === 'reauth' ? /key === 'reauth'/ : new RegExp(`\\b${k}: \\{`))
+    for (const k of sent) expect(ui, k).toMatch(k === 'reauth' ? /key === 'reauth'/ : new RegExp(`\\b${k}: \\(`))
+  })
+})
+
+describe('Disconnect', () => {
+  const un = (headers: Record<string, string> = {}) => unlink(new NextRequest('http://localhost/att/api/auth/google/unlink', { method: 'POST', headers }))
+  it('disconnects the connected Google login and says so', async () => {
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true, googleId: '1098' })
+    expect(to(await un()).search).toBe('?google=disconnected')
+    expect(cognito.disconnectGoogle).toHaveBeenCalledWith('1098')
+  })
+  it('never for another site\'s form, nothing to do without a connected login, and a failure says so', async () => {
+    expect(to(await un({ origin: 'https://evil.example' })).search).toBe('?google=google_failed')
+    expect(to(await un()).search).toBe('?google=disconnected')
+    expect(cognito.disconnectGoogle).not.toHaveBeenCalled()
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true, googleId: '1098' })
+    vi.mocked(cognito.disconnectGoogle).mockRejectedValueOnce(new Error('throttled'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(to(await un()).search).toBe('?google=disconnect_failed')
+  })
+})
+
+describe('proving the email from Account', () => {
+  const ask = (body: object) => emailProof(new NextRequest('http://localhost/api/account/email-proof', { method: 'POST', body: JSON.stringify(body) }))
+  beforeEach(async () => {
+    const { deleteObject } = await import('@/lib/storage')
+    await deleteObject('users/sub-me/email-proven.json')
+    jar({ tt_refresh: 'refresh-me' })
+  })
+  it('sends a code, then a right code marks the email proven', async () => {
+    expect((await ask({})).status).toBe(200)
+    expect(cognito.sendEmailProofCode).toHaveBeenCalledWith('access')
+    expect(cognito.accessTokenFrom).toHaveBeenCalledWith('refresh-me')
+    expect(await isEmailProven('sub-me')).toBe(false)
+    expect((await ask({ code: '123456' })).status).toBe(200)
+    expect(cognito.confirmEmailProof).toHaveBeenCalledWith('access', '123456')
+    expect(await isEmailProven('sub-me')).toBe(true)
+  })
+  it('a wrong or expired code, or not six digits, proves nothing', async () => {
+    vi.mocked(cognito.confirmEmailProof).mockResolvedValueOnce({ error: 'invalid_code' })
+    expect((await ask({ code: '000000' })).status).toBe(400)
+    vi.mocked(cognito.confirmEmailProof).mockResolvedValueOnce({ error: 'expired_code' })
+    expect((await (await ask({ code: '000000' })).json()).error).toMatch(/expired/)
+    expect((await ask({ code: '12ab' })).status).toBe(400)
+    expect(await isEmailProven('sub-me')).toBe(false)
+  })
+  it('needs a signed-in browser with its refresh token', async () => {
+    jar({})
+    expect((await ask({})).status).toBe(401)
+    vi.mocked(getAuthUser).mockResolvedValue(null)
+    jar({ tt_refresh: 'refresh-me' })
+    expect((await ask({})).status).toBe(401)
+  })
+})
+
+describe('the export and the other ways out', () => {
+  it('the export says Google is connected', async () => {
+    const { buildAccountExport } = await import('@/lib/account-export')
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true, googleId: '1098' })
+    expect((await buildAccountExport(me)).user).toMatchObject({ googleConnected: true })
+  })
+  it('a password reset disconnects a connected Google login', async () => {
+    const { afterPasswordReset } = await import('@/lib/password-reset')
+    vi.spyOn(cognito, 'findUserByEmail').mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true, googleId: '1098' })
+    vi.spyOn(cognito, 'signOutEverywhere').mockResolvedValue(undefined as never)
+    await afterPasswordReset('me@example.com')
+    expect(cognito.disconnectGoogle).toHaveBeenCalledWith('1098')
+  })
+})
+
+describe('isNewGoogleAccount: the only accounts the callback may delete', () => {
+  it('a Google account made in the window; never an older one, an email account or a missing one', async () => {
+    const real = await vi.importActual<typeof import('@/lib/cognito')>('@/lib/cognito')
+    const { CognitoIdentityProviderClient } = await import('@aws-sdk/client-cognito-identity-provider')
+    const now = Date.parse('2026-10-27T10:00:00Z')
+    const filters: string[] = []
+    const answer = (users: object[]) => vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockImplementation((async (cmd: { input: { Filter: string } }) => { filters.push(cmd.input.Filter); return { Users: users } }) as never)
+    const ago = (ms: number) => new Date(now - ms)
+    const cases: [object[], boolean][] = [
+      [[{ Username: 'Google_1', UserCreateDate: ago(60_000) }], true],
+      [[{ Username: 'Google_1', UserCreateDate: ago(3 * 60_000) }], false],
+      [[{ Username: 'u-1', UserCreateDate: ago(1000) }], false],
+      [[], false],
+      [[{ Username: 'Google_1' }], false],
+    ]
+    for (const [users, want] of cases) {
+      answer(users)
+      expect(await real.isNewGoogleAccount('s', 2 * 60_000, now), JSON.stringify(users)).toBe(want)
+      vi.restoreAllMocks()
+    }
+    answer([])
+    await real.isNewGoogleAccount('a"b', 1000, now)
+    expect(filters.at(-1)).toBe('sub = "a\\"b"')
+    vi.restoreAllMocks()
+  })
+})
+
+describe('deleting the account', () => {
+  it('disconnects a connected Google login before the account goes, and removes a leftover note', async () => {
+    const { DELETE } = await import('@/app/api/account/route')
+    vi.mocked(getRequestUser).mockResolvedValue(me)
+    vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true, googleId: '1098' })
+    vi.mocked(cookies).mockResolvedValue({ get: () => undefined, delete: vi.fn(), set: vi.fn() } as never)
+    await leaveLinkNote('me@example.com', 'sub-me')
+    await leaveLinkNote('other@example.com', 'sub-other')
+    const res = await DELETE(new Request('http://x', { method: 'DELETE', body: '{}' }))
+    expect(res.status).toBe(200)
+    expect(cognito.disconnectGoogle).toHaveBeenCalledWith('1098')
+    expect(vi.mocked(cognito.disconnectGoogle).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(cognito.deleteUserBySub).mock.invocationCallOrder[0])
+    expect(await getJson(linkNoteKey('me@example.com'))).toBeNull()
+    expect(await getJson(linkNoteKey('other@example.com'))).not.toBeNull()
   })
 })

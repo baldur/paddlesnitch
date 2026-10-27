@@ -72,6 +72,7 @@ function AuthForm() {
     if (e === 'google_account_exists') return STRAVA ? 'You already have an account with this email. Sign in with your email or Strava instead.' : 'You already have an account with this email. Sign in with your email instead.'
     if (e === 'google_no_email') return 'Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead.'
     if (e === 'google_not_configured') return 'Google sign-in isn’t available right now.'
+    if (e === 'google_linked') return 'Google is now connected to your account. Sign in with Google again.'
     if (e === 'app_link_expired') return 'That link from the app has expired. Sign in here, or open it from the app again.'
     if (e === 'strava_use_google') return 'Your account signs in with Google. Please sign in with Google instead.'
     if (e === 'strava_not_configured') return 'Strava sign-in isn’t available right now.'
