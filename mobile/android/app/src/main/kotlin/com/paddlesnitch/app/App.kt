@@ -186,7 +186,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             Screen.Paddles -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
                 adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m)
             Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m,
-                loadMotion = { readMotionSample(context) }, action = {
+                // One motion answer ships, the fixture for the river sample's recording: only that sample offers it.
+                loadMotion = { readMotionSample(context) }, offersMotion = { it.source.deviceSessionId == SAMPLE_MOTION_RECORDING }, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
         }
@@ -244,7 +245,10 @@ private suspend fun readSample(context: android.content.Context, file: String): 
     context.assets.open(file).bufferedReader().use { ApiJson.decodeFromString(AnalysisSession.serializer(), it.readText()) }
 }
 
-/** The sample tracker paddles' boat motion: the contract's golden answer, shipped as an asset. */
+/** The recording behind the measured motion fixture (paddles.get.json's tracker paddle). */
+internal const val SAMPLE_MOTION_RECORDING = "S0012"
+
+/** The river sample's boat motion: the contract's golden answer, shipped as an asset. */
 private suspend fun readMotionSample(context: android.content.Context): RecordingMotion = withContext(Dispatchers.IO) {
     context.assets.open("api/account.devices-session.json").bufferedReader().use { ApiJson.decodeFromString(RecordingMotion.serializer(), it.readText()) }
 }

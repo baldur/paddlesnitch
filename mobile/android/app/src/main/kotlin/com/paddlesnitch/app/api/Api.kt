@@ -140,6 +140,7 @@ class Api(
         read(call(Request.Builder().url(base.newBuilder().addPathSegments("att/api/auth/options").build()).get().build()), SignInOptions.serializer())
 
     suspend fun signOut() {
+        motionSeen.clear()
         val refresh = tokens.refreshToken
         tokens.clear()
         // Best effort: signed out on the phone either way.

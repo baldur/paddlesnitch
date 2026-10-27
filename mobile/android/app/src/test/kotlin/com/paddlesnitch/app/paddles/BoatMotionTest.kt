@@ -49,6 +49,7 @@ class BoatMotionTest {
         assertEquals("30 s at 10 Hz", excerptLabel(measured))
         assertEquals("30 s", excerptLabel(measured.copy(sampleRateHz = null)))
         assertEquals("9", histogramEdge(measured.rollHistogram!!))
+        assertEquals("a few moments went past ±5° and are clipped here", clippedNote(measured.copy(plotBoundDeg = 5.0)))
     }
 
     @Test fun aSmallExcerptStillHasADegreeOfRoom() =
@@ -60,7 +61,8 @@ class BoatMotionTest {
     }
 
     @Test fun whyThereIsNoMotion() {
-        assertEquals(noMotionCopy(null), noMotionCopy(motion("account.devices-session.no-motion.json").attitude))
+        assertNull(motion("account.devices-session.no-motion.json").attitude)
+        assertTrue(noMotionCopy(null).startsWith("Motion data uploads"))
         assertTrue(noMotionCopy(motion("account.devices-session.motion-unusable.json").attitude).startsWith("We couldn’t measure"))
         assertTrue(noMotionCopy(measured.copy(available = false, reason = "")).startsWith("Motion data uploads"))
     }

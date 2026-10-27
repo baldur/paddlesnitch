@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -19,7 +20,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,7 +49,6 @@ import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.RecordingMotion
 import com.paddlesnitch.app.ui.PsColor
 import com.paddlesnitch.app.ui.PlexMono
-import com.paddlesnitch.app.ui.outlinedColors
 import com.paddlesnitch.app.ui.textColors
 
 /** The map on the paddle page; tests swap in a stand-in, as MapLibre can't draw on the JVM. */
@@ -77,6 +76,8 @@ fun PaddlesHost(
     onOpened: () -> Unit = {},
     /** A tracker paddle's boat motion; null hides Boat motion. */
     loadMotion: (suspend (AnalysisSession) -> RecordingMotion)? = null,
+    /** Which paddles offer it: any from a tracker, unless a caller narrows it (the samples have one motion answer). */
+    offersMotion: (AnalysisSession) -> Boolean = ::hasBoatMotion,
 ) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(openPaddle) { if (openPaddle != null) { open = openPaddle; onOpened() } }
@@ -86,16 +87,18 @@ fun PaddlesHost(
         PaddlesScreen(list, sample, modifier, action, notice, listState, onOpen = { open = it })
     } else {
         BackHandler { open = null }
-        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion)
+        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion, offersMotion)
     }
 }
 
 @Composable
 private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, writeSummary: (suspend (String) -> AnalysisSession)?, onBack: () -> Unit, modifier: Modifier, map: MapSlot,
-                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?) {
+                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean) {
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var session by remember(id) { mutableStateOf<AnalysisSession?>(null) }
     var motionOpen by rememberSaveable(id) { mutableStateOf(false) }
+    // Kept here, so coming back from Boat motion returns to where the page was.
+    val scroll = rememberSaveable(id, saver = ScrollState.Saver) { ScrollState(0) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var attempt by remember(id) { mutableIntStateOf(0) }
     var notFound by remember(id) { mutableStateOf(false) }
@@ -112,7 +115,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     val d = detail
     val s = session
     // Boat motion only for a paddle from one of your trackers (README § Boat motion).
-    val onMotion = if (s != null && loadMotion != null && hasBoatMotion(s)) ({ motionOpen = true }) else null
+    val onMotion = if (s != null && loadMotion != null && hasBoatMotion(s) && offersMotion(s)) ({ motionOpen = true }) else null
     if (motionOpen && s != null && loadMotion != null) {
         BackHandler { motionOpen = false }
         Column(modifier.fillMaxSize()) {
@@ -124,7 +127,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     Column(modifier.fillMaxSize()) {
         TextButton(onClick = onBack, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
         when {
-            d != null -> PaddlePage(d, map, onMotion = onMotion)
+            d != null -> PaddlePage(d, map, onMotion = onMotion, scroll = scroll)
             error != null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(error!!, color = PsColor.red)
                 // Trying again can't find a paddle that isn't there: "← Paddles" above is the way on.
@@ -137,8 +140,8 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
 
 /** One paddle, read only, top to bottom as the website's paddle page. */
 @Composable
-fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Modifier, onMotion: (() -> Unit)? = null) {
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Modifier, onMotion: (() -> Unit)? = null, scroll: ScrollState = rememberScrollState()) {
+    Column(modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (d.route.isNotEmpty() && d.bounds != null) Column {
             map(d, Modifier.fillMaxWidth().height(320.dp))
             d.legend?.let { Legend(it) }
@@ -149,7 +152,8 @@ fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Mo
                 Text(d.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
             }
             StatsGrid(d.stats)
-            onMotion?.let { OutlinedButton(onClick = it, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Boat motion") } }
+            // Quiet, as on the website: a text button, not an outlined one.
+            onMotion?.let { TextButton(onClick = it, colors = textColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Boat motion", fontSize = 16.sp) } }
             d.noGpsMessage?.let { Text(it, color = PsColor.muted, fontSize = 15.sp) }
             d.note?.let { LeftRule(PsColor.borderStrong) { Text(it, color = PsColor.muted, fontSize = 15.sp) } }
             if (d.insight != null || d.insightPending) LeftRule(PsColor.primary) {

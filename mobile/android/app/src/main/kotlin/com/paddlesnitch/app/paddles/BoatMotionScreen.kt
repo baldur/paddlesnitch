@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -105,6 +106,9 @@ fun envelopeClipped(a: BoatMotion): Boolean {
     return a.envelope.any { abs(it.rollMin) > m || abs(it.rollMax) > m || abs(it.pitchMin) > m || abs(it.pitchMax) > m }
 }
 
+/** The axis note when the envelope went past its bound. */
+fun clippedNote(a: BoatMotion) = "a few moments went past ±${toFixed(envelopeBound(a), 0)}° and are clipped here"
+
 /** The excerpt chart's bound: the largest value (at least 1°), with a tenth to spare. */
 fun excerptBound(ex: List<AttitudeSample>) = max(ex.maxOfOrNull { max(abs(it.roll), abs(it.pitch)) } ?: 0.0, 1.0) * 1.1
 
@@ -147,7 +151,7 @@ fun BoatMotionScreen(paddle: AnalysisSession, load: suspend () -> RecordingMotio
         when {
             failed -> {}
             m == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator(Modifier.height(24.dp))
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                 Text("Loading", color = PsColor.muted)
             }
             m.attitude?.available != true -> NoMotion(m.attitude)
@@ -173,7 +177,8 @@ private fun NoMotion(a: BoatMotion?) {
 private fun Motion(a: BoatMotion, avgSR: Double?) {
     Tiles(motionTiles(a, avgSR))
     ChartPanel("Through the session", "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling.",
-        "Roll and pitch through the session, reaching about ${toFixed(envelopeBound(a), 0)} degrees", 3.5f, a.envelope.size >= 2) { t -> envelope(a, t) }
+        "Roll and pitch through the session, reaching about ${toFixed(envelopeBound(a), 0)} degrees", 3.5f, a.envelope.size >= 2,
+        note = if (a.envelope.size >= 2 && envelopeClipped(a)) clippedNote(a) else null) { t -> envelope(a, t) }
     ChartPanel("Stroke shape", "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides.",
         "Thirty seconds of roll and pitch at full sample rate", 3.5f, a.excerpt.size >= 2) { t -> excerpt(a, t) }
     val h = a.rollHistogram
@@ -219,7 +224,7 @@ private fun Tile(t: MotionTile, modifier: Modifier) {
 
 /** A chart with its title above and caption below; the chart is one image to a screen reader, and draws nothing with too few points. */
 @Composable
-private fun ChartPanel(title: String, caption: String, label: String, aspect: Float, drawable: Boolean, draw: DrawScope.(TextMeasurer) -> Unit) {
+private fun ChartPanel(title: String, caption: String, label: String, aspect: Float, drawable: Boolean, note: String? = null, draw: DrawScope.(TextMeasurer) -> Unit) {
     val text = rememberTextMeasurer()
     Column(Modifier.panel()) {
         Text(title, color = PsColor.fg, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp).semantics { heading() })
@@ -229,6 +234,8 @@ private fun ChartPanel(title: String, caption: String, label: String, aspect: Fl
             val h: Dp = max((maxWidth / aspect).value, 150f * scale).dp
             Canvas(Modifier.fillMaxWidth().height(h).clearAndSetSemantics { contentDescription = label; role = Role.Image }) { draw(text) }
         } else Box(Modifier.height(12.dp))
+        // Under the chart, not on its time axis: at a real 11 sp it's wider than a phone's plot.
+        note?.let { Text(it, color = PsColor.muted, fontFamily = PlexMono, fontSize = 11.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         Text(caption, color = PsColor.muted, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
     }
 }
@@ -264,16 +271,27 @@ private fun DrawScope.degreeAxis(m: TextMeasurer, f: Frame, bound: Double, y: (D
     drawLine(PsColor.muted, Offset(f.l, y(0.0)), Offset(f.r, y(0.0)), 1.2.dp.toPx())
 }
 
-private fun DrawScope.swatch(m: TextMeasurer, colour: Color, alpha: Float, text: String, x: Float, y: Float): Float {
-    val s = 10.dp.toPx()
-    drawRect(colour, Offset(x, y), Size(s, s), alpha = alpha)
-    val layout = m.measure(text, axisText)
-    drawText(layout, topLeft = Offset(x + s + 4.dp.toPx(), y + s / 2 - layout.size.height / 2f))
-    return x + s + 4.dp.toPx() + layout.size.width + 10.dp.toPx()
+/** A legend's sizes follow its text, so they keep their spacing at large text. */
+private class Key(m: TextMeasurer) {
+    val line = m.measure("pitch", axisText).size.height.toFloat()
+    val mark = line * 0.6f
+    val gap = line * 0.3f
+    val space = line * 0.7f
 }
 
-private fun DrawScope.legendWidth(m: TextMeasurer, vararg texts: String) =
-    texts.sumOf { (10.dp.toPx() + 4.dp.toPx() + m.measure(it, axisText).size.width + 10.dp.toPx()).toDouble() }.toFloat() - 10.dp.toPx()
+/** A swatch and its word, centred on [mid]; returns where the next one starts. */
+private fun DrawScope.swatch(m: TextMeasurer, colour: Color, alpha: Float, text: String, x: Float, mid: Float): Float {
+    val k = Key(m)
+    drawRect(colour, Offset(x, mid - k.mark / 2), Size(k.mark, k.mark), alpha = alpha)
+    val layout = m.measure(text, axisText)
+    drawText(layout, topLeft = Offset(x + k.mark + k.gap, mid - layout.size.height / 2f))
+    return x + k.mark + k.gap + layout.size.width + k.space
+}
+
+private fun DrawScope.legendWidth(m: TextMeasurer, vararg texts: String): Float {
+    val k = Key(m)
+    return texts.sumOf { (k.mark + k.gap + m.measure(it, axisText).size.width + k.space).toDouble() }.toFloat() - k.space
+}
 
 private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
     val env = a.envelope
@@ -293,11 +311,9 @@ private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
     val bottom = f.under
     label(m, "0 min", f.l, bottom)
     label(m, "${((t1 - t0) / 60000).roundToLong()} min", f.r, bottom, align = 1f)
-    if (envelopeClipped(a)) label(m, "a few moments went past ±${toFixed(bound, 0)}° and are clipped here", (f.l + f.r) / 2, bottom, align = 0.5f)
     var lx = f.r - legendWidth(m, "roll", "pitch")
-    val ly = f.legendMiddle - 5.dp.toPx()
-    lx = swatch(m, PsColor.split, 0.5f, "roll", lx, ly)
-    swatch(m, PsColor.green, 0.28f, "pitch", lx, ly)
+    lx = swatch(m, PsColor.split, 0.5f, "roll", lx, f.legendMiddle)
+    swatch(m, PsColor.green, 0.28f, "pitch", lx, f.legendMiddle)
 }
 
 private fun DrawScope.excerpt(a: BoatMotion, m: TextMeasurer) {
@@ -320,9 +336,10 @@ private fun DrawScope.histogram(h: RollHistogram, m: TextMeasurer) {
     val f = Frame(this, m, legend = true)
     val maxCount = max(h.bins.maxOf { it.count }, 1L).toDouble()
     val edge = max(h.bins.maxOf { abs(it.centreDeg) }, 1.0)
-    val x = { d: Double -> (f.l + (d + edge) / (2 * edge) * (f.r - f.l)).toFloat() }
-    val y = { c: Double -> (f.t + (1 - c / maxCount) * (f.b - f.t)).toFloat() }
     val bw = (f.r - f.l) / h.bins.size * 0.86f
+    // The end bars' centres sit half a bar in, so no bar hangs past the plot.
+    val x = { d: Double -> (f.l + bw / 2 + (d + edge) / (2 * edge) * (f.r - f.l - bw)).toFloat() }
+    val y = { c: Double -> (f.t + (1 - c / maxCount) * (f.b - f.t)).toFloat() }
     h.bins.forEach { b ->
         drawRect(PsColor.split, Offset(x(b.centreDeg) - bw / 2, y(b.count.toDouble())), Size(bw, max(0f, f.b - y(b.count.toDouble()))), alpha = 0.45f)
     }
@@ -338,7 +355,8 @@ private fun DrawScope.histogram(h: RollHistogram, m: TextMeasurer) {
     label(m, "−$n°", f.l, bottom)
     label(m, "+$n°", f.r, bottom, align = 1f)
     val mid = f.legendMiddle
-    val lx = swatch(m, PsColor.split, 0.45f, "actual", f.l + 6.dp.toPx(), mid - 5.dp.toPx())
-    drawLine(PsColor.red, Offset(lx, mid), Offset(lx + 18.dp.toPx(), mid), 1.6.dp.toPx(), pathEffect = dashes)
-    label(m, "mirrored", lx + 24.dp.toPx(), mid)
+    val k = Key(m)
+    val lx = swatch(m, PsColor.split, 0.45f, "actual", f.l + 6.dp.toPx(), mid)
+    drawLine(PsColor.red, Offset(lx, mid), Offset(lx + k.line * 1.2f, mid), 1.6.dp.toPx(), pathEffect = dashes)
+    label(m, "mirrored", lx + k.line * 1.2f + k.gap, mid)
 }

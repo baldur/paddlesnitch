@@ -70,6 +70,10 @@ class BoatMotionScreenTest {
     @Test fun measured() {
         show { BoatMotionScreen(tracker, load = { motion("account.devices-session.json") }) }
         compose.onNodeWithContentDescription("Side-to-side roll", substring = true).assertExists()
+        // The engine's own words are for engineers, on every path.
+        compose.onNodeWithText("moving samples", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("clipped here", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("hard to tell apart", substring = true).assertDoesNotExist()
         golden("measured")
         compose.onNodeWithText("Bars show how often", substring = true).performScrollTo()
         golden("measured.histogram")
@@ -140,8 +144,76 @@ class BoatMotionScreenTest {
     }
 
     @Test fun aPaddleNotFromATrackerHasNoBoatMotion() {
-        show { PaddlesHost(list, sample = true, load = { paddle("paddles.get.strava.json") }, map = fakeMap, openPaddle = "pdl-strava", loadMotion = { error("not asked") }) }
-        compose.onNodeWithText("← Paddles").assertExists()
+        val strava = paddle("paddles.get.strava.json")
+        show { PaddlesHost(list, sample = true, load = { strava }, map = fakeMap, openPaddle = "pdl-strava", loadMotion = { error("not asked") }) }
+        compose.onNodeWithText(PaddleDetail(strava).title).assertExists()
+        compose.onNode(hasText("Boat motion") and hasClickAction()).assertDoesNotExist()
+    }
+
+    @Test fun aChartWithTooFewPointsKeepsItsPanelButDrawsNothing() {
+        val sparse = motion("account.devices-session.json").let { m ->
+            m.copy(attitude = m.attitude!!.copy(envelope = m.attitude!!.envelope.take(1), excerpt = emptyList(), rollHistogram = null))
+        }
+        show { BoatMotionScreen(tracker, load = { sparse }) }
+        listOf("Through the session", "Stroke shape", "Where the boat spent its time").forEach {
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText(it))
+        }
+        listOf("The shaded band shows", "30 seconds of typical paddling", "Bars show how often").forEach {
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText(it, substring = true))
+        }
+        listOf("Roll and pitch through the session", "Thirty seconds", "Distribution of boat lean").forEach {
+            compose.onNode(hasContentDescription(it, substring = true)).assertDoesNotExist()
+        }
+    }
+
+    @Test fun rollAndPitchThatWereHardToTellApartSaySo() {
+        val m = motion("account.devices-session.json")
+        show { BoatMotionScreen(tracker, load = { m.copy(attitude = m.attitude!!.copy(axisConfident = false)) }) }
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Roll and pitch were hard to tell apart in this recording.", substring = true))
+    }
+
+    @Test fun aClippedSessionSaysSoUnderTheChart() {
+        val m = motion("account.devices-session.json")
+        show { BoatMotionScreen(tracker, load = { m.copy(attitude = m.attitude!!.copy(plotBoundDeg = 5.0)) }) }
+        compose.onNodeWithText("a few moments went past ±5° and are clipped here").performScrollTo()
+        golden("clipped")
+    }
+
+    @Test fun loadingSaysSo() {
+        val never = kotlinx.coroutines.CompletableDeferred<RecordingMotion>()
+        show { BoatMotionScreen(tracker, load = { never.await() }) }
+        compose.onNodeWithText("Loading").assertExists()
+        golden("loading")
+    }
+
+    @Test fun atSlightlyLargerTextTheTileLabelsStillRead() {
+        show(fontScale = 1.3f) { BoatMotionScreen(tracker, load = { motion("account.devices-session.json") }) }
+        golden("measured.text-1.3")
+    }
+
+    @Test @Config(qualifiers = "w800dp-h1280dp") fun onATabletTheTilesAreFourAcross() {
+        show { BoatMotionScreen(tracker, load = { motion("account.devices-session.json") }) }
+        golden("tablet")
+    }
+
+    @Test fun backFromBoatMotionReturnsToTheSamePlaceOnThePaddle() {
+        show { PaddlesHost(list, sample = true, load = { tracker }, map = fakeMap, openPaddle = "pdl-river", loadMotion = { motion("account.devices-session.json") }) }
+        compose.onNodeWithText("Boat motion").performScrollTo()
+        compose.onNodeWithText("Efforts and rests").performScrollTo()
+        val before = compose.onNodeWithText("Efforts and rests").fetchSemanticsNode().positionInRoot
+        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        compose.onNodeWithText("← Paddle").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Boat motion").assertExists()
+        val after = compose.onNodeWithText("Efforts and rests").fetchSemanticsNode().positionInRoot
+        assertEquals(before.y, after.y, 1f)
+    }
+
+    @Test fun onlyTheSampleWithAMotionAnswerOffersIt() {
+        val noGps = paddle("paddles.get.motion-only.json")
+        show { PaddlesHost(list, sample = true, load = { noGps }, map = fakeMap, openPaddle = "pdl-motion", loadMotion = { error("not asked") },
+            offersMotion = { it.source.deviceSessionId == com.paddlesnitch.app.SAMPLE_MOTION_RECORDING }) }
+        compose.onNodeWithText(PaddleDetail(noGps).title).assertExists()
         compose.onNode(hasText("Boat motion") and hasClickAction()).assertDoesNotExist()
     }
 }
