@@ -38,6 +38,7 @@ import com.paddlesnitch.app.account.PrefsConnectVerifierStore
 import com.paddlesnitch.app.account.clearExport
 import com.paddlesnitch.app.account.clearStravaConnect
 import com.paddlesnitch.app.api.AnalysisSession
+import com.paddlesnitch.app.api.RecordingMotion
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
@@ -184,7 +185,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             }
             Screen.Paddles -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
                 adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m)
-            Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m, action = {
+            Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m,
+                // One motion answer ships, the fixture for the river sample's recording: only that sample offers it.
+                loadMotion = { readMotionSample(context) }, offersMotion = { it.source.deviceSessionId == SAMPLE_MOTION_RECORDING }, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
         }
@@ -222,7 +225,8 @@ private fun MyPaddles(
     val current = list
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
-            openPaddle = openPaddle, onOpened = onOpened, action = {
+            openPaddle = openPaddle, onOpened = onOpened,
+            loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) }, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
@@ -239,6 +243,14 @@ private fun MyPaddles(
 
 private suspend fun readSample(context: android.content.Context, file: String): AnalysisSession = withContext(Dispatchers.IO) {
     context.assets.open(file).bufferedReader().use { ApiJson.decodeFromString(AnalysisSession.serializer(), it.readText()) }
+}
+
+/** The recording behind the measured motion fixture (paddles.get.json's tracker paddle). */
+internal const val SAMPLE_MOTION_RECORDING = "S0012"
+
+/** The river sample's boat motion: the contract's golden answer, shipped as an asset. */
+private suspend fun readMotionSample(context: android.content.Context): RecordingMotion = withContext(Dispatchers.IO) {
+    context.assets.open("api/account.devices-session.json").bufferedReader().use { ApiJson.decodeFromString(RecordingMotion.serializer(), it.readText()) }
 }
 
 /**
