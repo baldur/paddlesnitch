@@ -207,17 +207,20 @@ golden answers are `fixtures/api/account.*.json`.
 The website's `/paddles/[id]/motion`. Only a paddle whose `paddles.get` has
 `source.type === "device"` with `deviceId` and `deviceSessionId` has one: call
 `GET /api/account/devices/sessions/<deviceSessionId>?deviceId=<deviceId>`
-(URL-encode both). Every number comes from the server; the app draws. The
-answer carries more fields (`report`, `noPaddle`, `fromMotion`: the website's
-technical details); ignore them. It sends an `ETag`: send it back as
-`If-None-Match` and a 304 with no body means "what you have is current".
+(URL-encode both). Every number comes from the server; the app draws. With
+the `x-paddlesnitch-app` header the answer is only `{attitude, cadence}` (the
+website also gets its technical details, with raw GPS rows the apps don't need).
+It sends an `ETag`: send it back as `If-None-Match` and a 304 with no body
+means "what you have is current". The website's "← Paddle" link and its
+Technical details panel are not part of the app screen.
 
 | State | What to show (the website's words) |
 |---|---|
 | Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
+| `paddles.get` fails or finds nothing | Title "We can't find this paddle", button Back to Paddles |
 | Loading | "Loading" |
-| Call failed, or 404 | "Couldn’t read the tracker's recording. Please try again." |
-| `attitude` null, or `attitude.available` false | "No boat motion for this recording." then `noMotionCopy` (format.json: null = the motion file hasn't arrived, else it couldn't be measured), then "Technical detail: " + `attitude.reason` when there is an `attitude` |
+| Call failed, or 404 | "Couldn’t read the tracker’s recording. Please try again." |
+| `attitude` null, or `attitude.available` false | "No boat motion for this recording." then `noMotionCopy` (format.json: null = the motion file hasn't arrived, else it couldn't be measured). Never show `reason`: it is the engine's English, for engineers |
 | `attitude.available` | The tiles, the three charts and the two notes below |
 
 Page title "Boat motion", with the paddle's `paddledAt` as `fmtDayTime` above it.
@@ -229,18 +232,25 @@ Page title "Boat motion", with the paddle's `paddledAt` as `fmtDayTime` above it
 - Stroke rate: the paddle's `result.avgSR` rounded, "spm"; null: "—", "not measured"
 
 **Charts** (title, then caption under the chart). Roll is the split colour,
-pitch the green; angles in degrees, `t` in milliseconds.
+pitch the green; angles in degrees, `t` in milliseconds. Y-axis ticks read
+"N°" every 5° when the range passes 12°, every 3° past 6°, else every 2°.
+Ticks are the plain number (a hyphen for minus: "-6°"); only the
+histogram's left label uses U+2212. Each chart's accessibility label is given
+after it.
 - "Through the session" from `envelope`: a band per bucket from min to max, roll
   over pitch, y from −`plotBoundDeg` to +`plotBoundDeg` (10 when null), values
   beyond clamped to the edge, and then the axis note "a few moments went past
   ±N° and are clipped here". X labels "0 min" and the length in whole minutes.
+  Legend "roll" and "pitch". Label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
   Caption: "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
 - "Stroke shape" from `excerpt`: two lines, scaled to its largest value ×1.1.
-  Label "<seconds> s at <sampleRateHz> Hz". Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
+  Label "<seconds> s at <sampleRateHz> Hz". Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
+  Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
 - "Where the boat spent its time" from `rollHistogram`: bars by `centreDeg`,
   plus a dashed red line of the same counts flipped about 0 (each bin takes the
-  count of the bin nearest `-centreDeg`). Labels "level" at 0, ±the largest
-  `|centreDeg|`, legend "actual" and "mirrored". Caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
+  count of the bin nearest `-centreDeg`). Labels "level" at 0, "−N°" (U+2212)
+  at the left and "+N°" at the right (N = the largest `|centreDeg|`, rounded),
+  legend "actual" and "mirrored". Accessibility label: "Distribution of boat lean, with the mirrored distribution overlaid to show evenness". Caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
 
 A chart with fewer than 2 points (histogram: no bins) is left out.
 
@@ -327,7 +337,8 @@ Account answers are `account.<route>[-<what>][.<case>].json`: `account.tos`,
 `account.handle-check`(`.taken`), `account.contact`(`.none`),
 `account.devices`(`.none`), `account.devices-sessions`,
 `account.devices-session` (boat motion: `.json` measured, `.no-motion` no motion
-file yet, `.motion-unusable` measured nothing, `.not-found` the 404), and
+file yet, `.motion-unusable` measured nothing, `.not-found` the 404; made from
+synthetic data by `tracker-fixtures.ts`, as every fixture here must be: this repo is public), and
 `account.error` (the 401 every account route shares).
 
 `paddles.list` is the Paddles screen as the website draws it, worked out on the

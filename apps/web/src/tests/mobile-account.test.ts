@@ -334,6 +334,13 @@ describe('trackers in the apps', () => {
     await fits(ApiError, await motionOf('not-a-jwt'), 401)
     await fits(ApiError, await motionOf((await makeUser('Sam')).idToken), 404)
     await fits(ApiError, await motionOf(pat.idToken, 'no-such-recording'), 404)
+    // The tracker's own key is not a person's sign-in.
+    await fits(ApiError, await motionOf(tokenOf.get(DEVICE)), 401)
+    // The apps get only what they draw, never the raw GPS rows of the website's technical details.
+    expect(Object.keys(await (await motionOf(pat.idToken)).json()).sort()).toEqual(['attitude', 'cadence'])
+    const web = recordingMotion(new NextRequest(`http://x/api/account/devices/sessions/${rec.sessionId}?deviceId=${DEVICE}`, {
+      headers: { authorization: `Bearer ${pat.idToken}` } }), { params: Promise.resolve({ sessionId: rec.sessionId }) })
+    expect(await (await web).json()).toHaveProperty('report')
   })
 
   it('a recording that became a paddle names it (paddleId), so the apps can link to it', async () => {

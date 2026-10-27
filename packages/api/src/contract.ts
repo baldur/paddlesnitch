@@ -330,7 +330,7 @@ export const MotionStrokeRate = named('MotionStrokeRate', z.object({
   medianStrokesPerMin: z.number().nullable(),
   windows: z.array(StrokeRateWindow),
 }))
-/** `attitude` and `cadence` are null when the motion file hasn't arrived (or never will). The answer has more fields (the website's technical details); ignore them. */
+/** `attitude` and `cadence` are null when the motion file hasn't arrived (or never will). With the app header this is the whole answer. */
 export const RecordingMotion = named('RecordingMotion', z.object({
   attitude: BoatMotion.nullable(),
   cadence: MotionStrokeRate.nullable(),

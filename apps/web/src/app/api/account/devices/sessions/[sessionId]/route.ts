@@ -12,6 +12,9 @@ import { etagMatches } from '@/lib/etag'
 // Worked out once per recording version (lib/recording-report.ts), and sent
 // with that version as its ETag: a repeat view the browser already has is a
 // 304 with no body, before anything but the recording's metadata is read.
+//
+// The apps (x-paddlesnitch-app) get only the boat motion they draw
+// (mobile/contract RecordingMotion), not the raw GPS rows of the technical details.
 export async function GET(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -22,10 +25,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ sessionI
   if (!version) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   const etag = `"${version}"`
   // Private: only this signed-in user's browser keeps it, and checks back each time.
-  const headers = { ETag: etag, 'Cache-Control': 'private, no-cache' }
+  const headers = { ETag: etag, 'Cache-Control': 'private, no-cache', Vary: 'x-paddlesnitch-app' }
   if (etagMatches(req.headers.get('if-none-match'), etag)) return new NextResponse(null, { status: 304, headers })
 
   const r = await recordingReport(user.id, deviceId, sessionId)
   if (!r) return NextResponse.json({ error: 'not_found' }, { status: 404 })
-  return NextResponse.json(r, { headers })
+  const app = req.headers.has('x-paddlesnitch-app')
+  return NextResponse.json(app ? { attitude: r.attitude, cadence: r.cadence } : r, { headers })
 }

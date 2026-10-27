@@ -25,7 +25,6 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
         <div className="rounded-control border border-border bg-surface p-4 text-base text-muted flex flex-col gap-2">
           <p className="text-fg font-medium">No boat motion for this recording.</p>
           <p>{noMotionCopy(attitude)}</p>
-          {attitude?.reason && <p className="text-sm">Technical detail: {attitude.reason}</p>}
         </div>
       ) : (
         <>

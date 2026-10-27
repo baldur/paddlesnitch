@@ -1,365 +1,4 @@
 {
-  "report": {
-    "columns": [
-      "timestamp",
-      "ms",
-      "fix",
-      "lat",
-      "lon",
-      "speed_kmh"
-    ],
-    "rows": 1200,
-    "fixedRows": 1200,
-    "noFixRows": 0,
-    "timeSpanS": 1199,
-    "movementDistanceM": 3000,
-    "hasImu": false,
-    "hasGyro": false,
-    "strokeRate": {
-      "available": false,
-      "reason": "No stroke-rate column and no accelerometer data.",
-      "evidence": null
-    },
-    "capture": {
-      "intervalS": 1,
-      "expectedRows": 1200,
-      "missingRows": 0,
-      "gaps": 0,
-      "longestGapS": 0,
-      "capturedFraction": 1
-    },
-    "gnss": {
-      "satsFirst": null,
-      "satsLast": null,
-      "satsMin": null,
-      "satsMax": null,
-      "hdopFirst": null,
-      "hdopLast": null,
-      "hdopMedian": null,
-      "fixTrend": null,
-      "altitudeSpreadM": null
-    },
-    "motion": null,
-    "deadColumns": [],
-    "looksUsable": true,
-    "sampleRows": [
-      {
-        "timestamp": "2026-10-06T09:00:00Z",
-        "ms": "400000",
-        "fix": "1",
-        "lat": "51.500000",
-        "lon": "-0.978",
-        "speed_kmh": "9"
-      },
-      {
-        "timestamp": "2026-10-06T09:00:01Z",
-        "ms": "401000",
-        "fix": "1",
-        "lat": "51.500023",
-        "lon": "-0.978",
-        "speed_kmh": "9"
-      },
-      {
-        "timestamp": "2026-10-06T09:00:02Z",
-        "ms": "402000",
-        "fix": "1",
-        "lat": "51.500045",
-        "lon": "-0.978",
-        "speed_kmh": "9"
-      },
-      {
-        "timestamp": "2026-10-06T09:00:03Z",
-        "ms": "403000",
-        "fix": "1",
-        "lat": "51.500068",
-        "lon": "-0.978",
-        "speed_kmh": "9"
-      },
-      {
-        "timestamp": "2026-10-06T09:00:04Z",
-        "ms": "404000",
-        "fix": "1",
-        "lat": "51.500090",
-        "lon": "-0.978",
-        "speed_kmh": "9"
-      }
-    ]
-  },
-  "cadence": {
-    "available": true,
-    "reason": "Derived from 38 windows of 60s at 10 Hz.",
-    "sampleRateHz": 10,
-    "rows": 12000,
-    "medianStrokesPerMin": 60.1,
-    "windows": [
-      {
-        "tMs": 400000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 430000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.968
-      },
-      {
-        "tMs": 460000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 490000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.965
-      },
-      {
-        "tMs": 520000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 550000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 580000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 610000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.966
-      },
-      {
-        "tMs": 640000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 670000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.968
-      },
-      {
-        "tMs": 700000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 730000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.965
-      },
-      {
-        "tMs": 760000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 790000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.963
-      },
-      {
-        "tMs": 820000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 850000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.966
-      },
-      {
-        "tMs": 880000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 910000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 940000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.966
-      },
-      {
-        "tMs": 970000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.965
-      },
-      {
-        "tMs": 1000000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.963
-      },
-      {
-        "tMs": 1030000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 1060000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.965
-      },
-      {
-        "tMs": 1090000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 1120000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 1150000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 1180000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.966
-      },
-      {
-        "tMs": 1210000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 1240000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.963
-      },
-      {
-        "tMs": 1270000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 1300000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.965
-      },
-      {
-        "tMs": 1330000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.967
-      },
-      {
-        "tMs": 1360000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.968
-      },
-      {
-        "tMs": 1390000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.966
-      },
-      {
-        "tMs": 1420000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.965
-      },
-      {
-        "tMs": 1450000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 1480000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      },
-      {
-        "tMs": 1510000,
-        "cyclesPerMin": 30,
-        "strokesPerMin": 60.1,
-        "alternating": true,
-        "confidence": 0.964
-      }
-    ]
-  },
   "attitude": {
     "envelope": [
       {
@@ -3733,6 +3372,279 @@
     "excludedWindows": 0,
     "excludedSeconds": 0
   },
-  "noPaddle": null,
-  "fromMotion": null
+  "cadence": {
+    "available": true,
+    "reason": "Derived from 38 windows of 60s at 10 Hz.",
+    "sampleRateHz": 10,
+    "rows": 12000,
+    "medianStrokesPerMin": 60.1,
+    "windows": [
+      {
+        "tMs": 400000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 430000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.968
+      },
+      {
+        "tMs": 460000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 490000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 520000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 550000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 580000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 610000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 640000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 670000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.968
+      },
+      {
+        "tMs": 700000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 730000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 760000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 790000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.963
+      },
+      {
+        "tMs": 820000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 850000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 880000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 910000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 940000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 970000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1000000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.963
+      },
+      {
+        "tMs": 1030000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1060000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1090000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1120000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1150000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1180000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 1210000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1240000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.963
+      },
+      {
+        "tMs": 1270000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1300000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1330000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1360000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.968
+      },
+      {
+        "tMs": 1390000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 1420000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1450000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1480000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1510000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      }
+    ]
+  }
 }
