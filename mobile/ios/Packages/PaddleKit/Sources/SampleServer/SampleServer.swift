@@ -25,6 +25,10 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _refusesRefresh = false
     var _termsAccepted = true
     var _failsAccountDelete = false
+    var _removedTrackers: Set<String> = []
+    var _failsTrackerRemoval = false
+    var _failsTrackerList = false
+    var _failsTrackerRecordings = false
     var _signInIsRecent = true
     var _profilePublic = true
     var _handle: String? = "river-pat"
@@ -53,27 +57,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _unconfirmed: Set<String> = [SampleServer.unconfirmedEmail, SampleServer.unconfirmedOldTermsEmail]
     var _tooManyCodes = false
     var _confirmSignInFails = false
-    /// Sign-up and sign-in answer 429 "too many codes".
-    public var tooManyCodes: Bool {
-        get { lock.withLock { _tooManyCodes } }
-        set { lock.withLock { _tooManyCodes = newValue } }
-    }
-    /// The code confirms the email, but the sign-in after it fails (500).
-    public var confirmSignInFails: Bool {
-        get { lock.withLock { _confirmSignInFails } }
-        set { lock.withLock { _confirmSignInFails = newValue } }
-    }
-    /// The code was entered somewhere else: signing in now works.
-    public func confirmElsewhere(_ email: String) {
-        _ = lock.withLock { _unconfirmed.remove(email) }
-    }
-    /// Unconfirmed, and on Terms older than the current ones.
-    public static let unconfirmedOldTermsEmail = "ola@example.com"
-    /// Sign-up codes (#702): this one works; any other is wrong.
-    public static let signupCode = "123456"
-    public static let wrongSignupCodeMessage = "That code is not valid. Check your email and try again."
-    /// An account whose sign-up code was never entered: signing in asks for it.
-    public static let unconfirmedEmail = "una@example.com"
     /// Make the last sign-in older than 10 minutes, as after a day signed
     /// in: `GET /api/account` says so and `DELETE` refuses (403 reauth).
     /// A sign-in makes it recent again.
@@ -138,6 +121,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         }
         if ["/api/account/profile", "/api/account/handle", "/api/account/contact"].contains(path) {
             return try profile(path: path, request: request)
+        }
+        if path.hasPrefix("/api/account/devices") {
+            return try trackers(path: path, request: request)
         }
         if path == "/api/account" || path.hasPrefix("/api/account/") {
             return try account(path: path, request: request)

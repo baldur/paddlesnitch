@@ -59,11 +59,17 @@ struct SignInView: View {
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
-            // A Strava account signing in again: straight to Strava.
-            if account.signInAgainWithStrava && !startedStrava && !form.busy {
-                startedStrava = true
-                signInWithStrava()
-            }
+        }
+        .task {
+            // A Strava account signing in again: straight to Strava,
+            // once the sheet is fully up. A sign-in that finished while the
+            // sheet was still rising closed it mid-way, and iOS 17 then never
+            // called its onDismiss (CI: deleting didn't come back).
+            guard account.signInAgainWithStrava && !startedStrava else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !form.busy else { return }
+            startedStrava = true
+            signInWithStrava()
         }
     }
 

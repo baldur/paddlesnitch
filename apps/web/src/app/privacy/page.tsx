@@ -104,7 +104,7 @@ export default function PrivacyPolicy() {
             <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
             <li><code>tt_from_link</code>: only when the paddlesnitch app opens the website signed in. It records which account the app signed in, so this browser won’t connect Strava to that account. Connect Strava in the app instead. Lasts 24 hours, or until you sign out.</li>
             <li><code>strava_state</code>, <code>strava_signin_state</code>, <code>strava_signin_next</code> and <code>strava_signin_app</code>: only while you connect or sign in with Strava, to check the reply really came from Strava and to bring you back to the right page, or to the paddlesnitch app if you started there. Last 10 minutes.</li>
-            <li><code>google_signin_state</code>, <code>google_signin_verifier</code> and <code>google_signin_next</code>: only while you sign in with Google, to check the reply really came from Google and to bring you back to the right page. Last 10 minutes.</li>
+            <li><code>google_signin_state</code>, <code>google_signin_verifier</code>, <code>google_signin_next</code> and <code>google_signin_app</code>: only while you sign in with Google. They check the reply really came from Google, and bring you back to the right page, or to the paddlesnitch app if you started there. They last 10 minutes.</li>
             <li><code>ps_contact_banner_dismissed</code>: only if you sign in with Strava and hide the &quot;add your email&quot; banner. Lasts 180 days.</li>
           </ul>
           <p className="mt-3">

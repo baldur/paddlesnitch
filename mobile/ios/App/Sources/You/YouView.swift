@@ -22,10 +22,12 @@ struct YouView: View {
     ]
 
     @State private var open: WebPage?
-    @State private var path: [Route] = []
+    /// Type-erased, so Devices can push its own routes (a tracker, a
+    /// paddle) with destinations it declares.
+    @State private var path = NavigationPath()
 
     enum Route: Hashable {
-        case account
+        case account, trackers
     }
 
     var body: some View {
@@ -42,6 +44,10 @@ struct YouView: View {
                         .listRowBackground(Palette.surface)
                         NavigationLink(value: Route.account) {
                             Text("Account").font(.plexSans(.body)).foregroundStyle(Palette.fg)
+                        }
+                        .listRowBackground(Palette.surface)
+                        NavigationLink(value: Route.trackers) {
+                            Text("Devices").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
                         Button("Sign out", role: .destructive) { confirmingSignOut = true }
@@ -85,13 +91,16 @@ struct YouView: View {
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
             .navigationTitle("You")
-            .navigationDestination(for: Route.self) { _ in
-                AccountView(account: account, signIn: signIn)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .account: AccountView(account: account, signIn: signIn)
+                case .trackers: TrackersView(account: account)
+                }
             }
             .onChange(of: account.user?.id) { _, id in
                 // Signed in again to delete or connect Strava: straight back
                 // to the account.
-                if id != nil && account.afterSignIn != nil { path = [.account] }
+                if id != nil && account.afterSignIn != nil { path = NavigationPath([Route.account]) }
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in

@@ -14,6 +14,10 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Segmented } from '@paddlesnitch/ui/Form'
 import { Card, Chevron, EmptyState, cardClass } from '@paddlesnitch/ui/Card'
 import LoadingState from '@/components/LoadingState'
+import { stravaOn } from '@/lib/sign-in-options'
+
+// Strava is switched off in some builds (lib/sign-in-options.ts).
+const STRAVA = stravaOn()
 
 // A row to pick (a Strava activity, a time-trial entry): tapping it adds it.
 const PICK = `${cardClass} w-full text-left flex items-center gap-3 px-4 py-3 min-h-11 transition-colors hover:border-border-strong hover:bg-surface-2 disabled:opacity-50`
@@ -25,7 +29,7 @@ function Frame({ children }: { children: React.ReactNode }) {
     <main className="flex-1 flex flex-col">
       <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← Paddles</Link>} />
       <Page width="narrow">
-        <PageHeader title="Add a paddle" description="Upload a GPS file, or pick one from Strava, a time trial or your tracker." />
+        <PageHeader title="Add a paddle" description={STRAVA ? 'Upload a GPS file, or pick one from Strava, a time trial or your tracker.' : 'Upload a GPS file, or pick one from a time trial or your tracker.'} />
         <div className="flex flex-col gap-4">{children}</div>
       </Page>
     </main>
@@ -133,7 +137,7 @@ export default function AddPaddlePage() {
   return (
     <Frame>
       <Segmented label="Where the paddle comes from" value={tab} onChange={openTab}
-        options={[{ value: 'file', label: 'File' }, { value: 'strava', label: 'Strava' }, { value: 'trials', label: 'Trials' }, { value: 'device', label: 'Tracker' }]} />
+        options={[{ value: 'file', label: 'File' }, ...(STRAVA ? [{ value: 'strava' as const, label: 'Strava' }] : []), { value: 'trials', label: 'Trials' }, { value: 'device', label: 'Tracker' }]} />
 
       {dupId && (
         <Card className="flex flex-wrap items-center justify-between gap-3">

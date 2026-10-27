@@ -10,8 +10,8 @@ import { Field, inputClass } from './Form'
 // both apps sit behind one CloudFront origin, so an absolute-path fetch reaches
 // the ATT server that files the GitHub issue (one GitHub token, one place).
 //
-// Two entry points: a floating button, AND a window event so a header link can
-// open it: `window.dispatchEvent(new CustomEvent('paddlesnitch:open-feedback'))`.
+// Three entry points: a floating button, ?report=1 in the address, AND a window
+// event so a header link can open it: `window.dispatchEvent(new CustomEvent('paddlesnitch:open-feedback'))`.
 // Anti-bot fields (`website` honeypot + `elapsedMs` time-trap) match
 // apps/web/src/lib/anti-bot.ts.
 
@@ -41,6 +41,11 @@ export default function FeedbackWidget({ endpoint = '/att/api/feedback' }: { end
   useEffect(() => { if (open) setOpenedAt(Date.now()) }, [open])
 
   // Open on the platform event (header "REPORT" link) + close on Escape.
+  // A link can open it too: any page with ?report=1 (the apps open
+  // /signin?report=1 for people who can't sign in at all).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('report') === '1') setOpen(true)
+  }, [])
   useEffect(() => {
     const onOpen = () => setOpen(true)
     window.addEventListener(OPEN_EVENT, onOpen)

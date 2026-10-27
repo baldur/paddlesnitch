@@ -14,6 +14,10 @@ import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Field, inputClass } from '@paddlesnitch/ui/Form'
 import { Badge, Chevron, EmptyState, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
+import { stravaOn } from '@/lib/sign-in-options'
+
+// Strava is switched off in some builds (lib/sign-in-options.ts).
+const STRAVA = stravaOn()
 
 // The page's sections, in order, for the in-page jump list (sm and up).
 const SECTIONS: [string, string][] = [
@@ -276,6 +280,11 @@ function AccountPageInner() {
     if (!user) return
     const setErr = then === 'delete' ? setDeleteError : setStravaSignInError
     setErr('')
+    // Made through Strava, and Strava is off: signing out would leave no way back in.
+    if (!STRAVA && isSyntheticStravaEmail(user.email)) {
+      setErr('Strava sign-in is off for now, so you can’t sign in again here. Report an issue asking us to delete your account. We’ll know it’s yours, so leave out your name and email: reports are public.')
+      return
+    }
     setWorking(then === 'delete' ? 'delete' : 'strava')
     const back = then === 'delete' ? '/account?resume=delete#delete' : '/account#strava'
     const out = await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => null)
@@ -335,7 +344,7 @@ function AccountPageInner() {
 
             {/* In-page jump list, from sm up: the page is long. */}
             <nav aria-label="On this page" className="hidden sm:flex flex-wrap gap-x-5 gap-y-1 text-sm -mt-4">
-              {SECTIONS.map(([id, label]) => (
+              {SECTIONS.filter(([id]) => id !== 'strava' || STRAVA || strava?.connected).map(([id, label]) => (
                 <a key={id} href={`#${id}`} className="text-muted hover:text-fg">{label}</a>
               ))}
             </nav>
@@ -457,12 +466,16 @@ function AccountPageInner() {
               </div>
             </section>
 
+            {/* Strava switched off: shown only to people still connected, so they can disconnect. */}
+            {(STRAVA || strava?.connected) && (
             <section id="strava" className="flex flex-col gap-3 scroll-mt-4">
               <h2 className="text-lg font-semibold text-fg">Strava</h2>
-              <p className="text-base text-muted">
-                Connect Strava to bring in your paddles and trial results without exporting files,
-                and to sign in with Strava. We only read your activities; we never post.
-              </p>
+              {STRAVA && (
+                <p className="text-base text-muted">
+                  Connect Strava to bring in your paddles and trial results without exporting files,
+                  and to sign in with Strava. We only read your activities; we never post.
+                </p>
+              )}
 
               {stravaFlash && (
                 <p
@@ -492,7 +505,7 @@ function AccountPageInner() {
 
               {strava === undefined && <p className={msgClass}>Checking…</p>}
 
-              {strava && !strava.connected && (
+              {strava && !strava.connected && STRAVA && (
                 <div><StravaButton href="/att/api/strava/connect" post /></div>
               )}
 
@@ -500,18 +513,23 @@ function AccountPageInner() {
                 <>
                   <div className={`${cardClass} flex items-center justify-between gap-4 px-4 py-2`}>
                     <div className="flex items-center gap-2 min-w-0">
-                      <Badge tone="green">Connected</Badge>
+                      {STRAVA ? <Badge tone="green">Connected</Badge> : <Badge>Paused</Badge>}
                       <span className="text-base text-fg truncate">{strava.athlete.name}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={disconnectStrava}
-                      disabled={working === 'strava'}
-                      className={buttonClass('quiet')}
-                    >
-                      {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
-                    </button>
+                    {/* Strava off: an account made through Strava keeps its link, its only way back in once Strava returns. */}
+                    {(STRAVA || !isSyntheticStravaEmail(user.email)) && (
+                      <button
+                        type="button"
+                        onClick={disconnectStrava}
+                        disabled={working === 'strava'}
+                        className={buttonClass('quiet')}
+                      >
+                        {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
+                      </button>
+                    )}
                   </div>
+                  {!STRAVA && <p className={msgClass}>Strava isn’t available right now. Paddles you already brought in stay here.</p>}
+                  {STRAVA && (<>
                   {/* Auto-import toggle (default on). New water-sport activities
                       flow into Paddles automatically via the Strava webhook. */}
                   <label className={`${cardClass} flex items-center justify-between gap-4 px-4 py-3 cursor-pointer`}>
@@ -533,13 +551,17 @@ function AccountPageInner() {
                   <StravaMoreImport />
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
                   <PoweredByStrava />
-                  <p className={msgClass}>
-                    You can also sign in with Strava. Disconnecting stops both importing and signing in
-                    with Strava.
-                  </p>
+                  </>)}
+                  {STRAVA && (
+                    <p className={msgClass}>
+                      You can also sign in with Strava. Disconnecting stops both importing and signing in
+                      with Strava.
+                    </p>
+                  )}
                 </>
               )}
             </section>
+            )}
 
             <section id="devices" className="flex flex-col gap-3 scroll-mt-4">
               <h2 className="text-lg font-semibold text-fg">Devices</h2>

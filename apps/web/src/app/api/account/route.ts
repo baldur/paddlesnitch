@@ -133,7 +133,8 @@ export async function DELETE(req: Request) {
   await erasePortages(user.id)
   await removeUserFromAllGroups(user.id)
   await eraseFeedbackContactsForUser(user.id)
-  await eraseBetaApplication(user.email)
+  // Keyed by email: only an address the account has proved is theirs (#713).
+  if (user.emailVerified) await eraseBetaApplication(user.email)
   const strava = await getStravaTokens(user.id)
   if (strava) await revokeStrava(strava.accessToken)
   // A Strava sign-in account may have no tokens left, but its synthetic email

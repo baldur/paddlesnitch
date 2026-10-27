@@ -58,7 +58,18 @@ struct RootView: View {
             content: { SignInView(account: account) }
         )
         // Up from opening until it has finished closing, not just asked to.
-        .onChange(of: signingIn) { _, opening in if opening { account.signInSheetUp = true } }
+        // onDismiss says when; in case it never comes (a sheet closed while
+        // still opening, on iOS 17), it's down a second after closing.
+        .onChange(of: signingIn) { _, opening in
+            if opening {
+                account.signInSheetUp = true
+            } else {
+                Task {
+                    try? await Task.sleep(for: .seconds(1))
+                    if !signingIn { account.signInSheetUp = false }
+                }
+            }
+        }
         .sheet(isPresented: $termsOpen) {
             NavigationStack {
                 List {
