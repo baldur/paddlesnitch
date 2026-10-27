@@ -236,6 +236,7 @@ struct TermsView: View {
             if let status, status.accepted {
                 Text(acceptedLine(status))
                     .foregroundStyle(Palette.fg)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("account-terms")
             } else if status != nil {
                 VStack(alignment: .leading, spacing: 12) {

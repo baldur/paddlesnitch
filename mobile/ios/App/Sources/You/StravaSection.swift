@@ -126,6 +126,7 @@ struct StravaSection: View {
                 set: { enabled in Task { await strava.setAutoImport(enabled) } })
         ) {
             Text("Auto-import new paddles").foregroundStyle(Palette.fg)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .tint(Palette.primary)
         .disabled(strava.busy != nil)
