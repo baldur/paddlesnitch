@@ -4,6 +4,17 @@ import PaddleAPI
 /// The account routes, played for the UI tests (mobile/contract/README.md,
 /// "Account").
 extension SampleServer {
+    /// Everything under /api/account: the profile, the trackers, the rest.
+    func accountRoutes(path: String, request: URLRequest) throws -> (Int, Data) {
+        if ["/api/account/profile", "/api/account/handle", "/api/account/contact"].contains(path) {
+            return try profile(path: path, request: request)
+        }
+        if path.hasPrefix("/api/account/devices") {
+            return try trackers(path: path, request: request)
+        }
+        return try account(path: path, request: request)
+    }
+
     /// The account routes (mobile/contract/README.md, "Account"), from the
     /// account.* fixtures.
     func account(path: String, request: URLRequest) throws -> (Int, Data) {

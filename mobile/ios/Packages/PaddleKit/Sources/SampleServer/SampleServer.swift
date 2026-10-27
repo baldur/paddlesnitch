@@ -124,14 +124,8 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         if path == "/paddles/api/analyse" {
             return analyse(request)
         }
-        if ["/api/account/profile", "/api/account/handle", "/api/account/contact"].contains(path) {
-            return try profile(path: path, request: request)
-        }
-        if path.hasPrefix("/api/account/devices") {
-            return try trackers(path: path, request: request)
-        }
         if path == "/api/account" || path.hasPrefix("/api/account/") {
-            return try account(path: path, request: request)
+            return try accountRoutes(path: path, request: request)
         }
         if path.hasPrefix("/att/api/strava/") {
             return try strava(path: path, request: request)
