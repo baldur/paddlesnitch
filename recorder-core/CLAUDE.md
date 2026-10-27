@@ -13,13 +13,28 @@ Package.swift             iPhone: add the folder as a local package, `import Rec
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
 library.json              tracker: lib_deps = symlink://../recorder-core (carries -ffp-contract=off)
 test/esp32_no_fma.sh      the tracker's gcc build has no fused multiply-adds
+wasm/                     the server's build: a shim taking plain numbers, and
+                          run_fixtures.mjs, which replays the fixtures under Node
 make test                 host build + every fixture; CI runs this
+make wasm WASI_SDK=...    the WebAssembly build + every fixture (wasi-sdk 25)
 ```
 
 CI (`checks.yml`): `recorder-core` runs the fixtures (ubuntu gcc and clang,
 macOS arm64 clang, sanitizers). `recorder-core-builds` runs them through CMake
 and checks the Android NDK (arm64) and ESP32-S3 builds for fused
-multiply-adds, since the fixtures can't run on those devices here.
+multiply-adds, since the fixtures can't run on those devices here, then
+builds the WebAssembly module and replays the fixtures through it.
+
+## The WebAssembly build
+
+`wasm/recorder_core_wasm.c` wraps the API in plain numbers (JavaScript can't
+build C structs): `rcw_init(has)`, `rcw_imu(...)` and `rcw_second(...)` with
+every `rc_gps` and `rc_extras` field in header order. Lines come back
+through the import `env.rcw_write(stream, ptr, len)`. One recording per
+instance. libc's stdio comes along with `snprintf`, so the module imports
+`fd_write`, `fd_seek` and `fd_close`; the core never calls them, so a host
+stubs them and needs no WASI. The module is built in CI and not committed;
+phase 2 decides how the server gets it.
 
 ## Rules
 
@@ -86,6 +101,10 @@ are byte-identical. Two differences, both from the replay rather than the core:
 - The firmware cut its raw line at 96 characters and its row at 320. The core
   has room for any float, so the two would differ only on values no sensor
   gives.
+- WASM against native, 2026-10-27: both real captures replayed through the
+  module give the native build's output byte for byte (~912k lines, 0.6 s
+  under Node). In JavaScript, never `parseFloat(s) || 0`: it turns -0 into 0,
+  and the core writes `-0.00` (the first WASM run failed on exactly that).
 - macOS `make` compares timestamps to the second: restoring a file within the
   same second as a build leaves a stale binary. `make clean` before trusting
   a mutation test.

@@ -147,9 +147,10 @@ ESP32-S3. Confirm once on the bench build.
      the raw motion file and every GPS column byte for byte (details in
      `recorder-core/CLAUDE.md`).
    - **1b, in progress:** done so far are the PlatformIO manifest, the CMake
-     file and CI guards against fused multiply-adds on the Android and ESP32-S3
-     builds. Next: the WASM build (with the fixtures run under Node), and the
-     tracker switching to the core (`firmware`).
+     file, CI guards against fused multiply-adds on the Android and ESP32-S3
+     builds, and the WASM build (`make wasm`: every fixture replayed through
+     the module under Node, in CI). Next: the tracker switching to the core
+     (`firmware`).
 2. **Stroke rate** in the core as a stream; the server switches to the WASM
    build and `cadence.ts` goes once its tests pass against it.
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.

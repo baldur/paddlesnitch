@@ -7,7 +7,7 @@ CFLAGS  ?= -std=c99 -O2 -Wall -Wextra -Wpedantic -Wconversion -Werror
 BUILD = build
 FIXTURES = $(sort $(dir $(wildcard fixtures/*/calls.csv)))
 
-.PHONY: test sanitize fixtures clean
+.PHONY: test sanitize fixtures wasm clean
 test: $(BUILD)/run_fixtures
 	$(BUILD)/run_fixtures $(FIXTURES)
 
@@ -21,6 +21,19 @@ sanitize: | $(BUILD)
 # committing: a changed byte here changes every recording.
 fixtures: $(BUILD)/run_fixtures
 	$(BUILD)/run_fixtures --write $(FIXTURES)
+
+# The server's build (WebAssembly), and the fixtures replayed through it
+# under Node. Needs wasi-sdk 25: make wasm WASI_SDK=/path/to/wasi-sdk-25.0.
+# wasm has no fused multiply-add, but -ffp-contract=off keeps it so if it
+# ever gets one.
+WASI_SDK ?= $(error set WASI_SDK to a wasi-sdk 25 folder)
+wasm: $(BUILD)/recorder_core.wasm
+	node wasm/run_fixtures.mjs $< $(FIXTURES)
+
+$(BUILD)/recorder_core.wasm: src/recorder_core.c wasm/recorder_core_wasm.c include/recorder_core.h | $(BUILD)
+	$(WASI_SDK)/bin/clang --target=wasm32-wasip1 --sysroot=$(WASI_SDK)/share/wasi-sysroot \
+	    $(CFLAGS) -ffp-contract=off -mexec-model=reactor \
+	    -Iinclude src/recorder_core.c wasm/recorder_core_wasm.c -o $@
 
 $(BUILD)/run_fixtures: src/recorder_core.c test/run_fixtures.c include/recorder_core.h | $(BUILD)
 	$(CC) $(CFLAGS) -Iinclude src/recorder_core.c test/run_fixtures.c -lm -o $@
