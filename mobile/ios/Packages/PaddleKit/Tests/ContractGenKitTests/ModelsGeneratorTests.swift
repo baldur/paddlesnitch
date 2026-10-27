@@ -4,6 +4,16 @@ import Testing
 @testable import ContractGenKit
 
 @Suite struct ModelsGeneratorTests {
+    @Test func aPathParameterReadsAsByIt() {
+        #expect(
+            ModelsGenerator.endpointName(
+                method: "GET", path: "/api/account/devices/sessions/{sessionId}", pathIsShared: false)
+                == "getAccountDevicesSessionsBySessionId")
+        #expect(
+            ModelsGenerator.endpointName(method: "GET", path: "/api/account/devices/sessions", pathIsShared: false)
+                == "getAccountDevicesSessions")
+    }
+
     let noProcedures = Data("{}".utf8)
 
     func generate(_ schemas: [String: String], procedures: String = "{}") throws -> [String: String] {

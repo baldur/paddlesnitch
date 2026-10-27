@@ -22,6 +22,8 @@ public enum Endpoints {
         method: "GET", path: "/api/account/devices", auth: .user, errorStatuses: [401])
     public static let getAccountDevicesSessions = Endpoint<NoInput, RecordingList>(
         method: "GET", path: "/api/account/devices/sessions", auth: .user, errorStatuses: [401])
+    public static let getAccountDevicesSessionsBySessionId = Endpoint<RecordingOf, RecordingMotion>(
+        method: "GET", path: "/api/account/devices/sessions/{sessionId}", auth: .user, errorStatuses: [401, 404])
     public static let getAccountHandle = Endpoint<HandleCheck, HandleAvailability>(
         method: "GET", path: "/api/account/handle", auth: .user, errorStatuses: [401])
     public static let getAccountProfile = Endpoint<NoInput, ProfileSettings>(
@@ -90,6 +92,7 @@ public enum Endpoints {
         case "GET /api/account/contact": try decoder.decode(Contact.self, from: data)
         case "GET /api/account/devices": try decoder.decode(TrackerList.self, from: data)
         case "GET /api/account/devices/sessions": try decoder.decode(RecordingList.self, from: data)
+        case "GET /api/account/devices/sessions/{sessionId}": try decoder.decode(RecordingMotion.self, from: data)
         case "GET /api/account/handle": try decoder.decode(HandleAvailability.self, from: data)
         case "GET /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "GET /api/account/tos": try decoder.decode(TosStatus.self, from: data)
