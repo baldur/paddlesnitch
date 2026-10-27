@@ -1,5 +1,6 @@
-import { noMotionCopy } from '@/lib/tracker-copy'
+import { noMotionCopy, fmtEvenness } from '@/lib/tracker-copy'
 import { eyebrowClass } from '@paddlesnitch/ui/Layout'
+import { axisTicks } from '@/lib/boat-motion-chart'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 // Boat motion from a tracker's motion data: roll, pitch, evenness, stroke rate,
@@ -25,7 +26,6 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
         <div className="rounded-control border border-border bg-surface p-4 text-base text-muted flex flex-col gap-2">
           <p className="text-fg font-medium">No boat motion for this recording.</p>
           <p>{noMotionCopy(attitude)}</p>
-          {attitude?.reason && <p className="text-sm">Technical detail: {attitude.reason}</p>}
         </div>
       ) : (
         <>
@@ -34,7 +34,7 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
             <Tile label="Bow-to-stern pitch" value={`${attitude.pitchRmsDeg}°`} note="typical tilt" />
             <Tile
               label="Evenness"
-              value={attitude.symmetry ? `${Math.abs(attitude.symmetry.imbalancePct).toFixed(0)}%` : '—'}
+              value={attitude.symmetry ? fmtEvenness(attitude.symmetry.imbalancePct) : '—'}
               note={attitude.symmetry ? 'uneven' : ''}
             />
             <Tile
@@ -107,12 +107,7 @@ function Panel({ title, caption, children }: { title: string; caption: string; c
 
 const W = 900, H = 260, L = 44, R = 14, T = 14, B = 26
 
-function axes(maxDeg: number) {
-  const step = maxDeg > 12 ? 5 : maxDeg > 6 ? 3 : 2
-  const ticks: number[] = []
-  for (let v = -Math.ceil(maxDeg / step) * step; v <= maxDeg; v += step) ticks.push(v)
-  return ticks
-}
+const axes = axisTicks
 
 function EnvelopeChart({ report }: { report: AttitudeReport }) {
   const env = report.envelope

@@ -78,18 +78,50 @@ public struct PaddleClient: Sendable {
     /// back as `PaddleAPIError.rejected` with the server's own words.
     /// A `.user` route sends the Bearer token; if the server turns it down,
     /// it gets a fresh one and tries once more.
-    public func send<Input, Output>(_ endpoint: Endpoint<Input, Output>, _ input: Input) async throws -> Output {
-        guard endpoint.auth == .user else {
-            let (data, response) = try await transport.send(try request(for: endpoint, input, token: nil))
-            return try decodeREST(Output.self, from: data, status: response.statusCode)
-        }
-        guard let token = try await idToken(false) else { throw PaddleAPIError.signedOut }
-        var (data, response) = try await transport.send(try request(for: endpoint, input, token: token))
-        if response.statusCode == 401, let fresh = try await idToken(true), fresh != token {
-            (data, response) = try await transport.send(try request(for: endpoint, input, token: fresh))
-        }
-        if response.statusCode == 401 { throw PaddleAPIError.signedOut }
+    /// `pathValues` fill the path's `{parameters}`.
+    public func send<Input, Output>(
+        _ endpoint: Endpoint<Input, Output>, _ input: Input, pathValues: [String: String] = [:]
+    ) async throws -> Output {
+        let (data, response) = try await exchange(endpoint, input, pathValues: pathValues, headers: [:])
         return try decodeREST(Output.self, from: data, status: response.statusCode)
+    }
+
+    /// What a conditional call came back with.
+    public enum Conditional<Output: Sendable>: Sendable {
+        /// New or changed, with the ETag to send next time.
+        case changed(Output, etag: String?)
+        /// 304: what you have is current.
+        case unchanged
+    }
+
+    /// A GET that sends `etag` as `If-None-Match`: a 304 means what you
+    /// have is current.
+    public func sendIfChanged<Input, Output>(
+        _ endpoint: Endpoint<Input, Output>, _ input: Input, pathValues: [String: String] = [:], etag: String?
+    ) async throws -> Conditional<Output> {
+        let headers = etag.map { ["If-None-Match": $0] } ?? [:]
+        let (data, response) = try await exchange(endpoint, input, pathValues: pathValues, headers: headers)
+        if response.statusCode == 304 { return .unchanged }
+        let output = try decodeREST(Output.self, from: data, status: response.statusCode)
+        return .changed(output, etag: response.value(forHTTPHeaderField: "ETag"))
+    }
+
+    private func exchange<Input, Output>(
+        _ endpoint: Endpoint<Input, Output>, _ input: Input, pathValues: [String: String], headers: [String: String]
+    ) async throws -> (Data, HTTPURLResponse) {
+        func call(_ token: String?) async throws -> (Data, HTTPURLResponse) {
+            var request = try request(for: endpoint, input, token: token, pathValues: pathValues)
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+            return try await transport.send(request)
+        }
+        guard endpoint.auth == .user else { return try await call(nil) }
+        guard let token = try await idToken(false) else { throw PaddleAPIError.signedOut }
+        var answer = try await call(token)
+        if answer.1.statusCode == 401, let fresh = try await idToken(true), fresh != token {
+            answer = try await call(fresh)
+        }
+        if answer.1.statusCode == 401 { throw PaddleAPIError.signedOut }
+        return answer
     }
 
     /// A REST answer: the output, or the server's words as `rejected`.
@@ -110,11 +142,20 @@ public struct PaddleClient: Sendable {
     }
 
     /// A GET's input goes in the query string, one item per field
-    /// (`?check=pat`); any other method's goes as a JSON body.
-    func request<Input, Output>(for endpoint: Endpoint<Input, Output>, _ input: Input, token: String?) throws
-        -> URLRequest
-    {
-        var url = baseURL.appending(path: String(endpoint.path.drop { $0 == "/" }))
+    /// (`?check=pat`); any other method's goes as a JSON body. Each
+    /// `{parameter}` in the path takes its value from `pathValues`,
+    /// percent-encoded.
+    func request<Input, Output>(
+        for endpoint: Endpoint<Input, Output>, _ input: Input, token: String?, pathValues: [String: String] = [:]
+    ) throws -> URLRequest {
+        var path = String(endpoint.path.drop { $0 == "/" })
+        for (name, value) in pathValues {
+            path = path.replacingOccurrences(of: "{\(name)}", with: Self.percentEncoded(value))
+        }
+        guard !path.contains("{") else { throw PaddleAPIError.undecodable("no value for a path parameter in \(path)") }
+        var url =
+            URL(string: baseURL.absoluteString + (baseURL.absoluteString.hasSuffix("/") ? "" : "/") + path)
+            ?? baseURL.appending(path: path)
         let hasInput = !(input is NoInput)
         if hasInput && endpoint.method == "GET" {
             let object = try JSONSerialization.jsonObject(with: try JSONEncoder.paddlesnitch.encode(input))

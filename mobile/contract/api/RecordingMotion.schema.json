@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "RecordingMotion.schema.json",
+  "type": "object",
+  "properties": {
+    "attitude": {
+      "anyOf": [
+        {
+          "$ref": "BoatMotion.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cadence": {
+      "anyOf": [
+        {
+          "$ref": "MotionStrokeRate.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "attitude",
+    "cadence"
+  ]
+}

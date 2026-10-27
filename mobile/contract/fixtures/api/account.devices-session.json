@@ -1,0 +1,3650 @@
+{
+  "attitude": {
+    "envelope": [
+      {
+        "t": 400000,
+        "rollMin": -7.91,
+        "rollMax": 9.04,
+        "pitchMin": -2.81,
+        "pitchMax": 2.12
+      },
+      {
+        "t": 405000,
+        "rollMin": -7.9,
+        "rollMax": 9.1,
+        "pitchMin": -1.94,
+        "pitchMax": 2.44
+      },
+      {
+        "t": 410000,
+        "rollMin": -8.35,
+        "rollMax": 9.06,
+        "pitchMin": -2.09,
+        "pitchMax": 2.25
+      },
+      {
+        "t": 415000,
+        "rollMin": -8.69,
+        "rollMax": 9.25,
+        "pitchMin": -2.13,
+        "pitchMax": 2.14
+      },
+      {
+        "t": 420000,
+        "rollMin": -8.32,
+        "rollMax": 9.66,
+        "pitchMin": -2.49,
+        "pitchMax": 2.2
+      },
+      {
+        "t": 425000,
+        "rollMin": -8.33,
+        "rollMax": 9.71,
+        "pitchMin": -2.71,
+        "pitchMax": 1.54
+      },
+      {
+        "t": 430000,
+        "rollMin": -8.63,
+        "rollMax": 9.69,
+        "pitchMin": -2.54,
+        "pitchMax": 1.97
+      },
+      {
+        "t": 435000,
+        "rollMin": -8.66,
+        "rollMax": 9.9,
+        "pitchMin": -1.95,
+        "pitchMax": 2.64
+      },
+      {
+        "t": 440000,
+        "rollMin": -8.8,
+        "rollMax": 9.85,
+        "pitchMin": -1.69,
+        "pitchMax": 2.6
+      },
+      {
+        "t": 445000,
+        "rollMin": -9.07,
+        "rollMax": 9.65,
+        "pitchMin": -2.13,
+        "pitchMax": 2.36
+      },
+      {
+        "t": 450000,
+        "rollMin": -9,
+        "rollMax": 9.83,
+        "pitchMin": -2.43,
+        "pitchMax": 2.07
+      },
+      {
+        "t": 455000,
+        "rollMin": -9.26,
+        "rollMax": 9.97,
+        "pitchMin": -2.46,
+        "pitchMax": 1.99
+      },
+      {
+        "t": 460000,
+        "rollMin": -8.69,
+        "rollMax": 10.09,
+        "pitchMin": -2.09,
+        "pitchMax": 2.33
+      },
+      {
+        "t": 465000,
+        "rollMin": -8.96,
+        "rollMax": 9.89,
+        "pitchMin": -1.75,
+        "pitchMax": 2.57
+      },
+      {
+        "t": 470000,
+        "rollMin": -8.95,
+        "rollMax": 10.04,
+        "pitchMin": -2,
+        "pitchMax": 2.32
+      },
+      {
+        "t": 475000,
+        "rollMin": -8.73,
+        "rollMax": 9.82,
+        "pitchMin": -2.21,
+        "pitchMax": 2.11
+      },
+      {
+        "t": 480000,
+        "rollMin": -8.82,
+        "rollMax": 9.66,
+        "pitchMin": -2.65,
+        "pitchMax": 2.04
+      },
+      {
+        "t": 485000,
+        "rollMin": -8.75,
+        "rollMax": 9.69,
+        "pitchMin": -2.64,
+        "pitchMax": 1.61
+      },
+      {
+        "t": 490000,
+        "rollMin": -8.5,
+        "rollMax": 9.54,
+        "pitchMin": -2.32,
+        "pitchMax": 2.28
+      },
+      {
+        "t": 495000,
+        "rollMin": -8.48,
+        "rollMax": 9.34,
+        "pitchMin": -1.81,
+        "pitchMax": 2.61
+      },
+      {
+        "t": 500000,
+        "rollMin": -8.66,
+        "rollMax": 8.77,
+        "pitchMin": -1.82,
+        "pitchMax": 2.62
+      },
+      {
+        "t": 505000,
+        "rollMin": -8.12,
+        "rollMax": 9.09,
+        "pitchMin": -1.83,
+        "pitchMax": 2.42
+      },
+      {
+        "t": 510000,
+        "rollMin": -7.8,
+        "rollMax": 8.95,
+        "pitchMin": -2.2,
+        "pitchMax": 2.44
+      },
+      {
+        "t": 515000,
+        "rollMin": -7.68,
+        "rollMax": 8.8,
+        "pitchMin": -2.55,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 520000,
+        "rollMin": -7.7,
+        "rollMax": 8.31,
+        "pitchMin": -2.51,
+        "pitchMax": 1.6
+      },
+      {
+        "t": 525000,
+        "rollMin": -7.43,
+        "rollMax": 8.23,
+        "pitchMin": -2.43,
+        "pitchMax": 2.12
+      },
+      {
+        "t": 530000,
+        "rollMin": -7.32,
+        "rollMax": 7.9,
+        "pitchMin": -1.81,
+        "pitchMax": 2.55
+      },
+      {
+        "t": 535000,
+        "rollMin": -7.43,
+        "rollMax": 7.71,
+        "pitchMin": -1.95,
+        "pitchMax": 2.55
+      },
+      {
+        "t": 540000,
+        "rollMin": -7.14,
+        "rollMax": 7.7,
+        "pitchMin": -2.23,
+        "pitchMax": 2.27
+      },
+      {
+        "t": 545000,
+        "rollMin": -6.84,
+        "rollMax": 7.87,
+        "pitchMin": -2.67,
+        "pitchMax": 1.81
+      },
+      {
+        "t": 550000,
+        "rollMin": -6.83,
+        "rollMax": 7.54,
+        "pitchMin": -2.25,
+        "pitchMax": 2.07
+      },
+      {
+        "t": 555000,
+        "rollMin": -6.82,
+        "rollMax": 7.42,
+        "pitchMin": -2.25,
+        "pitchMax": 2.05
+      },
+      {
+        "t": 560000,
+        "rollMin": -6.65,
+        "rollMax": 7.38,
+        "pitchMin": -2.04,
+        "pitchMax": 2.52
+      },
+      {
+        "t": 565000,
+        "rollMin": -6.66,
+        "rollMax": 7.28,
+        "pitchMin": -2.25,
+        "pitchMax": 2.51
+      },
+      {
+        "t": 570000,
+        "rollMin": -6.73,
+        "rollMax": 7.41,
+        "pitchMin": -2.29,
+        "pitchMax": 1.95
+      },
+      {
+        "t": 575000,
+        "rollMin": -6.75,
+        "rollMax": 7.33,
+        "pitchMin": -2.5,
+        "pitchMax": 1.88
+      },
+      {
+        "t": 580000,
+        "rollMin": -6.73,
+        "rollMax": 7.28,
+        "pitchMin": -2.5,
+        "pitchMax": 1.71
+      },
+      {
+        "t": 585000,
+        "rollMin": -6.7,
+        "rollMax": 7.43,
+        "pitchMin": -2.43,
+        "pitchMax": 1.92
+      },
+      {
+        "t": 590000,
+        "rollMin": -6.69,
+        "rollMax": 7.33,
+        "pitchMin": -2.15,
+        "pitchMax": 2.68
+      },
+      {
+        "t": 595000,
+        "rollMin": -6.97,
+        "rollMax": 7.51,
+        "pitchMin": -1.6,
+        "pitchMax": 2.58
+      },
+      {
+        "t": 600000,
+        "rollMin": -7.4,
+        "rollMax": 7.43,
+        "pitchMin": -1.85,
+        "pitchMax": 2.6
+      },
+      {
+        "t": 605000,
+        "rollMin": -7.42,
+        "rollMax": 7.52,
+        "pitchMin": -2.34,
+        "pitchMax": 2.19
+      },
+      {
+        "t": 610000,
+        "rollMin": -7.37,
+        "rollMax": 7.83,
+        "pitchMin": -2.54,
+        "pitchMax": 1.74
+      },
+      {
+        "t": 615000,
+        "rollMin": -7.35,
+        "rollMax": 8.4,
+        "pitchMin": -2.56,
+        "pitchMax": 1.8
+      },
+      {
+        "t": 620000,
+        "rollMin": -7.66,
+        "rollMax": 8.11,
+        "pitchMin": -2.44,
+        "pitchMax": 2.25
+      },
+      {
+        "t": 625000,
+        "rollMin": -7.89,
+        "rollMax": 8.19,
+        "pitchMin": -1.91,
+        "pitchMax": 2.56
+      },
+      {
+        "t": 630000,
+        "rollMin": -7.96,
+        "rollMax": 8.43,
+        "pitchMin": -2.23,
+        "pitchMax": 2.16
+      },
+      {
+        "t": 635000,
+        "rollMin": -8.23,
+        "rollMax": 8.39,
+        "pitchMin": -2.49,
+        "pitchMax": 1.87
+      },
+      {
+        "t": 640000,
+        "rollMin": -8.35,
+        "rollMax": 8.87,
+        "pitchMin": -2.49,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 645000,
+        "rollMin": -8.49,
+        "rollMax": 8.8,
+        "pitchMin": -2.59,
+        "pitchMax": 2
+      },
+      {
+        "t": 650000,
+        "rollMin": -8.81,
+        "rollMax": 9.16,
+        "pitchMin": -2.06,
+        "pitchMax": 2.31
+      },
+      {
+        "t": 655000,
+        "rollMin": -8.49,
+        "rollMax": 9.28,
+        "pitchMin": -1.91,
+        "pitchMax": 2.7
+      },
+      {
+        "t": 660000,
+        "rollMin": -8.53,
+        "rollMax": 9.84,
+        "pitchMin": -1.87,
+        "pitchMax": 2.69
+      },
+      {
+        "t": 665000,
+        "rollMin": -8.89,
+        "rollMax": 9.46,
+        "pitchMin": -2.27,
+        "pitchMax": 2.35
+      },
+      {
+        "t": 670000,
+        "rollMin": -9.13,
+        "rollMax": 9.67,
+        "pitchMin": -2.43,
+        "pitchMax": 1.87
+      },
+      {
+        "t": 675000,
+        "rollMin": -9.02,
+        "rollMax": 9.63,
+        "pitchMin": -2.73,
+        "pitchMax": 1.57
+      },
+      {
+        "t": 680000,
+        "rollMin": -8.48,
+        "rollMax": 10.07,
+        "pitchMin": -2.38,
+        "pitchMax": 2.09
+      },
+      {
+        "t": 685000,
+        "rollMin": -9.13,
+        "rollMax": 9.82,
+        "pitchMin": -1.93,
+        "pitchMax": 2.44
+      },
+      {
+        "t": 690000,
+        "rollMin": -8.72,
+        "rollMax": 10.16,
+        "pitchMin": -1.95,
+        "pitchMax": 2.54
+      },
+      {
+        "t": 695000,
+        "rollMin": -8.77,
+        "rollMax": 10.08,
+        "pitchMin": -2.1,
+        "pitchMax": 2.29
+      },
+      {
+        "t": 700000,
+        "rollMin": -8.68,
+        "rollMax": 10.24,
+        "pitchMin": -2.77,
+        "pitchMax": 2.16
+      },
+      {
+        "t": 705000,
+        "rollMin": -8.55,
+        "rollMax": 10.12,
+        "pitchMin": -2.71,
+        "pitchMax": 1.66
+      },
+      {
+        "t": 710000,
+        "rollMin": -8.52,
+        "rollMax": 9.87,
+        "pitchMin": -2.28,
+        "pitchMax": 1.92
+      },
+      {
+        "t": 715000,
+        "rollMin": -8.59,
+        "rollMax": 9.71,
+        "pitchMin": -2.05,
+        "pitchMax": 2.29
+      },
+      {
+        "t": 720000,
+        "rollMin": -8.73,
+        "rollMax": 9.68,
+        "pitchMin": -1.86,
+        "pitchMax": 2.39
+      },
+      {
+        "t": 725000,
+        "rollMin": -8.69,
+        "rollMax": 9.41,
+        "pitchMin": -2.21,
+        "pitchMax": 2.23
+      },
+      {
+        "t": 730000,
+        "rollMin": -7.91,
+        "rollMax": 9.5,
+        "pitchMin": -2.48,
+        "pitchMax": 2.21
+      },
+      {
+        "t": 735000,
+        "rollMin": -7.95,
+        "rollMax": 9.12,
+        "pitchMin": -2.67,
+        "pitchMax": 1.69
+      },
+      {
+        "t": 740000,
+        "rollMin": -8.24,
+        "rollMax": 8.93,
+        "pitchMin": -2.13,
+        "pitchMax": 2.38
+      },
+      {
+        "t": 745000,
+        "rollMin": -8.16,
+        "rollMax": 8.43,
+        "pitchMin": -1.82,
+        "pitchMax": 2.37
+      },
+      {
+        "t": 750000,
+        "rollMin": -7.81,
+        "rollMax": 8.42,
+        "pitchMin": -1.83,
+        "pitchMax": 2.55
+      },
+      {
+        "t": 755000,
+        "rollMin": -8.09,
+        "rollMax": 7.85,
+        "pitchMin": -1.71,
+        "pitchMax": 2.4
+      },
+      {
+        "t": 760000,
+        "rollMin": -7.45,
+        "rollMax": 8.13,
+        "pitchMin": -2.02,
+        "pitchMax": 2.28
+      },
+      {
+        "t": 765000,
+        "rollMin": -7.47,
+        "rollMax": 7.89,
+        "pitchMin": -2.34,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 770000,
+        "rollMin": -7.22,
+        "rollMax": 7.85,
+        "pitchMin": -2.51,
+        "pitchMax": 2.01
+      },
+      {
+        "t": 775000,
+        "rollMin": -7.29,
+        "rollMax": 7.6,
+        "pitchMin": -2.15,
+        "pitchMax": 2.15
+      },
+      {
+        "t": 780000,
+        "rollMin": -6.84,
+        "rollMax": 7.81,
+        "pitchMin": -1.94,
+        "pitchMax": 2.43
+      },
+      {
+        "t": 785000,
+        "rollMin": -7.07,
+        "rollMax": 7.19,
+        "pitchMin": -1.79,
+        "pitchMax": 2.64
+      },
+      {
+        "t": 790000,
+        "rollMin": -6.7,
+        "rollMax": 7.51,
+        "pitchMin": -2.32,
+        "pitchMax": 2.2
+      },
+      {
+        "t": 795000,
+        "rollMin": -6.71,
+        "rollMax": 7.56,
+        "pitchMin": -2.62,
+        "pitchMax": 1.65
+      },
+      {
+        "t": 800000,
+        "rollMin": -6.68,
+        "rollMax": 7.27,
+        "pitchMin": -2.47,
+        "pitchMax": 1.67
+      },
+      {
+        "t": 805000,
+        "rollMin": -6.98,
+        "rollMax": 7.17,
+        "pitchMin": -2.26,
+        "pitchMax": 2.34
+      },
+      {
+        "t": 810000,
+        "rollMin": -6.86,
+        "rollMax": 7.35,
+        "pitchMin": -1.8,
+        "pitchMax": 2.47
+      },
+      {
+        "t": 815000,
+        "rollMin": -6.95,
+        "rollMax": 7.16,
+        "pitchMin": -1.89,
+        "pitchMax": 2.66
+      },
+      {
+        "t": 820000,
+        "rollMin": -6.84,
+        "rollMax": 7.36,
+        "pitchMin": -2.04,
+        "pitchMax": 2.35
+      },
+      {
+        "t": 825000,
+        "rollMin": -6.95,
+        "rollMax": 7.67,
+        "pitchMin": -2.49,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 830000,
+        "rollMin": -6.77,
+        "rollMax": 7.73,
+        "pitchMin": -2.62,
+        "pitchMax": 1.85
+      },
+      {
+        "t": 835000,
+        "rollMin": -7.14,
+        "rollMax": 7.8,
+        "pitchMin": -2.44,
+        "pitchMax": 2.11
+      },
+      {
+        "t": 840000,
+        "rollMin": -7.63,
+        "rollMax": 7.51,
+        "pitchMin": -2.3,
+        "pitchMax": 2.1
+      },
+      {
+        "t": 845000,
+        "rollMin": -7.72,
+        "rollMax": 7.61,
+        "pitchMin": -2.18,
+        "pitchMax": 2.69
+      },
+      {
+        "t": 850000,
+        "rollMin": -7.61,
+        "rollMax": 8.03,
+        "pitchMin": -1.57,
+        "pitchMax": 2.94
+      },
+      {
+        "t": 855000,
+        "rollMin": -7.5,
+        "rollMax": 8.36,
+        "pitchMin": -2.41,
+        "pitchMax": 2.44
+      },
+      {
+        "t": 860000,
+        "rollMin": -7.8,
+        "rollMax": 8.8,
+        "pitchMin": -2.89,
+        "pitchMax": 1.92
+      },
+      {
+        "t": 865000,
+        "rollMin": -8.07,
+        "rollMax": 9.02,
+        "pitchMin": -2.67,
+        "pitchMax": 2.29
+      },
+      {
+        "t": 870000,
+        "rollMin": -8.23,
+        "rollMax": 8.68,
+        "pitchMin": -2.18,
+        "pitchMax": 2.21
+      },
+      {
+        "t": 875000,
+        "rollMin": -8.33,
+        "rollMax": 9.04,
+        "pitchMin": -1.54,
+        "pitchMax": 2.63
+      },
+      {
+        "t": 880000,
+        "rollMin": -8.44,
+        "rollMax": 9.19,
+        "pitchMin": -1.85,
+        "pitchMax": 2.81
+      },
+      {
+        "t": 885000,
+        "rollMin": -8.55,
+        "rollMax": 9.15,
+        "pitchMin": -2.29,
+        "pitchMax": 2.16
+      },
+      {
+        "t": 890000,
+        "rollMin": -8.67,
+        "rollMax": 9.45,
+        "pitchMin": -2.59,
+        "pitchMax": 1.94
+      },
+      {
+        "t": 895000,
+        "rollMin": -9.01,
+        "rollMax": 9.75,
+        "pitchMin": -2.43,
+        "pitchMax": 1.83
+      },
+      {
+        "t": 900000,
+        "rollMin": -8.8,
+        "rollMax": 9.59,
+        "pitchMin": -2.37,
+        "pitchMax": 2.11
+      },
+      {
+        "t": 905000,
+        "rollMin": -9.11,
+        "rollMax": 9.65,
+        "pitchMin": -1.81,
+        "pitchMax": 2.6
+      },
+      {
+        "t": 910000,
+        "rollMin": -9.02,
+        "rollMax": 9.67,
+        "pitchMin": -1.81,
+        "pitchMax": 2.65
+      },
+      {
+        "t": 915000,
+        "rollMin": -8.97,
+        "rollMax": 9.77,
+        "pitchMin": -2.21,
+        "pitchMax": 2.13
+      },
+      {
+        "t": 920000,
+        "rollMin": -8.91,
+        "rollMax": 10.14,
+        "pitchMin": -2.63,
+        "pitchMax": 1.78
+      },
+      {
+        "t": 925000,
+        "rollMin": -8.74,
+        "rollMax": 10.04,
+        "pitchMin": -2.51,
+        "pitchMax": 1.87
+      },
+      {
+        "t": 930000,
+        "rollMin": -9.15,
+        "rollMax": 9.86,
+        "pitchMin": -2.26,
+        "pitchMax": 2.14
+      },
+      {
+        "t": 935000,
+        "rollMin": -8.85,
+        "rollMax": 9.72,
+        "pitchMin": -2.23,
+        "pitchMax": 2.69
+      },
+      {
+        "t": 940000,
+        "rollMin": -8.75,
+        "rollMax": 9.86,
+        "pitchMin": -1.72,
+        "pitchMax": 2.48
+      },
+      {
+        "t": 945000,
+        "rollMin": -8.83,
+        "rollMax": 9.51,
+        "pitchMin": -2.14,
+        "pitchMax": 2.57
+      },
+      {
+        "t": 950000,
+        "rollMin": -8.88,
+        "rollMax": 9.54,
+        "pitchMin": -2.38,
+        "pitchMax": 2.02
+      },
+      {
+        "t": 955000,
+        "rollMin": -8.21,
+        "rollMax": 9.63,
+        "pitchMin": -2.91,
+        "pitchMax": 1.71
+      },
+      {
+        "t": 960000,
+        "rollMin": -8.15,
+        "rollMax": 9.3,
+        "pitchMin": -2.77,
+        "pitchMax": 1.97
+      },
+      {
+        "t": 965000,
+        "rollMin": -8.09,
+        "rollMax": 9.01,
+        "pitchMin": -1.83,
+        "pitchMax": 2.55
+      },
+      {
+        "t": 970000,
+        "rollMin": -8.1,
+        "rollMax": 9,
+        "pitchMin": -1.69,
+        "pitchMax": 2.53
+      },
+      {
+        "t": 975000,
+        "rollMin": -8.21,
+        "rollMax": 8.53,
+        "pitchMin": -1.75,
+        "pitchMax": 2.51
+      },
+      {
+        "t": 980000,
+        "rollMin": -7.79,
+        "rollMax": 8.62,
+        "pitchMin": -2.26,
+        "pitchMax": 2.38
+      },
+      {
+        "t": 985000,
+        "rollMin": -7.54,
+        "rollMax": 8.61,
+        "pitchMin": -2.59,
+        "pitchMax": 1.81
+      },
+      {
+        "t": 990000,
+        "rollMin": -7.48,
+        "rollMax": 8.22,
+        "pitchMin": -2.51,
+        "pitchMax": 2.2
+      },
+      {
+        "t": 995000,
+        "rollMin": -7.64,
+        "rollMax": 7.83,
+        "pitchMin": -2.07,
+        "pitchMax": 2.2
+      },
+      {
+        "t": 1000000,
+        "rollMin": -7.45,
+        "rollMax": 7.72,
+        "pitchMin": -1.82,
+        "pitchMax": 2.56
+      },
+      {
+        "t": 1005000,
+        "rollMin": -7.25,
+        "rollMax": 7.5,
+        "pitchMin": -2.25,
+        "pitchMax": 2.52
+      },
+      {
+        "t": 1010000,
+        "rollMin": -7.11,
+        "rollMax": 7.58,
+        "pitchMin": -2.31,
+        "pitchMax": 2.13
+      },
+      {
+        "t": 1015000,
+        "rollMin": -6.98,
+        "rollMax": 7.62,
+        "pitchMin": -2.26,
+        "pitchMax": 1.96
+      },
+      {
+        "t": 1020000,
+        "rollMin": -7.15,
+        "rollMax": 7.37,
+        "pitchMin": -2.33,
+        "pitchMax": 1.97
+      },
+      {
+        "t": 1025000,
+        "rollMin": -7.04,
+        "rollMax": 7.14,
+        "pitchMin": -2.48,
+        "pitchMax": 2.04
+      },
+      {
+        "t": 1030000,
+        "rollMin": -6.44,
+        "rollMax": 7.47,
+        "pitchMin": -1.79,
+        "pitchMax": 2.75
+      },
+      {
+        "t": 1035000,
+        "rollMin": -6.66,
+        "rollMax": 7.3,
+        "pitchMin": -1.56,
+        "pitchMax": 2.97
+      },
+      {
+        "t": 1040000,
+        "rollMin": -6.58,
+        "rollMax": 7.38,
+        "pitchMin": -2.23,
+        "pitchMax": 2.49
+      },
+      {
+        "t": 1045000,
+        "rollMin": -6.91,
+        "rollMax": 7.3,
+        "pitchMin": -2.86,
+        "pitchMax": 1.72
+      },
+      {
+        "t": 1050000,
+        "rollMin": -7.01,
+        "rollMax": 7.4,
+        "pitchMin": -2.63,
+        "pitchMax": 1.74
+      },
+      {
+        "t": 1055000,
+        "rollMin": -6.88,
+        "rollMax": 7.2,
+        "pitchMin": -2.45,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 1060000,
+        "rollMin": -6.89,
+        "rollMax": 7.43,
+        "pitchMin": -1.85,
+        "pitchMax": 2.52
+      },
+      {
+        "t": 1065000,
+        "rollMin": -7.08,
+        "rollMax": 7.82,
+        "pitchMin": -1.69,
+        "pitchMax": 2.6
+      },
+      {
+        "t": 1070000,
+        "rollMin": -7.34,
+        "rollMax": 7.91,
+        "pitchMin": -2.05,
+        "pitchMax": 2.34
+      },
+      {
+        "t": 1075000,
+        "rollMin": -7.36,
+        "rollMax": 7.97,
+        "pitchMin": -2.29,
+        "pitchMax": 2.17
+      },
+      {
+        "t": 1080000,
+        "rollMin": -7.46,
+        "rollMax": 8.23,
+        "pitchMin": -2.8,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 1085000,
+        "rollMin": -7.47,
+        "rollMax": 8.35,
+        "pitchMin": -2.49,
+        "pitchMax": 1.87
+      },
+      {
+        "t": 1090000,
+        "rollMin": -7.55,
+        "rollMax": 8.44,
+        "pitchMin": -2.31,
+        "pitchMax": 2.17
+      },
+      {
+        "t": 1095000,
+        "rollMin": -7.91,
+        "rollMax": 8.49,
+        "pitchMin": -1.92,
+        "pitchMax": 2.32
+      },
+      {
+        "t": 1100000,
+        "rollMin": -7.91,
+        "rollMax": 8.85,
+        "pitchMin": -1.94,
+        "pitchMax": 2.59
+      },
+      {
+        "t": 1105000,
+        "rollMin": -8.15,
+        "rollMax": 8.89,
+        "pitchMin": -2.16,
+        "pitchMax": 2.18
+      },
+      {
+        "t": 1110000,
+        "rollMin": -8.05,
+        "rollMax": 9.4,
+        "pitchMin": -2.84,
+        "pitchMax": 1.82
+      },
+      {
+        "t": 1115000,
+        "rollMin": -8.48,
+        "rollMax": 9.42,
+        "pitchMin": -2.55,
+        "pitchMax": 1.99
+      },
+      {
+        "t": 1120000,
+        "rollMin": -8.55,
+        "rollMax": 9.4,
+        "pitchMin": -2.08,
+        "pitchMax": 2.3
+      },
+      {
+        "t": 1125000,
+        "rollMin": -8.96,
+        "rollMax": 9.2,
+        "pitchMin": -1.53,
+        "pitchMax": 2.73
+      },
+      {
+        "t": 1130000,
+        "rollMin": -8.73,
+        "rollMax": 9.71,
+        "pitchMin": -1.78,
+        "pitchMax": 2.83
+      },
+      {
+        "t": 1135000,
+        "rollMin": -8.96,
+        "rollMax": 10,
+        "pitchMin": -2.48,
+        "pitchMax": 2.37
+      },
+      {
+        "t": 1140000,
+        "rollMin": -8.74,
+        "rollMax": 10.15,
+        "pitchMin": -2.84,
+        "pitchMax": 1.79
+      },
+      {
+        "t": 1145000,
+        "rollMin": -9.03,
+        "rollMax": 9.72,
+        "pitchMin": -2.53,
+        "pitchMax": 1.69
+      },
+      {
+        "t": 1150000,
+        "rollMin": -9.11,
+        "rollMax": 10.02,
+        "pitchMin": -2.43,
+        "pitchMax": 1.9
+      },
+      {
+        "t": 1155000,
+        "rollMin": -9.13,
+        "rollMax": 9.79,
+        "pitchMin": -2.18,
+        "pitchMax": 2.21
+      },
+      {
+        "t": 1160000,
+        "rollMin": -9.03,
+        "rollMax": 9.89,
+        "pitchMin": -1.82,
+        "pitchMax": 2.65
+      },
+      {
+        "t": 1165000,
+        "rollMin": -9.11,
+        "rollMax": 9.59,
+        "pitchMin": -2.24,
+        "pitchMax": 2.58
+      },
+      {
+        "t": 1170000,
+        "rollMin": -9.03,
+        "rollMax": 9.63,
+        "pitchMin": -2.36,
+        "pitchMax": 2
+      },
+      {
+        "t": 1175000,
+        "rollMin": -9.07,
+        "rollMax": 9.69,
+        "pitchMin": -2.65,
+        "pitchMax": 1.73
+      },
+      {
+        "t": 1180000,
+        "rollMin": -8.75,
+        "rollMax": 9.65,
+        "pitchMin": -2.42,
+        "pitchMax": 2.22
+      },
+      {
+        "t": 1185000,
+        "rollMin": -8.53,
+        "rollMax": 9.48,
+        "pitchMin": -1.97,
+        "pitchMax": 2.4
+      },
+      {
+        "t": 1190000,
+        "rollMin": -8.76,
+        "rollMax": 9.16,
+        "pitchMin": -1.72,
+        "pitchMax": 2.45
+      },
+      {
+        "t": 1195000,
+        "rollMin": -8.68,
+        "rollMax": 8.93,
+        "pitchMin": -2.03,
+        "pitchMax": 2.59
+      },
+      {
+        "t": 1200000,
+        "rollMin": -8.13,
+        "rollMax": 9.09,
+        "pitchMin": -2.53,
+        "pitchMax": 2.11
+      },
+      {
+        "t": 1205000,
+        "rollMin": -8.04,
+        "rollMax": 9.1,
+        "pitchMin": -2.67,
+        "pitchMax": 1.67
+      },
+      {
+        "t": 1210000,
+        "rollMin": -8.06,
+        "rollMax": 8.62,
+        "pitchMin": -2.49,
+        "pitchMax": 1.87
+      },
+      {
+        "t": 1215000,
+        "rollMin": -7.69,
+        "rollMax": 8.53,
+        "pitchMin": -2.28,
+        "pitchMax": 2.09
+      },
+      {
+        "t": 1220000,
+        "rollMin": -7.36,
+        "rollMax": 8.22,
+        "pitchMin": -1.73,
+        "pitchMax": 2.67
+      },
+      {
+        "t": 1225000,
+        "rollMin": -7.39,
+        "rollMax": 8.39,
+        "pitchMin": -2.21,
+        "pitchMax": 2.5
+      },
+      {
+        "t": 1230000,
+        "rollMin": -7.09,
+        "rollMax": 8.17,
+        "pitchMin": -2.2,
+        "pitchMax": 2.12
+      },
+      {
+        "t": 1235000,
+        "rollMin": -7.22,
+        "rollMax": 7.81,
+        "pitchMin": -2.59,
+        "pitchMax": 1.87
+      },
+      {
+        "t": 1240000,
+        "rollMin": -6.92,
+        "rollMax": 7.79,
+        "pitchMin": -2.63,
+        "pitchMax": 1.71
+      },
+      {
+        "t": 1245000,
+        "rollMin": -7.2,
+        "rollMax": 7.3,
+        "pitchMin": -2.49,
+        "pitchMax": 1.99
+      },
+      {
+        "t": 1250000,
+        "rollMin": -6.72,
+        "rollMax": 7.64,
+        "pitchMin": -2.06,
+        "pitchMax": 2.46
+      },
+      {
+        "t": 1255000,
+        "rollMin": -6.75,
+        "rollMax": 7.52,
+        "pitchMin": -1.93,
+        "pitchMax": 2.67
+      },
+      {
+        "t": 1260000,
+        "rollMin": -6.48,
+        "rollMax": 7.38,
+        "pitchMin": -1.97,
+        "pitchMax": 2.35
+      },
+      {
+        "t": 1265000,
+        "rollMin": -6.94,
+        "rollMax": 6.95,
+        "pitchMin": -2.24,
+        "pitchMax": 2.13
+      },
+      {
+        "t": 1270000,
+        "rollMin": -6.72,
+        "rollMax": 7.14,
+        "pitchMin": -2.33,
+        "pitchMax": 1.88
+      },
+      {
+        "t": 1275000,
+        "rollMin": -7.19,
+        "rollMax": 7.03,
+        "pitchMin": -2.45,
+        "pitchMax": 2.04
+      },
+      {
+        "t": 1280000,
+        "rollMin": -7.02,
+        "rollMax": 7.06,
+        "pitchMin": -1.85,
+        "pitchMax": 2.57
+      },
+      {
+        "t": 1285000,
+        "rollMin": -6.88,
+        "rollMax": 7.41,
+        "pitchMin": -1.54,
+        "pitchMax": 2.68
+      },
+      {
+        "t": 1290000,
+        "rollMin": -7.14,
+        "rollMax": 7.32,
+        "pitchMin": -1.93,
+        "pitchMax": 2.59
+      },
+      {
+        "t": 1295000,
+        "rollMin": -7.06,
+        "rollMax": 7.57,
+        "pitchMin": -2.31,
+        "pitchMax": 2.08
+      },
+      {
+        "t": 1300000,
+        "rollMin": -7.13,
+        "rollMax": 7.75,
+        "pitchMin": -2.48,
+        "pitchMax": 1.72
+      },
+      {
+        "t": 1305000,
+        "rollMin": -7.31,
+        "rollMax": 7.92,
+        "pitchMin": -2.6,
+        "pitchMax": 1.98
+      },
+      {
+        "t": 1310000,
+        "rollMin": -7.5,
+        "rollMax": 8.09,
+        "pitchMin": -1.88,
+        "pitchMax": 2.31
+      },
+      {
+        "t": 1315000,
+        "rollMin": -7.45,
+        "rollMax": 8.02,
+        "pitchMin": -2.19,
+        "pitchMax": 2.19
+      },
+      {
+        "t": 1320000,
+        "rollMin": -7.48,
+        "rollMax": 8.59,
+        "pitchMin": -1.91,
+        "pitchMax": 2.36
+      },
+      {
+        "t": 1325000,
+        "rollMin": -7.68,
+        "rollMax": 8.32,
+        "pitchMin": -2.3,
+        "pitchMax": 2.13
+      },
+      {
+        "t": 1330000,
+        "rollMin": -8.02,
+        "rollMax": 8.56,
+        "pitchMin": -2.32,
+        "pitchMax": 1.91
+      },
+      {
+        "t": 1335000,
+        "rollMin": -8.1,
+        "rollMax": 8.83,
+        "pitchMin": -2.45,
+        "pitchMax": 1.74
+      },
+      {
+        "t": 1340000,
+        "rollMin": -8.38,
+        "rollMax": 9.08,
+        "pitchMin": -2.1,
+        "pitchMax": 2.12
+      },
+      {
+        "t": 1345000,
+        "rollMin": -8.35,
+        "rollMax": 9.18,
+        "pitchMin": -1.89,
+        "pitchMax": 2.5
+      },
+      {
+        "t": 1350000,
+        "rollMin": -8.25,
+        "rollMax": 9.36,
+        "pitchMin": -1.79,
+        "pitchMax": 2.63
+      },
+      {
+        "t": 1355000,
+        "rollMin": -8.63,
+        "rollMax": 9.79,
+        "pitchMin": -2.33,
+        "pitchMax": 2.18
+      },
+      {
+        "t": 1360000,
+        "rollMin": -8.64,
+        "rollMax": 9.59,
+        "pitchMin": -2.71,
+        "pitchMax": 1.98
+      },
+      {
+        "t": 1365000,
+        "rollMin": -9.24,
+        "rollMax": 9.18,
+        "pitchMin": -2.87,
+        "pitchMax": 1.43
+      },
+      {
+        "t": 1370000,
+        "rollMin": -9.14,
+        "rollMax": 9.45,
+        "pitchMin": -2.46,
+        "pitchMax": 2.46
+      },
+      {
+        "t": 1375000,
+        "rollMin": -8.97,
+        "rollMax": 9.89,
+        "pitchMin": -1.62,
+        "pitchMax": 2.76
+      },
+      {
+        "t": 1380000,
+        "rollMin": -8.7,
+        "rollMax": 10.15,
+        "pitchMin": -1.89,
+        "pitchMax": 2.7
+      },
+      {
+        "t": 1385000,
+        "rollMin": -9.11,
+        "rollMax": 10.26,
+        "pitchMin": -2.36,
+        "pitchMax": 2.3
+      },
+      {
+        "t": 1390000,
+        "rollMin": -8.89,
+        "rollMax": 10.18,
+        "pitchMin": -2.24,
+        "pitchMax": 2.28
+      },
+      {
+        "t": 1395000,
+        "rollMin": -9.15,
+        "rollMax": 9.78,
+        "pitchMin": -2.71,
+        "pitchMax": 1.78
+      },
+      {
+        "t": 1400000,
+        "rollMin": -8.76,
+        "rollMax": 9.9,
+        "pitchMin": -2.2,
+        "pitchMax": 2.22
+      },
+      {
+        "t": 1405000,
+        "rollMin": -8.81,
+        "rollMax": 9.51,
+        "pitchMin": -2.01,
+        "pitchMax": 2.27
+      },
+      {
+        "t": 1410000,
+        "rollMin": -8.72,
+        "rollMax": 9.54,
+        "pitchMin": -1.69,
+        "pitchMax": 2.6
+      },
+      {
+        "t": 1415000,
+        "rollMin": -8.6,
+        "rollMax": 9.67,
+        "pitchMin": -1.93,
+        "pitchMax": 2.47
+      },
+      {
+        "t": 1420000,
+        "rollMin": -8.72,
+        "rollMax": 9.54,
+        "pitchMin": -2.38,
+        "pitchMax": 2.24
+      },
+      {
+        "t": 1425000,
+        "rollMin": -8.44,
+        "rollMax": 9.04,
+        "pitchMin": -2.79,
+        "pitchMax": 1.76
+      },
+      {
+        "t": 1430000,
+        "rollMin": -8.32,
+        "rollMax": 9.01,
+        "pitchMin": -2.34,
+        "pitchMax": 2.06
+      },
+      {
+        "t": 1435000,
+        "rollMin": -8.3,
+        "rollMax": 8.79,
+        "pitchMin": -2.18,
+        "pitchMax": 2.14
+      },
+      {
+        "t": 1440000,
+        "rollMin": -8.02,
+        "rollMax": 8.82,
+        "pitchMin": -1.96,
+        "pitchMax": 2.35
+      },
+      {
+        "t": 1445000,
+        "rollMin": -7.85,
+        "rollMax": 8.48,
+        "pitchMin": -1.97,
+        "pitchMax": 2.33
+      },
+      {
+        "t": 1450000,
+        "rollMin": -7.5,
+        "rollMax": 8.39,
+        "pitchMin": -2.19,
+        "pitchMax": 2.31
+      },
+      {
+        "t": 1455000,
+        "rollMin": -7.65,
+        "rollMax": 8.06,
+        "pitchMin": -2.73,
+        "pitchMax": 2.02
+      },
+      {
+        "t": 1460000,
+        "rollMin": -7.48,
+        "rollMax": 7.89,
+        "pitchMin": -2.4,
+        "pitchMax": 1.8
+      },
+      {
+        "t": 1465000,
+        "rollMin": -7.36,
+        "rollMax": 7.8,
+        "pitchMin": -2.32,
+        "pitchMax": 2.24
+      },
+      {
+        "t": 1470000,
+        "rollMin": -7.21,
+        "rollMax": 7.48,
+        "pitchMin": -1.91,
+        "pitchMax": 2.48
+      },
+      {
+        "t": 1475000,
+        "rollMin": -7.28,
+        "rollMax": 7.64,
+        "pitchMin": -1.84,
+        "pitchMax": 2.5
+      },
+      {
+        "t": 1480000,
+        "rollMin": -6.85,
+        "rollMax": 7.66,
+        "pitchMin": -2.43,
+        "pitchMax": 2.28
+      },
+      {
+        "t": 1485000,
+        "rollMin": -6.79,
+        "rollMax": 7.74,
+        "pitchMin": -2.43,
+        "pitchMax": 1.89
+      },
+      {
+        "t": 1490000,
+        "rollMin": -6.89,
+        "rollMax": 7.28,
+        "pitchMin": -2.34,
+        "pitchMax": 1.97
+      },
+      {
+        "t": 1495000,
+        "rollMin": -7.17,
+        "rollMax": 7.23,
+        "pitchMin": -2.27,
+        "pitchMax": 2.05
+      },
+      {
+        "t": 1500000,
+        "rollMin": -6.73,
+        "rollMax": 7.16,
+        "pitchMin": -1.63,
+        "pitchMax": 2.63
+      },
+      {
+        "t": 1505000,
+        "rollMin": -6.58,
+        "rollMax": 7.23,
+        "pitchMin": -1.75,
+        "pitchMax": 2.71
+      },
+      {
+        "t": 1510000,
+        "rollMin": -6.62,
+        "rollMax": 7.44,
+        "pitchMin": -1.89,
+        "pitchMax": 2.4
+      },
+      {
+        "t": 1515000,
+        "rollMin": -7.05,
+        "rollMax": 7.1,
+        "pitchMin": -2.29,
+        "pitchMax": 2.22
+      },
+      {
+        "t": 1520000,
+        "rollMin": -7.07,
+        "rollMax": 7.12,
+        "pitchMin": -2.7,
+        "pitchMax": 1.74
+      },
+      {
+        "t": 1525000,
+        "rollMin": -7.23,
+        "rollMax": 7.53,
+        "pitchMin": -2.52,
+        "pitchMax": 1.9
+      },
+      {
+        "t": 1530000,
+        "rollMin": -7.01,
+        "rollMax": 7.56,
+        "pitchMin": -2.37,
+        "pitchMax": 2.09
+      },
+      {
+        "t": 1535000,
+        "rollMin": -7.21,
+        "rollMax": 7.84,
+        "pitchMin": -1.79,
+        "pitchMax": 2.43
+      },
+      {
+        "t": 1540000,
+        "rollMin": -7.29,
+        "rollMax": 7.95,
+        "pitchMin": -1.72,
+        "pitchMax": 2.66
+      },
+      {
+        "t": 1545000,
+        "rollMin": -7.66,
+        "rollMax": 7.65,
+        "pitchMin": -2.22,
+        "pitchMax": 2.52
+      },
+      {
+        "t": 1550000,
+        "rollMin": -7.41,
+        "rollMax": 8.36,
+        "pitchMin": -2.6,
+        "pitchMax": 1.84
+      },
+      {
+        "t": 1555000,
+        "rollMin": -7.55,
+        "rollMax": 8.78,
+        "pitchMin": -2.15,
+        "pitchMax": 2.23
+      },
+      {
+        "t": 1560000,
+        "rollMin": -7.67,
+        "rollMax": 8.76,
+        "pitchMin": -1.98,
+        "pitchMax": 2.35
+      },
+      {
+        "t": 1565000,
+        "rollMin": -8.14,
+        "rollMax": 8.77,
+        "pitchMin": -1.92,
+        "pitchMax": 2.28
+      },
+      {
+        "t": 1570000,
+        "rollMin": -7.95,
+        "rollMax": 9.15,
+        "pitchMin": -2.01,
+        "pitchMax": 2.26
+      },
+      {
+        "t": 1575000,
+        "rollMin": -8.37,
+        "rollMax": 9,
+        "pitchMin": -2.1,
+        "pitchMax": 2.26
+      },
+      {
+        "t": 1580000,
+        "rollMin": -8.45,
+        "rollMax": 9.46,
+        "pitchMin": -2.55,
+        "pitchMax": 2.01
+      },
+      {
+        "t": 1585000,
+        "rollMin": -8.56,
+        "rollMax": 9.36,
+        "pitchMin": -2.48,
+        "pitchMax": 2
+      },
+      {
+        "t": 1590000,
+        "rollMin": -8.31,
+        "rollMax": 9.77,
+        "pitchMin": -2.28,
+        "pitchMax": 1.99
+      },
+      {
+        "t": 1595000,
+        "rollMin": -8.76,
+        "rollMax": 9.76,
+        "pitchMin": -2.05,
+        "pitchMax": 2.56
+      }
+    ],
+    "excerpt": [
+      {
+        "t": 850000,
+        "roll": 1.7,
+        "pitch": 2.94
+      },
+      {
+        "t": 850100,
+        "roll": 4.13,
+        "pitch": 2.9
+      },
+      {
+        "t": 850200,
+        "roll": 6.03,
+        "pitch": 2.19
+      },
+      {
+        "t": 850300,
+        "roll": 7.22,
+        "pitch": 0.99
+      },
+      {
+        "t": 850400,
+        "roll": 7.73,
+        "pitch": -0.3
+      },
+      {
+        "t": 850500,
+        "roll": 7.43,
+        "pitch": -1.19
+      },
+      {
+        "t": 850600,
+        "roll": 6.17,
+        "pitch": -1.23
+      },
+      {
+        "t": 850700,
+        "roll": 4.22,
+        "pitch": -0.6
+      },
+      {
+        "t": 850800,
+        "roll": 1.81,
+        "pitch": 0.6
+      },
+      {
+        "t": 850900,
+        "roll": -0.84,
+        "pitch": 1.9
+      },
+      {
+        "t": 851000,
+        "roll": -2.93,
+        "pitch": 2.62
+      },
+      {
+        "t": 851100,
+        "roll": -4.88,
+        "pitch": 2.68
+      },
+      {
+        "t": 851200,
+        "roll": -6.39,
+        "pitch": 1.94
+      },
+      {
+        "t": 851300,
+        "roll": -7.38,
+        "pitch": 0.59
+      },
+      {
+        "t": 851400,
+        "roll": -7.61,
+        "pitch": -0.65
+      },
+      {
+        "t": 851500,
+        "roll": -7.21,
+        "pitch": -1.47
+      },
+      {
+        "t": 851600,
+        "roll": -6.29,
+        "pitch": -1.57
+      },
+      {
+        "t": 851700,
+        "roll": -4.89,
+        "pitch": -0.79
+      },
+      {
+        "t": 851800,
+        "roll": -3.1,
+        "pitch": 0.48
+      },
+      {
+        "t": 851900,
+        "roll": -0.97,
+        "pitch": 1.7
+      },
+      {
+        "t": 852000,
+        "roll": 1.75,
+        "pitch": 2.42
+      },
+      {
+        "t": 852100,
+        "roll": 4.19,
+        "pitch": 2.55
+      },
+      {
+        "t": 852200,
+        "roll": 6.13,
+        "pitch": 1.91
+      },
+      {
+        "t": 852300,
+        "roll": 7.45,
+        "pitch": 0.68
+      },
+      {
+        "t": 852400,
+        "roll": 7.92,
+        "pitch": -0.59
+      },
+      {
+        "t": 852500,
+        "roll": 7.55,
+        "pitch": -1.3
+      },
+      {
+        "t": 852600,
+        "roll": 6.39,
+        "pitch": -1.27
+      },
+      {
+        "t": 852700,
+        "roll": 4.42,
+        "pitch": -0.62
+      },
+      {
+        "t": 852800,
+        "roll": 1.98,
+        "pitch": 0.64
+      },
+      {
+        "t": 852900,
+        "roll": -0.62,
+        "pitch": 1.85
+      },
+      {
+        "t": 853000,
+        "roll": -2.73,
+        "pitch": 2.66
+      },
+      {
+        "t": 853100,
+        "roll": -4.63,
+        "pitch": 2.68
+      },
+      {
+        "t": 853200,
+        "roll": -6.13,
+        "pitch": 1.91
+      },
+      {
+        "t": 853300,
+        "roll": -7.21,
+        "pitch": 0.71
+      },
+      {
+        "t": 853400,
+        "roll": -7.48,
+        "pitch": -0.65
+      },
+      {
+        "t": 853500,
+        "roll": -7.13,
+        "pitch": -1.42
+      },
+      {
+        "t": 853600,
+        "roll": -6.24,
+        "pitch": -1.39
+      },
+      {
+        "t": 853700,
+        "roll": -4.67,
+        "pitch": -0.71
+      },
+      {
+        "t": 853800,
+        "roll": -2.87,
+        "pitch": 0.58
+      },
+      {
+        "t": 853900,
+        "roll": -0.76,
+        "pitch": 1.85
+      },
+      {
+        "t": 854000,
+        "roll": 1.9,
+        "pitch": 2.71
+      },
+      {
+        "t": 854100,
+        "roll": 4.35,
+        "pitch": 2.72
+      },
+      {
+        "t": 854200,
+        "roll": 6.25,
+        "pitch": 1.92
+      },
+      {
+        "t": 854300,
+        "roll": 7.56,
+        "pitch": 0.7
+      },
+      {
+        "t": 854400,
+        "roll": 8.03,
+        "pitch": -0.55
+      },
+      {
+        "t": 854500,
+        "roll": 7.66,
+        "pitch": -1.32
+      },
+      {
+        "t": 854600,
+        "roll": 6.48,
+        "pitch": -1.38
+      },
+      {
+        "t": 854700,
+        "roll": 4.53,
+        "pitch": -0.78
+      },
+      {
+        "t": 854800,
+        "roll": 2.06,
+        "pitch": 0.41
+      },
+      {
+        "t": 854900,
+        "roll": -0.64,
+        "pitch": 1.61
+      },
+      {
+        "t": 855000,
+        "roll": -2.66,
+        "pitch": 2.44
+      },
+      {
+        "t": 855100,
+        "roll": -4.53,
+        "pitch": 2.35
+      },
+      {
+        "t": 855200,
+        "roll": -6.08,
+        "pitch": 1.53
+      },
+      {
+        "t": 855300,
+        "roll": -7.01,
+        "pitch": 0.27
+      },
+      {
+        "t": 855400,
+        "roll": -7.37,
+        "pitch": -1.01
+      },
+      {
+        "t": 855500,
+        "roll": -7.03,
+        "pitch": -1.74
+      },
+      {
+        "t": 855600,
+        "roll": -6.04,
+        "pitch": -1.68
+      },
+      {
+        "t": 855700,
+        "roll": -4.62,
+        "pitch": -0.93
+      },
+      {
+        "t": 855800,
+        "roll": -2.64,
+        "pitch": 0.34
+      },
+      {
+        "t": 855900,
+        "roll": -0.63,
+        "pitch": 1.47
+      },
+      {
+        "t": 856000,
+        "roll": 2.11,
+        "pitch": 2.37
+      },
+      {
+        "t": 856100,
+        "roll": 4.53,
+        "pitch": 2.34
+      },
+      {
+        "t": 856200,
+        "roll": 6.52,
+        "pitch": 1.61
+      },
+      {
+        "t": 856300,
+        "roll": 7.84,
+        "pitch": 0.3
+      },
+      {
+        "t": 856400,
+        "roll": 8.23,
+        "pitch": -1
+      },
+      {
+        "t": 856500,
+        "roll": 7.84,
+        "pitch": -1.72
+      },
+      {
+        "t": 856600,
+        "roll": 6.62,
+        "pitch": -1.82
+      },
+      {
+        "t": 856700,
+        "roll": 4.69,
+        "pitch": -1.03
+      },
+      {
+        "t": 856800,
+        "roll": 2.22,
+        "pitch": 0.12
+      },
+      {
+        "t": 856900,
+        "roll": -0.47,
+        "pitch": 1.31
+      },
+      {
+        "t": 857000,
+        "roll": -2.6,
+        "pitch": 2
+      },
+      {
+        "t": 857100,
+        "roll": -4.56,
+        "pitch": 1.96
+      },
+      {
+        "t": 857200,
+        "roll": -6.05,
+        "pitch": 1.24
+      },
+      {
+        "t": 857300,
+        "roll": -7.16,
+        "pitch": -0.05
+      },
+      {
+        "t": 857400,
+        "roll": -7.5,
+        "pitch": -1.37
+      },
+      {
+        "t": 857500,
+        "roll": -7.05,
+        "pitch": -2.19
+      },
+      {
+        "t": 857600,
+        "roll": -6.1,
+        "pitch": -2.15
+      },
+      {
+        "t": 857700,
+        "roll": -4.55,
+        "pitch": -1.37
+      },
+      {
+        "t": 857800,
+        "roll": -2.58,
+        "pitch": -0.14
+      },
+      {
+        "t": 857900,
+        "roll": -0.56,
+        "pitch": 1.16
+      },
+      {
+        "t": 858000,
+        "roll": 2.2,
+        "pitch": 1.93
+      },
+      {
+        "t": 858100,
+        "roll": 4.64,
+        "pitch": 1.93
+      },
+      {
+        "t": 858200,
+        "roll": 6.58,
+        "pitch": 1.14
+      },
+      {
+        "t": 858300,
+        "roll": 7.78,
+        "pitch": -0.05
+      },
+      {
+        "t": 858400,
+        "roll": 8.36,
+        "pitch": -1.41
+      },
+      {
+        "t": 858500,
+        "roll": 8.04,
+        "pitch": -2.3
+      },
+      {
+        "t": 858600,
+        "roll": 6.9,
+        "pitch": -2.3
+      },
+      {
+        "t": 858700,
+        "roll": 5,
+        "pitch": -1.58
+      },
+      {
+        "t": 858800,
+        "roll": 2.6,
+        "pitch": -0.4
+      },
+      {
+        "t": 858900,
+        "roll": -0.21,
+        "pitch": 0.83
+      },
+      {
+        "t": 859000,
+        "roll": -2.45,
+        "pitch": 1.6
+      },
+      {
+        "t": 859100,
+        "roll": -4.38,
+        "pitch": 1.65
+      },
+      {
+        "t": 859200,
+        "roll": -5.95,
+        "pitch": 0.9
+      },
+      {
+        "t": 859300,
+        "roll": -7.02,
+        "pitch": -0.29
+      },
+      {
+        "t": 859400,
+        "roll": -7.29,
+        "pitch": -1.59
+      },
+      {
+        "t": 859500,
+        "roll": -6.89,
+        "pitch": -2.41
+      },
+      {
+        "t": 859600,
+        "roll": -5.91,
+        "pitch": -2.35
+      },
+      {
+        "t": 859700,
+        "roll": -4.4,
+        "pitch": -1.67
+      },
+      {
+        "t": 859800,
+        "roll": -2.49,
+        "pitch": -0.37
+      },
+      {
+        "t": 859900,
+        "roll": -0.44,
+        "pitch": 0.9
+      },
+      {
+        "t": 860000,
+        "roll": 2.33,
+        "pitch": 1.79
+      },
+      {
+        "t": 860100,
+        "roll": 4.77,
+        "pitch": 1.92
+      },
+      {
+        "t": 860200,
+        "roll": 6.7,
+        "pitch": 1.22
+      },
+      {
+        "t": 860300,
+        "roll": 8.08,
+        "pitch": -0.06
+      },
+      {
+        "t": 860400,
+        "roll": 8.56,
+        "pitch": -1.33
+      },
+      {
+        "t": 860500,
+        "roll": 8.08,
+        "pitch": -2.21
+      },
+      {
+        "t": 860600,
+        "roll": 6.8,
+        "pitch": -2.33
+      },
+      {
+        "t": 860700,
+        "roll": 4.8,
+        "pitch": -1.66
+      },
+      {
+        "t": 860800,
+        "roll": 2.25,
+        "pitch": -0.44
+      },
+      {
+        "t": 860900,
+        "roll": -0.57,
+        "pitch": 0.72
+      },
+      {
+        "t": 861000,
+        "roll": -2.82,
+        "pitch": 1.46
+      },
+      {
+        "t": 861100,
+        "roll": -4.89,
+        "pitch": 1.51
+      },
+      {
+        "t": 861200,
+        "roll": -6.44,
+        "pitch": 0.66
+      },
+      {
+        "t": 861300,
+        "roll": -7.45,
+        "pitch": -0.63
+      },
+      {
+        "t": 861400,
+        "roll": -7.8,
+        "pitch": -1.88
+      },
+      {
+        "t": 861500,
+        "roll": -7.45,
+        "pitch": -2.73
+      },
+      {
+        "t": 861600,
+        "roll": -6.46,
+        "pitch": -2.79
+      },
+      {
+        "t": 861700,
+        "roll": -4.87,
+        "pitch": -2.13
+      },
+      {
+        "t": 861800,
+        "roll": -3.02,
+        "pitch": -0.82
+      },
+      {
+        "t": 861900,
+        "roll": -0.84,
+        "pitch": 0.39
+      },
+      {
+        "t": 862000,
+        "roll": 1.91,
+        "pitch": 1.2
+      },
+      {
+        "t": 862100,
+        "roll": 4.34,
+        "pitch": 1.35
+      },
+      {
+        "t": 862200,
+        "roll": 6.39,
+        "pitch": 0.75
+      },
+      {
+        "t": 862300,
+        "roll": 7.68,
+        "pitch": -0.42
+      },
+      {
+        "t": 862400,
+        "roll": 8.12,
+        "pitch": -1.57
+      },
+      {
+        "t": 862500,
+        "roll": 7.72,
+        "pitch": -2.33
+      },
+      {
+        "t": 862600,
+        "roll": 6.49,
+        "pitch": -2.39
+      },
+      {
+        "t": 862700,
+        "roll": 4.6,
+        "pitch": -1.61
+      },
+      {
+        "t": 862800,
+        "roll": 2.09,
+        "pitch": -0.45
+      },
+      {
+        "t": 862900,
+        "roll": -0.68,
+        "pitch": 0.71
+      },
+      {
+        "t": 863000,
+        "roll": -2.84,
+        "pitch": 1.36
+      },
+      {
+        "t": 863100,
+        "roll": -4.81,
+        "pitch": 1.44
+      },
+      {
+        "t": 863200,
+        "roll": -6.31,
+        "pitch": 0.62
+      },
+      {
+        "t": 863300,
+        "roll": -7.24,
+        "pitch": -0.62
+      },
+      {
+        "t": 863400,
+        "roll": -7.51,
+        "pitch": -1.94
+      },
+      {
+        "t": 863500,
+        "roll": -7.11,
+        "pitch": -2.81
+      },
+      {
+        "t": 863600,
+        "roll": -6.14,
+        "pitch": -2.89
+      },
+      {
+        "t": 863700,
+        "roll": -4.51,
+        "pitch": -2.15
+      },
+      {
+        "t": 863800,
+        "roll": -2.58,
+        "pitch": -0.96
+      },
+      {
+        "t": 863900,
+        "roll": -0.44,
+        "pitch": 0.31
+      },
+      {
+        "t": 864000,
+        "roll": 2.39,
+        "pitch": 1.06
+      },
+      {
+        "t": 864100,
+        "roll": 4.87,
+        "pitch": 1.14
+      },
+      {
+        "t": 864200,
+        "roll": 6.99,
+        "pitch": 0.47
+      },
+      {
+        "t": 864300,
+        "roll": 8.4,
+        "pitch": -0.68
+      },
+      {
+        "t": 864400,
+        "roll": 8.8,
+        "pitch": -1.81
+      },
+      {
+        "t": 864500,
+        "roll": 8.36,
+        "pitch": -2.63
+      },
+      {
+        "t": 864600,
+        "roll": 7.1,
+        "pitch": -2.61
+      },
+      {
+        "t": 864700,
+        "roll": 5.16,
+        "pitch": -1.98
+      },
+      {
+        "t": 864800,
+        "roll": 2.6,
+        "pitch": -0.69
+      },
+      {
+        "t": 864900,
+        "roll": -0.14,
+        "pitch": 0.51
+      },
+      {
+        "t": 865000,
+        "roll": -2.35,
+        "pitch": 1.28
+      },
+      {
+        "t": 865100,
+        "roll": -4.37,
+        "pitch": 1.34
+      },
+      {
+        "t": 865200,
+        "roll": -5.89,
+        "pitch": 0.58
+      },
+      {
+        "t": 865300,
+        "roll": -7,
+        "pitch": -0.67
+      },
+      {
+        "t": 865400,
+        "roll": -7.31,
+        "pitch": -1.88
+      },
+      {
+        "t": 865500,
+        "roll": -6.91,
+        "pitch": -2.62
+      },
+      {
+        "t": 865600,
+        "roll": -5.84,
+        "pitch": -2.67
+      },
+      {
+        "t": 865700,
+        "roll": -4.37,
+        "pitch": -1.93
+      },
+      {
+        "t": 865800,
+        "roll": -2.43,
+        "pitch": -0.6
+      },
+      {
+        "t": 865900,
+        "roll": -0.3,
+        "pitch": 0.66
+      },
+      {
+        "t": 866000,
+        "roll": 2.48,
+        "pitch": 1.41
+      },
+      {
+        "t": 866100,
+        "roll": 5.05,
+        "pitch": 1.53
+      },
+      {
+        "t": 866200,
+        "roll": 7.13,
+        "pitch": 0.81
+      },
+      {
+        "t": 866300,
+        "roll": 8.37,
+        "pitch": -0.31
+      },
+      {
+        "t": 866400,
+        "roll": 8.79,
+        "pitch": -1.48
+      },
+      {
+        "t": 866500,
+        "roll": 8.39,
+        "pitch": -2.29
+      },
+      {
+        "t": 866600,
+        "roll": 7.16,
+        "pitch": -2.3
+      },
+      {
+        "t": 866700,
+        "roll": 5.19,
+        "pitch": -1.57
+      },
+      {
+        "t": 866800,
+        "roll": 2.61,
+        "pitch": -0.35
+      },
+      {
+        "t": 866900,
+        "roll": -0.17,
+        "pitch": 0.91
+      },
+      {
+        "t": 867000,
+        "roll": -2.45,
+        "pitch": 1.68
+      },
+      {
+        "t": 867100,
+        "roll": -4.49,
+        "pitch": 1.77
+      },
+      {
+        "t": 867200,
+        "roll": -6,
+        "pitch": 1.03
+      },
+      {
+        "t": 867300,
+        "roll": -7.08,
+        "pitch": -0.07
+      },
+      {
+        "t": 867400,
+        "roll": -7.41,
+        "pitch": -1.26
+      },
+      {
+        "t": 867500,
+        "roll": -7.14,
+        "pitch": -2.07
+      },
+      {
+        "t": 867600,
+        "roll": -6.24,
+        "pitch": -2.05
+      },
+      {
+        "t": 867700,
+        "roll": -4.62,
+        "pitch": -1.39
+      },
+      {
+        "t": 867800,
+        "roll": -2.63,
+        "pitch": -0.14
+      },
+      {
+        "t": 867900,
+        "roll": -0.41,
+        "pitch": 1.16
+      },
+      {
+        "t": 868000,
+        "roll": 2.45,
+        "pitch": 1.96
+      },
+      {
+        "t": 868100,
+        "roll": 4.95,
+        "pitch": 2.01
+      },
+      {
+        "t": 868200,
+        "roll": 7.12,
+        "pitch": 1.39
+      },
+      {
+        "t": 868300,
+        "roll": 8.48,
+        "pitch": 0.27
+      },
+      {
+        "t": 868400,
+        "roll": 9.02,
+        "pitch": -1.05
+      },
+      {
+        "t": 868500,
+        "roll": 8.65,
+        "pitch": -1.76
+      },
+      {
+        "t": 868600,
+        "roll": 7.27,
+        "pitch": -1.84
+      },
+      {
+        "t": 868700,
+        "roll": 5.15,
+        "pitch": -1.03
+      },
+      {
+        "t": 868800,
+        "roll": 2.52,
+        "pitch": 0.18
+      },
+      {
+        "t": 868900,
+        "roll": -0.37,
+        "pitch": 1.41
+      },
+      {
+        "t": 869000,
+        "roll": -2.72,
+        "pitch": 2.25
+      },
+      {
+        "t": 869100,
+        "roll": -4.85,
+        "pitch": 2.29
+      },
+      {
+        "t": 869200,
+        "roll": -6.59,
+        "pitch": 1.44
+      },
+      {
+        "t": 869300,
+        "roll": -7.74,
+        "pitch": 0.11
+      },
+      {
+        "t": 869400,
+        "roll": -8.07,
+        "pitch": -1.1
+      },
+      {
+        "t": 869500,
+        "roll": -7.73,
+        "pitch": -1.93
+      },
+      {
+        "t": 869600,
+        "roll": -6.72,
+        "pitch": -2.02
+      },
+      {
+        "t": 869700,
+        "roll": -5.12,
+        "pitch": -1.36
+      },
+      {
+        "t": 869800,
+        "roll": -3.04,
+        "pitch": -0.04
+      },
+      {
+        "t": 869900,
+        "roll": -0.8,
+        "pitch": 1.24
+      },
+      {
+        "t": 870000,
+        "roll": 2.03,
+        "pitch": 2.06
+      },
+      {
+        "t": 870100,
+        "roll": 4.71,
+        "pitch": 2.21
+      },
+      {
+        "t": 870200,
+        "roll": 6.84,
+        "pitch": 1.47
+      },
+      {
+        "t": 870300,
+        "roll": 8.11,
+        "pitch": 0.18
+      },
+      {
+        "t": 870400,
+        "roll": 8.59,
+        "pitch": -1.08
+      },
+      {
+        "t": 870500,
+        "roll": 8.14,
+        "pitch": -1.79
+      },
+      {
+        "t": 870600,
+        "roll": 6.86,
+        "pitch": -1.77
+      },
+      {
+        "t": 870700,
+        "roll": 4.72,
+        "pitch": -1.14
+      },
+      {
+        "t": 870800,
+        "roll": 2.2,
+        "pitch": 0.13
+      },
+      {
+        "t": 870900,
+        "roll": -0.67,
+        "pitch": 1.26
+      },
+      {
+        "t": 871000,
+        "roll": -3.04,
+        "pitch": 2.11
+      },
+      {
+        "t": 871100,
+        "roll": -5.01,
+        "pitch": 2.11
+      },
+      {
+        "t": 871200,
+        "roll": -6.75,
+        "pitch": 1.37
+      },
+      {
+        "t": 871300,
+        "roll": -7.78,
+        "pitch": 0.24
+      },
+      {
+        "t": 871400,
+        "roll": -8.23,
+        "pitch": -1.11
+      },
+      {
+        "t": 871500,
+        "roll": -7.96,
+        "pitch": -1.94
+      },
+      {
+        "t": 871600,
+        "roll": -6.92,
+        "pitch": -1.98
+      },
+      {
+        "t": 871700,
+        "roll": -5.25,
+        "pitch": -1.2
+      },
+      {
+        "t": 871800,
+        "roll": -3.19,
+        "pitch": -0.03
+      },
+      {
+        "t": 871900,
+        "roll": -0.91,
+        "pitch": 1.3
+      },
+      {
+        "t": 872000,
+        "roll": 2.07,
+        "pitch": 2.05
+      },
+      {
+        "t": 872100,
+        "roll": 4.76,
+        "pitch": 2.1
+      },
+      {
+        "t": 872200,
+        "roll": 6.78,
+        "pitch": 1.31
+      },
+      {
+        "t": 872300,
+        "roll": 8.13,
+        "pitch": 0.06
+      },
+      {
+        "t": 872400,
+        "roll": 8.68,
+        "pitch": -1.18
+      },
+      {
+        "t": 872500,
+        "roll": 8.28,
+        "pitch": -1.99
+      },
+      {
+        "t": 872600,
+        "roll": 6.94,
+        "pitch": -2.12
+      },
+      {
+        "t": 872700,
+        "roll": 4.88,
+        "pitch": -1.3
+      },
+      {
+        "t": 872800,
+        "roll": 2.27,
+        "pitch": -0.2
+      },
+      {
+        "t": 872900,
+        "roll": -0.71,
+        "pitch": 1
+      },
+      {
+        "t": 873000,
+        "roll": -2.96,
+        "pitch": 1.92
+      },
+      {
+        "t": 873100,
+        "roll": -4.96,
+        "pitch": 1.91
+      },
+      {
+        "t": 873200,
+        "roll": -6.59,
+        "pitch": 1.09
+      },
+      {
+        "t": 873300,
+        "roll": -7.65,
+        "pitch": -0.2
+      },
+      {
+        "t": 873400,
+        "roll": -8.08,
+        "pitch": -1.38
+      },
+      {
+        "t": 873500,
+        "roll": -7.81,
+        "pitch": -2.18
+      },
+      {
+        "t": 873600,
+        "roll": -6.76,
+        "pitch": -2.09
+      },
+      {
+        "t": 873700,
+        "roll": -5.03,
+        "pitch": -1.3
+      },
+      {
+        "t": 873800,
+        "roll": -3.02,
+        "pitch": -0.11
+      },
+      {
+        "t": 873900,
+        "roll": -0.83,
+        "pitch": 1.08
+      },
+      {
+        "t": 874000,
+        "roll": 2.15,
+        "pitch": 1.99
+      },
+      {
+        "t": 874100,
+        "roll": 4.69,
+        "pitch": 2.04
+      },
+      {
+        "t": 874200,
+        "roll": 6.74,
+        "pitch": 1.34
+      },
+      {
+        "t": 874300,
+        "roll": 8.16,
+        "pitch": 0.15
+      },
+      {
+        "t": 874400,
+        "roll": 8.63,
+        "pitch": -0.95
+      },
+      {
+        "t": 874500,
+        "roll": 8.18,
+        "pitch": -1.73
+      },
+      {
+        "t": 874600,
+        "roll": 6.8,
+        "pitch": -1.84
+      },
+      {
+        "t": 874700,
+        "roll": 4.72,
+        "pitch": -1.03
+      },
+      {
+        "t": 874800,
+        "roll": 2.16,
+        "pitch": 0.21
+      },
+      {
+        "t": 874900,
+        "roll": -0.73,
+        "pitch": 1.49
+      },
+      {
+        "t": 875000,
+        "roll": -3.07,
+        "pitch": 2.26
+      },
+      {
+        "t": 875100,
+        "roll": -5.22,
+        "pitch": 2.25
+      },
+      {
+        "t": 875200,
+        "roll": -6.81,
+        "pitch": 1.54
+      },
+      {
+        "t": 875300,
+        "roll": -7.9,
+        "pitch": 0.35
+      },
+      {
+        "t": 875400,
+        "roll": -8.33,
+        "pitch": -0.8
+      },
+      {
+        "t": 875500,
+        "roll": -8.01,
+        "pitch": -1.5
+      },
+      {
+        "t": 875600,
+        "roll": -7.01,
+        "pitch": -1.48
+      },
+      {
+        "t": 875700,
+        "roll": -5.27,
+        "pitch": -0.8
+      },
+      {
+        "t": 875800,
+        "roll": -3.22,
+        "pitch": 0.4
+      },
+      {
+        "t": 875900,
+        "roll": -0.93,
+        "pitch": 1.61
+      },
+      {
+        "t": 876000,
+        "roll": 1.96,
+        "pitch": 2.43
+      },
+      {
+        "t": 876100,
+        "roll": 4.53,
+        "pitch": 2.49
+      },
+      {
+        "t": 876200,
+        "roll": 6.66,
+        "pitch": 1.74
+      },
+      {
+        "t": 876300,
+        "roll": 8.03,
+        "pitch": 0.57
+      },
+      {
+        "t": 876400,
+        "roll": 8.49,
+        "pitch": -0.63
+      },
+      {
+        "t": 876500,
+        "roll": 8.01,
+        "pitch": -1.54
+      },
+      {
+        "t": 876600,
+        "roll": 6.76,
+        "pitch": -1.51
+      },
+      {
+        "t": 876700,
+        "roll": 4.76,
+        "pitch": -0.81
+      },
+      {
+        "t": 876800,
+        "roll": 2.07,
+        "pitch": 0.4
+      },
+      {
+        "t": 876900,
+        "roll": -0.81,
+        "pitch": 1.64
+      },
+      {
+        "t": 877000,
+        "roll": -3.22,
+        "pitch": 2.45
+      },
+      {
+        "t": 877100,
+        "roll": -5.23,
+        "pitch": 2.55
+      },
+      {
+        "t": 877200,
+        "roll": -6.95,
+        "pitch": 1.87
+      },
+      {
+        "t": 877300,
+        "roll": -7.94,
+        "pitch": 0.59
+      },
+      {
+        "t": 877400,
+        "roll": -8.27,
+        "pitch": -0.74
+      },
+      {
+        "t": 877500,
+        "roll": -7.82,
+        "pitch": -1.49
+      },
+      {
+        "t": 877600,
+        "roll": -6.69,
+        "pitch": -1.5
+      },
+      {
+        "t": 877700,
+        "roll": -5.01,
+        "pitch": -0.71
+      },
+      {
+        "t": 877800,
+        "roll": -3.02,
+        "pitch": 0.59
+      },
+      {
+        "t": 877900,
+        "roll": -0.69,
+        "pitch": 1.86
+      },
+      {
+        "t": 878000,
+        "roll": 2.32,
+        "pitch": 2.58
+      },
+      {
+        "t": 878100,
+        "roll": 5.04,
+        "pitch": 2.63
+      },
+      {
+        "t": 878200,
+        "roll": 7.12,
+        "pitch": 1.93
+      },
+      {
+        "t": 878300,
+        "roll": 8.6,
+        "pitch": 0.66
+      },
+      {
+        "t": 878400,
+        "roll": 9.04,
+        "pitch": -0.47
+      },
+      {
+        "t": 878500,
+        "roll": 8.59,
+        "pitch": -1.21
+      },
+      {
+        "t": 878600,
+        "roll": 7.3,
+        "pitch": -1.36
+      },
+      {
+        "t": 878700,
+        "roll": 5.07,
+        "pitch": -0.62
+      },
+      {
+        "t": 878800,
+        "roll": 2.41,
+        "pitch": 0.59
+      },
+      {
+        "t": 878900,
+        "roll": -0.54,
+        "pitch": 1.85
+      },
+      {
+        "t": 879000,
+        "roll": -2.97,
+        "pitch": 2.58
+      },
+      {
+        "t": 879100,
+        "roll": -5.13,
+        "pitch": 2.62
+      },
+      {
+        "t": 879200,
+        "roll": -6.73,
+        "pitch": 1.96
+      },
+      {
+        "t": 879300,
+        "roll": -7.76,
+        "pitch": 0.8
+      },
+      {
+        "t": 879400,
+        "roll": -8.24,
+        "pitch": -0.52
+      },
+      {
+        "t": 879500,
+        "roll": -7.95,
+        "pitch": -1.27
+      },
+      {
+        "t": 879600,
+        "roll": -6.91,
+        "pitch": -1.36
+      },
+      {
+        "t": 879700,
+        "roll": -5.2,
+        "pitch": -0.55
+      },
+      {
+        "t": 879800,
+        "roll": -3.15,
+        "pitch": 0.65
+      },
+      {
+        "t": 879900,
+        "roll": -0.76,
+        "pitch": 1.92
+      }
+    ],
+    "rollHistogram": {
+      "binWidthDeg": 0.47,
+      "bins": [
+        {
+          "centreDeg": -9.37,
+          "count": 5
+        },
+        {
+          "centreDeg": -8.9,
+          "count": 137
+        },
+        {
+          "centreDeg": -8.44,
+          "count": 341
+        },
+        {
+          "centreDeg": -7.97,
+          "count": 313
+        },
+        {
+          "centreDeg": -7.5,
+          "count": 398
+        },
+        {
+          "centreDeg": -7.03,
+          "count": 594
+        },
+        {
+          "centreDeg": -6.56,
+          "count": 572
+        },
+        {
+          "centreDeg": -6.09,
+          "count": 313
+        },
+        {
+          "centreDeg": -5.62,
+          "count": 472
+        },
+        {
+          "centreDeg": -5.16,
+          "count": 383
+        },
+        {
+          "centreDeg": -4.69,
+          "count": 315
+        },
+        {
+          "centreDeg": -4.22,
+          "count": 324
+        },
+        {
+          "centreDeg": -3.75,
+          "count": 37
+        },
+        {
+          "centreDeg": -3.28,
+          "count": 304
+        },
+        {
+          "centreDeg": -2.81,
+          "count": 585
+        },
+        {
+          "centreDeg": -2.34,
+          "count": 296
+        },
+        {
+          "centreDeg": -1.87,
+          "count": 3
+        },
+        {
+          "centreDeg": -1.41,
+          "count": 4
+        },
+        {
+          "centreDeg": -0.94,
+          "count": 385
+        },
+        {
+          "centreDeg": -0.47,
+          "count": 773
+        },
+        {
+          "centreDeg": 0,
+          "count": 37
+        },
+        {
+          "centreDeg": 0.47,
+          "count": 0
+        },
+        {
+          "centreDeg": 0.94,
+          "count": 0
+        },
+        {
+          "centreDeg": 1.41,
+          "count": 68
+        },
+        {
+          "centreDeg": 1.87,
+          "count": 432
+        },
+        {
+          "centreDeg": 2.34,
+          "count": 517
+        },
+        {
+          "centreDeg": 2.81,
+          "count": 179
+        },
+        {
+          "centreDeg": 3.28,
+          "count": 6
+        },
+        {
+          "centreDeg": 3.75,
+          "count": 157
+        },
+        {
+          "centreDeg": 4.22,
+          "count": 294
+        },
+        {
+          "centreDeg": 4.69,
+          "count": 240
+        },
+        {
+          "centreDeg": 5.16,
+          "count": 335
+        },
+        {
+          "centreDeg": 5.62,
+          "count": 389
+        },
+        {
+          "centreDeg": 6.09,
+          "count": 228
+        },
+        {
+          "centreDeg": 6.56,
+          "count": 270
+        },
+        {
+          "centreDeg": 7.03,
+          "count": 499
+        },
+        {
+          "centreDeg": 7.5,
+          "count": 508
+        },
+        {
+          "centreDeg": 7.97,
+          "count": 355
+        },
+        {
+          "centreDeg": 8.44,
+          "count": 248
+        },
+        {
+          "centreDeg": 8.9,
+          "count": 294
+        },
+        {
+          "centreDeg": 9.37,
+          "count": 381
+        }
+      ]
+    },
+    "available": true,
+    "reason": "From 11,991 moving samples at 10 Hz.",
+    "sampleRateHz": 10,
+    "samples": 11991,
+    "rollRmsDeg": 5.8,
+    "pitchRmsDeg": 1.52,
+    "rollP5Deg": -8.04,
+    "rollP95Deg": 8.82,
+    "plotBoundDeg": 10.57,
+    "rollToPitchRatio": 3.81,
+    "axisConfident": true,
+    "symmetry": {
+      "sideADeg": 9.3,
+      "sideBDeg": 8.37,
+      "imbalancePct": 10.49
+    },
+    "excludedWindows": 0,
+    "excludedSeconds": 0
+  },
+  "cadence": {
+    "available": true,
+    "reason": "Derived from 38 windows of 60s at 10 Hz.",
+    "sampleRateHz": 10,
+    "rows": 12000,
+    "medianStrokesPerMin": 60.1,
+    "windows": [
+      {
+        "tMs": 400000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 430000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.968
+      },
+      {
+        "tMs": 460000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 490000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 520000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 550000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 580000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 610000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 640000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 670000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.968
+      },
+      {
+        "tMs": 700000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 730000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 760000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 790000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.963
+      },
+      {
+        "tMs": 820000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 850000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 880000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 910000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 940000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 970000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1000000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.963
+      },
+      {
+        "tMs": 1030000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1060000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1090000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1120000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1150000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1180000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 1210000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1240000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.963
+      },
+      {
+        "tMs": 1270000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1300000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1330000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.967
+      },
+      {
+        "tMs": 1360000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.968
+      },
+      {
+        "tMs": 1390000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.966
+      },
+      {
+        "tMs": 1420000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.965
+      },
+      {
+        "tMs": 1450000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1480000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      },
+      {
+        "tMs": 1510000,
+        "cyclesPerMin": 30,
+        "strokesPerMin": 60.1,
+        "alternating": true,
+        "confidence": 0.964
+      }
+    ]
+  }
+}
