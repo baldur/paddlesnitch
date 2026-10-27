@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "MotionStrokeRate.schema.json",
+  "type": "object",
+  "properties": {
+    "available": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "sampleRateHz": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "rows": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "medianStrokesPerMin": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "windows": {
+      "type": "array",
+      "items": {
+        "$ref": "StrokeRateWindow.schema.json"
+      }
+    }
+  },
+  "required": [
+    "available",
+    "reason",
+    "sampleRateHz",
+    "rows",
+    "medianStrokesPerMin",
+    "windows"
+  ]
+}

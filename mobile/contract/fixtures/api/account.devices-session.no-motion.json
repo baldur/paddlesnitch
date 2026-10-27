@@ -1,0 +1,92 @@
+{
+  "report": {
+    "columns": [
+      "timestamp",
+      "ms",
+      "fix",
+      "lat",
+      "lon",
+      "speed_kmh"
+    ],
+    "rows": 1200,
+    "fixedRows": 1200,
+    "noFixRows": 0,
+    "timeSpanS": 1199,
+    "movementDistanceM": 3000,
+    "hasImu": false,
+    "hasGyro": false,
+    "strokeRate": {
+      "available": false,
+      "reason": "No stroke-rate column and no accelerometer data.",
+      "evidence": null
+    },
+    "capture": {
+      "intervalS": 1,
+      "expectedRows": 1200,
+      "missingRows": 0,
+      "gaps": 0,
+      "longestGapS": 0,
+      "capturedFraction": 1
+    },
+    "gnss": {
+      "satsFirst": null,
+      "satsLast": null,
+      "satsMin": null,
+      "satsMax": null,
+      "hdopFirst": null,
+      "hdopLast": null,
+      "hdopMedian": null,
+      "fixTrend": null,
+      "altitudeSpreadM": null
+    },
+    "motion": null,
+    "deadColumns": [],
+    "looksUsable": true,
+    "sampleRows": [
+      {
+        "timestamp": "2026-10-06T09:00:00Z",
+        "ms": "400000",
+        "fix": "1",
+        "lat": "51.500000",
+        "lon": "-0.978",
+        "speed_kmh": "9"
+      },
+      {
+        "timestamp": "2026-10-06T09:00:01Z",
+        "ms": "401000",
+        "fix": "1",
+        "lat": "51.500023",
+        "lon": "-0.978",
+        "speed_kmh": "9"
+      },
+      {
+        "timestamp": "2026-10-06T09:00:02Z",
+        "ms": "402000",
+        "fix": "1",
+        "lat": "51.500045",
+        "lon": "-0.978",
+        "speed_kmh": "9"
+      },
+      {
+        "timestamp": "2026-10-06T09:00:03Z",
+        "ms": "403000",
+        "fix": "1",
+        "lat": "51.500068",
+        "lon": "-0.978",
+        "speed_kmh": "9"
+      },
+      {
+        "timestamp": "2026-10-06T09:00:04Z",
+        "ms": "404000",
+        "fix": "1",
+        "lat": "51.500090",
+        "lon": "-0.978",
+        "speed_kmh": "9"
+      }
+    ]
+  },
+  "cadence": null,
+  "attitude": null,
+  "noPaddle": null,
+  "fromMotion": null
+}

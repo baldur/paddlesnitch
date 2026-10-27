@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "AttitudeSample.schema.json",
+  "type": "object",
+  "properties": {
+    "t": {
+      "type": "number"
+    },
+    "roll": {
+      "type": "number"
+    },
+    "pitch": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "t",
+    "roll",
+    "pitch"
+  ]
+}

@@ -313,6 +313,53 @@
       "out": "Too short to be a paddle: the boat moved 12 m, and a paddle needs 100 m."
     }
   ],
+  "noMotionCopy": [
+    {
+      "in": null,
+      "out": "Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. Older recordings have no motion data."
+    },
+    {
+      "in": {
+        "available": false,
+        "reason": "Motion file has too few samples to describe attitude."
+      },
+      "out": "We couldn’t measure boat motion in this recording. The tracker may not have been fixed firmly in the boat."
+    }
+  ],
+  "fmtEvenness": [
+    {
+      "in": 0,
+      "out": "0%"
+    },
+    {
+      "in": 0.3,
+      "out": "0%"
+    },
+    {
+      "in": 0.5,
+      "out": "1%"
+    },
+    {
+      "in": -0.5,
+      "out": "1%"
+    },
+    {
+      "in": 10.49,
+      "out": "10%"
+    },
+    {
+      "in": 10.5,
+      "out": "11%"
+    },
+    {
+      "in": -10.5,
+      "out": "11%"
+    },
+    {
+      "in": 99.6,
+      "out": "100%"
+    }
+  ],
   "roundStrokes": [
     {
       "in": 0,

@@ -1,4 +1,4 @@
-import { noMotionCopy } from '@/lib/tracker-copy'
+import { noMotionCopy, fmtEvenness } from '@/lib/tracker-copy'
 import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
@@ -34,7 +34,7 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
             <Tile label="Bow-to-stern pitch" value={`${attitude.pitchRmsDeg}°`} note="typical tilt" />
             <Tile
               label="Evenness"
-              value={attitude.symmetry ? `${Math.abs(attitude.symmetry.imbalancePct).toFixed(0)}%` : '—'}
+              value={attitude.symmetry ? fmtEvenness(attitude.symmetry.imbalancePct) : '—'}
               note={attitude.symmetry ? 'uneven' : ''}
             />
             <Tile

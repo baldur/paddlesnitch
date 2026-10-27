@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "BoatMotion.schema.json",
+  "type": "object",
+  "properties": {
+    "available": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "sampleRateHz": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "samples": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "envelope": {
+      "type": "array",
+      "items": {
+        "$ref": "AttitudeBucket.schema.json"
+      }
+    },
+    "excerpt": {
+      "type": "array",
+      "items": {
+        "$ref": "AttitudeSample.schema.json"
+      }
+    },
+    "rollHistogram": {
+      "anyOf": [
+        {
+          "$ref": "RollHistogram.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rollRmsDeg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "pitchRmsDeg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "rollP5Deg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "rollP95Deg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "plotBoundDeg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "rollToPitchRatio": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "axisConfident": {
+      "type": "boolean"
+    },
+    "symmetry": {
+      "anyOf": [
+        {
+          "$ref": "AttitudeSymmetry.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "excludedWindows": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "excludedSeconds": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "available",
+    "reason",
+    "sampleRateHz",
+    "samples",
+    "envelope",
+    "excerpt",
+    "rollHistogram",
+    "rollRmsDeg",
+    "pitchRmsDeg",
+    "rollP5Deg",
+    "rollP95Deg",
+    "plotBoundDeg",
+    "rollToPitchRatio",
+    "axisConfident",
+    "symmetry",
+    "excludedWindows",
+    "excludedSeconds"
+  ]
+}

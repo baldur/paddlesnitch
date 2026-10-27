@@ -260,6 +260,15 @@
       401
     ]
   },
+  "GET /api/account/devices/sessions/{sessionId}": {
+    "auth": "user",
+    "input": "RecordingOf",
+    "output": "RecordingMotion",
+    "errors": [
+      401,
+      404
+    ]
+  },
   "GET /att/api/strava/status": {
     "auth": "user",
     "input": null,

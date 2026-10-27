@@ -200,6 +200,55 @@ golden answers are `fixtures/api/account.*.json`.
 | `GET /api/account/devices` | | `{devices: Tracker[], stableVersion, summaries: TrackerSummary[]}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash. **Show the cards from `summaries`**: already in order, removed trackers that still have recordings included (`linked: false`), with the counts, `firmwareState`, `quiet` (over 2 days silent) and `crash` (last 7 days) worked out by the server, the same rules the website uses. Don't recompute them |
 | `DELETE /api/account/devices` | `{deviceId}` | `{ok: true}`: removed; it stops syncing and can be added again. Its recordings and paddles stay. 404 if it isn't this person's |
 | `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId`. `paddleId` on each recording that became a paddle (open it with `paddles.get`); none = too short or no track |
+| `GET /api/account/devices/sessions/{sessionId}?deviceId=` | | `RecordingMotion`: a tracker paddle's boat motion. See **Boat motion** below. 404 if it isn't this person's recording |
+
+### Boat motion
+
+The website's `/paddles/[id]/motion`. Only a paddle whose `paddles.get` has
+`source.type === "device"` with `deviceId` and `deviceSessionId` has one: call
+`GET /api/account/devices/sessions/<deviceSessionId>?deviceId=<deviceId>`
+(URL-encode both). Every number comes from the server; the app draws. The
+answer carries more fields (`report`, `noPaddle`, `fromMotion`: the website's
+technical details); ignore them. It sends an `ETag`: send it back as
+`If-None-Match` and a 304 with no body means "what you have is current".
+
+| State | What to show (the website's words) |
+|---|---|
+| Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
+| Loading | "Loading" |
+| Call failed, or 404 | "Couldn’t read the tracker's recording. Please try again." |
+| `attitude` null, or `attitude.available` false | "No boat motion for this recording." then `noMotionCopy` (format.json: null = the motion file hasn't arrived, else it couldn't be measured), then "Technical detail: " + `attitude.reason` when there is an `attitude` |
+| `attitude.available` | The tiles, the three charts and the two notes below |
+
+Page title "Boat motion", with the paddle's `paddledAt` as `fmtDayTime` above it.
+
+**Tiles** (label, value, note under it):
+- Side-to-side roll: `rollRmsDeg` + "°", "typical lean"
+- Bow-to-stern pitch: `pitchRmsDeg` + "°", "typical tilt"
+- Evenness: `fmtEvenness(symmetry.imbalancePct)`, "uneven"; `symmetry` null: "—" and no note
+- Stroke rate: the paddle's `result.avgSR` rounded, "spm"; null: "—", "not measured"
+
+**Charts** (title, then caption under the chart). Roll is the split colour,
+pitch the green; angles in degrees, `t` in milliseconds.
+- "Through the session" from `envelope`: a band per bucket from min to max, roll
+  over pitch, y from −`plotBoundDeg` to +`plotBoundDeg` (10 when null), values
+  beyond clamped to the edge, and then the axis note "a few moments went past
+  ±N° and are clipped here". X labels "0 min" and the length in whole minutes.
+  Caption: "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
+- "Stroke shape" from `excerpt`: two lines, scaled to its largest value ×1.1.
+  Label "<seconds> s at <sampleRateHz> Hz". Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
+- "Where the boat spent its time" from `rollHistogram`: bars by `centreDeg`,
+  plus a dashed red line of the same counts flipped about 0 (each bin takes the
+  count of the bin nearest `-centreDeg`). Labels "level" at 0, ±the largest
+  `|centreDeg|`, legend "actual" and "mirrored". Caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even."
+
+A chart with fewer than 2 points (histogram: no bins) is left out.
+
+**Notes** under the charts:
+- "**Reading this.** Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly."
+- "**What this can't tell you.** We can't tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." and, when `axisConfident` is false, " Roll and pitch were hard to tell apart in this recording."
+
+Never call the sides left and right (`sideADeg`/`sideBDeg`): the tracker can't tell which is which.
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
 are in `fixtures/tracker/README.md`. Forgot password is under Signing in; Strava has its own section below.
@@ -276,7 +325,9 @@ route shares. So far: `auth.login`, `auth.login.needs-terms`,
 Account answers are `account.<route>[-<what>][.<case>].json`: `account.tos`,
 `account.tos-accepted`, `account.export`, `account.profile`(`.private`),
 `account.handle-check`(`.taken`), `account.contact`(`.none`),
-`account.devices`(`.none`), `account.devices-sessions`, and
+`account.devices`(`.none`), `account.devices-sessions`,
+`account.devices-session` (boat motion: `.json` measured, `.no-motion` no motion
+file yet, `.motion-unusable` measured nothing, `.not-found` the 404), and
 `account.error` (the 401 every account route shares).
 
 `paddles.list` is the Paddles screen as the website draws it, worked out on the
@@ -312,6 +363,8 @@ even), 22.5° on the compass.
 | `paddleKm` | `{distanceKm, noGps?}` | `4.25 km`; `—` for a paddle without a map |
 | `compassPoint` | degrees the wind blows from | one of N, NE … NW |
 | `noPaddleMessage` | `{reason, hasMotion}` | why a recording has no route (`reason` is a `NoPaddleReason`) |
+| `noMotionCopy` | the answer's `attitude` (null, or one with `available: false`) | why a tracker paddle has no boat motion |
+| `fmtEvenness` | `symmetry.imbalancePct` | the Evenness tile: its size, rounded, with % |
 
 ## tokens/
 

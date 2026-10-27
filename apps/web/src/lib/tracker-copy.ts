@@ -33,6 +33,12 @@ export function gpsCopy(report: DeviceDataReport): string | null {
   return parts.length ? parts.join(' ') : null
 }
 
+// The Evenness tile: how uneven the rocking was, by size (the sign only says
+// which side, and we can't tell port from starboard).
+export function fmtEvenness(imbalancePct: number): string {
+  return `${Math.abs(imbalancePct).toFixed(0)}%`
+}
+
 // Why there are no boat-motion charts.
 export function noMotionCopy(attitude: AttitudeReport | null): string {
   // A reason means motion data WAS uploaded but yielded nothing; none means it

@@ -31,6 +31,7 @@ import { GET as checkHandle, PUT as claimHandle, DELETE as releaseHandle } from 
 import { GET as getContact, POST as setContact, DELETE as clearContact } from '@/app/api/account/contact/route'
 import { GET as listTrackers, DELETE as removeTracker } from '@/app/api/account/devices/route'
 import { GET as listRecordings } from '@/app/api/account/devices/sessions/route'
+import { GET as recordingMotion } from '@/app/api/account/devices/sessions/[sessionId]/route'
 import { POST as link } from '@/app/api/account/devices/link/route'
 import { POST as claim } from '@/app/api/devices/claim/route'
 import { POST as token } from '@/app/api/devices/token/route'
@@ -41,7 +42,7 @@ import type { DeviceSessionMeta } from '@/lib/devices'
 import { provedPoll } from './device-proof'
 import {
   restRoutes, ApiError, Ok, TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact, AccountStatus,
-  TrackerList, RecordingList,
+  TrackerList, RecordingList, RecordingMotion,
 } from '@paddlesnitch/api/contract'
 
 let dataDir: string
@@ -280,7 +281,7 @@ check<Same<Norm<z.infer<typeof TrackerList>>, Norm<Awaited<ReturnType<typeof dev
 // The stored metadata, less the owner's own id (unnamed fields are allowed).
 check<Same<Norm<z.infer<typeof RecordingList>['sessions'][number]>, Norm<Omit<DeviceSessionMeta, 'userId'> & { paddleId?: string }>>>()
 
-const trackerRoutes = ['GET /api/account/devices', 'DELETE /api/account/devices', 'GET /api/account/devices/sessions']
+const trackerRoutes = ['GET /api/account/devices', 'DELETE /api/account/devices', 'GET /api/account/devices/sessions', 'GET /api/account/devices/sessions/{sessionId}']
 const DEVICE = 'C0FFEE01'
 const CSV = [
   'timestamp,lat,lon,tx_seq,battery',
@@ -319,6 +320,20 @@ describe('trackers in the apps', () => {
     expect(recs.sessions).toMatchObject([{ deviceId: DEVICE, filename: 'track_0001.csv', points: 3 }])
     // Three points is too short to be a paddle: no paddleId.
     expect(recs.sessions[0]).not.toHaveProperty('paddleId')
+  })
+
+  it("read a recording's boat motion with only the Bearer token; nobody else's, and nothing signed out", async () => {
+    await trackerWithRecording(pat)
+    const { sessions: [rec] } = await (await listRecordings(req('GET', '/api/account/devices/sessions', pat.idToken))).json()
+    const motionOf = (token?: string, sessionId = rec.sessionId) => recordingMotion(
+      req('GET', `/api/account/devices/sessions/${sessionId}?deviceId=${DEVICE}`, token),
+      { params: Promise.resolve({ sessionId }) })
+    // No motion file yet: both null, which the app shows as "not arrived yet".
+    expect(await fits(RecordingMotion, await motionOf(pat.idToken))).toMatchObject({ attitude: null, cadence: null })
+    await fits(ApiError, await motionOf(undefined), 401)
+    await fits(ApiError, await motionOf('not-a-jwt'), 401)
+    await fits(ApiError, await motionOf((await makeUser('Sam')).idToken), 404)
+    await fits(ApiError, await motionOf(pat.idToken, 'no-such-recording'), 404)
   })
 
   it('a recording that became a paddle names it (paddleId), so the apps can link to it', async () => {
