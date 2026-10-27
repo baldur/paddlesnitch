@@ -12,6 +12,8 @@ struct SignInView: View {
     @State private var form = SignInForm()
     @State private var web: URL?
     @State private var forgotPassword = false
+    /// Strava starts by itself once, for a Strava account signing in again.
+    @State private var startedStrava = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @FocusState private var focus: Field?
@@ -58,10 +60,29 @@ struct SignInView: View {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
         }
+        .task {
+            // A Strava account signing in again to delete: straight to Strava,
+            // once the sheet is fully up. A sign-in that finished while the
+            // sheet was still rising closed it mid-way, and iOS 17 then never
+            // called its onDismiss (CI: deleting didn't come back).
+            guard account.signInAgainWithStrava && !startedStrava else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !form.busy else { return }
+            startedStrava = true
+            signInWithStrava()
+        }
     }
 
     private var formStep: some View {
         VStack(alignment: .leading, spacing: 20) {
+            if account.signInAgainWithStrava {
+                // Its sign-in email is a placeholder: the password form
+                // can't work, so say why; Strava starts by itself.
+                Text("Sign in with Strava again to delete your account.")
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.fg)
+                    .accessibilityIdentifier("sign-in-again-strava")
+            }
             Picker("Sign in or create an account", selection: $form.mode) {
                 Text("Sign in").tag(SignInForm.Mode.signIn)
                 Text("Create account").tag(SignInForm.Mode.createAccount)

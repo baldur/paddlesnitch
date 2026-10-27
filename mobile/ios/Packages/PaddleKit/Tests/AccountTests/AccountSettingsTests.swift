@@ -156,4 +156,13 @@ import Testing
         #expect(!account.deleteAfterSignIn)
         #expect(account.signInAgainEmail == nil)
     }
+
+    @Test func aStravaAccountSignsInAgainWithStravaNotAnEmail() async throws {
+        let account = try await signedIn()
+        await account.signOutToDelete(withStrava: true)
+        #expect(account.signInAgainWithStrava)
+        #expect(account.signInAgainEmail == nil, "its sign-in email is a placeholder")
+        account.deleteResumed()
+        #expect(!account.signInAgainWithStrava)
+    }
 }

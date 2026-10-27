@@ -39,6 +39,8 @@ struct PaddlesnitchApp: App {
         let server = SampleServer(fixtures: fixtures, summariesPending: arguments.contains("-PendingSummaries"))
         // UI tests: an old sign-in, so deleting asks for a new one.
         if arguments.contains("-StaleSignIn") { server.signInIsRecent = false }
+        // UI tests: a session restored from a Strava sign-in.
+        if arguments.contains("-StravaAccount") { server.placeholderEmail = true }
         let transport: any HTTPTransport = sample ? server : URLSession.shared
         return AccountModel(
             baseURL: baseURL, transport: transport, app: "ios/\(YouView.shortVersion)", tokens: tokens,

@@ -2,18 +2,10 @@ import XCTest
 
 /// The native Account screen (mobile-apps.md, C5), against the sample server.
 final class AccountTests: AppTestCase {
-    private func openAccount() {
-        tab("You").tap()
-        let row = app.buttons["Account"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10))
-        row.tap()
-        XCTAssertTrue(element("account-terms").waitForExistence(timeout: 10))
-    }
-
     func testTheAccountShowsTheTermsAreAccepted() {
         signInAndWait()
         openAccount()
-        XCTAssertTrue(text(containing: "You accepted the Terms of Service on").exists)
+        XCTAssertTrue(scrollToElement(text(containing: "You accepted the Terms of Service on")).exists)
         XCTAssertFalse(app.buttons["Accept the Terms"].exists)
     }
 
@@ -35,7 +27,7 @@ final class AccountTests: AppTestCase {
     func testDownloadingYourDataOffersTheFile() {
         signInAndWait()
         openAccount()
-        app.buttons["Download my data"].tap()
+        scrollToElement(app.buttons["Download my data"]).tap()
         // The share sheet, with the file: Save to Files, AirDrop, Mail…
         XCTAssertTrue(app.otherElements["ActivityListView"].waitForExistence(timeout: 15))
     }

@@ -51,11 +51,25 @@ struct RootView: View {
         .sheet(
             isPresented: $signingIn,
             onDismiss: {
+                account.signInSheetUp = false
                 // Closed without signing in again: don't jump to deleting later.
                 if account.user == nil && account.deleteAfterSignIn { account.deleteResumed() }
             },
             content: { SignInView(account: account) }
         )
+        // Up from opening until it has finished closing, not just asked to.
+        // onDismiss says when; in case it never comes (a sheet closed while
+        // still opening, on iOS 17), it's down a second after closing.
+        .onChange(of: signingIn) { _, opening in
+            if opening {
+                account.signInSheetUp = true
+            } else {
+                Task {
+                    try? await Task.sleep(for: .seconds(1))
+                    if !signingIn { account.signInSheetUp = false }
+                }
+            }
+        }
         .sheet(isPresented: $termsOpen) {
             NavigationStack {
                 List {

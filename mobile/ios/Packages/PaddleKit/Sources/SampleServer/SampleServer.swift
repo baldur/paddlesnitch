@@ -20,16 +20,34 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
 
     private let fixtures: URL
     let lock = NSLock()
-    private var _requests: [URLRequest] = []
-    private var revoked: Set<String> = []
-    private var _refusesRefresh = false
-    private var _termsAccepted = true
-    private var _failsAccountDelete = false
+    var _requests: [URLRequest] = []
+    var revoked: Set<String> = []
+    var _refusesRefresh = false
+    var _termsAccepted = true
+    var _failsAccountDelete = false
     var _removedTrackers: Set<String> = []
     var _failsTrackerRemoval = false
     var _failsTrackerList = false
     var _failsTrackerRecordings = false
     var _signInIsRecent = true
+    var _profilePublic = true
+    var _handle: String? = "river-pat"
+    var _contact: String?
+    var _placeholderEmail = false
+    /// Signed in through Strava: the sign-in email is a placeholder.
+    public var placeholderEmail: Bool {
+        get { lock.withLock { _placeholderEmail } }
+        set { lock.withLock { _placeholderEmail = newValue } }
+    }
+    var _failsProfileChange = false
+    /// Make public/private fail, as when the server is down.
+    public var failsProfileChange: Bool {
+        get { lock.withLock { _failsProfileChange } }
+        set { lock.withLock { _failsProfileChange = newValue } }
+    }
+    /// A handle someone else has.
+    public static let takenHandle = "taken-handle"
+    public static let badEmailMessage = "That doesn't look like an email address."
     var _waitingForCode: [String: String] = [:]
     var _unconfirmed: Set<String> = [SampleServer.unconfirmedEmail, SampleServer.unconfirmedOldTermsEmail]
     var _tooManyCodes = false
@@ -96,6 +114,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         if path == "/paddles/api/analyse" {
             return analyse(request)
         }
+        if ["/api/account/profile", "/api/account/handle", "/api/account/contact"].contains(path) {
+            return try profile(path: path, request: request)
+        }
         if path.hasPrefix("/api/account/devices") {
             return try trackers(path: path, request: request)
         }
@@ -121,6 +142,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             }
             lock.withLock {
                 _termsAccepted = login.email != Self.needsTermsEmail
+                _placeholderEmail = false
                 _signInIsRecent = true
             }
             return (200, try signIn(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
@@ -130,6 +152,11 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             let swap = try JSONDecoder().decode(StravaAppToken.self, from: body)
             guard swap.code == "sample." + Self.challenge(swap.verifier) else {
                 return (401, Data(#"{"error":"That sign-in has expired. Please try again."}"#.utf8))
+            }
+            lock.withLock {
+                _placeholderEmail = true
+                // A Strava sign-in is a real one: recent, as the server counts it.
+                _signInIsRecent = true
             }
             return (200, try signIn("auth.login"))
         case "/att/api/auth/refresh":
@@ -183,55 +210,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             return (200, trpc(try JSONEncoder.paddlesnitch.encode(paddle)))
         }
         return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
-    }
-
-    /// The account routes (mobile/contract/README.md, "Account"), from the
-    /// account.* fixtures.
-    private func account(path: String, request: URLRequest) throws -> (Int, Data) {
-        guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
-            return (401, try fixture("account.error"))
-        }
-        switch (request.httpMethod ?? "GET", path) {
-        case ("GET", "/api/account/tos"):
-            guard lock.withLock({ _termsAccepted }) else { return (200, try fixture("account.tos")) }
-            let accepted = TosStatus(
-                acceptances: [
-                    TosAcceptance(acceptedAt: Date(timeIntervalSince1970: 1_788_000_000), version: Constants.tosVersion)
-                ],
-                accepted: true, currentVersion: Constants.tosVersion)
-            return (200, try JSONEncoder.paddlesnitch.encode(accepted))
-        case ("POST", "/api/account/tos"):
-            let accept = try JSONDecoder().decode(TosAccept.self, from: request.httpBody ?? Data())
-            guard accept.version == Constants.tosVersion else {
-                return (
-                    422, Data(#"{"error":"The Terms of Service have changed. Update the app to accept them."}"#.utf8)
-                )
-            }
-            lock.withLock { _termsAccepted = true }
-            return (200, try fixture("account.tos-accepted"))
-        case ("GET", "/api/account"):
-            return (200, Data(#"{"recentSignIn":\#(lock.withLock { _signInIsRecent })}"#.utf8))
-        case ("POST", "/api/account/export"):
-            return (200, Data(#"{"url":"\#(Self.exportPath)"}"#.utf8))
-        case ("DELETE", "/api/account"):
-            return try deleteAccount(request)
-        default:
-            return (404, Data(#"{"error":"Not found"}"#.utf8))
-        }
-    }
-
-    /// Deleting: refused without a recent sign-in, as the server does.
-    private func deleteAccount(_ request: URLRequest) throws -> (Int, Data) {
-        if lock.withLock({ _failsAccountDelete }) {
-            return (500, Data(#"{"error":"Couldn't delete the account."}"#.utf8))
-        }
-        guard lock.withLock({ _signInIsRecent }) else {
-            let words = "For your safety, deleting your account needs a recent sign-in. Please sign in again."
-            return (403, Data(#"{"error":"\#(words)","reauth":true}"#.utf8))
-        }
-        let body = try JSONDecoder().decode(DeleteAccount.self, from: request.httpBody ?? Data())
-        if let token = body.refreshToken { _ = lock.withLock { revoked.insert(token) } }
-        return (200, Data(#"{"ok":true}"#.utf8))
     }
 
     /// Adding a paddle from a file. The file's name picks the answer: one with

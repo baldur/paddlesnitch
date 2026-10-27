@@ -5,9 +5,9 @@ import Paddles
 import SwiftUI
 
 /// The account, native in the app (mobile-apps.md, the owner's 2026-10-25
-/// note), in the website's order: the Terms when they've changed, public
-/// profile (still the website until it moves here too), your data, then
-/// delete. Words follow the website's account page.
+/// note), in the website's order: the Terms when they've changed, your
+/// details, public profile, your data, then delete. Words follow the
+/// website's account page.
 struct AccountView: View {
     let account: AccountModel
     /// Opens the sign-in sheet.
@@ -19,6 +19,13 @@ struct AccountView: View {
     @State private var downloadFailure: String?
     @State private var confirmingDelete = false
     @State private var webPage: YouView.WebPage?
+    @State private var profile: ProfileForm
+
+    init(account: AccountModel, signIn: @escaping () -> Void) {
+        self.account = account
+        self.signIn = signIn
+        _profile = State(initialValue: ProfileForm(account: account))
+    }
 
     struct SharedFile: Identifiable {
         let url: URL
@@ -39,20 +46,12 @@ struct AccountView: View {
     var body: some View {
         List {
             if termsChanged { termsSection }
-            Section {
-                Button {
-                    webPage = YouView.WebPage(title: "Public profile", path: "/account#profile")
-                } label: {
-                    HStack {
-                        Text("Public profile").font(.plexSans(.body)).foregroundStyle(Palette.fg)
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square").foregroundStyle(Palette.muted)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .accessibilityHint("Opens paddlesnitch.com")
-                .listRowBackground(Palette.surface)
+            ProfileSections(account: account, form: profile) { title, path in
+                webPage = YouView.WebPage(title: title, path: path)
             }
+            // The profile arrives after the screen: its rows appear in place
+            // rather than animating in (iOS 17's audit measured them mid-move).
+            .transaction { $0.animation = nil }
             Section {
                 Button {
                     Task { await download() }
@@ -86,20 +85,16 @@ struct AccountView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
         .background(Palette.bg)
         .navigationTitle("Account")
         // Back from signing in again to delete: on appearing (You pushed this
-        // screen again), or when the sign-in comes back with this screen
-        // still under the sheet. A sheet can't open while another is
-        // closing, so the sign-in sheet goes first.
+        // screen again), or once the sign-in sheet has finished closing. A
+        // sheet asked to open while another is closing never opens (iOS 17
+        // on CI took longer than the 700 ms once waited here).
         .onAppear { resumeDelete() }
-        .onChange(of: account.user?.id) { _, id in
-            guard id != nil else { return }
-            Task {
-                try? await Task.sleep(for: .milliseconds(700))
-                resumeDelete()
-            }
-        }
+        .task { await profile.load() }
+        .onChange(of: account.signInSheetUp) { _, up in if !up { resumeDelete() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(
@@ -120,7 +115,8 @@ struct AccountView: View {
                 signInAgain: {
                     confirmingDelete = false
                     Task {
-                        await account.signOutToDelete()
+                        // A Strava account signs in again with Strava.
+                        await account.signOutToDelete(withStrava: profile.needsContactEmail)
                         signIn()
                     }
                 })
@@ -136,7 +132,7 @@ struct AccountView: View {
     }
 
     private func resumeDelete() {
-        guard account.deleteAfterSignIn, account.user != nil else { return }
+        guard account.deleteAfterSignIn, account.user != nil, !account.signInSheetUp else { return }
         account.deleteResumed()
         confirmingDelete = true
     }
