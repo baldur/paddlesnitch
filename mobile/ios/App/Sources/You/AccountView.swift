@@ -2,17 +2,19 @@ import Account
 import DesignSystem
 import PaddleAPI
 import Paddles
+import SampleServer
 import SwiftUI
 
 /// The account, native in the app (mobile-apps.md, the owner's 2026-10-25
 /// note), in the website's order: the Terms when they've changed, your
-/// details, public profile, your data, then delete. Words follow the
+/// details, public profile, Strava, your data, then delete. Words follow the
 /// website's account page.
 struct AccountView: View {
     let account: AccountModel
     /// Opens the sign-in sheet.
     let signIn: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var termsChanged = false
     @State private var downloading = false
     @State private var downloaded: SharedFile?
@@ -20,11 +22,13 @@ struct AccountView: View {
     @State private var confirmingDelete = false
     @State private var webPage: YouView.WebPage?
     @State private var profile: ProfileForm
+    @State private var strava: StravaConnection
 
     init(account: AccountModel, signIn: @escaping () -> Void) {
         self.account = account
         self.signIn = signIn
         _profile = State(initialValue: ProfileForm(account: account))
+        _strava = State(initialValue: StravaConnection(account: account))
     }
 
     struct SharedFile: Identifiable {
@@ -52,6 +56,15 @@ struct AccountView: View {
             // The profile arrives after the screen: its rows appear in place
             // rather than animating in (iOS 17's audit measured them mid-move).
             .transaction { $0.animation = nil }
+            // Paused only when the server said Strava is off; while that's
+            // unknown, as when it's on.
+            if !account.stravaSaidOff || strava.status?.connected == true {
+                StravaSection(
+                    strava: strava, signsInWithStrava: profile.needsContactEmail, stravaOn: !account.stravaSaidOff,
+                    connect: connectStrava
+                ) { signInAgain(then: .connectStrava) }
+                .transaction { $0.animation = nil }
+            }
             Section {
                 Button {
                     Task { await download() }
@@ -88,13 +101,24 @@ struct AccountView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Palette.bg)
         .navigationTitle("Account")
-        // Back from signing in again to delete: on appearing (You pushed this
-        // screen again), or once the sign-in sheet has finished closing. A
-        // sheet asked to open while another is closing never opens (iOS 17
-        // on CI took longer than the 700 ms once waited here).
-        .onAppear { resumeDelete() }
-        .task { await profile.load() }
-        .onChange(of: account.signInSheetUp) { _, up in if !up { resumeDelete() } }
+        // Back from signing in again to delete or connect: on appearing (You
+        // pushed this screen again), or once the sign-in sheet has finished
+        // closing. A sheet asked to open while another is closing never opens
+        // (iOS 17 on CI took longer than the 700 ms once waited here).
+        .onAppear { resume() }
+        .onChange(of: StravaSection.announcement(strava)) { _, words in
+            guard let words else { return }
+            // After Strava's page has closed, so VoiceOver doesn't drop it.
+            Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                AccessibilityNotification.Announcement(words).post()
+            }
+        }
+        // Again for whoever signs in, so nothing of the last account stays.
+        .task(id: account.user?.id) { await profile.load() }
+        .task(id: account.user?.id) { await strava.load() }
+        .task { await account.loadOptions() }
+        .onChange(of: account.signInSheetUp) { _, up in if !up { resume() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(
@@ -112,13 +136,13 @@ struct AccountView: View {
                     // Back to You, which now says the account is deleted.
                     dismiss()
                 },
+                // Made through Strava with Strava off: no way back in to
+                // sign in again with, so it asks for help instead.
+                // Only when the server said so: unknown isn't off.
+                cantSignInAgain: profile.needsContactEmail && account.stravaSaidOff,
                 signInAgain: {
                     confirmingDelete = false
-                    Task {
-                        // A Strava account signs in again with Strava.
-                        await account.signOutToDelete(withStrava: profile.needsContactEmail)
-                        signIn()
-                    }
+                    signInAgain(then: .delete)
                 })
         }
     }
@@ -131,10 +155,29 @@ struct AccountView: View {
         }
     }
 
-    private func resumeDelete() {
-        guard account.deleteAfterSignIn, account.user != nil, !account.signInSheetUp else { return }
-        account.deleteResumed()
-        confirmingDelete = true
+    private func resume() {
+        guard !account.signInSheetUp, let next = account.resumeAfterSignIn() else { return }
+        switch next {
+        case .delete: confirmingDelete = true
+        case .connectStrava: connectStrava()
+        }
+    }
+
+    private func signInAgain(then next: AccountModel.AfterSignIn) {
+        Task {
+            // A Strava account signs in again with Strava.
+            await account.signOutToSignInAgain(then: next, withStrava: profile.needsContactEmail)
+            signIn()
+        }
+    }
+
+    private func connectStrava() {
+        Task {
+            await strava.connect { page in
+                try await SignInBrowser.open(
+                    page, with: webAuthenticationSession, sample: SampleServer.stravaConnectBrowser)
+            }
+        }
     }
 
     private func download() async {
@@ -193,6 +236,7 @@ struct TermsView: View {
             if let status, status.accepted {
                 Text(acceptedLine(status))
                     .foregroundStyle(Palette.fg)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("account-terms")
             } else if status != nil {
                 VStack(alignment: .leading, spacing: 12) {

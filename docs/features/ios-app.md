@@ -97,6 +97,17 @@ The protocol is fixed by the tracker sync contract and its fixtures. On iPhone:
   (`mobile/contract/README.md`, "Strava"; `Account/StravaSignIn.swift`). The
   session catches the callback itself, so there's no URL type to register and
   no universal link, and it works with a free Apple ID.
+- Google sign-in works the same way (`Account/GoogleSignIn.swift`): its page
+  first asks for one tap on "Sign in with Google", and it comes back on
+  `com.paddlesnitch.app:/signin/google`. The sign-in screen, Account and the
+  app's start ask `GET /att/api/auth/options` which ways in are on; until it
+  answers only email is offered, a failed first ask says so with Try again,
+  and a later failure keeps the last answer. With Strava off: no Strava
+  button, connect, auto-import or Strava wording; sign-in offers "Email us"
+  (privacy@, not a public issue report); a connected account sees Strava
+  "Paused"; a Strava-made account can't disconnect its only way in, and
+  before deleting it reports an issue signed in (`/account?report=1` through
+  web-code) instead of signing in again.
 - The same file also declares `webcredentials`, so iOS offers saved
   paddlesnitch.com passwords and suggests strong ones at sign-up.
 - Website link-outs open in `SFSafariViewController`, signed in through the
@@ -233,7 +244,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
 | **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Strava, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
-| **P1b. Native account** (C5) | Add a paddle from a file ✅ (the file picker, and GPS files opened from Files, Mail, AirDrop or a share sheet; a file opened while signed out is added after sign-in); accept new Terms ✅, download your data ✅, delete account ✅ (as the website: type DELETE, then "Delete for good"); the recent-sign-in check before delete ✅ (sign in again and come straight back; a Strava account with Strava), your details, public profile and handle, contact email for a Strava account ✅; forgot password ✅; Devices ✅ (your trackers, their recordings, removing one); then Strava (mobile-apps.md, the owner's 2026-10-25 note) | The Account pages leave the website | No |
+| **P1b. Native account** (C5) | Add a paddle from a file ✅ (the file picker, and GPS files opened from Files, Mail, AirDrop or a share sheet; a file opened while signed out is added after sign-in); accept new Terms ✅, download your data ✅, delete account ✅ (as the website: type DELETE, then "Delete for good"); the recent-sign-in check before delete ✅ (sign in again and come straight back; a Strava account with Strava), your details, public profile and handle, contact email for a Strava account ✅; Strava connect, auto-import and disconnect ✅ (Strava's page in `ASWebAuthenticationSession`, back on `com.paddlesnitch.app:/account/strava`; an old sign-in signs in again and comes straight back to connecting); forgot password ✅; Devices ✅ (your trackers, their recordings, removing one); then older Strava paddles (mobile-apps.md, the owner's 2026-10-25 note) | The Account pages leave the website | No |
 | **P2. Record** | Recorder → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |

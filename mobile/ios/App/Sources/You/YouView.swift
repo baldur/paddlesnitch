@@ -98,8 +98,9 @@ struct YouView: View {
                 }
             }
             .onChange(of: account.user?.id) { _, id in
-                // Signed in again to delete: straight back to the account.
-                if id != nil && account.deleteAfterSignIn { path = NavigationPath([Route.account]) }
+                // Signed in again to delete or connect Strava: straight back
+                // to the account.
+                if id != nil && account.afterSignIn != nil { path = NavigationPath([Route.account]) }
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in

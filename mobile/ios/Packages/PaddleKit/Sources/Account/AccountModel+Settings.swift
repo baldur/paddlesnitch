@@ -76,21 +76,38 @@ extension AccountModel {
         try await client.send(Endpoints.getAccount, NoInput()).recentSignIn
     }
 
-    /// "Sign in again" before deleting: signs out, and remembers to come
-    /// straight back to deleting. A Strava account (its sign-in email is a
-    /// placeholder) signs in again with Strava; any other with its email
-    /// filled in (mobile/contract/README.md, Account).
-    public func signOutToDelete(withStrava: Bool = false) async {
-        let email = user?.email
-        await signOut()
-        signInAgainEmail = withStrava ? nil : email
-        signInAgainWithStrava = withStrava
-        deleteAfterSignIn = true
+    /// What needs a sign-in from the last 10 minutes (a 403 reauth).
+    public enum AfterSignIn: Equatable, Sendable {
+        case delete, connectStrava
     }
 
-    /// Back at deleting after signing in again.
-    public func deleteResumed() {
-        deleteAfterSignIn = false
+    /// "Sign in again" before deleting or connecting Strava: signs out, and
+    /// remembers to come straight back. A Strava account (its sign-in email
+    /// is a placeholder) signs in again with Strava; any other with its email
+    /// filled in (mobile/contract/README.md, Account).
+    public func signOutToSignInAgain(then next: AfterSignIn, withStrava: Bool = false) async {
+        let email = user?.email
+        let id = user?.id
+        await signOut()
+        signInAgainUserId = id
+        signInAgainEmail = withStrava ? nil : email
+        signInAgainWithStrava = withStrava
+        afterSignIn = next
+    }
+
+    /// What to come straight back to, now signed in again: nothing if
+    /// someone else signed in on this phone (it's cleared either way).
+    public func resumeAfterSignIn() -> AfterSignIn? {
+        guard let next = afterSignIn, let id = user?.id else { return nil }
+        let same = id == signInAgainUserId
+        resumed()
+        return same ? next : nil
+    }
+
+    /// Back where they were after signing in again (or they gave up).
+    public func resumed() {
+        afterSignIn = nil
+        signInAgainUserId = nil
         signInAgainEmail = nil
         signInAgainWithStrava = false
     }
