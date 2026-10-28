@@ -52,6 +52,23 @@ extension AppTestCase {
     func signedIn() -> Bool {
         app.buttons["sign-in-submit"].disappears(timeout: 15) && element("sample-notice").disappears(timeout: 15)
     }
+
+    /// iOS 26 asks "Save Password?" once a password is sent, for any secure
+    /// field (an autofill type or none), covering the next screen's buttons.
+    /// Not now. iOS 27 doesn't ask there.
+    func declineSavingPassword() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        // One short look at both, not a wait on each: on iOS 27 it never
+        // comes, and every second here is paid in every such test.
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            for owner in [app, springboard] where owner.buttons["Not Now"].firstMatch.exists {
+                owner.buttons["Not Now"].firstMatch.tap()
+                return
+            }
+            usleep(200_000)
+        }
+    }
 }
 
 /// True as soon as `condition` is; false if it still isn't after `timeout`.

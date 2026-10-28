@@ -66,23 +66,6 @@ class AppTestCase: XCTestCase {
         field.typeText(text)
     }
 
-    /// iOS 26 asks "Save Password?" once a password is sent, for any secure
-    /// field (an autofill type or none), covering the next screen's buttons.
-    /// Not now. iOS 27 doesn't ask there.
-    func declineSavingPassword() {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        // One short look at both, not a wait on each: on iOS 27 it never
-        // comes, and every second here is paid in every such test.
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline {
-            for owner in [app, springboard] where owner.buttons["Not Now"].firstMatch.exists {
-                owner.buttons["Not Now"].firstMatch.tap()
-                return
-            }
-            usleep(200_000)
-        }
-    }
-
     /// Types into a field that takes the keyboard by itself (the code step's):
     /// waits for that, however late it comes (after "Save Password?" closes,
     /// iOS gives the keyboard back), and never taps it. Tapping a field while
@@ -114,6 +97,9 @@ class AppTestCase: XCTestCase {
 
     /// Taps once nothing covers it: the keyboard away, scrolled into view,
     /// and hittable; a keyboard that came back in between is put away again.
+    /// So is a late "Save Password?": on iOS 26.5 it came ~10 s after the
+    /// password was sent, after the code step's keyboard had gone (CI,
+    /// "change-email" stayed covered).
     func tapWhenClear(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<3 {
             dismissKeyboard()
@@ -122,6 +108,7 @@ class AppTestCase: XCTestCase {
                 target.tap()
                 return
             }
+            declineSavingPassword()
         }
         XCTFail("\(target) stayed covered", file: file, line: line)
     }
