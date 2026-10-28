@@ -1,12 +1,16 @@
 import XCTest
 
-/// Waits that look straight away and then every 0.2 s.
+/// Waits that look straight away, then back off to one look a second.
 ///
 /// XCTest's own (`waitForExistence`, `waitForNonExistence`, an
 /// `XCTNSPredicateExpectation`) first look a full second after they start,
 /// even when the answer is already yes. With ~15 waits a test that was a
 /// third of every UI test, and the newest-iOS job ran past its 70-minute
 /// limit (mobile/ios/CLAUDE.md). SwiftLint's `xctest_waits` rule keeps them out.
+///
+/// Don't look more often than that: every look makes XCTest log inside the
+/// app, and looking every 0.2 s logged so much that the system quarantined
+/// the app's logging, which crashes XCTest in the app on iOS 17.
 @MainActor
 extension XCUIElement {
     /// Whether it exists, or comes within `timeout`.
@@ -27,7 +31,8 @@ extension XCUIElement {
         let keyboard = XCUIApplication().keyboards.firstMatch
         var last = CGRect.null
         return poll(timeout: timeout) {
-            guard exists, value(forKey: "hasKeyboardFocus") as? Bool ?? false, keyboard.exists else { return false }
+            // The keyboard first: while it's down that's one look, not three.
+            guard keyboard.exists, exists, value(forKey: "hasKeyboardFocus") as? Bool ?? false else { return false }
             let frame = keyboard.frame
             defer { last = frame }
             return frame == last
@@ -50,12 +55,16 @@ extension AppTestCase {
 }
 
 /// True as soon as `condition` is; false if it still isn't after `timeout`.
+/// Looks at once, then after 0.25 s, 0.5 s and every second after that.
 @MainActor
 func poll(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
     let end = Date().addingTimeInterval(timeout)
+    var pause: TimeInterval = 0.25
     while !condition() {
-        if Date() >= end { return false }
-        Thread.sleep(forTimeInterval: 0.2)
+        let left = end.timeIntervalSinceNow
+        if left <= 0 { return false }
+        Thread.sleep(forTimeInterval: min(pause, left))
+        pause = min(pause * 2, 1)
     }
     return true
 }

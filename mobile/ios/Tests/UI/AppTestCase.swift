@@ -13,6 +13,11 @@ class AppTestCase: XCTestCase {
     /// network) and starts signed out.
     override func setUp() async throws {
         continueAfterFailure = false
+        // No logging in the app: every look a test takes logs there (XCTest's
+        // side), and at full speed the system quarantined the app's logging,
+        // which crashes XCTest in the app on iOS 17 ("not running", "Lost
+        // connection"). Every launch below keeps this; tests change arguments.
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launchArguments += ["-SampleServer", "-ResetAccount"] + launchArguments
         app.launch()
     }
@@ -175,7 +180,16 @@ class AppTestCase: XCTestCase {
         _ = app.windows.firstMatch.appears(timeout: 10)
         for _ in 0..<10 {
             if target.exists && isReadable(target) { break }
-            if target.exists { scroll(by: distanceToReadable(target)) } else { swipe(up: true) }
+            guard target.exists else {
+                swipe(up: true)
+                continue
+            }
+            let before = target.frame
+            scroll(by: distanceToReadable(target))
+            // It didn't move: the page goes no further (a button at the foot
+            // of a sheet at the largest text size). Nine more tries were 111
+            // drags in one test, and 7x the looks (mobile/ios/CLAUDE.md).
+            if target.exists && target.frame == before { break }
         }
         return target
     }
