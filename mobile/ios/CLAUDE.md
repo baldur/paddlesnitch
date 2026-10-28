@@ -90,3 +90,16 @@ isn't obvious from the code.
   row: `app.swipeUp()` starts mid-screen, and at the largest text size it
   landed on a tracker card and opened it. Not the left margin: the back
   gesture has it, and in the sign-in sheet a drag there scrolled nothing.
+- UI test time: XCTest's waits (`waitForExistence`, `waitForNonExistence`,
+  `XCTNSPredicateExpectation`) first look a full second after they start, even
+  when the element is already there. With ~15 per test that was a third of
+  every test, and the newest-iOS job crept past its 70-minute limit. Use
+  `appears(timeout:)`, `disappears(timeout:)` and `poll(timeout:)`
+  (`Tests/UI/Waiting.swift`); SwiftLint's `xctest_waits` rule enforces it.
+  Also check `exists` before `isHittable`: on a missing element it spends ~2 s
+  looking. To find where a test's time goes, run it with `-resultBundlePath`
+  and read the gaps between steps in
+  `xcrun xcresulttool get test-results activities --test-id …`.
+- `scrollToElement` drags by the distance it measures, then holds. A fixed
+  fast swipe flung the page past a target at the largest text size, and back,
+  for all ten tries.

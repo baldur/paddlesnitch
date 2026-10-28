@@ -7,14 +7,14 @@ final class TrackersTests: AppTestCase {
         signInAndWait()
         tab("You").tap()
         let row = app.buttons["Devices"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.appears(timeout: 10))
         row.tap()
-        XCTAssertTrue(app.navigationBars["Devices"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Devices"].appears(timeout: 10))
     }
 
     func testTheCardsSayWhatTheServerSays() {
         openTrackers()
-        XCTAssertTrue(text(containing: "Tracker C0FFEE01").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Tracker C0FFEE01").appears(timeout: 10))
         XCTAssertTrue(text(containing: "up to date").exists)
         XCTAssertTrue(text(containing: "update pending (0.18.2)").exists)
         XCTAssertTrue(text(containing: "crashed").exists)
@@ -25,35 +25,35 @@ final class TrackersTests: AppTestCase {
     func testARecordingThatBecameAPaddleOpensIt() {
         openTrackers()
         let card = element("tracker-C0FFEE01")
-        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        XCTAssertTrue(card.appears(timeout: 10))
         card.tap()
         let river = element("recording-rec-river")
-        XCTAssertTrue(river.waitForExistence(timeout: 10))
+        XCTAssertTrue(river.appears(timeout: 10))
         XCTAssertTrue(element("recording-rec-no-fix").exists)
         XCTAssertTrue(text(containing: "not a paddle").exists)
         river.tap()
-        XCTAssertTrue(text(containing: "PACE").waitForExistence(timeout: 10), "the paddle opens")
+        XCTAssertTrue(text(containing: "PACE").appears(timeout: 10), "the paddle opens")
     }
 
     func testRemovingATrackerAsksFirstAndKeepsItsCard() {
         openTrackers()
         let card = element("tracker-C0FFEE02")
-        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        XCTAssertTrue(card.appears(timeout: 10))
         card.tap()
         scrollToElement(app.buttons["Remove tracker"]).tap()
-        XCTAssertTrue(text(containing: "Remove this tracker?").waitForExistence(timeout: 10), "asks first")
+        XCTAssertTrue(text(containing: "Remove this tracker?").appears(timeout: 10), "asks first")
         app.buttons["confirm-remove-tracker"].tap()
-        XCTAssertTrue(app.buttons["Remove tracker"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Remove tracker"].disappears(timeout: 10))
         XCTAssertTrue(
-            text(containing: "no longer on your account").waitForExistence(timeout: 10), "says what removed means")
+            text(containing: "no longer on your account").appears(timeout: 10), "says what removed means")
     }
 
     func testTheTrackersPassTheAccessibilityAudit() throws {
         openTrackers()
-        XCTAssertTrue(text(containing: "Tracker C0FFEE01").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Tracker C0FFEE01").appears(timeout: 10))
         try audit()
         element("tracker-C0FFEE01").tap()
-        XCTAssertTrue(element("recording-rec-river").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("recording-rec-river").appears(timeout: 10))
         try audit()
     }
 }

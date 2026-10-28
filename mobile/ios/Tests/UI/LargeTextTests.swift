@@ -24,13 +24,13 @@ final class LargeTextTests: AppTestCase {
     }
 
     func testTheListAtTheLargestTextSize() throws {
-        XCTAssertTrue(element("logbook").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("logbook").appears(timeout: 10))
         try checkWholeScreen()
     }
 
     func testAPaddleAtTheLargestTextSize() throws {
         open("pdl-river")
-        XCTAssertTrue(text(containing: "PACE").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(text(containing: "RIVER").exists, "the last stat is still there")
         XCTAssertTrue(text(containing: "29 s at 1:23").exists, "and the rests, at the end")
@@ -38,16 +38,16 @@ final class LargeTextTests: AppTestCase {
 
     func testYouAtTheLargestTextSize() throws {
         tab("You").tap()
-        XCTAssertTrue(app.buttons["Privacy policy"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Privacy policy"].appears(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(text(containing: "Version").exists)
     }
 
     func testForgotPasswordAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
         scrollToElement(app.buttons["Forgot password?"]).tap()
-        XCTAssertTrue(element("forgot-explainer").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("forgot-explainer").appears(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(app.buttons["forgot-submit"].exists)
     }
@@ -68,6 +68,9 @@ final class LargeTextTests: AppTestCase {
             if element.exists && !isReadable(element) { scrollToElement(element) }
             XCTAssertTrue(element.exists, "reached \(element)")
             try audit(.textClipped, unpinnedFails: false)
+            // The page jumps back after the audit returns: let it land before
+            // the next row is looked for, or the row goes mid-look.
+            Thread.sleep(forTimeInterval: 1)
         }
     }
 
@@ -83,12 +86,12 @@ final class LargeTextTests: AppTestCase {
     /// A Strava account's contact email block is the tallest row there is.
     func testAStravaAccountAtTheLargestTextSize() throws {
         let notice = app.buttons["sample-notice-action"]
-        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.appears(timeout: 10))
         notice.tap()
         scrollToElement(app.buttons["strava-sign-in"]).tap()
-        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
+        XCTAssertTrue(signedIn(), "signed in")
         openAccount()
-        XCTAssertTrue(app.textFields["contact-email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["contact-email"].appears(timeout: 10))
         try checkScreen(at: [
             app.buttons["contact-email-save"], app.textFields["profile-handle"], app.buttons["profile-handle-save"],
             app.buttons["Delete my account"],
@@ -99,8 +102,8 @@ final class LargeTextTests: AppTestCase {
         signInAndWait()
         tab("You").tap()
         scrollToElement(app.buttons["Devices"]).tap()
-        XCTAssertTrue(app.navigationBars["Devices"].waitForExistence(timeout: 10))
-        XCTAssertTrue(element("tracker-C0FFEE01").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Devices"].appears(timeout: 10))
+        XCTAssertTrue(element("tracker-C0FFEE01").appears(timeout: 10))
         try checkScreen(at: [element("tracker-C0FFEE02"), element("tracker-BADC0DE9")])
     }
 
@@ -114,7 +117,7 @@ final class LargeTextTests: AppTestCase {
         type("new@example.com", into: scrollToElement(app.textFields["Email"]))
         type("New", into: scrollToElement(app.textFields["Display name"]))
         type("Secret123\n", into: scrollToElement(app.secureTextFields["Password"]))
-        XCTAssertTrue(element("code-explainer").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("code-explainer").appears(timeout: 10))
         declineSavingPassword()
         waitForTheCodeKeyboard()
         dismissKeyboard()
@@ -130,7 +133,7 @@ final class LargeTextTests: AppTestCase {
         app.launchArguments = ["-SampleServer", "-ResetAccount", "-StravaOff"] + launchArguments
         app.launch()
         app.buttons["sample-notice-action"].tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
         // Element by element: each check resizes the text and the sheet
         // jumps back to the top, so swiping from the top never got there.
         try checkScreen(at: [app.buttons["sign-in-submit"], app.buttons["google-sign-in"], app.buttons["email-us"]])
@@ -148,7 +151,7 @@ final class LargeTextTests: AppTestCase {
 
     func testSignInAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(app.buttons["sign-in-submit"].exists)
     }

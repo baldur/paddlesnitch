@@ -6,8 +6,8 @@ final class ProfileTests: AppTestCase {
     func testTheAccountShowsYourDetailsAndPublicProfile() {
         signInAndWait()
         openAccount()
-        XCTAssertTrue(text(containing: "Display name").waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["Make profile private"].waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Display name").appears(timeout: 10))
+        XCTAssertTrue(app.buttons["Make profile private"].appears(timeout: 10))
         XCTAssertTrue(app.buttons["View my profile"].exists)
         XCTAssertEqual(app.textFields["profile-handle"].value as? String, "river-pat")
         XCTAssertFalse(app.textFields["contact-email"].exists, "a real email needs no contact email")
@@ -17,9 +17,9 @@ final class ProfileTests: AppTestCase {
         signInAndWait()
         openAccount()
         let toggle = app.buttons["Make profile private"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        XCTAssertTrue(toggle.appears(timeout: 10))
         toggle.tap()
-        XCTAssertTrue(app.buttons["Make profile public"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Make profile public"].appears(timeout: 10))
         XCTAssertTrue(app.buttons["Preview my profile"].exists)
     }
 
@@ -44,7 +44,7 @@ final class ProfileTests: AppTestCase {
         signInWithStrava()
         openAccount()
         let field = app.textFields["contact-email"]
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "Strava doesn't share the email")
+        XCTAssertTrue(field.appears(timeout: 10), "Strava doesn't share the email")
         type("me@example.com", into: field)
         app.buttons["contact-email-save"].tap()
         XCTAssertEqual(element("contact-email-message").label, "Saved.")
@@ -59,29 +59,29 @@ final class ProfileTests: AppTestCase {
         app.launchArguments = ["-SampleServer", "-StaleSignIn", "-StravaAccount"]
         app.launch()
         openAccount()
-        XCTAssertTrue(app.textFields["contact-email"].waitForExistence(timeout: 10), "the placeholder is known")
+        XCTAssertTrue(app.textFields["contact-email"].appears(timeout: 10), "the placeholder is known")
         scrollToElement(app.buttons["Delete my account"]).tap()
-        XCTAssertTrue(element("delete-needs-sign-in").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("delete-needs-sign-in").appears(timeout: 10))
         app.buttons["Sign in again"].tap()
-        XCTAssertTrue(app.textFields["confirm-delete-text"].waitForExistence(timeout: 20), "straight back to deleting")
+        XCTAssertTrue(app.textFields["confirm-delete-text"].appears(timeout: 20), "straight back to deleting")
     }
 
     func testTheProfilePassesTheAccessibilityAudit() throws {
         signInAndWait()
         openAccount()
-        XCTAssertTrue(app.buttons["Make profile private"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Make profile private"].appears(timeout: 10))
         try audit()
     }
 
     private func signInWithStrava() {
         let notice = app.buttons["sample-notice-action"]
-        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.appears(timeout: 10))
         notice.tap()
         let strava = app.buttons["strava-sign-in"]
-        XCTAssertTrue(strava.waitForExistence(timeout: 10))
+        XCTAssertTrue(strava.appears(timeout: 10))
         if !strava.isHittable { app.swipeUp() }
         strava.tap()
-        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
+        XCTAssertTrue(signedIn(), "signed in")
     }
 
     private func replace(_ field: XCUIElement, with text: String) {
