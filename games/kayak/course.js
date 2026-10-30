@@ -63,7 +63,8 @@ export function createCourse(points, { width = 20, sides = null, start = 60, fin
       p.right = p.half;
     }
     for (const m of moorings) {
-      if (Math.abs(p.s - m.s) < m.length / 2 + 1) p[m.side < 0 ? 'left' : 'right'] = p.half - (m.beam ?? NARROWBOAT);
+      // (One moored at a point is in a side channel: it doesn't narrow this water.)
+      if (!m.at && Math.abs(p.s - m.s) < m.length / 2 + 1) p[m.side < 0 ? 'left' : 'right'] = p.half - (m.beam ?? NARROWBOAT);
     }
   });
   withinReach(samples);
@@ -226,7 +227,7 @@ export function raceRiver(km = 6, warp = 4) {
 
 // Beam of each kind of moored boat, metres.
 export const POST = 0.7; // a post standing in the water, metres square (world.js draws it)
-const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6, tatty: 3.4 };
+const BEAM = { narrowboat: NARROWBOAT, cruiser: 3.4, 'trip-boat': 4.6, tatty: 3.4, houseboat: 4.6 };
 
 // A real river from a course file (made by apps/web/scripts/courses, see
 // docs/features/game-courses-from-video.md): its line and widths in true metres,
@@ -269,6 +270,7 @@ export function courseFromFile(data) {
 // them), as boxes for water.js's shoreOf: solid.
 function mooringBoxes(river, moorings) {
   return moorings.map((m) => {
+    if (m.at) return { x: m.at[0], z: m.at[1], ux: m.dir[0], uz: m.dir[1], half: m.length / 2, beam: m.beam };
     const c = pointAt(river, m.s);
     const w = widthAt(river, m.s).half - m.beam / 2;
     return { x: c.x - c.tz * m.side * w, z: c.z + c.tx * m.side * w, ux: c.tx, uz: c.tz, half: m.length / 2, beam: m.beam };
@@ -279,8 +281,8 @@ function mooringBoxes(river, moorings) {
 function moored(course, river, m) {
   const c = pointAt(river, m.s);
   const w = widthAt(river, m.s).half - m.beam / 2;
-  const bx = c.x - c.tz * m.side * w;
-  const bz = c.z + c.tx * m.side * w;
+  const bx = m.at ? m.at[0] : c.x - c.tz * m.side * w;
+  const bz = m.at ? m.at[1] : c.z + c.tx * m.side * w;
   for (const p of course.samples) {
     const along = (bx - p.x) * p.tx + (bz - p.z) * p.tz;
     const lateral = (bx - p.x) * -p.tz + (bz - p.z) * p.tx;

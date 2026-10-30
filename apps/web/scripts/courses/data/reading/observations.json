@@ -78,13 +78,16 @@
       "kind": "moorings",
       "side": "left",
       "at": [
-        51.465362,
-        -0.975673
+        51.465522,
+        -0.976012
       ],
-      "heading": 322,
-      "frame": "0095-p2-00500",
+      "heading": 320,
+      "frame": "0095-p2-00600-left",
       "boats": "trip-boat",
-      "note": "a Thames passenger boat moored by the flats"
+      "note": "the blue and white two-deck trip boat with orange lifebuoys, moored on the island side of the north channel at Piper's Island (it was placed on the main river, inside a row of tatty cruisers)",
+      "exact": true,
+      "length": 24,
+      "paint": "navy"
     },
     {
       "kind": "bank",
@@ -750,26 +753,6 @@
       "note": "the big weeping willow in front of the glass house"
     },
     {
-      "kind": "moorings",
-      "side": "left",
-      "boats": "cruiser",
-      "from": {
-        "at": [
-          51.466614,
-          -1.013483
-        ],
-        "heading": 254
-      },
-      "to": {
-        "at": [
-          51.466593,
-          -1.015202
-        ],
-        "heading": 277
-      },
-      "note": "the marina: white cruisers nose to tail along the pontoons (owner point 2)"
-    },
-    {
       "kind": "feature",
       "style": "marina",
       "at": [
@@ -970,6 +953,128 @@
       "heading": 314,
       "frame": "0095-p0 near (owner point 11)",
       "note": "the ferry landing: pontoons along the hotel frontage, blue umbrellas and a flag"
+    },
+    {
+      "kind": "landmark",
+      "style": "stilts",
+      "at": [
+        51.4657,
+        -0.97573
+      ],
+      "heading": 320,
+      "note": "brick flats on concrete stilts over the north channel, balconies to the water (the owner's photo)"
+    },
+    {
+      "kind": "landmark",
+      "style": "stilts",
+      "at": [
+        51.465767,
+        -0.975878
+      ],
+      "heading": 320,
+      "note": "brick flats on concrete stilts over the north channel, balconies to the water (the owner's photo)"
+    },
+    {
+      "kind": "landmark",
+      "style": "stilts",
+      "at": [
+        51.465861,
+        -0.976012
+      ],
+      "heading": 320,
+      "note": "brick flats on concrete stilts over the north channel, balconies to the water (the owner's photo)"
+    },
+    {
+      "kind": "landmark",
+      "style": "stilts",
+      "at": [
+        51.466254,
+        -0.97638
+      ],
+      "heading": 320,
+      "note": "brick flats on concrete stilts over the north channel, balconies to the water (the owner's photo)"
+    },
+    {
+      "kind": "landmark",
+      "style": "stilts",
+      "at": [
+        51.466266,
+        -0.976557
+      ],
+      "heading": 320,
+      "note": "brick flats on concrete stilts over the north channel, balconies to the water (the owner's photo)"
+    },
+    {
+      "kind": "landmark",
+      "style": "tudor-boathouse",
+      "at": [
+        51.468883,
+        -0.990545
+      ],
+      "heading": 281,
+      "frame": "0095-p0-01700-right",
+      "note": "a half-timbered boathouse: black timbers on white over brick boat bays, a balcony, a brick quay and lawn"
+    },
+    {
+      "kind": "feature",
+      "style": "wharf",
+      "at": [
+        51.469546,
+        -1.003026
+      ],
+      "heading": 250,
+      "frame": "0095-p0-02600-left",
+      "note": "an old concrete wharf with a little concrete hut on it (the steel wall behind it in August is the festival fence)"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 9,
+      "crew": "fenders",
+      "at": [
+        51.466679,
+        -1.016349
+      ],
+      "heading": 276,
+      "frame": "0095-p0-03600-right",
+      "note": "a big white Bayliner cruiser with blue fenders"
+    },
+    {
+      "kind": "feature",
+      "style": "jetty",
+      "at": [
+        51.466897,
+        -1.016161
+      ],
+      "heading": 276,
+      "note": "the timber landing stage with a ladder just below the Bayliner"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "houseboat",
+      "length": 16,
+      "at": [
+        51.475867,
+        -1.037444
+      ],
+      "heading": 312,
+      "frame": "0095-p0-05400-right",
+      "note": "a big timber houseboat with a lifebuoy and a mast, opposite the railway wall"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 9,
+      "at": [
+        51.476467,
+        -1.038306
+      ],
+      "heading": 330,
+      "frame": "0095-p0-05500-right",
+      "note": "an old white cruiser moored under the trees"
     }
   ]
 }
