@@ -48,12 +48,12 @@ Each recording's fixes are placed on the line and split into **passes** at each 
 What the frames show, **tied to places, not to the course**: each item has `at` (or `from`/`to`) as lat/lng, the camera's `heading`, `side` (left/right of travel at that heading), and `frame` naming the evidence. Kinds used so far:
 
 - `bank`, with `cover`: `park`, `trees`, `gardens` or `wild`.
-- `moorings`, with `boats`: `cruiser`, `narrowboat`, `trip-boat`, `tatty` (tired old cruisers: tarps, faded paint, flags) or `mixed`. With `length` it's one boat, as seen: `paint` (`maroon`, `navy`) and `crew` (`statues`: the Lara Croft figures; `tower`: a wakeboard boat's tower).
-- `buildings`, with `style`: `flats` (made tall) or `clapboard` (white and grey board houses with decks and jetties), for the OSM buildings on that side of the stretch.
+- `moorings`, with `boats`: `cruiser`, `narrowboat`, `trip-boat`, `tatty` (tired old cruisers: tarps, faded paint, flags) or `mixed`. With `length` it's one boat, as seen: `paint` (`maroon`, `navy`) and `crew` (`statues`: the Lara Croft figures; `tower`: a wakeboard boat's tower; `fenders`: blue fenders over the side); `boats: 'houseboat'` for a big timber one; `exact: true` moors it where `at` is, along `heading` (a side channel the river line doesn't follow).
+- `buildings`, with `style`: `flats` (made tall) or `clapboard` (white and grey board houses with decks and jetties), for the OSM buildings on that side of the stretch. A `landmark` with `style: 'stilts'` marks one building as flats on concrete stilts over the water; `tudor-boathouse` is the half-timbered boathouse at 1.7 km.
 - `bridge`, with `style` (`cable-stayed` or `concrete-arch`) and `mast`.
 - `railway`.
 - `wall`: a quay or revetment at the water's edge; `style: 'brick'` for a tall brick wall straight out of the water (under the railway below Mapledurham).
-- `feature`, with `style` and `at` (a point on the bank, not the camera): a thing seen in the footage with its own model (`FEATURES` in `world.js`), built at that point facing the water: `beach`, `sandbags`, `channel-sign`, `mailbox`, `gazebo`, `sculling-club`, `glass-restaurant`, `ferry-landing`, `marina`, `willow`. Other trees keep off it (`CLEAR`).
+- `feature`, with `style` and `at` (a point on the bank, not the camera): a thing seen in the footage with its own model (`FEATURES` in `world.js`), built at that point facing the water: `beach`, `sandbags`, `channel-sign`, `mailbox`, `gazebo`, `sculling-club`, `glass-restaurant`, `ferry-landing`, `marina`, `willow`, `wharf`, `jetty`. Other trees keep off it (`CLEAR`).
 - `path`, with `points`: a footpath along the bank (a portage's run). Drawn as gravel; trees keep off it.
 - `landmark`, with `style`: an unnamed building to draw as a bespoke model, given by a point beside it (`at`): the nearest OSM footprint within 40 m gets the style. Named buildings use `styles` in `course.json` instead.
 - `posts`, with `points` (lat/lng each): posts standing in the water. Solid in the game.

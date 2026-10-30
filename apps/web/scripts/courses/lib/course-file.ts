@@ -11,6 +11,7 @@ export type Observation = {
   name?: string; style?: string; mast?: 'left' | 'right'; cover?: string; boats?: string
   count?: number; points?: LatLng[] // anglers along a stretch; posts in the water; a path's line
   length?: number; paint?: string; crew?: string // one boat seen moored: its length (m), paintwork and who's on deck
+  exact?: boolean // moored where `at` is, along `heading` (in a side channel, off the river line)
 } & (Place | { from: Place; to: Place })
 
 export type Cover = 'park' | 'trees' | 'gardens' | 'wild'
@@ -22,7 +23,8 @@ export type CourseFile = {
   walls: Array<{ side: -1 | 1; from: number; to: number; style?: string }>
   /** `ends`: the road over it, where the map has one (a bridge can cross at a slant). */
   bridges: Array<{ s: number; name?: string; style: string; mast?: -1 | 1; ends?: [XZ, XZ] }>
-  moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' | 'tatty'; paint?: string; crew?: string }>
+  /** `at`/`dir`: moored at that point, lying along `dir` (in a side channel the river line doesn't follow). */
+  moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' | 'tatty' | 'houseboat'; paint?: string; crew?: string; at?: XZ; dir?: XZ }>
   buildings: Array<{ shape: XZ[]; height: number; kind: 'house' | 'flats' | 'boathouse' | 'other'; style?: string }>
   woods: XZ[][]
   trees: XZ[]
@@ -164,7 +166,7 @@ function mulberry32(seed: number) {
   }
 }
 
-const BOATS = { cruiser: [8, 12], narrowboat: [17, 21], 'trip-boat': [24, 26], tatty: [7, 11] } as const
+const BOATS = { cruiser: [8, 12], narrowboat: [17, 21], 'trip-boat': [24, 26], tatty: [7, 11], houseboat: [14, 18] } as const
 
 /** A row of moored boats filling a stretch of bank, or one or two at a spot. */
 export function mooringRow(from: number, to: number, side: -1 | 1, boats: string, rand: () => number): CourseFile['moorings'] {
@@ -181,6 +183,42 @@ export function mooringRow(from: number, to: number, side: -1 | 1, boats: string
     s += length + 1 + rand() * (b > a ? 6 : 2)
   }
   return out
+}
+
+/**
+ * Boats moored along a bank are spaced by distance along the river line, but
+ * on the inside of a bend the bank is shorter than the line: boats there end
+ * up in each other. Walk each bank in order and nudge a boat on until it
+ * clears the one before it, measured where they lie (at `half` of the width
+ * in from the line, the way the game moors them).
+ */
+export function spaceOut(moorings: CourseFile['moorings'], line: XZ[], width: number[]): CourseFile['moorings'] {
+  const cum = cumulative(line)
+  const at = (s: number, side: number): XZ => {
+    let i = 0
+    while (i < cum.length - 2 && cum[i + 1] < s) i++
+    const f = Math.max(0, Math.min(1, (s - cum[i]) / (cum[i + 1] - cum[i] || 1)))
+    const [a, b] = [line[i], line[i + 1]]
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
+    const [tx, tz] = [(b[0] - a[0]) / len, (b[1] - a[1]) / len]
+    const w = (width[i] + (width[i + 1] - width[i]) * f) / 2 - 1
+    return [a[0] + (b[0] - a[0]) * f - tz * side * w, a[1] + (b[1] - a[1]) * f + tx * side * w]
+  }
+  const last = new Map<number, CourseFile['moorings'][number]>()
+  for (const m of [...moorings].sort((a, b) => a.s - b.s)) {
+    if (m.at) continue
+    const prev = last.get(m.side)
+    if (prev) {
+      const need = (prev.length + m.length) / 2 + 1
+      for (let k = 0; k < 40; k++) {
+        const [p, q] = [at(prev.s, m.side), at(m.s, m.side)]
+        if (Math.hypot(q[0] - p[0], q[1] - p[1]) >= need) break
+        m.s = r1(m.s + 0.5)
+      }
+    }
+    last.set(m.side, m)
+  }
+  return moorings
 }
 
 const HEIGHTS = { house: 7, flats: 12, boathouse: 6, other: 6 }
@@ -261,7 +299,9 @@ export function courseFile(input: {
     else if (o.kind === 'moorings' && o.length) {
       // One boat, as seen: its length, and its paint and crew if they stood out.
       const kind = (o.boats && o.boats in BOATS ? o.boats : 'cruiser') as keyof typeof BOATS
-      moorings.push({ s: r1(sp.from), length: o.length, side: sp.side, kind, ...(o.paint ? { paint: o.paint } : {}), ...(o.crew ? { crew: o.crew } : {}) })
+      const h = (('at' in o ? o.heading : 0) * Math.PI) / 180
+      const exact = o.exact && 'at' in o && input.toXZ ? { at: pts([input.toXZ(o.at)])[0], dir: [Math.round(Math.sin(h) * 1000) / 1000, Math.round(-Math.cos(h) * 1000) / 1000] as XZ } : {}
+      moorings.push({ s: r1(sp.from), length: o.length, side: sp.side, kind, ...(o.paint ? { paint: o.paint } : {}), ...(o.crew ? { crew: o.crew } : {}), ...exact })
     } else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand))
     else if (o.kind === 'buildings' && o.style === 'flats') flats.push(sp)
     else if (o.kind === 'buildings' && o.style) styled.push({ ...sp, style: o.style })
@@ -304,7 +344,7 @@ export function courseFile(input: {
     licence: 'ODbL 1.0 (https://opendatacommons.org/licenses/odbl/1-0/): derived from OpenStreetMap; observations from paddlesnitch footage',
     speedup: input.speedup, warp: input.warp, start: r1(input.start), finish: r1(input.finish),
     line: pts(input.line), width: widths(input.edges),
-    banks, walls, moorings: moorings.sort((a, b) => a.s - b.s),
+    banks, walls, moorings: spaceOut(moorings, input.line, widths(input.edges)).sort((a, b) => a.s - b.s),
     bridges: bridges(input.things, styles),
     buildings,
     woods: input.things.filter((t) => /wood|forest|scrub/.test(t.kind) && t.shape && t.shape.length > 3 && near(t, 250)).map((t) => pts(thin(t.shape!, 40))),

@@ -53,7 +53,7 @@ test('every feature and styled building on the river has a model of its own, and
   const river = await data('reading');
   assert.ok(river.features.length >= 10);
   for (const f of river.features) assert.ok(FEATURE_STYLES.includes(f.style), `${f.style}: no model`);
-  for (const b of river.buildings.filter((b) => b.style)) assert.ok(LANDMARK_STYLES.includes(b.style) || b.style === 'clapboard', `${b.style}: no model`);
+  for (const b of river.buildings.filter((b) => b.style)) assert.ok(LANDMARK_STYLES.includes(b.style) || ['clapboard', 'stilts'].includes(b.style), `${b.style}: no model`);
   assert.ok((await world()).every((t) => t.p.flat().every(Number.isFinite)));
 });
 
@@ -85,4 +85,36 @@ test("the Lara Croft boat is moored on the right going up, and solid: you can't 
   const c = pointAt(course, boat.s);
   const w = widthAt(course, boat.s).half - 1;
   assert.ok(course.shore.dry(c.x - c.tz * w, c.z + c.tx * w), 'a boat bumps into it');
+});
+
+test('no two moored boats lie in each other', async () => {
+  const course = courseFromFile(await data('reading'));
+  const river = course.scenery.river;
+  // Each boat as a box along the bank (or along its own heading, moored at a point).
+  const boxes = course.scenery.moorings.map((m) => {
+    if (m.at) return { m, x: m.at[0], z: m.at[1], u: m.dir, half: m.length / 2, beam: 2 };
+    const c = pointAt(river, m.s);
+    const w = widthAt(river, m.s).half - 1;
+    return { m, x: c.x - c.tz * m.side * w, z: c.z + c.tx * m.side * w, u: [c.tx, c.tz], half: m.length / 2, beam: 2 };
+  });
+  const clash = [];
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const [a, b] = [boxes[i], boxes[j]];
+      const along = Math.abs((b.x - a.x) * a.u[0] + (b.z - a.z) * a.u[1]);
+      const across = Math.abs((b.x - a.x) * -a.u[1] + (b.z - a.z) * a.u[0]);
+      if (along < a.half + b.half - 0.5 && across < (a.beam + b.beam) / 2) clash.push(`${a.m.kind} at ${a.m.s} and ${b.m.kind} at ${b.m.s}`);
+    }
+  }
+  assert.deepEqual(clash, []);
+});
+
+test('the boats found in the footage are moored where they were: the trip boat in the north channel, a houseboat by the railway wall', async () => {
+  const course = courseFromFile(await data('reading'));
+  const trip = course.scenery.moorings.find((m) => m.kind === 'trip-boat' && m.at);
+  assert.ok(trip, 'the trip boat moored at its own point');
+  assert.ok(course.shore.dry(trip.at[0], trip.at[1]), 'solid: boats bump into it');
+  assert.ok(course.scenery.moorings.some((m) => m.kind === 'houseboat'));
+  const styles = new Set(course.scenery.buildings.map((b) => b.style));
+  for (const s of ['stilts', 'tudor-boathouse']) assert.ok(styles.has(s), s);
 });

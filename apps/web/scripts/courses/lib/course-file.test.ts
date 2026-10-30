@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bridges, courseFile, mooringRow, places, routePlaces, sides, widths, type RiverThing } from './course-file'
+import { bridges, courseFile, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
 import type { XZ } from './river'
 
 describe('widths', () => {
@@ -218,3 +218,16 @@ describe('a route', () => {
   })
 })
 
+
+describe('spaceOut', () => {
+  it('nudges boats apart on the inside of a bend, where the bank is shorter than the line', () => {
+    // A quarter circle of 30 m radius, bending left: the left bank (side -1) is inside.
+    const line: XZ[] = Array.from({ length: 31 }, (_, i) => { const a = (i / 30) * (Math.PI / 2); return [-(30 - 30 * Math.cos(a)), -30 * Math.sin(a)] })
+    const width = line.map(() => 40)
+    const boats = [{ s: 10, length: 10, side: -1 as const, kind: 'cruiser' as const }, { s: 21, length: 10, side: -1 as const, kind: 'cruiser' as const }, { s: 21, length: 10, side: 1 as const, kind: 'cruiser' as const }]
+    const out = spaceOut(boats.map((b) => ({ ...b })), line, width)
+    // 11 m apart along the line is only about 4 m apart 19 m in on the inside: the second one moves on.
+    expect(out[1].s).toBeGreaterThan(30)
+    expect(out[2].s).toBe(21) // the other bank's boat is left alone
+  })
+})

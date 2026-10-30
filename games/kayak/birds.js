@@ -116,6 +116,15 @@ export function stepBirds(birds, racers, course, dt) {
     b.heading += wrap(want - b.heading) * Math.min(1, 3 * dt);
     b.speed += (speed - b.speed) * Math.min(1, 2 * dt);
     move(b, dt);
+    // A duck off the racing line never drifts out of the water, sideways onto
+    // the bank or into a moored boat (looking ahead only catches it going
+    // forwards): it's put back on the nearest open water and swims on. Not
+    // swans: they're what tips rivals in, and any change to how they move
+    // shifts where they meet the pack (measure over many seeded races first).
+    if (b.away && b.kind === 'duck' && course.shore?.dry(b.x, b.z)) {
+      const o = course.shore.out(b.x, b.z);
+      Object.assign(b, { x: o.x + o.nx * 0.2, z: o.z + o.nz * 0.2 });
+    }
 
     if (b.kind !== 'swan' || b.huff > 0) continue;
     for (const r of racers) {
