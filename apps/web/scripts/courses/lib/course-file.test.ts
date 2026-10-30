@@ -116,6 +116,15 @@ describe('courseFile', () => {
     expect(out.anglers!.map((a) => a.s)).toEqual([...out.anglers!.map((a) => a.s)].sort((a, b) => a - b))
   })
 
+  it('keeps a footpath along the bank as its line of points, for the portage run and for trees to keep off', () => {
+    const out = courseFile({
+      ...base, toXZ: ([lat, lng]) => [lng, -lat],
+      observations: [{ kind: 'path', at: [300, 30], heading: 0, points: [[300, 30], [340, 31], [380, 30]] }],
+    })
+    expect(out.paths).toEqual([[[30, -300], [31, -340], [30, -380]]])
+    expect(courseFile({ ...base, observations: [] }).paths).toBeUndefined()
+  })
+
   it('moors tatty boats as their own kind', () => {
     const out = courseFile({ ...base, observations: [{ kind: 'moorings', side: 'right', boats: 'tatty', from: { at: [300, 0], heading: 0 }, to: { at: [360, 0], heading: 0 } }] })
     expect(out.moorings.length).toBeGreaterThan(3)

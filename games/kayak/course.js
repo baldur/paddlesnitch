@@ -256,12 +256,13 @@ export function courseFromFile(data) {
   const posts = (data.posts ?? []).map(([x, z]) => ({ x, z, ux: 1, uz: 0, half: POST / 2, beam: POST }));
   const shore = data.water?.length ? shoreOf(waterMap(data.water), [...mooringBoxes(river, moorings), ...posts]) : null;
   if (!data.route) return { ...river, shore, scenery: { ...data, river } };
-  const { line, left, right, start, finish } = data.route;
+  const { line, left, right, start, finish, portages = [] } = data.route;
   const [l, r] = [along(line, left), along(line, right)];
   const course = createCourse(line, { sides: (s) => ({ left: l(s), right: r(s) }), start, finish, warp: data.warp, speedup: data.speedup });
   for (const m of moorings) moored(course, river, m);
   twoWay(course);
-  return { ...course, shore, scenery: { ...data, river } };
+  // A portage's run is over land: no water to keep to there.
+  return { ...course, shore, portages, scenery: { ...data, river } };
 }
 
 // The boats moored on a river (placed against their bank, as moored() has

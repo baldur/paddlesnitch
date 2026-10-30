@@ -66,13 +66,14 @@ const CASES = [
   { name: 'iphone, features missing', engine: webkit, ctx: landscape('iPhone 15'), touch: true, strip: true, expect: 'webgl2' },
   { name: 'firefox, desktop', engine: firefox, ctx: desktop },
   { name: 'firefox, features missing', engine: firefox, ctx: desktop, strip: true, expect: 'webgl2' },
-  // The real river: a course file, a world four times the size, boats moving at speedup.
-  { name: 'chromium, desktop, Reading Thames', engine: chromium, ctx: desktop, course: 'reading' },
-  { name: 'iphone safari, Reading Thames', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'reading' },
-  { name: 'chrome GPU, desktop, Reading Thames', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'reading', expect: 'webgpu' },
-  // A time trial on a loop round islands, with interval starts.
-  { name: 'chromium, desktop, Time Trial Loop', engine: chromium, ctx: desktop, course: 'loop' },
-  { name: 'iphone safari, Time Trial Loop', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'loop' },
+  // Every course is on the real river at Reading (the cases above paddle its
+  // practice kilometre): a race with the pack, boats moving at speedup.
+  { name: 'chromium, desktop, Hasler Div 7-9 race', engine: chromium, ctx: desktop, course: 'hasler79', format: 'mass' },
+  { name: 'iphone safari, Hasler Div 1-6 race', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'hasler16', format: 'mass' },
+  { name: 'chrome GPU, desktop, Hasler Div 7-9 race', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'hasler79', format: 'mass', expect: 'webgpu' },
+  // A time trial, with interval starts.
+  { name: 'chromium, desktop, Time Trial Loop time trial', engine: chromium, ctx: desktop, course: 'loop', format: 'interval' },
+  { name: 'iphone safari, Time Trial Loop time trial', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'loop', format: 'interval' },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -96,6 +97,10 @@ async function play(c, page, errors) {
   for (let i = 0; i < 3 && await page.locator('#stepHome').isHidden(); i++) {
     const next = page.locator('#menu .step:not([hidden]) .step-buttons .next');
     await (c.touch ? next.tap() : next.click());
+  }
+  if (c.format) {
+    const format = page.locator(`#menu [data-format="${c.format}"]`);
+    await (c.touch ? format.tap() : format.click());
   }
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   await (c.touch ? practice.tap() : practice.click());
@@ -138,6 +143,8 @@ async function play(c, page, errors) {
   }
   const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.__best, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
   if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
+  const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
+  if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
 }
