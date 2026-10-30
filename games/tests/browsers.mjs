@@ -67,12 +67,14 @@ const CASES = [
   { name: 'firefox, desktop', engine: firefox, ctx: desktop },
   { name: 'firefox, features missing', engine: firefox, ctx: desktop, strip: true, expect: 'webgl2' },
   // Every course is on the real river at Reading (the cases above paddle its
-  // practice kilometre): a race with the pack, boats moving at speedup.
-  { name: 'chromium, desktop, Hasler Div 7-9 race', engine: chromium, ctx: desktop, course: 'hasler79', format: 'mass' },
+  // practice kilometre): a race with the pack, boats moving at speedup. In
+  // WebKit: CI's Chromium draws the river in software, 4 to 6 minutes a case,
+  // and the job has 30 (the Chromium cases above already play the full river).
+  { name: 'webkit, desktop, Hasler Div 7-9 race', engine: webkit, ctx: desktop, course: 'hasler79', format: 'mass' },
   { name: 'iphone safari, Hasler Div 1-6 race', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'hasler16', format: 'mass' },
   { name: 'chrome GPU, desktop, Hasler Div 7-9 race', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'hasler79', format: 'mass', expect: 'webgpu' },
   // A time trial, with interval starts.
-  { name: 'chromium, desktop, Time Trial Loop time trial', engine: chromium, ctx: desktop, course: 'loop', format: 'interval' },
+  { name: 'webkit, desktop, Time Trial Loop time trial', engine: webkit, ctx: desktop, course: 'loop', format: 'interval' },
   { name: 'iphone safari, Time Trial Loop time trial', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'loop', format: 'interval' },
 ];
 
