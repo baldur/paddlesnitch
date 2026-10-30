@@ -79,7 +79,8 @@ jobs:
       - name: App tests
         run: make test-app IOS=${{ matrix.ios }}
       - name: Keep the test results
-        if: failure()
+        # Also when the job's timeout cancels it: that's when they're needed most.
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: ios-test-results-${{ matrix.ios }}

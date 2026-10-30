@@ -22,11 +22,27 @@ public final class AccountModel {
     public internal(set) var state: State = .signedOut
     /// The account was just deleted here: the signed-out You tab says so.
     public internal(set) var accountDeleted = false
-    /// Signed out to sign in again before deleting: come straight back.
-    public internal(set) var deleteAfterSignIn = false
-    /// The email to sign in again with (not for a Strava account's
-    /// placeholder; that waits for the contract's placeholderEmail).
+    /// Signed out to sign in again before deleting or connecting Strava:
+    /// come straight back to it.
+    public internal(set) var afterSignIn: AfterSignIn?
+    /// Who signed out to sign in again: only they come straight back.
+    public internal(set) var signInAgainUserId: String?
+    /// The app's sign-in sheet is up or still closing: another sheet can't
+    /// open yet (iOS drops it without a word). Set by the app; kept here, as
+    /// iOS 17 doesn't pass environment changes to pushed screens.
+    public var signInSheetUp = false
+    /// The ways in the server offers besides email: none until asked, and
+    /// none if asking fails (mobile/contract/README.md, Signing in).
+    public internal(set) var options = SignInOptions.emailOnly
+    /// The server said Strava is off (not just unknown): only then is it
+    /// right to say so.
+    public internal(set) var stravaSaidOff = false
+    /// The ask failed and nothing was known before: say so, with Try again.
+    public internal(set) var optionsFailed = false
+    /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
+    /// Signing in again goes straight to Strava sign-in.
+    public internal(set) var signInAgainWithStrava = false
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
     public private(set) var client: PaddleClient
     public var user: User? {
@@ -132,7 +148,7 @@ public final class AccountModel {
     }
 
     /// Tokens first, so the first call after signing in already has them.
-    private func accept(_ answer: SignIn) async throws {
+    func accept(_ answer: SignIn) async throws {
         let user = User(
             id: answer.id, email: answer.email, displayName: answer.displayName, needsTerms: answer.needsTerms == true)
         try await session.signedIn(idToken: answer.idToken, refreshToken: answer.refreshToken)

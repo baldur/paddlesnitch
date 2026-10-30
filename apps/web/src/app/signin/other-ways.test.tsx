@@ -69,4 +69,10 @@ describe('other ways in', () => {
     const c = await mountWith({ google: true, strava: false })
     expect(c.textContent).toContain('Sign in with your email instead.')
   })
+
+  it('back to sign in again before connecting Google: says why', async () => {
+    search = new URLSearchParams('reason=reauth_google&next=%2Faccount%23google')
+    const c = await mountWith({ google: true })
+    expect(c.textContent).toContain('For your safety, connecting Google needs a recent sign-in.')
+  })
 })

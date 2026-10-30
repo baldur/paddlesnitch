@@ -1,0 +1,29 @@
+{
+  "attitude": {
+    "available": false,
+    "reason": "Motion file has too few samples to describe attitude.",
+    "sampleRateHz": null,
+    "samples": 90,
+    "envelope": [],
+    "excerpt": [],
+    "rollHistogram": null,
+    "rollRmsDeg": null,
+    "pitchRmsDeg": null,
+    "rollP5Deg": null,
+    "rollP95Deg": null,
+    "plotBoundDeg": null,
+    "rollToPitchRatio": null,
+    "axisConfident": false,
+    "symmetry": null,
+    "excludedWindows": 0,
+    "excludedSeconds": 0
+  },
+  "cadence": {
+    "available": false,
+    "reason": "No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.",
+    "sampleRateHz": 10,
+    "rows": 90,
+    "medianStrokesPerMin": null,
+    "windows": []
+  }
+}

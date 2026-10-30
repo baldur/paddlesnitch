@@ -31,7 +31,7 @@ struct RootView: View {
             PaddleListView(
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
                 needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
-                openTerms: { termsOpen = true }, adding: adding,
+                openTerms: { termsOpen = true }, adding: adding, options: account.options,
                 openFile: { url in Task { await open(url) } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
@@ -46,16 +46,32 @@ struct RootView: View {
             if id != nil { Task { await adding.signedIn() } }
         }
         .task { await openLaunchFile() }
+        // Google and Strava, for the screens that offer them.
+        .task { await account.loadOptions() }
         .tint(Palette.primaryText)
         .preferredColorScheme(.dark)
         .sheet(
             isPresented: $signingIn,
             onDismiss: {
-                // Closed without signing in again: don't jump to deleting later.
-                if account.user == nil && account.deleteAfterSignIn { account.deleteResumed() }
+                account.signInSheetUp = false
+                // Closed without signing in again: don't jump back later.
+                if account.user == nil && account.afterSignIn != nil { account.resumed() }
             },
             content: { SignInView(account: account) }
         )
+        // Up from opening until it has finished closing, not just asked to.
+        // onDismiss says when; in case it never comes (a sheet closed while
+        // still opening, on iOS 17), it's down a second after closing.
+        .onChange(of: signingIn) { _, opening in
+            if opening {
+                account.signInSheetUp = true
+            } else {
+                Task {
+                    try? await Task.sleep(for: .seconds(1))
+                    if !signingIn { account.signInSheetUp = false }
+                }
+            }
+        }
         .sheet(isPresented: $termsOpen) {
             NavigationStack {
                 List {

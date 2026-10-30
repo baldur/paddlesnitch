@@ -1,0 +1,46 @@
+{
+  "name": "Reading: a practice kilometre from the canoe club",
+  "title": "Practice",
+  "blurb": "1 km up the river from Reading Canoe Club, on your own",
+  "river": "River Thames",
+  "world": "reading",
+  "from": [
+    51.46175,
+    -0.96945
+  ],
+  "start": [
+    51.467645,
+    -0.982164
+  ],
+  "finish": [
+    51.469961,
+    -0.996773
+  ],
+  "styles": {
+    "Reading Rowing Club": "rowing-club",
+    "Reading Canoe Club": "canoe-club"
+  },
+  "route": [
+    {
+      "along": [
+        [
+          51.467375,
+          -0.981173
+        ],
+        [
+          51.470085,
+          -0.997616
+        ]
+      ]
+    }
+  ],
+  "places": [
+    "Reading Canoe Club",
+    "Thames Side Promenade",
+    {
+      "name": "Wychotes Waterside Activity Centre",
+      "label": "Wychcotes"
+    }
+  ],
+  "birds": []
+}

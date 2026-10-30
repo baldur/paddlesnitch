@@ -1,0 +1,469 @@
+{
+  "name": "Reading: the Hasler course for Divisions 1 to 6",
+  "title": "Hasler Div 1-6",
+  "blurb": "From Reading Canoe Club up to Mapledurham, a run round the portage, back down round Fry's Island to the club",
+  "river": "River Thames",
+  "world": "reading",
+  "from": [
+    51.46175,
+    -0.96945
+  ],
+  "start": [
+    51.467645,
+    -0.982164
+  ],
+  "finish": [
+    51.467645,
+    -0.982164
+  ],
+  "styles": {
+    "Reading Rowing Club": "rowing-club",
+    "Reading Canoe Club": "canoe-club"
+  },
+  "route": [
+    {
+      "along": [
+        [
+          51.467375,
+          -0.981173
+        ],
+        [
+          51.483321,
+          -1.036885
+        ]
+      ]
+    },
+    [
+      51.483657,
+      -1.037321
+    ],
+    {
+      "portage": [
+        [
+          51.483657,
+          -1.037497
+        ],
+        [
+          51.483218,
+          -1.037433
+        ],
+        [
+          51.482734,
+          -1.037398
+        ],
+        [
+          51.482536,
+          -1.037391
+        ],
+        [
+          51.482371,
+          -1.037451
+        ]
+      ]
+    },
+    [
+      51.482344,
+      -1.037292
+    ],
+    [
+      51.482119,
+      -1.037151
+    ],
+    {
+      "along": [
+        [
+          51.481294,
+          -1.037423
+        ],
+        [
+          51.462508,
+          -0.970859
+        ]
+      ]
+    },
+    [
+      51.462504,
+      -0.970127
+    ],
+    [
+      51.462592,
+      -0.970134
+    ],
+    [
+      51.462671,
+      -0.970203
+    ],
+    [
+      51.462749,
+      -0.970274
+    ],
+    [
+      51.462828,
+      -0.970344
+    ],
+    [
+      51.462912,
+      -0.970396
+    ],
+    [
+      51.462996,
+      -0.970446
+    ],
+    [
+      51.46308,
+      -0.970497
+    ],
+    [
+      51.463164,
+      -0.970548
+    ],
+    [
+      51.463248,
+      -0.970599
+    ],
+    [
+      51.463333,
+      -0.970648
+    ],
+    [
+      51.463405,
+      -0.970732
+    ],
+    [
+      51.463475,
+      -0.970823
+    ],
+    [
+      51.463545,
+      -0.970914
+    ],
+    [
+      51.463615,
+      -0.971005
+    ],
+    [
+      51.463685,
+      -0.971096
+    ],
+    [
+      51.46374,
+      -0.971209
+    ],
+    [
+      51.463786,
+      -0.971333
+    ],
+    [
+      51.463832,
+      -0.971456
+    ],
+    [
+      51.463879,
+      -0.97158
+    ],
+    [
+      51.463925,
+      -0.971704
+    ],
+    [
+      51.463971,
+      -0.971827
+    ],
+    [
+      51.464018,
+      -0.971951
+    ],
+    [
+      51.464064,
+      -0.972075
+    ],
+    [
+      51.464111,
+      -0.972198
+    ],
+    [
+      51.464157,
+      -0.972322
+    ],
+    [
+      51.464204,
+      -0.972445
+    ],
+    [
+      51.464238,
+      -0.972578
+    ],
+    [
+      51.464265,
+      -0.972716
+    ],
+    [
+      51.464292,
+      -0.972854
+    ],
+    [
+      51.464319,
+      -0.972991
+    ],
+    [
+      51.464347,
+      -0.973129
+    ],
+    [
+      51.464374,
+      -0.973266
+    ],
+    [
+      51.464401,
+      -0.973404
+    ],
+    [
+      51.464424,
+      -0.973543
+    ],
+    [
+      51.464436,
+      -0.973686
+    ],
+    [
+      51.464448,
+      -0.973829
+    ],
+    [
+      51.46446,
+      -0.973972
+    ],
+    [
+      51.464472,
+      -0.974115
+    ],
+    [
+      51.464492,
+      -0.974255
+    ],
+    [
+      51.464523,
+      -0.974391
+    ],
+    [
+      51.464553,
+      -0.974527
+    ],
+    [
+      51.464583,
+      -0.974663
+    ],
+    [
+      51.465167,
+      -0.975705
+    ],
+    [
+      51.465527,
+      -0.976032
+    ],
+    [
+      51.465827,
+      -0.976306
+    ],
+    [
+      51.466067,
+      -0.976571
+    ],
+    [
+      51.466082,
+      -0.977028
+    ],
+    [
+      51.466217,
+      -0.977437
+    ],
+    [
+      51.466396,
+      -0.97787
+    ],
+    {
+      "along": [
+        [
+          51.466396,
+          -0.97787
+        ],
+        [
+          51.467658,
+          -0.982695
+        ]
+      ]
+    }
+  ],
+  "places": [
+    "Reading Canoe Club",
+    {
+      "name": "Wychotes Waterside Activity Centre",
+      "label": "Wychcotes"
+    },
+    "Thames Side Promenade",
+    "Reading School Boat House",
+    {
+      "name": "Great Western Main Line",
+      "label": "The Great Western railway"
+    },
+    "Reading Rowing Club",
+    "Caversham Bridge",
+    {
+      "label": "Piper's Island",
+      "at": [
+        51.465682,
+        -0.977098
+      ]
+    },
+    "Fry's Island",
+    {
+      "label": "Up the back channel behind Fry's Island",
+      "at": [
+        51.463,
+        -0.9705
+      ],
+      "heading": 330
+    },
+    "Christchurch Meadows",
+    "Appletree Eyot",
+    "Poplar Island",
+    "Purley Gardens",
+    {
+      "name": "Mapledurham Weir",
+      "label": "Mapledurham"
+    }
+  ],
+  "birds": [
+    {
+      "near": "Reading Rowing Club",
+      "count": 14,
+      "spread": 120
+    },
+    {
+      "near": "Caversham Bridge",
+      "count": 5,
+      "spread": 60
+    },
+    {
+      "at": [
+        51.465616,
+        -0.976057
+      ],
+      "count": 4,
+      "spread": 30,
+      "note": "swans in front of the Reading University boathouses, in the narrow channel this course takes up the right of Piper's Island: fewer than on the loop, which only passes them"
+    }
+  ],
+  "gates": [
+    {
+      "at": [
+        51.465262,
+        -0.976234
+      ],
+      "heading": 120,
+      "label": "down the right of Piper's Island"
+    },
+    {
+      "at": [
+        51.463451,
+        -0.973226
+      ],
+      "heading": 120,
+      "label": "down the main channel, right of Fry's Island"
+    },
+    {
+      "at": [
+        51.462356,
+        -0.970225
+      ],
+      "heading": 0,
+      "label": "round the end of Fry's Island"
+    },
+    {
+      "at": [
+        51.463971,
+        -0.971827
+      ],
+      "heading": 300,
+      "label": "up the back channel behind Fry's Island"
+    },
+    {
+      "at": [
+        51.465827,
+        -0.976306
+      ],
+      "heading": 330,
+      "label": "up the right of Piper's Island"
+    }
+  ],
+  "cues": [
+    {
+      "at": [
+        51.482106,
+        -1.036804
+      ],
+      "heading": 350,
+      "turn": "left",
+      "text": "Mapledurham: land on the beach on the left and run to the put-in"
+    },
+    {
+      "at": [
+        51.466382,
+        -0.978193
+      ],
+      "heading": 120,
+      "turn": "right",
+      "text": "Caversham Bridge: take the right arch"
+    },
+    {
+      "at": [
+        51.465078,
+        -0.975841
+      ],
+      "heading": 120,
+      "turn": "right",
+      "text": "Keep right of Fry's Island, down the main channel"
+    },
+    {
+      "at": [
+        51.462993,
+        -0.971985
+      ],
+      "heading": 120,
+      "turn": "left",
+      "text": "Christchurch Bridge ahead: turn left round the end of Fry's Island"
+    },
+    {
+      "at": [
+        51.464855,
+        -0.975389
+      ],
+      "heading": 290,
+      "turn": "right",
+      "text": "Keep right: up the right of Piper's Island, the north arch"
+    }
+  ],
+  "marks": [
+    {
+      "at": [
+        51.464235,
+        -0.974174
+      ],
+      "note": "Fry's Island's upstream end: keep it on your left, down the main channel"
+    },
+    {
+      "at": [
+        51.462502,
+        -0.970562
+      ],
+      "note": "Fry's Island's downstream end: turn left round it, before Christchurch Bridge"
+    },
+    {
+      "at": [
+        51.465392,
+        -0.976061
+      ],
+      "note": "Piper's Island's downstream end: keep it on your left going up"
+    }
+  ]
+}

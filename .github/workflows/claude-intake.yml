@@ -57,7 +57,7 @@ jobs:
           gh issue edit "$ISSUE" --add-label claude-active
           gh issue view "$ISSUE" --json number,title,body,labels,comments > .intake-issue.json   # in the checkout: Read outside it would need a permission
 
-      - uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1
+      - uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1
         id: claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

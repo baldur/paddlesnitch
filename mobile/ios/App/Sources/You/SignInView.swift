@@ -5,13 +5,15 @@ import SampleServer
 import SwiftUI
 
 /// Sign in or create an account: the same fields, checks and words as the
-/// Android app and the website's /signin: password sign-in, sign-up and
-/// Strava. The email code waits for email delivery, as on the website.
+/// Android app and the website's /signin: password sign-in, sign-up, and
+/// Google and Strava when the server offers them.
 struct SignInView: View {
     let account: AccountModel
     @State private var form = SignInForm()
     @State private var web: URL?
     @State private var forgotPassword = false
+    /// Strava starts by itself once, for a Strava account signing in again.
+    @State private var startedStrava = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @FocusState private var focus: Field?
@@ -54,14 +56,47 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Said out loud: a Google or Strava refusal shows above the form,
+        // out of sight from the buttons below it.
+        .onChange(of: form.error) { _, error in
+            if let error { AccessibilityNotification.Announcement(error).post() }
+        }
         .onAppear {
             // Signing in again to delete: the email they're signed in with.
             if form.email.isEmpty, let email = account.signInAgainEmail { form.email = email }
+        }
+        .task {
+            // The ways in first; the sheet is fully up by the time they've
+            // come back. A sign-in that finished while the sheet was still
+            // rising closed it mid-way, and iOS 17 then never called its
+            // onDismiss (CI: deleting didn't come back).
+            async let options: Void = account.loadOptions()
+            try? await Task.sleep(for: .milliseconds(600))
+            await options
+            // A Strava account signing in again: straight to Strava, once
+            // the server has said Strava is on.
+            guard account.signInAgainWithStrava && account.options.strava && !startedStrava && !form.busy else {
+                return
+            }
+            startedStrava = true
+            signInWithStrava()
         }
     }
 
     private var formStep: some View {
         VStack(alignment: .leading, spacing: 20) {
+            if account.signInAgainWithStrava {
+                // Its sign-in email is a placeholder: the password form
+                // can't work, so say why; Strava starts by itself.
+                Text(
+                    account.afterSignIn == .connectStrava
+                        ? "Sign in with Strava again, then connect it."
+                        : "Sign in with Strava again to delete your account."
+                )
+                .font(.plexSans(.body))
+                .foregroundStyle(Palette.fg)
+                .accessibilityIdentifier("sign-in-again-strava")
+            }
             Picker("Sign in or create an account", selection: $form.mode) {
                 Text("Sign in").tag(SignInForm.Mode.signIn)
                 Text("Create account").tag(SignInForm.Mode.createAccount)
@@ -124,31 +159,12 @@ struct SignInView: View {
                     .foregroundStyle(Palette.primaryText)
                     .frame(minHeight: 44)
             }
-            strava
+            OtherWaysIn(
+                options: account.options, stravaSaidOff: account.stravaSaidOff, failed: account.optionsFailed,
+                busy: form.busy,
+                google: signInWithGoogle, strava: signInWithStrava,
+                tryAgain: { Task { await account.loadOptions() } })
         }
-    }
-
-    /// Strava's own button, unaltered (their brand guidelines).
-    private var strava: some View {
-        VStack(spacing: 12) {
-            Divider().overlay(Palette.border)
-            Text("Or use your Strava account")
-                .font(.plexSans(.body))
-                .foregroundStyle(Palette.muted)
-            Button(action: signInWithStrava) {
-                Image("ConnectWithStrava").resizable().scaledToFit().frame(height: 48)
-            }
-            .buttonStyle(.plain)
-            .disabled(form.busy)
-            .accessibilityLabel("Connect with Strava")
-            .accessibilityIdentifier("strava-sign-in")
-            Text("Already have an account? Sign in first, then connect Strava in Account on paddlesnitch.com.")
-                .font(.plexSans(.subheadline))
-                .foregroundStyle(Palette.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
     }
 
     private var terms: some View {
@@ -193,17 +209,19 @@ extension SignInView {
         }
     }
 
-    /// The system's sign-in browser, which shares Safari's cookies: someone
-    /// signed in to Strava there needn't sign in again. The sample server
-    /// answers at once.
-    private func openStrava(_ start: URL) async throws -> URL {
-        if PaddlesnitchApp.usesSampleServer { return SampleServer.stravaBrowser(start) }
-        do {
-            return try await webAuthenticationSession.authenticate(
-                using: start, callbackURLScheme: StravaSignIn.callbackScheme, preferredBrowserSession: .shared)
-        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
-            throw CancellationError()
+    private func signInWithGoogle() {
+        focus = nil
+        Task {
+            if await form.signInWithGoogle(to: account, browser: openGoogle) { dismiss() }
         }
+    }
+
+    private func openGoogle(_ start: URL) async throws -> URL {
+        try await SignInBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.googleBrowser)
+    }
+
+    private func openStrava(_ start: URL) async throws -> URL {
+        try await SignInBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.stravaBrowser)
     }
 }
 

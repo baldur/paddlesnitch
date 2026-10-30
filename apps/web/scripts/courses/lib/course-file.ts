@@ -9,7 +9,8 @@ type Place = { at: LatLng; heading: number; frame?: string }
 export type Observation = {
   kind: string; side?: 'left' | 'right'; note?: string
   name?: string; style?: string; mast?: 'left' | 'right'; cover?: string; boats?: string
-  count?: number; points?: LatLng[] // anglers along a stretch; posts in the water
+  count?: number; points?: LatLng[] // anglers along a stretch; posts in the water; a path's line
+  length?: number; paint?: string; crew?: string // one boat seen moored: its length (m), paintwork and who's on deck
 } & (Place | { from: Place; to: Place })
 
 export type Cover = 'park' | 'trees' | 'gardens' | 'wild'
@@ -18,9 +19,10 @@ export type CourseFile = {
   speedup: number; warp: number; start: number; finish: number
   line: XZ[]; width: number[]
   banks: Array<{ side: -1 | 1; from: number; to: number; cover: Cover }>
-  walls: Array<{ side: -1 | 1; from: number; to: number }>
-  bridges: Array<{ s: number; name?: string; style: string; mast?: -1 | 1 }>
-  moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' | 'tatty' }>
+  walls: Array<{ side: -1 | 1; from: number; to: number; style?: string }>
+  /** `ends`: the road over it, where the map has one (a bridge can cross at a slant). */
+  bridges: Array<{ s: number; name?: string; style: string; mast?: -1 | 1; ends?: [XZ, XZ] }>
+  moorings: Array<{ s: number; length: number; side: -1 | 1; kind: 'cruiser' | 'narrowboat' | 'trip-boat' | 'tatty'; paint?: string; crew?: string }>
   buildings: Array<{ shape: XZ[]; height: number; kind: 'house' | 'flats' | 'boathouse' | 'other'; style?: string }>
   woods: XZ[][]
   trees: XZ[]
@@ -31,6 +33,10 @@ export type CourseFile = {
   birds: Array<{ s: number; count: number; spread: number }>
   /** Posts standing in the water (solid). */
   posts?: XZ[]
+  /** Footpaths along the bank (a portage's run): trees keep off them. */
+  paths?: XZ[][]
+  /** Things seen in the footage at a point on the bank, each drawn by its own model (world.js FEATURES). */
+  features?: Array<{ style: string; at: XZ }>
   /** People fishing from the bank, a line out into the water each. */
   anglers?: Array<{ s: number; side: -1 | 1 }>
   /** The water's outlines (rings of the river's areas and its islands), to shape the land. */
@@ -123,14 +129,25 @@ export function routePlaces(shapes: Array<{ name: string; shape: XZ[] }>, list: 
 export function bridges(things: RiverThing[], styles: Map<string, { style: string; mast?: -1 | 1 }>): CourseFile['bridges'] {
   const crossings = things.filter((t) => t.kind === 'bridge').sort((a, b) => a.s - b.s)
   const out: CourseFile['bridges'] = []
+  const longest = new Map<CourseFile['bridges'][number], number>()
   for (const c of crossings) {
-    const last = out.at(-1)
+    let last = out.at(-1)
     if (last && c.s - last.s < 40) {
       // Prefer the bridge's own name ("Caversham Bridge") over a road on it.
       if (c.tags.man_made === 'bridge' && c.name) last.name = c.name
-      continue
+    } else {
+      last = { s: r1(c.s), name: c.name, style: 'arch' }
+      out.push(last)
     }
-    out.push({ s: r1(c.s), name: c.name, style: 'arch' })
+    // The way across: the longest road or path over it, end to end.
+    if (c.tags.highway && c.shape && c.shape.length > 1) {
+      const [a, b] = [c.shape[0], c.shape.at(-1)!]
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+      if (len > (longest.get(last) ?? 0)) {
+        longest.set(last, len)
+        last.ends = [pts([a])[0], pts([b])[0]]
+      }
+    }
   }
   for (const b of out) Object.assign(b, (b.name && styles.get(b.name)) ?? {})
   return out
@@ -223,8 +240,11 @@ export function courseFile(input: {
   const walls: CourseFile['walls'] = []
   const moorings: CourseFile['moorings'] = []
   const flats: Array<{ from: number; to: number; side: -1 | 1 }> = []
+  const styled: Array<{ from: number; to: number; side: -1 | 1; style: string }> = [] // houses along a stretch, in a style
+  const features: NonNullable<CourseFile['features']> = []
   const marked: Array<{ at: XZ; style: string }> = [] // an unnamed building given a bespoke model
   const posts: XZ[] = []
+  const paths: XZ[][] = []
   const anglers: NonNullable<CourseFile['anglers']> = []
   const styles = new Map<string, { style: string; mast?: -1 | 1 }>()
   for (const o of input.observations) {
@@ -237,11 +257,18 @@ export function courseFile(input: {
     }
     const sp = span(o)
     if (o.kind === 'bank') banks.push({ side: sp.side, from: r1(sp.from), to: r1(sp.to), cover: o.cover as Cover })
-    else if (o.kind === 'wall') walls.push({ side: sp.side, from: r1(sp.from), to: r1(sp.to) })
-    else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand))
+    else if (o.kind === 'wall') walls.push({ side: sp.side, from: r1(sp.from), to: r1(sp.to), ...(o.style ? { style: o.style } : {}) })
+    else if (o.kind === 'moorings' && o.length) {
+      // One boat, as seen: its length, and its paint and crew if they stood out.
+      const kind = (o.boats && o.boats in BOATS ? o.boats : 'cruiser') as keyof typeof BOATS
+      moorings.push({ s: r1(sp.from), length: o.length, side: sp.side, kind, ...(o.paint ? { paint: o.paint } : {}), ...(o.crew ? { crew: o.crew } : {}) })
+    } else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand))
     else if (o.kind === 'buildings' && o.style === 'flats') flats.push(sp)
+    else if (o.kind === 'buildings' && o.style) styled.push({ ...sp, style: o.style })
+    else if (o.kind === 'feature' && 'at' in o && o.style && input.toXZ) features.push({ style: o.style, at: pts([input.toXZ(o.at)])[0] })
     else if (o.kind === 'landmark' && 'at' in o && o.style && input.toXZ) marked.push({ at: input.toXZ(o.at), style: o.style })
     else if (o.kind === 'posts' && input.toXZ) posts.push(...(o.points ?? []).map((p) => pts([input.toXZ!(p)])[0]))
+    else if (o.kind === 'path' && input.toXZ) paths.push(pts((o.points ?? []).map((p) => input.toXZ!(p))))
     else if (o.kind === 'anglers') {
       // Evenly along the stretch, each nudged a little.
       const n = o.count ?? 1
@@ -265,6 +292,7 @@ export function courseFile(input: {
       const levels = Number(t.tags['building:levels'])
       const height = Number.isFinite(levels) && levels > 0 ? levels * 3 + 1 : HEIGHTS[kind]
       const style = (t.name ? input.styles?.[t.name] : undefined) ?? styleAt.get(t)
+        ?? styled.find((f) => t.s >= f.from && t.s <= f.to && Math.sign(t.lateral) === f.side)?.style
       return { shape: pts(thin(t.shape!, 12)), height, kind, ...(style ? { style } : {}) }
     })
 
@@ -297,6 +325,8 @@ export function courseFile(input: {
     }),
     water: (input.water ?? []).map(pts),
     ...(posts.length ? { posts } : {}),
+    ...(features.length ? { features } : {}),
+    ...(paths.length ? { paths } : {}),
     ...(anglers.length ? { anglers: anglers.sort((a, b) => a.s - b.s) } : {}),
   }
 }

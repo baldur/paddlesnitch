@@ -16,7 +16,6 @@ struct YouView: View {
         var id: String { path }
     }
 
-    static let account = [WebPage(title: "Your profile", path: "/profile/me")]
     static let about = [
         WebPage(title: "Privacy policy", path: "/privacy"),
         WebPage(title: "Terms of Service", path: "/terms"),
@@ -51,7 +50,6 @@ struct YouView: View {
                             Text("Devices").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
-                        rows(Self.account)
                         Button("Sign out", role: .destructive) { confirmingSignOut = true }
                             .font(.plexSans(.body))
                             .foregroundStyle(Palette.red)
@@ -82,6 +80,8 @@ struct YouView: View {
                         Text("Version").foregroundStyle(Palette.fg)
                         Spacer()
                         Text(Self.version).foregroundStyle(Palette.muted)
+                            // iOS 17's audit cut it short (text clipped).
+                            .fixedSize()
                     }
                     .font(.plexSans(.body))
                     .accessibilityElement(children: .combine)
@@ -98,8 +98,9 @@ struct YouView: View {
                 }
             }
             .onChange(of: account.user?.id) { _, id in
-                // Signed in again to delete: straight back to the account.
-                if id != nil && account.deleteAfterSignIn { path = NavigationPath([Route.account]) }
+                // Signed in again to delete or connect Strava: straight back
+                // to the account.
+                if id != nil && account.afterSignIn != nil { path = NavigationPath([Route.account]) }
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in

@@ -29,6 +29,7 @@ export default function TechnicalDetails({ report, cadence, attitude }: {
         )}
         <p className="text-muted leading-relaxed">Stroke rate: {report.strokeRate.reason}{cadence && !cadence.available ? ` Motion data: ${cadence.reason}` : ''}</p>
         {report.strokeRate.evidence && <p className="text-muted leading-relaxed">{report.strokeRate.evidence}</p>}
+        {attitude && !attitude.available && <p className="text-muted leading-relaxed">Boat motion: {attitude.reason}</p>}
         {attitude?.available && (
           <p className="text-muted">Roll range {attitude.rollP5Deg}° … {attitude.rollP95Deg}°{attitude.symmetry ? `; one side to ${attitude.symmetry.sideADeg}°, the other to ${attitude.symmetry.sideBDeg}°` : ''}.</p>
         )}

@@ -228,11 +228,26 @@ public final class SignInForm {
         return false
     }
 
+    public func signInWithGoogle(to account: AccountModel, browser: (URL) async throws -> URL) async -> Bool {
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            try await account.signInWithGoogle(browser: browser)
+            return true
+        } catch is CancellationError {
+        } catch {
+            self.error = Self.message(for: error)
+        }
+        return false
+    }
+
     static func message(for error: any Error, fallback: String = "Couldn't sign in. Please try again.") -> String {
         switch error {
         case PaddleAPIError.rejected(let message, _, _): message
         case PaddleAPIError.codeNeeded(let message): message
         case let strava as StravaSignInError: strava.message
+        case let google as GoogleSignInError: google.message
         case is TokenStoreError: "Signed in, but this iPhone wouldn't keep you signed in. Try again."
         case is URLError: "Couldn't reach paddlesnitch. Check your connection and try again."
         default: fallback

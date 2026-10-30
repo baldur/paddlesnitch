@@ -34,8 +34,9 @@ isn't obvious from the code.
   differ (alerts, dialogs, tab bars). There's no iOS 17 simulator on this Mac.
 - The audit's clipped-text check flags a text field with text in it (our
   Plex font) as clipped when nothing is: zoomed screenshots show the whole
-  text, descenders too. Audit a filled form without `.textClipped`, and check
-  clipping in `LargeTextTests` with the fields empty.
+  text, descenders too. `AppTestCase.audit` ignores that one report on text
+  fields (`isTextFieldClipWarning`); check clipping in `LargeTextTests` with
+  the fields empty.
 - iOS shows "Use Strong Password?" on a new-password field and "Save
   Password?" after it's sent, at different moments on each iOS (26.5 and 27
   differ), covering buttons and swallowing keys. With `-SampleServer` the
@@ -49,7 +50,35 @@ isn't obvious from the code.
   (`pgrep -f "^/Applications/Xcode.app/.*/xcodebuild test"`): a pattern like
   `pgrep -f "xcodebuild test"` also matches the waiting shells' own command
   lines, and two of them wait on each other forever. A download
-  (`xcodebuild -downloadPlatform`) is an xcodebuild too.
+  (`xcodebuild -downloadPlatform`) is an xcodebuild too. Never wait on another
+  queued job by a name in its command (a log file, a script name): its own
+  line holds that name, and two such waits deadlocked three runs for hours.
+  Queue several runs as one script that runs them in turn.
+- The audit's clip report on no element also comes from a row half under the
+  navigation or tab bar. `AppTestCase.audit` looks up to three times, moving
+  the page a little before each, and fails only if every look reports it: a
+  real clip is layout and stays. On a long List the largest-text check goes
+  section by section (`checkScreen(at:)`), as each check resizes the text and
+  the List jumps back up.
+- A test helper must never tap by accident: a short press-and-drag counts as
+  a tap on whatever it starts on (it flipped "Make profile private" between
+  audit looks). Scroll with a clear drag from a margin, and check the
+  screenshots for state that changed between steps.
+- On a long List at the largest text size, rows sit half under a bar
+  wherever the page stops, and the audit reports "may be clipped" on no
+  element at every position with nothing clipped in the screenshots. There
+  (`LargeTextTests.checkScreen`) only reports pinned to an element fail; the
+  screenshots are kept. Everywhere else (`checkWholeScreen`, the screens'
+  audits) element-less reports still fail: the real "N…" clip came as one.
+- Open a sheet from a sheet's result only once the first has finished
+  closing (`onDismiss`, kept as `AccountModel.signInSheetUp`), never after a
+  fixed delay: iOS 17 on CI took longer than 700 ms, and a sheet asked to
+  open while another closes is dropped without a word. Not through the
+  environment: iOS 17 doesn't pass its changes to pushed screens.
+- A sheet closed while it's still opening (a sign-in that finishes at once
+  against the sample server) gets no `onDismiss` on iOS 17. Let a sheet be
+  fully up before it acts by itself, and don't let a flag that only
+  `onDismiss` clears be the only way on.
 - Push screens by value, with the destination declared on a screen that
   stays in the stack (`navigationDestination(for:)`). On iOS 17 a
   `NavigationLink { destination }` two screens under a typed path hung
@@ -57,6 +86,37 @@ isn't obvious from the code.
   You's path is a `NavigationPath`, so a pushed screen can add its own routes.
 - iOS 17's audit cuts long text in List rows and section footers where newer
   iOS doesn't: give every sentence `.fixedSize(horizontal: false, vertical: true)`.
-- Test scrolls start in the side margin (`swipe(up:)`), outside every
+- Test scrolls start in the right margin (`swipe(up:)`), outside every
   row: `app.swipeUp()` starts mid-screen, and at the largest text size it
-  landed on a tracker card and opened it.
+  landed on a tracker card and opened it. Not the left margin: the back
+  gesture has it, and in the sign-in sheet a drag there scrolled nothing.
+- UI test time: XCTest's waits (`waitForExistence`, `waitForNonExistence`,
+  `XCTNSPredicateExpectation`) first look a full second after they start, even
+  when the element is already there. With ~15 per test that was a third of
+  every test, and the newest-iOS job crept past its 70-minute limit. Use
+  `appears(timeout:)`, `disappears(timeout:)` and `poll(timeout:)`
+  (`Tests/UI/Waiting.swift`); SwiftLint's `xctest_waits` rule enforces it.
+  Also check `exists` before `isHittable`: on a missing element it spends ~2 s
+  looking. To find where a test's time goes, run it with `-resultBundlePath`
+  and read the gaps between steps in
+  `xcrun xcresulttool get test-results activities --test-id …`.
+- `scrollToElement` drags by the distance it measures, then holds. A fixed
+  fast swipe flung the page past a target at the largest text size, and back,
+  for all ten tries. It stops when a drag leaves the target where it was (the
+  page goes no further). Without that, one large-text test made 111 drags and
+  seven times main's looks.
+- Every look a UI test takes (`exists`, `frame`, a tap) makes XCTest log
+  inside the app. Once the tests got faster, the system quarantined the app's
+  logging for volume (`QUARANTINED DUE TO HIGH LOGGING VOLUME`), and on iOS 17
+  that crashes XCTest's own code in the app. The test sees "not running" or
+  "Lost connection", and the crash report shows
+  `runtime_issue_os_log_fault_callback` → `strcmp`. So `AppTestCase` launches
+  the app with `OS_ACTIVITY_MODE=disable`, and `poll` backs off to one look a
+  second. To measure log volume, count the app's lines with
+  `xcrun simctl spawn <udid> log stream --predicate 'process == "Paddlesnitch"'`,
+  or search `log show` for `QUARANTINED`.
+- CI's log has no test lines until the run ends, because xcbeautify holds
+  them back. A cancelled job's only clue is the `IDELaunchParametersSnapshot`
+  lines, one per app launch. `make test-app` therefore gives each test 6
+  minutes (`-default-test-execution-time-allowance`), and CI keeps the results
+  when a job is cancelled too.

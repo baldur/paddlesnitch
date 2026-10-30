@@ -4,7 +4,7 @@
 
 Owner's decisions, 2026-10-24:
 
-- **Sign in for races.** Anyone can paddle the practice time trial; Division 9, Reading Thames, the Time Trial Loop, the leaderboard and live races need a paddlesnitch account.
+- **Sign in for races.** Anyone can paddle practice; the Time Trial Loop, Hasler Div 7-9, Hasler Div 1-6, the leaderboard and live races need a paddlesnitch account. (Since 2026-10-30 every course is on the real river at Reading; the made-up Division 9 river and the point-to-point Reading Thames left the menu, and their leaderboards are no longer shown. `GAME_COURSES` keeps their ids.)
 - **Join by link.** One player creates a race and shares a link (or its four-letter code); friends open it and join.
 - **Every race goes through our own relay** (API Gateway WebSocket + one Lambda, state in S3, no database). Not direct phone-to-phone.
 

@@ -7,19 +7,20 @@
 // `post`: hidden fields to POST to `href` in a form, instead of a link.
 const CLASS = 'inline-flex items-center gap-3 h-11 px-4 rounded-control border border-[#8E918F] bg-[#131314] text-[#E3E3E3] text-sm font-medium cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
 
-export default function GoogleButton({ href, post }: { href: string; post?: Record<string, string> }) {
+// `label`: one of Google's own wordings (Sign in / Continue with Google).
+export default function GoogleButton({ href, post, label = 'Sign in with Google' }: { href: string; post?: Record<string, string>; label?: 'Sign in with Google' | 'Continue with Google' }) {
   if (post) {
     return (
       <form method="post" action={href}>
         {Object.entries(post).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-        <button type="submit" className={CLASS}><GoogleG />Sign in with Google</button>
+        <button type="submit" className={CLASS}><GoogleG />{label}</button>
       </form>
     )
   }
   return (
     <a href={href} className={CLASS}>
       <GoogleG />
-      Sign in with Google
+      {label}
     </a>
   )
 }

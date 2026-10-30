@@ -76,6 +76,25 @@ describe('the leaderboard', () => {
     expect(plausible('practice', Number.NaN)).toBe(false)
   })
 
+  it("takes results on the Reading Hasler courses, at their own distances, and keeps the old courses", async () => {
+    expect(plausible('hasler79', 1580)).toBe(true) // 7900 m at 18 km/h
+    expect(plausible('hasler79', 1579)).toBe(false)
+    expect(plausible('hasler16', 2520)).toBe(true) // 12600 m
+    expect(plausible('hasler16', 2519)).toBe(false)
+    expect((await as(PAT).games.submit({ course: 'hasler79', time: 2400, hull: 'club' })).best).toBe(true)
+    expect((await as(SAM).games.leaderboard({ course: 'hasler16' })).top).toEqual([])
+    const { room } = await as(PAT).games.live.create({ course: 'hasler16' })
+    expect(room.course).toBe('hasler16')
+    // A board stored before the Hasler courses still reads back, under its old key.
+    for (const course of ['race', 'practice', 'reading', 'loop'] as const) {
+      const file = path.join(dir, 'games/kayak/leaderboard', `${course}.json`)
+      await fs.mkdir(path.dirname(file), { recursive: true })
+      await fs.writeFile(file, JSON.stringify([{ userId: 'user-old', name: 'Old T.', time: 3000, hull: 'club', at: '2026-10-01T00:00:00Z' }]))
+      const { top } = await as(null).games.leaderboard({ course })
+      expect(top.map(e => e.name)).toEqual(['Old T.'])
+    }
+  })
+
   it('keeps the top 100', () => {
     let board = Array.from({ length: 100 }, (_, i) => ({ userId: `u${i}`, name: 'x', time: 1000 + i, hull: 'club', at: '' }))
     board = withResult(board, { userId: 'new', name: 'y', time: 999, hull: 'club', at: '' }).board

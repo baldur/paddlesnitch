@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AppHeader from '@/components/AppHeader'
 import BoatMotion from '@/components/devices/BoatMotion'
+import TechnicalDetails from '@/components/devices/TechnicalDetails'
 import LoadingState from '@/components/LoadingState'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
@@ -11,6 +12,7 @@ import { EmptyState } from '@paddlesnitch/ui/Card'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
+import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import { fmtDayTime } from '@paddlesnitch/core/format'
 
 const fmtDate = (iso?: string) => (iso ? fmtDayTime(iso) : '—')
@@ -20,6 +22,7 @@ export default function RecordingMotion() {
   const sessionId = params?.sessionId ?? ''
   const deviceId = (params?.deviceId ?? '').toUpperCase()
   const [meta, setMeta] = useState<DeviceSessionMeta | null | 'missing'>(null)
+  const [report, setReport] = useState<DeviceDataReport | null>(null)
   const [attitude, setAttitude] = useState<AttitudeReport | null>(null)
   const [cadence, setCadence] = useState<CadenceReport | null>(null)
   const [noPaddle, setNoPaddle] = useState<string | null>(null)
@@ -42,6 +45,9 @@ export default function RecordingMotion() {
         const res = await fetch(`/api/account/devices/sessions/${sessionId}?deviceId=${encodeURIComponent(found.deviceId)}`)
         const d = await res.json()
         if (cancelled) return
+        // A failed read is an error, not "no motion yet".
+        if (!res.ok || !d.report) { setState('error'); return }
+        setReport(d.report)
         setAttitude(d.attitude ?? null)
         setCadence(d.cadence ?? null)
         setNoPaddle(d.noPaddle ?? null)
@@ -79,6 +85,7 @@ export default function RecordingMotion() {
             {noPaddle && <p className="text-base text-fg border-l-2 border-primary pl-3 -mt-4">{noPaddle}{fromMotion ? ` ${fromMotion}` : ''}</p>}
 
             <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} />
+            {report && <TechnicalDetails report={report} cadence={cadence} attitude={attitude} />}
           </>
         )}
       </Page>

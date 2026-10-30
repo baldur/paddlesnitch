@@ -10,6 +10,9 @@ import { fmtWeekday, fmtMonth, compassPoint, fmtDayTime } from '@paddlesnitch/co
 import { fmtDay as deviceDay, fmtDist, fmtAgo } from '@/lib/device-view'
 import { paddleKm } from '@paddlesnitch/core/paddles'
 import { noPaddleMessage, type NoPaddleReason } from '@paddlesnitch/timing/device'
+import { noMotionCopy, fmtEvenness } from '@/lib/tracker-copy'
+import { axisTicks } from '@/lib/boat-motion-chart'
+import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 export type DesignTokens = {
   color: Record<string, string>
@@ -60,6 +63,16 @@ export function formatCases() {
       ...[0.4, 89, 90, 5399, 5400, 8100, 9000].map(s => ({ reason: lost(s), hasMotion: true })),
       { reason: { kind: 'too_short', movedM: 12, minM: 100 }, hasMotion: true },
     ]),
+    // Boat motion (the Motion screen). `in` is the answer's `attitude`, cut to what
+    // decides the words: null (no motion file yet) or one that measured nothing.
+    noMotionCopy: cases((a: { available: false; reason: string } | null) => noMotionCopy(a as AttitudeReport | null), [
+      // An empty reason counts as no reason: the motion file hasn't arrived.
+      null, { available: false, reason: '' }, { available: false, reason: 'Motion file has too few samples to describe attitude.' },
+    ]),
+    // 0.5 and 10.5 are exact ties: JavaScript rounds them up.
+    fmtEvenness: cases(fmtEvenness, [0, 0.3, 0.5, -0.5, 10.49, 10.5, -10.5, 99.6]),
+    // The y-axis ticks of the boat-motion charts, for a chart's ±bound in degrees.
+    axisTicks: cases(axisTicks, [1, 2, 5.9, 6, 6.1, 10, 10.57, 12, 12.1, 14.21, 25]),
     roundStrokes: cases(roundStrokes, [0, 7, 999, 1000, 1049, 1050, 12345, 1234567]),
     // The tracker pages (lib/device-view.ts). null = no value ("never", "—").
     fmtDay: cases((i: string | null) => deviceDay(i ?? undefined), ['2026-09-13T07:30:00.000Z', '2026-09-14T00:30:00+01:00', '2026-09-13', null]),

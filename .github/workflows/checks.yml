@@ -123,7 +123,7 @@ jobs:
   # tracker here, so this checks what decides whether they would agree: that
   # no build fuses multiply-adds (fixtures/fp_contract).
   recorder-core-builds:
-    name: recorder core builds (CMake, Android, ESP32-S3)
+    name: recorder core builds (CMake, Android, ESP32-S3, WebAssembly)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -157,6 +157,18 @@ jobs:
           pip install --upgrade platformio
           pio pkg install --global --tool "espressif/toolchain-xtensa-esp32s3@8.4.0+2021r2-patch5"
           bash recorder-core/test/esp32_no_fma.sh
+      # The server's build: every fixture replayed through the WebAssembly
+      # module under Node. wasi-sdk publishes no checksums, so it's pinned here.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: WebAssembly build and fixtures
+        run: |
+          curl -fsSL -o /tmp/wasi-sdk.tar.gz \
+            https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
+          echo "52640dde13599bf127a95499e61d6d640256119456d1af8897ab6725bcf3d89c  /tmp/wasi-sdk.tar.gz" | sha256sum -c -
+          tar xzf /tmp/wasi-sdk.tar.gz -C /tmp
+          make -C recorder-core wasm WASI_SDK=/tmp/wasi-sdk-25.0-x86_64-linux
 
   games:
     name: games in browsers

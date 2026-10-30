@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "AttitudeBucket.schema.json",
+  "type": "object",
+  "properties": {
+    "t": {
+      "type": "number"
+    },
+    "rollMin": {
+      "type": "number"
+    },
+    "rollMax": {
+      "type": "number"
+    },
+    "pitchMin": {
+      "type": "number"
+    },
+    "pitchMax": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "t",
+    "rollMin",
+    "rollMax",
+    "pitchMin",
+    "pitchMax"
+  ]
+}

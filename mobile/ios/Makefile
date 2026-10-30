@@ -26,11 +26,14 @@ test: test-packages test-app
 test-packages:
 	swift test --package-path $(PACKAGE)
 
+# A test that hangs fails after 6 minutes (with a spindump in the results)
+# instead of running into CI's job timeout. The slowest passes in about 3.5 minutes on CI.
 test-app: project
 	set -o pipefail && xcodebuild test \
 	  -project Paddlesnitch.xcodeproj -scheme Paddlesnitch \
 	  -destination "platform=iOS Simulator,id=$$(scripts/simulator.sh $(IOS))" \
 	  -derivedDataPath $(DERIVED) \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 360 \
 	  | xcbeautify
 
 lint:

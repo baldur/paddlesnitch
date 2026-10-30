@@ -1,6 +1,6 @@
 # Game courses from 360 video
 
-✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/kayak/`).
+✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/kayak/`). Since 2026-10-30 Reading Thames is the **world** every course is raced on: the Time Trial Loop, **Hasler Div 7-9**, **Hasler Div 1-6** (with a portage at Mapledurham) and **Practice** (see [One river, many courses](#one-river-many-courses)).
 
 A toolchain that turns paddling videos with GPS into a real river in the kayak game. It's built so that more courses are the same few commands. The longer-term aim is to let other people submit video, so the toolchain doubles as a way of surveying rivers: what's on each bank, where boats moor, where the locks and slipways are.
 
@@ -48,16 +48,20 @@ Each recording's fixes are placed on the line and split into **passes** at each 
 What the frames show, **tied to places, not to the course**: each item has `at` (or `from`/`to`) as lat/lng, the camera's `heading`, `side` (left/right of travel at that heading), and `frame` naming the evidence. Kinds used so far:
 
 - `bank`, with `cover`: `park`, `trees`, `gardens` or `wild`.
-- `moorings`, with `boats`: `cruiser`, `narrowboat`, `trip-boat`, `tatty` (tired old cruisers: tarps, faded paint, flags) or `mixed`.
-- `buildings`, with `style: 'flats'`.
+- `moorings`, with `boats`: `cruiser`, `narrowboat`, `trip-boat`, `tatty` (tired old cruisers: tarps, faded paint, flags) or `mixed`. With `length` it's one boat, as seen: `paint` (`maroon`, `navy`) and `crew` (`statues`: the Lara Croft figures; `tower`: a wakeboard boat's tower).
+- `buildings`, with `style`: `flats` (made tall) or `clapboard` (white and grey board houses with decks and jetties), for the OSM buildings on that side of the stretch.
 - `bridge`, with `style` (`cable-stayed` or `concrete-arch`) and `mast`.
 - `railway`.
-- `wall`: a quay or revetment at the water's edge.
+- `wall`: a quay or revetment at the water's edge; `style: 'brick'` for a tall brick wall straight out of the water (under the railway below Mapledurham).
+- `feature`, with `style` and `at` (a point on the bank, not the camera): a thing seen in the footage with its own model (`FEATURES` in `world.js`), built at that point facing the water: `beach`, `sandbags`, `channel-sign`, `mailbox`, `gazebo`, `sculling-club`, `glass-restaurant`, `ferry-landing`, `marina`, `willow`. Other trees keep off it (`CLEAR`).
+- `path`, with `points`: a footpath along the bank (a portage's run). Drawn as gravel; trees keep off it.
 - `landmark`, with `style`: an unnamed building to draw as a bespoke model, given by a point beside it (`at`): the nearest OSM footprint within 40 m gets the style. Named buildings use `styles` in `course.json` instead.
 - `posts`, with `points` (lat/lng each): posts standing in the water. Solid in the game.
 - `anglers`, with `count` and a stretch (`from`/`to`, `side`): people fishing from that bank, spread along it.
 
 **Owner's spots (2026-10-25).** The owner gave GPS points for things to make more recognisable. Finding them in the footage: take each recording's `track.json` (from `course:ingest`), find the fixes within ~40 m of the point, one per pass, and pull flat views from the 360 at that moment towards the point (ffmpeg `v360` as `frames.ts` does, a narrow `h_fov` to zoom). From those came the posts off St Mary's Island, the riverside villa, the spiral-stair and grey boathouses, the canoe club's details, the tatty cruisers below Caversham Bridge and the anglers on the Promenade.
+
+**Owner's spots (2026-10-30).** Eleven more points, from Christchurch Bridge to the portage, plus a boat found in the pair footage (`Raw/pair/GS030094.360` at 6:33): the glass house and its willow, the marina at Riverside Park, the railway's brick wall with its red "mailbox", the gazebo and cruiser opposite, the Lara Croft narrowboat, the clapboard houses below Mapledurham, the beach and CHANNEL sign, the sandbag put-in, the sculling club by Christchurch Meadows, the glass restaurant and the ferry landing at the Village Hotel. Most pins were dropped on the water: walk from the pin across the mapped water to the bank on the named side (or the nearer one) for the thing's `at`, and check the side three ways (the owner's words, which way the pass was heading, and what OSM has there: a trailer park, the railway embankment, the hotel). A pass's left and right are the camera's: the kayak trips went down first round Caversham Bridge, so there "pass 0" is the downstream one. The review page every 100 m (footage over the game, four ways, with notes and a comment per spot) is built from `course:frames reading --step 100` and game screenshots taken with `#debug` at the frames' fixes.
 
 A course can use another's observations (`observations` in `course.json`): the Time Trial Loop uses Reading's, placed on its own river line.
 
@@ -70,7 +74,7 @@ Because they're geo-referenced, the same observations can feed another course on
 Combines the river and the observations into what the game draws:
 
 - `line` and `width`: a running median takes out spikes where a ray slipped into a side stream, clamped to 20–100 m.
-- `banks` (cover per stretch), `walls`, `moorings` (rows of boats filling each observed stretch), `bridges` (one per crossing cluster, under the bridge's own OSM name, styled from the observations).
+- `banks` (cover per stretch), `walls`, `moorings` (rows of boats filling each observed stretch), `bridges` (one per crossing cluster, under the bridge's own OSM name, styled from the observations, with `ends`: the longest road over it, so a bridge crossing at a slant is drawn along its road; Caversham Bridge spans both channels round Piper's Island at about 70 degrees, and drawn square across the river line it stood 40 m off in the north channel), `features` (see `feature` above).
 - `places`: the landmarks named on screen as you pass them, from the course's `places` list of OSM names (optionally relabelled, or `{ label, at }` for a point of your own) in `course.json`. On the river line each is named where the line comes nearest; on a route, once each time the route goes by, as you come up to it.
 - `birds`: where swans crowd (`{ near: <OSM name>, count, spread }`).
 - `styles`: OSM building names drawn as bespoke models (`rowing-club`, `canoe-club`), modelled from the frames; `landmark` observations add more by position (`spiral-boathouse`, `grey-boathouse`, `riverside-villa`).
@@ -129,7 +133,17 @@ It's a time trial with **interval starts**: boats wait in two columns by the ban
 
 `course:route <id>` rebuilds a course file's route from `course.json` without the downloads or the footage, from the river line and mapped water already in the file: the legs (`along` the river line between two points, or points to go through), moved off any land, corners rounded to 12 m where there's water for it, the open water either side from the mapped shore; and what's placed along the route: `places` (names found where the file's previous route named them; a label `at` a point; `heading` to name it only on the pass going that way), `birds` (`near` a name, or `at` a point off the line: kept to the real water), `gates` and `cues` (`at` a point, `heading` for the pass), and `marks` (buoys, 4 m out from the nearest shore to `at`). Run it after `course:build` for a course with a route (`course:build` doesn't know these, and skips flocks given `at` a point).
 
-**Rebuilding is reproducible** (checked 2026-10-25): with the cache in `apps/web/.cache/courses/` (the `<rec>/track.json` files and `<id>/river.json`; copy them from the worktree that ran `course:river` if yours has none), `course:build reading` gives the committed file byte for byte, and `course:build loop` then `course:route loop` gives it apart from a place name moving a few metres (route names a place where the previous file's route did, so each run can nudge it). Add new observations at the end of `observations.json`: moorings take random draws in order, so an item added earlier would reshuffle every row after it.
+**Rebuilding is reproducible** (checked 2026-10-25): with the cache in `apps/web/.cache/courses/` (the `<rec>/track.json` files and `<id>/river.json`; copy them from the worktree that ran `course:river` if yours has none), `course:build reading` gives the committed file byte for byte (checked again 2026-10-30, when only the new `paths` changed), and `course:route <id>` rebuilds each course on it (`loop`, `hasler79`, `hasler16`, `practice`) from the world and its `course.json` alone: run them all after rebuilding the world. Add new observations at the end of `observations.json`: moorings take random draws in order, so an item added earlier would reshuffle every row after it.
+
+## One river, many courses
+
+Owner's choice, 2026-10-30: the courses differ, the river doesn't. `reading.json` (built by `course:build reading`) is the world. Every other course's `course.json` says `"world": "reading"` and gives only its route and what goes along it, and `course:route <id>` writes `games/kayak/courses/<id>.json` as the world's file with that route (and `world: 'reading'`, which the game uses to build the river once for all of them). The game's `kayak-courses.test.js` checks the scenery is identical in every file.
+
+- **Hasler Div 7-9** (7.9 km): from the canoe club up the main channel, keeping right of Appletree Eyot, round its upstream end and down its back channel (a gate there), down past the club, keep right of Piper's Island (the south arch), down the right of Fry's Island, round its end before Christchurch Bridge, up its back channel, keep right of Piper's going up (its narrow north channel, by the Reading University boathouses: a gate and a buoy), and home to the club. Appletree Eyot is the lower of the two islands (Poplar Island is just above it).
+- **Hasler Div 1-6** (12.6 km): up to Mapledurham, keeping to the main channel; land on the beach on the left (the owner's point 51.48366, -1.03732), run about 170 m down the bank path, put in behind the island (51.48235, -1.03730), down its back channel, then as Div 7-9 from the club. Raced against a quicker pack (`DIVISION_3`).
+- **Practice**: 1 km up from the club.
+
+The start and the finish are both at the club: `course:route` puts the start on the route's first pass by its point and the finish on the last. **A portage** is a leg `{ "portage": [points on land] }` between the leg that ends where you land and the one that starts where you put in: each stretch of water is moved off the land and smoothed on its own, and the run joins them as given (`joinRuns` in `lib/route.ts`, tested). The file gets `route.portages: [{ from, to }]` and the run's open water is 1 m each side. Give the run the same points as the world's `path` observation, so it follows the gravel path the trees keep off.
 
 ## Adding a course
 

@@ -1,6 +1,6 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { practiceRiver, raceRiver, loadCourse, riverView } from './course.js';
-import { createRace, stepRace, standings, elapsed, projected, applyCall, released, DIVISION_9 } from './race.js';
+import { loadCourse, riverView } from './course.js';
+import { createRace, stepRace, standings, elapsed, projected, applyCall, released, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
@@ -8,7 +8,7 @@ import { BOATS, boatById, hullOf, describe } from './boats.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
-import { buildWorld } from './world.js';
+import { buildWorld, groundAt } from './world.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
 import { TRAFFIC } from './traffic.js';
 import { createRenderer } from './render.js';
@@ -24,15 +24,25 @@ const MIN_FOV_X = (75 * Math.PI) / 180;
 const HULL_KEY = 'snitchmedia:kayak:hull'; // the hull picked before there were boats
 const KIT_KEY = 'snitchmedia:kayak:kit';
 const FORM_KEY = 'snitchmedia:kayak:form'; // sessionStorage: this visit only, for now
+const FORMAT_KEY = 'snitchmedia:kayak:format'; // a race or a time trial, as last picked
 
-// Real rivers come from course files (courses/*.json), loaded when first picked.
+// The courses, all on the one real river at Reading (courses/*.json, made by
+// apps/web/scripts/courses: see docs/features/game-courses-from-video.md),
+// loaded when first picked. Each is a race (everyone off together) or a time
+// trial (interval starts), as picked on the menu; practice is on your own.
 const MODES = {
-  race: { course: raceRiver(6), rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:div9', label: 'Division 9' },
-  practice: { course: practiceRiver(), rivals: [], bestKey: 'snitchmedia:kayak:practice', label: 'Practice' },
-  reading: { file: 'courses/reading.json', rivals: DIVISION_9, bestKey: 'snitchmedia:kayak:reading', label: 'Reading Thames' },
-  loop: { file: 'courses/loop.json', rivals: DIVISION_9, format: 'interval', bestKey: 'snitchmedia:kayak:loop', label: 'Time Trial Loop' },
+  loop: { file: 'courses/loop.json', rivals: DIVISION_9, label: 'Time Trial Loop' },
+  hasler79: { file: 'courses/hasler79.json', rivals: DIVISION_9, label: 'Hasler Div 7-9' },
+  hasler16: { file: 'courses/hasler16.json', rivals: DIVISION_3, label: 'Hasler Div 1-6' },
+  practice: { file: 'courses/practice.json', rivals: [], label: 'Practice', solo: true },
 };
 for (const [key, m] of Object.entries(MODES)) m.key = key;
+const FORMATS = { mass: 'race', interval: 'time trial' };
+let format = 'mass';
+try { if (FORMATS[localStorage.getItem(FORMAT_KEY)]) format = localStorage.getItem(FORMAT_KEY); } catch {}
+// Your best on a course, per format (the loop's time trial keeps the key it always had).
+const bestKey = (m, f) => (m.solo || f === 'interval' ? `snitchmedia:kayak:${m.key}` : `snitchmedia:kayak:${m.key}:race`);
+const formatOf = (m) => (m.solo || liveRace ? 'mass' : format);
 // Anyone can paddle practice; the races, the leaderboard and live races need an account.
 const OPEN = new Set(['practice']);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
@@ -69,7 +79,7 @@ const controls = new Controls(canvas);
 
 let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'finished'
 let resumeTo = 'racing';
-let mode = MODES.race;
+let mode = MODES.loop;
 let race;
 let liveries; // racer -> { key, ...colours } (kit.js livery, or one of LIVERIES)
 // Your paddler and boat (kit.js): from this device, or new and random on a
@@ -102,7 +112,7 @@ function reset() {
   const f = form();
   race = createRace(mode.course, {
     rivals: mode.rivals,
-    format: mode.format,
+    format: formatOf(mode),
     seed: liveRace?.seed ?? ((Math.random() * 2 ** 31) | 0),
     you: { hull: hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
@@ -175,7 +185,7 @@ function train(km) {
 const shown = (t) => t * mode.course.warp;
 
 function loadBest() {
-  try { return JSON.parse(localStorage.getItem(mode.bestKey)) ?? null; } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(bestKey(mode, formatOf(mode)))) ?? null; } catch { return null; }
 }
 
 function finish() {
@@ -189,7 +199,7 @@ function finish() {
   const record = !best || time < best.time;
   if (record || (!solo && place < (best.place ?? Infinity))) {
     best = { time: Math.min(time, best?.time ?? Infinity), place: Math.min(place, best?.place ?? Infinity) };
-    try { localStorage.setItem(mode.bestKey, JSON.stringify(best)); } catch {}
+    try { localStorage.setItem(bestKey(mode, formatOf(mode)), JSON.stringify(best)); } catch {}
   }
 
   submitResult(time);
@@ -227,13 +237,13 @@ function toMenu() {
   state = 'menu';
   hud.hidden = true;
   reset();
-  const lines = Object.entries(MODES).map(([name, m]) => {
+  const lines = Object.values(MODES).flatMap((m) => (m.solo ? ['mass'] : ['mass', 'interval']).map((f) => {
     let b;
-    try { b = JSON.parse(localStorage.getItem(m.bestKey)); } catch {}
+    try { b = JSON.parse(localStorage.getItem(bestKey(m, f))); } catch {}
     if (b == null) return '';
     if (typeof b === 'number') b = { time: b };
-    return m.rivals.length ? `${m.label} best: ${ordinal(b.place)}, ${formatTime(b.time)}` : `${m.label} best: ${formatTime(b.time)}`;
-  });
+    return m.solo ? `${m.label} best: ${formatTime(b.time)}` : `${m.label} ${FORMATS[f]} best: ${ordinal(b.place)}, ${formatTime(b.time)}`;
+  }));
   const t = training();
   if (t.races) lines.push(`Form this session: +${(form() * 100).toFixed(1)}% after ${t.races} race${t.races > 1 ? 's' : ''}`);
   els.best.textContent = lines.filter(Boolean).join(' · ');
@@ -385,6 +395,20 @@ document.addEventListener('fullscreenchange', () => {
 matchMedia('(orientation: portrait) and (pointer: coarse)').addEventListener('change', (e) => {
   if (e.matches) pause();
 });
+
+// A race or a time trial, for whichever course is picked next.
+const formatButtons = [...menu.querySelectorAll('[data-format]')];
+function showFormat() {
+  for (const b of formatButtons) b.setAttribute('aria-pressed', String(b.dataset.format === format));
+}
+for (const b of formatButtons) {
+  b.addEventListener('click', () => {
+    format = b.dataset.format;
+    try { localStorage.setItem(FORMAT_KEY, format); } catch {}
+    showFormat();
+  });
+}
+showFormat();
 
 menu.addEventListener('cancel', (e) => e.preventDefault());
 menu.addEventListener('close', async () => {
@@ -784,6 +808,11 @@ function react({ events, splashes }) {
     if (e === 'bank') controls.rumble(0.8, 150);
     if (e === 'bump') controls.rumble(0.6, 120);
     if (e === 'finish') finish();
+    if (e === 'landed') {
+      show('Out of the boat: run it along the bank to the put-in', { small: true, hold: 3 });
+      controls.rumble(0.5, 200);
+    }
+    if (e === 'put-in') show('Back in: paddle on down the river', { small: true, hold: 2.5 });
     if (e === 'line-up') say(race.start.holds ? 'Back to the line' : 'Paddlers, come up to the line');
     if (e === 'nudge') say("Come on up to the line, please. We're waiting for you");
     if (e === 'ready') say('Are you ready?');
@@ -813,7 +842,8 @@ function react({ events, splashes }) {
     if (e === 'go') {
       state = 'racing';
       show('Go!', { hold: 0.6 });
-      if (race.format === 'interval') setTimeout(() => show('Keep right: boats come back the other way', { small: true, hold: 3 }), 1500);
+      // Out and back on the same water: the courses round islands and back to the club.
+      if (race.course.samples.some((p) => p.shared)) setTimeout(() => show('Keep right: boats come back the other way', { small: true, hold: 3 }), 1500);
       controls.rumble(0.8, 300);
     }
     if (e === 'hold') {
@@ -855,7 +885,7 @@ const WATER = [0.07, 0.2, 0.24, 0];
 const THAMES = [0.19, 0.23, 0.16, 0];
 const SUN = normalize([0.35, 0.42, -0.84]);
 
-function boatFrame(b) {
+function boatFrame(b, y = 0) {
   const h = b.heading;
   const f = [Math.sin(h), 0, -Math.cos(h)];
   const r = [Math.cos(h), 0, Math.sin(h)];
@@ -870,7 +900,7 @@ function boatFrame(b) {
   const s = Math.sin(roll);
   const up = [s * r[0], c, s * r[2]];
   const right = [c * r[0], -s, c * r[2]];
-  return { f, up, right, back: f.map((v) => -v), pos: [b.x, 0, b.z] };
+  return { f, up, right, back: f.map((v) => -v), pos: [b.x, y, b.z] };
 }
 
 // Where the player's paddle is in boat space, seen from the cockpit. It rests
@@ -1023,6 +1053,15 @@ function engines(dt) {
   }
 }
 
+// On a portage you run along the bank with the boat on your shoulder: where
+// you stand (the seat's height, so the eye's at a standing height) and the boat.
+function carried(r) {
+  if (!r.portage) return null;
+  const bob = 0.05 * Math.abs(Math.sin(r.boat.time * 9));
+  const g = groundAt(race.course, r.boat.x, r.boat.z) + bob;
+  return { seat: g + 0.75, boat: g + 1.8 };
+}
+
 function placeRacers() {
   const paddles = new Map([...meshes.paddles.values()].map((m) => [m, []])); // mesh -> where
   const hold = (r, matrix) => {
@@ -1031,14 +1070,22 @@ function placeRacers() {
     paddles.get(mesh).push(matrix);
   };
   for (const r of race.racers) {
-    const fr = boatFrame(r.boat);
+    const lift = carried(r);
+    const fr = boatFrame(r.boat, lift?.seat);
     const model = basis(fr.right, fr.up, fr.back, fr.pos);
-    renderer.place(kayakFor(r), [model]);
+    // Carried, the boat's on your right shoulder; no paddling.
+    const hullAt = lift ? [fr.pos[0] + fr.right[0] * 0.55, lift.boat, fr.pos[2] + fr.right[2] * 0.55] : fr.pos;
+    renderer.place(kayakFor(r), [basis(fr.right, fr.up, fr.back, hullAt)]);
     if (r === race.player) {
-      hold(r, multiply(model, paddlePose(r.boat).matrix));
+      if (!lift) hold(r, multiply(model, paddlePose(r.boat).matrix));
       continue;
     }
     const set = paddlerFor(r);
+    if (lift) {
+      renderer.place(set.body, [multiply(model, translation(0, 0, SEAT))]);
+      renderer.place(set.arms, []);
+      continue;
+    }
     // The paddler twists with the stroke; hands stay on the shaft.
     const pose = rivalPaddle(r.boat);
     hold(r, multiply(model, pose.matrix));
@@ -1069,7 +1116,7 @@ function render(time) {
   placeRacers();
   placeTraffic();
   const boat = race.player.boat;
-  const fr = boatFrame(boat);
+  const fr = boatFrame(boat, carried(race.player)?.seat);
 
   // Eye just behind the cockpit, pitched down a touch to see the bow. You
   // lean into each catch, and the boat surges on under you as you drive.
@@ -1096,7 +1143,7 @@ function render(time) {
   frameData.set(race.course.scenery ? THAMES : WATER, 44);
   // Wakes, for the racers and then the nearest other boats (placed so their bow
   // is where a kayak's would be, which is what the water shader expects).
-  const wakes = race.racers.map((r) => r.boat).filter((b) => b.swim <= 0).map((b) => [b.x, b.z, b.heading, b.speed]);
+  const wakes = race.racers.filter((r) => !r.portage).map((r) => r.boat).filter((b) => b.swim <= 0).map((b) => [b.x, b.z, b.heading, b.speed]);
   const near = (race.traffic?.boats ?? []).filter((b) => b.on)
     .sort((a, c) => Math.hypot(a.x - boat.x, a.z - boat.z) - Math.hypot(c.x - boat.x, c.z - boat.z));
   for (const b of near) {
@@ -1112,7 +1159,7 @@ function render(time) {
   const { half } = reflected;
   frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
-  const list = [meshes.worlds.get(mode)];
+  const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
   for (const r of race.racers) {
     list.push(kayakFor(r));
     if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
@@ -1417,12 +1464,21 @@ function paddlerFor(r) {
   return meshes.racers.get(l.key);
 }
 
-// The scenery is built the first time each course is raced.
+// The scenery is built the first time each course is raced: the river once for
+// every course on it (they're all on the one at Reading), and each course's own
+// buoys, start and finish.
+const worldOf = (m) => m.course.world ?? m.key;
 function useWorld() {
-  if (meshes.worlds.has(mode)) return;
-  const world = renderer.createMesh(buildWorld(mode.course));
-  renderer.place(world, [translation(0, 0, 0)]);
-  meshes.worlds.set(mode, world);
+  if (!meshes.worlds.has(worldOf(mode))) {
+    const world = renderer.createMesh(buildWorld(mode.course, 1, 'river'));
+    renderer.place(world, [translation(0, 0, 0)]);
+    meshes.worlds.set(worldOf(mode), world);
+  }
+  if (!meshes.marks.has(mode)) {
+    const marks = renderer.createMesh(buildWorld(mode.course, 1, 'course'));
+    renderer.place(marks, [translation(0, 0, 0)]);
+    meshes.marks.set(mode, marks);
+  }
 }
 
 // --- start up ----------------------------------------------------------------
@@ -1443,6 +1499,14 @@ if (HASH.has('debug')) {
   };
 }
 
+// The menu opens over the first course; the others load when picked.
+try {
+  mode.course = await loadCourse(mode.file);
+} catch (err) {
+  els.nogpu.hidden = false;
+  els.nogpu.textContent = `${err.message} Check your connection and reload the page.`;
+  throw err;
+}
 reset();
 toMenu();
 whoAmI().then((a) => {
@@ -1459,6 +1523,7 @@ try {
   renderer = await createRenderer(canvas);
   meshes = {
     worlds: new Map(),
+    marks: new Map(),
     paddles: new Map(),
     traffic: { sculler: renderer.createMesh(scullerMesh(), 8), eight: renderer.createMesh(eightMesh(), 8), cruiser: renderer.createMesh(cruiserMesh(), 8), motorboat: renderer.createMesh(motorboatMesh(), 8) },
     oar: renderer.createMesh(oarMesh(), 128),

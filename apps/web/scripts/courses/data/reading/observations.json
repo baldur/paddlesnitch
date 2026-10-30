@@ -1,6 +1,9 @@
 {
   "about": "What the 360 frames show along the Thames, Christchurch Bridge to Mapledurham. Positions are where the camera was; `side` is left/right of travel when heading `heading` (degrees from north). `frame` names the evidence (course:frames output).",
-  "recordings": ["0093 (2026-08-14)", "0095 (2026-08-20)"],
+  "recordings": [
+    "0093 (2026-08-14)",
+    "0095 (2026-08-20)"
+  ],
   "labelledBy": "Claude, from frames every 100 m, 2026-10-24",
   "items": [
     {
@@ -8,7 +11,10 @@
       "name": "Christchurch Bridge",
       "style": "cable-stayed",
       "mast": "left",
-      "at": [51.46225, -0.9706],
+      "at": [
+        51.46225,
+        -0.9706
+      ],
       "heading": 300,
       "note": "2015 foot and cycle bridge: white steel deck on one tall leaning mast with fanned cables"
     },
@@ -16,7 +22,10 @@
       "kind": "bridge",
       "name": "Caversham Bridge",
       "style": "concrete-arch",
-      "at": [51.4656, -0.977],
+      "at": [
+        51.4656,
+        -0.977
+      ],
       "heading": 300,
       "frame": "0095-p2-00600",
       "note": "1926 road bridge: two flat concrete arches on a pier at Piper's Island, pale stone colour, balustrade parapets and lamps"
@@ -25,12 +34,18 @@
       "kind": "moorings",
       "side": "right",
       "from": {
-        "at": [51.463124, -0.972302],
+        "at": [
+          51.463124,
+          -0.972302
+        ],
         "heading": 302,
         "frame": "0095-p1-00300-behind"
       },
       "to": {
-        "at": [51.464163, -0.974349],
+        "at": [
+          51.464163,
+          -0.974349
+        ],
         "heading": 327,
         "frame": "0095-p1-00300-behind"
       },
@@ -41,12 +56,18 @@
       "kind": "buildings",
       "side": "left",
       "from": {
-        "at": [51.464707, -0.974548],
+        "at": [
+          51.464707,
+          -0.974548
+        ],
         "heading": 308,
         "frame": "0095-p2-00400"
       },
       "to": {
-        "at": [51.465738, -0.976147],
+        "at": [
+          51.465738,
+          -0.976147
+        ],
         "heading": 312,
         "frame": "0095-p2-00550"
       },
@@ -56,7 +77,10 @@
     {
       "kind": "moorings",
       "side": "left",
-      "at": [51.465362, -0.975673],
+      "at": [
+        51.465362,
+        -0.975673
+      ],
       "heading": 322,
       "frame": "0095-p2-00500",
       "boats": "trip-boat",
@@ -66,12 +90,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.46625, -0.977286],
+        "at": [
+          51.46625,
+          -0.977286
+        ],
         "heading": 297,
         "frame": "0095-p2-00650"
       },
       "to": {
-        "at": [51.468589, -0.988918],
+        "at": [
+          51.468589,
+          -0.988918
+        ],
         "heading": 251,
         "frame": "0093-p0-01500"
       },
@@ -82,12 +112,18 @@
       "kind": "bank",
       "side": "right",
       "from": {
-        "at": [51.46625, -0.977286],
+        "at": [
+          51.46625,
+          -0.977286
+        ],
         "heading": 297,
         "frame": "0095-p2-00650"
       },
       "to": {
-        "at": [51.467699, -0.981814],
+        "at": [
+          51.467699,
+          -0.981814
+        ],
         "heading": 292,
         "frame": "0095-p2-01000"
       },
@@ -98,12 +134,18 @@
       "kind": "bank",
       "side": "right",
       "from": {
-        "at": [51.467905, -0.98323],
+        "at": [
+          51.467905,
+          -0.98323
+        ],
         "heading": 286,
         "frame": "0093-p0-01100"
       },
       "to": {
-        "at": [51.469866, -1.002831],
+        "at": [
+          51.469866,
+          -1.002831
+        ],
         "heading": 234,
         "frame": "0093-p0-02500"
       },
@@ -113,7 +155,10 @@
     {
       "kind": "moorings",
       "side": "right",
-      "at": [51.46846, -0.987492],
+      "at": [
+        51.46846,
+        -0.987492
+      ],
       "heading": 280,
       "frame": "0093-p0-01400",
       "boats": "cruiser"
@@ -121,7 +166,10 @@
     {
       "kind": "moorings",
       "side": "right",
-      "at": [51.468875, -0.991732],
+      "at": [
+        51.468875,
+        -0.991732
+      ],
       "heading": 290,
       "frame": "0093-p0-01700",
       "boats": "cruiser"
@@ -129,7 +177,10 @@
     {
       "kind": "moorings",
       "side": "right",
-      "at": [51.470444, -0.998521],
+      "at": [
+        51.470444,
+        -0.998521
+      ],
       "heading": 272,
       "frame": "0093-p0-02200",
       "boats": "cruiser"
@@ -138,12 +189,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.468589, -0.988918],
+        "at": [
+          51.468589,
+          -0.988918
+        ],
         "heading": 251,
         "frame": "0093-p0-01500"
       },
       "to": {
-        "at": [51.469377, -1.004039],
+        "at": [
+          51.469377,
+          -1.004039
+        ],
         "heading": 242,
         "frame": "0093-p0-02600"
       },
@@ -154,12 +211,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.469377, -1.004039],
+        "at": [
+          51.469377,
+          -1.004039
+        ],
         "heading": 242,
         "frame": "0093-p0-02600"
       },
       "to": {
-        "at": [51.466813, -1.013149],
+        "at": [
+          51.466813,
+          -1.013149
+        ],
         "heading": 256,
         "frame": "0093-p0-03300"
       },
@@ -169,12 +232,18 @@
       "kind": "bank",
       "side": "right",
       "from": {
-        "at": [51.469377, -1.004039],
+        "at": [
+          51.469377,
+          -1.004039
+        ],
         "heading": 242,
         "frame": "0093-p0-02600"
       },
       "to": {
-        "at": [51.466813, -1.013149],
+        "at": [
+          51.466813,
+          -1.013149
+        ],
         "heading": 256,
         "frame": "0093-p0-03300"
       },
@@ -185,12 +254,18 @@
       "kind": "moorings",
       "side": "left",
       "from": {
-        "at": [51.466813, -1.013149],
+        "at": [
+          51.466813,
+          -1.013149
+        ],
         "heading": 256,
         "frame": "0093-p0-03300"
       },
       "to": {
-        "at": [51.466802, -1.015879],
+        "at": [
+          51.466802,
+          -1.015879
+        ],
         "heading": 276,
         "frame": "0093-p0-03500"
       },
@@ -201,12 +276,18 @@
       "kind": "moorings",
       "side": "right",
       "from": {
-        "at": [51.466745, -1.014461],
+        "at": [
+          51.466745,
+          -1.014461
+        ],
         "heading": 274,
         "frame": "0093-p0-03400"
       },
       "to": {
-        "at": [51.466802, -1.015879],
+        "at": [
+          51.466802,
+          -1.015879
+        ],
         "heading": 276,
         "frame": "0093-p0-03500"
       },
@@ -217,12 +298,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.466891, -1.017316],
+        "at": [
+          51.466891,
+          -1.017316
+        ],
         "heading": 281,
         "frame": "0093-p0-03600"
       },
       "to": {
-        "at": [51.47416, -1.033371],
+        "at": [
+          51.47416,
+          -1.033371
+        ],
         "heading": 305,
         "frame": "0093-p0-05000"
       },
@@ -233,12 +320,18 @@
       "kind": "bank",
       "side": "right",
       "from": {
-        "at": [51.466891, -1.017316],
+        "at": [
+          51.466891,
+          -1.017316
+        ],
         "heading": 281,
         "frame": "0093-p0-03600"
       },
       "to": {
-        "at": [51.47416, -1.033371],
+        "at": [
+          51.47416,
+          -1.033371
+        ],
         "heading": 305,
         "frame": "0093-p0-05000"
       },
@@ -247,7 +340,10 @@
     {
       "kind": "moorings",
       "side": "right",
-      "at": [51.47268, -1.029831],
+      "at": [
+        51.47268,
+        -1.029831
+      ],
       "heading": 300,
       "frame": "0093-p0-04700",
       "boats": "narrowboat",
@@ -257,12 +353,18 @@
       "kind": "moorings",
       "side": "right",
       "from": {
-        "at": [51.474681, -1.034551],
+        "at": [
+          51.474681,
+          -1.034551
+        ],
         "heading": 307,
         "frame": "0093-p0-05100"
       },
       "to": {
-        "at": [51.475715, -1.036896],
+        "at": [
+          51.475715,
+          -1.036896
+        ],
         "heading": 308,
         "frame": "0093-p0-05300"
       },
@@ -273,12 +375,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.47416, -1.033371],
+        "at": [
+          51.47416,
+          -1.033371
+        ],
         "heading": 305,
         "frame": "0093-p0-05000"
       },
       "to": {
-        "at": [51.475715, -1.036896],
+        "at": [
+          51.475715,
+          -1.036896
+        ],
         "heading": 308,
         "frame": "0093-p0-05300"
       },
@@ -289,12 +397,18 @@
       "kind": "railway",
       "side": "left",
       "from": {
-        "at": [51.475715, -1.036896],
+        "at": [
+          51.475715,
+          -1.036896
+        ],
         "heading": 308,
         "frame": "0093-p0-05300"
       },
       "to": {
-        "at": [51.477957, -1.038338],
+        "at": [
+          51.477957,
+          -1.038338
+        ],
         "heading": 2,
         "frame": "0093-p0-05600"
       },
@@ -304,12 +418,18 @@
       "kind": "bank",
       "side": "right",
       "from": {
-        "at": [51.47416, -1.033371],
+        "at": [
+          51.47416,
+          -1.033371
+        ],
         "heading": 305,
         "frame": "0093-p0-05000"
       },
       "to": {
-        "at": [51.483552, -1.037064],
+        "at": [
+          51.483552,
+          -1.037064
+        ],
         "heading": 333,
         "frame": "0093-p0-06250"
       },
@@ -319,12 +439,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.478861, -1.038241],
+        "at": [
+          51.478861,
+          -1.038241
+        ],
         "heading": 5,
         "frame": "0093-p0-05700"
       },
       "to": {
-        "at": [51.482255, -1.036655],
+        "at": [
+          51.482255,
+          -1.036655
+        ],
         "heading": 4,
         "frame": "0093-p0-06100"
       },
@@ -334,7 +460,10 @@
     {
       "kind": "moorings",
       "side": "left",
-      "at": [51.480579, -1.03768],
+      "at": [
+        51.480579,
+        -1.03768
+      ],
       "heading": 17,
       "frame": "0093-p0-05900",
       "boats": "cruiser"
@@ -343,12 +472,18 @@
       "kind": "bank",
       "side": "left",
       "from": {
-        "at": [51.482255, -1.036655],
+        "at": [
+          51.482255,
+          -1.036655
+        ],
         "heading": 4,
         "frame": "0093-p0-06100"
       },
       "to": {
-        "at": [51.483552, -1.037064],
+        "at": [
+          51.483552,
+          -1.037064
+        ],
         "heading": 333,
         "frame": "0093-p0-06250"
       },
@@ -360,12 +495,18 @@
       "side": "left",
       "note": "flats behind lawns down to the water, weeping willows",
       "from": {
-        "at": [51.462346, -0.970534],
+        "at": [
+          51.462346,
+          -0.970534
+        ],
         "heading": 310,
         "frame": "0095-p1-00200-behind"
       },
       "to": {
-        "at": [51.465833, -0.97736],
+        "at": [
+          51.465833,
+          -0.97736
+        ],
         "heading": 313,
         "frame": "0095-p1-00700-behind"
       }
@@ -375,12 +516,18 @@
       "side": "left",
       "note": "low walls in front of the flats' lawns",
       "from": {
-        "at": [51.462346, -0.970534],
+        "at": [
+          51.462346,
+          -0.970534
+        ],
         "heading": 310,
         "frame": "0095-p1-00200-behind"
       },
       "to": {
-        "at": [51.464946, -0.975548],
+        "at": [
+          51.464946,
+          -0.975548
+        ],
         "heading": 305,
         "frame": "0095-p1-00500-behind"
       }
@@ -390,12 +537,18 @@
       "side": "right",
       "note": "concrete quay with cruisers moored along it, Fry's Island",
       "from": {
-        "at": [51.463124, -0.972302],
+        "at": [
+          51.463124,
+          -0.972302
+        ],
         "heading": 302,
         "frame": "0095-p1-00300-behind"
       },
       "to": {
-        "at": [51.464237, -0.974428],
+        "at": [
+          51.464237,
+          -0.974428
+        ],
         "heading": 325,
         "frame": "0095-p1-00300-behind"
       }
@@ -405,12 +558,18 @@
       "side": "left",
       "note": "stone and sandbag revetment, Thames Side Promenade",
       "from": {
-        "at": [51.466885, -0.979311],
+        "at": [
+          51.466885,
+          -0.979311
+        ],
         "heading": 300,
         "frame": "0095-p1-01000-behind"
       },
       "to": {
-        "at": [51.468342, -0.988488],
+        "at": [
+          51.468342,
+          -0.988488
+        ],
         "heading": 278,
         "frame": "0095-p1-01300-behind"
       }
@@ -421,28 +580,53 @@
       "boats": "cruiser",
       "note": "cruisers along the wall below the flats",
       "from": {
-        "at": [51.464384, -0.974593],
+        "at": [
+          51.464384,
+          -0.974593
+        ],
         "heading": 324,
         "frame": "0095-p1-00500-behind"
       },
       "to": {
-        "at": [51.464946, -0.975548],
+        "at": [
+          51.464946,
+          -0.975548
+        ],
         "heading": 305,
         "frame": "0095-p1-00500-behind"
       }
     },
     {
       "kind": "posts",
-      "at": [51.46938443, -1.00532164],
+      "at": [
+        51.46938443,
+        -1.00532164
+      ],
       "heading": 253,
       "frame": "0093-p0 t=752",
-      "points": [[51.4693844, -1.0053216], [51.4693936, -1.005281], [51.4694059, -1.0052268]],
+      "points": [
+        [
+          51.4693844,
+          -1.0053216
+        ],
+        [
+          51.4693936,
+          -1.005281
+        ],
+        [
+          51.4694059,
+          -1.0052268
+        ]
+      ],
       "note": "three tall, weathered concrete posts standing in the water off St Mary's Island, about 4 m high (pointed out by the owner)"
     },
     {
       "kind": "landmark",
       "style": "riverside-villa",
-      "at": [51.47005347, -1.00318771],
+      "at": [
+        51.47005347,
+        -1.00318771
+      ],
       "heading": 235,
       "frame": "0093-p0 t=677",
       "note": "grey-blue clapboard house with white trim behind a long stone quay: white bollards, stone urns, a white summerhouse and a white tower (pointed out by the owner)"
@@ -450,7 +634,10 @@
     {
       "kind": "landmark",
       "style": "spiral-boathouse",
-      "at": [51.46827043, -0.98562223],
+      "at": [
+        51.46827043,
+        -0.98562223
+      ],
       "heading": 281,
       "frame": "0093-p0 t=160",
       "note": "tall red-brick boathouse: an open boat dock under a white first floor, glass balconies, a steep dark gable, white spiral stairs at both ends (pointed out by the owner)"
@@ -458,7 +645,10 @@
     {
       "kind": "landmark",
       "style": "grey-boathouse",
-      "at": [51.4683523, -0.98663074],
+      "at": [
+        51.4683523,
+        -0.98663074
+      ],
       "heading": 275,
       "frame": "0093-p0 t=187",
       "note": "long two-storey boathouse in pale grey: roller shutters below, a balcony on white pillars above, grey metal roof, a blue launch alongside (pointed out by the owner)"
@@ -468,12 +658,18 @@
       "side": "right",
       "boats": "tatty",
       "from": {
-        "at": [51.4653, -0.97685],
+        "at": [
+          51.4653,
+          -0.97685
+        ],
         "heading": 132,
         "frame": "0095-p0 t=4254"
       },
       "to": {
-        "at": [51.46488, -0.97595],
+        "at": [
+          51.46488,
+          -0.97595
+        ],
         "heading": 132,
         "frame": "0095-p0 t=4254"
       },
@@ -484,16 +680,296 @@
       "side": "left",
       "count": 3,
       "from": {
-        "at": [51.46776, -0.98395],
+        "at": [
+          51.46776,
+          -0.98395
+        ],
         "heading": 283,
         "frame": "0093-p1 t=3488"
       },
       "to": {
-        "at": [51.468, -0.9857],
+        "at": [
+          51.468,
+          -0.9857
+        ],
         "heading": 283,
         "frame": "0093-p1 t=3488"
       },
       "note": "people often fish from the Promenade's stone wall here: mind their lines (pointed out by the owner)"
+    },
+    {
+      "kind": "path",
+      "at": [
+        51.483657,
+        -1.037497
+      ],
+      "heading": 180,
+      "points": [
+        [
+          51.483657,
+          -1.037497
+        ],
+        [
+          51.483218,
+          -1.037433
+        ],
+        [
+          51.482734,
+          -1.037398
+        ],
+        [
+          51.482536,
+          -1.037391
+        ],
+        [
+          51.482371,
+          -1.037451
+        ]
+      ],
+      "note": "the bank path below Mapledurham Lock, from the beach where Div 1-6 land to where they put in again (the owner's points)"
+    },
+    {
+      "kind": "landmark",
+      "style": "glass-house",
+      "at": [
+        51.469026,
+        -1.006835
+      ],
+      "heading": 233,
+      "frame": "0095-p0 near (owner point 1)",
+      "note": "modern flat-roofed house, dark glass in white frames, behind a big weeping willow, a timber edge to its lawn (pointed out by the owner)"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.468876,
+        -1.006497
+      ],
+      "heading": 233,
+      "note": "the big weeping willow in front of the glass house"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "cruiser",
+      "from": {
+        "at": [
+          51.466614,
+          -1.013483
+        ],
+        "heading": 254
+      },
+      "to": {
+        "at": [
+          51.466593,
+          -1.015202
+        ],
+        "heading": 277
+      },
+      "note": "the marina: white cruisers nose to tail along the pontoons (owner point 2)"
+    },
+    {
+      "kind": "feature",
+      "style": "marina",
+      "at": [
+        51.466306,
+        -1.014234
+      ],
+      "heading": 269,
+      "frame": "0093-p0 near (owner point 2)",
+      "note": "marina clubhouse, dark timber with flagpoles, and the static caravans of Riverside Park behind"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 7,
+      "crew": "tower",
+      "at": [
+        51.46677,
+        -1.014243
+      ],
+      "heading": 269,
+      "note": "a white and green wakeboard boat with a tower, at a pontoon across from the marina"
+    },
+    {
+      "kind": "wall",
+      "style": "brick",
+      "side": "left",
+      "from": {
+        "at": [
+          51.47533,
+          -1.036289
+        ],
+        "heading": 301
+      },
+      "to": {
+        "at": [
+          51.476248,
+          -1.038056
+        ],
+        "heading": 321
+      },
+      "note": "the tall brick wall holding up the Great Western main line, wires and masts above (owner point 3)"
+    },
+    {
+      "kind": "feature",
+      "style": "mailbox",
+      "at": [
+        51.475598,
+        -1.037402
+      ],
+      "heading": 309,
+      "frame": "0095-p0 near (owner point 3)",
+      "note": "a little red box on the railway wall just above the water: the owner calls it a mailbox"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 13,
+      "at": [
+        51.475879,
+        -1.037031
+      ],
+      "heading": 309,
+      "note": "a big white cruiser with a navy stripe and blue fenders, opposite the wall"
+    },
+    {
+      "kind": "feature",
+      "style": "gazebo",
+      "at": [
+        51.475879,
+        -1.037031
+      ],
+      "heading": 309,
+      "note": "a timber gazebo on a deck with a ladder down to the water, behind the cruiser"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "narrowboat",
+      "length": 19,
+      "paint": "maroon",
+      "crew": "statues",
+      "at": [
+        51.470336,
+        -1.025382
+      ],
+      "heading": 308,
+      "frame": "pair GS030094 6:33 (owner)",
+      "note": "maroon narrowboat with white window frames and life-size figures on the front deck, one of them Lara Croft"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 9,
+      "at": [
+        51.470506,
+        -1.025506
+      ],
+      "heading": 308,
+      "note": "the small white cruiser moored just above the Lara Croft boat"
+    },
+    {
+      "kind": "buildings",
+      "style": "clapboard",
+      "side": "left",
+      "from": {
+        "at": [
+          51.479524,
+          -1.038316
+        ],
+        "heading": 10
+      },
+      "to": {
+        "at": [
+          51.480785,
+          -1.037735
+        ],
+        "heading": 19
+      },
+      "note": "big white and grey clapboard houses, gables, balconies, decks and jetties (owner points 5 and 6)"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "narrowboat",
+      "length": 16,
+      "paint": "navy",
+      "at": [
+        51.481776,
+        -1.037055
+      ],
+      "heading": 29,
+      "note": "a navy narrowboat at a timber pontoon with white fenders, below the red-brick houses"
+    },
+    {
+      "kind": "feature",
+      "style": "channel-sign",
+      "at": [
+        51.483315,
+        -1.037317
+      ],
+      "heading": 341,
+      "note": "a blue CHANNEL sign with an arrow on a post at the water's edge, below the lock"
+    },
+    {
+      "kind": "feature",
+      "style": "beach",
+      "at": [
+        51.483602,
+        -1.03743
+      ],
+      "heading": 346,
+      "frame": "0093-p0 near (owner point 7)",
+      "note": "the sandy beach where Div 1-6 land for the portage"
+    },
+    {
+      "kind": "feature",
+      "style": "sandbags",
+      "at": [
+        51.482283,
+        -1.037373
+      ],
+      "heading": 22,
+      "frame": "0093-p1 near (owner point 8)",
+      "note": "the put-in: a stepped wall of sandbags with a drain pipe, a timber deck with railings above, brick houses behind"
+    },
+    {
+      "kind": "feature",
+      "style": "sculling-club",
+      "at": [
+        51.465234,
+        -0.975415
+      ],
+      "heading": 305,
+      "frame": "0095-p1 near (owner point 9)",
+      "note": "a sculling club on the lawn: sculls and oars on racks beside a tall stone memorial pillar"
+    },
+    {
+      "kind": "feature",
+      "style": "glass-restaurant",
+      "at": [
+        51.466331,
+        -0.977218
+      ],
+      "heading": 323,
+      "frame": "0095-p1 near (owner point 10)",
+      "note": "a glass-fronted restaurant at the water with a white round tower"
+    },
+    {
+      "kind": "feature",
+      "style": "ferry-landing",
+      "at": [
+        51.465709,
+        -0.978186
+      ],
+      "heading": 314,
+      "frame": "0095-p0 near (owner point 11)",
+      "note": "the ferry landing: pontoons along the hotel frontage, blue umbrellas and a flag"
     }
   ]
 }

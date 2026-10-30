@@ -21,3 +21,10 @@ opt_in_rules:
   - weak_delegate
 force_unwrapping:
   severity: warning
+custom_rules:
+  xctest_waits:
+    included: "Tests/UI/.*\\.swift"
+    excluded: "Tests/UI/Waiting\\.swift"
+    regex: "waitForExistence|waitForNonExistence|XCTNSPredicateExpectation|expectation\\(for:"
+    message: "XCTest's waits first look after a full second: use appears(timeout:), disappears(timeout:) or poll(timeout:) from Waiting.swift"
+    severity: error

@@ -4,7 +4,10 @@
 import { cumulative, locate, resample, type LatLng, type XZ } from './river'
 
 // A leg: along the river line between two points, or a point to go through.
+// A portage (in course.json, between legs) is a run over land: from where you
+// land to where you put in, through the points between.
 export type Leg = LatLng | { along: [LatLng, LatLng] }
+export type Portage = { portage: LatLng[] }
 
 /** The legs as one line of points (the river line's own between `along` ends). */
 export function routePoints(legs: Leg[], line: XZ[], toXZ: (p: LatLng) => XZ): XZ[] {
@@ -116,4 +119,24 @@ export function along(line: XZ[], p: XZ, heading?: number): { s: number; lateral
   const n = Math.hypot(t[0], t[1]) || 1
   const lateral = ((p[0] - line[best][0]) * -t[1] + (p[1] - line[best][1]) * t[0]) / n
   return { s: cum[best], lateral, d: bestD }
+}
+
+/**
+ * Pieces of racing line on the water joined by runs over land (a portage: from
+ * the end of one piece, through a run's points, to the start of the next), as
+ * one line every `step` metres, and where each run lies along it ({ from, to }
+ * in metres: where you land and where you put in).
+ */
+export function joinRuns(pieces: XZ[][], runs: XZ[][], step = 5): { line: XZ[]; portages: Array<{ from: number; to: number }> } {
+  const line: XZ[] = [...pieces[0]]
+  const portages: Array<{ from: number; to: number }> = []
+  for (let k = 1; k < pieces.length; k++) {
+    const from = cumulative(line).at(-1)!
+    const run = resample([line.at(-1)!, ...runs[k - 1], pieces[k][0]], step)
+    line.push(...run.slice(1))
+    const to = cumulative([...line, pieces[k][0]]).at(-1)!
+    portages.push({ from: Math.round(from * 10) / 10, to: Math.round(to * 10) / 10 })
+    line.push(...pieces[k])
+  }
+  return { line: line.filter((p, i) => i === 0 || Math.hypot(p[0] - line[i - 1][0], p[1] - line[i - 1][1]) > 0.01), portages }
 }

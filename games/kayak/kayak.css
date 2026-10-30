@@ -369,6 +369,11 @@ summary { cursor: pointer; }
 #menu .credit { font-size: 0.8rem; color: var(--dim); }
 
 #menu .account { font-size: 0.9rem; }
+/* A race or a time trial: one choice for every course (practice is on your own). */
+#menu .format { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+#menu .format button { flex: 1; }
+#menu .format button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+#menu .format button[aria-pressed="true"] small { color: inherit; }
 #livePlayers .you { font-weight: 700; }
 #live select, #live input { font: inherit; padding: 0.3rem 0.4rem; }
 #live .choice { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }

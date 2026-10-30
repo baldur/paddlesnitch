@@ -11,7 +11,11 @@ import { getJson, putJson, listKeys } from './storage'
 // --- leaderboard -------------------------------------------------------------
 
 /** The game's courses, and their distances as the game shows them (metres). */
-export const GAME_COURSES = { race: 6000, practice: 1000, reading: 6260, loop: 5400 } as const
+export const GAME_COURSES = {
+  race: 6000, practice: 1000, reading: 6260, loop: 5400,
+  // The Reading Hasler courses: Div 7-9 and Div 1-6.
+  hasler79: 7900, hasler16: 12600,
+} as const
 export type GameCourse = keyof typeof GAME_COURSES
 /** The boats you can race (games/kayak/boats.js), then the three hulls the game had before them. */
 export const GAME_BOATS = [
