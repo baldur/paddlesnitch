@@ -59,6 +59,7 @@
     <p id="behind" aria-hidden="true">Eight behind</p>
     <p id="cue" aria-live="polite"><b id="cueArrow" aria-hidden="true"></b> <span id="cueText"></span></p>
     <p id="missed" aria-live="assertive" hidden></p>
+    <p id="drill" aria-live="polite" hidden></p>
   </div>
 
   <pre id="tiltdebug" hidden></pre>
@@ -88,7 +89,7 @@
         <button value="loop" autofocus>Time Trial Loop <small>5.3 km from Reading Canoe Club round St Mary's and Fry's islands and back</small></button>
         <button value="hasler79">Hasler Div 7-9 <small>7.9 km: up round Appletree Eyot, down round Fry's Island, back to the club</small></button>
         <button value="hasler16">Hasler Div 1-6 <small>12.6 km: up to Mapledurham, run the portage, down round Fry's Island, back to the club</small></button>
-        <button value="practice">Practice <small>1 km up the river from the club, on your own</small></button>
+        <button type="button" data-step="practice">Practice <small>starts, wash hanging, the portage, or a paddle on your own</small></button>
         <button value="live">Race friends <small>a live race against people you send a link to</small></button>
       </form>
       <p class="rotate-hint">Turn your phone sideways to race</p>
@@ -107,6 +108,7 @@
           <li>Tuck in right behind a boat, or alongside its back half, to ride its wash: you go further for less effort and your sprint fills up, but the boat rocks more</li>
           <li>Race distances and times are shown four times longer than you actually paddle, so a 6 km race takes about 7 minutes. On the Reading Thames and the Time Trial Loop the river is true to size and you cover it four times faster</li>
           <li>Time Trial Loop: boats go one at a time, 30 seconds apart, and your time runs from the start line. Keep right: after the turns, the boats ahead come back the other way. The gap at St Mary's Island takes two boats at most</li>
+          <li>The portage (Hasler Div 1-6): slow right down into the beach, then press both sides together to jump out (<kbd>&larr;</kbd> and <kbd>&rarr;</kbd> at once, both thumbs, or <kbd>LT</kbd> and <kbd>RT</kbd>). Come in too fast and you run aground. Tap left, right to run with the boat: 2 a second is a jog, quicker is faster but spends the sprint bar. At the put-in press both sides together to get in, and keep it level a moment before you paddle</li>
           <li>Swans won't get out of your way: paddle into one and you're in. Ducks fly off</li>
         <li>Other boats use the river too: scullers, eights, cruisers and motorboats. They keep to their right, so keep right and they pass on your left. Hit one, or its oars, and you're in; a motorboat's wash rocks you. Now and then an eight comes up from behind: the cox shouts and an arrow shows which side, so move over the other way</li>
           <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes, <kbd>LB</kbd> <kbd>RB</kbd> back strokes, left stick rudder, right stick lean</li>
@@ -221,6 +223,17 @@
       <p class="step-buttons">
         <button type="button" class="next" data-step="home" data-first="Done: to the races &rarr;">Done</button>
       </p>
+    </section>
+
+    <section id="stepPractice" class="step" hidden>
+      <h3>Practice</h3>
+      <form method="dialog">
+        <button value="drill-start">Starts <small>on the line with four others: the horn, your reaction, the first 100 m. Again and again</small></button>
+        <button value="drill-wash">Wash hanging <small>a pacer paddles steadily up the river: sit on its wash and see how long you can hold it</small></button>
+        <button value="drill-portage">The portage <small>at the Mapledurham beach: slow in, jump out, run the bank, jump in, paddle away. Timed, with splits</small></button>
+        <button value="practice">A paddle on your own <small>1 km up the river from the club</small></button>
+      </form>
+      <p class="step-buttons"><button type="button" class="back" data-step="home">&larr; Back</button></p>
     </section>
 
     <section id="stepBoards" class="step" hidden>

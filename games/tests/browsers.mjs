@@ -76,6 +76,8 @@ const CASES = [
   // A time trial, with interval starts.
   { name: 'webkit, desktop, Time Trial Loop time trial', engine: webkit, ctx: desktop, course: 'loop', format: 'interval' },
   { name: 'iphone safari, Time Trial Loop time trial', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'loop', format: 'interval' },
+  // A practice drill: under way below the Mapledurham beach, no starter.
+  { name: 'webkit, desktop, portage drill', engine: webkit, ctx: desktop, course: 'drill-portage' },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -103,6 +105,11 @@ async function play(c, page, errors) {
   if (c.format) {
     const format = page.locator(`#menu [data-format="${c.format}"]`);
     await (c.touch ? format.tap() : format.click());
+  }
+  // Practice and its drills are on the practice page.
+  if (!c.course || c.course.startsWith('drill-')) {
+    const page2 = page.locator('#menu [data-step="practice"]');
+    await (c.touch ? page2.tap() : page2.click());
   }
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   await (c.touch ? practice.tap() : practice.click());

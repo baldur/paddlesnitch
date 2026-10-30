@@ -87,55 +87,169 @@ export function createRace(course, { rivals = [], seed = 1, you = {}, birds = tr
 // --- portages ----------------------------------------------------------------
 // A course can make you land, run along the bank with your boat and put in
 // again (`course.portages`: { from, to } along the route, where you land and
-// where you put in; the route between runs over land). Paddle within LAND
-// metres of where the water ends and you're out: OUT seconds getting out, a run
-// at RUN metres a second, IN seconds getting back in (real seconds and metres,
-// so a quarter of that at warp 4), then you're afloat at the put-in, pointing
-// on down the course. Everyone takes the same time over it: it's the paddling
-// that races. Miss it (paddle on past without landing) and, like a gate, there's
-// no finishing until you've gone back for it.
-export const PORTAGE = { land: 12, out: 4, run: 3, in: 4 };
+// where you put in; the route between runs over land). It's yours to do, and
+// the rivals do the same:
+// - Come into the beach slowly: within LAND metres of where the water ends,
+//   under SLOW m/s, press both sides together (a left and a right tap within
+//   PAIR seconds) and you jump out. Come in quicker and you run aground within
+//   AGROUND metres: STUCK seconds before you can get out.
+// - Run: every tap is a stride, any side. A comfortable 2 a second is a jog
+//   (JOG m/s), each tap a second more is PER_TAP faster, up to MAX. Quicker than
+//   the comfortable rate spends your sprint stamina, as paddling does; out of it,
+//   you can only jog.
+// - At the put-in, both sides together again to get in. The boat wobbles as you
+//   sit (WOBBLE), and a stroke in the first SETTLE seconds rocks it more (RUSH):
+//   keep it level, then paddle.
+// OUT, IN, STUCK and SETTLE are seconds as shown (race time × warp); PAIR is real
+// time, as you tap. Paddle on past without landing and, like a gate, there's no
+// finishing until you've gone back for it.
+export const PORTAGE = {
+  land: 12, slow: 1.5, aground: 3, stuck: 3, out: 3, in: 3, settle: 4, pair: 0.2,
+  comfortable: 0.5, jog: 2.5, perTap: 1, max: 4.2, cost: 0.03, wobble: 0.9, rush: 0.6,
+};
 
-export function portageTime(p) {
-  return PORTAGE.out + (p.to - p.from) / PORTAGE.run + PORTAGE.in;
+// The time a portage takes as shown, run at a steady `pace` (m/s): out, along
+// the bank, back in.
+export function portageTime(p, pace = 3) {
+  return PORTAGE.out + (p.to - p.from) / pace + PORTAGE.in;
 }
 
-// Where a racer on a portage is, `t` seconds into it (real seconds): their s
-// along the route (on the bank while getting out and in), and the phase.
-export function portageAt(p, t) {
-  if (t < PORTAGE.out) return { s: p.from, phase: 'out' };
-  const run = (t - PORTAGE.out) * PORTAGE.run;
-  if (run < p.to - p.from) return { s: p.from + run, phase: 'run' };
-  return { s: p.to, phase: 'in' };
+// Both sides together: a left and a right tap within PAIR seconds of each
+// other (or an explicit `jump`, as the rivals give).
+function jumped(r, input) {
+  if (input.jump) return true;
+  for (const t of input.strokes ?? []) {
+    const side = t.replace('back-', '');
+    if (r.tap && r.tap.side !== side && r.boat.time - r.tap.at <= PORTAGE.pair) {
+      r.tap = null;
+      return true;
+    }
+    r.tap = { side, at: r.boat.time };
+  }
+  return false;
 }
 
-// Lands a racer that's reached a portage's beach; carries one that's on one;
-// puts them back in at the end. Returns 'landed' or 'put-in' when that happens.
-function carry(race, r, dt) {
+// A stride on the run: like a stroke, the pace is the average of the last two
+// gaps, and quicker than comfortable costs stamina.
+function stride(r) {
+  const run = r.portage;
+  const { boat } = r;
+  const gap = boat.time - (run.last ?? -Infinity);
+  const pace = Math.max(0.2, (Math.min(gap, 2) + Math.min(run.gap ?? 2, 2)) / 2);
+  run.gap = gap;
+  run.last = boat.time;
+  let rate = 1 / pace;
+  const quick = rate - 1 / PORTAGE.comfortable;
+  if (quick > 0 && boat.stamina > 0) boat.stamina = Math.max(0, boat.stamina - PORTAGE.cost * quick);
+  else if (quick > 0) rate = 1 / PORTAGE.comfortable;
+  run.target = Math.min(PORTAGE.max, PORTAGE.jog + PORTAGE.perTap * (rate - 1 / PORTAGE.comfortable));
+  // Running quicker than a jog, stamina doesn't come back (even when there's
+  // none left to spend): ease to a jog to get it back.
+  run.quick = quick > 0;
+  boat.strokeTimes.push(boat.time);
+  while (boat.strokeTimes[0] < boat.time - 6) boat.strokeTimes.shift();
+}
+
+// Puts a racer's boat at a point along the route, pointing on down it.
+function setAt(race, r, s, speed = 0) {
+  const c = pointAt(race.course, s);
+  // Strides and strokes are counted apart: the rate starts again out of the boat and back in it.
+  if (!speed) r.boat.strokeTimes = [];
+  Object.assign(r.boat, { x: c.x, z: c.z, heading: Math.atan2(c.tx, -c.tz), speed, yawRate: 0, roll: 0, rollRate: 0 });
+  r.loc = locate(race.course, c.x, c.z, r.loc.i);
+}
+
+// What a rival does on a portage: taps out a stride, and jumps out and in
+// after a moment to react.
+function portageThink(r, race) {
+  const { ai, boat, portage: run } = r;
+  // How quick a runner and how sharp they are: stronger rivals run quicker.
+  ai.stride ??= 0.36 / Math.sqrt(boat.power) * (1 + (race.rand() - 0.5) * 0.08);
+  ai.react ??= 1.5 + race.rand() * 1.5; // seconds as shown
+  if (run.phase === 'run') {
+    ai.strideAt ??= race.time;
+    if (race.time < ai.strideAt) return { strokes: [] };
+    // Easier when tired: their stamina says how hard to run.
+    const gap = boat.stamina > 0.3 ? ai.stride : PORTAGE.comfortable;
+    ai.strideAt = race.time + gap;
+    return { strokes: [boat.lastSide === 'left' ? 'right' : 'left'] };
+  }
+  if (run.phase === 'beached' || run.phase === 'put') return { strokes: [], jump: run.t * (race.course.warp ?? 1) > ai.react };
+  return { strokes: [] };
+}
+
+// A racer and the portages: the beach as they come up to it, and everything
+// from jumping out to getting back in. Returns the event, if any: 'beach'
+// (coming up to it), 'too-fast' (tried to jump out going too quick), 'aground',
+// 'landed', 'run', 'at-put-in', 'put-in'. While `r.portage` is set the racer is
+// out of the water and isn't paddling.
+function carry(race, r, dt, input) {
   const { course } = race;
+  const warp = course.warp ?? 1;
   r.portaged ??= new Set();
+  const intent = r.ai && r.portage ? portageThink(r, race) : input;
+  const jump = jumped(r, intent);
   if (!r.portage) {
     const k = race.portages.findIndex((p, i) => !r.portaged.has(i) && r.loc.s > p.from - 40 && r.loc.s < p.to + 40);
-    if (k < 0) return null;
-    const at = pointAt(course, race.portages[k].from);
-    if (Math.hypot(r.boat.x - at.x, r.boat.z - at.z) > PORTAGE.land) return null;
-    r.portage = { k, t: 0 };
-    // Out onto the beach.
-    Object.assign(r.boat, { x: at.x, z: at.z, heading: Math.atan2(at.tx, -at.tz), speed: 0, yawRate: 0, roll: 0, rollRate: 0 });
-    r.loc = locate(course, at.x, at.z, r.loc.i);
-    return 'landed';
+    const at = k >= 0 ? pointAt(course, race.portages[k].from) : null;
+    const d = at ? Math.hypot(r.boat.x - at.x, r.boat.z - at.z) : Infinity;
+    if (d > PORTAGE.land) {
+      r.beach = null;
+      return null;
+    }
+    const speed = Math.abs(r.boat.speed);
+    if (d < PORTAGE.aground && speed > PORTAGE.slow) {
+      r.portage = { k, phase: 'aground', t: 0 };
+      setAt(race, r, race.portages[k].from);
+      return 'aground';
+    }
+    if (jump && speed <= PORTAGE.slow) {
+      r.portage = { k, phase: 'out', t: 0 };
+      setAt(race, r, race.portages[k].from);
+      return 'landed';
+    }
+    if (jump) return 'too-fast';
+    if (r.beach !== k) {
+      r.beach = k;
+      return 'beach';
+    }
+    return null;
   }
-  const p = race.portages[r.portage.k];
-  r.portage.t += dt * (r.boat.speedup ?? 1);
+  const run = r.portage;
+  const p = race.portages[run.k];
+  run.t += dt;
   r.boat.time += dt;
-  const done = r.portage.t >= portageTime(p);
-  const { s } = done ? { s: p.to + 1 } : portageAt(p, r.portage.t);
-  const c = pointAt(course, s);
-  Object.assign(r.boat, { x: c.x, z: c.z, heading: Math.atan2(c.tx, -c.tz), speed: 0 });
-  r.loc = locate(course, c.x, c.z, r.loc.i);
-  if (!done) return null;
-  r.portaged.add(r.portage.k);
+  const shown = run.t * warp;
+  const next = (phase, event) => {
+    Object.assign(run, { phase, t: 0 });
+    return event;
+  };
+  if (run.phase === 'aground') return shown >= PORTAGE.stuck ? next('beached', null) : null;
+  if (run.phase === 'beached') return jump ? next('out', 'landed') : null;
+  if (run.phase === 'out') {
+    if (shown < PORTAGE.out) return null;
+    run.d = 0;
+    run.v = 0;
+    return next('run', 'run');
+  }
+  if (run.phase === 'run') {
+    for (let n = (intent.strokes ?? []).length; n > 0; n--) stride(r);
+    if (r.boat.time - (run.last ?? -Infinity) > 1) Object.assign(run, { target: 0, quick: false });
+    if (!run.quick) r.boat.stamina = Math.min(1, r.boat.stamina + r.boat.hull.recover * r.boat.endurance * dt);
+    run.v += ((run.target ?? 0) - run.v) * Math.min(1, 3 * dt);
+    run.d += run.v * (r.boat.speedup ?? 1) * dt;
+    const len = p.to - p.from;
+    setAt(race, r, p.from + Math.min(run.d, len), run.v);
+    return run.d >= len ? next('put', 'at-put-in') : null;
+  }
+  if (run.phase === 'put') return jump ? next('in', null) : null;
+  // Getting in: then afloat at the put-in, from a standstill, and wobbling.
+  if (shown < PORTAGE.in) return null;
+  r.portaged.add(run.k);
   r.portage = null;
+  setAt(race, r, p.to + 1);
+  r.boat.rollRate = PORTAGE.wobble * (race.rand() < 0.5 ? -1 : 1);
+  r.settle = r.boat.time + PORTAGE.settle / warp;
   return 'put-in';
 }
 
@@ -376,14 +490,17 @@ export function stepRace(race, dt, input) {
       r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);
       return;
     }
-    // On a portage: carried along the bank, no paddling.
-    const carried = going ? carry(race, r, dt) : null;
-    if (r.portage || carried === 'put-in') {
-      if (r === player) events = carried ? [carried] : [];
-      return;
-    }
     // Until you're let go in a time trial, only your balance counts.
-    const intent = r.ai ? think(r, race) : released(race, r) ? { ...input } : { ...input, strokes: [] };
+    const intent = r.ai ? (r.portage ? {} : think(r, race)) : released(race, r) ? { ...input } : { ...input, strokes: [] };
+    // On a portage: out of the boat, running along the bank, getting back in.
+    const carried = going ? carry(race, r, dt, intent) : null;
+    if (r === player && carried) events.push(carried);
+    if (r.portage || carried === 'put-in') return;
+    // Just back in: a stroke before the boat's settled rocks it.
+    if (r.settle && r.boat.time < r.settle && (intent.strokes ?? []).some((t) => !t.startsWith('back-'))) {
+      r.boat.rollRate += (intent.strokes.at(-1) === 'left' ? -1 : 1) * PORTAGE.rush;
+      if (r === player) events.push('rushed');
+    }
     r.draft = washes[i].draft;
     const rock = washes[i].rock + (race.traffic ? trafficWash(race.traffic, r.boat) : 0);
     const result = step(r.boat, dt, { ...intent, draft: r.draft, rock });
@@ -537,6 +654,10 @@ function think(r, race) {
   // On a true-size course (speedup > 1) the same moment in the race is that
   // many times further along, and a gap closes that many times quicker.
   const k = course.speedup ?? 1;
+  // Just back in from a portage: sit still and keep it level until it's settled.
+  if (r.settle && boat.time < r.settle) return { strokes: [], rudder: steer(r, course, 0, 10), lean };
+  const beach = beachAhead(r, race);
+  if (beach) return beach;
   const togo = course.finish - loc.s;
   // They sprint (paddling quicker than their comfortable beat, which spends
   // stamina) for the line, off the start, and to catch a wash: `f` of their
@@ -637,6 +758,29 @@ function think(r, race) {
   // Look nearer ahead to swerve round a swan, or to get out of a boat's way.
   const swerve = swans.some((b) => b.pass || b.s - loc.s < 15 * k);
   return { strokes, rudder: steer(r, course, lateral, (swerve ? 7 : 18) * Math.sqrt(k)), lean };
+}
+
+// A rival coming up to a portage's beach: stop paddling well before it and
+// coast in, back-paddling if still too quick, and jump out once slow enough
+// (nudging on if they've stopped short). Null when there's no beach ahead.
+function beachAhead(r, race) {
+  const { boat, loc } = r;
+  const k = race.portages.findIndex((p, i) => !r.portaged?.has(i) && loc.s > p.from - 90 && loc.s < p.from + 5);
+  if (k < 0) return null;
+  const at = pointAt(race.course, race.portages[k].from);
+  const togo = Math.hypot(at.x - boat.x, at.z - boat.z);
+  if (togo > 70) return null;
+  const lean = clamp(-(boat.roll * 2 + boat.rollRate * 0.6));
+  const rudder = steer(r, race.course, 0, Math.max(3, Math.min(togo, 12)));
+  const strokes = [];
+  const slow = PORTAGE.slow * 0.8;
+  if (togo <= PORTAGE.land - 1 && boat.speed <= slow) return { strokes, jump: true, rudder, lean };
+  if (race.time >= (r.ai.next ?? 0)) {
+    if (boat.speed > slow && togo < 35) strokes.push(boat.lastSide === 'left' ? 'back-right' : 'back-left');
+    else if (boat.speed < 0.5 && togo > PORTAGE.land - 1) strokes.push(boat.lastSide === 'left' ? 'right' : 'left');
+    if (strokes.length) r.ai.next = race.time + 0.6;
+  }
+  return { strokes, rudder, lean };
 }
 
 // Rudder towards a point `ahead` metres down the river, `lateral` off the middle.

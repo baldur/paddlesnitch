@@ -9,6 +9,7 @@ import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt } from './world.js';
+import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
 import { TRAFFIC } from './traffic.js';
 import { createRenderer } from './render.js';
@@ -43,8 +44,17 @@ try { if (FORMATS[localStorage.getItem(FORMAT_KEY)]) format = localStorage.getIt
 // Your best on a course, per format (the loop's time trial keeps the key it always had).
 const bestKey = (m, f) => (m.solo || f === 'interval' ? `snitchmedia:kayak:${m.key}` : `snitchmedia:kayak:${m.key}:race`);
 const formatOf = (m) => (m.solo || liveRace ? 'mass' : format);
-// Anyone can paddle practice; the races, the leaderboard and live races need an account.
-const OPEN = new Set(['practice']);
+// Practice drills (drills.js), each on one of the courses above: starts, wash
+// hanging and the portage. Picked from the practice page of the menu.
+const DRILL_MODES = {
+  'drill-start': { drill: 'start', label: 'Practice starts' },
+  'drill-wash': { drill: 'wash', label: 'Practice wash hanging' },
+  'drill-portage': { drill: 'portage', label: 'Practice the portage' },
+};
+for (const [key, m] of Object.entries(DRILL_MODES)) Object.assign(m, { key, solo: true, rivals: DRILLS[m.drill].rivals, base: MODES[DRILLS[m.drill].course] });
+const DRILL_BEST = (m) => `snitchmedia:kayak:drill:${m.drill}`;
+// Anyone can paddle practice and the drills; the races, the leaderboard and live races need an account.
+const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 
@@ -72,7 +82,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -81,6 +91,7 @@ let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'f
 let resumeTo = 'racing';
 let mode = MODES.loop;
 let race;
+let drill = null; // the drill being practised (drills.js), if it's one
 let liveries; // racer -> { key, ...colours } (kit.js livery, or one of LIVERIES)
 // Your paddler and boat (kit.js): from this device, or new and random on a
 // first visit; the account's copy replaces it once we know who you are.
@@ -116,7 +127,10 @@ function reset() {
     seed: liveRace?.seed ?? ((Math.random() * 2 ** 31) | 0),
     you: { hull: hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
+    // A drill is about the one thing: no swans or other boats in the way.
+    birds: !mode.drill, traffic: !mode.drill,
   });
+  drill = mode.drill ? setupDrill(race, mode.drill) : null;
   // Practice also sharpens your feel for the beat.
   const h = race.player.boat.hull;
   race.player.boat.hull = { ...h, rhythmSlop: h.rhythmSlop * (1 + f * 2) };
@@ -152,6 +166,8 @@ function start() {
   hud.hidden = false;
   hud.classList.toggle('solo', race.racers.length === 1);
   drawMap();
+  // A drill that starts under way (wash hanging, the portage) has no starter.
+  if (drill && race.start.phase === 'go') state = 'racing';
   if (race.format === 'interval') {
     show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
   }
@@ -232,6 +248,22 @@ function finish() {
   setTimeout(() => { if (state === 'finished') openDialog(finished); }, 1500);
 }
 
+// A go at a drill is over: how it went, your best, and Again to go again.
+function finishDrill() {
+  state = 'finished';
+  const { title, lines, best } = drill.result;
+  let before = null;
+  try { before = JSON.parse(localStorage.getItem(DRILL_BEST(mode))); } catch {}
+  const record = typeof before !== 'number' || best < before;
+  if (record) try { localStorage.setItem(DRILL_BEST(mode), JSON.stringify(best)); } catch {}
+  els.result.textContent = record && before !== null ? `New best! ${title}` : title;
+  els.details.textContent = lines.join('. ') + '.';
+  els.standings.hidden = true;
+  finished.querySelector('button[value="again"]').hidden = false;
+  tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
+  setTimeout(() => { if (state === 'finished') openDialog(finished); }, 1200);
+}
+
 function toMenu() {
   endLive();
   state = 'menu';
@@ -256,7 +288,7 @@ function toMenu() {
 // Home: you, the races, the leaderboards. A first visit goes through making
 // your paddler, boat and paddle first (Next, Next, Done); after that each is
 // one tap from home, and its button says Done.
-const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', paddle: 'stepPaddle', boards: 'stepBoards' };
+const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', paddle: 'stepPaddle', boards: 'stepBoards', practice: 'stepPractice' };
 function showStep(name) {
   // Getting as far as the races counts as having chosen.
   if (name === 'home' && !kitChosen) {
@@ -413,7 +445,7 @@ showFormat();
 menu.addEventListener('cancel', (e) => e.preventDefault());
 menu.addEventListener('close', async () => {
   if (menu.returnValue === 'live') return openLive();
-  const next = MODES[menu.returnValue];
+  const next = MODES[menu.returnValue] ?? DRILL_MODES[menu.returnValue];
   if (!next) return;
   if (!OPEN.has(next.key) && !account.offline && !account.user) {
     location.href = SIGN_IN;
@@ -421,7 +453,9 @@ menu.addEventListener('close', async () => {
   }
   if (!next.course) {
     try {
-      next.course = await loadCourse(next.file);
+      // A drill is on one of the courses: load it there, once.
+      if (next.base) next.course = next.base.course ??= await loadCourse(next.base.file);
+      else next.course = await loadCourse(next.file);
     } catch (err) {
       els.best.textContent = `${err.message} Check your connection and try again.`;
       openDialog(menu);
@@ -808,11 +842,21 @@ function react({ events, splashes }) {
     if (e === 'bank') controls.rumble(0.8, 150);
     if (e === 'bump') controls.rumble(0.6, 120);
     if (e === 'finish') finish();
+    // The portage: slow in to the beach, jump out, run it, jump back in.
+    const both = phone.matches ? 'tap with both thumbs at once' : 'press \u2190 and \u2192 together';
+    if (e === 'beach' && !drill) show(`The beach: slow right down, then ${both} to jump out`, { small: true, hold: 3.5 });
+    if (e === 'too-fast') show('Too fast to get out: slow down', { small: true, hold: 1.5 });
+    if (e === 'aground') {
+      show('Aground! Too fast into the beach', { small: true, hold: 2.5 });
+      controls.rumble(1, 400);
+    }
     if (e === 'landed') {
-      show('Out of the boat: run it along the bank to the put-in', { small: true, hold: 3 });
+      show('Out! Tap left, right to run with the boat', { small: true, hold: 2.5 });
       controls.rumble(0.5, 200);
     }
-    if (e === 'put-in') show('Back in: paddle on down the river', { small: true, hold: 2.5 });
+    if (e === 'at-put-in' && !drill) show(`The put-in: ${both} to get in`, { small: true, hold: 3 });
+    if (e === 'put-in') show('In. Keep it level a moment, then paddle', { small: true, hold: 2.5 });
+    if (e === 'rushed') show('Steady! Let it settle first', { small: true, hold: 1.2 });
     if (e === 'line-up') say(race.start.holds ? 'Back to the line' : 'Paddlers, come up to the line');
     if (e === 'nudge') say("Come on up to the line, please. We're waiting for you");
     if (e === 'ready') say('Are you ready?');
@@ -875,6 +919,10 @@ function simulate(dt) {
   const result = stepRace(race, dt, input);
   if (liveRace) liveAfter(result.events);
   react(result);
+  if (drill && state === 'racing') {
+    trackDrill(drill, race, result.events, dt);
+    if (drill.done) finishDrill();
+  }
 }
 
 // --- rendering ---------------------------------------------------------------
@@ -1056,7 +1104,7 @@ function engines(dt) {
 // On a portage you run along the bank with the boat on your shoulder: where
 // you stand (the seat's height, so the eye's at a standing height) and the boat.
 function carried(r) {
-  if (!r.portage) return null;
+  if (r.portage?.phase !== 'run' && r.portage?.phase !== 'put') return null;
   const bob = 0.05 * Math.abs(Math.sin(r.boat.time * 9));
   const g = groundAt(race.course, r.boat.x, r.boat.z) + bob;
   return { seat: g + 0.75, boat: g + 1.8 };
@@ -1229,6 +1277,8 @@ function updateHud(dt) {
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
   showCue(course, loc.s, dt);
+  els.drill.hidden = !drill?.readout;
+  if (drill) els.drill.textContent = drill.readout;
   moveMap();
   els.rhythm.style.transform = `scaleX(${boat.rhythm.toFixed(3)})`;
   els.rhythm.parentElement.classList.toggle('locked', boat.rhythm > 0.9);
