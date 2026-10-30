@@ -28,14 +28,14 @@
     "./observe": "./src/observe.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.1152.0",
-    "@aws-sdk/client-s3": "^3.1152.0",
-    "@aws-sdk/client-ssm": "^3.1152.0",
-    "@aws-sdk/s3-request-presigner": "^3.1152.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@aws-sdk/client-ssm": "^3.1156.0",
+    "@aws-sdk/s3-request-presigner": "^3.1156.0",
     "@paddlesnitch/timing": "workspace:*",
     "aws-jwt-verify": "^5.2.1"
   },
   "peerDependencies": {
-    "next": "16.4.2"
+    "next": "16.4.3"
   }
 }
