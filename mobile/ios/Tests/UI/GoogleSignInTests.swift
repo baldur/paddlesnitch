@@ -9,7 +9,7 @@ final class GoogleSignInTests: AppTestCase {
         let google = scrollToElement(app.buttons["google-sign-in"])
         XCTAssertEqual(google.label, "Sign in with Google")
         google.tap()
-        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in")
+        XCTAssertTrue(signedIn(), "signed in")
         XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
     }
 
@@ -28,7 +28,7 @@ final class GoogleSignInTests: AppTestCase {
         signInAndWait()
         openAccount()
         let row = scrollTo("strava-connected")
-        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.appears(timeout: 10))
         XCTAssertTrue(row.label.contains("Paused"))
         XCTAssertTrue(text(containing: "Strava isn’t available right now.").exists)
         XCTAssertTrue(scrollToElement(app.buttons["Disconnect"]).exists)
@@ -46,7 +46,7 @@ final class GoogleSignInTests: AppTestCase {
     /// data, and given time to come.
     private func noStravaSection() {
         XCTAssertTrue(scrollToElement(app.buttons["Download my data"]).exists)
-        XCTAssertFalse(element("strava-connect").waitForExistence(timeout: 3), "no Connect")
+        XCTAssertFalse(element("strava-connect").appears(timeout: 3), "no Connect")
         XCTAssertFalse(element("strava-connected").exists)
     }
 
@@ -64,7 +64,7 @@ final class GoogleSignInTests: AppTestCase {
     func testSignInAsksWhichWaysInAreOn() {
         relaunch(["-StravaOffLater"])
         openSignIn()
-        XCTAssertTrue(scrollToElement(app.buttons["email-us"]).waitForExistence(timeout: 10))
+        XCTAssertTrue(scrollToElement(app.buttons["email-us"]).appears(timeout: 10))
         XCTAssertFalse(app.buttons["strava-sign-in"].exists)
     }
 
@@ -73,7 +73,7 @@ final class GoogleSignInTests: AppTestCase {
     func testWhenAskingFailsSignInSaysSoAndCanTryAgain() {
         relaunch(["-OptionsFail"])
         openSignIn()
-        XCTAssertTrue(scrollTo("ways-in-failed").waitForExistence(timeout: 10))
+        XCTAssertTrue(scrollTo("ways-in-failed").appears(timeout: 10))
         XCTAssertFalse(app.buttons["google-sign-in"].exists)
         XCTAssertFalse(app.buttons["strava-sign-in"].exists)
         XCTAssertFalse(app.buttons["email-us"].exists, "doesn't say Strava is off")
@@ -88,7 +88,7 @@ final class GoogleSignInTests: AppTestCase {
         app.launch()
         openAccount()
         scrollToElement(app.buttons["Delete my account"]).tap()
-        XCTAssertTrue(element("delete-needs-sign-in").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("delete-needs-sign-in").appears(timeout: 10))
         XCTAssertTrue(app.buttons["Sign in again"].exists)
         XCTAssertFalse(app.buttons["Report an issue"].exists)
     }
@@ -103,29 +103,29 @@ final class GoogleSignInTests: AppTestCase {
         app.launchArguments = ["-SampleServer", "-StravaOff", "-StravaConnected", "-StaleSignIn", "-StravaAccount"]
         app.launch()
         openAccount()
-        XCTAssertTrue(scrollTo("strava-connected").waitForExistence(timeout: 10))
+        XCTAssertTrue(scrollTo("strava-connected").appears(timeout: 10))
         XCTAssertFalse(scrollToElement(app.buttons["Disconnect"]).exists, "its only way in")
         scrollToElement(app.buttons["Delete my account"]).tap()
-        XCTAssertTrue(element("delete-needs-sign-in").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("delete-needs-sign-in").appears(timeout: 10))
         XCTAssertTrue(text(containing: "leave out your name and email: reports are public.").exists)
         XCTAssertFalse(app.buttons["Sign in again"].exists)
         // Signed in through a one-time link, so it's filed as this account.
         app.buttons["Report an issue"].tap()
-        XCTAssertFalse(element("delete-error").waitForExistence(timeout: 3), "the signed-in link came")
+        XCTAssertFalse(element("delete-error").appears(timeout: 3), "the signed-in link came")
     }
 
     func testTheSignInSheetWithStravaOffPassesTheAccessibilityAudit() throws {
         relaunch(["-StravaOff"])
         openSignIn()
-        XCTAssertTrue(app.buttons["google-sign-in"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["google-sign-in"].appears(timeout: 10))
         try audit()
     }
 
     private func openSignIn() {
         let notice = app.buttons["sample-notice-action"]
-        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.appears(timeout: 10))
         notice.tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
     }
 
     private func relaunch(_ extra: [String]) {

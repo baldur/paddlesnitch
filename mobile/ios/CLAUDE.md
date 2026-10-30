@@ -90,3 +90,33 @@ isn't obvious from the code.
   row: `app.swipeUp()` starts mid-screen, and at the largest text size it
   landed on a tracker card and opened it. Not the left margin: the back
   gesture has it, and in the sign-in sheet a drag there scrolled nothing.
+- UI test time: XCTest's waits (`waitForExistence`, `waitForNonExistence`,
+  `XCTNSPredicateExpectation`) first look a full second after they start, even
+  when the element is already there. With ~15 per test that was a third of
+  every test, and the newest-iOS job crept past its 70-minute limit. Use
+  `appears(timeout:)`, `disappears(timeout:)` and `poll(timeout:)`
+  (`Tests/UI/Waiting.swift`); SwiftLint's `xctest_waits` rule enforces it.
+  Also check `exists` before `isHittable`: on a missing element it spends ~2 s
+  looking. To find where a test's time goes, run it with `-resultBundlePath`
+  and read the gaps between steps in
+  `xcrun xcresulttool get test-results activities --test-id …`.
+- `scrollToElement` drags by the distance it measures, then holds. A fixed
+  fast swipe flung the page past a target at the largest text size, and back,
+  for all ten tries. It stops when a drag leaves the target where it was (the
+  page goes no further). Without that, one large-text test made 111 drags and
+  seven times main's looks.
+- Every look a UI test takes (`exists`, `frame`, a tap) makes XCTest log
+  inside the app. Once the tests got faster, the system quarantined the app's
+  logging for volume (`QUARANTINED DUE TO HIGH LOGGING VOLUME`), and on iOS 17
+  that crashes XCTest's own code in the app. The test sees "not running" or
+  "Lost connection", and the crash report shows
+  `runtime_issue_os_log_fault_callback` → `strcmp`. So `AppTestCase` launches
+  the app with `OS_ACTIVITY_MODE=disable`, and `poll` backs off to one look a
+  second. To measure log volume, count the app's lines with
+  `xcrun simctl spawn <udid> log stream --predicate 'process == "Paddlesnitch"'`,
+  or search `log show` for `QUARANTINED`.
+- CI's log has no test lines until the run ends, because xcbeautify holds
+  them back. A cancelled job's only clue is the `IDELaunchParametersSnapshot`
+  lines, one per app launch. `make test-app` therefore gives each test 6
+  minutes (`-default-test-execution-time-allowance`), and CI keeps the results
+  when a job is cancelled too.

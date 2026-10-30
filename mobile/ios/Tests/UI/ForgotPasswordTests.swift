@@ -6,17 +6,17 @@ final class ForgotPasswordTests: AppTestCase {
     private func openForgotPassword(email: String) {
         app.buttons["sample-notice-action"].tap()
         let emailField = app.textFields["Email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 10))
+        XCTAssertTrue(emailField.appears(timeout: 10))
         emailField.tap()
         emailField.typeText(email)
         app.buttons["Forgot password?"].tap()
-        XCTAssertTrue(element("forgot-explainer").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("forgot-explainer").appears(timeout: 10))
     }
 
     private func sendCodeThenReset(code: String) {
         app.buttons["forgot-submit"].tap()
         let codeField = app.textFields["Code from the email"]
-        XCTAssertTrue(codeField.waitForExistence(timeout: 10))
+        XCTAssertTrue(codeField.appears(timeout: 10))
         codeField.tap()
         codeField.typeText(code)
         let password = app.secureTextFields["New password"]
@@ -29,21 +29,21 @@ final class ForgotPasswordTests: AppTestCase {
         openForgotPassword(email: "pat@example.com")
         XCTAssertTrue(text(containing: "we'll send you a 6-digit code").exists)
         sendCodeThenReset(code: "123456")
-        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "signed in, sheet closed")
-        XCTAssertTrue(element("logbook").waitForExistence(timeout: 10))
+        XCTAssertTrue(signedIn(), "signed in, sheet closed")
+        XCTAssertTrue(element("logbook").appears(timeout: 10))
     }
 
     func testAWrongCodeSaysSo() {
         openForgotPassword(email: "pat@example.com")
         sendCodeThenReset(code: "000000")
-        XCTAssertTrue(text(containing: "That code is wrong or has expired.").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "That code is wrong or has expired.").appears(timeout: 10))
         XCTAssertTrue(app.buttons["Send a new code"].exists)
     }
 
     func testSetButNotSignedInGoesBackToSignInWithTheEmail() {
         openForgotPassword(email: "kim@example.com")
         sendCodeThenReset(code: "123456")
-        XCTAssertTrue(element("sign-in-notice").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("sign-in-notice").appears(timeout: 10))
         XCTAssertEqual(app.textFields["Email"].value as? String, "kim@example.com")
     }
 
@@ -52,7 +52,7 @@ final class ForgotPasswordTests: AppTestCase {
         settle()
         try audit()
         app.buttons["forgot-submit"].tap()
-        XCTAssertTrue(app.textFields["Code from the email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Code from the email"].appears(timeout: 10))
         settle()
         try audit()
     }

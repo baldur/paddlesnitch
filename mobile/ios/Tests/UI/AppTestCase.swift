@@ -13,6 +13,11 @@ class AppTestCase: XCTestCase {
     /// network) and starts signed out.
     override func setUp() async throws {
         continueAfterFailure = false
+        // No logging in the app: every look a test takes logs there (XCTest's
+        // side), and at full speed the system quarantined the app's logging,
+        // which crashes XCTest in the app on iOS 17 ("not running", "Lost
+        // connection"). Every launch below keeps this; tests change arguments.
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launchArguments += ["-SampleServer", "-ResetAccount"] + launchArguments
         app.launch()
     }
@@ -20,7 +25,7 @@ class AppTestCase: XCTestCase {
     /// Opens the sign-in sheet from the Paddles notice and signs in.
     func signIn(email: String = "pat@example.com", password: String = "Password123") {
         let button = app.buttons["sample-notice-action"]
-        XCTAssertTrue(button.waitForExistence(timeout: 10))
+        XCTAssertTrue(button.appears(timeout: 10))
         button.tap()
         fill(email: email, password: password)
         app.buttons["sign-in-submit"].tap()
@@ -30,13 +35,13 @@ class AppTestCase: XCTestCase {
     /// own paddles.
     func signInAndWait(email: String = "pat@example.com") {
         signIn(email: email)
-        XCTAssertTrue(element("sample-notice").waitForNonExistence(timeout: 15), "still showing the samples")
-        XCTAssertTrue(element("logbook").waitForExistence(timeout: 10))
+        XCTAssertTrue(signedIn(), "still showing the samples")
+        XCTAssertTrue(element("logbook").appears(timeout: 10))
     }
 
     func fill(email: String, password: String) {
         let emailField = app.textFields["Email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 10))
+        XCTAssertTrue(emailField.appears(timeout: 10))
         type(email, into: emailField)
         type(password, into: app.secureTextFields["Password"])
     }
@@ -46,7 +51,7 @@ class AppTestCase: XCTestCase {
     /// without focus, and typing then fails ("Neither element nor any
     /// descendant has keyboard focus", seen on CI).
     func type(_ text: String, into field: XCUIElement) {
-        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        XCTAssertTrue(field.appears(timeout: 10))
         // A field that took the keyboard itself (the code step's) needs no
         // tap, and one mid-animation can't take it ("not hittable"). Only
         // wait for that when a keyboard is up: otherwise it's 2 s for nothing
@@ -61,30 +66,22 @@ class AppTestCase: XCTestCase {
         field.typeText(text)
     }
 
-    /// iOS 26 asks "Save Password?" once a password is sent, for any secure
-    /// field (an autofill type or none), covering the next screen's buttons.
-    /// Not now. iOS 27 doesn't ask there.
-    func declineSavingPassword() {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        // One short look at both, not a wait on each: on iOS 27 it never
-        // comes, and every second here is paid in every such test.
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline {
-            for owner in [app, springboard] where owner.buttons["Not Now"].firstMatch.exists {
-                owner.buttons["Not Now"].firstMatch.tap()
-                return
-            }
-            usleep(200_000)
-        }
-    }
-
     /// Types into a field that takes the keyboard by itself (the code step's):
     /// waits for that, however late it comes (after "Save Password?" closes,
     /// iOS gives the keyboard back), and never taps it. Tapping a field while
     /// it takes the keyboard fails as "not hittable" on a slow simulator.
     func typeWhenFocused(_ text: String, into field: XCUIElement) {
-        XCTAssertTrue(field.waitForExistence(timeout: 10))
-        if !field.waitForKeyboardFocus(timeout: 5) { scrollToElement(field).tap() }
+        XCTAssertTrue(field.appears(timeout: 10))
+        if !field.waitForKeyboardFocus(timeout: 5) {
+            // It didn't come back by itself: tap, and wait again, or the
+            // keyboard is still rising when the code is typed and it's lost.
+            // "Save Password?" can come late, after the first look for it,
+            // and cover the field: look again, then wait until a tap lands.
+            declineSavingPassword()
+            XCTAssertTrue(scrollToElement(field).becomesHittable(timeout: 5), "nothing over the field")
+            field.tap()
+            XCTAssertTrue(field.waitForKeyboardFocus(timeout: 5), "the field has the keyboard")
+        }
         field.typeText(text)
     }
 
@@ -95,23 +92,23 @@ class AppTestCase: XCTestCase {
     /// `dismissKeyboard()` doesn't run before it comes and leave it over the
     /// buttons (CI: "Change email" not hittable).
     func waitForTheCodeKeyboard() {
-        let focused = NSPredicate(format: "hasKeyboardFocus == true")
-        let wait = XCTNSPredicateExpectation(predicate: focused, object: app.textFields["code-field"])
-        _ = XCTWaiter.wait(for: [wait], timeout: 5)
+        _ = app.textFields["code-field"].waitForKeyboardFocus(timeout: 5)
     }
 
     /// Taps once nothing covers it: the keyboard away, scrolled into view,
     /// and hittable; a keyboard that came back in between is put away again.
+    /// So is a late "Save Password?": on iOS 26.5 it came ~10 s after the
+    /// password was sent, after the code step's keyboard had gone (CI,
+    /// "change-email" stayed covered).
     func tapWhenClear(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        let hittable = NSPredicate(format: "hittable == true")
         for _ in 0..<3 {
             dismissKeyboard()
             scrollToElement(target)
-            let wait = XCTNSPredicateExpectation(predicate: hittable, object: target)
-            if XCTWaiter.wait(for: [wait], timeout: 2) == .completed {
+            if target.becomesHittable(timeout: 2) {
                 target.tap()
                 return
             }
+            declineSavingPassword()
         }
         XCTFail("\(target) stayed covered", file: file, line: line)
     }
@@ -120,8 +117,14 @@ class AppTestCase: XCTestCase {
         let keyboard = app.keyboards.firstMatch
         guard keyboard.exists else { return }
         let done = app.buttons["keyboard-done"].firstMatch
-        if done.exists && done.isHittable { done.tap() } else { swipe(up: false) }
-        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5), "the keyboard went away")
+        // The code step's Done comes a moment after its keyboard; without
+        // a wait, the drag tried instead left that keyboard up.
+        let doneComing = app.textFields["code-field"].exists
+        for _ in 0..<3 {
+            if done.becomesHittable(timeout: doneComing ? 2 : 0) { done.tap() } else { swipe(up: false) }
+            if keyboard.disappears(timeout: 3) { return }
+        }
+        XCTFail("the keyboard went away")
     }
 
     func element(_ identifier: String) -> XCUIElement {
@@ -161,10 +164,19 @@ class AppTestCase: XCTestCase {
 
     @discardableResult
     func scrollToElement(_ target: XCUIElement) -> XCUIElement {
-        _ = app.windows.firstMatch.waitForExistence(timeout: 10)
+        _ = app.windows.firstMatch.appears(timeout: 10)
         for _ in 0..<10 {
             if target.exists && isReadable(target) { break }
-            swipe(up: !(target.exists && target.frame.minY < readableArea.minY))
+            guard target.exists else {
+                swipe(up: true)
+                continue
+            }
+            let before = target.frame
+            scroll(by: distanceToReadable(target))
+            // It didn't move: the page goes no further (a button at the foot
+            // of a sheet at the largest text size). Nine more tries were 111
+            // drags in one test, and 7x the looks (mobile/ios/CLAUDE.md).
+            if target.exists && target.frame == before { break }
         }
         return target
     }
@@ -228,7 +240,7 @@ class AppTestCase: XCTestCase {
 
     func open(_ paddle: String, file: StaticString = #filePath, line: UInt = #line) {
         let row = element("paddle-\(paddle)")
-        _ = app.windows.firstMatch.waitForExistence(timeout: 10)
+        _ = app.windows.firstMatch.appears(timeout: 10)
         // Swipe until a good slice of the row (44 pt, a tap target) is in the
         // readable area, then tap in that slice: at the largest text size a
         // row can be taller than the screen, and its middle may be under a bar.
@@ -281,8 +293,10 @@ class AppTestCase: XCTestCase {
         // A row half under a bar draws a report on no element, and it moves
         // with the page; a real clip ("NO GPS" → "N…") is layout and stays
         // through small moves. So: two more looks, the page moved a little
-        // before each, and it fails only if all three report it.
-        for _ in 0..<2 where found.pinned.isEmpty && !found.unpinned.isEmpty {
+        // before each, and it fails only if all three report it. Not when
+        // such a report can't fail anyway: those looks were ~40% of a
+        // large-text test.
+        for _ in 0..<2 where unpinnedFails && found.pinned.isEmpty && !found.unpinned.isEmpty {
             keepScreenshot("Audit issue on no element")
             nudgePage()
             found = try auditIssues(types)
@@ -342,38 +356,32 @@ class AppTestCase: XCTestCase {
     func openAccount() {
         tab("You").tap()
         let row = app.buttons["Account"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.appears(timeout: 10))
         row.tap()
-        XCTAssertTrue(app.navigationBars["Account"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Account"].appears(timeout: 10))
         // The profile loads after the screen; wait for it, and for it to stop
         // moving, before anyone audits or taps.
         let loaded = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Make profile'")).firstMatch
         // At the largest text size it's below the fold, where a List hasn't
         // made its row yet: go and look, then come back to the top.
-        let below = !loaded.waitForExistence(timeout: 3)
+        let below = !loaded.appears(timeout: 3)
         if below { scrollToElement(loaded) }
-        XCTAssertTrue(loaded.waitForExistence(timeout: 10), "the profile loaded")
+        XCTAssertTrue(loaded.appears(timeout: 10), "the profile loaded")
         var last = CGRect.null
         for _ in 0..<20 where loaded.frame != last {
             last = loaded.frame
             usleep(150_000)
         }
         if below {
-            for _ in 0..<8 where !app.staticTexts["Your details"].firstMatch.isHittable { app.swipeDown() }
+            // `exists` first: `isHittable` on a row not made yet spends ~2 s
+            // looking for it.
+            let top = app.staticTexts["Your details"].firstMatch
+            for _ in 0..<8 where !(top.exists && top.isHittable) { app.swipeDown() }
         }
     }
 
     /// Tab items, wherever this iOS draws the tab bar.
     func tab(_ name: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
-    }
-}
-
-extension XCUIElement {
-    /// Whether this field has the keyboard, waiting up to `timeout`.
-    func waitForKeyboardFocus(timeout: TimeInterval) -> Bool {
-        let focused = NSPredicate(format: "hasKeyboardFocus == true")
-        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: focused, object: self)], timeout: timeout)
-            == .completed
     }
 }
