@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { courseFromFile, pointAt, locate } from '../kayak/course.js';
-import { createRace, stepRace, standings, PORTAGE, portageTime, DIVISION_9 } from '../kayak/race.js';
+import { createRace, stepRace, standings, PORTAGE, portageTime, DIVISION_9, DIVISION_3 } from '../kayak/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -61,14 +61,14 @@ test('Hasler Div 1-6 has one portage at Mapledurham, a run of 150 to 200 m over 
   assert.ok(portageTime(p) > 50 && portageTime(p) < 80, `${portageTime(p)} s`);
 });
 
-// A Div 1-6 race on its own, the player put just below the beach.
-async function atTheBeach(back = 30) {
+// A Div 1-6 race on its own, the player `back` metres below the beach, at `speed`.
+async function atTheBeach(back = 30, speed = 0) {
   const course = courseFromFile(await data('hasler16'));
   const race = createRace(course, { rivals: [], seed: 1, birds: false, traffic: false });
   const r = race.player;
   const p = course.portages[0];
   const at = pointAt(course, p.from - back);
-  Object.assign(r.boat, { x: at.x, z: at.z, heading: Math.atan2(at.tx, -at.tz), speed: 0, speedup: course.speedup });
+  Object.assign(r.boat, { x: at.x, z: at.z, heading: Math.atan2(at.tx, -at.tz), speed, speedup: course.speedup });
   r.boat.hull = { ...r.boat.hull, capsize: 10 };
   r.loc = locate(course, at.x, at.z, course.samples.findIndex((q) => q.s >= p.from - back));
   race.start.phase = 'go';
@@ -90,28 +90,123 @@ function paddle(race, seconds, { off = 0 } = {}) {
   }
   return events;
 }
-
-test('at the beach you land, run along the bank with the boat and put in again, a minute later as shown', async () => {
-  const { race, r, p, course } = await atTheBeach();
-  const landed = [];
-  let events = [];
-  for (let t = 0; t < 20 && !r.portage; t += DT) events = paddle(race, DT);
-  assert.ok(r.portage, 'landed at the beach');
-  const from = race.time;
-  // While carried, strokes do nothing and you follow the run along the bank.
-  while (r.portage) {
-    landed.push(r.loc.s);
-    events.push(...stepRace(race, DT, { strokes: ['left'], lean: 0 }).events);
+// `seconds` of race time doing nothing but `strokes` once (both sides together: a jump).
+function hold(race, seconds, strokes = []) {
+  const events = [...stepRace(race, DT, { strokes, lean: balance(race.player.boat) }).events];
+  for (let t = DT; t < seconds; t += DT) events.push(...stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) }).events);
+  return events;
+}
+// Tapping strides, `rate` a second, until `until` (or `seconds` of race time).
+function run(race, rate, seconds, until = () => false) {
+  const r = race.player;
+  const events = [];
+  let next = r.boat.time;
+  for (let t = 0; t < seconds && !until(); t += DT) {
+    const strokes = r.boat.time >= next ? [r.boat.lastSide === 'left' ? 'right' : 'left'] : [];
+    if (strokes.length) {
+      next += 1 / rate;
+      r.boat.lastSide = strokes[0];
+    }
+    events.push(...stepRace(race, DT, { strokes, lean: 0 }).events);
   }
-  assert.ok(events.includes('put-in'));
-  const shownSeconds = (race.time - from) * course.warp;
-  assert.ok(Math.abs(shownSeconds - portageTime(p)) < 1, `${shownSeconds} s as shown`);
-  assert.ok(Math.min(...landed) >= p.from - 0.5 && Math.max(...landed) <= p.to + 1.5, `${Math.min(...landed)}-${Math.max(...landed)} for ${p.from}-${p.to}`);
+  return events;
+}
+const BOTH = ['left', 'right'];
+const shown = (race, from) => (race.time - from) * race.course.warp;
+
+test('at the beach you jump out (both sides together, slowly), run it by tapping, and jump back in at the put-in', async () => {
+  const { race, r, p } = await atTheBeach(8);
+  // Coming up to it: told what to do.
+  assert.ok(hold(race, 0.05).includes('beach'));
+  assert.ok(hold(race, 0.05, BOTH).includes('landed'), 'out');
+  assert.equal(r.portage.phase, 'out');
+  // Getting out takes a moment; then you run, only as you tap.
+  assert.ok(hold(race, PORTAGE.out / race.course.warp + 0.05).includes('run'));
+  hold(race, 1);
+  assert.ok(r.portage.d < 0.01, "no taps, you don't go anywhere");
+  const from = race.time;
+  const events = run(race, 3, 60, () => r.portage?.phase === 'put');
+  assert.ok(events.includes('at-put-in'));
+  // 3 taps a second is 3.5 m/s: about 50 s along the bank, as shown.
+  const runSeconds = shown(race, from);
+  assert.ok(runSeconds > (p.to - p.from) / 3.6 && runSeconds < (p.to - p.from) / 3.2, `${runSeconds} s for ${p.to - p.from} m`);
+  // At the put-in you wait for yourself: strides don't get you in.
+  hold(race, 0.3);
+  run(race, 3, 1);
+  assert.equal(r.portage.phase, 'put');
+  hold(race, 0.05, BOTH);
+  assert.equal(r.portage.phase, 'in');
+  assert.ok(hold(race, PORTAGE.in / race.course.warp + 0.05).includes('put-in'));
+  assert.equal(r.portage, null);
   assert.equal(r.boat.speed, 0, 'afloat at the put-in, from a standstill');
+  assert.ok(Math.abs(r.loc.s - p.to) < 3);
   // And on down the river.
   paddle(race, 15);
   assert.ok(r.loc.s > p.to + 60, `on to ${r.loc.s}`);
   assert.equal(r.missed, undefined);
+});
+
+test('come into the beach too fast and you run aground: stuck a few seconds before you can get out', async () => {
+  const { race, r } = await atTheBeach(10, 3);
+  const events = [];
+  for (let t = 0; t < 2 && !r.portage; t += DT) events.push(...hold(race, DT));
+  assert.ok(events.includes('aground'));
+  assert.equal(r.portage.phase, 'aground');
+  hold(race, 0.05, BOTH);
+  assert.equal(r.portage.phase, 'aground', "can't get out while stuck");
+  hold(race, PORTAGE.stuck / race.course.warp);
+  assert.equal(r.portage.phase, 'beached');
+  assert.ok(hold(race, 0.05, BOTH).includes('landed'));
+});
+
+test("trying to jump out while still going too quick (but not aground yet) doesn't work", async () => {
+  const { race, r } = await atTheBeach(11, 2.5);
+  const events = hold(race, 0.02, BOTH);
+  assert.ok(events.includes('too-fast'));
+  assert.equal(r.portage ?? null, null);
+});
+
+test('running: a jog at 2 taps a second for free, quicker costs your sprint stamina, and out of it you can only jog', async () => {
+  const speedAt = async (rate, stamina = 1) => {
+    const { race, r } = await atTheBeach(5);
+    hold(race, 0.02, BOTH);
+    hold(race, PORTAGE.out / race.course.warp + 0.05);
+    r.boat.stamina = stamina;
+    run(race, rate, 3);
+    return { v: r.portage.v, stamina: r.boat.stamina };
+  };
+  const jog = await speedAt(2);
+  const fast = await speedAt(3);
+  const tired = await speedAt(3, 0);
+  assert.ok(Math.abs(jog.v - 2.5) < 0.15, `jog ${jog.v}`);
+  assert.ok(jog.stamina > 0.999, `stamina ${jog.stamina}`);
+  assert.ok(Math.abs(fast.v - 3.5) < 0.15, `fast ${fast.v}`);
+  assert.ok(fast.stamina < 0.95, `stamina ${fast.stamina}`);
+  assert.ok(Math.abs(tired.v - 2.5) < 0.15, `tired ${tired.v}`);
+});
+
+test('back in, the boat wobbles: sit still and it settles, paddle at once and it rocks harder', async () => {
+  const roll = async (strokes) => {
+    const { race, r, p } = await atTheBeach(5);
+    hold(race, 0.02, BOTH);
+    hold(race, PORTAGE.out / race.course.warp + 0.05);
+    run(race, 3, 60, () => r.portage?.phase === 'put');
+    hold(race, 0.02, BOTH);
+    hold(race, PORTAGE.in / race.course.warp + 0.05);
+    assert.equal(r.portage, null);
+    let worst = 0;
+    const events = [];
+    for (let t = 0; t < 1; t += DT) {
+      events.push(...stepRace(race, DT, { strokes: t < 0.6 && strokes && Math.round(t / DT) % 30 === 0 ? [Math.round(t / DT) % 60 ? 'left' : 'right'] : [], lean: 0 }).events);
+      worst = Math.max(worst, Math.abs(r.boat.roll));
+    }
+    return { worst, events, p };
+  };
+  const still = await roll(false);
+  const rushed = await roll(true);
+  assert.ok(still.worst > 0.03, 'a wobble as you sit');
+  assert.ok(rushed.events.includes('rushed'));
+  assert.ok(rushed.worst > still.worst * 1.3, `${rushed.worst} vs ${still.worst}`);
 });
 
 test('paddle on past the beach without landing and you have missed it, until you go back and run it', async () => {
@@ -129,7 +224,11 @@ test('paddle on past the beach without landing and you have missed it, until you
   const back = pointAt(course, p.from);
   Object.assign(r.boat, { x: back.x, z: back.z, speed: 0 });
   r.loc = locate(course, back.x, back.z, course.samples.findIndex((q) => q.s >= p.from - 5));
-  for (let t = 0; t < 120 && !r.portaged?.has(0); t += DT) stepRace(race, DT, { strokes: [], lean: 0 });
+  hold(race, 0.02, BOTH);
+  hold(race, PORTAGE.out / race.course.warp + 0.05);
+  run(race, 3, 60, () => r.portage?.phase === 'put');
+  hold(race, 0.02, BOTH);
+  hold(race, PORTAGE.in / race.course.warp + 0.05);
   assert.ok(r.portaged.has(0));
   assert.equal(r.missed, null);
 });
@@ -139,7 +238,7 @@ test('carried along the bank, a boat on the water beside you never bumps you', a
   const race = createRace(course, { rivals: DIVISION_9.slice(0, 1), seed: 1, birds: false, traffic: false });
   race.start.phase = 'go';
   const [you, rival] = [race.player, race.racers.find((r) => r.ai)];
-  you.portage = { k: 0, t: PORTAGE.out + 5 }; // mid-run
+  you.portage = { k: 0, phase: 'run', t: 0, d: 50, v: 3, target: 3 }; // mid-run
   you.portaged = new Set();
   for (let t = 0; t < 2; t += DT) {
     // The rival kept right alongside, wherever the run takes you.
@@ -148,6 +247,19 @@ test('carried along the bank, a boat on the water beside you never bumps you', a
     assert.ok(!stepRace(race, DT, { strokes: [], lean: 0 }).events.includes('bump'));
   }
   assert.ok(you.portage, 'still running');
+});
+
+test('Div 1-6 as a time trial: every rival coasts in, jumps out, runs the bank and gets back in, and nobody runs aground', async () => {
+  const course = courseFromFile(await data('hasler16'));
+  const race = createRace(course, { rivals: DIVISION_3, seed: 1, format: 'interval' });
+  const aground = new Set();
+  while (race.time < 1600 && race.racers.some((r) => r.ai && r.finish === null)) {
+    stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+    for (const r of race.racers) if (r.portage?.phase === 'aground') aground.add(r.name);
+  }
+  const rivals = race.racers.filter((r) => r.ai);
+  assert.ok(rivals.every((r) => r.finish !== null && r.portaged.has(0)), 'all ran it and finished');
+  assert.deepEqual([...aground], []);
 });
 
 test('Hasler Div 7-9 as a time trial: the pack goes round Appletree Eyot and Fry\'s Island, right of Piper\'s both ways, and all finish', async () => {
@@ -175,6 +287,7 @@ test('a mass start on a course that finishes where it starts: nobody "finishes" 
   }
 });
 
-test('the run itself takes everyone the same: out, along the bank at a jog, back in', () => {
-  assert.equal(portageTime({ from: 0, to: 150 }), PORTAGE.out + 150 / PORTAGE.run + PORTAGE.in);
+test('a portage as shown: out, along the bank at a pace, back in', () => {
+  assert.equal(portageTime({ from: 0, to: 150 }), PORTAGE.out + 150 / 3 + PORTAGE.in);
+  assert.equal(portageTime({ from: 0, to: 150 }, 2.5), PORTAGE.out + 60 + PORTAGE.in);
 });
