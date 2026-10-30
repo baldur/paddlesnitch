@@ -89,8 +89,8 @@ test('the posts in the water off St Mary\'s Island are solid', async () => {
 
 test('the landmarks pointed out from the footage get their own models', async () => {
   const course = await load('loop');
-  const styles = course.scenery.buildings.map((b) => b.style).filter(Boolean).sort();
-  assert.deepEqual(styles, ['canoe-club', 'grey-boathouse', 'riverside-villa', 'rowing-club', 'spiral-boathouse']);
+  const styles = [...new Set(course.scenery.buildings.map((b) => b.style).filter(Boolean))].sort();
+  assert.deepEqual(styles, ['canoe-club', 'clapboard', 'glass-house', 'grey-boathouse', 'riverside-villa', 'rowing-club', 'spiral-boathouse']);
   assert.ok(course.scenery.moorings.some((m) => m.kind === 'tatty'));
   const { vertices, count } = buildWorld(course);
   assert.ok(count > 0);
