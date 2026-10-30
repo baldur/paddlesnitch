@@ -70,9 +70,17 @@ const SHADED = [0.25, 0.36, 0.17];
 const WALLS = [[0.62, 0.32, 0.24], [0.7, 0.42, 0.3], [0.86, 0.8, 0.68], [0.92, 0.9, 0.85], [0.55, 0.3, 0.25], [0.8, 0.68, 0.47]];
 const ROOFS = [[0.32, 0.2, 0.17], [0.28, 0.28, 0.3], [0.45, 0.25, 0.18]];
 
-export function buildWorld(course, seed = 1) {
+// `parts`: 'river' is the river and its scenery alone, 'course' what this
+// course adds to it (turning buoys, start and finish gantries, distance
+// boards), 'all' both. The Reading courses share one river: main.js builds it
+// once and each course's own parts on their own.
+export function buildWorld(course, seed = 1, parts = 'all') {
   const rand = mulberry32(seed);
   const m = new MeshBuilder();
+  if (parts === 'course') {
+    courseParts(m, course);
+    return m.build();
+  }
   const real = course.scenery;
   // A real river's scenery is placed along the river line, which a race on a
   // route (a loop, round islands) doesn't follow.
@@ -83,7 +91,6 @@ export function buildWorld(course, seed = 1) {
   if (real) {
     river.land = waterMap(real.water ?? []);
     realLand(m, river, real, rand);
-    for (const b of real.marks ?? []) buoy(m, b);
   } else {
     // The towpath runs along the left bank.
     for (const side of [-1, 1]) {
@@ -166,6 +173,12 @@ export function buildWorld(course, seed = 1) {
     placed++;
   }
 
+  if (parts !== 'river') courseParts(m, course);
+  return m.build();
+}
+
+function courseParts(m, course) {
+  for (const b of course.scenery?.marks ?? []) buoy(m, b);
   // (A loop that finishes where it starts gets the finish banner only.)
   const [a, b] = [pointAt(course, course.start), pointAt(course, course.finish)];
   if (Math.hypot(a.x - b.x, a.z - b.z) > 20) gantry(m, course, course.start, COLORS.start, COLORS.post);
@@ -191,8 +204,6 @@ export function buildWorld(course, seed = 1) {
       m.box([x - 0.6, 2.4, z - 0.6], [x + 0.6, 3.4, z + 0.6], COLORS.marker);
     }
   }
-
-  return m.build();
 }
 
 // Two posts on the banks and a banner across the river, chequered or striped.
@@ -363,6 +374,40 @@ function ground(course, x, z, lineD = null) {
   return { d, y: d < 0 ? -0.4 : groundHeight(d, REAL_PROFILE) + bump(x, z, d) };
 }
 
+// A gravel path along the bank, 2 m wide, following the ground.
+function footpath(m, course, line) {
+  const gravel = [0.62, 0.58, 0.5];
+  for (let i = 1; i < line.length; i++) {
+    const [a, b] = [line[i - 1], line[i]];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const r = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len]; // across the path
+    const n = Math.ceil(len / 2);
+    const at = (k, side) => {
+      const x = a[0] + ((b[0] - a[0]) * k) / n + r[0] * side;
+      const z = a[1] + ((b[1] - a[1]) * k) / n + r[1] * side;
+      return [x, Math.max(0, ground(course, x, z).y) + 0.06, z];
+    };
+    for (let k = 0; k < n; k++) m.quad(at(k, -1), at(k, 1), at(k + 1, 1), at(k + 1, -1), gravel);
+  }
+}
+
+// The distance from a point to a segment.
+function toSegment(x, z, a, b) {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(x - (a[0] + dx * t), z - (a[1] + dz * t));
+}
+
+// The height of the ground at a point beside a real river (for a paddler
+// running along the bank on a portage); 0 on a made-up river.
+export function groundAt(course, x, z) {
+  if (!course.scenery) return 0;
+  const river = course.scenery.river;
+  river.land ??= waterMap(course.scenery.water ?? []);
+  return Math.max(0, ground(river, x, z).y);
+}
+
 // A turning buoy off an island's end (a course file's `marks`): a big yellow
 // inflatable, a red band and a flag on top, to be seen from well back.
 function buoy(m, { x, z }) {
@@ -458,12 +503,20 @@ function realScenery(m, course, real, rand) {
     }
   }
   const built = (x, z) => (bins.get(key(x, z)) ?? []).some((b) => x >= b[0] && x <= b[2] && z >= b[1] && z <= b[3]);
+  // Footpaths (a portage's run) are kept clear: a tree that would stand on one
+  // is drawn nowhere, so the random draws, and the rest of the world, stay as
+  // they were.
+  const paths = real.paths ?? [];
+  const onPath = (x, z, clear) => paths.some((line) => line.some((a, i) => i > 0 && toSegment(x, z, line[i - 1], a) < clear));
+  const nowhere = new MeshBuilder();
   const plant = (x, z, willow) => {
     const g = ground(course, x, z);
     if (g.d < 1.5 || built(x, z)) return;
-    if (willow) willowTree(m, x, g.y, z, rand);
-    else tree(m, x, g.y, z, rand, true);
+    const into = onPath(x, z, willow ? 7 : 4.5) ? nowhere : m;
+    if (willow) willowTree(into, x, g.y, z, rand);
+    else tree(into, x, g.y, z, rand, true);
   };
+  for (const line of paths) footpath(m, course, line);
 
   // Along each bank, as the frames showed it.
   for (let s = 0; s < course.length; s += 6) {
@@ -478,7 +531,7 @@ function realScenery(m, course, real, rand) {
       if (rand() < p.bushes * 0.7 && !walled(real, side, s)) {
         const [x, z] = at(0.5 + rand() * 1.5);
         if (built(x, z)) continue;
-        m.sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
+        (onPath(x, z, 4) ? nowhere : m).sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
       }
       if (p.stages && rand() < p.stages) landingStage(m, c, side, w);
     }

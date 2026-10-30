@@ -41,6 +41,22 @@ export const DIVISION_9 = [
   { name: 'Mateo', hull: 'racing', power: 0.96, endurance: 0.9, pace: 1.0, kick: 160 },
 ];
 
+// Division 3, for the long Hasler course (Divisions 1 to 6): club racers in
+// racing boats, quicker on the beat and stronger for longer.
+export const DIVISION_3 = [
+  { name: 'Hannah', hull: 'racing', power: 1.04, endurance: 1.15, pace: 0.95, kick: 220 },
+  { name: 'Rafael', hull: 'racing', power: 1.06, endurance: 1.05, pace: 0.94, kick: 160 },
+  { name: 'Sigrún', hull: 'racing', power: 1.02, endurance: 1.2, pace: 0.96, kick: 300 },
+  { name: 'Dev', hull: 'club', power: 1.05, endurance: 1.1, pace: 0.95, kick: 140 },
+  { name: 'Chloe', hull: 'racing', power: 1.03, endurance: 1.1, pace: 0.95, kick: 200 },
+  { name: 'Kwame', hull: 'racing', power: 1.07, endurance: 0.95, pace: 0.94, kick: 120 },
+  { name: 'Elin', hull: 'club', power: 1.02, endurance: 1.15, pace: 0.96, kick: 250 },
+  { name: 'Marco', hull: 'racing', power: 1.04, endurance: 1.0, pace: 0.95, kick: 180 },
+  { name: 'Yuki', hull: 'racing', power: 1.03, endurance: 1.1, pace: 0.96, kick: 150 },
+  { name: 'Fionn', hull: 'club', power: 1.05, endurance: 1.05, pace: 0.95, kick: 210 },
+  { name: 'Leila', hull: 'racing', power: 1.02, endurance: 1.1, pace: 0.96, kick: 130 },
+];
+
 // The starter: boats come up to the line; once the line is steady, "Are you
 // ready?"; then the horn after a pause you can't predict. Cross the line early
 // and the start is held while everyone else comes up level with you, then it
@@ -64,7 +80,63 @@ export function createRace(course, { rivals = [], seed = 1, you = {}, birds = tr
   race.traffic = traffic ? createTraffic(course, seed) : null;
   race.gates = [...(course.scenery?.gates ?? [])].sort((a, b) => a.s - b.s);
   race.anglers = createAnglers(course);
+  race.portages = course.portages ?? [];
   return race;
+}
+
+// --- portages ----------------------------------------------------------------
+// A course can make you land, run along the bank with your boat and put in
+// again (`course.portages`: { from, to } along the route, where you land and
+// where you put in; the route between runs over land). Paddle within LAND
+// metres of where the water ends and you're out: OUT seconds getting out, a run
+// at RUN metres a second, IN seconds getting back in (real seconds and metres,
+// so a quarter of that at warp 4), then you're afloat at the put-in, pointing
+// on down the course. Everyone takes the same time over it: it's the paddling
+// that races. Miss it (paddle on past without landing) and, like a gate, there's
+// no finishing until you've gone back for it.
+export const PORTAGE = { land: 12, out: 4, run: 3, in: 4 };
+
+export function portageTime(p) {
+  return PORTAGE.out + (p.to - p.from) / PORTAGE.run + PORTAGE.in;
+}
+
+// Where a racer on a portage is, `t` seconds into it (real seconds): their s
+// along the route (on the bank while getting out and in), and the phase.
+export function portageAt(p, t) {
+  if (t < PORTAGE.out) return { s: p.from, phase: 'out' };
+  const run = (t - PORTAGE.out) * PORTAGE.run;
+  if (run < p.to - p.from) return { s: p.from + run, phase: 'run' };
+  return { s: p.to, phase: 'in' };
+}
+
+// Lands a racer that's reached a portage's beach; carries one that's on one;
+// puts them back in at the end. Returns 'landed' or 'put-in' when that happens.
+function carry(race, r, dt) {
+  const { course } = race;
+  r.portaged ??= new Set();
+  if (!r.portage) {
+    const k = race.portages.findIndex((p, i) => !r.portaged.has(i) && r.loc.s > p.from - 40 && r.loc.s < p.to + 40);
+    if (k < 0) return null;
+    const at = pointAt(course, race.portages[k].from);
+    if (Math.hypot(r.boat.x - at.x, r.boat.z - at.z) > PORTAGE.land) return null;
+    r.portage = { k, t: 0 };
+    // Out onto the beach.
+    Object.assign(r.boat, { x: at.x, z: at.z, heading: Math.atan2(at.tx, -at.tz), speed: 0, yawRate: 0, roll: 0, rollRate: 0 });
+    r.loc = locate(course, at.x, at.z, r.loc.i);
+    return 'landed';
+  }
+  const p = race.portages[r.portage.k];
+  r.portage.t += dt * (r.boat.speedup ?? 1);
+  r.boat.time += dt;
+  const done = r.portage.t >= portageTime(p);
+  const { s } = done ? { s: p.to + 1 } : portageAt(p, r.portage.t);
+  const c = pointAt(course, s);
+  Object.assign(r.boat, { x: c.x, z: c.z, heading: Math.atan2(c.tx, -c.tz), speed: 0 });
+  r.loc = locate(course, c.x, c.z, r.loc.i);
+  if (!done) return null;
+  r.portaged.add(r.portage.k);
+  r.portage = null;
+  return 'put-in';
 }
 
 function massRace(course, { rivals, seed, you, birds }) {
@@ -82,7 +154,9 @@ function massRace(course, { rivals, seed, you, birds }) {
   };
   const onLine = course.start - BOW - 0.3;
   const heading = headingAt(course, onLine);
-  const racer = (name, boat, ai) => ({ name, boat, loc: locate(course, boat.x, boat.z), finish: null, draft: 0, ai });
+  // Located on the first stretch: a course that finishes where it starts (the
+  // Hasler courses, home to the club) has the finish in the same water.
+  const racer = (name, boat, ai) => ({ name, boat, loc: locate(course, boat.x, boat.z, Math.round(Math.max(0, onLine - BEHIND) / 2)), finish: null, draft: 0, ai });
   // Lining up happens at true speed; the course's speedup starts with the horn.
   const player = racer('You', createBoat({ ...place(solo ? onLine : onLine - BEHIND, 0, headingAt(course, onLine - BEHIND)), ...you }), null);
   // Who is still on the way: they're a few lengths back in their own lane,
@@ -302,6 +376,12 @@ export function stepRace(race, dt, input) {
       r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);
       return;
     }
+    // On a portage: carried along the bank, no paddling.
+    const carried = going ? carry(race, r, dt) : null;
+    if (r.portage || carried === 'put-in') {
+      if (r === player) events = carried ? [carried] : [];
+      return;
+    }
     // Until you're let go in a time trial, only your balance counts.
     const intent = r.ai ? think(r, race) : released(race, r) ? { ...input } : { ...input, strokes: [] };
     r.draft = washes[i].draft;
@@ -313,21 +393,23 @@ export function stepRace(race, dt, input) {
     // The real banks where they're mapped; else the edges of the open water.
     const w = widthAt(course, r.loc.s);
     if (course.shore ? bounceOffShore(r.boat, course.shore, dt) : bounceOffBank(r.boat, r.loc, w.left, w.right)) result.push('bank');
-    if (r === player) events = result;
+    if (r === player) events = [...events, ...result];
     else if (result.includes('stroke')) splashes.push(Math.hypot(r.boat.x - player.boat.x, r.boat.z - player.boat.z));
   });
 
+  // Boats on the water (not carried along a bank on a portage).
+  const afloat = racers.filter((r) => !r.portage);
   // Paddling into a swan tips you in.
-  for (const r of stepBirds(race.birds, racers, course, dt)) {
+  for (const r of stepBirds(race.birds, afloat, course, dt)) {
     r.boat.roll = (r.boat.hull.capsize + 0.05) * (Math.sign(r.boat.roll) || 1);
     if (r === player) events.push('swan');
   }
   // Paddling across a fishing line pulls you up short.
-  for (const { racer } of snagLines(race.anglers ?? [], racers)) if (racer === player) events.push('line');
+  for (const { racer } of snagLines(race.anglers ?? [], afloat)) if (racer === player) events.push('line');
   // So does running into another boat, or its oars; and the cox of an eight
   // coming up behind you shouts in time to move over.
   if (race.traffic && going) {
-    for (const { racer: r, boat } of trafficHits(race.traffic, racers)) {
+    for (const { racer: r, boat } of trafficHits(race.traffic, afloat)) {
       r.boat.roll = (r.boat.hull.capsize + 0.05) * (Math.sign(r.boat.roll) || 1);
       if (r === player) events.push(`hit-${boat.kind}`);
     }
@@ -336,6 +418,7 @@ export function stepRace(race, dt, input) {
 
   for (let i = 0; i < racers.length; i++) {
     for (let j = i + 1; j < racers.length; j++) {
+      if (racers[i].portage || racers[j].portage) continue;
       if (collide(race, i, j) && (racers[i] === player || racers[j] === player)) events.push('bump');
     }
   }
@@ -345,10 +428,19 @@ export function stepRace(race, dt, input) {
   // anywhere else (another channel, a short cut) misses it, and then you must
   // go back for it: there's no finishing with a gate missed.
   for (const r of racers) {
-    if (r.remote || !race.gates.length) continue;
+    // Gone back for it: back below a missed gate, or over the missed portage.
+    if (r.missed && (r.missed.portage !== undefined ? r.portaged?.has(r.missed.portage) : r.loc.s < r.missed.s - 10)) r.missed = null;
+    // A portage is a gate too: past where you put in without having landed.
+    if (!r.remote && !r.missed) {
+      const k = race.portages.findIndex((p, i) => !r.portaged?.has(i) && r.loc.s > p.to + 5);
+      if (k >= 0) {
+        r.missed = { s: race.portages[k].from, portage: k, label: 'back up and land at the beach for the run' };
+        if (r === player) events.push('missed');
+      }
+    }
+    if (r.remote || !race.gates.length || r.portage) continue;
     r.gate ??= 0;
     const g = race.gates[r.gate];
-    if (r.missed && r.loc.s < r.missed.s - 10) r.missed = null; // gone back for it
     if (!g || r.missed || r.loc.s < g.s) continue;
     const w = widthAt(course, g.s);
     if (Math.abs(r.loc.lateral) <= (r.loc.lateral < 0 ? w.left : w.right) + 2) r.gate++;
@@ -359,7 +451,7 @@ export function stepRace(race, dt, input) {
   }
 
   for (const r of racers) {
-    const gated = !race.gates.length || r.gate === race.gates.length;
+    const gated = (!race.gates.length || r.gate === race.gates.length) && !r.missed;
     if (going && !r.remote && r.finish === null && gated && r.loc.s >= course.finish && (race.format !== 'interval' || r.crossed !== null)) {
       r.finish = race.format === 'interval' ? race.time - r.crossed : race.time;
       if (r === player) events.push('finish');
@@ -407,7 +499,7 @@ function totalWash(r, racers) {
   let draft = 0;
   let rock = 0;
   for (const o of racers) {
-    if (o === r || o.boat.swim > 0) continue;
+    if (o === r || o.boat.swim > 0 || o.portage) continue;
     const dx = o.boat.x - r.boat.x;
     const dz = o.boat.z - r.boat.z;
     if (dx * dx + dz * dz > 40 * 40) continue;

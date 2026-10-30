@@ -9,7 +9,7 @@ type Place = { at: LatLng; heading: number; frame?: string }
 export type Observation = {
   kind: string; side?: 'left' | 'right'; note?: string
   name?: string; style?: string; mast?: 'left' | 'right'; cover?: string; boats?: string
-  count?: number; points?: LatLng[] // anglers along a stretch; posts in the water
+  count?: number; points?: LatLng[] // anglers along a stretch; posts in the water; a path's line
 } & (Place | { from: Place; to: Place })
 
 export type Cover = 'park' | 'trees' | 'gardens' | 'wild'
@@ -31,6 +31,8 @@ export type CourseFile = {
   birds: Array<{ s: number; count: number; spread: number }>
   /** Posts standing in the water (solid). */
   posts?: XZ[]
+  /** Footpaths along the bank (a portage's run): trees keep off them. */
+  paths?: XZ[][]
   /** People fishing from the bank, a line out into the water each. */
   anglers?: Array<{ s: number; side: -1 | 1 }>
   /** The water's outlines (rings of the river's areas and its islands), to shape the land. */
@@ -225,6 +227,7 @@ export function courseFile(input: {
   const flats: Array<{ from: number; to: number; side: -1 | 1 }> = []
   const marked: Array<{ at: XZ; style: string }> = [] // an unnamed building given a bespoke model
   const posts: XZ[] = []
+  const paths: XZ[][] = []
   const anglers: NonNullable<CourseFile['anglers']> = []
   const styles = new Map<string, { style: string; mast?: -1 | 1 }>()
   for (const o of input.observations) {
@@ -242,6 +245,7 @@ export function courseFile(input: {
     else if (o.kind === 'buildings' && o.style === 'flats') flats.push(sp)
     else if (o.kind === 'landmark' && 'at' in o && o.style && input.toXZ) marked.push({ at: input.toXZ(o.at), style: o.style })
     else if (o.kind === 'posts' && input.toXZ) posts.push(...(o.points ?? []).map((p) => pts([input.toXZ!(p)])[0]))
+    else if (o.kind === 'path' && input.toXZ) paths.push(pts((o.points ?? []).map((p) => input.toXZ!(p))))
     else if (o.kind === 'anglers') {
       // Evenly along the stretch, each nudged a little.
       const n = o.count ?? 1
@@ -297,6 +301,7 @@ export function courseFile(input: {
     }),
     water: (input.water ?? []).map(pts),
     ...(posts.length ? { posts } : {}),
+    ...(paths.length ? { paths } : {}),
     ...(anglers.length ? { anglers: anglers.sort((a, b) => a.s - b.s) } : {}),
   }
 }

@@ -80,11 +80,15 @@
         </div>
       </div>
       <p id="account" class="account"></p>
+      <div class="choice format" role="group" aria-label="A race or a time trial">
+        <button type="button" data-format="mass" aria-pressed="true">Race <small>everyone off together</small></button>
+        <button type="button" data-format="interval" aria-pressed="false">Time trial <small>let go 30 seconds apart</small></button>
+      </div>
       <form method="dialog">
-        <button value="race" autofocus>Division 9 race <small>6 km, 12 paddlers</small></button>
-        <button value="reading">Reading Thames <small>6.3 km up the real river from Christchurch Bridge to Mapledurham, 12 paddlers</small></button>
-        <button value="loop">Time Trial Loop <small>5.4 km from Reading Canoe Club round St Mary's and Fry's islands and back, interval starts</small></button>
-        <button value="practice">Practice time trial <small>1 km, on your own</small></button>
+        <button value="loop" autofocus>Time Trial Loop <small>5.3 km from Reading Canoe Club round St Mary's and Fry's islands and back</small></button>
+        <button value="hasler79">Hasler Div 7-9 <small>7.9 km: up round Appletree Eyot, down round Fry's Island, back to the club</small></button>
+        <button value="hasler16">Hasler Div 1-6 <small>12.6 km: up to Mapledurham, run the portage, down round Fry's Island, back to the club</small></button>
+        <button value="practice">Practice <small>1 km up the river from the club, on your own</small></button>
         <button value="live">Race friends <small>a live race against people you send a link to</small></button>
       </form>
       <p class="rotate-hint">Turn your phone sideways to race</p>
@@ -225,7 +229,7 @@
       <p class="step-buttons"><button type="button" class="back" data-step="home">&larr; Back</button></p>
     </section>
 
-    <p class="credit">Reading Thames and Time Trial Loop map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
+    <p class="credit">The Reading courses' map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
     <p class="dialog-links"><a href="../" class="leave">&larr; All games</a></p>
   </dialog>
 
@@ -251,9 +255,9 @@
       <p id="liveMake">
         <label for="liveCourse">Course</label>
         <select id="liveCourse">
-          <option value="race">Division 9 river, 6 km</option>
-          <option value="reading">Reading Thames, 6.3 km</option>
-          <option value="loop">Time Trial Loop, 5.4 km</option>
+          <option value="loop">Time Trial Loop, 5.3 km</option>
+          <option value="hasler79">Hasler Div 7-9, 7.9 km</option>
+          <option value="hasler16">Hasler Div 1-6, 12.6 km</option>
           <option value="practice">Practice, 1 km</option>
         </select>
         <button type="button" id="liveCreate">Make it</button>

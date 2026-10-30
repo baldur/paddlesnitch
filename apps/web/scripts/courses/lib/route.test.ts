@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { along, offLand, routePoints, smoothTurns, tightest } from './route'
+import { along, joinRuns, offLand, routePoints, smoothTurns, tightest } from './route'
 import { routePlaces } from './course-file'
-import { resample, type XZ } from './river'
+import { cumulative, resample, type XZ } from './river'
 
 // Open water everywhere but a square island (x and z from 0 to 20).
 const island = (x: number, z: number) => x > 0 && x < 20 && z > 0 && z < 20
@@ -61,5 +61,23 @@ describe('a racing line round islands', () => {
     const back = routePlaces(shapes, [{ name: 'Club', label: 'Club', heading: 270 }], line, [0, 2000])
     expect(back.length).toBe(1)
     expect(back[0].s).toBeGreaterThan(1000)
+  })
+})
+
+describe('a portage: a run over land between two stretches of water', () => {
+  it('joins the water before and after with the run, and says where you land and put in', () => {
+    const up: XZ[] = [[0, 0], [0, -100]] // up the river
+    const down: XZ[] = [[-20, -60], [-20, 0]] // back down the other side
+    const { line, portages } = joinRuns([resample(up, 5), resample(down, 5)], [[[-10, -100], [-10, -60]]])
+    expect(portages).toHaveLength(1)
+    const cum = cumulative(line)
+    const at = (s: number) => line[cum.findIndex((c) => c >= s - 0.01)]
+    // Landing where the water ends, 100 m along; putting in where the next water starts.
+    expect(portages[0].from).toBeCloseTo(100, 0)
+    expect(at(portages[0].from)).toEqual([0, -100])
+    expect(at(portages[0].to)).toEqual([-20, -60])
+    // The run goes by its points: 10 + 40 + 10 m.
+    expect(portages[0].to - portages[0].from).toBeCloseTo(60, 0)
+    expect(line.at(-1)![1]).toBeGreaterThan(-6)
   })
 })

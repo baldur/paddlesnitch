@@ -494,6 +494,37 @@
         "frame": "0093-p1 t=3488"
       },
       "note": "people often fish from the Promenade's stone wall here: mind their lines (pointed out by the owner)"
+    },
+    {
+      "kind": "path",
+      "at": [
+        51.483657,
+        -1.037497
+      ],
+      "heading": 180,
+      "points": [
+        [
+          51.483657,
+          -1.037497
+        ],
+        [
+          51.483218,
+          -1.037433
+        ],
+        [
+          51.482734,
+          -1.037398
+        ],
+        [
+          51.482536,
+          -1.037391
+        ],
+        [
+          51.482371,
+          -1.037451
+        ]
+      ],
+      "note": "the bank path below Mapledurham Lock, from the beach where Div 1-6 land to where they put in again (the owner's points)"
     }
   ]
 }

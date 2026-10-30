@@ -1,6 +1,6 @@
 # Game courses from 360 video
 
-✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/kayak/`).
+✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/kayak/`). Since 2026-10-30 Reading Thames is the **world** every course is raced on: the Time Trial Loop, **Hasler Div 7-9**, **Hasler Div 1-6** (with a portage at Mapledurham) and **Practice** (see [One river, many courses](#one-river-many-courses)).
 
 A toolchain that turns paddling videos with GPS into a real river in the kayak game. It's built so that more courses are the same few commands. The longer-term aim is to let other people submit video, so the toolchain doubles as a way of surveying rivers: what's on each bank, where boats moor, where the locks and slipways are.
 
@@ -53,6 +53,7 @@ What the frames show, **tied to places, not to the course**: each item has `at` 
 - `bridge`, with `style` (`cable-stayed` or `concrete-arch`) and `mast`.
 - `railway`.
 - `wall`: a quay or revetment at the water's edge.
+- `path`, with `points`: a footpath along the bank (a portage's run). Drawn as gravel; trees keep off it.
 - `landmark`, with `style`: an unnamed building to draw as a bespoke model, given by a point beside it (`at`): the nearest OSM footprint within 40 m gets the style. Named buildings use `styles` in `course.json` instead.
 - `posts`, with `points` (lat/lng each): posts standing in the water. Solid in the game.
 - `anglers`, with `count` and a stretch (`from`/`to`, `side`): people fishing from that bank, spread along it.
@@ -129,7 +130,17 @@ It's a time trial with **interval starts**: boats wait in two columns by the ban
 
 `course:route <id>` rebuilds a course file's route from `course.json` without the downloads or the footage, from the river line and mapped water already in the file: the legs (`along` the river line between two points, or points to go through), moved off any land, corners rounded to 12 m where there's water for it, the open water either side from the mapped shore; and what's placed along the route: `places` (names found where the file's previous route named them; a label `at` a point; `heading` to name it only on the pass going that way), `birds` (`near` a name, or `at` a point off the line: kept to the real water), `gates` and `cues` (`at` a point, `heading` for the pass), and `marks` (buoys, 4 m out from the nearest shore to `at`). Run it after `course:build` for a course with a route (`course:build` doesn't know these, and skips flocks given `at` a point).
 
-**Rebuilding is reproducible** (checked 2026-10-25): with the cache in `apps/web/.cache/courses/` (the `<rec>/track.json` files and `<id>/river.json`; copy them from the worktree that ran `course:river` if yours has none), `course:build reading` gives the committed file byte for byte, and `course:build loop` then `course:route loop` gives it apart from a place name moving a few metres (route names a place where the previous file's route did, so each run can nudge it). Add new observations at the end of `observations.json`: moorings take random draws in order, so an item added earlier would reshuffle every row after it.
+**Rebuilding is reproducible** (checked 2026-10-25): with the cache in `apps/web/.cache/courses/` (the `<rec>/track.json` files and `<id>/river.json`; copy them from the worktree that ran `course:river` if yours has none), `course:build reading` gives the committed file byte for byte (checked again 2026-10-30, when only the new `paths` changed), and `course:route <id>` rebuilds each course on it (`loop`, `hasler79`, `hasler16`, `practice`) from the world and its `course.json` alone: run them all after rebuilding the world. Add new observations at the end of `observations.json`: moorings take random draws in order, so an item added earlier would reshuffle every row after it.
+
+## One river, many courses
+
+Owner's choice, 2026-10-30: the courses differ, the river doesn't. `reading.json` (built by `course:build reading`) is the world. Every other course's `course.json` says `"world": "reading"` and gives only its route and what goes along it, and `course:route <id>` writes `games/kayak/courses/<id>.json` as the world's file with that route (and `world: 'reading'`, which the game uses to build the river once for all of them). The game's `kayak-courses.test.js` checks the scenery is identical in every file.
+
+- **Hasler Div 7-9** (7.9 km): from the canoe club up the main channel, keeping right of Appletree Eyot, round its upstream end and down its back channel (a gate there), down past the club, keep right of Piper's Island (the south arch), down the right of Fry's Island, round its end before Christchurch Bridge, up its back channel, keep right of Piper's going up (its narrow north channel, by the Reading University boathouses: a gate and a buoy), and home to the club. Appletree Eyot is the lower of the two islands (Poplar Island is just above it).
+- **Hasler Div 1-6** (12.6 km): up to Mapledurham, keeping to the main channel; land on the beach on the left (the owner's point 51.48366, -1.03732), run about 170 m down the bank path, put in behind the island (51.48235, -1.03730), down its back channel, then as Div 7-9 from the club. Raced against a quicker pack (`DIVISION_3`).
+- **Practice**: 1 km up from the club.
+
+The start and the finish are both at the club: `course:route` puts the start on the route's first pass by its point and the finish on the last. **A portage** is a leg `{ "portage": [points on land] }` between the leg that ends where you land and the one that starts where you put in: each stretch of water is moved off the land and smoothed on its own, and the run joins them as given (`joinRuns` in `lib/route.ts`, tested). The file gets `route.portages: [{ from, to }]` and the run's open water is 1 m each side. Give the run the same points as the world's `path` observation, so it follows the gravel path the trees keep off.
 
 ## Adding a course
 

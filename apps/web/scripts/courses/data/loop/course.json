@@ -2,7 +2,7 @@
   "name": "Reading: the club's time trial loop",
   "title": "Time Trial Loop",
   "blurb": "From the canoe club round St Mary's Island, down the main channel and back up behind Fry's Island: interval starts",
-  "river": "River Thames",
+  "world": "reading",
   "from": [
     51.46175,
     -0.96945
@@ -15,16 +15,6 @@
     51.467645,
     -0.982164
   ],
-  "to": [
-    51.467635,
-    -1.010318
-  ],
-  "recordings": [
-    "0093",
-    "0095"
-  ],
-  "osmFrom": "reading",
-  "observations": "reading",
   "route": [
     {
       "along": [
