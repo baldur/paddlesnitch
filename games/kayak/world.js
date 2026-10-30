@@ -414,7 +414,10 @@ function ground(course, x, z, lineD = null) {
   }
   if (course.land?.rings) {
     if (course.land.inside(x, z)) return { d: -1, y: -0.6 };
-    if (d < SHORE_SEARCH) d = course.land.shore(x, z);
+    // The nearest mapped shore, wherever it is: land beside a side channel far
+    // off the river line (Fry's back channel, 90 m out) slopes down to that
+    // water, not up as if it were 90 m from any.
+    d = d < SHORE_SEARCH ? course.land.shore(x, z) : Math.min(d, course.land.shore(x, z));
   }
   return { d, y: d < 0 ? -0.4 : groundHeight(d, REAL_PROFILE) + bump(x, z, d) };
 }
@@ -444,6 +447,14 @@ function toSegment(x, z, a, b) {
   return Math.hypot(x - (a[0] + dx * t), z - (a[1] + dz * t));
 }
 
+// How far a point is from the river itself (not from a lake or pond beside
+// it): what the triangle budget goes by.
+function fromRiver(course, x, z) {
+  const at = locate(course, x, z);
+  const d = Math.abs(at.lateral) - widthAt(course, at.s).half;
+  return d < SHORE_SEARCH && course.land?.rings ? course.land.shore(x, z) : d;
+}
+
 // The height of the ground at a point beside a real river (for a paddler
 // running along the bank on a portage); 0 on a made-up river.
 export function groundAt(course, x, z) {
@@ -469,11 +480,15 @@ function buoy(m, { x, z }) {
 // side channels show). Rows across are every 6 m along near the river and 12 m
 // further out, with extra rows round any water beyond the bank.
 const NEAR = [-6, 0, 3, 7, 12, 20, 30, 45];
+const FAR_WATER = 120; // metres out from the bank to look for side channels (Fry's back channel is at most 100)
 const FAR = [45, 65, 90, 120, 160, 220, 320];
 function realLand(m, river, real, rand) {
   const { samples } = river;
   const at = (s, side, d) => [s.x + -s.tz * side * (s.half + d), s.z + s.tx * side * (s.half + d)];
-  const strip = (side, stride, rowsAt) => {
+  // fineRows(n): finer rows for this stretch (a far side channel), drawn in
+  // two halves along; the coarse quads' shades are still drawn, so the random
+  // draws after them don't change.
+  const strip = (side, stride, rowsAt, fineRows = () => null) => {
     for (let n = 0; (n + 1) * stride < samples.length; n++) {
       const a = samples[n * stride];
       const b = samples[(n + 1) * stride];
@@ -484,6 +499,28 @@ function realLand(m, river, real, rand) {
         const g = ground(river, x, z, d);
         return { p: [x, g.y, z], d: g.d };
       };
+      const rows = fineRows(n);
+      if (rows) {
+        // The draws the coarse quads would have taken (only those that weren't mud).
+        let was = [point(a, across[0]), point(b, across[0])];
+        for (let k = 1; k < across.length; k++) {
+          const next = [point(a, across[k]), point(b, across[k])];
+          if (Math.min(was[0].d, was[1].d, next[0].d, next[1].d) >= 1) shade(COLORS.meadow, rand, 0.08);
+          was = next;
+        }
+        const mid = samples[n * stride + stride / 2];
+        for (const [u, v] of [[a, mid], [mid, b]]) {
+          let prev = [point(u, rows[0]), point(v, rows[0])];
+          for (let k = 1; k < rows.length; k++) {
+            const next = [point(u, rows[k]), point(v, rows[k])];
+            const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
+            const green = near < 7 ? SHADED : COLORS.meadow;
+            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? COLORS.mud : shade(green, fine, 0.08));
+            prev = next;
+          }
+        }
+        continue;
+      }
       let prev = [point(a, across[0]), point(b, across[0])];
       for (let k = 1; k < across.length; k++) {
         const next = [point(a, across[k]), point(b, across[k])];
@@ -495,19 +532,28 @@ function realLand(m, river, real, rand) {
       }
     }
   };
+  // Shades for the finer land round a far side channel: their own draws, so
+  // the rest of the world (every tree) stays as it was.
+  const fine = mulberry32(404);
   for (const side of [-1, 1]) {
     // Other water beyond the bank (past some land: a side channel behind an
-    // island), with rows every 2.5 m round it.
+    // island), with rows every 2.5 m round it: near the river, and further out
+    // (Fry's Island's back channel is 75-100 m off the line, where coarse land
+    // spanned the channel and lay over its water like a sheet).
     const extra = [];
+    const far = [];
     for (let i = 0; i < samples.length; i += 3) {
       let land = false;
       const wet = [];
-      for (let d = 0; d < 45; d += 2) {
+      for (let d = 0; d < FAR_WATER; d += 2) {
         const w = river.land.inside(...at(samples[i], side, d));
         if (!w) land = true;
         else if (land) wet.push(d);
       }
-      extra.push(wet.length ? [Math.max(2, wet[0] - 8), Math.min(45, wet.at(-1) + 8)] : null);
+      const near = wet.filter((d) => d < 45);
+      const out = wet.filter((d) => d >= 45);
+      extra.push(near.length ? [Math.max(2, near[0] - 8), Math.min(45, near.at(-1) + 8)] : null);
+      far.push(out.length ? [Math.max(45, out[0] - 8), out.at(-1) + 8] : null);
     }
     strip(side, 3, (n) => {
       const rows = new Set(NEAR);
@@ -516,7 +562,16 @@ function realLand(m, river, real, rand) {
       }
       return [...rows].sort((p, q) => p - q);
     });
-    strip(side, 6, () => FAR);
+    // Far out, every 36 m and in big rows; where a side channel runs out there,
+    // every 6 m and every 2.5 m across round it.
+    const farRows = (n) => {
+      const rows = new Set(FAR);
+      for (let k = Math.max(0, n - 2); k <= Math.min(far.length - 1, n + 3); k++) {
+        if (far[k]) for (let d = far[k][0]; d <= far[k][1]; d += 2.5) rows.add(Math.round(d * 2) / 2);
+      }
+      return [...rows].sort((p, q) => p - q);
+    };
+    strip(side, 6, () => FAR, (n) => (far.slice(Math.max(0, n * 2 - 2), n * 2 + 4).some(Boolean) ? farRows(n * 2) : null));
   }
 }
 
@@ -567,7 +622,7 @@ function realScenery(m, course, real, rand) {
     if (g.d < 1.5 || built(x, z)) return;
     const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) ? nowhere : m;
     if (willow) willowTree(into, x, g.y, z, rand);
-    else tree(into, x, g.y, z, rand, true, g.d > FAR_TREE);
+    else tree(into, x, g.y, z, rand, true, fromRiver(course, x, z) > FAR_TREE);
   };
   for (const line of paths) footpath(m, course, line);
 
@@ -598,7 +653,7 @@ function realScenery(m, course, real, rand) {
       for (let z = Math.min(...zs); z < Math.max(...zs); z += 14) {
         const px = x + (rand() - 0.5) * 10;
         const pz = z + (rand() - 0.5) * 10;
-        const d = inside(wood, px, pz) ? ground(course, px, pz).d : Infinity;
+        const d = inside(wood, px, pz) ? fromRiver(course, px, pz) : Infinity;
         if (d > 200) continue;
         plant(px, pz, rand() < 0.1, d > WOOD_REACH); // (out of reach: drawn nowhere, the draws kept)
       }
@@ -777,7 +832,7 @@ function building(m, course, b, rand) {
     const len = Math.hypot(p.x - cx, p.z - cz) || 1;
     return [(p.x - cx) / len, (p.z - cz) / len];
   })();
-  if (g.d < 150 && b.kind !== 'boathouse') {
+  if (fromRiver(course, cx, cz) < 150 && b.kind !== 'boathouse') {
     let count = 0;
     for (let i = 0; i < ring.length && count < 60; i++) {
       const [ax, az] = ring[i];
@@ -800,8 +855,8 @@ function building(m, course, b, rand) {
       }
     }
   }
-  if (b.kind === 'boathouse' && g.d < 45) pontoon(m, course, river, Math.min(30, Math.max(15, Math.sqrt(area(ring)) * 2)));
-  if (clap && g.d < 80) clapboardFront(m, course, facing(course, ring, cx, cz, g), b.height);
+  if (b.kind === 'boathouse' && fromRiver(course, cx, cz) < 45) pontoon(m, course, river, Math.min(30, Math.max(15, Math.sqrt(area(ring)) * 2)));
+  if (clap && fromRiver(course, cx, cz) < 80) clapboardFront(m, course, facing(course, ring, cx, cz, g), b.height);
   const pitched = b.kind === 'house' || b.kind === 'boathouse';
   const roof = clap ? CLAP.roof : pitched ? ROOFS[Math.floor(rand() * ROOFS.length)] : COLORS.coping;
   const peak = [cx, top + (pitched ? Math.min(4, 1.5 + Math.sqrt(area(ring)) * 0.18) : 0), cz];
@@ -1801,7 +1856,7 @@ function railway(m, course, line) {
     if (!len) continue;
     const ga = ground(course, ax, az);
     const gb = ground(course, bx, bz);
-    if (ga.d < 3 || gb.d < 3 || ga.d > 220) continue; // over the river (bridges), or out of sight
+    if (ga.d < 3 || gb.d < 3 || fromRiver(course, ax, az) > 220) continue; // over the river (bridges), or out of sight
     const r = [-(bz - az) / len * 6, (bx - ax) / len * 6];
     const ya = ga.y + 1.2;
     const yb = gb.y + 1.2;

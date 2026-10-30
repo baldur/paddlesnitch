@@ -118,3 +118,22 @@ test('the boats found in the footage are moored where they were: the trip boat i
   const styles = new Set(course.scenery.buildings.map((b) => b.style));
   for (const s of ['stilts', 'tudor-boathouse']) assert.ok(styles.has(s), s);
 });
+
+test("no bank lies over the water like a sheet: down Fry's Island's back channel, 90 m off the river line", async () => {
+  const h79 = courseFromFile(await data('hasler79'));
+  const tris = await world();
+  const land = waterMap((await data('reading')).water);
+  // A bank drawn across a channel: a triangle from under the water to well above it, over open water on the route.
+  const cliffs = [];
+  for (let s = 6900; s <= 7600; s += 20) {
+    const p = pointAt(h79, s);
+    if (!land.inside(p.x, p.z)) continue;
+    for (const t of tris) {
+      const ys = t.p.map((q) => q[1]);
+      if (Math.min(...ys) >= 0 || Math.max(...ys) < 1.5) continue;
+      if (t.p.some((q) => Math.hypot(q[0] - p.x, q[2] - p.z) > 40)) continue;
+      if (under(t.p, p.x, p.z)) cliffs.push(s);
+    }
+  }
+  assert.deepEqual([...new Set(cliffs)], []);
+});
