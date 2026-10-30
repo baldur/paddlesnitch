@@ -26,6 +26,17 @@ describe('bridges', () => {
       { s: 2000, name: 'Main Line', style: 'arch' },
     ])
   })
+
+  it('lays a bridge along its road, which can cross the river at a slant', () => {
+    const road = (s: number, tags: Record<string, string>, shape: XZ[], name?: string): RiverThing => ({ ...bridge(s, tags, name), shape })
+    const got = bridges([
+      road(600, { highway: 'primary', bridge: 'yes' }, [[-10, 40], [0, 0], [12, -45]], 'Caversham Road'),
+      road(604, { highway: 'footway', bridge: 'yes' }, [[-14, 38], [-4, 0]]),
+      bridge(605, { man_made: 'bridge' }, 'Caversham Bridge'),
+    ], new Map())
+    // The longest road's two ends.
+    expect(got[0].ends).toEqual([[-10, 40], [12, -45]])
+  })
 })
 
 describe('mooringRow', () => {
@@ -123,6 +134,39 @@ describe('courseFile', () => {
     })
     expect(out.paths).toEqual([[[30, -300], [31, -340], [30, -380]]])
     expect(courseFile({ ...base, observations: [] }).paths).toBeUndefined()
+  })
+
+  it('keeps a feature where it was seen, by its style, for its own model', () => {
+    const out = courseFile({
+      ...base, toXZ: ([lat, lng]) => [lng, -lat],
+      observations: [{ kind: 'feature', style: 'mailbox', at: [300, 22], heading: 0 }],
+    })
+    expect(out.features).toEqual([{ style: 'mailbox', at: [22, -300] }])
+    expect(courseFile({ ...base, observations: [] }).features).toBeUndefined()
+  })
+
+  it('keeps how a wall is built, where the frames showed it', () => {
+    const out = courseFile({ ...base, observations: [{ kind: 'wall', style: 'brick', side: 'left', from: { at: [700, 0], heading: 0 }, to: { at: [800, 0], heading: 0 } }] })
+    expect(out.walls).toEqual([{ side: -1, from: 700, to: 800, style: 'brick' }])
+  })
+
+  it('gives the houses along a stretch of bank the style the frames showed', () => {
+    const square = (x: number, z: number): XZ[] => [[x, z], [x + 10, z], [x + 10, z - 10], [x, z - 10], [x, z]]
+    const out = courseFile({
+      ...base,
+      observations: [{ kind: 'buildings', style: 'clapboard', side: 'left', from: { at: [400, 0], heading: 0 }, to: { at: [500, 0], heading: 0 } }],
+      things: [
+        { kind: 'building', s: 450, lateral: -40, tags: { building: 'house' }, shape: square(-50, -450) },
+        { kind: 'building', s: 450, lateral: 40, tags: { building: 'house' }, shape: square(40, -450) }, // across the river
+        { kind: 'building', s: 700, lateral: -40, tags: { building: 'house' }, shape: square(-50, -700) }, // further up
+      ],
+    })
+    expect(out.buildings.map((b) => [b.kind, b.style])).toEqual([['house', 'clapboard'], ['house', undefined], ['house', undefined]])
+  })
+
+  it('moors one boat of a given length, paint and crew where one was seen', () => {
+    const out = courseFile({ ...base, observations: [{ kind: 'moorings', side: 'right', boats: 'narrowboat', length: 18, paint: 'maroon', crew: 'statues', at: [300, 0], heading: 0 }] })
+    expect(out.moorings).toEqual([{ s: 300, length: 18, side: 1, kind: 'narrowboat', paint: 'maroon', crew: 'statues' }])
   })
 
   it('moors tatty boats as their own kind', () => {
