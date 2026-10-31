@@ -87,7 +87,8 @@ const CASES = [
   { name: 'webkit, desktop, race friends from the bridge', engine: webkit, ctx: desktop, club: true, friends: true, site: true },
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
-  { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
+  { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat', boat: 'Electric launch' },
+  { name: 'iphone safari, hire a speedboat', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, outing: 'Hire a boat', boat: 'Speedboat' },
   // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
   { name: 'webkit, desktop, a practice row', engine: webkit, ctx: desktop, club: true, row: true },
   { name: 'iphone safari, a practice row', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true },
@@ -160,7 +161,7 @@ async function play(c, page, errors) {
   if (c.club) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
-    const steps = c.outing ? [[c.outing, null]]
+    const steps = c.outing ? (c.boat ? [[c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {

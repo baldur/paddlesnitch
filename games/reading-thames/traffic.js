@@ -50,7 +50,10 @@ const KAYAK = { bow: 3.3, stern: 1.9, half: 0.25 }; // as race.js
 // where you'll be when, in place of the pack's way round the course; or
 // `ambient`, that many seconds of boats up and down the whole river, met or
 // not (for a boat that goes anywhere), the river already busy at the start.
-export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null, ambient = 0 } = {}) {
+// `mix`: weights by kind in place of TRAFFIC's (an outing can ask for more
+// rowers and kayakers), and with `pack`, kayakers out together: a pack of
+// three in a triangle or four in a diamond (PACKS), paddling as one.
+export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null, ambient = 0, mix = null } = {}) {
   const rand = mulberry32((seed ^ 0x5eed7) >>> 0);
   const river = course.scenery?.river ?? course;
   const k = course.speedup ?? 1;
@@ -61,23 +64,49 @@ export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null
     x: 0, z: 0, heading: 0, s, lateral: 0, on: false, warned: false, phase: rand() * 10, // phase: the oars' stroke
     hit: [], // who it has tipped in: they're not hit again climbing back in
   });
+  // A kind picked from the mix; a pack is a lead kayaker and the rest in formation behind it.
+  const add = (kind, behind, dir, s, t) => {
+    if (kind !== 'pack') return boats.push(boat(kind, behind, dir, s, t));
+    const shape = rand() < 0.5 ? PACKS.triangle : PACKS.diamond;
+    const lead = boat('kayaker', false, dir, s, t);
+    boats.push(lead);
+    for (const slot of shape.slice(1)) boats.push({ ...boat('kayaker', false, dir, s, t), pack: { lead, slot } });
+    lead.pack = { lead, slot: shape[0] };
+  };
+  const choose = () => (mix ? pickFrom(rand, mix) : pick(rand));
   if (ambient) {
-    for (let t = -AFTER; t < ambient; t += gap()) boats.push(boat(pick(rand), false, rand() < 0.5 ? 1 : -1, rand() * river.length, t));
+    for (let t = -AFTER; t < ambient; t += gap()) add(choose(), false, rand() < 0.5 ? 1 : -1, rand() * river.length, t);
     return { river, boats, k };
   }
   const racing = route ? route.seconds : (course.finish - course.start) / (PACE * k); // seconds, about
   const where = route ? route.at : (t) => pointAt(course, course.start + PACE * k * t);
   for (let t = (route ? 10 : FIRST) + gap(); t < racing - 10; t += (route ? 5 : 15) + gap()) {
-    const kind = pick(rand);
+    const kind = choose();
     // Where the pack (or you) should be then, if in the main channel there.
     const p = where(t);
     const at = locate(river, p.x, p.z);
     if (Math.abs(at.lateral) > widthAt(river, at.s).half) continue;
     const along = Math.sign(p.tx * at.tx + p.tz * at.tz) || 1; // the race's way along the river there
     const behind = kind === 'eight' && rand() < BEHIND && t > BEHIND_FIRST && wide(river, at.s, k);
-    boats.push(boat(kind, behind, behind ? along : -along, at.s, t));
+    add(kind, behind, behind ? along : -along, at.s, t);
   }
   return { river, boats, k };
+}
+
+// Kayakers out together hold a formation: slots [metres back from the lead,
+// metres to its right], the lead first. Three in a triangle, four in a diamond
+// (each sitting on the wash of the one ahead).
+export const PACKS = {
+  triangle: [[0, 0], [4, -1.8], [4, 1.8]],
+  diamond: [[0, 0], [4, -1.8], [4, 1.8], [8, 0]],
+};
+function pickFrom(rand, mix) {
+  let r = rand() * Object.values(mix).reduce((a, w) => a + w, 0);
+  for (const [kind, w] of Object.entries(mix)) {
+    r -= w;
+    if (r < 0) return kind;
+  }
+  return Object.keys(mix)[0];
 }
 
 function pick(rand) {
@@ -120,10 +149,20 @@ export function moveTraffic(traffic, time) {
       b.at += SWIM;
       delete b.swim;
     }
-    b.s = b.meet + b.dir * T.speed * k * (time - b.at);
-    b.on = (b.behind || time > b.at - BEFORE) && time < b.at + AFTER && b.s > T.length && b.s < river.length - T.length;
-    if (!b.on) continue;
-    b.lateral = b.dir * lane(river, b.s, b.dir, T);
+    // In a pack: in its slot behind the lead (who's moved already: it comes first).
+    const lead = b.pack && b.pack.lead !== b ? b.pack.lead : null;
+    if (lead && lead.swim === undefined) {
+      const [back, right] = b.pack.slot;
+      b.s = lead.s - b.dir * back;
+      b.on = lead.on && b.s > T.length && b.s < river.length - T.length;
+      if (!b.on) continue;
+      b.lateral = lead.lateral + b.dir * right;
+    } else {
+      b.s = b.meet + b.dir * T.speed * k * (time - b.at);
+      b.on = (b.behind || time > b.at - BEFORE) && time < b.at + AFTER && b.s > T.length && b.s < river.length - T.length;
+      if (!b.on) continue;
+      b.lateral = b.dir * lane(river, b.s, b.dir, T);
+    }
     const c = pointAt(river, b.s);
     b.x = c.x - c.tz * b.lateral;
     b.z = c.z + c.tx * b.lateral;
@@ -163,12 +202,16 @@ export function trafficHits(traffic, racers) {
   for (const r of racers) {
     if (r.remote || r.boat.swim > 0) continue;
     const f = [Math.sin(r.boat.heading), -Math.cos(r.boat.heading)];
+    // Points along the hitter's length: a kayak's, or its own (a hired boat's `shape`).
+    const S = r.boat.shape ?? KAYAK;
+    const along = S === KAYAK ? [-KAYAK.stern, -0.9, 0.5, 1.9, KAYAK.bow] : Array.from({ length: Math.ceil((S.bow + S.stern) / 1.2) + 1 }, (_, i) => -S.stern + i * ((S.bow + S.stern) / Math.ceil((S.bow + S.stern) / 1.2)));
+    const reach = (20 + S.bow + S.stern) ** 2;
     for (const b of traffic.boats) {
-      if (!b.on || b.hit.includes(r) || (b.x - r.boat.x) ** 2 + (b.z - r.boat.z) ** 2 > 400) continue;
+      if (!b.on || b.hit.includes(r) || (b.x - r.boat.x) ** 2 + (b.z - r.boat.z) ** 2 > reach) continue;
       const T = TRAFFIC[b.kind];
-      const hit = [-KAYAK.stern, -0.9, 0.5, 1.9, KAYAK.bow].some((d) => {
+      const hit = along.some((d) => {
         const p = frame(b, r.boat.x + f[0] * d, r.boat.z + f[1] * d);
-        return parts(T).some((q) => p.along > q.from && p.along < q.to && Math.abs(p.across) < q.out + KAYAK.half);
+        return parts(T).some((q) => p.along > q.from && p.along < q.to && Math.abs(p.across) < q.out + S.half);
       });
       if (hit) {
         b.hit.push(r);

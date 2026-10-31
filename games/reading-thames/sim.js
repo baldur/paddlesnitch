@@ -344,7 +344,11 @@ const BANK_TURN = 6; // radians a second
 export function bounceOffShore(boat, shore, dt) {
   const f = [Math.sin(boat.heading), -Math.cos(boat.heading)];
   let push = null;
-  for (const d of HULL_POINTS) {
+  // A boat with its own size (a hired narrowboat's `shape`) is checked along its whole length.
+  const S = boat.shape;
+  const n = S ? Math.ceil((S.bow + S.stern) / 1.5) : 0;
+  const points = S ? Array.from({ length: n + 1 }, (_, i) => -S.stern + (i * (S.bow + S.stern)) / n) : HULL_POINTS;
+  for (const d of points) {
     const x = boat.x + f[0] * d;
     const z = boat.z + f[1] * d;
     if (!shore.dry(x, z)) continue;
