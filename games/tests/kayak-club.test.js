@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../kayak/course.js';
 import { waterMap } from '../kayak/water.js';
-import { groundAt, bridgeBay, BRIDGE } from '../kayak/world.js';
-import { PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
+import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../kayak/world.js';
+import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -186,4 +186,21 @@ test('your paddler standing in the changing room has legs to the floor; the swan
   assert.ok(Math.abs(shots.changingStand[1] + low - floor) < 0.01, 'shoes on the floor');
   assert.ok(swanLegsMesh().vertices.every(Number.isFinite));
   assert.ok(bridgeSwanMesh().vertices.every(Number.isFinite));
+});
+
+test("Caversham Bridge with its bay, balustrade and lamps stays inside its own share of the river's triangles", async () => {
+  const course = await loop();
+  const bridge = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge');
+  const n = bridgeTriangles(course.scenery.river, bridge);
+  assert.ok(n < 9000, `${n} triangles`);
+});
+
+test("a glide blends a shot's wider view into the next, and adds none between two ordinary shots", async () => {
+  const shots = clubShots(await loop());
+  const bridge = shots.places.path;
+  assert.equal(bridge.wide, 100);
+  const club = shots.places.club;
+  assert.equal(glide(bridge, club, 0.5).wide, (100 + WIDE) / 2);
+  assert.equal(glide(bridge, club, 1).wide, WIDE);
+  assert.ok(!('wide' in glide(club, shots.places.pontoon, 0.5)));
 });
