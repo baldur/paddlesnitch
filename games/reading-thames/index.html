@@ -61,7 +61,8 @@
     <p id="missed" aria-live="assertive" hidden></p>
     <p id="drill" aria-live="polite" hidden></p>
     <div id="coach" aria-hidden="true" hidden></div>
-    <button type="button" id="lookBtn">Look</button>
+    <button type="button" id="lookLeft" class="look" aria-label="Look over your left shoulder">&#9664; Look</button>
+    <button type="button" id="lookRight" class="look" aria-label="Look over your right shoulder">Look &#9654;</button>
     <div id="outingBar" hidden>
       <b id="outingName"></b> <span id="outingHint"></span>
       <button type="button" id="outingSlower" hidden>Slower</button>
@@ -117,7 +118,7 @@
         <ul>
           <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> paddle strokes, left and right in turn. The quicker you paddle, the faster you go. Up to 90 a minute you can keep going for ever, and the sprint bar fills up</li>
           <li>Quicker than 90 a minute is a sprint: every stroke pulls harder, but it spends the sprint bar. When the bar is empty, paddling quicker than 90 gets you nothing extra. Use a sprint to catch someone, then rest on their wash: the bar fills there several times faster</li>
-          <li>In a scull (Reading Rowing Club): <kbd>&larr;</kbd> and <kbd>&rarr;</kbd> are your left and right oars. Press both together to go straight, lead with one to turn. Hold <kbd>&uarr;</kbd> to look where you're going</li>
+          <li>In a scull (Reading Rowing Club): <kbd>&larr;</kbd> and <kbd>&rarr;</kbd> are your left and right oars. Press both together to go straight, lead with one to turn. Hold <kbd>Q</kbd> or <kbd>E</kbd> to look over your left or right shoulder (<kbd>&uarr;</kbd> works for the right too)</li>
           <li>Hold <kbd>&darr;</kbd> and press <kbd>&larr;</kbd> <kbd>&rarr;</kbd> for back strokes: to brake, back off a bank or the start line, or turn on the spot. A back stroke on one side swings the bow towards that side, so alternate them to go straight back</li>
           <li>Keep your beat even: an even beat pulls fully and builds flow, a few percent more over the next 20 seconds. Uneven strokes, two on one side, steering hard and bumping into people cost you some of it. The rhythm bar shows how even you are</li>
           <li>The start: you begin behind the field. Paddle up into a gap on the line, stop, and wait for the horn. It comes without warning after "Are you ready?" Go early and everyone waits while the line comes up to you</li>
@@ -129,7 +130,7 @@
           <li>The portage (Hasler Div 1-6): slow right down into the beach, then press both sides together to jump out (<kbd>&larr;</kbd> and <kbd>&rarr;</kbd> at once, both thumbs, or <kbd>LT</kbd> and <kbd>RT</kbd>). Come in too fast and you run aground. Tap left, right to run with the boat: 2 a second is a jog, quicker is faster but spends the sprint bar. At the put-in press both sides together to get in, and keep it level a moment before you paddle</li>
           <li>Swans won't get out of your way: paddle into one and you're in. Ducks fly off</li>
         <li>Other boats use the river too: scullers, eights, cruisers and motorboats. They keep to their right, so keep right and they pass on your left. Hit one, or its oars, and you're in; a motorboat's wash rocks you. Now and then an eight comes up from behind: the cox shouts and an arrow shows which side, so move over the other way</li>
-          <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes (in a scull, your oars), <kbd>LB</kbd> <kbd>RB</kbd> back strokes, left stick rudder, right stick lean, <kbd>Y</kbd> held looks round in a scull</li>
+          <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes (in a scull, your oars), <kbd>LB</kbd> <kbd>RB</kbd> back strokes, left stick rudder, right stick lean. In a scull, hold <kbd>X</kbd> or <kbd>B</kbd> to look over your left or right shoulder</li>
           <li>Phone, held sideways: tap the left or right half of the screen to stroke, and swipe a thumb down for a back stroke on that side. To steer, push one side of the phone away from you: push the right side forward to go left, the left side to go right. Or put a finger down and slide it left or right. The bar under the balance gauge shows your rudder. Turn the phone like a steering wheel to shift your weight: when the boat dips one way, lean the other, as you would in a real kayak. (Tilt needs the page over HTTPS on iPhone; without it, balance is done for you)</li>
           <li><kbd>P</kbd> or <kbd>Esc</kbd> to pause, <kbd>M</kbd> to toggle sound</li>
         </ul>

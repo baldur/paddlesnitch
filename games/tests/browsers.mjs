@@ -88,6 +88,7 @@ const CASES = [
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
   // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
   { name: 'webkit, desktop, a practice row', engine: webkit, ctx: desktop, club: true, row: true },
+  { name: 'iphone safari, a practice row', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true },
   { name: 'iphone safari, the ergs', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true, erg: true },
 ];
 
@@ -225,10 +226,46 @@ async function play(c, page, errors) {
     const scull = await page.evaluate(() => !!window.kayak.boat.hull.scull);
     if (!scull) errors.push('pushed off in something other than a scull');
     if (await page.locator('#coach').isHidden()) errors.push("the stroke coach isn't showing");
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(800);
-    if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
-    await page.keyboard.up('ArrowUp');
+    const lookIs = async (side, what) => {
+      await page.waitForTimeout(800);
+      const look = await page.evaluate(() => window.kayak.look);
+      if (!(side ? look * side > 0.9 : Math.abs(look) < 0.1)) errors.push(`${what}: looked ${look.toFixed(2)}, expected ${side}`);
+    };
+    if (c.touch) {
+      // A phone: the two Look buttons, both showing, apart, each looking over its own shoulder.
+      const [l, r] = [await page.locator('#lookLeft').boundingBox(), await page.locator('#lookRight').boundingBox()];
+      if (!l || !r || l.x + l.width > r.x) errors.push(`the Look buttons: ${JSON.stringify([l, r])}`);
+      for (const [id, side] of [['#lookLeft', -1], ['#lookRight', 1]]) {
+        await page.locator(id).dispatchEvent('pointerdown');
+        await lookIs(side, id);
+        if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
+        await page.locator(id).dispatchEvent('pointerup');
+        await lookIs(0, `${id} let go`);
+      }
+      // A tap is a glance: it looks, then comes back on its own.
+      await page.locator('#lookRight').dispatchEvent('pointerdown');
+      await page.locator('#lookRight').dispatchEvent('pointerup');
+      await lookIs(1, 'a tap on Look ▶');
+      await page.waitForTimeout(1300);
+      await lookIs(0, 'the glance over');
+    } else {
+      // Over each shoulder: Q left, E right; the coach goes while you look.
+      for (const [key, side] of [['KeyQ', -1], ['KeyE', 1]]) {
+        await page.keyboard.down(key);
+        await lookIs(side, `holding ${key}`);
+        if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
+        await page.keyboard.up(key);
+      }
+      // E held, then Q: left; let go of Q and it's E's again. Then leaving the window lets go of everything.
+      await page.keyboard.down('KeyE');
+      await page.keyboard.down('KeyQ');
+      await lookIs(-1, 'E then Q');
+      await page.keyboard.up('KeyQ');
+      await lookIs(1, 'let go of Q with E held');
+      await page.evaluate(() => dispatchEvent(new Event('blur')));
+      await lookIs(0, 'after the window lost focus');
+      await page.keyboard.up('KeyE');
+    }
   }
   // Analytics (metrics.js): the paddler and the session go out when the page is
   // hidden; locally they're kept in gameMetrics.sent instead of sent.

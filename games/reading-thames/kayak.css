@@ -508,11 +508,25 @@ summary { cursor: pointer; }
 #coach span { display: flex; align-items: baseline; gap: 0.25rem; }
 #coach b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 #coach small { font-size: 0.6rem; opacity: 0.75; }
-#lookBtn { display: none; }
-#hud.rowing #lookBtn { display: block; position: absolute; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px); transform: translateX(-50%); min-width: 88px; min-height: 48px;
+#hud .look { display: none; }
+/* Two Look buttons on a phone, one each side of the balance gauge: hold one to look over that shoulder. */
+#hud.rowing .look { display: block; position: absolute; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px); min-width: 88px; min-height: 48px;
   border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 18, 18, 0.6); color: #fff; font-weight: 600; pointer-events: auto; touch-action: none; }
-#hud.rowing .rudder, #hud.rowing #flow { display: none; }
-@media (hover: hover) and (pointer: fine) { #hud.rowing #lookBtn::after { content: ' (↑)'; font-weight: 400; opacity: 0.7; } }
+#hud.rowing #lookLeft { right: calc(50% + 8px); }
+#hud.rowing #lookRight { left: calc(50% + 8px); }
+/* Held sideways: at the outer edges, just above the speed and the meters (where the thumbs rest)… */
+@media (orientation: landscape) {
+  #hud.rowing .look { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 72px); }
+  #hud.rowing #lookLeft { left: max(16px, env(safe-area-inset-left)); right: auto; }
+  #hud.rowing #lookRight { right: max(16px, env(safe-area-inset-right)); left: auto; }
+}
+/* …and on a wide screen, in the bottom row beside the gauge, where there's room. */
+@media (orientation: landscape) and (min-width: 760px) {
+  #hud.rowing .look { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 8px); }
+  #hud.rowing #lookLeft { right: calc(50% + 112px); left: auto; }
+  #hud.rowing #lookRight { left: calc(50% + 112px); right: auto; }
+}
+@media (hover: hover) and (pointer: fine) { #hud.rowing #lookLeft::after { content: ' (Q)'; font-weight: 400; opacity: 0.7; } #hud.rowing #lookRight::after { content: ' (E)'; font-weight: 400; opacity: 0.7; } }
 /* The erg's monitor: its numbers just above the machine's own. */
 #ergMon { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.7rem; padding: 0.5rem 0.7rem; border-radius: 6px;
   background: #9aa88f; color: #101410; font: 600 0.8rem/1.05 ui-monospace, Menlo, monospace; box-shadow: 0 0 0 4px #161718; pointer-events: none; }
