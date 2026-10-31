@@ -4,5 +4,25 @@
      emulator). Release builds stay https-only. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <application android:usesCleartextTraffic="true" tools:ignore="UnusedAttribute" />
+    <!-- Recording a paddle on the phone (record/RecordingService.kt): debug builds
+         only until recordings upload (C3), so release builds don't ask for or
+         declare location. A foreground
+         service of type location, started while the app is on screen, keeps GPS
+         going with the screen off with "while using the app" location only: no
+         background location. The wake lock keeps the sensors' batches coming. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+
+    <application android:usesCleartextTraffic="true" tools:ignore="UnusedAttribute">
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+    </application>
 </manifest>

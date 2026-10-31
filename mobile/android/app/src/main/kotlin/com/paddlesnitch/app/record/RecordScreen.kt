@@ -2,12 +2,30 @@ package com.paddlesnitch.app.record
 
 import android.Manifest
 import android.os.Build
+import android.app.NotificationManager
+import android.content.Intent
+import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import com.paddlesnitch.app.ui.textColors
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.paddlesnitch.app.ui.outlinedColors
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,7 +70,13 @@ import com.paddlesnitch.app.ui.PsRadius
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-const val RECORD_FAILED = "Couldn’t start recording. Allow location for paddlesnitch, then try again."
+const val RECORD_LOCATION_REFUSED = "Couldn’t start recording without location. Allow location for paddlesnitch in the app’s settings."
+const val RECORD_FAILED = "Couldn’t start recording. Please try again."
+const val NOTIFICATIONS_OFF = "Notifications are off for paddlesnitch, so stop the recording here."
+const val KEEP_HOLDING = "Keep holding to stop."
+
+/** How long "Hold to stop" must be held: long enough that a brush or a drybag doesn't end a paddle. */
+const val HOLD_TO_STOP_MS = 1500
 
 /** The stroke rate as the core gives it: "—" until it has one (rc_phone_live is NaN until phase 2). */
 fun liveStrokeRate(live: RecorderCore.Live?): String = live?.spm?.takeIf { !it.isNaN() }?.roundToInt()?.toString() ?: "—"
@@ -68,11 +92,12 @@ fun Record(modifier: Modifier = Modifier) {
     val state by RecordingService.state.collectAsState()
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) RecordingService.start(context)
-        else RecordingService.failed()
+        else RecordingService.set(RecordingService.State.Failed(locationRefused = true))
     }
     RecordScreen(
         state = state,
         onStart = {
+            RecordingService.set(RecordingService.State.Starting)
             ask.launch(buildList {
                 add(Manifest.permission.ACCESS_FINE_LOCATION)
                 add(Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -80,6 +105,10 @@ fun Record(modifier: Modifier = Modifier) {
             }.toTypedArray())
         },
         onStop = { RecordingService.stop(context) },
+        onSettings = {
+            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+        },
+        notificationsOn = context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
         modifier = modifier,
     )
 }
@@ -90,6 +119,8 @@ fun RecordScreen(
     onStart: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    onSettings: () -> Unit = {},
+    notificationsOn: Boolean = true,
     now: () -> Long = SystemClock::elapsedRealtime,
 ) {
     Column(
@@ -98,25 +129,30 @@ fun RecordScreen(
     ) {
         Text("Record", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         when (state) {
-            is RecordingService.State.Recording -> Recording(state, onStop, now)
+            is RecordingService.State.Recording -> Recording(state, onStop, notificationsOn, now)
             else -> {
-                Text("Records GPS and boat motion, with the screen off. Recordings stay on this phone for now.", color = PsColor.muted)
-                Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                Text("Records your route and boat motion. Recordings stay on this phone for now.", color = PsColor.muted)
+                Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     when (state) {
-                        is RecordingService.State.Failed -> Text(RECORD_FAILED, color = PsColor.red)
-                        is RecordingService.State.Stopped -> Text("Saved on this phone as ${state.files.track.name}.", color = PsColor.fg)
+                        is RecordingService.State.Failed -> {
+                            Text(if (state.locationRefused) RECORD_LOCATION_REFUSED else RECORD_FAILED, color = PsColor.red)
+                            if (state.locationRefused) OutlinedButton(onClick = onSettings, colors = outlinedColors()) { Text("Open the app’s settings") }
+                        }
+                        is RecordingService.State.Stopped -> Text("Recording saved on this phone (${fmtClock(state.elapsedMs / 1000.0)}).", color = PsColor.fg)
                         else -> {}
                     }
                 }
-                Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) { Text("Start recording", fontSize = 18.sp) }
+                val starting = state is RecordingService.State.Starting
+                Button(onClick = onStart, enabled = !starting, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
+                    Text(if (starting) "Start recording…" else "Start recording", fontSize = 18.sp)
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Recording(state: RecordingService.State.Recording, onStop: () -> Unit, now: () -> Long) {
+private fun Recording(state: RecordingService.State.Recording, onStop: () -> Unit, notificationsOn: Boolean, now: () -> Long) {
     val live by state.live.collectAsState()
     var elapsedMs by remember { mutableLongStateOf(now() - state.startedAt) }
     LaunchedEffect(state.startedAt) {
@@ -126,20 +162,77 @@ private fun Recording(state: RecordingService.State.Recording, onStop: () -> Uni
     Tile("Elapsed", elapsed, "Elapsed, $elapsed")
     val spm = liveStrokeRate(live)
     Tile("Stroke rate", spm, if (spm == "—") "Stroke rate, not measured yet" else "Stroke rate, $spm strokes per minute")
-    Text("Keeps recording with the screen off. Stop from here or from the notification.", color = PsColor.muted)
-    // Hold, not tap: a wet hand or a drybag mustn't end a paddle by brushing it.
-    Box(
-        Modifier.fillMaxWidth().heightIn(min = 96.dp)
-            .background(PsColor.red.copy(alpha = 0.18f), RoundedCornerShape(PsRadius.control))
-            .combinedClickable(onClick = {}, onLongClick = onStop)
-            .clearAndSetSemantics { role = Role.Button; contentDescription = "Hold to stop"; onLongClick("Stop recording") { onStop(); true } },
-        contentAlignment = Alignment.Center,
-    ) { Text("Hold to stop", color = PsColor.red, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+    Text(
+        if (notificationsOn) "Keeps recording with the screen off. Stop here or from the notification." else NOTIFICATIONS_OFF,
+        color = PsColor.muted,
+    )
+    HoldToStop(onStop)
 }
 
+/**
+ * Stops only after [HOLD_TO_STOP_MS] held, filling as it goes: a wet hand or a
+ * drybag mustn't end a paddle by brushing it. A tap says to keep holding.
+ * TalkBack gets a long-press action that stops at once.
+ */
+@Composable
+private fun HoldToStop(onStop: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    val fill = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var hint by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            Modifier.fillMaxWidth().heightIn(min = 96.dp)
+                .background(PsColor.red.copy(alpha = 0.18f), RoundedCornerShape(PsRadius.control))
+                .drawBehind { drawRect(PsColor.red.copy(alpha = 0.35f), size = size.copy(width = size.width * fill.value)) }
+                .pointerInput(Unit) {
+                    detectTapGestures(onPress = {
+                        hint = false
+                        val held = scope.launch { fill.animateTo(1f, tween(HOLD_TO_STOP_MS, easing = LinearEasing)) }
+                        val released = tryAwaitRelease()
+                        if (fill.value >= 1f) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onStop()
+                        } else {
+                            held.cancel()
+                            if (released) hint = true
+                            scope.launch { fill.animateTo(0f, tween(150)) }
+                        }
+                    })
+                }
+                .clearAndSetSemantics { role = Role.Button; contentDescription = "Hold to stop"; onLongClick("Stop recording") { onStop(); true } },
+            contentAlignment = Alignment.Center,
+        ) { Text("Hold to stop", color = PsColor.red, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+        Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (hint) Text(KEEP_HOLDING, color = PsColor.muted)
+        }
+    }
+}
 @Composable
 private fun Tile(label: String, value: String, spoken: String) =
     Column(Modifier.fillMaxWidth().card().padding(16.dp).clearAndSetSemantics { contentDescription = spoken }) {
         Eyebrow(label)
         Text(value, fontFamily = PlexMono, fontSize = 40.sp, color = PsColor.fg)
     }
+
+/**
+ * The way to Record from Paddles (debug builds only, for now). While a
+ * recording runs it says so, with the time, so leaving the screen never hides it.
+ */
+@Composable
+fun RecordEntry(state: RecordingService.State, onOpen: () -> Unit, now: () -> Long = SystemClock::elapsedRealtime) {
+    val recording = state as? RecordingService.State.Recording
+    var label by remember { mutableStateOf("Record a paddle") }
+    LaunchedEffect(recording?.startedAt) {
+        while (true) {
+            label = recording?.let { "Recording · ${fmtClock((now() - it.startedAt) / 1000.0)}" } ?: "Record a paddle"
+            if (recording == null) break
+            delay(1000)
+        }
+    }
+    TextButton(onClick = onOpen, colors = if (recording != null) ButtonDefaults.textButtonColors(contentColor = PsColor.red) else textColors(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text("→", fontSize = 16.sp)
+    }
+}

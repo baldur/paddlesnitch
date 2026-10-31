@@ -80,66 +80,86 @@ class PhoneRecorder(
     private val tick = object : Runnable {
         override fun run() {
             if (!tickNow()) return
-            // The next whole second from the start, skipping any a stall missed:
-            // ticks must never queue up out of order.
-            val up = SystemClock.uptimeMillis()
-            do nextTick += 1000 while (nextTick <= up)
+            nextTick = nextTickAfter(nextTick, SystemClock.uptimeMillis())
             handler.postAtTime(this, nextTick)
         }
     }
+
+    internal fun looperForTest() = thread.looper
+    internal fun threadForTest(): Thread = thread
 
     /** This second's row. On the recorder thread only. */
     internal fun tickNow(): Boolean {
         val c = core ?: return false
         c.tick(clock(), battMv)
+        files?.sync()
         _live.value = c.live()
         logDrops(c, false)
         return true
     }
 
-    /** Starts recording; returns once the files exist and the headers are written. */
+    /**
+     * Starts recording; returns once the files exist and the headers are written.
+     * If anything fails part way, everything started so far is undone and the
+     * recorder is finished with: make a new one to try again.
+     */
     @SuppressLint("MissingPermission")   // RecordingService starts only with location permission
-    fun start(): RecordingFiles = onThread {
-        check(core == null) { "already recording" }
-        val accel = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val gyro = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-        val motion = accel != null && gyro != null     // no gyroscope: track only, no sensor events
-        val f = RecordingFiles.create(dir, now())
-        files = f
-        core = RecorderCore(has = RecorderCore.HAS_BATT_MV, motion = motion, lines = f::write)
-        context.registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED), null, handler)
-        if (motion) {
-            sensors.registerListener(sensorListener, accel, SAMPLE_US, MAX_LATENCY_US, handler)
-            sensors.registerListener(sensorListener, gyro, SAMPLE_US, MAX_LATENCY_US, handler)
+    fun start(): RecordingFiles = try {
+        onThread {
+            check(core == null) { "already recording" }
+            val accel = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            val gyro = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+            // Motion only with both sensors really delivering; otherwise track only,
+            // or rows would wait for a gyroscope that never comes. Events before the
+            // core exists are ignored (core is null).
+            val motion = accel != null && gyro != null &&
+                sensors.registerListener(sensorListener, accel, SAMPLE_US, MAX_LATENCY_US, handler) &&
+                sensors.registerListener(sensorListener, gyro, SAMPLE_US, MAX_LATENCY_US, handler)
+            if (!motion) sensors.unregisterListener(sensorListener)
+            val f = RecordingFiles.create(dir, now())
+            files = f
+            core = RecorderCore(has = RecorderCore.HAS_BATT_MV, motion = motion, lines = f::write)
+            context.registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED), null, handler)
+            locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener, thread.looper)
+            nextTick = SystemClock.uptimeMillis() + 1000
+            handler.postAtTime(tick, nextTick)
+            current = f
+            Log.i(TAG, "recording ${f.track.name}, motion=$motion")
+            f
         }
-        locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener, thread.looper)
-        nextTick = SystemClock.uptimeMillis() + 1000
-        handler.postAtTime(tick, nextTick)
-        current = f
-        Log.i(TAG, "recording ${f.track.name}, motion=$motion")
-        f
+    } catch (e: Exception) {
+        runCatching { stop() }
+        throw e
     }
 
-    /** Stops: writes everything still held, closes the files and ends the thread. */
-    fun stop(): RecordingFiles? = if (!thread.isAlive) null else onThread {
-        val c = core
-        val f = files
-        if (c != null && f != null) {
+    /** Stops: writes everything still held, closes the files and ends the thread. Safe to call again. */
+    fun stop(): RecordingFiles? = if (finished) null else try {
+        onThread {
+            val c = core
+            val f = files
             handler.removeCallbacks(tick)
             sensors.unregisterListener(sensorListener)
             locations.removeUpdates(locationListener)
             runCatching { context.unregisterReceiver(battery) }
-            c.finish()
-            logDrops(c, true)
-            c.close()
-            f.close()
+            try {
+                c?.finish()
+                c?.let { logDrops(it, true) }
+            } finally {
+                c?.close()
+                f?.close()
+                core = null
+                files = null
+                current = null
+                _live.value = null
+            }
+            f
         }
-        core = null
-        files = null
-        current = null
-        _live.value = null
-        f
-    }.also { thread.quitSafely() }
+    } finally {
+        finished = true
+        thread.quitSafely()
+    }
+
+    @Volatile private var finished = false
 
     private var lastDrops = 0L to 0L
     private fun logDrops(c: RecorderCore, end: Boolean) {
@@ -161,6 +181,17 @@ class PhoneRecorder(
         private const val TAG = "PhoneRecorder"
         const val SAMPLE_US = 20_000          // ~50 Hz (recorder_phone.h, SAMPLE RATE)
         const val MAX_LATENCY_US = 2_000_000  // batches at most 2 s late; the layer holds 15 s
+
+        /**
+         * When the tick after one due at [due] goes, with the clock at [now] (both
+         * uptime ms): the next whole second from the start, skipping any a stall
+         * missed, so ticks never queue up behind each other.
+         */
+        fun nextTickAfter(due: Long, now: Long): Long {
+            var next = due + 1000
+            while (next <= now) next += 1000
+            return next
+        }
 
         /** A Location as the core takes it: taken-at on the monotonic clock, and only the fields Android gave. */
         fun fixOf(l: Location) = RecorderCore.Fix(

@@ -213,6 +213,8 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 private fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier,
+    /** Recording on the phone: debug builds only until recordings upload (C3). */
+    canRecord: Boolean = BuildConfig.DEBUG,
 ) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -224,7 +226,6 @@ private fun MyPaddles(
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
-    // Recording on the phone: debug builds only until recordings upload (C3).
     var recording by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     if (recording) {
         androidx.activity.compose.BackHandler { recording = false }
@@ -238,9 +239,12 @@ private fun MyPaddles(
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
-            loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) }, action = {
+            loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
+            notice = if (canRecord) ({
+                val state by com.paddlesnitch.app.record.RecordingService.state.collectAsState()
+                com.paddlesnitch.app.record.RecordEntry(state, onOpen = { recording = true })
+            }) else null, action = {
             Row {
-                if (BuildConfig.DEBUG) TextButton(onClick = { recording = true }, colors = textColors()) { Text("Record") }
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
             }

@@ -8,8 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import com.paddlesnitch.app.MainActivity
 import com.paddlesnitch.app.R
@@ -21,11 +25,17 @@ import kotlinx.coroutines.flow.StateFlow
  * Runs a recording (PhoneRecorder) as a foreground service of type location,
  * with a partial wake lock, so it carries on with the screen off
  * (docs/features/android-app.md, Recording). Start it while the app is on
- * screen: Android lets a location service start only then.
+ * screen: Android lets a location service start only then. Declared in the
+ * debug manifest only, until recordings upload.
  */
 class RecordingService : Service() {
     private var recorder: PhoneRecorder? = null
+    private var startedAt = 0L
     private var wake: PowerManager.WakeLock? = null
+    private val main = Handler(Looper.getMainLooper())
+
+    /** Makes the recorder; tests swap in one with a fake clock. */
+    internal var makeRecorder: (Context) -> PhoneRecorder = { PhoneRecorder(it, recordingsDir(it)) }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,25 +51,33 @@ class RecordingService : Service() {
 
     private fun startRecording(): Boolean = try {
         startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        wake = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "paddlesnitch:recording").apply { acquire() }
-        val r = PhoneRecorder(this, recordingsDir(this))
-        val files = r.start()
+        // A backstop: a recording that's never stopped mustn't hold the phone awake for ever.
+        wake = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "paddlesnitch:recording").apply { acquire(MAX_RECORDING_MS) }
+        val r = makeRecorder(this)
+        val files = r.start()   // on failure it has already undone itself
         recorder = r
-        _state.value = State.Recording(files, r.live, android.os.SystemClock.elapsedRealtime())
+        startedAt = SystemClock.elapsedRealtime()
+        _state.value = State.Recording(files, r.live, startedAt)
         true
     } catch (e: Exception) {
-        // No location permission, or started from the background: nothing to record with.
         Log.w(TAG, "couldn't start recording", e)
-        _state.value = State.Failed
+        _state.value = State.Failed(locationRefused = e is SecurityException)
         releaseAndStop()
         false
     }
 
+    /** Ends the recording off the main thread (finishing writes what's held), then lets go. */
     private fun stopRecording() {
-        val files = recorder?.stop()
+        val r = recorder ?: run { if (_state.value is State.Recording) _state.value = State.Idle; releaseAndStop(); return }
         recorder = null
-        _state.value = files?.let { State.Stopped(it) } ?: State.Idle
-        releaseAndStop()
+        val elapsed = SystemClock.elapsedRealtime() - startedAt
+        Thread({
+            val files = runCatching { r.stop() }.onFailure { Log.w(TAG, "couldn't finish the recording", it) }.getOrNull()
+            main.post {
+                _state.value = files?.let { State.Stopped(it, elapsed) } ?: State.Idle
+                releaseAndStop()
+            }
+        }, "recorder-stop").start()
     }
 
     private fun releaseAndStop() {
@@ -70,7 +88,8 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
-        if (recorder != null) stopRecording()
+        recorder?.let { r -> recorder = null; runCatching { r.stop() } }
+        wake?.takeIf { it.isHeld }?.release()
         super.onDestroy()
     }
 
@@ -79,30 +98,38 @@ class RecordingService : Service() {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Recording", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, Intent(this, RecordingService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
+        val stopAction = Notification.Action.Builder(null, "Stop recording", stop)
+            // On the lock screen, stopping needs an unlock: a wet drybag mustn't end a paddle.
+            .apply { if (Build.VERSION.SDK_INT >= 31) setAuthenticationRequired(true) }
+            .build()
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_recording)
             .setContentTitle("Recording a paddle")
-            .setContentText("Open the app to see it, or stop here.")
+            .setContentText("Tap to open paddlesnitch.")
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+            .addAction(stopAction)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
     sealed interface State {
         data object Idle : State
+        /** Asked to start; waiting for permission or the service. */
+        data object Starting : State
         /** [startedAt] is SystemClock.elapsedRealtime() at the start, for the elapsed time on screen. */
         data class Recording(val files: RecordingFiles, val live: StateFlow<RecorderCore.Live?>, val startedAt: Long) : State
-        data class Stopped(val files: RecordingFiles) : State
-        data object Failed : State
+        data class Stopped(val files: RecordingFiles, val elapsedMs: Long) : State
+        /** [locationRefused]: the person said no to location (Settings can change that). */
+        data class Failed(val locationRefused: Boolean) : State
     }
 
     companion object {
         private const val TAG = "RecordingService"
         private const val CHANNEL = "recording"
         private const val NOTIFICATION = 1
-        private const val ACTION_STOP = "com.paddlesnitch.app.record.STOP"
+        internal const val ACTION_STOP = "com.paddlesnitch.app.record.STOP"
+        private const val MAX_RECORDING_MS = 12 * 60 * 60 * 1000L
 
         private val _state = MutableStateFlow<State>(State.Idle)
         val state: StateFlow<State> = _state
@@ -111,8 +138,7 @@ class RecordingService : Service() {
         fun recordingsDir(context: Context) = File(context.filesDir, "recordings")
 
         fun start(context: Context) { context.startForegroundService(Intent(context, RecordingService::class.java)) }
-        /** Location wasn't allowed. */
-        fun failed() { _state.value = State.Failed }
         fun stop(context: Context) { context.startService(Intent(context, RecordingService::class.java).setAction(ACTION_STOP)) }
+        internal fun set(state: State) { _state.value = state }
     }
 }

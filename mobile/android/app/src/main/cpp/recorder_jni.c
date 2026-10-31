@@ -20,6 +20,9 @@ static void write_line(void *user, rc_stream stream, const char *line, size_t le
 {
     recorder *r = user;
     JNIEnv *env = r->env;
+    /* A line that failed in Kotlin leaves its exception pending until this
+       native call returns; no more JNI calls until then. */
+    if ((*env)->ExceptionCheck(env)) return;
     jbyteArray bytes = (*env)->NewByteArray(env, (jsize)len);
     if (!bytes) return;
     (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)len, (const jbyte *)line);

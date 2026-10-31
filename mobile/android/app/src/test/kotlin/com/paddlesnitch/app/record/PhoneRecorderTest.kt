@@ -11,7 +11,12 @@ import java.io.File
 import java.nio.file.Files
 import java.time.Instant
 import org.junit.After
+import android.content.Intent
+import android.os.BatteryManager
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -101,14 +106,78 @@ class PhoneRecorderTest {
         assertEquals(listOf("0.00", "0.00", "57.30"), rows.first().subList(4, 7))
     }
 
-    @Test fun withoutAGyroscopeItRecordsTheTrackAlone() {
+    @Test fun withoutAGyroscopeRowsAreWrittenAtOnceAndSamplesIgnored() {
         addSensors(gyro = false)
-        recorder.start()
+        val f = recorder.start()
         send(Sensor.TYPE_ACCELEROMETER, 10_000_000_000L, 0f, 0f, G)
         tickAt(11)
-        val f = recorder.stop()!!
-        assertEquals(1, f.motion.readLines().size)   // the header only
+        // Read before stopping: finishing writes held rows, which would hide a core told motion=1.
         assertEquals(2, f.track.readLines().size)
+        assertEquals(1, f.motion.readLines().size)   // the header only
+    }
+
+    @Test fun withBothSensorsRowsWaitForTheirSamples() {
+        addSensors()
+        val f = recorder.start()
+        tickAt(11)
+        assertEquals(1, f.track.readLines().size)   // held: no sensor has passed 11 s yet
+        hold(10, 12, Triple(0f, 0f, G), Triple(0f, 0f, 0f))
+        assertEquals(2, f.track.readLines().size)
+    }
+
+    @Test fun theBatteryVoltageGoesInEachRow() {
+        context.sendStickyBroadcast(Intent(Intent.ACTION_BATTERY_CHANGED).putExtra(BatteryManager.EXTRA_VOLTAGE, 3949))
+        addSensors(gyro = false)
+        val f = recorder.start()
+        recorder.onThread { }   // the sticky broadcast is delivered on the recorder thread
+        shadowOf(recorder.looperForTest()).idle()
+        tickAt(11)
+        assertEquals("3949", f.track.readLines()[1].split(',')[12])
+    }
+
+    @Test fun ticksComeOnTheirOwnOnceASecond() {
+        addSensors(gyro = false)
+        recorder = PhoneRecorder(context, dir, clock = { android.os.SystemClock.uptimeMillis() * 1_000_000 })
+        val f = recorder.start()
+        val looper = shadowOf(recorder.looperForTest())
+        repeat(3) { looper.idleFor(java.time.Duration.ofMillis(1_000)) }
+        assertEquals(4, f.track.readLines().size)   // header + three rows
+    }
+
+    @Test fun afterAStallTheMissedTicksAreSkippedNotQueued() {
+        assertEquals(2_000L, PhoneRecorder.nextTickAfter(1_000L, 1_500L))
+        assertEquals(5_000L, PhoneRecorder.nextTickAfter(1_000L, 4_200L))   // 2 s, 3 s and 4 s passed: one tick, at 5 s
+        assertEquals(5_000L, PhoneRecorder.nextTickAfter(1_000L, 4_000L))
+    }
+
+    @Test fun stoppingTwiceIsHarmlessAndTheFilesAreClosed() {
+        addSensors(gyro = false)
+        recorder.start()
+        val f = recorder.stop()!!
+        assertNull(recorder.stop())
+        assertTrue(f.track.exists())
+        assertNull(recorder.live.value)
+    }
+
+    @Test fun aStartThatFailsUndoesItself() {
+        addSensors()
+        val notADir = File(dir, "taken").apply { writeText("") }   // the recordings folder can't be made
+        val broken = PhoneRecorder(context, File(notADir, "recordings"), clock = { clockNs })
+        assertThrows(java.io.IOException::class.java) { broken.start() }
+        assertEquals(0, shadowOf(sensors).getListeners().size)   // the sensors registered first are let go
+        assertNull(broken.current)
+        broken.threadForTest().join(2_000)
+        assertFalse(broken.threadForTest().isAlive)
+        assertNull(broken.stop())
+    }
+
+    @Test fun twoRecordingsStartedInTheSameSecondGetTheirOwnFiles() {
+        val first = RecordingFiles.create(dir, Instant.parse("2026-10-31T09:14:07Z"))
+        val second = RecordingFiles.create(dir, Instant.parse("2026-10-31T09:14:07Z"))
+        first.close(); second.close()
+        assertEquals("track_20261031_091407.csv", first.track.name)
+        assertEquals("track_20261031_091407_1.csv", second.track.name)
+        assertEquals("track_20261031_091407_1_i10.csv", second.motion.name)
     }
 
     @Test fun aFixGoesInWithTheTimeItWasTaken() {

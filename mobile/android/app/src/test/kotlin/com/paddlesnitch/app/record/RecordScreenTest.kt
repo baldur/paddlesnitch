@@ -11,6 +11,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -39,10 +42,11 @@ class RecordScreenTest {
     private val recording = RecordingService.State.Recording(files, MutableStateFlow(notReady), startedAt = 1_000L)
     private val now = { 1_000L + 3_903_000L }
 
-    private fun show(state: RecordingService.State, fontScale: Float = 1f, onStart: () -> Unit = {}, onStop: () -> Unit = {}) = compose.setContent {
+    private fun show(state: RecordingService.State, fontScale: Float = 1f, onStart: () -> Unit = {}, onStop: () -> Unit = {},
+                     onSettings: () -> Unit = {}, notificationsOn: Boolean = true) = compose.setContent {
         val d = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-            PaddlesnitchTheme { Surface(color = PsColor.bg) { RecordScreen(state, onStart, onStop, now = now) } }
+            PaddlesnitchTheme { Surface(color = PsColor.bg) { RecordScreen(state, onStart, onStop, onSettings = onSettings, notificationsOn = notificationsOn, now = now) } }
         }
     }
 
@@ -63,13 +67,43 @@ class RecordScreenTest {
         golden("recording")
     }
 
-    @Test fun aTapDoesntStopItAHoldDoes() {
+    @Test fun aTapDoesntStopItItSaysToKeepHolding() {
         var stops = 0
         show(recording, onStop = { stops++ })
         compose.onNodeWithContentDescription("Hold to stop").performClick()
         assertEquals(0, stops)
-        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { longClick() }
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
+    @Test fun aShortHoldDoesntStopIt() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center); advanceEventTime(800); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(0, stops)
+    }
+
+    @Test fun holdingForOneAndAHalfSecondsStopsIt() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS + 100L)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(100)
         assertEquals(1, stops)
+    }
+
+    @Test fun talkBackStopsItWithALongPressAction() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.onNodeWithContentDescription("Hold to stop").performSemanticsAction(SemanticsActions.OnLongClick)
+        assertEquals(1, stops)
+    }
+
+    @Test fun withNotificationsOffItSaysStopHere() {
+        show(recording, notificationsOn = false)
+        compose.onNodeWithText(NOTIFICATIONS_OFF).assertExists()
     }
 
     @Test fun atLargeText() {
@@ -77,15 +111,52 @@ class RecordScreenTest {
         golden("recording.large-text")
     }
 
-    @Test fun afterStoppingItSaysWhereItIs() {
-        show(RecordingService.State.Stopped(files))
-        compose.onNodeWithText("Saved on this phone as ${files.track.name}.").assertExists()
+    @Test fun afterStoppingItSaysHowLong() {
+        show(RecordingService.State.Stopped(files, elapsedMs = 3_903_000L))
+        compose.onNodeWithText("Recording saved on this phone (1:05:03).").assertExists()
+        golden("stopped")
     }
 
-    @Test fun withoutLocationItSaysSo() {
-        show(RecordingService.State.Failed)
-        compose.onNodeWithText(RECORD_FAILED).assertExists()
+    @Test fun whileStartingTheButtonWaits() {
+        var started = 0
+        show(RecordingService.State.Starting, onStart = { started++ })
+        compose.onNodeWithText("Start recording…").assertIsNotEnabled()
+    }
+
+    @Test fun withoutLocationItSaysSoAndOpensSettings() {
+        var settings = 0
+        show(RecordingService.State.Failed(locationRefused = true), onSettings = { settings++ })
+        compose.onNodeWithText(RECORD_LOCATION_REFUSED).assertExists()
         golden("failed")
+        compose.onNodeWithText("Open the app’s settings").performClick()
+        assertEquals(1, settings)
+    }
+
+    @Test fun anotherFailureDoesntBlameLocation() {
+        show(RecordingService.State.Failed(locationRefused = false))
+        compose.onNodeWithText(RECORD_FAILED).assertExists()
+        compose.onNodeWithText("Open the app’s settings").assertDoesNotExist()
+    }
+
+    @Test fun paddlesSaysARecordingIsRunning() {
+        var opened = 0
+        compose.setContent { PaddlesnitchTheme { RecordEntry(recording, onOpen = { opened++ }, now = now) } }
+        compose.onNodeWithText("Recording · 1:05:03").performClick()
+        assertEquals(1, opened)
+    }
+
+    @Test fun paddlesOffersToRecord() {
+        compose.setContent { PaddlesnitchTheme { RecordEntry(RecordingService.State.Idle, onOpen = {}) } }
+        compose.onNodeWithText("Record a paddle").assertExists()
+    }
+
+    // Release builds don't record yet (no upload until C3): recording's permissions and
+    // service are in the debug manifest only. (MapLibre's own manifest still adds location.)
+    @Test fun recordingIsDeclaredForDebugBuildsOnly() {
+        val main = File("src/main/AndroidManifest.xml").readText()
+        listOf("ACCESS_FINE_LOCATION", "FOREGROUND_SERVICE_LOCATION", "RecordingService").forEach {
+            assertEquals("$it in the main manifest", false, main.contains(it))
+        }
     }
 
     @Test fun theStrokeRateIsTheCoresOrADash() {
