@@ -29,13 +29,14 @@ static int next_line(cursor *c, const char **line, size_t *len)
 }
 
 /* A header cell, compared the way the server always has: lower case, with
-   spaces and underscores gone ("Speed_kmh" is "speedkmh"). */
+   spaces and underscores gone ("Speed_kmh" is "speedkmh"), and the CR that
+   ends the last cell of a CR LF file. */
 static int cell_is(const char *cell, size_t n, const char *name)
 {
     size_t j = 0;
     for (size_t i = 0; i < n; i++) {
         char ch = (char)tolower((unsigned char)cell[i]);
-        if (ch == ' ' || ch == '\t' || ch == '_') continue;
+        if (ch == ' ' || ch == '\t' || ch == '_' || ch == '\r') continue;
         if (name[j] != ch) return 0;
         j++;
     }

@@ -719,6 +719,10 @@ int main(void)
         tn = (size_t)snprintf(g_t2, CAP, "speed_kmh,ms\n");
         for (uint32_t ms = 2000; ms <= 301000; ms += 1000) tn += (size_t)snprintf(g_t2 + tn, CAP - tn, "8.00,%lu\n", (unsigned long)ms);
         replay_reads("ms as the last column", tn, mn, 0);
+        /* speed as the last column of a CR LF file: its cell ends in CR */
+        tn = (size_t)snprintf(g_t2, CAP, "ms,speed_kmh\r\n");
+        for (uint32_t ms = 2000; ms <= 301000; ms += 1000) tn += (size_t)snprintf(g_t2 + tn, CAP - tn, "%lu,8.00\r\n", (unsigned long)ms);
+        replay_reads("speed as the last column, CR LF", tn, mn, 1);
         /* motion lines one column short are not samples */
         tn = rewrite(g_t2, g_dev.buf[RC_TRACK], g_dev.len[RC_TRACK], 0, 0, 0, 0);
         mn = 0;

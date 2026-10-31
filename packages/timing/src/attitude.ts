@@ -380,3 +380,50 @@ export function deriveAttitude(
     excludedSeconds: Math.round(droppedWindows * STABILITY_WINDOW_S),
   }
 }
+
+/**
+ * Millisecond spans where the boat was actually moving, from the track CSV
+ * (its `ms` and `speed_kmh` columns): at least 4 km/h for `minRunS` rows in a
+ * row (the track is 1 Hz). Boat motion's gate until it moves into the
+ * recorder core (docs/features/on-device-metrics.md, phase 3); stroke rate
+ * gates itself there already (recordingStrokeRate in ./cadence).
+ *
+ * Without it boat motion would describe the parked minutes at the start of a
+ * session too: someone shifting their weight on a stationary hull.
+ */
+export function movingRangesFromTrack(csv: string, minRunS = 90): [number, number][] {
+  // The header is the first line naming the columns: a serial capture opens
+  // with a <<<CAT …>>> marker before it.
+  const lines = csv.split(/\r?\n/)
+  const hi = lines.findIndex(l => /(^|,)\s*ms\s*,/i.test(l))
+  if (hi < 0) return []
+  const head = lines[hi].split(',').map(h => h.trim().toLowerCase().replace(/[\s_]/g, ''))
+  const msI = head.indexOf('ms')
+  const spI = head.findIndex(h => h === 'speedkmh' || h === 'speed')
+  if (msI < 0 || spI < 0) return []
+
+  const ranges: [number, number][] = []
+  let run: number[] = []
+  for (const line of lines.slice(hi + 1)) {
+    const p = line.split(',')
+    if (p.length <= Math.max(msI, spI)) continue
+    const ms = Number(p[msI]), sp = Number(p[spI])
+    if (!Number.isFinite(ms) || !Number.isFinite(sp)) continue
+    if (sp >= 4) run.push(ms)
+    else {
+      if (run.length >= minRunS) ranges.push([run[0], run[run.length - 1]])
+      run = []
+    }
+  }
+  if (run.length >= minRunS) ranges.push([run[0], run[run.length - 1]])
+  return ranges
+}
+
+/**
+ * Where to describe boat motion: where the GPS saw the boat moving, or
+ * (`gpsFailed`) the whole recording, since after the GPS lost the sky it
+ * can't say whether the boat moved (#414).
+ */
+export function attitudeRangesFor(trackCsv: string, gpsFailed: boolean): [number, number][] {
+  return gpsFailed ? [] : movingRangesFromTrack(trackCsv)
+}

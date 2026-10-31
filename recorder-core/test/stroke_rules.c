@@ -67,5 +67,19 @@ int main(void)
     g_buf[g_len] = 0;
     check(strstr(g_buf, "rest,") == 0, "a 59.999 s gap isn't a rest");
 
+    /* Paddling time merges overlapping windows, and strokes follow each
+       window's own rate over its share (moved from cadence.ts's test):
+       60 s windows at 0, 30, 60 s (50 spm) and 90 s (60 spm) cover 0-150 s,
+       then one at 600 s (40 spm): 210 s, 50x2 + 60x0.5 + 40 = 170 strokes. */
+    static const uint32_t at[] = { 0, 30000, 60000, 90000, 600000 };
+    static const int cpm[] = { 250, 250, 250, 300, 200 };
+    memset(&set, 0, sizeof(set)); g_len = 0;
+    for (int i = 0; i < 5; i++) {
+        rc_stroke_window wi = win(at[i], cpm[i]);
+        accept_session(&set, hist, &cfg, "all", &wi, 60000);
+    }
+    check(set.paddling_ms == 210000, "paddling time merges overlapping windows");
+    check((set.strokes_x + 300000) / 600000 == 170, "strokes follow each window's rate over its share");
+
     return g_fails ? 1 : 0;
 }

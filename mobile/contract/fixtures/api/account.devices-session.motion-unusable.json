@@ -20,7 +20,7 @@
   },
   "cadence": {
     "available": false,
-    "reason": "No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.",
+    "reason": "No stretch showed a clear, repeating stroke. It may have been still, or somewhere the stroke doesn't reach it.",
     "sampleRateHz": 10,
     "rows": 90,
     "medianStrokesPerMin": null,

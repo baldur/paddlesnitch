@@ -504,7 +504,8 @@ static int run(const char *dir, int write_mode)
     return fails ? 1 : 0;
 }
 
-/* Phase 1 computes no live values: each must read "not ready" (NAN), never 0. */
+/* The metrics aren't live yet (phases 2-4): each must read "not ready" (NAN),
+   never 0. The GPS state is live already: test/live_values.c. */
 static int check_live_not_ready(void)
 {
     static outputs o;
@@ -519,7 +520,7 @@ static int check_live_not_ready(void)
         printf("ok   live values read not ready\n");
         return 0;
     }
-    fprintf(stderr, "FAIL live values: phase 1 must report every one as NAN\n");
+    fprintf(stderr, "FAIL live values: every metric must read NAN until its phase\n");
     return 1;
 }
 

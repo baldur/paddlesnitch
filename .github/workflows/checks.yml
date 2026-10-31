@@ -129,7 +129,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # The apps reach the core only through the phone layer, and don't
-      # convert sensor units themselves (no second copy).
+      # convert sensor units themselves; stroke rate is only in the core, and
+      # the module the site ships is built from the C sources (no second copy).
       - name: One implementation
         run: bash recorder-core/test/one_implementation.sh
       - name: CMake build and fixtures
@@ -173,6 +174,8 @@ jobs:
           echo "52640dde13599bf127a95499e61d6d640256119456d1af8897ab6725bcf3d89c  /tmp/wasi-sdk.tar.gz" | sha256sum -c -
           tar xzf /tmp/wasi-sdk.tar.gz -C /tmp
           make -C recorder-core wasm WASI_SDK=/tmp/wasi-sdk-25.0-x86_64-linux
+          # The module the site ships (packages/timing) is this build, byte for byte.
+          node recorder-core/wasm/embed.mjs same recorder-core/build/recorder_core.wasm
 
   games:
     name: games in browsers

@@ -2,8 +2,8 @@ import { derived, derivedKey, type DerivedSpec } from '@paddlesnitch/core/derive
 import { getDeviceSessionMeta, getDeviceSessionTrace, getDeviceSessionMotion, type DeviceSessionMeta } from '@paddlesnitch/core/devices'
 import { describeDeviceData, noPaddleReason, noPaddleMessage, type DeviceDataReport } from '@paddlesnitch/timing/device'
 import { MIN_PADDLE_METRES } from '@paddlesnitch/analysis/tracker-paddle'
-import { deriveCadence, strokeRangesFor, paddlingFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
-import { deriveAttitude, type AttitudeReport } from '@paddlesnitch/timing/attitude'
+import { recordingStrokeRate, STROKE_RATE_VERSION, type CadenceReport, type PaddlingFromMotion } from '@paddlesnitch/timing/cadence'
+import { deriveAttitude, attitudeRangesFor, type AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 export type RecordingReport = {
   report: DeviceDataReport; cadence: CadenceReport | null; attitude: AttitudeReport | null
@@ -21,12 +21,13 @@ export type RecordingReport = {
  *
  * Owner-checked: someone else's recording is null. The version is the
  * recording's upload time and its motion file's, so a motion file landing
- * after the track gives a new report.
+ * after the track gives a new report, and so does a new recorder core (its
+ * stroke rate can change).
  */
 const spec = (userId: string, meta: DeviceSessionMeta): DerivedSpec => ({
   name: 'recording-report',
   owner: userId,
-  inputs: [meta.deviceId, meta.sessionId, meta.uploadedAt, meta.motion?.uploadedAt ?? null, meta.motion?.bytes ?? null],
+  inputs: [meta.deviceId, meta.sessionId, meta.uploadedAt, meta.motion?.uploadedAt ?? null, meta.motion?.bytes ?? null, STROKE_RATE_VERSION],
 })
 
 /**
@@ -51,17 +52,18 @@ export async function recordingReport(userId: string, deviceId: string, sessionI
     const gpsFailed = why?.kind === 'gps_lost' || why?.kind === 'no_gps'
     let cadence: CadenceReport | null = null
     let attitude: AttitudeReport | null = null
+    let fromMotion: PaddlingFromMotion | null = null
     try {
       const motion = await getDeviceSessionMotion(userId, deviceId, sessionId)
       if (motion) {
         const text = motion.toString('utf8')
         // Where the GPS saw the boat moving; the whole recording when it failed.
-        const movingRanges = strokeRangesFor(csv, gpsFailed)
-        cadence = deriveCadence(text, { movingRanges })
-        attitude = deriveAttitude(text, { movingRanges })
+        const strokes = recordingStrokeRate(csv, text)[gpsFailed ? 'all' : 'moving']
+        cadence = strokes.report
+        fromMotion = gpsFailed ? strokes.paddling : null
+        attitude = deriveAttitude(text, { movingRanges: attitudeRangesFor(csv, gpsFailed) })
       }
-    } catch { cadence = null; attitude = null }
-    const fromMotion = gpsFailed && cadence ? paddlingFromMotion(cadence) : null
+    } catch { cadence = null; attitude = null; fromMotion = null }
     return {
       report, cadence, attitude,
       noPaddle: why ? noPaddleMessage(why, !!meta.motion) : null,

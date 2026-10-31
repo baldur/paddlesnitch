@@ -12,6 +12,7 @@
 #pragma STDC FP_CONTRACT OFF
 #endif
 
+#include <math.h>
 #include <string.h>
 
 #define G_MS2        9.80665            /* standard gravity, m/s² per g     */
@@ -210,6 +211,11 @@ void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv)
     rc_phone_row *r = &p->rows[(p->rows_head + p->rows_n) % RC_PHONE_ROWS];
     r->ms = ms;
     snapshot(p, ms, &r->gps);
+    /* The live GPS state on the row's clock (ms, moved after late samples),
+       the one snapshot() judged the fix at, so it agrees with the rows. */
+    p->tick_fix = r->gps.fix;
+    p->tick_ms = ms;
+    if (r->gps.fix) { p->tick_fixed = 1; p->tick_fix_ms = ms; }
     memset(&r->extras, 0, sizeof(r->extras));
     r->extras.batt_mv = batt_mv;
     p->rows_n++;
@@ -223,7 +229,12 @@ void rc_phone_finish(rc_phone *p)
     rc_finish(&p->core);
 }
 
-void rc_phone_live(const rc_phone *p, rc_live_values *out) { rc_live(&p->core, out); }
+void rc_phone_live(const rc_phone *p, rc_live_values *out)
+{
+    rc_live(&p->core, out);
+    out->fix = p->tick_last >= 0 && p->tick_fix;
+    out->since_fix_s = p->tick_fixed ? (float)(p->tick_ms - p->tick_fix_ms) / 1000.0f : NAN;
+}
 
 uint32_t rc_phone_dropped_late(const rc_phone *p) { return p->dropped_late; }
 uint32_t rc_phone_dropped_unpaired(const rc_phone *p) { return p->dropped_unpaired; }
