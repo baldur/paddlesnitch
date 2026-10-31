@@ -240,6 +240,8 @@ function gantry(m, course, s, colorA, colorB) {
 
 // A box in a local frame: `right` across, `fwd` along (both unit vectors in
 // the ground plane), around `origin`. Ranges are [from, to] along each axis.
+const mix = (a, b, t) => a.map((v, i) => v * (1 - t) + b[i] * t);
+
 function orientedBox(m, origin, right, fwd, [x0, x1], [y0, y1], [z0, z1], color) {
   const at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, origin[1] + y, origin[2] + right[1] * x + fwd[1] * z];
   const c = [at(x0, y0, z0), at(x1, y0, z0), at(x1, y1, z0), at(x0, y1, z0), at(x0, y0, z1), at(x1, y0, z1), at(x1, y1, z1), at(x0, y1, z1)];
@@ -287,31 +289,34 @@ function narrowboat(m, course, boat, [paint, trim]) {
   }
   const chimney = at(0.3, 1.78, half - 4.5);
   m.cylinder(chimney, 0.08, 0.6, 6, COLORS.boatHull);
-  if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 2.6);
+  if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 3.7);
 }
 
-// Life-size figures on a narrowboat's front deck, facing the river: Lara Croft
+// Figures standing on a narrowboat's roof, in front of the chimney: Lara Croft
 // (green vest, blue cargo trousers, holsters on her thighs, a long brown plait)
-// beside a woman in black. At `z` along the boat, standing on the deck.
+// beside a woman in black. At `z` along the boat, a little larger than life
+// (`STATUE`) so they show from the water (owner, 2026-10-31).
 const FIGURE = { skin: [0.86, 0.68, 0.55], hair: [0.3, 0.18, 0.1], vest: [0.3, 0.5, 0.33], cargo: [0.2, 0.3, 0.48], holster: [0.15, 0.12, 0.1], boot: [0.12, 0.1, 0.09], black: [0.1, 0.1, 0.11] };
+const STATUE = 1.25;
 function statues(m, at, right, fwd, z) {
-  const deck = 0.55;
+  const deck = 1.78; // the cabin roof
+  const k = STATUE;
   const figure = (x, top, legs, hair, plait) => {
-    const box = (xr, yr, zr, color) => orientedBox(m, at(0, 0, 0), right, fwd, xr.map((v) => v + x), yr.map((v) => v + deck), zr.map((v) => v + z), color);
+    const box = (xr, yr, zr, color) => orientedBox(m, at(0, 0, 0), right, fwd, xr.map((v) => v * k + x), yr.map((v) => v * k + deck), zr.map((v) => v * k + z), color);
     for (const e of [-1, 1]) {
       box([e * 0.12 - 0.07, e * 0.12 + 0.07], [0, 0.12], [-0.08, 0.12], FIGURE.boot);
       box([e * 0.12 - 0.07, e * 0.12 + 0.07], [0.12, 0.85], [-0.07, 0.07], legs);
       box([e * 0.24 - 0.04, e * 0.24 + 0.04], [0.95, 1.4], [-0.04, 0.04], FIGURE.skin); // arms
     }
     box([-0.19, 0.19], [0.85, 1.42], [-0.1, 0.1], top);
-    m.sphere(at(x, deck + 1.58, z), 0.12, FIGURE.skin, 3, 6);
-    m.sphere(at(x, deck + 1.62, z - 0.03), 0.125, hair, 3, 6);
+    m.sphere(at(x, deck + 1.58 * k, z), 0.12 * k, FIGURE.skin, 3, 6);
+    m.sphere(at(x, deck + 1.62 * k, z - 0.03 * k), 0.125 * k, hair, 3, 6);
     if (plait) box([-0.03, 0.03], [1.05, 1.55], [-0.16, -0.1], hair);
     return box;
   };
-  const lara = figure(-0.4, FIGURE.vest, FIGURE.cargo, FIGURE.hair, true);
+  const lara = figure(-0.42, FIGURE.vest, FIGURE.cargo, FIGURE.hair, true);
   for (const e of [-1, 1]) lara([e * 0.2 - 0.04, e * 0.2 + 0.04], [0.5, 0.72], [-0.06, 0.06], FIGURE.holster);
-  figure(0.4, FIGURE.black, FIGURE.black, [0.2, 0.14, 0.1], false);
+  figure(0.42, FIGURE.black, FIGURE.black, [0.2, 0.14, 0.1], false);
 }
 
 // An old brick road bridge: one arch over the whole river, the deck and
@@ -616,6 +621,12 @@ function realScenery(m, course, real, rand) {
   const nowhere = new MeshBuilder();
   // And so are the things pointed out in the footage (a beach, a club's lawn).
   const clearings = (real.features ?? []).filter((f) => CLEAR[f.style]).map((f) => [...f.at, CLEAR[f.style]]);
+  // And the boat with figures on its roof, so no riverside tree stands over them.
+  for (const b of real.moorings ?? []) {
+    if (b.crew !== 'statues' || b.at) continue;
+    const { origin, fwd } = berth(course, b, 1.05);
+    for (let d = -b.length / 2; d <= b.length / 2; d += 3) clearings.push([origin[0] + fwd[0] * d, origin[2] + fwd[1] * d, 5]);
+  }
   const cleared = (x, z) => clearings.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r);
   const plant = (x, z, willow, hidden = false) => {
     const g = ground(course, x, z);
@@ -1785,7 +1796,9 @@ function cableStayedBridge(m, course, { s, mast = -1 }) {
 // A 1920s concrete road bridge: wide flat arches over the water it crosses
 // (over each channel, where it crosses an island), piers between them, a pale
 // stone face, balustrades and lamp posts.
-function concreteBridge(m, course, { s, ends }) {
+// A bridge's frame: `origin` on the river line's crossing, `right` along its
+// road, `fwd` across it (horizontal unit vectors as [x, z]).
+function bridgeFrame(course, { s, ends }) {
   const c = pointAt(course, s);
   let right = [-c.tz, c.tx];
   let fwd = [c.tx, c.tz];
@@ -1800,7 +1813,76 @@ function concreteBridge(m, course, { s, ends }) {
     const t = (c.x - a[0]) * right[0] + (c.z - a[1]) * right[1];
     origin = [a[0] + right[0] * t, 0, a[1] + right[1] * t];
   }
-  const deck = 6.5;
+  return { c, origin, right, fwd };
+}
+
+// Caversham Bridge as seen from its upstream pavement (the walk's opening
+// shot, club.js): a viewing bay out over the water between two stone
+// pedestals carrying green double lamps, a stone balustrade, pavements either
+// side of the road. Where the bay is, along the road (`t`) and on which side
+// (`e`, the upstream one, towards the clubs), with the bridge's frame.
+export const BRIDGE = { deck: 6.5, half: 5.75, pavement: 2.6, bay: 3.2, out: 3, pedestal: 0.75 };
+export function bridgeBay(course, bridge) {
+  if (bridge?.name !== 'Caversham Bridge') return null;
+  const { c, origin, right, fwd } = bridgeFrame(course, bridge);
+  const target = [c.x + c.tx * 5.5 - c.tz * 7, c.z + c.tz * 5.5 + c.tx * 7];
+  const t = (target[0] - origin[0]) * right[0] + (target[1] - origin[2]) * right[1];
+  const e = Math.sign(c.tx * fwd[0] + c.tz * fwd[1]) || 1;
+  const at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
+  return { t, e, origin, right, fwd, at };
+}
+
+const STONE = [0.93, 0.92, 0.88];
+const PAVING = [0.72, 0.71, 0.68];
+const ROAD = [0.3, 0.3, 0.32];
+const BRONZE = [0.42, 0.6, 0.52];
+const GLOBE = [0.93, 0.93, 0.9];
+
+// A stone balustrade from (x0, z0) to (x1, z1) in a bridge's frame: plinth,
+// coping, and balusters between (only near the bay: far off, a solid panel).
+function balustrade(m, f, [x0, z0], [x1, z1], balusters) {
+  const { deck } = BRIDGE;
+  const len = Math.hypot(x1 - x0, z1 - z0);
+  const u = [(x1 - x0) / len, (z1 - z0) / len];
+  const v = [-u[1], u[0]];
+  const box = (a0, a1, y0, y1, w, col) => {
+    // A box along the run from a0 to a1, w either side of it.
+    const c = [[a0, -w], [a1, -w], [a1, w], [a0, w]].map(([a, b]) => [x0 + u[0] * a + v[0] * b, z0 + u[1] * a + v[1] * b]);
+    const p = (q, y) => f.at(q[0], y, q[1]);
+    m.prism(c.map((q) => p(q, y0)), c.map((q) => p(q, y1)), col);
+  };
+  box(0, len, deck, deck + 0.25, 0.25, STONE);
+  box(0, len, deck + 0.95, deck + 1.1, 0.27, STONE);
+  if (!balusters) return box(0, len, deck + 0.25, deck + 0.95, 0.16, mix(STONE, [0, 0, 0], 0.12));
+  for (let a = 0.2; a < len - 0.1; a += 0.3) {
+    box(a - 0.06, a + 0.06, deck + 0.25, deck + 0.95, 0.06, STONE);
+    box(a - 0.09, a + 0.09, deck + 0.52, deck + 0.68, 0.09, STONE); // the swell
+  }
+}
+
+// A green double lamp standard on a stone pedestal at (x, z).
+function lamp(m, f, x, z, along) {
+  const { deck } = BRIDGE;
+  const p = f.at(x, deck, z);
+  m.box([p[0] - 0.75, deck, p[2] - 0.75], [p[0] + 0.75, deck + 1.45, p[2] + 0.75], STONE);
+  m.box([p[0] - 0.85, deck + 1.45, p[2] - 0.85], [p[0] + 0.85, deck + 1.6, p[2] + 0.85], STONE);
+  m.cylinder([p[0], deck + 1.6, p[2]], 0.32, 0.7, 8, BRONZE);
+  m.cylinder([p[0], deck + 2.3, p[2]], 0.13, 3.4, 8, BRONZE);
+  const top = deck + 5.7;
+  for (const side of [-1, 1]) {
+    const q = [p[0] + along[0] * side * 0.45, top, p[2] + along[1] * side * 0.45];
+    m.box([Math.min(p[0], q[0]) - 0.05, top + 0.05, Math.min(p[2], q[2]) - 0.05], [Math.max(p[0], q[0]) + 0.05, top + 0.15, Math.max(p[2], q[2]) + 0.05], BRONZE);
+    m.sphere([q[0], top + 0.3, q[2]], 0.24, GLOBE, 4, 8);
+  }
+  m.sphere([p[0], top + 0.35, p[2]], 0.1, BRONZE, 2, 5);
+}
+
+function concreteBridge(m, course, bridge) {
+  const f = bridgeFrame(course, bridge);
+  const { origin, right, fwd } = f;
+  f.at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
+  const { s } = bridge;
+  const deck = BRIDGE.deck;
   const half = widthAt(course, s).half;
   const wet = (x) => (course.land?.rings ? course.land.inside(origin[0] + right[0] * x, origin[2] + right[1] * x) : Math.abs(x) < half);
   // The water across the line, out to where a long stretch of land begins.
@@ -1837,14 +1919,41 @@ function concreteBridge(m, course, { s, ends }) {
     const b = k < arches.length ? arches[k][0] - 1 : hi + 12;
     if (b > a) orientedBox(m, origin, right, fwd, [a, b], [-0.5, deck], [-6.5, 6.5], COLORS.cream);
   }
-  for (const e of [-1, 1]) {
-    orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 1.1], e < 0 ? [-6, -5.5] : [5.5, 6], COLORS.white);
-    for (let x = lo; x <= hi; x += 12) {
-      const p = [origin[0] + right[0] * x + fwd[0] * e * 5.75, deck + 1.1, origin[2] + right[1] * x + fwd[1] * e * 5.75];
-      m.cylinder(p, 0.08, 3.2, 5, COLORS.boatHull);
-      m.sphere([p[0], p[1] + 3.3, p[2]], 0.25, COLORS.white, 2, 5);
+  const bay = bridgeBay(course, bridge);
+  if (!bay) {
+    for (const e of [-1, 1]) {
+      orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 1.1], e < 0 ? [-6, -5.5] : [5.5, 6], COLORS.white);
+      for (let x = lo; x <= hi; x += 12) {
+        const p = [origin[0] + right[0] * x + fwd[0] * e * 5.75, deck + 1.1, origin[2] + right[1] * x + fwd[1] * e * 5.75];
+        m.cylinder(p, 0.08, 3.2, 5, COLORS.boatHull);
+        m.sphere([p[0], p[1] + 3.3, p[2]], 0.25, COLORS.white, 2, 5);
+      }
     }
+    return;
   }
+  // The road and its pavements, a kerb up.
+  const { half: H, pavement: P, bay: B, out: O } = BRIDGE;
+  orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 0.02], [-H + P, H - P], ROAD);
+  for (const e of [-1, 1]) orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 0.14], e < 0 ? [-H, -H + P] : [H - P, H], PAVING);
+  // The balustrades, open (balusters) for 30 m either side of the bay on its
+  // side, a panel elsewhere; a gap for the bay with a pedestal and lamp each side.
+  const near = 30;
+  for (const e of [-1, 1]) {
+    const z = e * H;
+    const cuts = e === bay.e ? [[lo - 12, bay.t - near, false], [bay.t - near, bay.t - B - 0.75, true], [bay.t + B + 0.75, bay.t + near, true], [bay.t + near, hi + 12, false]] : [[lo - 12, hi + 12, false]];
+    for (const [x0, x1, open] of cuts) if (x1 > x0) balustrade(m, f, [x0, z], [x1, z], open);
+    // Lamp standards along it, every 24 m, clear of the bay.
+    for (let x = lo; x <= hi; x += 24) if (e !== bay.e || Math.abs(x - bay.t) > 12) lamp(m, f, x, z, right);
+  }
+  // The bay: paved, out over the water, with its own balustrade round three sides.
+  const z0 = bay.e * H;
+  const z1 = bay.e * (H + O);
+  orientedBox(m, origin, right, fwd, [bay.t - B, bay.t + B], [deck - 0.7, deck + 0.14], bay.e < 0 ? [z1, z0] : [z0, z1], PAVING);
+  orientedBox(m, origin, right, fwd, [bay.t - B, bay.t + B], [deck - 1.4, deck - 0.7], bay.e < 0 ? [z1 + 0.3, z0] : [z0, z1 - 0.3], COLORS.cream);
+  balustrade(m, f, [bay.t - B, z1], [bay.t + B, z1], true);
+  balustrade(m, f, [bay.t - B, z0], [bay.t - B, z1], true);
+  balustrade(m, f, [bay.t + B, z0], [bay.t + B, z1], true);
+  for (const side of [-1, 1]) lamp(m, f, bay.t + side * (B + 0.75), z0, right);
 }
 
 // A railway on its embankment: a ballast bed with overhead-line portals.

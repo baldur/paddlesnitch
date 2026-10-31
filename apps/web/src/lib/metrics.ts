@@ -15,7 +15,7 @@
 // @paddlesnitch/ui/metrics-events (single source of truth for client capture +
 // this server EMF path). Re-exported here so existing `@/lib/metrics` importers
 // (the track route, tests) keep resolving unchanged.
-export { METRIC_EVENTS, isMetricEvent } from '@paddlesnitch/ui/metrics-events'
+export { METRIC_EVENTS, isMetricEvent, gameEventProps, gamePath } from '@paddlesnitch/ui/metrics-events'
 export type { MetricEvent } from '@paddlesnitch/ui/metrics-events'
 import type { MetricEvent } from '@paddlesnitch/ui/metrics-events'
 

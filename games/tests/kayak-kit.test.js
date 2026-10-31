@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../kayak/boats.js';
-import { SKIN_TONES, cleanKit, randomKit, kitKey, livery } from '../kayak/kit.js';
+import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery } from '../kayak/kit.js';
 import { HULLS, createBoat } from '../kayak/sim.js';
-import { paddlerMesh, limbMesh, kayakMesh, paddleMesh } from '../kayak/meshes.js';
+import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../kayak/meshes.js';
+import { paddlerSvg } from '../kayak/picture.js';
 
 test('nine boats, one for each stability from 1 (tippy) to 9 (stable)', () => {
   assert.deepEqual(BOATS.map((b) => b.stability), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -45,12 +46,18 @@ test('a saved look is read back safely: anything unknown falls back', () => {
   const kit = randomKit(() => 0.5);
   assert.deepEqual(cleanKit(kit), kit);
   assert.equal(cleanKit({ paddle: 'canoe' }).paddle, 'wing');
-  const bad = cleanKit({ skin: '#00ff00', head: 'helmet', headColour: 'red', sleeves: 'none', top: '#ABCDEF', boat: 'canoe', deck: '#12345', stripe: null, glasses: 'monocle', deckShape: 'sail', hullShape: 'flat' });
+  const bad = cleanKit({ skin: '#00ff00', body: 'man', hair: 'mohican', hairColour: 'red', hat: 'helmet', hatColour: 'blue', beard: 'goatee', aid: 'yes', aidColour: '#zzzzzz', sleeves: 'none', top: '#ABCDEF', boat: 'canoe', deck: '#12345', stripe: null, glasses: 'monocle', deckShape: 'sail', hullShape: 'flat' });
   assert.equal(bad.glasses, 'none');
   assert.equal(bad.deckShape, 'modern');
   assert.equal(bad.hullShape, 'round');
   assert.ok(SKIN_TONES.includes(bad.skin), 'skin only from the tones');
-  assert.equal(bad.head, 'cap');
+  assert.equal(bad.body, 'broad');
+  assert.equal(bad.hair, 'short');
+  assert.equal(bad.hat, 'cap');
+  assert.equal(bad.beard, 'none');
+  assert.equal(bad.aid, false);
+  assert.match(bad.hairColour, /^#[0-9a-f]{6}$/);
+  assert.match(bad.aidColour, /^#[0-9a-f]{6}$/);
   assert.equal(bad.sleeves, 'short');
   assert.equal(bad.top, '#abcdef');
   assert.ok(boatById(bad.boat));
@@ -67,11 +74,69 @@ test('a first visit gets a skin tone at random, each one possible', () => {
   assert.equal(seen.size, SKIN_TONES.length);
 });
 
-test('the look reaches the meshes: hair or a cap, short sleeves or long', () => {
-  const kit = cleanKit({ head: 'hair', sleeves: 'short', top: '#ff0000', skin: SKIN_TONES[5] });
+test('a paddler saved before body types keeps their look: a cap stays a cap, hair keeps its colour', () => {
+  const capped = cleanKit({ head: 'cap', headColour: '#123456', top: '#ff0000' });
+  assert.equal(capped.hat, 'cap');
+  assert.equal(capped.hatColour, '#123456');
+  assert.equal(capped.top, '#ff0000');
+  const haired = cleanKit({ head: 'hair', headColour: '#a0703c' });
+  assert.equal(haired.hat, 'none');
+  assert.equal(haired.hair, 'short');
+  assert.equal(haired.hairColour, '#a0703c');
+  assert.ok(!('head' in haired) && !('headColour' in haired), 'the old fields are gone');
+});
+
+test("a first visit's body type, hair and beard are each picked on their own: every pairing turns up", () => {
+  const seen = new Set();
+  let n = 7919;
+  const rand = () => ((n = (n * 16807 + 11) % 2147483647) / 2147483647);
+  for (let i = 0; i < 400; i++) {
+    const k = randomKit(rand);
+    seen.add(`${k.body}:${k.beard !== 'none'}`);
+    seen.add(`${k.body}:${k.hair}`);
+  }
+  for (const body of Object.keys(BODIES)) {
+    for (const beard of [true, false]) assert.ok(seen.has(`${body}:${beard}`), `${body} with${beard ? '' : 'out'} a beard`);
+    for (const hair of Object.keys(HAIRS)) assert.ok(seen.has(`${body}:${hair}`), `${body} with ${hair} hair`);
+  }
+});
+
+test('the body types differ in shape only: narrower shoulders than broad, and the arms from those shoulders', () => {
+  const l = livery(cleanKit({}));
+  const widest = (mesh, y0, y1) => {
+    let w = 0;
+    for (let i = 0; i < mesh.vertices.length; i += 9) if (mesh.vertices[i + 1] > y0 && mesh.vertices[i + 1] < y1) w = Math.max(w, Math.abs(mesh.vertices[i]));
+    return w;
+  };
+  const broad = paddlerMesh({ ...l, body: 'broad' });
+  for (const body of ['slim', 'curvy']) {
+    const mesh = paddlerMesh({ ...l, body });
+    assert.notDeepEqual(mesh.vertices, broad.vertices);
+    assert.ok(widest(mesh, 0.55, 0.62) < widest(broad, 0.55, 0.62), `${body}: narrower at the shoulders`);
+    assert.ok(shoulderOf(body).x < shoulderOf('broad').x);
+  }
+  assert.equal(shoulderOf(undefined), shoulderOf('broad'), 'a rival with no body type set is broad');
+});
+
+test('every hair, hat and beard is drawn, and a buoyancy aid goes over the top', () => {
+  const l = livery(cleanKit({ hat: 'none', hair: 'short', beard: 'none' }));
+  const look = (o) => [...paddlerMesh({ ...l, ...o }).vertices].join();
+  for (const [field, list] of [['hair', HAIRS], ['hat', HATS], ['beard', BEARDS], ['body', BODIES]]) {
+    const drawn = Object.keys(list).map((v) => look({ [field]: v }));
+    assert.equal(new Set(drawn).size, drawn.length, `each ${field} looks different`);
+    const pictures = Object.keys(list).map((v) => paddlerSvg(cleanKit({ [field]: v, hat: field === 'hat' ? v : 'none' })));
+    assert.equal(new Set(pictures).size, pictures.length, `and each ${field} has its own picture`);
+  }
+  assert.ok(paddlerMesh({ ...l, aid: [1, 0, 0] }).count > paddlerMesh(l).count);
+  assert.notEqual(paddlerSvg(cleanKit({ aid: true })), paddlerSvg(cleanKit({ aid: false })));
+  // Small enough for a pack of rivals.
+  assert.ok(paddlerMesh({ ...l, body: 'curvy', hair: 'long', hat: 'beanie', beard: 'beard', aid: [1, 0, 0], glasses: 'round' }).count / 3 < 900);
+});
+
+test('the look reaches the meshes: short sleeves or long', () => {
+  const kit = cleanKit({ hair: 'short', sleeves: 'short', top: '#ff0000', skin: SKIN_TONES[5] });
   const l = livery(kit);
   assert.deepEqual(l.top, [1, 0, 0]);
-  assert.notDeepEqual(paddlerMesh(l).vertices, paddlerMesh({ ...l, head: 'cap' }).vertices);
   assert.ok(paddlerMesh({ ...l, glasses: 'wrap' }).count > paddlerMesh({ ...l, glasses: 'none' }).count);
   assert.notDeepEqual(kayakMesh({ ...l, wings: true }).vertices, kayakMesh(l).vertices);
   assert.notDeepEqual(kayakMesh({ ...l, vee: true }).vertices, kayakMesh(l).vertices);

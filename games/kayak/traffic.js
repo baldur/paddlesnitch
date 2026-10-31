@@ -1,5 +1,5 @@
-// Other boats on the river: single scullers, eights, pleasure cruisers and
-// motorboats. Only kayaks race; these are out for their own reasons, keep to
+// Other boats on the river: single scullers, eights, kayakers out paddling,
+// pleasure cruisers and motorboats. Only kayaks race; these are out for their own reasons, keep to
 // their right of the river's main channel (never a race route's side channel)
 // and don't stop for anyone. Hit one, or its oars, and you're in; motorboats
 // and eights leave a wash that rocks you.
@@ -19,12 +19,14 @@ import { locate, pointAt, widthAt } from './course.js';
 // from the stern, and how far out they reach), speed (m/s, real), wash.
 export const TRAFFIC = {
   sculler: { length: 8.2, hull: 0.3, oars: [0.35, 0.7, 2.9], speed: 3.5, wash: 0.1, weight: 0.3 },
+  // A kayaker out for a paddle: a touring pace, the paddle sweeping a metre out each side.
+  kayaker: { length: 5.2, hull: 0.3, oars: [0.4, 0.62, 1.15], speed: 2.3, wash: 0.05, weight: 0.3 },
   eight: { length: 17.5, hull: 0.32, oars: [0.12, 0.85, 3.2], speed: 5, wash: 0.55, weight: 0.22 },
   cruiser: { length: 11, hull: 1.75, speed: 1.8, wash: 0.3, weight: 0.2 },
   motorboat: { length: 6, hull: 1.2, speed: 2.2, wash: 0.8, weight: 0.28 },
 };
 const BEHIND = 0.35; // of the eights, the share that come up from behind
-const MEAN_GAP = 150; // seconds of racing between boats, on average (gaps are random: some races are quiet)
+const MEAN_GAP = 120; // seconds of racing between boats, on average (gaps are random: some races are quiet; owner 2026-10-31: a little busier than the 150 it was)
 const PACE = 3.6; // m/s, a racing K1's, for when the pack will be where
 const FIRST = 60; // seconds into the race before the first meeting: the start has spread out by then
 const BEFORE = 60; // seconds on the water before meeting the pack
@@ -42,27 +44,38 @@ const wide = (river, s, k) => {
 const WARN = 30; // metres, an eight behind's bow from your stern, when the cox shouts
 const KAYAK = { bow: 3.3, stern: 1.9, half: 0.25 }; // as race.js
 
-// The boats for a race on `course`: a timetable, nothing moving yet.
-export function createTraffic(course, seed) {
+// The boats for a race on `course`: a timetable, nothing moving yet. Options,
+// for the outings (outing.js): `gap`, the average seconds between meetings;
+// `route`, { at(t) -> a point with its heading (x, z, tx, tz), seconds } for
+// where you'll be when, in place of the pack's way round the course; or
+// `ambient`, that many seconds of boats up and down the whole river, met or
+// not (for a boat that goes anywhere), the river already busy at the start.
+export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null, ambient = 0 } = {}) {
   const rand = mulberry32((seed ^ 0x5eed7) >>> 0);
   const river = course.scenery?.river ?? course;
   const k = course.speedup ?? 1;
-  const racing = (course.finish - course.start) / (PACE * k); // seconds, about
   const boats = [];
-  const gap = () => -Math.log(1 - rand()) * MEAN_GAP;
-  for (let t = FIRST + gap(); t < racing - 10; t += 15 + gap()) {
+  const gap = () => -Math.log(1 - rand()) * mean;
+  const boat = (kind, behind, dir, s, t) => ({
+    kind, behind, dir, meet: s, at: t,
+    x: 0, z: 0, heading: 0, s, lateral: 0, on: false, warned: false, phase: rand() * 10, // phase: the oars' stroke
+    hit: [], // who it has tipped in: they're not hit again climbing back in
+  });
+  if (ambient) {
+    for (let t = -AFTER; t < ambient; t += gap()) boats.push(boat(pick(rand), false, rand() < 0.5 ? 1 : -1, rand() * river.length, t));
+    return { river, boats, k };
+  }
+  const racing = route ? route.seconds : (course.finish - course.start) / (PACE * k); // seconds, about
+  const where = route ? route.at : (t) => pointAt(course, course.start + PACE * k * t);
+  for (let t = (route ? 10 : FIRST) + gap(); t < racing - 10; t += (route ? 5 : 15) + gap()) {
     const kind = pick(rand);
-    // Where the pack should be then, if the race is in the main channel there.
-    const p = pointAt(course, course.start + PACE * k * t);
+    // Where the pack (or you) should be then, if in the main channel there.
+    const p = where(t);
     const at = locate(river, p.x, p.z);
     if (Math.abs(at.lateral) > widthAt(river, at.s).half) continue;
     const along = Math.sign(p.tx * at.tx + p.tz * at.tz) || 1; // the race's way along the river there
     const behind = kind === 'eight' && rand() < BEHIND && t > BEHIND_FIRST && wide(river, at.s, k);
-    boats.push({
-      kind, behind, dir: behind ? along : -along, meet: at.s, at: t,
-      x: 0, z: 0, heading: 0, s: at.s, lateral: 0, on: false, warned: false, phase: rand() * 10, // phase: the oars' stroke
-      hit: [], // who it has tipped in: they're not hit again climbing back in
-    });
+    boats.push(boat(kind, behind, behind ? along : -along, at.s, t));
   }
   return { river, boats, k };
 }
@@ -76,11 +89,37 @@ function pick(rand) {
   return 'sculler';
 }
 
+// Knocked in (the hired launch rams a sculler or a kayaker: outing.js): the
+// boat goes over and stops where it is, its rower or paddler swims beside it,
+// then rights it, climbs back in and carries on, SWIM seconds later. Only the
+// small boats: an eight's crew of nine stays upright.
+export const SWIM = 10;
+export const TIPPY = ['sculler', 'kayaker'];
+export function knockIn(b, time) {
+  if (!TIPPY.includes(b.kind) || b.swim !== undefined) return false;
+  b.swim = time;
+  return true;
+}
+// How far over a knocked-in boat is (0 upright, 1 upside down) and whether
+// its crew is in the water.
+export function overturned(b, time) {
+  if (b.swim === undefined) return { over: 0, swimming: false };
+  const t = time - b.swim;
+  const over = Math.min(1, t / 0.6) * Math.min(1, (SWIM - t) / 1.2);
+  return { over: Math.max(0, over), swimming: t > 0.3 && t < SWIM - 1.2 };
+}
+
 // Where everything is at race time `time`.
 export function moveTraffic(traffic, time) {
   const { river, k } = traffic;
   for (const b of traffic.boats) {
     const T = TRAFFIC[b.kind];
+    if (b.swim !== undefined) {
+      if (time < b.swim + SWIM) continue; // still in, the boat where it went over
+      // Back in: on from where it stopped, so its timetable is SWIM seconds later.
+      b.at += SWIM;
+      delete b.swim;
+    }
     b.s = b.meet + b.dir * T.speed * k * (time - b.at);
     b.on = (b.behind || time > b.at - BEFORE) && time < b.at + AFTER && b.s > T.length && b.s < river.length - T.length;
     if (!b.on) continue;

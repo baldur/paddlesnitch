@@ -20,7 +20,7 @@ export default function PrivacyPolicy() {
       />
 
       <Page>
-        <PageHeader title="Privacy policy" description="Last updated: 28 September 2026" />
+        <PageHeader title="Privacy policy" description="Last updated: 31 October 2026" />
         <article className="max-w-[65ch] text-base text-fg leading-relaxed flex flex-col gap-8 [&_code]:font-mono [&_code]:text-sm">
 
         <Section title="Who runs paddlesnitch.com">
@@ -44,12 +44,13 @@ export default function PrivacyPolicy() {
             <li><strong>Buddies</strong>: who your buddies are, buddy requests you&apos;ve sent and received, and your invite link. <strong>Your buddies see your paddles</strong> (route, speed, stroke rate and boat class) unless you turn that off on the Buddies page or hide a paddle. They never see your diary notes, your automatic summaries or your email.</li>
             <li><strong>River plans</strong>: plans you save on Plan (start and finish points, start time and pace, and any notes you add to the plan or its stops). They&apos;re private until you share one. <strong>A shared plan can be seen by anyone with its link</strong>, with your display name, and your buddies see it listed. Stop sharing and the link stops working. We also note which locks a saved plan passes and a rough outline of its route (a point about every kilometre), so the gaps page can show which locks and waterways need details most; only counts are shown, never whose plans or their routes.</li>
             <li><strong>Portage details</strong>: where you get out and back in at a lock or weir, and any notes, if you add them on Plan. <strong>They&apos;re public the moment you save them</strong>, released under CC0 (anyone may reuse them, including other open-data projects), and shown with your display name. You can delete one at any time and it stops being shown; copies already downloaded by others can&apos;t be recalled. If people flag one, we may hide it.</li>
+            <li><strong>Kayak game</strong>: if you sign in to play, the paddler and boat you pick (such as body shape, hair and colours) and your best time on each course. <strong>Leaderboards are public</strong> and show your display name shortened (Sam T.), your time, your boat and the date. Players in a live race with you see your shortened name, paddler and boat.</li>
             <li><strong>Trackers</strong>: if you link a paddlesnitch tracker, the recordings it uploads (GPS positions and motion data), and its ID, software version and when it last synced.</li>
             <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
             <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, the name of the nearest river gauge, your recent paddles and your diary notes to an AI model on Amazon Bedrock. Please don&apos;t put health details in diary notes. We keep a short written profile of your paddling to make later summaries relevant.</li>
             <li><strong>Issue reports</strong>: what you write, the page you were on and your browser. If you&apos;re signed in, or add an email, we keep your name and email privately so we can reply.</li>
             <li><strong>Beta tester applications</strong>: your name, email, how you paddle (kayak, rowing and so on), and how often. We use it only to choose and contact beta testers, and delete it when the beta ends or when you ask.</li>
-            <li><strong>Page-view counts</strong>: which pages are opened, with a random ID that lasts until you close the tab. It isn&apos;t linked to your account.</li>
+            <li><strong>Page-view and game counts</strong>: which pages are opened, with a random ID that lasts until you close the tab. In the games we also record each race or outing (course, time, distance, how it ended, finishing place, swims, bumps and rowers knocked in) and the paddler you chose (body shape, hair, hat, beard, buoyancy aid, glasses, sleeves, boat and paddle, but no colours or skin tones). For each visit we record the playing time, how many races, whether you started from the menu or the walk, the places you visited on the walk, whether you used touch, keys, a mouse or a gamepad, and your browser&apos;s graphics type. None of this is linked to your account.</li>
             <li><strong>Technical records</strong>: when a tracker checks for a software update we record its IP address and software version (kept 90 days), and we briefly keep IP addresses to stop repeated requests (1 day).</li>
             <li><strong>Emails to us</strong>: if you email privacy@paddlesnitch.com we keep the message so we can deal with it.</li>
           </ul>

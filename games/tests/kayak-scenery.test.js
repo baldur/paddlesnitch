@@ -87,14 +87,14 @@ test('nothing grows on either beach', async () => {
   }
 });
 
-test("the Lara Croft boat is moored on the right going up, and solid: you can't paddle through it", async () => {
+test("the Lara Croft boat is moored on the left going up, and solid: you can't paddle through it", async () => {
   const course = courseFromFile(await data('reading'));
   const boat = course.scenery.moorings.find((m) => m.crew === 'statues');
-  assert.equal(boat.side, 1);
+  assert.equal(boat.side, -1, 'on the left going up (owner, 2026-10-31)');
   assert.equal(boat.paint, 'maroon');
   const c = pointAt(course, boat.s);
   const w = widthAt(course, boat.s).half - 1;
-  assert.ok(course.shore.dry(c.x - c.tz * w, c.z + c.tx * w), 'a boat bumps into it');
+  assert.ok(course.shore.dry(c.x - c.tz * w * boat.side, c.z + c.tx * w * boat.side), 'a boat bumps into it');
 });
 
 test('no two moored boats lie in each other', async () => {

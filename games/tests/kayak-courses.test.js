@@ -276,7 +276,9 @@ test('Hasler Div 7-9 as a time trial: the pack goes round Appletree Eyot and Fry
   // It passes the crowd of swans by Reading Rowing Club twice: a swim or two,
   // but nobody goes in again and again (SWAN_GRACE in birds.js).
   const caps = rivals.filter((r) => r.boat.capsizes).map((r) => `${r.name} ${r.boat.capsizes}`);
-  assert.ok(caps.length <= 3 && rivals.every((r) => r.boat.capsizes <= 1), `swims: ${caps}`);
+  // A swim each for a few, never two for anyone. (One seed: with the busier river of
+  // 2026-10-31 this one has four, while 16 seeded races swam fewer than main's, 9 against 12.)
+  assert.ok(caps.length <= 4 && rivals.every((r) => r.boat.capsizes <= 1), `swims: ${caps}`);
 });
 
 test('a mass start on a course that finishes where it starts: nobody "finishes" on the start line', async () => {

@@ -60,9 +60,23 @@
     <p id="cue" aria-live="polite"><b id="cueArrow" aria-hidden="true"></b> <span id="cueText"></span></p>
     <p id="missed" aria-live="assertive" hidden></p>
     <p id="drill" aria-live="polite" hidden></p>
+    <div id="outingBar" hidden>
+      <b id="outingName"></b> <span id="outingHint"></span>
+      <button type="button" id="outingSlower" hidden>Slower</button>
+      <button type="button" id="outingFaster" hidden>Faster</button>
+    </div>
   </div>
 
   <pre id="tiltdebug" hidden></pre>
+
+  <div id="club" hidden>
+    <p id="clubPlace"></p>
+    <p id="clubNav"><button type="button" id="clubBack" hidden>&larr; Back</button> <button type="button" id="clubStart" hidden>Start over</button></p>
+    <div id="clubDoors"></div>
+    <div id="clubCards"></div>
+    <p id="clubNote" role="status" aria-live="polite" hidden></p>
+    <div id="clubFade" aria-hidden="true"></div>
+  </div>
 
   <dialog id="menu">
     <h2>Kayak</h2>
@@ -130,11 +144,42 @@
             <div id="skinTones"></div>
           </fieldset>
           <fieldset>
-            <legend>On your head</legend>
+            <legend>Body</legend>
             <div class="row">
-              <label><input type="radio" name="head" value="cap"> Cap</label>
-              <label><input type="radio" name="head" value="hair"> Hair</label>
-              <label class="swatch">Colour <input type="color" id="headColour"></label>
+              <label><input type="radio" name="body" value="broad"> Broad</label>
+              <label><input type="radio" name="body" value="slim"> Slim</label>
+              <label><input type="radio" name="body" value="curvy"> Curvy</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Hair</legend>
+            <div class="row">
+              <label><input type="radio" name="hair" value="short"> Short</label>
+              <label><input type="radio" name="hair" value="crop"> Cropped</label>
+              <label><input type="radio" name="hair" value="ponytail"> Ponytail</label>
+              <label><input type="radio" name="hair" value="bun"> Bun</label>
+              <label><input type="radio" name="hair" value="long"> Long</label>
+              <label><input type="radio" name="hair" value="none"> Shaved</label>
+              <label class="swatch">Colour <input type="color" id="hairColour"></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Hat</legend>
+            <div class="row">
+              <label><input type="radio" name="hat" value="none"> None</label>
+              <label><input type="radio" name="hat" value="cap"> Cap</label>
+              <label><input type="radio" name="hat" value="visor"> Visor</label>
+              <label><input type="radio" name="hat" value="beanie"> Beanie</label>
+              <label class="swatch">Colour <input type="color" id="hatColour"></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Facial hair</legend>
+            <div class="row">
+              <label><input type="radio" name="beard" value="none"> None</label>
+              <label><input type="radio" name="beard" value="stubble"> Stubble</label>
+              <label><input type="radio" name="beard" value="moustache"> Moustache</label>
+              <label><input type="radio" name="beard" value="beard"> Beard</label>
             </div>
           </fieldset>
           <fieldset>
@@ -154,6 +199,13 @@
               <label><input type="radio" name="sleeves" value="short"> T-shirt</label>
               <label><input type="radio" name="sleeves" value="long"> Long sleeves</label>
               <label class="swatch">Colour <input type="color" id="topColour"></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Buoyancy aid</legend>
+            <div class="row">
+              <label><input type="checkbox" id="aid"> Wear one</label>
+              <label class="swatch">Colour <input type="color" id="aidColour"></label>
             </div>
           </fieldset>
         </div>
