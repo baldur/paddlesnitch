@@ -39,6 +39,8 @@ class PrefsVerifierStore(context: Context) : VerifierStore {
     private val prefs = context.getSharedPreferences("strava-signin", Context.MODE_PRIVATE)
     override fun put(verifier: String) { prefs.edit().putString("verifier", verifier).commit() }
     override fun take(): String? = prefs.getString("verifier", null).also { prefs.edit().remove("verifier").apply() }
+    /** A sign-in this app started hasn't come back yet. */
+    val pending: Boolean get() = prefs.contains("verifier")
 }
 
 /** RFC 7636 S256. */

@@ -70,7 +70,15 @@ class IntakeTest {
 
     @Test fun otherLinksGoWhereTheyBelong() {
         assertEquals(Do.Browser("https://paddlesnitch.com/paddles/new"), Intake().arrived(Incoming.OpenOnWeb("https://paddlesnitch.com/paddles/new"), true).second)
-        assertEquals(Do.StravaReturn("com.paddlesnitch.app:/x"), Intake().arrived(Incoming.StravaReturn("com.paddlesnitch.app:/x"), false).second)
+    }
+
+    // Anyone can open this address. Without the guard, a crafted link opened sign-in with a
+    // Strava error, even in a release build that hides Strava.
+    @Test fun aStravaReturnCountsOnlyWhenThisAppStartedOneWhileSignedOut() {
+        val back = Incoming.StravaReturn("com.paddlesnitch.app:/signin/strava?code=1")
+        assertEquals(Do.StravaReturn(back.uri), Intake().arrived(back, signedIn = false, stravaPending = true).second)
+        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = false, stravaPending = false).second) // a link alone
+        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = true, stravaPending = true).second) // already signed in
     }
 
     @Test fun aGoogleReturnCountsOnlyWhenThisAppStartedOneWhileSignedOut() {
