@@ -129,12 +129,17 @@ export const STROKE_RATE_REASONS: Record<string, (hz: number, windows: number) =
  * `all`; `moving` and `series` need the track to say the boat moved.
  */
 export function recordingStrokeRate(trackCsv: string, motionCsv: string): RecordingStrokeRate {
+  return strokeRateFromLines(replayStrokeLines(trackCsv, motionCsv))
+}
+
+/** Reads the core's RC_STROKE lines (replayStrokeLines). Exported for tests. */
+export function strokeRateFromLines(lines: string[]): RecordingStrokeRate {
   const windows: Record<string, CadenceWindow[]> = { moving: [], all: [] }
   const rests: Record<string, [number, number][]> = { moving: [], all: [] }
   const sessions: Record<string, string[]> = {}
   const points: StrokeRatePoint[] = []
   let rows = 0, hz = 0, seriesOk = false
-  for (const line of replayStrokeLines(trackCsv, motionCsv)) {
+  for (const line of lines) {
     const f = line.split(',')
     switch (f[0]) {
       case 'window':

@@ -259,3 +259,11 @@ are byte-identical. Two differences, both from the replay rather than the core:
   every column position for CR LF, not only the core's own layout. Also:
   `rc_replay` reads files in the order they're written and never sorts them
   (header). The old server sorted, and nothing needs it.
+- `not_moving` (0.5.0) asks whether any run reached 90 rows, not whether a
+  window ever fit inside one. A run of exactly 90-91 rows can miss every
+  60 s window on the 30 s grid (about 1 phase in 30, found by the `tester`
+  review), and then reads `no_rhythm` though nothing showed the stroke was
+  missing. Rare enough to leave. The honest fix is to count windows the
+  moving gate let through, whatever their rhythm, which means deciding
+  rhythm-less windows against the track too. Do that if it's ever seen on
+  a real recording.
