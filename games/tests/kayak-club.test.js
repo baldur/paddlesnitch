@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../kayak/course.js';
 import { waterMap } from '../kayak/water.js';
-import { groundAt } from '../kayak/world.js';
-import { PLACES, START, DOOR_LABELS, ROOMS, PARAPET, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
+import { groundAt, bridgeBay, BRIDGE } from '../kayak/world.js';
+import { PLACES, START, DOOR_LABELS, ROOMS, STANDING, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -63,7 +63,11 @@ test('the shots are on the real Reading river: the bridge view from Caversham Br
   // On the bridge: above the water, by Caversham Bridge.
   const bridge = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge');
   assert.ok(Math.abs(locate(course.scenery.river, path.eye[0], path.eye[2]).s - bridge.s) < 15);
-  assert.ok(path.eye[1] > 8, 'up on the deck');
+  assert.ok(Math.abs(path.eye[1] - BRIDGE.deck - STANDING.eye) < 1e-9, "standing on the deck, a person's eye height up");
+  const bay = bridgeBay(course.scenery.river, bridge);
+  const across = (p) => ((p[0] - bay.origin[0]) * bay.fwd[0] + (p[2] - bay.origin[2]) * bay.fwd[1]) * bay.e;
+  assert.ok(across(path.eye) > 0 && across(path.eye) < BRIDGE.half - 2, 'on the upstream side of the bridge, back from the parapet');
+  assert.ok(across(path.look) > across(path.eye) + 10, 'looking out over the parapet, through the bay');
   // The club from the road: standing on dry land, eye at a person's height.
   assert.ok(!land.inside(club.eye[0], club.eye[2]), 'on land');
   assert.ok(Math.abs(club.eye[1] - groundAt(course, club.eye[0], club.eye[2]) - 1.7) < 0.01);
@@ -127,16 +131,21 @@ test('the swan on the bridge sits facing you, stands, waddles off one way or the
   }
 });
 
-test("the swan paces the bridge's far parapet, in front of you", async () => {
-  const shots = clubShots(await loop());
+test("the swan paces the viewing bay's paving in front of you, clear of its balustrade", async () => {
+  const course = await loop();
+  const shots = clubShots(course);
   const { eye, look } = shots.places.path;
+  const bay = bridgeBay(course.scenery.river, course.scenery.bridges.find((b) => b.name === 'Caversham Bridge'));
+  const across = (p) => ((p[0] - bay.origin[0]) * bay.fwd[0] + (p[2] - bay.origin[2]) * bay.fwd[1]) * bay.e;
   for (const p of [shots.swan.from, shots.swan.to]) {
-    assert.equal(p[1], PARAPET);
+    assert.ok(Math.abs(p[1] - BRIDGE.deck - 0.14) < 1e-9, 'on the paving');
+    assert.ok(across(p) > across(eye) + 2 && across(p) < BRIDGE.half + BRIDGE.out - 0.6, 'in the bay, clear of its front');
+    assert.ok(Math.abs((p[0] - bay.origin[0]) * bay.right[0] + (p[2] - bay.origin[2]) * bay.right[1] - bay.t) < BRIDGE.bay - 0.6, 'and of its sides');
     const ahead = (p[0] - eye[0]) * (look[0] - eye[0]) + (p[2] - eye[2]) * (look[2] - eye[2]);
     assert.ok(ahead > 0, 'in front of the camera');
   }
   const len = Math.hypot(shots.swan.to[0] - shots.swan.from[0], shots.swan.to[2] - shots.swan.from[2]);
-  assert.ok(len > 3 && len < 8, `${len} m of parapet`);
+  assert.ok(len > 3 && len < 8, `${len} m of paving`);
 });
 
 test('your paddler standing in the changing room has legs to the floor; the swan has legs too', async () => {

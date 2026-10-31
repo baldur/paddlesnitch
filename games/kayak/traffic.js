@@ -89,11 +89,37 @@ function pick(rand) {
   return 'sculler';
 }
 
+// Knocked in (the hired launch rams a sculler or a kayaker: outing.js): the
+// boat goes over and stops where it is, its rower or paddler swims beside it,
+// then rights it, climbs back in and carries on, SWIM seconds later. Only the
+// small boats: an eight's crew of nine stays upright.
+export const SWIM = 10;
+export const TIPPY = ['sculler', 'kayaker'];
+export function knockIn(b, time) {
+  if (!TIPPY.includes(b.kind) || b.swim !== undefined) return false;
+  b.swim = time;
+  return true;
+}
+// How far over a knocked-in boat is (0 upright, 1 upside down) and whether
+// its crew is in the water.
+export function overturned(b, time) {
+  if (b.swim === undefined) return { over: 0, swimming: false };
+  const t = time - b.swim;
+  const over = Math.min(1, t / 0.6) * Math.min(1, (SWIM - t) / 1.2);
+  return { over: Math.max(0, over), swimming: t > 0.3 && t < SWIM - 1.2 };
+}
+
 // Where everything is at race time `time`.
 export function moveTraffic(traffic, time) {
   const { river, k } = traffic;
   for (const b of traffic.boats) {
     const T = TRAFFIC[b.kind];
+    if (b.swim !== undefined) {
+      if (time < b.swim + SWIM) continue; // still in, the boat where it went over
+      // Back in: on from where it stopped, so its timetable is SWIM seconds later.
+      b.at += SWIM;
+      delete b.swim;
+    }
     b.s = b.meet + b.dir * T.speed * k * (time - b.at);
     b.on = (b.behind || time > b.at - BEFORE) && time < b.at + AFTER && b.s > T.length && b.s < river.length - T.length;
     if (!b.on) continue;

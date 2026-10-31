@@ -7,7 +7,7 @@
 // the race). Pure: no DOM; main.js draws the shots and the doors.
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt } from './course.js';
-import { groundAt } from './world.js';
+import { groundAt, bridgeBay, BRIDGE } from './world.js';
 
 // Where each place's doors lead. 'rowing' isn't a place: its door says why not.
 // `up` is where Back goes: the rooms and the pontoon are in the club, the club is off the bridge.
@@ -34,8 +34,11 @@ export function firstPlace({ invited = false, last = null } = {}) {
 // The rooms are built under the club, out of sight of the river: each is a box
 // you stand in, so the sky and the water never show.
 const UNDER = -60;
-export const PARAPET = 7.6; // the top of Caversham Bridge's parapet (world.js: deck 6.5, parapet 1.1)
-export const SWAN_WALK = [6.5, 12.5]; // the stretch of parapet the swan paces, metres along the road from the camera
+// On Caversham Bridge (world.js bridgeBay): standing at the upstream kerb
+// this far back from the parapet, looking out through the viewing bay; the
+// swan paces the bay's paving in front of you, this far either side of its middle.
+export const STANDING = { back: 5.4, eye: 1.75 };
+export const SWAN_WALK = 2.4;
 export const PATH = { height: 9.8, lean: 5.5, aside: 7, back: 11 }; // the eye on Caversham Bridge (how high, how far over the parapet); how far back from the club you stand
 export const HIPS = 0.9; // a standing paddler's hips above the floor (the paddler mesh starts at the hips)
 export const ROOMS = {
@@ -86,28 +89,30 @@ export function clubShots(course) {
   const ds = deck ? deck.s : locate(river, (c.x + r.x) / 2, (c.z + r.z) / 2).s - 200;
   const on = pointAt(river, ds);
   const ahead = pointAt(river, (locate(river, r.x, r.z).s + locate(river, c.x, c.z).s) / 2);
-  // Leaning on the upstream parapet, so the bridge itself is out of the shot.
-  const lean = [on.tx * PATH.lean - on.tz * PATH.aside, 0, on.tz * PATH.lean + on.tx * PATH.aside];
-  const bridge = { eye: [on.x + lean[0], PATH.height, on.z + lean[2]], look: [ahead.x, 5, ahead.z] };
-  // A swan on the bridge's far parapet (the one in view), pacing a few metres of it.
+  // Standing on the upstream pavement, looking out through the viewing bay
+  // towards the clubs, as in Street View (world.js draws the bay).
+  const bay = bridgeBay(river, deck);
+  let bridge;
   let swan = null;
-  if (deck?.ends) {
-    const [a, b] = deck.ends;
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const road = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
-    const across = [-road[1], road[0]];
-    const t = (bridge.eye[0] - a[0]) * road[0] + (bridge.eye[2] - a[1]) * road[1];
-    const o = [a[0] + road[0] * t, a[1] + road[1] * t];
-    const look = [bridge.look[0] - bridge.eye[0], bridge.look[2] - bridge.eye[2]];
-    const side = Math.sign(across[0] * look[0] + across[1] * look[1]) || 1;
-    // Along the road, the stretch of parapet that shows in the lower right.
-    const k = -side * Math.sign(road[0] * look[1] - road[1] * look[0]) || 1;
-    const on = (d) => [o[0] + road[0] * d * k + across[0] * side * 5.75, PARAPET, o[1] + road[1] * d * k + across[1] * side * 5.75];
-    swan = { from: on(SWAN_WALK[0]), to: on(SWAN_WALK[1]) };
-    // Which quarter turn from facing up its stretch faces it towards you.
+  if (bay) {
+    const { deck: d, half } = BRIDGE;
+    const z = bay.e * (half - STANDING.back);
+    const eye = bay.at(bay.t, d + STANDING.eye, z);
+    // Straight out of the bay, level, so the lamps show either side and the
+    // canoe club across the water between them.
+    const out = bay.at(bay.t, 0, bay.e * (half + 60));
+    const look = [out[0], d + 7, out[2]];
+    bridge = { eye, look, wide: 100 }; // wide, as Street View: both lamps and the bay
+    // The swan on the paving in front of you, pacing across the bay (so it
+    // shows above the cards on a phone).
+    const sz = bay.e * (half + BRIDGE.out / 2);
+    swan = { from: bay.at(bay.t - SWAN_WALK, d + 0.14, sz), to: bay.at(bay.t + SWAN_WALK, d + 0.14, sz) };
     const up = [swan.to[0] - swan.from[0], swan.to[2] - swan.from[2]];
-    const toYou = [bridge.eye[0] - swan.from[0], bridge.eye[2] - swan.from[2]];
+    const toYou = [eye[0] - swan.from[0], eye[2] - swan.from[2]];
     swan.side = Math.sign(-up[1] * toYou[0] + up[0] * toYou[1]) || 1;
+  } else {
+    const lean = [on.tx * PATH.lean - on.tz * PATH.aside, 0, on.tz * PATH.lean + on.tx * PATH.aside];
+    bridge = { eye: [on.x + lean[0], PATH.height, on.z + lean[2]], look: [ahead.x, 5, ahead.z] };
   }
   // The club from the road: on its land side, looking at the door.
   const entrance = at(...add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back)).filter((_, i) => i !== 1), 1.7);
@@ -163,9 +168,13 @@ const RACK = Array.from({ length: 9 }, (_, i) => {
 });
 
 // A camera part of the way from one shot to the next (t 0..1, eased at both ends).
+export const WIDE = 75; // the game's least horizontal view, degrees (main.js MIN_FOV_X)
 export function glide(a, b, t) {
   const k = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
-  return { eye: a.eye.map((v, i) => v + (b.eye[i] - v) * k), look: a.look.map((v, i) => v + (b.look[i] - v) * k) };
+  const shot = { eye: a.eye.map((v, i) => v + (b.eye[i] - v) * k), look: a.look.map((v, i) => v + (b.look[i] - v) * k) };
+  // A shot can ask for a wider view (`wide`: the least horizontal angle, degrees).
+  if (a.wide || b.wide) shot.wide = (a.wide ?? WIDE) + ((b.wide ?? WIDE) - (a.wide ?? WIDE)) * k;
+  return shot;
 }
 
 const C = {
@@ -351,7 +360,7 @@ export function bridgeSwanMesh() {
 
 // The swan's legs, for standing: dark grey, under its body, `SWAN_LEGS` tall.
 export const SWAN_LEGS = 0.26;
-export const SWAN_SIZE = 1.7; // the bridge swan, larger than life so it shows from the deck
+export const SWAN_SIZE = 1.1; // the bridge swan, a touch larger than life
 export function swanLegsMesh() {
   const m = new MeshBuilder();
   const leg = [0.12, 0.12, 0.13];

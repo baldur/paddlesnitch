@@ -6,7 +6,7 @@
 // An outing is a race with no rivals whose one boat moves by these rules
 // instead of paddling. Pure: no DOM.
 import { pointAt, locate, widthAt } from './course.js';
-import { createTraffic, moveTraffic, trafficHits } from './traffic.js';
+import { createTraffic, moveTraffic, trafficHits, knockIn } from './traffic.js';
 import { stepBirds } from './birds.js';
 import { bounceOffShore, wrap } from './sim.js';
 import { MeshBuilder } from './meshes.js';
@@ -25,7 +25,8 @@ export const CRUISE = { speed: 2.2, keepRight: 0.3, ahead: 30, look: 1.4, lookRa
 // which goes anywhere, has boats up and down the whole river, a new one about
 // every `ambient` seconds (some 20 on the water at once).
 export const BUSY = { gap: 35, ambient: 5, hours: 2 };
-export const HIRE = { top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, bump: 0.3 };
+// knock: the speed (m/s) a sculler or kayaker rammed at least this hard goes in.
+export const HIRE = { top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, bump: 0.3, knock: 0.5 };
 
 // Puts the race's one boat at the pier (`s` along the river line, upstream of
 // Caversham Bridge) on the right of the river going up, and starts the outing,
@@ -71,7 +72,8 @@ function keepRight(river, s, shore) {
 // One step of an outing. `input`: `turn` -1 (left) to 1 (right) and `throttle`
 // -1 (astern) to 1 (ahead). On the cruise, turn looks about. Returns events:
 // 'end' (the cruise reached Mapledurham), 'bump' (the launch hit a boat or the
-// bank), 'swan' (a swan wouldn't move).
+// bank), 'tipped-sculler' or 'tipped-kayaker' (and knocked them in), 'swan' (a
+// swan wouldn't move).
 export function stepOuting(race, dt, input = {}) {
   const o = race.outing;
   const me = race.player;
@@ -116,10 +118,14 @@ export function stepOuting(race, dt, input = {}) {
     b.z -= Math.cos(b.heading) * b.speed * k * dt;
     if (race.course.shore && bounceOffShore(b, race.course.shore, dt)) events.push('bump');
     if (race.traffic) {
-      for (const _ of trafficHits(race.traffic, [me])) {
+      for (const hit of trafficHits(race.traffic, [me])) {
+        // A sculler or a kayaker goes in; anything bigger, you bounce off.
+        if (Math.abs(b.speed) > HIRE.knock && knockIn(hit.boat, race.time)) events.push(`tipped-${hit.boat.kind}`);
         b.speed = -HIRE.bump;
         events.push('bump');
       }
+      // Clear of a boat you bumped, it's solid again (a race's boats tip you in once only).
+      for (const t of race.traffic.boats) if (t.hit.length && Math.hypot(t.x - b.x, t.z - b.z) > 10) t.hit.length = 0;
     }
     // Swans won't get out of your way: you stop.
     for (const _ of stepBirds(race.birds, [me], race.course, dt)) {

@@ -12,8 +12,8 @@ import { encodeState, decodeState, createTrack, receive, sample, applyState, SEN
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, startOuting, stepOuting, tripBoatMesh, launchMesh } from './outing.js';
-import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf } from './meshes.js';
-import { TRAFFIC } from './traffic.js';
+import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf } from './meshes.js';
+import { TRAFFIC, overturned } from './traffic.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
@@ -589,6 +589,10 @@ function outingStep(dt) {
       setTimeout(() => { if (race.outing && state === 'racing') toMenu(); }, 4500);
     }
     if (e === 'bump') noise({ freq: 160, to: 90, q: 2, duration: 0.25, gain: 0.12, type: 'lowpass' });
+    if (e.startsWith('tipped-')) {
+      noise({ freq: 900, to: 200, q: 0.7, duration: 0.6, gain: 0.2, type: 'lowpass' }); // the splash
+      show(e === 'tipped-kayaker' ? 'You knocked a kayaker in!' : 'You knocked a rower in!', { small: true, hold: 2 });
+    }
     if (e === 'swan') {
       outingLever = 0;
       showOutingBar();
@@ -1430,10 +1434,26 @@ function placeTraffic() {
   const where = Object.fromEntries(Object.keys(TRAFFIC).map((k) => [k, []]));
   const oars = [];
   const paddles = [];
+  const swimmers = [];
   for (const b of race.traffic?.boats ?? []) {
     if (!b.on) continue;
     const f = [Math.sin(b.heading), 0, -Math.cos(b.heading)];
-    const model = basis([-f[2], 0, f[0]], [0, 1, 0], f.map((v) => -v), [b.x, 0.03 * Math.sin(race.time * 1.3 + b.phase), b.z]);
+    const bob = 0.03 * Math.sin(race.time * 1.3 + b.phase);
+    // Knocked in by the launch: rolled over, the crew swimming alongside.
+    const { over, swimming } = overturned(b, race.time);
+    if (over > 0) {
+      const a = over * Math.PI;
+      const right = [-f[2], 0, f[0]];
+      const r = right.map((v) => v * Math.cos(a)).map((v, i) => v + [0, Math.sin(a), 0][i]);
+      const u = right.map((v) => -v * Math.sin(a)).map((v, i) => v + [0, Math.cos(a), 0][i]);
+      where[b.kind].push(basis(r, u, f.map((v) => -v), [b.x, bob - 0.12 * over, b.z]));
+      if (swimming) {
+        const side = 0.75 + TRAFFIC[b.kind].hull;
+        swimmers.push(basis(f, [0, 1, 0], right, [b.x + right[0] * side, bob, b.z + right[2] * side]));
+      }
+      continue;
+    }
+    const model = basis([-f[2], 0, f[0]], [0, 1, 0], f.map((v) => -v), [b.x, bob, b.z]);
     where[b.kind].push(model);
     // A kayaker's paddle swings from side to side, about a stroke a second each side.
     if (b.kind === 'kayaker') {
@@ -1453,6 +1473,7 @@ function placeTraffic() {
   for (const [kind, list] of Object.entries(where)) renderer.place(meshes.traffic[kind], list);
   renderer.place(meshes.oar, oars);
   renderer.place(meshes.trafficPaddle, paddles);
+  renderer.place(meshes.swimmer, swimmers);
 }
 
 // A motorboat's engine: a low rumble, louder as it comes by.
@@ -1570,7 +1591,8 @@ function render(time) {
   }
   // Portrait screens widen the vertical view so the horizontal one stays usable.
   const aspect = renderer.aspect;
-  const tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(MIN_FOV_X / 2) / aspect);
+  const minX = shot?.wide ? (shot.wide * Math.PI) / 180 : MIN_FOV_X;
+  const tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(minX / 2) / aspect);
   const proj = perspective(2 * Math.atan(tanY), aspect, 0.05, 2500);
 
   viewProj = multiply(proj, view(eye, right, up, fwd));
@@ -1606,7 +1628,7 @@ function render(time) {
     list.push(r === race.player && race.outing ? meshes.outing[race.outing.kind] : kayakFor(r));
     if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
-  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle);
+  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle, meshes.swimmer);
   if (shot) list.push(...placeClub());
   renderer.draw(frameData, list);
   if (shot) placeDoors();
@@ -1982,6 +2004,7 @@ try {
     traffic: { sculler: renderer.createMesh(scullerMesh(), 24), kayaker: renderer.createMesh(kayakerMesh(), 24), eight: renderer.createMesh(eightMesh(), 24), cruiser: renderer.createMesh(cruiserMesh(), 24), motorboat: renderer.createMesh(motorboatMesh(), 24) },
     oar: renderer.createMesh(oarMesh(), 256),
     trafficPaddle: renderer.createMesh(paddleMesh(RIVAL_PADDLE), 24),
+    swimmer: renderer.createMesh(swimmerMesh(), 24),
     kayaks: new Map(),
     swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
     duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),

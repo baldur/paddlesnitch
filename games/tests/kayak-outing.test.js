@@ -7,6 +7,7 @@ import { courseFromFile, locate } from '../kayak/course.js';
 import { waterMap } from '../kayak/water.js';
 import { createRace } from '../kayak/race.js';
 import { OUTINGS, CRUISE, HIRE, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh } from '../kayak/outing.js';
+import { SWIM, moveTraffic, overturned } from '../kayak/traffic.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
 const DT = 1 / 60;
@@ -98,6 +99,46 @@ test('outings are busier than a race: the cruise meets a boat about every half m
   assert.ok(on.length >= 10, `${on.length} boats on the river at the start`);
   assert.ok(new Set(on.map((b) => b.kind)).size >= 3, 'of different kinds');
   assert.ok(on.some((b) => b.kind === 'kayaker') || hire.traffic.boats.some((b) => b.kind === 'kayaker'), 'kayakers among them');
+});
+
+// The launch lined up `off` metres from a boat of `kind`'s beam, coming at it at `speed`.
+async function ram(kind, speed, off = 8) {
+  const { race } = await outing('hire');
+  race.course.shore = null;
+  const t = race.traffic.boats.find((x) => x.kind === kind && x.at > 60);
+  race.time = t.at;
+  race.traffic.boats = [t];
+  moveTraffic(race.traffic, race.time);
+  const b = race.player.boat;
+  const side = [Math.cos(t.heading), Math.sin(t.heading)]; // the boat's right
+  Object.assign(b, { x: t.x + side[0] * off, z: t.z + side[1] * off, speed, heading: t.heading - Math.PI / 2 });
+  const events = [];
+  for (let i = 0; i < 300 && !events.includes('bump'); i++) events.push(...stepOuting(race, DT, { throttle: speed / HIRE.top }));
+  return { race, t, events };
+}
+
+test('ram a sculler or a kayaker with the launch and they fall in, swim by the upturned boat, then carry on', async () => {
+  for (const kind of ['sculler', 'kayaker']) {
+    const { race, t, events } = await ram(kind, HIRE.top);
+    assert.ok(events.includes(`tipped-${kind}`), `${kind}: ${events}`);
+    const at = [t.x, t.z];
+    for (let s = 0; s < SWIM / 2; s += DT) stepOuting(race, DT, {});
+    assert.deepEqual([t.x, t.z], at, 'the boat stays where it went over');
+    assert.equal(overturned(t, race.time).over, 1, 'upside down');
+    assert.ok(overturned(t, race.time).swimming, 'and its crew in the water');
+    for (let s = 0; s < SWIM; s += DT) stepOuting(race, DT, {});
+    assert.equal(overturned(t, race.time).over, 0, 'righted');
+    assert.ok(Math.hypot(t.x - at[0], t.z - at[1]) > 1, 'and on its way again');
+  }
+});
+
+test("an eight, a cruiser or a motorboat doesn't go over, and nobody does at a crawl", async () => {
+  for (const kind of ['eight', 'cruiser', 'motorboat']) {
+    const { events } = await ram(kind, HIRE.top);
+    assert.ok(events.includes('bump') && !events.some((e) => e.startsWith('tipped')), `${kind}: ${events}`);
+  }
+  const { events } = await ram('sculler', HIRE.knock * 0.8, 2.6);
+  assert.ok(events.includes('bump') && !events.some((e) => e.startsWith('tipped')), `slow: ${events}`);
 });
 
 test("the boats you're on are small meshes with no NaN", () => {

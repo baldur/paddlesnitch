@@ -510,6 +510,19 @@ export function kayakerMesh({ deck = [0.15, 0.45, 0.75], hull = [0.92, 0.92, 0.9
   return { vertices, count: boat.count + body.count + arms.count };
 }
 
+// Someone swimming beside their upturned boat: head and shoulders out of the
+// water (y 0 is the surface), an arm over the hull's edge, facing -z.
+export function swimmerMesh({ skin = [0.82, 0.62, 0.48], top = [0.2, 0.35, 0.75], cap = [0.95, 0.95, 0.95] } = {}) {
+  const m = new MeshBuilder();
+  m.box([-0.2, -0.12, -0.1], [0.2, 0.06, 0.1], top);
+  m.cylinder([0, 0.04, 0], 0.05, 0.1, 6, skin);
+  m.sphere([0, 0.22, -0.01], 0.105, skin, 4, 8);
+  m.sphere([0, 0.26, 0.0], 0.1, cap, 3, 8);
+  m.box([0.06, 0.0, -0.3], [0.17, 0.08, -0.08], top); // an arm reaching for the boat
+  m.box([0.07, 0.02, -0.5], [0.16, 0.09, -0.3], skin);
+  return m.build();
+}
+
 // One oar along +z, from the rowlock (z 0) to the blade tip (z 1); x and y in
 // metres, so stretching it along z keeps the blade's size.
 export function oarMesh() {
