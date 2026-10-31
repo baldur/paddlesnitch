@@ -179,7 +179,11 @@ async function play(c, page, errors) {
     const kinds = sent.map((e) => e.event);
     for (const want of ['pageview', 'game_kit', 'game_session']) if (!kinds.includes(want)) errors.push(`no ${want} event (sent ${kinds.join(', ')})`);
     const session = sent.find((e) => e.event === 'game_session');
-    if (session && !(Number(session.props.secs) > 3 && session.props.places.includes('path'))) errors.push(`game_session says ${JSON.stringify(session.props)}`);
+    if (session && !(Number(session.props.secs) > 3 && session.props.places.includes('path') && session.props.from === 'walk' && session.props.plays === '1')) errors.push(`game_session says ${JSON.stringify(session.props)}`);
+    if (kinds.filter((k) => k === 'game_kit').length !== 1) errors.push(`game_kit sent ${kinds.filter((k) => k === 'game_kit').length} times`);
+    // Closing the page mid-outing still reports the play, ended 'closed', with how far it went.
+    const closed = await page.evaluate(() => { dispatchEvent(new Event('pagehide')); return window.gameMetrics.sent.flatMap((b) => b.events).find((e) => e.event === 'game_play'); });
+    if (!(closed?.props.end === 'closed' && closed.props.mode === 'outing' && Number(closed.props.km) > 0)) errors.push(`closing the page reported ${JSON.stringify(closed?.props)}`);
   }
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
 }

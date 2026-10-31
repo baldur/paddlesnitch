@@ -33,7 +33,7 @@ export function playEvent(play, how) {
   };
   if (place) props.place = String(place);
   if (play.mode === 'outing') {
-    Object.assign(props, { knocked: String(play.knocked), bumps: String(play.bumps), km: (play.metres / 1000).toFixed(1) });
+    Object.assign(props, { knocked: String(play.knocked), bumps: String(play.bumps), km: (play.metres / 1000).toFixed(2) });
   }
   return { event: 'game_play', props };
 }

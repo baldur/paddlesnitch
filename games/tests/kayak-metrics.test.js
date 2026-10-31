@@ -38,7 +38,7 @@ test('an outing reports exploring or mischief: how far, how many bumps, how many
   const e = playEvent(play, { end: 'quit', now: 300 });
   assert.equal(e.props.knocked, '2');
   assert.equal(e.props.bumps, '5');
-  assert.equal(e.props.km, '3.5');
+  assert.equal(e.props.km, '3.46');
   assert.equal(e.props.end, 'quit');
   fits(e);
 });
@@ -92,7 +92,7 @@ async function page(hostname = 'localhost') {
     navigator: { sendBeacon: (url, body) => beacons.push({ url, body: JSON.parse(body) }) },
     document: { visibilityState: 'visible', addEventListener: (t, fn) => (listeners[t] = fn) },
     addEventListener: (t, fn) => (listeners[t] = fn),
-    setInterval: () => 0,
+    setInterval: (fn) => { listeners.interval = fn; return 0; },
   };
   win.window = win;
   vm.runInNewContext(await readFile(new URL('../shared/analytics.js', import.meta.url), 'utf8'), win);
@@ -124,4 +124,22 @@ test('the sender never sends more than 20 events at once, and off the real site 
   assert.equal(beacons.length, 0, 'nothing leaves a local copy');
   assert.ok(win.gameMetrics.sent.every((b) => b.events.length <= 20));
   assert.equal(win.gameMetrics.sent.reduce((n, b) => n + b.events.length, 0), 46, 'the pageview and all 45');
+});
+
+test('the sender also goes once a minute while something waits, and when the page is left; showing the page again sends nothing', async () => {
+  const { win, listeners, beacons } = await page('paddlesnitch.com');
+  const sent = () => beacons.length;
+  const before = sent();
+  listeners.interval();
+  assert.equal(sent(), before, 'nothing waiting: nothing sent');
+  win.gameMetrics.track('game_play', { mode: 'race' });
+  listeners.interval();
+  assert.equal(sent(), before + 1, 'once a minute with something waiting');
+  win.gameMetrics.track('game_play', { mode: 'trial' });
+  win.document.visibilityState = 'visible';
+  listeners.visibilitychange();
+  assert.equal(sent(), before + 1, 'coming back into view sends nothing');
+  listeners.pagehide();
+  assert.equal(sent(), before + 2, 'leaving the page sends what waits');
+  assert.equal(beacons.at(-1).body.events[0].props.mode, 'trial');
 });

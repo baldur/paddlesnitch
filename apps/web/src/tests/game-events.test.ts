@@ -14,7 +14,7 @@ const kept = (e: Ev) => {
 }
 
 describe("the kayak game's analytics events pass the server's rules untouched", () => {
-  it('every way a play can go: each kind, course, ending and where it was picked', async () => {
+  it('every way a play can go: each kind, course, ending, and how the visit began (the walk or the menu)', async () => {
     const { beginPlay, playEvent } = await import('../../../../games/kayak/metrics.js')
     type Case = { mode: { key: string; solo?: boolean; drill?: string; outing?: string }; o: { format?: string; live?: boolean } }
     const modes: Case[] = [
