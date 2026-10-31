@@ -14,6 +14,7 @@ struct Frame {
   boats: array<vec4f, 16>, // x, z, heading, speed: for their wakes
   river: vec4f,      // the river where you are: centre x, z and direction x, z
   banks: vec4f,      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
+  spots: array<vec4f, 3>, // x, z, heading, how bright: the free places in the wash ahead of you
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -186,6 +187,25 @@ fn wake(p: vec2f) -> vec2f {
   return out;
 }
 
+// The free places in the wash ahead of you (race.js washSlots): a faint
+// outline of a kayak on the water where you'd sit. 0..1.
+fn spots(p: vec2f) -> f32 {
+  var out = 0.0;
+  for (var i = 0u; i < 3u; i++) {
+    let s = frame.spots[i];
+    if (s.w <= 0.0) { continue; }
+    let f = vec2f(sin(s.z), -cos(s.z));
+    let d = p - s.xy;
+    let along = dot(d, f) - 0.7; // the hull's middle is 0.7 m ahead of the boat's origin
+    let lat = d.x * -f.y + d.y * f.x;
+    let e = length(vec2f(along / 2.7, lat / 0.6));
+    let ring = smoothstep(0.74, 0.88, e) * (1.0 - smoothstep(0.98, 1.12, e));
+    let fill = 1.0 - smoothstep(0.85, 1.0, e);
+    out = max(out, s.w * (ring + fill * 0.25));
+  }
+  return out;
+}
+
 // The riverside trees seen in the water. The reflected ray is followed across
 // the river (taken as straight from where you are) to the line of trees on the
 // bank it's heading for: if it meets them below their tops, it sees leaves.
@@ -232,6 +252,7 @@ fn treeline(p: vec2f, refl: vec3f) -> f32 {
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;
   let foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2f(13.0, 9.0)) + t * 6.0));
   c = mix(c, vec3f(0.85, 0.9, 0.9), foam * 0.45);
+  c = mix(c, vec3f(0.85, 0.97, 1.0), clamp(spots(p), 0.0, 1.0) * 0.7);
   return vec4f(fog(c, dist), 1.0);
 }
 `;
