@@ -13,6 +13,8 @@ public final class RecordingFiles: RecordingSink {
     public let log: URL
     /// The first write that failed (a full phone); later lines are skipped.
     public private(set) var failure: Error?
+    /// Lines that couldn't be written: the failed one and every one after.
+    public private(set) var failedLines = 0
     /// Whether the last row the core wrote had a usable fix (its `fix`
     /// column), so the screen says what the file says.
     public private(set) var lastRowHasFix = false
@@ -39,7 +41,10 @@ public final class RecordingFiles: RecordingSink {
     }
 
     public func write(_ line: Data, to stream: RecordingStream) {
-        guard failure == nil else { return }
+        guard failure == nil else {
+            failedLines += 1
+            return
+        }
         do {
             switch stream {
             case .track:
@@ -51,15 +56,18 @@ public final class RecordingFiles: RecordingSink {
             }
         } catch {
             failure = error
+            failedLines += 1
         }
     }
 
-    /// Call after `PhoneRecorder.finish()`. The counts go in `log`: a rising
-    /// count means events were held too long or a sensor stopped.
+    /// Call after `PhoneRecorder.finish()`. The counts go in `log`, three
+    /// lines as Android writes them: a rising drop count means events were
+    /// held too long or a sensor stopped; failed lines, that the phone was full.
     public func close(droppedLate: UInt32, droppedUnpaired: UInt32) throws {
         try trackHandle.close()
         try motionHandle.close()
-        let text = "dropped_late,\(droppedLate)\ndropped_unpaired,\(droppedUnpaired)\n"
+        let text =
+            "dropped_late,\(droppedLate)\ndropped_unpaired,\(droppedUnpaired)\nfailed_lines,\(failedLines)\n"
         try Data(text.utf8).write(to: log, options: Self.logOptions)
     }
 

@@ -123,7 +123,9 @@ struct RecordingFilesTests {
         #expect(motion == "ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n")
         recorder.finish()
         try files.close(droppedLate: 2, droppedUnpaired: 1)
-        #expect(try String(contentsOf: files.log, encoding: .utf8) == "dropped_late,2\ndropped_unpaired,1\n")
+        #expect(
+            try String(contentsOf: files.log, encoding: .utf8) == "dropped_late,2\ndropped_unpaired,1\nfailed_lines,0\n"
+        )
     }
 
     @Test func aSecondRecordingInTheSameSecondGetsTheTrackersSuffix() throws {
@@ -192,5 +194,6 @@ struct FinishingTests {
         #expect(files.failure != nil)
         files.write(Data("y\n".utf8), to: .motion)  // skipped, no crash
         #expect(try Data(contentsOf: files.motion).isEmpty)
+        #expect(files.failedLines == 2, "the failed line and the one skipped after it")
     }
 }
