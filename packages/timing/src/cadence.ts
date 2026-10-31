@@ -108,10 +108,11 @@ export function replayStrokeLines(trackCsv: string, motionCsv: string): string[]
   return out.join('').split('\n').filter(Boolean)
 }
 
-const REASONS: Record<string, (hz: number, windows: number) => string> = {
+/** What each of the core's reasons (recorder_core.h, "reason:") says; cadence.test.ts checks every one has words. */
+export const STROKE_RATE_REASONS: Record<string, (hz: number, windows: number) => string> = {
   ok: (hz, n) => `Derived from ${n} window${n === 1 ? '' : 's'} of ${WINDOW_S}s at ${Math.round(hz)} Hz.`,
   too_few_samples: () => 'Motion file has too few samples to derive cadence.',
-  too_slow: hz => `Motion data is sampled at ${hz.toFixed(1)} Hz — too slow for a 0.5–2 Hz stroke.`,
+  too_slow: hz => `Motion data is sampled at ${hz > 0 ? hz.toFixed(1) : '?'} Hz — too slow for a 0.5–2 Hz stroke.`,
   no_rhythm: () => 'No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.',
 }
 
@@ -149,7 +150,8 @@ export function recordingStrokeRate(trackCsv: string, motionCsv: string): Record
     const median = Number(s[5])
     const report: CadenceReport = {
       available,
-      reason: (REASONS[s[3]] ?? (() => s[3]))(hz, Number(s[4])),
+      // A reason this code doesn't know yet (a newer core) gets plain words, never the raw code.
+      reason: (STROKE_RATE_REASONS[s[3]] ?? (() => "Couldn't work out a stroke rate from this motion file."))(hz, Number(s[4])),
       sampleRateHz: hz > 0 ? hz : null,
       rows,
       medianStrokesPerMin: available ? median : null,

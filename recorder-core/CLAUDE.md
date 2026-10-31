@@ -240,3 +240,10 @@ are byte-identical. Two differences, both from the replay rather than the core:
 - macOS `make` compares timestamps to the second: restoring a file within the
   same second as a build leaves a stale binary. `make clean` before trusting
   a mutation test.
+- The `tester` review of phase 2b (2026-10-31) found that a CR LF track whose
+  speed is the last column lost its moving gate: the header's last cell
+  ended in CR (the old TypeScript trimmed it). Real headers put speed in
+  the middle, so only a hand-made track hit it. Replay tests now cover
+  every column position for CR LF, not only the core's own layout. Also:
+  `rc_replay` reads files in the order they're written and never sorts them
+  (header). The old server sorted, and nothing needs it.

@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
-  recordingStrokeRate, replayStrokeLines, decimateMotionCsv, parseMotionCsv, trackClockOffset, withStrokeRate,
+  recordingStrokeRate, replayStrokeLines, decimateMotionCsv, STROKE_RATE_REASONS, parseMotionCsv, trackClockOffset, withStrokeRate,
 } from '@paddlesnitch/timing/cadence'
 import { movingRangesFromTrack } from '@paddlesnitch/timing/attitude'
 import { addStrokeRate } from '@paddlesnitch/analysis/device-sessions'
@@ -97,6 +97,28 @@ describe('stroke rate for a recording', () => {
 
   it('refuses a motion file with too few samples', () => {
     expect(ungated(sidecar({ seconds: 5, hz: 10, strokesPerMin: 56 })).reason).toBe('Motion file has too few samples to derive cadence.')
+  })
+
+  it("has words for every reason the core gives, never the raw code", () => {
+    const header = readFileSync(path.join(CORE, 'include/recorder_core.h'), 'utf8')
+    const listed = /\* reason: ([a-z_, ]+)\./.exec(header)?.[1].split(', ')
+    expect(listed).toEqual(['ok', 'too_few_samples', 'too_slow', 'no_rhythm'])
+    for (const r of listed!) expect(STROKE_RATE_REASONS[r]).toBeDefined()
+  })
+
+  it("says the rate is unknown when a motion file's clock never moves forward", () => {
+    // Lines written backwards: the core reads files as they come (recorder_core.h, rc_replay).
+    const [head, ...rows] = sidecar({ seconds: 60, hz: 10, strokesPerMin: 56 }).split('\n')
+    const r = ungated([head, ...rows.reverse()].join('\n'))
+    expect(r.available).toBe(false)
+    expect(r.reason).toBe('Motion data is sampled at ? Hz — too slow for a 0.5–2 Hz stroke.')
+  })
+
+  it('reads a CR LF track whose speed is the last column', () => {
+    const motion = sidecar({ seconds: 180, hz: 10, strokesPerMin: 56 })
+    const lf = recordingStrokeRate(track([180, 9]), motion).moving.report
+    expect(lf.available).toBe(true)
+    expect(recordingStrokeRate(track([180, 9]).replace(/\n/g, '\r\n'), motion.replace(/\n/g, '\r\n')).moving.report).toEqual(lf)
   })
 
   it('counts only windows where the track says the boat was moving', () => {

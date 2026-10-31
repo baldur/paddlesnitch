@@ -283,7 +283,9 @@ void rc_finish(rc_state *rc);
  * and the motion CSV, whole) and writes only RC_STROKE, exactly as the device
  * did. Lines are merged by ms, motion first on a tie (CALL ORDER). Columns
  * are found by name in the track's header, so older trackers' files work.
- * `rc` is scratch space; cfg->has is ignored.
+ * Each file must be in time order, as every recorder writes it: lines are
+ * read as they come, never sorted (a file written backwards reads as a
+ * stopped clock, too_slow). `rc` is scratch space; cfg->has is ignored.
  */
 void rc_replay(rc_state *rc, const rc_config *cfg,
                const char *track, size_t track_len,
