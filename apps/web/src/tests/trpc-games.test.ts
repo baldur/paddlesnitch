@@ -40,7 +40,7 @@ describe('your paddler and boat', () => {
   it('takes the paddler kit without the old head (body, hair, hat, beard, buoyancy aid), and an old kit still', async () => {
     const { head: _h, headColour: _c, ...rest } = KIT
     const NEW = {
-      ...rest, body: 'woman', hair: 'ponytail', hairColour: '#3b2414', hat: 'visor', hatColour: '#f5f5f4',
+      ...rest, body: 'curvy', hair: 'ponytail', hairColour: '#3b2414', hat: 'visor', hatColour: '#f5f5f4',
       beard: 'none', aid: true, aidColour: '#dc2626',
     } as const
     await as(PAT).games.kit.set(NEW)

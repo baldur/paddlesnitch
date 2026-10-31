@@ -76,7 +76,7 @@ export async function getLeaderboard(course: GameCourse, userId?: string) {
 
 export type GameKit = {
   skin: string; sleeves: 'short' | 'long'; top: string
-  body?: 'man' | 'woman'
+  body?: 'broad' | 'slim' | 'curvy'
   hair?: 'short' | 'crop' | 'ponytail' | 'bun' | 'long' | 'none'; hairColour?: string
   hat?: 'none' | 'cap' | 'visor' | 'beanie'; hatColour?: string
   beard?: 'none' | 'stubble' | 'moustache' | 'beard'
