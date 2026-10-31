@@ -613,6 +613,94 @@ export function wash(boat, other) {
   };
 }
 
+// The places to sit in a boat's wash, measured from it (metres behind its
+// middle, and to its right): its two hips, where `wash` gives most, then
+// tucked in behind its stern. Taken in turn they make a pack's shape: the
+// two hips make a V, the stern between them a diamond, and the next boats
+// take the hips of the hips, widening the V.
+export const SLOTS = [
+  { back: 4.2, across: -1.4 },
+  { back: 4.2, across: 1.4 },
+  { back: 6.3, across: 0 },
+];
+
+// The free places in the washes of the boats ahead of racer `r`, within
+// `reach` metres of it, nearest first: { host, slot (index into SLOTS), s,
+// lateral (along and across the course), x, z, heading, gap (metres along to
+// it: less than 0 when it's behind `r`) }. A place is taken when another boat
+// sits in it; a boat hanging on `r` isn't offered (no going round in a ring).
+// Only boats under way leave a wash worth sitting in.
+export function washSlots(race, r, reach = 20) {
+  const out = [];
+  const { loc } = r;
+  for (const host of race.racers) {
+    if (host === r || host.boat.swim > 0 || host.portage || host.finish !== null || host.boat.speed < 1.5) continue;
+    if (host.ai?.slot?.host === r) continue;
+    const ahead = host.loc.s - loc.s;
+    if (ahead < 1 || ahead > reach + 7 || Math.abs(host.loc.lateral - loc.lateral) > 8) continue;
+    const f = [Math.sin(host.boat.heading), -Math.cos(host.boat.heading)];
+    SLOTS.forEach(({ back, across }, slot) => {
+      const s = host.loc.s - back;
+      const lateral = host.loc.lateral + across;
+      const gap = s - loc.s;
+      if (gap > reach || gap < -4) return;
+      const taken = race.racers.some((o) => o !== r && o !== host && !o.portage && o.boat.swim <= 0
+        && Math.abs(o.loc.s - s) < 2 && Math.abs(o.loc.lateral - lateral) < 0.9);
+      if (taken) return;
+      out.push({
+        host, slot, s, lateral, gap, heading: host.boat.heading,
+        x: host.boat.x - f[0] * back - f[1] * across,
+        z: host.boat.z - f[1] * back + f[0] * across,
+      });
+    });
+  }
+  const cost = (p) => Math.abs(p.gap) + 1.5 * Math.abs(p.lateral - loc.lateral);
+  return out.sort((a, b) => cost(a) - cost(b));
+}
+
+// What the water shows racer `r` (you): up to three free places in the wash
+// ahead, as [x, z, heading, brightness]. Only places a rival could take too
+// (`placeFits`): a mark is an invitation. Full out to 20 m and gone at 30 (the
+// low camera already shrinks them with distance), softer under 5 m so they
+// don't drown the boats, and dim while you ride the wash of the nearest one
+// (when "On the wash" shows). None before the start, on an outing, off the
+// water or once you've finished.
+export function washMarks(race, r) {
+  if (race.outing || !started(race) || r.finish !== null || r.portage || r.boat.swim > 0) return [];
+  const boats = race.traffic ? trafficNear(race.traffic, r, race.course) : [];
+  return washSlots(race, r, 30).filter((p) => placeFits(race, p, boats)).slice(0, 3).map((p, i) => {
+    const near = Math.hypot(p.x - r.boat.x, p.z - r.boat.z);
+    if (i === 0 && r.draft > 0.3 && near < 3) return [p.x, p.z, p.heading, 0.2];
+    const fade = 1 - Math.min(1, Math.max(0, (p.gap - 20) / 10));
+    const close = 0.5 + 0.4 * Math.min(1, Math.max(0, (near - 2) / 3));
+    return [p.x, p.z, p.heading, close * fade];
+  }).filter((m) => m[3] > 0.02);
+}
+
+// Whether a place in a wash is one a boat may sit in: clear of the banks
+// and of the river's boats about to pass (`boats`, from trafficNear), and on
+// water used both ways no more than a hip's width left of the keep-right line
+// (see think).
+export function placeFits(race, p, boats) {
+  const { course } = race;
+  if (boats.some((b) => Math.abs(p.lateral - b.lateral) < b.out + 1.5)) return false;
+  const room = widthAt(course, p.s);
+  if (p.lateral < -(room.left - 2.2) || p.lateral > room.right - 2.2) return false;
+  return !course.samples[p.host.loc.i]?.shared || p.lateral >= Math.min(room.right * 0.4, 8) - 1.5;
+}
+
+// A rival's place in a pack: the one it had while that's still free and in
+// reach, else the nearest free one (within 14 m ahead, 6 across), else none.
+// `boats`: the river's boats about to pass (trafficNear): no place in their way.
+function pickSlot(r, race, boats = []) {
+  const { ai, loc } = r;
+  const free = washSlots(race, r, 14).filter((p) => Math.abs(p.lateral - loc.lateral) < 6 && placeFits(race, p, boats));
+  const kept = ai.slot && free.find((p) => p.host === ai.slot.host && p.slot === ai.slot.slot);
+  const p = kept ?? free[0] ?? null;
+  ai.slot = p && { host: p.host, slot: p.slot, back: SLOTS[p.slot].back, across: SLOTS[p.slot].across };
+  return ai.slot;
+}
+
 function totalWash(r, racers) {
   let draft = 0;
   let rock = 0;
@@ -672,24 +760,26 @@ function think(r, race) {
   else if (togo < ai.kick * k && boat.stamina > 0) cadence = sprint(0.92);
   else if (loc.s < race.start.line + 100 * k) cadence = boat.stamina > 0.5 ? sprint(0.9) : cadence * 0.93; // for a place on a wash
 
-  // Find the wash to sit on: the nearest boat just ahead, if it isn't too slow.
-  let leader = null;
-  for (const o of racers) {
-    if (o === r || o.boat.swim > 0) continue;
-    const gap = o.loc.s - loc.s;
-    if (gap > 1.5 && gap < 14 && Math.abs(o.loc.lateral - loc.lateral) < 6 && (!leader || gap < leader.loc.s - loc.s)) leader = o;
-  }
+  // Find a wash to sit on: the nearest free place in a pack (a boat's hip or
+  // its stern; see washSlots), if that boat isn't too slow.
+  const boatsNear = race.traffic ? trafficNear(race.traffic, r, course) : [];
+  const slot = pickSlot(r, race, boatsNear);
+  const leader = slot?.host ?? null;
   const kicking = togo < ai.kick * k && r.finish === null;
   // No wash to sit on, but one a little way up the river: sprint up to it.
   if (!leader && !kicking && r.finish === null && boat.stamina > 0.6 && racers.some((o) => o !== r && o.boat.swim <= 0
     && o.loc.s - loc.s > 14 && o.loc.s - loc.s < 40 && Math.abs(o.loc.lateral - loc.lateral) < 8)) cadence = sprint(0.9);
   const tooSlow = leader && leader.boat.speed < cruiseSpeed(ai.cadence, boat.power) - 0.25;
+  // More than a couple of metres short of the place: sprint into it (the wash
+  // there pays the sprint back). Easing up a few per cent never closed it.
+  if (leader && !kicking && !tooSlow && r.finish === null && cadence && boat.stamina > 0.4
+    && leader.loc.s - loc.s - slot.back > 2) cadence = Math.min(cadence, sprint(0.9));
   let lateral = ai.lane;
   if (leader && !kicking && !tooSlow && r.finish === null && cadence) {
     // Hold station on its hip (or tucked in behind): speed up when dropping
     // back, ease off when riding up. The wash makes easing off cheap.
-    const spot = ai.side ? 4.2 : 6.5;
-    lateral = leader.loc.lateral + ai.side * 1.4;
+    const spot = slot.back;
+    lateral = leader.loc.lateral + slot.across;
     const target = leader.boat.speed + limit(((leader.loc.s - loc.s) - spot) * 0.25 / k, -0.6, 0.6);
     ai.interval = limit(ai.interval - (target - boat.speed) * 0.003, cadence * 0.94, cadence * 1.4);
   } else {
@@ -701,7 +791,9 @@ function think(r, race) {
   // right still for a boat coming the other way.
   if (course.samples[loc.i]?.shared) {
     const right = widthAt(course, loc.s).right;
-    lateral = Math.max(lateral, Math.min(right * 0.4, 8));
+    // (A boat in a pack may sit a hip's width inside that, on the left hip of a boat keeping right.)
+    const inPack = leader && !kicking && !tooSlow;
+    lateral = Math.max(lateral, Math.min(right * 0.4, 8) - (inPack ? 1.5 : 0));
     const f = [Math.sin(boat.heading), -Math.cos(boat.heading)];
     for (const o of racers) {
       const dx = o.boat.x - boat.x;
@@ -711,9 +803,10 @@ function think(r, race) {
     }
   }
 
-  // Keep off anyone alongside (except the boat we're hanging on).
+  // Keep off anyone alongside (except the boat we're hanging on, and the
+  // others in its pack: a diamond's last boat sits between the two hips).
   for (const o of racers) {
-    if (o === r || o === leader) continue;
+    if (o === r || o === leader || (leader && o.ai?.slot?.host === leader)) continue;
     const gap = o.loc.s - loc.s;
     const apart = loc.lateral - o.loc.lateral;
     if (Math.abs(gap) < 7 && Math.abs(apart) < 1.6) lateral += Math.sign(apart || ai.side) * (1.6 - Math.abs(apart)) * 2;
@@ -730,7 +823,7 @@ function think(r, race) {
   // line, from the float in to the bank.
   const swans = [
     ...swansAhead(race.birds, r, course, 30 * k).map((b) => ({ ...b, half: 2.6 })),
-    ...(race.traffic ? trafficNear(race.traffic, r, course).map((b) => ({ ...b, half: b.out + 1.5 })) : []),
+    ...boatsNear.map((b) => ({ ...b, half: b.out + 1.5 })),
     ...linesAhead(race.anglers ?? [], r, course, 30 * k),
   ];
   const fits = (x) => x >= -(room.left - 2.2) && x <= room.right - 2.2;
@@ -740,7 +833,10 @@ function think(r, race) {
     if (last && b.lateral - b.half < last.hi) Object.assign(last, { hi: Math.max(last.hi, b.lateral + b.half), near: Math.min(last.near, b.s - loc.s), pass: last.pass ?? b.pass });
     else blocks.push({ lo: b.lateral - b.half, hi: b.lateral + b.half, near: b.s - loc.s, pass: b.pass });
   }
-  const block = blocks.find((b) => lateral > b.lo && lateral < b.hi);
+  // (Where it's heading, or where it is with the swan or boat close: a boat
+  // steering for its place in a pack can be in the way while the place isn't.)
+  const block = blocks.find((b) => lateral > b.lo && lateral < b.hi)
+    ?? (leader ? blocks.find((b) => loc.lateral > b.lo && loc.lateral < b.hi && b.near < 15 * k) : undefined);
   if (block?.pass) {
     // A boat: by the rule of the river, unless there's no room that side.
     const [mine, other] = block.pass > 0 ? [block.hi, block.lo] : [block.lo, block.hi];

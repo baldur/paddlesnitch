@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBoat, step } from '../reading-thames/sim.js';
 import { readFile } from 'node:fs/promises';
-import { raceRiver, courseFromFile, pointAt, locate, headingAt } from '../reading-thames/course.js';
+import { raceRiver, courseFromFile, pointAt, locate, headingAt, widthAt } from '../reading-thames/course.js';
 import { wrap } from '../reading-thames/sim.js';
-import { createRace, stepRace, standings, started, wash, elapsed, applyCall, DIVISION_9 } from '../reading-thames/race.js';
+import { createRace, stepRace, standings, started, wash, elapsed, applyCall, washSlots, washMarks, placeFits, SLOTS, DIVISION_9 } from '../reading-thames/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -288,3 +288,167 @@ test('a live race: everyone on the line, the host runs the starter, the others f
   assert.equal(ann.finish, null, 'their finish comes from them');
 });
 
+
+// A boat under way at `s` along the made-up river, `lateral` to the right of its middle.
+function boatAt(course, s, lateral, speed = 3.6) {
+  const c = pointAt(course, s);
+  const boat = createBoat({ x: c.x - c.tz * lateral, z: c.z + c.tx * lateral, heading: headingAt(course, s) });
+  boat.speed = speed;
+  return { boat, loc: locate(course, boat.x, boat.z), finish: null, ai: { slot: null } };
+}
+const packRace = (course, racers) => ({ course, racers, start: { phase: 'go' } });
+
+test("a boat under way has three places in its wash, its two hips and its stern, each where wash() gives the most", () => {
+  const course = raceRiver();
+  const host = boatAt(course, 600, 0);
+  const me = boatAt(course, 585, 0);
+  const free = washSlots(packRace(course, [host, me]), me);
+  assert.deepEqual(free.map((p) => p.slot).sort(), [0, 1, 2]);
+  for (const p of free) {
+    const there = createBoat({ x: p.x, z: p.z, heading: p.heading });
+    assert.ok(wash(there, host.boat).draft > 0.5, `slot ${p.slot}: draft ${wash(there, host.boat).draft.toFixed(2)}`);
+    assert.ok(Math.abs(host.loc.s - p.s - SLOTS[p.slot].back) < 0.01 && Math.abs(p.lateral - host.loc.lateral - SLOTS[p.slot].across) < 0.01);
+  }
+  // A boat drifting, or one too far ahead, leaves no place worth taking.
+  host.boat.speed = 1;
+  assert.equal(washSlots(packRace(course, [host, me]), me).length, 0);
+  host.boat.speed = 3.6;
+  assert.equal(washSlots(packRace(course, [host, me]), me, 5).length, 0, 'out of reach');
+});
+
+test("a place someone sits in isn't offered, nor a boat that's hanging on you (no going round in a ring)", () => {
+  const course = raceRiver();
+  const host = boatAt(course, 600, 0);
+  const left = boatAt(course, 600 - SLOTS[0].back, SLOTS[0].across);
+  const me = boatAt(course, 585, 0);
+  const race = packRace(course, [host, left, me]);
+  const free = washSlots(race, me).filter((p) => p.host === host);
+  assert.deepEqual(free.map((p) => p.slot).sort(), [1, 2], 'the left hip is taken');
+  // The left-hip boat is under way too: its own hips are places (the V widening).
+  assert.ok(washSlots(race, me).some((p) => p.host === left));
+  left.ai.slot = { host: me };
+  assert.ok(!washSlots(race, me).some((p) => p.host === left), 'not a boat hanging on me');
+});
+
+test('the water shows you the free places ahead: full out to 20 m, gone by 30, softer close up, dim while you ride one; never by the bank; none before the start or on an outing', () => {
+  const course = raceRiver();
+  const host = boatAt(course, 600, 0);
+  const me = boatAt(course, 585, 0);
+  const race = packRace(course, [host, me]);
+  const marks = washMarks(race, me);
+  assert.equal(marks.length, 3);
+  assert.ok(marks.every((m) => m[3] > 0.85), `bright 9-11 m off: ${marks.map((m) => m[3].toFixed(2))}`);
+  const mid = boatAt(course, 600 - 6.3 - 18, 0); // the nearest place (the stern) 18 m ahead
+  assert.ok(washMarks(packRace(course, [host, mid]), mid).every((m) => m[3] > 0.85), 'still full at 18 m');
+  const far = boatAt(course, 600 - 6.3 - 31, 0);
+  assert.equal(washMarks(packRace(course, [host, far]), far).length, 0, 'gone past 30 m');
+  const close = boatAt(course, 600 - 6.3 - 2, 0);
+  assert.ok(washMarks(packRace(course, [host, close]), close).some((m) => m[3] <= 0.6), 'softer 2 m off');
+  // Riding the hip's wash ("On the wash" showing): that place goes dim.
+  const sitting = boatAt(course, 600 - SLOTS[1].back, SLOTS[1].across);
+  sitting.draft = 0.6;
+  assert.ok(washMarks(packRace(course, [host, sitting]), sitting)[0][3] < 0.3);
+  // A boat close to the right bank: no mark on its right hip, too near the bank for anyone.
+  const right = widthAt(course, 600).right;
+  const byBank = boatAt(course, 600, right - 2.6);
+  const behind = boatAt(course, 590, right - 2.6);
+  const shown = washMarks(packRace(course, [byBank, behind]), behind).map((m) => locate(course, m[0], m[1]).lateral);
+  assert.ok(shown.length === 2 && shown.every((l) => l <= right - 2.2 + 0.01), `marks at ${shown.map((l) => l.toFixed(1))}, bank at ${right.toFixed(1)}`);
+  assert.equal(washMarks({ ...race, start: { phase: 'ready' } }, me).length, 0);
+  assert.equal(washMarks({ ...race, outing: {} }, me).length, 0);
+  me.finish = 100;
+  assert.equal(washMarks(race, me).length, 0);
+});
+
+test('the rivals race in packs: a V or a diamond, each in a place on a wash, far more than when each just hung on a hip', async () => {
+  // Measured: the first 4 minutes of three Hasler 7-9 races. Before packs,
+  // rivals rode a wash 14% of the time and a boat had two on its wash 80 times
+  // in 1260 half-second looks; with them, 24% and 356.
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/hasler79.json', import.meta.url), 'utf8')));
+  let n = 0;
+  let on = 0;
+  let shaped = 0;
+  for (const seed of [1, 2, 3]) {
+    const race = createRace(course, { rivals: DIVISION_9, seed, traffic: false });
+    // You sit out of the way at the side of the start (only the rivals are watched).
+    const sLine = race.start.line - 3.6;
+    const c = pointAt(course, sLine);
+    const half = widthAt(course, sLine).half - 2;
+    Object.assign(race.player.boat, { x: c.x - c.tz * half, z: c.z + c.tx * half, heading: headingAt(course, sLine), speed: 0 });
+    race.player.loc = locate(course, race.player.boat.x, race.player.boat.z, race.player.loc.i);
+    race.player.boat.hull = { ...race.player.boat.hull, capsize: 99 };
+    const rivals = race.racers.filter((r) => r.ai);
+    for (let t = 0, k = 0; t < 240; t += 1 / 60, k++) {
+      stepRace(race, 1 / 60, { strokes: [], lean: 0 });
+      if (race.time < 30 || k % 30) continue;
+      for (const r of rivals) { n++; if (r.draft > 0.3) on++; }
+      if (rivals.some((h) => rivals.filter((o) => o !== h && wash(o.boat, h.boat).draft > 0.3).length >= 2)) shaped++;
+    }
+  }
+  assert.ok(on / n > 0.2, `on a wash ${(100 * on / n).toFixed(0)}%`);
+  assert.ok(shaped > 250, `a V or diamond ${shaped} times`);
+});
+
+test("no place is offered in a passing boat's way, nor more than a hip's width left of the keep-right line where the route goes both ways", async () => {
+  const course = raceRiver();
+  const host = boatAt(course, 600, 0);
+  const me = boatAt(course, 585, 0);
+  const race = packRace(course, [host, me]);
+  const places = washSlots(race, me);
+  const right = places.find((p) => p.slot === 1);
+  const eight = { lateral: right.lateral + 3, out: 2 }; // its oars reach the right hip
+  assert.equal(placeFits(race, right, [eight]), false);
+  assert.ok(places.filter((p) => p.slot !== 1).every((p) => placeFits(race, p, [eight])), 'the rest are clear of it');
+  // The Loop shares water both ways: the keep-right line is 40% of the way to the right bank (8 m at most).
+  const loop = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
+  const i = loop.samples.findIndex((x, k) => x.shared && k > 200 && loop.samples[k + 40]?.shared);
+  const s = i * (loop.samples[1].s - loop.samples[0].s) + loop.samples[0].s;
+  const line = Math.min(widthAt(loop, s).right * 0.4, 8);
+  const lead = boatAt(loop, s, line - 0.5);
+  assert.ok(loop.samples[lead.loc.i].shared);
+  const behind = boatAt(loop, s - 12, line);
+  const offered = washSlots(packRace(loop, [lead, behind]), behind);
+  const fit = (k) => placeFits(packRace(loop, [lead, behind]), offered.find((p) => p.slot === k), []);
+  assert.equal(fit(0), false, 'its left hip, 1.9 m left of the line');
+  assert.equal(fit(1), true, 'its right hip');
+  assert.equal(fit(2), true, 'its stern, 0.5 m left of the line');
+});
+
+test("swimming, carrying or finished, a boat leaves no place; one just behind you still counts, one 8 m across doesn't", () => {
+  const course = raceRiver();
+  const me = boatAt(course, 585, 0);
+  for (const [why, set] of [['swimming', (h) => { h.boat.swim = 1; }], ['carrying', (h) => { h.portage = {}; }], ['finished', (h) => { h.finish = 10; }]]) {
+    const host = boatAt(course, 600, 0);
+    set(host);
+    assert.equal(washSlots(packRace(course, [host, me]), me).length, 0, why);
+  }
+  const level = boatAt(course, 588, 0); // its stern place is 3.3 m behind me
+  assert.ok(washSlots(packRace(course, [level, me]), me).some((p) => p.slot === 2 && p.gap < 0));
+  const across = boatAt(course, 600, 8.5);
+  assert.equal(washSlots(packRace(course, [across, me]), me).length, 0);
+});
+
+test("a boat in a pack heading for its place goes round a swan in its way now, though its place is clear of it", () => {
+  // Without that, 11 of 16 rival swims on the Reading river were pack boats paddling into a swan.
+  const course = raceRiver();
+  const race = createRace(course, { rivals: DIVISION_9.slice(0, 2), seed: 1, birds: false, traffic: false });
+  race.start.phase = 'go';
+  const [, host, me] = race.racers;
+  const put = (r, s, lateral) => {
+    const c = pointAt(course, s);
+    Object.assign(r.boat, { x: c.x - c.tz * lateral, z: c.z + c.tx * lateral, heading: headingAt(course, s), speed: 3.6 });
+    r.loc = locate(course, r.boat.x, r.boat.z);
+  };
+  put(host, 800, -1.1);
+  put(me, 790, 1);
+  const c = pointAt(course, 797);
+  race.birds = [{ kind: 'swan', x: c.x - c.tz * 0.5, z: c.z + c.tx * 0.5, heading: 0, speed: 0, phase: 0, loc: locate(course, c.x - c.tz * 0.5, c.z + c.tx * 0.5), fly: 0, gone: false, huff: 0, away: false }];
+  me.ai.slot = { host, slot: 0, back: SLOTS[0].back, across: SLOTS[0].across }; // its left hip, across the swan
+  let passed = null;
+  for (let t = 0; t < 4 && passed === null; t += DT) {
+    stepRace(race, DT, { strokes: [], lean: 0 });
+    if (me.loc.s > 797) passed = me.loc.lateral;
+  }
+  assert.equal(me.boat.capsizes, 0, 'into the swan');
+  assert.ok(passed > 0.5 + 1, `passed at ${passed?.toFixed(2)}, the swan at 0.5`);
+});

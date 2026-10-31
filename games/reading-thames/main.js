@@ -1,6 +1,6 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
 import { loadCourse, riverView } from './course.js';
-import { createRace, stepRace, standings, elapsed, projected, applyCall, released, DIVISION_9, DIVISION_3 } from './race.js';
+import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
@@ -1760,7 +1760,7 @@ function simulate(dt) {
 
 // --- rendering ---------------------------------------------------------------
 
-const frameData = new Float32Array(120);
+const frameData = new Float32Array(132);
 // Deep water: a made-up river's, and the real Thames's olive green.
 const WATER = [0.07, 0.2, 0.24, 0];
 const THAMES = [0.19, 0.23, 0.16, 0];
@@ -2179,6 +2179,8 @@ function render(time) {
   const { half } = reflected;
   frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
+  const spots = state === 'racing' ? washMarks(race, race.player) : [];
+  for (let i = 0; i < 3; i++) frameData.set(spots[i] ?? [0, 0, 0, 0], 120 + i * 4);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
   for (const r of race.racers) {
     if (r.boat.hull.scull) list.push(...myRowing.list);
