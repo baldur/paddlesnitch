@@ -40,7 +40,8 @@ export function clientErrorProps(props: unknown, path: unknown): Record<string, 
   const p = (props && typeof props === 'object' ? props : {}) as Record<string, unknown>
   const message = str(typeof p.message === 'string' ? p.message.split('\n')[0] : undefined, 120)
   if (!message) return null
-  const type = str(p.type, 60)
+  // An error's name (TypeError, DOMException), never free text: it's kept indefinitely.
+  const type = typeof p.type === 'string' && /^[A-Za-z0-9_$.]{1,60}$/.test(p.type) ? p.type : undefined
   const page = typeof path === 'string' && path.startsWith('/') ? publicPath(path.slice(0, 200)) : undefined
   return { message, ...(type ? { type } : {}), ...(page ? { path: page } : {}) }
 }
