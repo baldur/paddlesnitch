@@ -24,7 +24,9 @@ export function beginPlay(mode, { format = 'mass', live = false, from = 'menu', 
 
 // The play's event when it ends: `end` 'finished', 'quit' (back to the menu),
 // 'restart' or 'closed' (the page was left); `place` in a race, `swims` your capsizes.
-export function playEvent(play, { end, now, place = null, swims = 0 }) {
+/** @param {{ end: string, now: number, place?: number | null, swims?: number }} how */
+export function playEvent(play, how) {
+  const { end, now, place = null, swims = 0 } = how;
   const props = {
     mode: play.mode, course: play.course, end, secs: round(Math.max(0, now - play.start)),
     swims: String(swims), from: play.from,

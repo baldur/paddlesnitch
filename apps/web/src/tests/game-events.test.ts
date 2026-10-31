@@ -16,7 +16,8 @@ const kept = (e: Ev) => {
 describe("the kayak game's analytics events pass the server's rules untouched", () => {
   it('every way a play can go: each kind, course, ending and where it was picked', async () => {
     const { beginPlay, playEvent } = await import('../../../../games/kayak/metrics.js')
-    const modes = [
+    type Case = { mode: { key: string; solo?: boolean; drill?: string; outing?: string }; o: { format?: string; live?: boolean } }
+    const modes: Case[] = [
       ...['loop', 'hasler79', 'hasler16'].flatMap((key) => [{ mode: { key }, o: { format: 'mass' } }, { mode: { key }, o: { format: 'interval' } }, { mode: { key }, o: { live: true } }]),
       { mode: { key: 'practice', solo: true }, o: {} },
       ...['start', 'wash', 'portage'].map((drill) => ({ mode: { key: `drill-${drill}`, drill, solo: true }, o: {} })),
