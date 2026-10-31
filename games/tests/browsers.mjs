@@ -192,6 +192,7 @@ let failed = 0;
 for (const c of CASES) {
   if (c.gpuOnly && !process.argv.includes('--gpu')) continue;
   if (process.env.ONLY && !c.name.includes(process.env.ONLY)) continue; // ONLY=portage: just the cases named so
+  if (process.env.ENGINE && c.engine.name() !== process.env.ENGINE) continue; // ENGINE=webkit: one browser (CI runs the three side by side)
   const errors = [];
   let line = '';
   const browser = await c.engine.launch(c.launch ?? {});
