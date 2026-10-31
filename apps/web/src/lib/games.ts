@@ -7,7 +7,7 @@ export const GAMES: Game[] = [
   {
     slug: 'kayak',
     title: 'Kayak',
-    blurb: 'A marathon race against a pack of computer paddlers. Keep the rhythm, ride the wash.',
+    blurb: 'Walk down to the canoe club at Reading. Race the Hasler courses, practise a drill or take a boat up the Thames.',
     href: '/games/kayak/',
   },
 ]
