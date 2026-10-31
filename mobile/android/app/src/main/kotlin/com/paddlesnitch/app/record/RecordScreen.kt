@@ -6,6 +6,9 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.paddlesnitch.app.BuildConfig
 import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -234,5 +237,36 @@ fun RecordEntry(state: RecordingService.State, onOpen: () -> Unit, now: () -> Lo
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text("→", fontSize = 16.sp)
+    }
+}
+
+/**
+ * Puts Record above every screen. While a recording runs, its screen and Hold to stop
+ * survive anything that changes the screen underneath, a forced sign-out included (a
+ * refused token refresh signs out by itself: #702). [content] gets the Paddles row to
+ * show ("Record a paddle", or "Recording · h:mm:ss"), or null when there's nothing to offer:
+ * release builds, and signed out with nothing recording.
+ */
+@Composable
+fun WithRecording(
+    signedIn: Boolean,
+    modifier: Modifier = Modifier,
+    canRecord: Boolean = BuildConfig.DEBUG,
+    record: @Composable () -> Unit = { Record() },
+    content: @Composable (entry: (@Composable () -> Unit)?) -> Unit,
+) {
+    val state by RecordingService.state.collectAsState()
+    var open by rememberSaveable { mutableStateOf(false) }
+    val reachable = canRecord && (signedIn || state is RecordingService.State.Recording)
+    if (open && reachable) {
+        BackHandler { open = false }
+        Column(modifier.fillMaxSize()) {
+            TextButton(onClick = { open = false }, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) {
+                Text("← Paddles", fontSize = 16.sp)
+            }
+            record()
+        }
+    } else {
+        content(if (reachable) ({ RecordEntry(state, onOpen = { open = true }) }) else null)
     }
 }

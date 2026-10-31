@@ -23,7 +23,13 @@ import com.paddlesnitch.app.ui.PsColor
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.After
 import org.junit.Rule
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -163,5 +169,58 @@ class RecordScreenTest {
         assertEquals("—", liveStrokeRate(null))
         assertEquals("—", liveStrokeRate(notReady))
         assertEquals("58", liveStrokeRate(notReady.copy(spm = 57.6f)))
+    }
+
+    // A refused token refresh signs out by itself (#702), mid-paddle as easily as not.
+    private var signedIn by mutableStateOf(true)
+
+    private fun showApp(canRecord: Boolean = true) = compose.setContent {
+        PaddlesnitchTheme {
+            Surface(color = PsColor.bg) {
+                WithRecording(signedIn = signedIn, canRecord = canRecord) { entry ->
+                    Column {
+                        Text(if (signedIn) "Your paddles" else "Sample paddles")
+                        entry?.invoke()
+                    }
+                }
+            }
+        }
+    }
+
+    @After fun idle() = RecordingService.set(RecordingService.State.Idle)
+
+    @Test fun aForcedSignOutMidRecordingKeepsTheScreenAndStop() {
+        RecordingService.set(recording)
+        showApp()
+        compose.onNodeWithText("Recording ·", substring = true).performClick()
+        compose.onNodeWithContentDescription("Hold to stop").assertExists()
+        signedIn = false
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Hold to stop").assertExists()
+        compose.onNodeWithContentDescription("Hold to stop").performSemanticsAction(SemanticsActions.OnLongClick)
+        val app = compose.activity.application
+        assertEquals(RecordingService.ACTION_STOP, org.robolectric.Shadows.shadowOf(app).nextStartedService?.action)
+    }
+
+    @Test fun signedOutMidRecordingTheSamplesStillLeadBackToIt() {
+        RecordingService.set(recording)
+        showApp()
+        signedIn = false
+        compose.onNodeWithText("Sample paddles").assertExists()
+        compose.onNodeWithText("Recording ·", substring = true).performClick()
+        compose.onNodeWithContentDescription("Hold to stop").assertExists()
+    }
+
+    @Test fun signedOutWithNothingRecordingThereIsNoRecord() {
+        signedIn = false
+        showApp()
+        compose.onNodeWithText("Record a paddle").assertDoesNotExist()
+    }
+
+    @Test fun releaseBuildsNeverOfferRecord() {
+        RecordingService.set(recording)
+        showApp(canRecord = false)
+        compose.onNodeWithText("Record a paddle").assertDoesNotExist()
+        compose.onNodeWithText("Recording ·", substring = true).assertDoesNotExist()
     }
 }

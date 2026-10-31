@@ -139,3 +139,7 @@ time and isn't obvious from the code.
 - A recording's write errors never reach the core: `RecordingFiles.write` catches and counts
   them, and the JNI callback returns early while an exception is pending (CheckJNI aborts a
   debug build that makes JNI calls with one pending).
+- Record sits above every screen (`WithRecording` wraps App's `when (screen)`), never inside a
+  signed-in screen: a refused token refresh signs out by itself (#702), and a Record screen
+  owned by Paddles would vanish mid-paddle with its Hold to stop while the service kept
+  recording (found by ios in #767). Signed out, it's reachable only while a recording runs.
