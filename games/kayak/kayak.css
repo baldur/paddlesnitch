@@ -498,3 +498,22 @@ summary { cursor: pointer; }
   background: rgba(10, 18, 18, 0.6); color: #fff; font: 0.9rem/1.2 system-ui, sans-serif; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: auto; }
 #outingBar button { min-height: 44px; padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
 #outingBar span { opacity: 0.85; }
+
+/* Rowing (scull.js): the stroke coach's numbers on its screen at your feet, a Look button on phones; no rudder. */
+#coach { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.1rem 0.6rem; padding: 0.4rem 0.6rem; border-radius: 6px;
+  background: #9aa88f; color: #101410; font: 600 0.75rem/1 ui-monospace, Menlo, monospace; box-shadow: 0 0 0 3px #161718; pointer-events: none; }
+#coach span { display: flex; align-items: baseline; gap: 0.25rem; }
+#coach b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+#coach small { font-size: 0.6rem; opacity: 0.75; }
+#lookBtn { display: none; }
+#hud.rowing #lookBtn { display: block; position: absolute; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px); transform: translateX(-50%); min-width: 88px; min-height: 48px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 18, 18, 0.6); color: #fff; font-weight: 600; pointer-events: auto; touch-action: none; }
+#hud.rowing .rudder, #hud.rowing #flow { display: none; }
+@media (hover: hover) and (pointer: fine) { #hud.rowing #lookBtn::after { content: ' (↑)'; font-weight: 400; opacity: 0.7; } }
+/* The erg's monitor: its numbers just above the machine's own. */
+#ergMon { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.7rem; padding: 0.5rem 0.7rem; border-radius: 6px;
+  background: #9aa88f; color: #101410; font: 600 0.8rem/1.05 ui-monospace, Menlo, monospace; box-shadow: 0 0 0 4px #161718; pointer-events: none; }
+#ergMon b, #ergMon span { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+#ergMon small { font-size: 0.6rem; margin-left: 0.2rem; opacity: 0.75; }
+#ergMon .other { grid-column: 1 / -1; font-size: 0.75rem; }
+#coach[hidden], #ergMon[hidden] { display: none; }

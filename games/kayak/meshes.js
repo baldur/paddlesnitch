@@ -327,10 +327,10 @@ export function paddlerMesh({ top, skin, cap, body = 'broad', hair = 'short', ha
 
 // A unit-length arm along +z, 1 unit across; a model matrix stretches it
 // from shoulder to hand. A short sleeve covers the first `sleeve` of it, the
-// rest is bare (`skin`).
+// rest is bare (`skin`); none (an all-in-one's) leaves it all bare.
 export function limbMesh(color, { skin = color, sleeve = 1 } = {}) {
   const m = new MeshBuilder();
-  m.box([-0.5, -0.5, 0], [0.5, 0.5, sleeve], color);
+  if (sleeve > 0) m.box([-0.5, -0.5, 0], [0.5, 0.5, sleeve], color);
   if (sleeve < 1) m.box([-0.45, -0.45, sleeve], [0.45, 0.45, 1], skin);
   return m.build();
 }
@@ -440,6 +440,97 @@ export function scullerMesh() {
   shell(m, 8.2, 0.3, { deck: [0.95, 0.95, 0.93], hull: [0.92, 0.92, 0.9], top: 0.08, depth: 0.12 });
   for (const [side, x, z] of ROWLOCKS.sculler) m.box([Math.min(0, side * x), 0.18, z - 0.03], [Math.max(0, side * x), 0.22, z + 0.03], [0.6, 0.6, 0.62]);
   rower(m, 0.4 - SEAT_BACK);
+  return m.build();
+}
+
+// Your own single scull, seen from the seat (no rower: that's you). Riggers
+// out to the rowlocks, the slide, the foot stretcher with its shoes, and the
+// stroke coach on the stretcher, facing you. Boat space: you face +z, the
+// stern; the bow is behind you. `deck` and `hull` its colours.
+export const SCULL_SEAT = { finish: -0.55, catch: 0, y: 0.2 }; // the seat's z at the finish and the catch
+export const SCULL_FEET = { z: 0.9, y: 0.24 };
+export const SCULL_COACH = [0, 0.46, 1.02]; // the coach's screen, for its numbers (main.js)
+export const SCULL_ROWLOCK = { x: 0.8, y: 0.32, z: 0.35 };
+export function scullHullMesh({ deck = [0.95, 0.95, 0.93], hull = [0.92, 0.92, 0.9] } = {}) {
+  const m = new MeshBuilder();
+  shell(m, 8.2, 0.3, { deck, hull, top: 0.08, depth: 0.12 });
+  const metal = [0.55, 0.56, 0.6];
+  const dark = [0.12, 0.12, 0.13];
+  // The cockpit's floor and its side decks, from behind you to past your feet.
+  m.box([-0.13, 0.06, -1.1], [0.13, 0.09, 1.25], [0.62, 0.48, 0.32]);
+  for (const x of [-1, 1]) m.box([x * 0.14 - 0.02, 0.06, -1.1], [x * 0.14 + 0.02, 0.15, 1.25], deck);
+  // Riggers: struts from the hull to each rowlock, and the pin.
+  for (const side of [-1, 1]) {
+    const { x, y, z } = SCULL_ROWLOCK;
+    for (const dz of [-0.35, 0.35]) {
+      const a = [side * 0.15, 0.12, z + dz];
+      const b = [side * x, y - 0.03, z];
+      const c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+      m.box([Math.min(a[0], b[0]), c[1] - 0.012, c[2] - 0.012], [Math.max(a[0], b[0]), c[1] + 0.012, c[2] + 0.012], metal);
+    }
+    m.box([side * x - 0.03, y - 0.04, z - 0.03], [side * x + 0.03, y + 0.05, z + 0.03], dark); // the gate
+  }
+  // The slide's rails and the seat.
+  for (const x of [-0.09, 0.09]) m.box([x - 0.012, 0.1, SCULL_SEAT.finish - 0.25], [x + 0.012, 0.13, SCULL_SEAT.catch + 0.3], metal);
+  // The foot stretcher: a plate, angled back towards you, and a pair of shoes.
+  m.prism([[-0.16, 0.08, SCULL_FEET.z + 0.12], [0.16, 0.08, SCULL_FEET.z + 0.12], [0.16, 0.08, SCULL_FEET.z + 0.16], [-0.16, 0.08, SCULL_FEET.z + 0.16]],
+    [[-0.16, 0.4, SCULL_FEET.z + 0.0], [0.16, 0.4, SCULL_FEET.z + 0.0], [0.16, 0.4, SCULL_FEET.z + 0.04], [-0.16, 0.4, SCULL_FEET.z + 0.04]], metal);
+  for (const x of [-0.08, 0.08]) m.box([x - 0.05, 0.12, SCULL_FEET.z - 0.05], [x + 0.05, 0.3, SCULL_FEET.z + 0.09], [0.92, 0.92, 0.9]);
+  // The stroke coach: a little black box on a stalk above the stretcher, its screen towards you.
+  const [cx, cy, cz] = SCULL_COACH;
+  m.box([cx - 0.015, 0.38, cz + 0.02], [cx + 0.015, cy - 0.04, cz + 0.05], dark);
+  m.box([cx - 0.09, cy - 0.06, cz], [cx + 0.09, cy + 0.06, cz + 0.05], dark);
+  m.box([cx - 0.075, cy - 0.045, cz - 0.004], [cx + 0.075, cy + 0.045, cz], [0.55, 0.62, 0.52]);
+  return m.build();
+}
+
+// An erg (a rowing machine): a long rail on two feet, the seat, a foot plate,
+// the flywheel's round housing at the front with its monitor on an arm.
+// Lengthways along z, the flywheel at -z (the rower faces it), floor at y 0.
+export const ERG_SIZE = { rail: 2.4, seat: 0.5, feet: -0.55, handle: -0.85, monitor: [0, 1.05, -1.0] };
+export function ergMesh() {
+  const m = new MeshBuilder();
+  const white = [0.93, 0.93, 0.92];
+  const dark = [0.12, 0.12, 0.14];
+  const grey = [0.55, 0.56, 0.6];
+  m.box([-0.06, 0.32, -0.75], [0.06, 0.38, ERG_SIZE.rail - 0.75], dark); // the rail
+  m.box([-0.04, 0.0, ERG_SIZE.rail - 0.85], [0.04, 0.34, ERG_SIZE.rail - 0.75], white); // the back leg
+  m.box([-0.3, 0.0, ERG_SIZE.rail - 0.85], [0.3, 0.05, ERG_SIZE.rail - 0.75], white);
+  m.box([-0.32, 0.0, -1.05], [0.32, 0.05, -0.95], white); // the front foot
+  // The flywheel's housing: a round cage on its side (a sixteen-sided drum along x), black fan inside.
+  const c = [0, 0.55, -1.05];
+  const n = 16;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2;
+    const a1 = ((i + 1) / n) * Math.PI * 2;
+    const p = (a, x, r = 0.3) => [c[0] + x, c[1] + Math.sin(a) * r, c[2] + Math.cos(a) * r];
+    const out = [0, Math.sin((a0 + a1) / 2), Math.cos((a0 + a1) / 2)];
+    m.triFacing(p(a0, -0.17), p(a1, -0.17), p(a1, 0.17), white, out);
+    m.triFacing(p(a0, -0.17), p(a1, 0.17), p(a0, 0.17), white, out);
+    for (const x of [-0.17, 0.17]) {
+      m.triFacing([c[0] + x, c[1], c[2]], p(a0, x), p(a1, x), dark, [Math.sign(x), 0, 0]);
+      m.triFacing([c[0] + x * 1.02, c[1], c[2]], p(a0, x * 1.02, 0.27), p(a1, x * 1.02, 0.27), grey, [Math.sign(x), 0, 0]);
+    }
+  }
+  // The foot plate, the monitor arm and the monitor.
+  m.prism([[-0.2, 0.22, ERG_SIZE.feet - 0.08], [0.2, 0.22, ERG_SIZE.feet - 0.08], [0.2, 0.22, ERG_SIZE.feet + 0.02], [-0.2, 0.22, ERG_SIZE.feet + 0.02]],
+    [[-0.2, 0.6, ERG_SIZE.feet - 0.2], [0.2, 0.6, ERG_SIZE.feet - 0.2], [0.2, 0.6, ERG_SIZE.feet - 0.1], [-0.2, 0.6, ERG_SIZE.feet - 0.1]], dark);
+  const [mx, my, mz] = ERG_SIZE.monitor;
+  m.box([mx - 0.025, 0.8, mz - 0.1], [mx + 0.025, my - 0.08, mz - 0.05], white);
+  m.box([mx - 0.12, my - 0.09, mz - 0.06], [mx + 0.12, my + 0.09, mz + 0.02], dark);
+  m.box([mx - 0.1, my - 0.07, mz + 0.02], [mx + 0.1, my + 0.07, mz + 0.025], [0.55, 0.62, 0.52]);
+  return m.build();
+}
+
+// An erg's seat (it slides along the rail) and handle (pulled on its chain).
+export function ergSeatMesh() {
+  const m = new MeshBuilder();
+  m.box([-0.15, 0.38, -0.12], [0.15, 0.46, 0.14], [0.3, 0.31, 0.34]);
+  return m.build();
+}
+export function ergHandleMesh() {
+  const m = new MeshBuilder();
+  m.box([-0.28, -0.015, -0.015], [0.28, 0.015, 0.015], [0.12, 0.12, 0.14]);
   return m.build();
 }
 

@@ -5,7 +5,9 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh } from './club.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
+import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split } from './scull.js';
+import { createErg, stepErg, monitor, ergPose } from './erg.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
@@ -13,22 +15,27 @@ import { encodeState, decodeState, createTrack, receive, sample, applyState, SEN
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, startOuting, stepOuting, tripBoatMesh, launchMesh } from './outing.js';
-import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf } from './meshes.js';
+import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
 import { TRAFFIC, overturned } from './traffic.js';
 import { createRenderer } from './render.js';
-import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
+import { perspective, view, basis, multiply, translation, rotationX, rotationY, rotationZ } from './mat4.js';
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
 import { tone, noise, isMuted, setMuted } from '../shared/audio.js';
 import { openDialog, gamepadDialogs, soundToggle } from '../shared/dialogs.js';
 
 const STEP = 1 / 120;
 const EYE_HEIGHT = 0.78;
+const ROW_WIDE = 105; // degrees across, at least, sat in a scull
 const FOV_Y = (62 * Math.PI) / 180;
 const MIN_FOV_X = (75 * Math.PI) / 180;
 const HULL_KEY = 'snitchmedia:kayak:hull'; // the hull picked before there were boats
 const KIT_KEY = 'snitchmedia:kayak:kit';
 const FORM_KEY = 'snitchmedia:kayak:form'; // sessionStorage: this visit only, for now
 const FORMAT_KEY = 'snitchmedia:kayak:format'; // a race or a time trial, as last picked
+// The rowing club's: your scull and its colour, and your best on the ergs (on
+// this device for now: the account keeps the kayak's kit).
+const ROW_KEY = 'snitchmedia:kayak:row';
+const ERG_BEST = 'snitchmedia:kayak:erg';
 
 // The courses, all on the one real river at Reading (courses/*.json, made by
 // apps/web/scripts/courses: see docs/features/game-courses-from-video.md),
@@ -46,7 +53,7 @@ let format = 'mass';
 try { if (FORMATS[localStorage.getItem(FORMAT_KEY)]) format = localStorage.getItem(FORMAT_KEY); } catch {}
 // Your best on a course, per format (the loop's time trial keeps the key it always had).
 const bestKey = (m, f) => (m.solo || f === 'interval' ? `snitchmedia:kayak:${m.key}` : `snitchmedia:kayak:${m.key}:race`);
-const formatOf = (m) => (m.solo || liveRace ? 'mass' : format);
+const formatOf = (m) => (m.head ? 'interval' : m.solo || liveRace ? 'mass' : format);
 // Practice drills (drills.js), each on one of the courses above: starts, wash
 // hanging and the portage. Picked from the practice page of the menu.
 const DRILL_MODES = {
@@ -59,8 +66,20 @@ const DRILL_BEST = (m) => `snitchmedia:kayak:drill:${m.drill}`;
 // Outings from Caversham Pier (outing.js), picked on the walk's bridge: on the
 // Div 1-6 course's river, which goes all the way up to Mapledurham.
 const OUTING_MODES = Object.fromEntries(Object.entries(OUTINGS).map(([key, o]) => [key, { key, outing: key, label: o.label, solo: true, rivals: [], base: MODES.hasler16 }]));
-// Anyone can paddle practice and the drills; the races, the leaderboard and live races need an account.
-const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES)]);
+// The rowing club's (scull.js): a practice row, and the Head of the River on
+// the Time Trial Loop (a head race is a time trial: boats sent off one at a
+// time), the rivals in sculls. One way to row: a single scull.
+const ROW_MODES = {
+  'row-practice': { label: 'Practice row', line: '1 km up from the club, on your own', base: MODES.practice, solo: true, rivals: [] },
+  'row-head': { label: 'Head of the River', line: 'Round the islands against the clock, scullers 30 seconds apart', base: MODES.loop, rivals: DIVISION_9.slice(0, 5), head: true },
+};
+for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: true });
+let row = { scull: 'club', colour: SCULL_COLOURS[0] };
+try { row = { ...row, ...JSON.parse(localStorage.getItem(ROW_KEY)) }; } catch {}
+if (!SCULL_COLOURS.includes(row.colour)) row.colour = SCULL_COLOURS[0];
+const storeRow = () => { try { localStorage.setItem(ROW_KEY, JSON.stringify(row)); } catch {} };
+// Anyone can paddle practice and the drills, and row; the kayak races, the leaderboard and live races need an account.
+const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 // The walk to the club (club.js) is what opens (owner 2026-10-31). #menu opens
@@ -92,7 +111,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'hairColour', 'hatColour', 'aid', 'aidColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
+const els = Object.fromEntries(['touchhelp', 'account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'hairColour', 'hatColour', 'aid', 'aidColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -141,6 +160,7 @@ let placeNext = 0; // the next landmark to name (showPlace)
 let placeTimer = 0;
 let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprintHint)
 let stuck = { left: 2, for: 0, s: 0 }; // back-paddling tips still to give this race, and how long you've been getting nowhere (stuckHint)
+const TOUCH_HELP = document.getElementById('touchhelp').textContent;
 let hitSwan = -Infinity; // race time the player last paddled into a swan
 let hitBoat = { kind: null, time: -Infinity }; // and into another boat
 let behindTimer = 0; // hides the arrow for an eight coming up behind
@@ -155,7 +175,7 @@ function reset() {
     rivals: mode.rivals,
     format: formatOf(mode),
     seed: liveRace?.seed ?? ((Math.random() * 2 ** 31) | 0),
-    you: { hull: hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
+    you: { hull: mode.row ? scullById(row.scull).hull : hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
     // A drill is about the one thing: no swans or other boats in the way.
     birds: !mode.drill, traffic: !mode.drill,
@@ -163,7 +183,7 @@ function reset() {
   drill = mode.drill ? setupDrill(race, mode.drill) : null;
   // Practice also sharpens your feel for the beat.
   const h = race.player.boat.hull;
-  race.player.boat.hull = { ...h, rhythmSlop: h.rhythmSlop * (1 + f * 2) };
+  if (!h.scull) race.player.boat.hull = { ...h, rhythmSlop: h.rhythmSlop * (1 + f * 2) };
   setLiveries();
   controls.clear();
   placeNext = 0;
@@ -203,6 +223,11 @@ function start() {
   drawMap();
   // A drill that starts under way (wash hanging, the portage) has no starter.
   if (drill && race.start.phase === 'go') state = 'racing';
+  // Rowing: the stroke coach and the Look button instead of the rudder and the paddler's hints.
+  hud.classList.toggle('rowing', !!mode.row);
+  els.touchhelp.textContent = mode.row
+    ? 'Left thumb, left oar; right thumb, right oar · Both together to go straight · One first, or one alone, to turn · Hold Look to see where you are going'
+    : TOUCH_HELP;
   // An outing from Caversham Pier: no starter, no clock; off at once.
   hud.classList.toggle('outing', !!mode.outing);
   document.getElementById('outingBar').hidden = !mode.outing;
@@ -264,7 +289,7 @@ function finish() {
     try { localStorage.setItem(bestKey(mode, formatOf(mode)), JSON.stringify(best)); } catch {}
   }
 
-  submitResult(time);
+  if (!mode.row) submitResult(time); // the leaderboards are the kayak's
   endPlay('finished', { place: solo ? null : place, swims: race.player.boat.capsizes });
   const before = form();
   train((mode.course.finish - mode.course.start) / mode.course.speedup / 1000);
@@ -515,7 +540,7 @@ menu.addEventListener('close', () => {
 // Start a race, a drill or a live race by its menu value.
 async function choose(value) {
   if (value === 'live') return openLive();
-  const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value];
+  const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value] ?? ROW_MODES[value];
   if (!next) return;
   if (!OPEN.has(next.key) && !account.offline && !account.user) {
     location.href = SIGN_IN;
@@ -699,9 +724,9 @@ function leaveClub() {
 
 // Walk through a door: outside a glide, through a wall a quick fade.
 function go(to) {
-  if (to === 'rowing') return note('Red boards are out: the river is too rough for rowers today. The canoe club is open.');
   if (!club || club.to || !PLACES[to] || to === club.place) return;
   closeSheet();
+  endErg();
   const through = !!PLACES[to].inside !== !!PLACES[club.place].inside;
   club.from = clubCamera();
   club.to = to;
@@ -741,27 +766,40 @@ function arrive(place) {
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
   document.getElementById('clubPlace').textContent = PLACES[place].label;
   const { shots } = club;
-  const label = (key) => (MODES[key] ?? DRILL_MODES[key])?.label;
+  const label = (key) => (MODES[key] ?? DRILL_MODES[key] ?? ROW_MODES[key])?.label;
   // On the bridge the clubs are cards along the bottom, each with a picture,
   // and a pin over its building in the view: nothing covers the scene.
   const spots = place === 'path'
     ? [
       { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races and practice', pin: 'canoe' }, act: () => go('club') },
-      { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Red boards: too rough for rowers today', pin: 'rowing' }, act: () => go('rowing') },
+      { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
       { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise') },
       { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => choose('hire') },
       { pin: 'canoe', at: shots.doors.path.club },
-      { pin: 'rowing', at: shots.doors.path.rowing },
+      { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
   if (place === 'path' && label(club.plan)) {
     spots.push({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
-  if (place === 'pontoon') {
-    const plan = label(club.plan) ? club.plan : 'practice';
-    spots.push({ label: `Push off: ${label(plan)}`, at: shots.places.pontoon.look.map((v, i) => (i === 1 ? 1.2 : shots.places.pontoon.eye[i] + (v - shots.places.pontoon.eye[i]) * 0.08)), act: () => choose(plan), go: true });
+  if (place === 'pontoon' || place === 'rpontoon') {
+    const rowing = place === 'rpontoon';
+    const plan = rowing ? (ROW_MODES[club.rplan] ? club.rplan : 'row-practice') : label(club.plan) && !ROW_MODES[club.plan] ? club.plan : 'practice';
+    const shot = shots.places[place];
+    spots.push({ label: `Push off: ${label(plan)}`, at: shot.look.map((v, i) => (i === 1 ? 1.2 : shot.eye[i] + (v - shot.eye[i]) * 0.08)), act: () => choose(plan), go: true });
   }
+  // The rowing club: your all-in-one, the sculls, the plan, the ergs.
+  if (place === 'rchanging') spots.push({ label: 'Change', at: shots.rChangeLabel, act: () => sheet('paddler') });
+  if (place === 'rboathouse') {
+    SCULLS.forEach((b, i) => spots.push({ label: b.name, at: shots.scullLabels[i], act: () => pickScull(b.id), small: true, on: row.scull === b.id, scull: b.id }));
+    spots.push({ label: 'Paint your scull', at: shots.paint, act: paintScull });
+  }
+  if (place === 'rclubhouse') {
+    Object.entries(ROW_MODES).forEach(([key, m], i) => spots.push({ label: m.label, at: shots.rplan[i], act: () => plannedRow(key), on: club.rplan === key }));
+    spots.push({ label: 'Honours board', at: shots.honours, act: honours });
+  }
+  if (place === 'erg') spots.push({ label: 'Row a 500 m', at: shots.ergLabel, act: startErg, go: true });
   if (place === 'changing') spots.push({ label: 'Change', at: shots.changeLabel, act: () => sheet('paddler') });
   if (place === 'boathouse') {
     BOATS.forEach((b, i) => spots.push({ label: String(b.stability), at: shots.rackLabels[i], act: () => pickBoat(b.id), small: true, on: kit.boat === b.id, title: b.name }));
@@ -796,7 +834,7 @@ function arrive(place) {
     (spot.card ? clubCards : clubDoors).append(b);
     return { ...spot, el: b };
   });
-  if (place === 'changing') sheet('paddler');
+  if (place === 'changing' || place === 'rchanging') sheet('paddler');
   if (place === 'clubhouse') sheet('home');
   // A first visit: where to make your paddler, and where the races are.
   if (place === 'club' && !kitChosen) note('New here? Make your paddler in the changing room, then pick a race in the clubhouse');
@@ -804,6 +842,71 @@ function arrive(place) {
   if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
   // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
   if (!menu.open) club.spots.find((x) => x.act)?.el.focus({ preventScroll: true });
+  if (place === 'rchanging') note('Rowing is in an all-in-one: it takes your top colour');
+  if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Both arrows (or both thumbs, or both triggers) together for each stroke');
+}
+// The erg room: a 500 m on your erg, the rower on the next one keeping a
+// steady 2:08. Both sides together for a stroke; the monitor shows how it's going.
+let ergRun = null; // { erg, play }
+const ergMon = document.getElementById('ergMon');
+const ergBest = () => { try { return Number(localStorage.getItem(ERG_BEST)) || null; } catch { return null; } };
+function startErg() {
+  closeSheet();
+  endErg('restart');
+  controls.clear();
+  ergRun = { erg: createErg({ pace: 128 }), play: beginPlay({ key: 'erg', solo: true }, { from: visit.from, now: clock() }) };
+  visit.plays++;
+  ergMon.hidden = false;
+  note('Row! Both together for each stroke. Steady beats quick');
+}
+function endErg(end = 'quit') {
+  if (!ergRun) return;
+  if (ergRun.play) track(playEvent(ergRun.play, { end, now: clock() }));
+  ergRun = null;
+  ergMon.hidden = true;
+}
+function stepErgRun(dt) {
+  const { erg } = ergRun;
+  const { strokes } = controls.take();
+  for (const e of stepErg(erg, dt, { strokes: strokes.filter((x) => !x.startsWith('back-')) })) {
+    if (e === 'stroke') noise({ freq: 300, to: 120, q: 0.6, duration: 0.7, gain: 0.08 }); // the flywheel's whirr
+    if (e === 'done') {
+      const best = ergBest();
+      const record = !best || erg.done < best;
+      if (record) try { localStorage.setItem(ERG_BEST, String(erg.done)); } catch {}
+      note(`500 m in ${formatTime(erg.done)}${record ? (best ? ': a new best!' : '') : `. Your best: ${formatTime(best)}`}${erg.other.metres >= 500 ? '' : '. You beat the next erg!'}`);
+      tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
+      track(playEvent(ergRun.play, { end: 'finished', now: clock() }));
+      ergRun.play = null;
+    }
+  }
+  const m = monitor(erg);
+  ergMon.innerHTML = `<b>${formatTime(m.time)}</b><span>${m.pace ? formatTime(m.pace) : '-:--'}<small>/500m</small></span><span>${m.rate || '--'}<small>s/m</small></span><b>${m.left}<small>m to go</small></b><span class="other">Next erg ${m.other ?? 0} m</span>`;
+}
+
+// The rowing club's boathouse: take a scull, or paint yours.
+function pickScull(id) {
+  row.scull = id;
+  storeRow();
+  for (const s of club.spots) if (s.scull) s.el.classList.toggle('on', s.scull === id);
+  note(`${scullById(id).name}: ${scullById(id).line}`);
+}
+function paintScull() {
+  row.colour = SCULL_COLOURS[(SCULL_COLOURS.indexOf(row.colour) + 1) % SCULL_COLOURS.length];
+  storeRow();
+}
+function plannedRow(key) {
+  club.rplan = key;
+  go('rpontoon');
+}
+function honours() {
+  const lines = Object.values(ROW_MODES).map((m) => {
+    let b = null;
+    try { b = JSON.parse(localStorage.getItem(bestKey(m, formatOf(m)))); } catch {}
+    return b?.time ? `${m.label}: ${formatTime(b.time)}` : '';
+  }).filter(Boolean);
+  if (ergBest()) lines.push(`Erg 500 m: ${formatTime(ergBest())}`);
+  note(lines.length ? `Your bests. ${lines.join(' · ')}` : 'No names on it yet: row the Head of the River, or a 500 m on the ergs');
 }
 function note(text) {
   clubNote.textContent = text;
@@ -863,6 +966,14 @@ function placeDoors() {
     }
   }
   for (const p of placed) p.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+  // The erg's numbers, beside its monitor (above it, on a phone held sideways).
+  if (ergRun && ergMonAt) {
+    const [x, y, z] = ergMonAt;
+    const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+    const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw;
+    const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw;
+    ergMon.style.transform = `translate(${((cx + 1) / 2) * w}px, ${((1 - cy) / 2) * h}px) translate(-50%, -165%)`;
+  }
 }
 // The rooms, and you, your boats on the rack: built the first time, rebuilt when your kit changes.
 function placeClub() {
@@ -908,6 +1019,7 @@ function placeClub() {
     renderer.place(meshes.swanLegs, sw.stand > 0.05 ? [basis(k(rightV), k(upV).map((v) => v * sw.stand), k(f.map((v) => -v)), at)] : []);
     out.push(meshes.bridgeSwan, meshes.swanLegs);
   }
+  out.push(...placeRowingClub(l));
   // The nine boats on the boathouse's racks, side on, in your colours.
   BOATS.forEach((b, i) => {
     const key = `${l.key}:${b.id}`;
@@ -918,6 +1030,141 @@ function placeClub() {
   });
   return out;
 }
+// You in rowing kit: an all-in-one in your top's colour, bare arms, no buoyancy aid.
+const suitOf = (l) => ({ ...l, key: `${l.key}:suit`, sleeves: 'none', aid: null });
+// A leg or an arm's two pieces, `a` to `b` through a joint `length` from each
+// that bends towards `up` (boat or erg space).
+function bend(a, b, length, up) {
+  const d = b.map((v, i) => v - a[i]);
+  const dist = Math.min(Math.hypot(...d), length * 2 - 0.001);
+  const h = Math.sqrt(length * length - (dist / 2) ** 2);
+  const mid = a.map((v, i) => (v + b[i]) / 2);
+  // Out of the line, towards `up`.
+  const n = normalize(d);
+  const k = up.reduce((acc, v, i) => acc + v * n[i], 0);
+  const side = normalize(up.map((v, i) => v - n[i] * k));
+  return mid.map((v, i) => v + side[i] * h);
+}
+// A rower on a slide (an erg's or a scull's), in that thing's space, facing -z
+// on an erg (+z in a boat: `facing`). Hips at `hips`, feet at `feet`, hands on
+// `hands` (one point for an erg's handle, or one per oar handle), leaning
+// `lean` radians from upright towards where they face.
+const legParts = new Map();
+function rowerParts(model, l, { hips, feet, hands, lean, facing = -1 }) {
+  const set = paddlerOf(l);
+  const key = l.key;
+  if (!legParts.has(key)) legParts.set(key, { thigh: renderer.createMesh(limbMesh(l.top), 4), shin: renderer.createMesh(limbMesh(l.skin), 4) });
+  const legs = legParts.get(key);
+  // The body: the paddler mesh faces -z; in a boat the rower faces +z, so turn it round.
+  const turn = facing > 0 ? rotationY(Math.PI) : translation(0, 0, 0);
+  const body = multiply(model, multiply(translation(...hips), multiply(turn, rotationX(-lean))));
+  const sh = shoulderOf(l.body);
+  const shoulder = (side) => apply(body, [side * sh.x, sh.y, 0]);
+  const world = (p) => apply(model, p);
+  const arms = [-1, 1].map((side, i) => {
+    // (Turned to face +z, the shoulder at -x in the mesh is on the right: it takes the other handle.)
+    const hand = Array.isArray(hands[0]) ? hands[facing > 0 ? 1 - i : i] : hands.map((v, k) => (k === 0 ? v + side * 0.18 * -facing : v));
+    return limb(translation(0, 0, 0), shoulder(side), world(hand));
+  });
+  const thighs = [];
+  const shins = [];
+  for (const side of [-1, 1]) {
+    const hip = [hips[0] + side * 0.09, hips[1], hips[2]];
+    const foot = [feet[0] + side * 0.09, feet[1], feet[2]];
+    const knee = bend(hip, foot, 0.47, [0, 1, 0]);
+    thighs.push(limb(model, hip, knee));
+    shins.push(limb(model, knee, foot));
+  }
+  renderer.place(set.body, [body]);
+  renderer.place(set.arms, arms);
+  renderer.place(legs.thigh, thighs);
+  renderer.place(legs.shin, shins);
+  return [set.body, set.arms, legs.thigh, legs.shin];
+}
+
+// The rowing club: you in your all-in-one in its changing room, the sculls on
+// the boathouse rack, the ergs, you on yours (rowing, when you are) and the
+// rower on the next one.
+function placeRowingClub(l) {
+  const shots = club.shots;
+  const out = [];
+  meshes.sculls ??= new Map();
+  if (!meshes.erg) {
+    meshes.erg = renderer.createMesh(ergMesh(), ERGS.length);
+    meshes.ergSeat = renderer.createMesh(ergSeatMesh(), ERGS.length);
+    meshes.ergHandle = renderer.createMesh(ergHandleMesh(), ERGS.length);
+  }
+  const suit = suitOf(l);
+  // In the changing room: standing, arms by your sides, the all-in-one to mid-thigh.
+  const set = paddlerOf(suit);
+  const stand = basis([1, 0, 0], [0, 1, 0], [0, 0, 1], shots.rStand);
+  const legsKey = `${l.skin}:${l.top}`;
+  if (!meshes.legs.has(legsKey)) meshes.legs.set(legsKey, renderer.createMesh(legsMesh(l.skin, l.top), 2));
+  const sh = shoulderOf(l.body);
+  if (club.place === 'rchanging' || club.to === 'rchanging') {
+    renderer.place(set.body, [stand]);
+    renderer.place(set.arms, [-1, 1].map((side) => limb(stand, [side * sh.x, sh.y, 0], [side * (sh.x + 0.07), sh.y - 0.62, -0.03])));
+    renderer.place(meshes.legs.get(legsKey), [stand]);
+    out.push(set.body, set.arms, meshes.legs.get(legsKey));
+  }
+  // The sculls on the rack: yours in your colour, the others the club's white.
+  const scullMesh = (hex) => {
+    if (!meshes.sculls.has(hex)) meshes.sculls.set(hex, renderer.createMesh(scullHullMesh({ deck: rgbOf(hex), hull: rgbOf(hex).map((v) => v * 0.94) }), 3));
+    return meshes.sculls.get(hex);
+  };
+  const byColour = new Map();
+  SCULLS.forEach((b, i) => {
+    const mesh = scullMesh(b.id === row.scull ? row.colour : SCULL_COLOURS[0]);
+    if (!byColour.has(mesh)) byColour.set(mesh, []);
+    byColour.get(mesh).push(basis([0, 0, 1], [0, 1, 0], [-1, 0, 0], shots.sculls[i]));
+  });
+  for (const [mesh, where] of byColour) {
+    renderer.place(mesh, where);
+    out.push(mesh);
+  }
+  // The ergs, side on, flywheels to your left; seats where they sit at rest.
+  const ergAt = shots.ergs.map((p) => basis([0, 0, 1], [0, 1, 0], [-1, 0, 0], p));
+  const NEXT = MY_ERG + 2;
+  const seats = [];
+  const handles = [];
+  const rest = { slide: 0.05, arms: 0.4 };
+  // Your pose (rowing, or sat ready), and the next erg's rower, steady at 24 a minute.
+  const mine = ergRun ? ergPose(ergRun.erg) : rest;
+  const t = performance.now() / 1000;
+  const p = (t * 24 / 60) % 1;
+  const smooth = (x) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
+  const theirs = !ergRun ? rest : p < 0.35 ? { slide: 1 - smooth(p / 0.35 / 0.7), arms: 1 - smooth((p / 0.35 - 0.5) / 0.5) } : { slide: smooth(((p - 0.35) / 0.65 - 0.25) / 0.75), arms: smooth((p - 0.35) / 0.65 / 0.25) };
+  const rowers = new Map([[MY_ERG, { pose: mine, l: suit }], [NEXT, { pose: theirs, l: { ...LIVERIES[3], key: 'erg-next', sleeves: 'none', body: 'slim', hair: 'ponytail', hairColour: [0.3, 0.2, 0.1], hat: 'none' } }]]);
+  // (Only in the erg room: a body can stand in one place a frame, and yours is in the changing room too.)
+  const inErgRoom = club.place === 'erg' || club.to === 'erg';
+  ergAt.forEach((model, i) => {
+    const r = inErgRoom ? rowers.get(i) : null;
+    const pose = r?.pose ?? rest;
+    const seatZ = 0.55 - pose.slide * 0.8;
+    seats.push(multiply(model, translation(0, 0, seatZ)));
+    if (!r) {
+      handles.push(multiply(model, translation(0, 0.62, ERG_SIZE.handle - 0.15)));
+      return;
+    }
+    const lean = 0.42 * pose.slide - 0.22 * (1 - pose.slide);
+    const hips = [0, 0.5, seatZ];
+    const body = multiply(translation(...hips), rotationX(-lean));
+    const chest = apply(body, [0, 0.42, -0.12]);
+    const handle = [0, chest[1] - 0.05, chest[2] - 0.18 - 0.42 * pose.arms];
+    handles.push(multiply(model, translation(...handle)));
+    out.push(...rowerParts(model, r.l, { hips, feet: [0, 0.4, ERG_SIZE.feet + 0.05], hands: handle, lean }));
+  });
+  renderer.place(meshes.erg, ergAt);
+  renderer.place(meshes.ergSeat, seats);
+  renderer.place(meshes.ergHandle, handles);
+  out.push(meshes.erg, meshes.ergSeat, meshes.ergHandle);
+  // Where your erg's monitor is, for its numbers.
+  ergMonAt = apply(ergAt[MY_ERG], ERG_SIZE.monitor);
+  return out;
+}
+let ergMonAt = null;
+const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+
 // A gamepad on the walk: the d-pad moves between the labels, A goes.
 function clubGamepad(pressed) {
   if (pressed.has(BUTTON.B)) return back();
@@ -1261,6 +1508,12 @@ function react({ events, splashes }) {
     sounds[e]?.();
     if (e === 'stroke' || e === 'back') controls.rumble(0.25, 40);
     if (e === 'weak') show('Weak stroke', { small: true, hold: 0.5 });
+    if (e === 'crab') {
+      show('You caught a crab! Keep the boat level', { small: true, hold: 2 });
+      noise({ freq: 900, to: 150, q: 0.7, duration: 0.5, gain: 0.18, type: 'lowpass' });
+      tone({ freq: 140, to: 70, duration: 0.25, type: 'triangle', gain: 0.1 });
+      controls.rumble(0.9, 300);
+    }
     if (e === 'swan') hitSwan = race.time;
     if (e.startsWith('hit-')) hitBoat = { kind: e.slice(4), time: race.time };
     if (e === 'capsize') {
@@ -1503,9 +1756,26 @@ function oarFrom(model, from, to) {
 }
 function placeTraffic() {
   const where = Object.fromEntries(Object.keys(TRAFFIC).map((k) => [k, []]));
-  const oars = [];
+  const oars = [...(race.player.boat.hull.scull ? myRowing.oars : [])];
   const paddles = [];
   const swimmers = [];
+  // A head race's rival scullers, on the river's scull with its rower.
+  for (const r of rowingRivals) {
+    const fr = boatFrame(r.boat);
+    const model = basis(fr.right, fr.up, fr.back, fr.pos);
+    if (r.boat.swim > 0) {
+      swimmers.push(basis(fr.f, [0, 1, 0], fr.right, [r.boat.x + fr.right[0] * 1.1, 0, r.boat.z + fr.right[2] * 1.1]));
+      where.sculler.push(multiply(model, rotationZ(Math.PI)));
+      continue;
+    }
+    where.sculler.push(model);
+    const rate = 18 + r.boat.speed * 3.5; // strokes a minute
+    const p = (r.boat.time * rate / 60 + (r.phase ??= Math.random())) % 1;
+    const drive = p < 0.4;
+    const angle = drive ? 0.6 - 1.1 * smooth(p / 0.4) : -0.5 + 1.1 * smooth((p - 0.4) / 0.6);
+    const len = TRAFFIC.sculler.oars[2] - ROWLOCKS.sculler[0][1];
+    for (const [side, x, z] of ROWLOCKS.sculler) oars.push(oarFrom(model, [side * x, 0.2, z], [side * (x + len * Math.cos(angle)), drive ? -0.05 : 0.3, z - len * Math.sin(angle)]));
+  }
   for (const b of race.traffic?.boats ?? []) {
     if (!b.on) continue;
     const f = [Math.sin(b.heading), 0, -Math.cos(b.heading)];
@@ -1569,7 +1839,48 @@ function carried(r) {
   return { seat: g + 0.75, boat: g + 1.8 };
 }
 
+// The rivals in a head race are scullers: drawn as the river's sculls (traffic),
+// their oars swung at a rate from their speed. Handed to placeTraffic.
+let rowingRivals = [];
+// Your scull, from the seat: the hull in your colour, both oars from scullPose
+// (handles in your hands, blades out over the water), your legs and arms.
+function placeMyScull(model, boat) {
+  meshes.myScull ??= new Map();
+  if (!meshes.myScull.has(row.colour)) meshes.myScull.set(row.colour, renderer.createMesh(scullHullMesh({ deck: rgbOf(row.colour), hull: rgbOf(row.colour).map((v) => v * 0.94) })));
+  const hull = meshes.myScull.get(row.colour);
+  renderer.place(hull, [model]);
+  myRowing.list = [hull];
+  const pose = scullPose(boat);
+  const { x: rx, y: ry, z: rz } = SCULL_ROWLOCK;
+  const hands = [];
+  const oars = [];
+  for (const side of [-1, 1]) {
+    const o = side < 0 ? pose.left : pose.right;
+    const a = o.sweep * 0.85; // radians from square: the blade to the stern at the finish
+    const dir = [side * Math.cos(a), 0, Math.sin(a)];
+    const pin = [side * rx, ry, rz];
+    // Handles a little higher on the recovery (blades up), lower through the drive (blades buried).
+    const handle = [pin[0] - dir[0] * 0.88, ry + 0.06 - 0.1 * o.depth + (o.feather ? -0.04 : 0), pin[2] - dir[2] * 0.88];
+    const tip = [pin[0] + dir[0] * 2.0, ry - 0.42 * o.depth + (o.depth ? 0 : 0.22), pin[2] + dir[2] * 2.0];
+    oars.push(oarFrom(model, handle, tip));
+    hands.push(handle);
+  }
+  myRowing.oars = oars;
+  // You: hips on the seat (up the slide towards the stern at the catch), feet
+  // in the shoes, hands on the handles, leaning into the catch.
+  const seat = SCULL_SEAT.finish + (SCULL_SEAT.catch - SCULL_SEAT.finish) * pose.slide;
+  const lean = 0.4 * pose.slide - 0.25 * (1 - pose.slide);
+  const l = suitOf({ key: kitKey(kit), ...livery(kit) });
+  // (Not your body: the camera's in your head. Your legs and arms.)
+  myRowing.list.push(...rowerParts(model, l, { hips: [0, SCULL_SEAT.y + 0.1, seat], feet: [0, SCULL_FEET.y, SCULL_FEET.z], hands, lean, facing: 1 }).slice(1));
+  myRowing.pose = pose;
+  myRowing.seat = seat;
+  myRowing.lean = lean;
+}
+const myRowing = { list: [], oars: [], pose: null, seat: 0, lean: 0 };
+
 function placeRacers() {
+  rowingRivals = [];
   const paddles = new Map([...meshes.paddles.values()].map((m) => [m, []])); // mesh -> where
   const hold = (r, matrix) => {
     const mesh = paddleFor(r);
@@ -1585,6 +1896,15 @@ function placeRacers() {
     // On an outing you're on the trip boat or the launch, not in a kayak.
     if (r === race.player && race.outing) {
       renderer.place(meshes.outing[race.outing.kind], [basis(fr.right, fr.up, fr.back, fr.pos)]);
+      continue;
+    }
+    // Rowing: your scull from the seat, the rivals' sculls with their rowers.
+    if (r.boat.hull.scull) {
+      if (r === race.player) placeMyScull(model, r.boat);
+      continue;
+    }
+    if (mode.row && r !== race.player) {
+      rowingRivals.push(r);
       continue;
     }
     renderer.place(kayakFor(r), [basis(fr.right, fr.up, fr.back, hullAt)]);
@@ -1642,6 +1962,19 @@ function render(time) {
   let fwd = normalize(fr.f.map((v, i) => v * Math.cos(pitch) - fr.up[i] * Math.sin(pitch)));
   let up = normalize(fr.up.map((v, i) => v * Math.cos(pitch) + fr.f[i] * Math.sin(pitch)));
   let right = fr.right;
+  // In a scull: sat facing the stern, eye going up and down the slide with
+  // you, looking down a little at the stretcher and the coach; ↑ (or Y, or the
+  // Look button) turns your head round over your shoulder to see where you're going.
+  if (boat.hull.scull && state !== 'menu' && myRowing.pose) {
+    const local = [0, SCULL_SEAT.y + 0.95 - 0.12 * Math.max(0, myRowing.lean), myRowing.seat + 0.1 + 0.32 * Math.max(0, myRowing.lean)];
+    eye = fr.pos.map((p, i) => p + fr.right[i] * local[0] + fr.up[i] * (local[1] + bob + lift) + fr.back[i] * local[2]);
+    const turn = lookBack * 2.6; // radians: over the right shoulder
+    const pitch = 0.42 * (1 - lookBack) + 0.05;
+    const ahead = fr.back.map((v, i) => v * Math.cos(turn) + fr.right[i] * -Math.sin(turn));
+    fwd = normalize(ahead.map((v, i) => v * Math.cos(pitch) - fr.up[i] * Math.sin(pitch)));
+    right = normalize([-fwd[2], 0, fwd[0]]);
+    up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+  }
   // On an outing: standing at the trip boat's bow, or at the launch's helm, looking about.
   if (race.outing && state !== 'menu') {
     const o = OUTINGS[race.outing.kind];
@@ -1662,7 +1995,9 @@ function render(time) {
   }
   // Portrait screens widen the vertical view so the horizontal one stays usable.
   const aspect = renderer.aspect;
-  const minX = shot?.wide ? (shot.wide * Math.PI) / 180 : MIN_FOV_X;
+  // A scull's view is wide: the oars reach out either side of you.
+  const wide = shot?.wide ?? (boat.hull.scull && state !== 'menu' ? ROW_WIDE : 0);
+  const minX = wide ? (wide * Math.PI) / 180 : MIN_FOV_X;
   const tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(minX / 2) / aspect);
   const proj = perspective(2 * Math.atan(tanY), aspect, 0.05, 2500);
 
@@ -1696,14 +2031,52 @@ function render(time) {
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
   for (const r of race.racers) {
-    list.push(r === race.player && race.outing ? meshes.outing[race.outing.kind] : kayakFor(r));
-    if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
+    if (r.boat.hull.scull) list.push(...myRowing.list);
+    else if (mode.row) continue; // a head race's rivals: drawn as the river's sculls
+    else list.push(r === race.player && race.outing ? meshes.outing[race.outing.kind] : kayakFor(r));
+    if (r !== race.player && !mode.row) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
   list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle, meshes.swimmer);
   if (shot) list.push(...placeClub());
   renderer.draw(frameData, list);
   if (shot) clubEl.classList.remove('waiting');
   if (shot) placeDoors();
+  placeCoach();
+}
+
+// The stroke coach on your foot stretcher: its numbers, on its screen.
+const coachEl = document.getElementById('coach');
+function placeCoach() {
+  const boat = race.player.boat;
+  const on = !!boat.hull.scull && state !== 'menu' && !hud.hidden && lookBack < 0.3;
+  coachEl.hidden = !on;
+  if (!on || !viewProj) return;
+  const fr = boatFrame(boat);
+  const model = basis(fr.right, fr.up, fr.back, fr.pos);
+  const [x, y, z] = apply(model, SCULL_COACH);
+  const m = viewProj;
+  const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+  const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw;
+  const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw;
+  coachEl.style.transform = `translate(${((cx + 1) / 2) * canvas.clientWidth}px, ${((1 - cy) / 2) * canvas.clientHeight}px) translate(-50%, -50%)`;
+  const { course } = race;
+  const sp = split(boat, course.warp / course.speedup);
+  const metres = Math.max(0, race.player.loc.s - course.start) * course.warp / course.speedup;
+  const time = race.format === 'interval' ? (race.player.crossed === null ? 0 : elapsed(race, race.player)) : race.time;
+  coachEl.innerHTML = `<span class="rate"><b>${scullRate(boat) || '--'}</b><small>SPM</small></span><span class="split"><b>${sp ? formatTime(sp, 0) : '-:--'}</b><small>/500</small></span><span><b>${formatTime(shown(race.player.finish ?? time), 0)}</b><small>TIME</small></span><span><b>${Math.round(metres)}</b><small>M</small></span>`;
+}
+
+// Looking back over your shoulder in a scull: held ↑, Y, or the Look button.
+let lookBack = 0;
+let lookWant = false;
+addEventListener('keydown', (e) => { if (e.code === 'ArrowUp' && race?.player.boat.hull.scull) { lookWant = true; e.preventDefault(); } });
+addEventListener('keyup', (e) => { if (e.code === 'ArrowUp') lookWant = false; });
+const lookBtn = document.getElementById('lookBtn');
+for (const [type, want] of [['pointerdown', true], ['pointerup', false], ['pointercancel', false], ['pointerleave', false]]) lookBtn.addEventListener(type, (e) => { lookWant = want; e.preventDefault(); e.stopPropagation(); });
+function stepLook(dt) {
+  const pad = navigator.getGamepads?.()?.find?.((p) => p);
+  const want = lookWant || !!pad?.buttons[3]?.pressed; // Y, on a standard pad
+  lookBack += ((want ? 1 : 0) - lookBack) * Math.min(1, dt * 6);
 }
 
 // Open the page with #tilt to see what the motion sensors are doing.
@@ -1759,10 +2132,10 @@ function updateHud(dt) {
   els.pos.textContent = `${ordinal(standings(race).indexOf(race.player) + 1)} / ${race.racers.length}`;
   els.wash.classList.toggle('on', race.player.draft > 0.3 && state === 'racing');
   els.speed.textContent = (boat.speed * 3.6).toFixed(1);
-  els.rate.textContent = strokeRate(boat);
+  els.rate.textContent = boat.hull.scull ? scullRate(boat) : strokeRate(boat);
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
   els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
-  if (!race.outing) {
+  if (!race.outing && !boat.hull.scull) {
     sprintHint(boat, dt);
     stuckHint(boat, dt);
   }
@@ -1778,7 +2151,7 @@ function updateHud(dt) {
   // On phones, the controls in a line until a little way into the race.
   hud.classList.toggle('helping', phone.matches && (state === 'start' || (state === 'racing' && race.time < 6)));
   els.rudder.style.transform = `translateX(${(controls.rudder * 39).toFixed(1)}px)`;
-  const angle = Math.max(-1.1, Math.min(1.1, boat.roll / BOAT.capsize)) * 90;
+  const angle = Math.max(-1.1, Math.min(1.1, boat.roll / (boat.hull.scull ? boat.hull.crabAt : BOAT.capsize))) * 90;
   els.needle.style.transform = `rotate(${angle.toFixed(1)}deg)`;
 }
 
@@ -1954,7 +2327,9 @@ function frame(now) {
     if (state === 'menu') for (const r of race.racers) r.boat.time += dt;
   }
   updateHud(dt);
+  stepLook(dt);
   if (club) stepClub(dt);
+  if (ergRun) stepErgRun(dt);
   render(now / 1000);
   requestAnimationFrame(frame);
 }
@@ -2003,7 +2378,7 @@ function paddlerOf(l) {
   if (!meshes.racers.has(l.key)) {
     meshes.racers.set(l.key, {
       body: renderer.createMesh(paddlerMesh(l)),
-      arms: renderer.createMesh(limbMesh(l.top, { skin: l.skin, sleeve: l.sleeves === 'short' ? 0.4 : 1 }), 2),
+      arms: renderer.createMesh(limbMesh(l.top, { skin: l.skin, sleeve: l.sleeves === 'short' ? 0.4 : l.sleeves === 'none' ? 0 : 1 }), 2),
     });
   }
   return meshes.racers.get(l.key);

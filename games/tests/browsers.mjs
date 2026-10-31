@@ -86,6 +86,9 @@ const CASES = [
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
+  // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
+  { name: 'webkit, desktop, a practice row', engine: webkit, ctx: desktop, club: true, row: true },
+  { name: 'iphone safari, the ergs', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true, erg: true },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -112,7 +115,9 @@ async function play(c, page, errors) {
   if (c.club) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
-    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+    const steps = c.outing ? [[c.outing, null]]
+      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Go to the water', 'rpontoon'], ['Push off', null]])]
+      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
       // Keys with the picker open: Backspace in one of its fields stays put, Esc goes back.
       if (label === '@backspace') {
@@ -133,7 +138,19 @@ async function play(c, page, errors) {
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
-    if (!c.outing && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
+    if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
+    // The erg: both sides together for each stroke, and the monitor counts down the 500 m.
+    if (c.erg) {
+      for (let i = 0; i < 6; i++) {
+        if (c.touch) await Promise.all([page.touchscreen.tap(page.viewportSize().width * 0.2, page.viewportSize().height * 0.6), page.touchscreen.tap(page.viewportSize().width * 0.8, page.viewportSize().height * 0.6)]);
+        else await page.keyboard.press('ArrowLeft');
+        await page.waitForTimeout(1600);
+      }
+      const shown = await page.locator('#ergMon').textContent();
+      const left = Number(/(\d+)m to go/.exec(shown)?.[1]);
+      if (!(left < 500)) errors.push(`the erg's monitor says ${shown}`);
+      return `the erg: ${shown.replace(/\s+/g, ' ').slice(0, 60)}`;
+    }
   }
   // The practice time trial on your own, or a real river with the pack: there
   // the horn waits for you on the line, so the boat is put there.

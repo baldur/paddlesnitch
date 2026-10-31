@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from '../kayak/metrics.js';
 import { cleanKit, randomKit, SKIN_TONES } from '../kayak/kit.js';
+import { PLACES } from '../kayak/club.js';
 
 const fits = ({ props }) => {
   assert.ok(Object.keys(props).length <= 10, `${Object.keys(props).length} props`);
@@ -71,7 +72,7 @@ test('a visit counts only the time the page is in view, sent as what was added s
   fits(first);
   assert.equal(sessionEvent(s, 600), null, 'nothing new while hidden');
   const all = createSession(0, 'walk');
-  for (const p of ['path', 'rowing', 'club', 'changing', 'boathouse', 'clubhouse', 'pontoon']) all.places.add(p);
+  for (const p of Object.keys(PLACES)) all.places.add(p); // both clubs, every room
   for (const i of ['keys', 'mouse', 'pad', 'touch']) all.inputs.add(i);
   fits(sessionEvent(all, 10, 'webgl2')); // every place on the walk and every control, still short enough
   assert.ok(!('places' in sessionEvent(createSession(0, 'menu'), 5).props), 'no places: left out, not empty');
