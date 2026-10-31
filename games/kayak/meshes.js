@@ -193,30 +193,122 @@ export function paddleMesh({ shaft, blade, flat = false }) {
   return m.build();
 }
 
-// A rival paddler from the hips up, in boat space, sitting at the cockpit:
-// torso in their club top, head and a cap (in `cap`'s colour) or hair (`head`
-// 'hair', the same colour), and sunglasses unless `glasses` is 'none' (lenses
-// in `lens`). Arms are separate (see limbMesh).
+// A paddler from the hips up, in boat space, sitting at the cockpit, facing
+// -z: a man's or a woman's build (`body`), a face, hair (`hair`, in
+// `hairColour`) under a hat (`hat`, in `cap`'s colour), a beard or not, a
+// buoyancy aid over the top if `aid` is its colour, and sunglasses unless
+// `glasses` is 'none' (lenses in `lens`). Arms are separate (see limbMesh),
+// from `shoulderOf(body)`.
 export const SEAT = 0.15; // z of the paddler's hips
 export const SHOULDER = { x: 0.2, y: 0.58 };
+const SHOULDERS = { man: SHOULDER, woman: { x: 0.175, y: 0.56 } };
+export const shoulderOf = (body) => SHOULDERS[body] ?? SHOULDER;
+// The torso as rings up from the seat: [y, half width, depth in front, depth
+// behind], each an eight-sided ring (the corners cut off).
+const TORSO = {
+  man: [[0.08, 0.16, 0.11, 0.11], [0.38, 0.17, 0.125, 0.115], [0.5, 0.2, 0.12, 0.105], [0.6, 0.22, 0.1, 0.1]],
+  woman: [[0.08, 0.155, 0.105, 0.105], [0.25, 0.13, 0.095, 0.095], [0.4, 0.15, 0.135, 0.1], [0.48, 0.165, 0.125, 0.095], [0.58, 0.19, 0.09, 0.09]],
+};
 const FRAME = [0.08, 0.08, 0.09];
+const EYES = [0.07, 0.06, 0.06];
+const LIPS = [0.55, 0.28, 0.27];
 // Each lens's half width and height, and how far below the eyeline it hangs.
 const LENSES = { round: [0.024, 0.016, 0], aviator: [0.026, 0.022, 0.006], square: [0.028, 0.015, 0] };
-export function paddlerMesh({ top, skin, cap, head = 'cap', glasses = 'none', lens = FRAME }) {
+const mix = (a, b, t) => a.map((v, i) => v * (1 - t) + b[i] * t);
+// Eight-sided rings joined bottom to top, with a lid on the top one.
+function loft(m, rings, color) {
+  const round = ([y, w, f, b]) => {
+    const c = 0.35 * Math.min(w, f, b);
+    return [[-w + c, -f], [w - c, -f], [w, -f + c], [w, b - c], [w - c, b], [-w + c, b], [-w, b - c], [-w, -f + c]].map(([x, z]) => [x, y, z]);
+  };
+  const pts = rings.map(round);
+  for (let r = 1; r < pts.length; r++) {
+    for (let i = 0; i < 8; i++) {
+      const j = (i + 1) % 8;
+      const [a, b, c, d] = [pts[r - 1][i], pts[r - 1][j], pts[r][j], pts[r][i]];
+      const out = [(a[0] + b[0]) / 2, 0, (a[2] + b[2]) / 2];
+      m.triFacing(a, b, c, color, out);
+      m.triFacing(a, c, d, color, out);
+    }
+  }
+  const lid = pts[pts.length - 1];
+  const mid = [0, lid[0][1], (lid[0][2] + lid[4][2]) / 2];
+  for (let i = 0; i < 8; i++) m.triFacing(mid, lid[i], lid[(i + 1) % 8], color, [0, 1, 0]);
+}
+export function paddlerMesh({ top, skin, cap, body = 'man', hair = 'short', hairColour = [0.23, 0.14, 0.08], hat = 'cap', beard = 'none', aid = null, glasses = 'none', lens = FRAME }) {
   const m = new MeshBuilder();
-  const ring = (y, w, d) => [[-w, y, -d], [w, y, -d], [w, y, d], [-w, y, d]];
-  m.prism(ring(0.08, 0.16, 0.11), ring(0.38, 0.17, 0.12), top);
-  m.prism(ring(0.38, 0.17, 0.12), ring(SHOULDER.y + 0.02, 0.22, 0.1), top);
-  m.cylinder([0, SHOULDER.y, 0], 0.05, 0.12, 6, skin);
+  const woman = body === 'woman';
+  const rings = TORSO[woman ? 'woman' : 'man'];
+  loft(m, rings, top);
+  if (aid) {
+    // A buoyancy aid: a padded vest from the ribs up over the shoulders, and
+    // a buckled strap across the front.
+    const lo = rings[0][0] + 0.1;
+    const at = (y) => {
+      for (let i = 1; i < rings.length; i++) {
+        const [a, b] = [rings[i - 1], rings[i]];
+        if (y <= b[0]) { const t = (y - a[0]) / (b[0] - a[0]); return a.map((v, k) => v + (b[k] - v) * t); }
+      }
+      return rings[rings.length - 1];
+    };
+    const pad = 0.03;
+    const grow = ([y, w, f, b]) => [y, w + pad * 0.6, f + pad, b + pad * 0.8];
+    const vest = [at(lo), ...rings.filter((r) => r[0] > lo)].map(grow);
+    vest[vest.length - 1][0] += 0.012;
+    loft(m, vest, aid);
+    const [, w, f] = grow(at(lo + 0.08));
+    m.box([-w - 0.004, lo + 0.06, -f - 0.008], [w + 0.004, lo + 0.1, -f + 0.02], mix(aid, [0, 0, 0], 0.7));
+    m.box([-0.025, lo + 0.055, -f - 0.014], [0.025, lo + 0.105, -f], [0.75, 0.75, 0.72]); // the buckle
+  }
+  const neck = shoulderOf(body).y;
+  m.cylinder([0, neck, 0], woman ? 0.042 : 0.05, 0.12, 6, skin);
   m.sphere([0, 0.77, -0.01], 0.105, skin, 5, 8);
-  if (head === 'hair') {
-    m.sphere([0, 0.795, 0.015], 0.108, cap, 3, 8);
-    m.box([-0.09, 0.7, 0.02], [0.09, 0.8, 0.11], cap); // the back of the head
-  } else {
+  // The face looks down -z; the eyes are about y 0.785.
+  const brow = hair === 'none' ? mix(skin, [0.1, 0.08, 0.06], 0.5) : hairColour;
+  for (const side of [-1, 1]) {
+    const x = side * 0.038;
+    m.box([x - 0.011, 0.781, -0.116], [x + 0.011, 0.793, -0.104], EYES);
+    m.box([x - 0.019, 0.804, -0.113], [x + 0.019, 0.811, -0.1], brow);
+  }
+  m.box([-0.011, 0.752, -0.124], [0.011, 0.778, -0.108], mix(skin, [0, 0, 0], 0.08)); // the nose
+  m.box([-0.024, 0.733, -0.112], [0.024, woman ? 0.742 : 0.739, -0.1], woman ? LIPS : mix(skin, [0.35, 0.1, 0.1], 0.45));
+  if (beard === 'beard' || beard === 'stubble') {
+    m.sphere([0, 0.742, -0.022], 0.096, beard === 'beard' ? hairColour : mix(skin, hairColour, 0.35), 4, 8);
+    m.box([-0.022, 0.729, -0.122], [0.022, 0.737, -0.11], beard === 'beard' ? mix(hairColour, [0, 0, 0], 0.4) : LIPS); // the mouth, through it
+  }
+  if (beard === 'moustache' || beard === 'beard') m.box([-0.034, 0.743, -0.122], [0.034, 0.754, -0.104], hairColour);
+  // Hair: a crown unless a cap or beanie sits on it (a visor has no crown),
+  // then whatever shows below the hat.
+  const hatted = hat === 'cap' || hat === 'beanie';
+  if (hair !== 'none') {
+    if (!hatted) {
+      if (hair === 'crop') m.sphere([0, 0.8, 0.02], 0.1, hairColour, 3, 8);
+      else m.sphere([0, 0.795, 0.015], 0.108, hairColour, 3, 8);
+    }
+    if (hair !== 'crop') m.box([-0.09, 0.7, 0.02], [0.09, 0.8, 0.11], hairColour); // the back of the head
+    if (hair === 'ponytail') {
+      m.box([-0.02, 0.78, 0.1], [0.02, 0.81, 0.13], mix(hairColour, [0, 0, 0], 0.5)); // the tie
+      m.prism([[-0.03, 0.79, 0.12], [0.03, 0.79, 0.12], [0.03, 0.79, 0.16], [-0.03, 0.79, 0.16]],
+        [[-0.018, 0.6, 0.15], [0.018, 0.6, 0.15], [0.018, 0.6, 0.18], [-0.018, 0.6, 0.18]], hairColour);
+    } else if (hair === 'bun') {
+      m.sphere(hatted ? [0, 0.79, 0.12] : [0, 0.86, 0.09], 0.045, hairColour, 3, 6);
+    } else if (hair === 'long') {
+      m.prism([[-0.095, 0.8, 0.02], [0.095, 0.8, 0.02], [0.095, 0.8, 0.12], [-0.095, 0.8, 0.12]],
+        [[-0.11, 0.56, 0.04], [0.11, 0.56, 0.04], [0.11, 0.56, 0.12], [-0.11, 0.56, 0.12]], hairColour);
+      for (const side of [-1, 1]) m.box([side * 0.1 - 0.012, 0.66, -0.04], [side * 0.1 + 0.012, 0.8, 0.06], hairColour);
+    }
+  }
+  if (hat === 'cap') {
     m.sphere([0, 0.81, 0.0], 0.1, cap, 3, 8);
     m.box([-0.08, 0.79, -0.15], [0.08, 0.805, -0.07], cap); // peak
+  } else if (hat === 'visor') {
+    m.cylinder([0, 0.8, -0.005], 0.109, 0.03, 10, cap);
+    m.box([-0.08, 0.8, -0.16], [0.08, 0.812, -0.07], cap);
+  } else if (hat === 'beanie') {
+    m.sphere([0, 0.805, 0.005], 0.112, cap, 4, 8);
+    m.cylinder([0, 0.77, 0.0], 0.115, 0.035, 10, mix(cap, [0, 0, 0], 0.2)); // the turn-up
+    m.sphere([0, 0.925, 0.005], 0.026, mix(cap, [1, 1, 1], 0.5), 2, 6); // the bobble
   }
-  // On the face, which looks down -z; the eyes are about y 0.785.
   if (glasses === 'wrap') {
     m.box([-0.088, 0.772, -0.124], [0.088, 0.8, -0.1], lens);
   } else if (LENSES[glasses]) {

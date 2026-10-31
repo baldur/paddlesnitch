@@ -12,7 +12,7 @@ import { encodeState, decodeState, createTrack, receive, sample, applyState, SEN
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, startOuting, stepOuting, tripBoatMesh, launchMesh } from './outing.js';
-import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
+import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf } from './meshes.js';
 import { TRAFFIC } from './traffic.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
@@ -70,15 +70,15 @@ const CLUB = HASH.has('club');
 const LIVERIES = [
   { deck: [0.9, 0.2, 0.16], hull: [0.95, 0.93, 0.88], stripe: [0.97, 0.97, 0.95] },
   { deck: [0.12, 0.35, 0.8], hull: [0.95, 0.95, 0.95], stripe: [0.95, 0.85, 0.2], top: [0.95, 0.8, 0.15], skin: [0.85, 0.65, 0.5], cap: [0.1, 0.25, 0.7] },
-  { deck: [0.95, 0.95, 0.92], hull: [0.92, 0.92, 0.9], stripe: [0.1, 0.6, 0.4], top: [0.1, 0.55, 0.35], skin: [0.6, 0.42, 0.3], cap: [0.95, 0.95, 0.95] },
+  { deck: [0.95, 0.95, 0.92], hull: [0.92, 0.92, 0.9], stripe: [0.1, 0.6, 0.4], top: [0.1, 0.55, 0.35], skin: [0.6, 0.42, 0.3], cap: [0.95, 0.95, 0.95], body: 'woman', hair: 'ponytail', hairColour: [0.35, 0.2, 0.1], hat: 'visor' },
   { deck: [0.98, 0.75, 0.1], hull: [0.95, 0.93, 0.88], stripe: [0.2, 0.2, 0.2], top: [0.15, 0.15, 0.18], skin: [0.92, 0.75, 0.62], cap: [0.98, 0.75, 0.1] },
-  { deck: [0.55, 0.15, 0.6], hull: [0.95, 0.95, 0.95], stripe: [0.95, 0.95, 0.95], top: [0.6, 0.2, 0.65], skin: [0.75, 0.55, 0.4], cap: [0.95, 0.95, 0.95] },
-  { deck: [0.1, 0.1, 0.12], hull: [0.9, 0.9, 0.88], stripe: [0.9, 0.2, 0.2], top: [0.85, 0.15, 0.15], skin: [0.42, 0.28, 0.2], cap: [0.1, 0.1, 0.1] },
+  { deck: [0.55, 0.15, 0.6], hull: [0.95, 0.95, 0.95], stripe: [0.95, 0.95, 0.95], top: [0.6, 0.2, 0.65], skin: [0.75, 0.55, 0.4], cap: [0.95, 0.95, 0.95], hair: 'crop', hairColour: [0.1, 0.08, 0.06], beard: 'beard', hat: 'none' },
+  { deck: [0.1, 0.1, 0.12], hull: [0.9, 0.9, 0.88], stripe: [0.9, 0.2, 0.2], top: [0.85, 0.15, 0.15], skin: [0.42, 0.28, 0.2], cap: [0.1, 0.1, 0.1], body: 'woman', hair: 'bun', hairColour: [0.08, 0.06, 0.05], hat: 'none' },
   { deck: [0.2, 0.7, 0.85], hull: [0.95, 0.95, 0.95], stripe: [0.95, 0.95, 0.95], top: [0.95, 0.95, 0.95], skin: [0.9, 0.72, 0.58], cap: [0.2, 0.7, 0.85] },
   { deck: [0.95, 0.45, 0.1], hull: [0.95, 0.93, 0.88], stripe: [0.1, 0.1, 0.1], top: [0.3, 0.3, 0.32], skin: [0.88, 0.68, 0.55], cap: [0.95, 0.45, 0.1] },
-  { deck: [0.85, 0.85, 0.82], hull: [0.92, 0.92, 0.9], stripe: [0.8, 0.1, 0.3], top: [0.8, 0.1, 0.3], skin: [0.7, 0.5, 0.38], cap: [0.85, 0.85, 0.82] },
+  { deck: [0.85, 0.85, 0.82], hull: [0.92, 0.92, 0.9], stripe: [0.8, 0.1, 0.3], top: [0.8, 0.1, 0.3], skin: [0.7, 0.5, 0.38], cap: [0.85, 0.85, 0.82], body: 'woman', hair: 'ponytail', hairColour: [0.75, 0.6, 0.35] },
   { deck: [0.15, 0.45, 0.2], hull: [0.95, 0.95, 0.95], stripe: [0.95, 0.95, 0.95], top: [0.95, 0.6, 0.1], skin: [0.9, 0.74, 0.62], cap: [0.15, 0.45, 0.2] },
-  { deck: [0.3, 0.3, 0.75], hull: [0.95, 0.93, 0.88], stripe: [0.95, 0.4, 0.1], top: [0.3, 0.3, 0.75], skin: [0.5, 0.34, 0.24], cap: [0.95, 0.4, 0.1] },
+  { deck: [0.3, 0.3, 0.75], hull: [0.95, 0.93, 0.88], stripe: [0.95, 0.4, 0.1], top: [0.3, 0.3, 0.75], skin: [0.5, 0.34, 0.24], cap: [0.95, 0.4, 0.1], body: 'woman', hair: 'long', hairColour: [0.1, 0.07, 0.05], hat: 'visor' },
   { deck: [0.98, 0.9, 0.3], hull: [0.95, 0.95, 0.95], stripe: [0.2, 0.5, 0.9], top: [0.2, 0.5, 0.9], skin: [0.86, 0.66, 0.52], cap: [0.98, 0.9, 0.3] },
 ];
 
@@ -89,7 +89,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'headColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
+const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'hairColour', 'hatColour', 'aid', 'aidColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -348,10 +348,13 @@ els.boatList.append(...BOATS.map((b) => make(
 
 // The fields show the kit; any change to them is the new kit, kept at once.
 function showKit() {
-  for (const name of ['skin', 'head', 'sleeves', 'glasses', 'boat', 'deckShape', 'hullShape', 'paddle']) {
+  for (const name of ['skin', 'body', 'hair', 'hat', 'beard', 'sleeves', 'glasses', 'boat', 'deckShape', 'hullShape', 'paddle']) {
     for (const input of menu.querySelectorAll(`input[name="${name}"]`)) input.checked = input.value === kit[name];
   }
-  els.headColour.value = kit.headColour;
+  els.hairColour.value = kit.hairColour;
+  els.hatColour.value = kit.hatColour;
+  els.aid.checked = kit.aid;
+  els.aidColour.value = kit.aidColour;
   els.topColour.value = kit.top;
   els.glassesColour.value = kit.glassesColour;
   els.deckColour.value = kit.deck;
@@ -375,8 +378,10 @@ const checked = (name) => menu.querySelector(`input[name="${name}"]:checked`)?.v
 menu.addEventListener('input', (e) => {
   if (!e.target.closest('#stepPaddler, #stepBoat, #stepPaddle')) return;
   kit = cleanKit({
-    skin: checked('skin'), head: checked('head'), headColour: els.headColour.value,
-    sleeves: checked('sleeves'), top: els.topColour.value,
+    skin: checked('skin'), body: checked('body'),
+    hair: checked('hair'), hairColour: els.hairColour.value, hat: checked('hat'), hatColour: els.hatColour.value,
+    beard: checked('beard'), sleeves: checked('sleeves'), top: els.topColour.value,
+    aid: els.aid.checked, aidColour: els.aidColour.value,
     glasses: checked('glasses'), glassesColour: els.glassesColour.value,
     boat: checked('boat'), deck: els.deckColour.value, hullColour: els.hullColour.value, stripe: els.stripeColour.value,
     deckShape: checked('deckShape'), hullShape: checked('hullShape'),
@@ -804,7 +809,8 @@ function placeClub() {
   if (!meshes.legs.has(legsKey)) meshes.legs.set(legsKey, renderer.createMesh(legsMesh(l.skin)));
   const legs = meshes.legs.get(legsKey);
   renderer.place(set.body, [stand]);
-  renderer.place(set.arms, [-1, 1].map((side) => limb(stand, [side * SHOULDER.x, SHOULDER.y, 0], [side * (SHOULDER.x + 0.07), SHOULDER.y - 0.62, -0.03])));
+  const sh = shoulderOf(l.body);
+  renderer.place(set.arms, [-1, 1].map((side) => limb(stand, [side * sh.x, sh.y, 0], [side * (sh.x + 0.07), sh.y - 0.62, -0.03])));
   renderer.place(legs, [stand]);
   out.push(set.body, set.arms, legs);
   // The confused swan on Caversham Bridge's parapet.
@@ -1504,10 +1510,11 @@ function placeRacers() {
     const pose = rivalPaddle(r.boat);
     hold(r, multiply(model, pose.matrix));
     renderer.place(set.body, [multiply(model, multiply(translation(0, 0, SEAT), rotationY(pose.twist)))]);
+    const sh = shoulderOf(liveries.get(r)?.body);
     const arms = [-1, 1].map((side) => {
       const c = Math.cos(pose.twist);
       const s = Math.sin(pose.twist);
-      const shoulder = [side * SHOULDER.x * c, SHOULDER.y, SEAT - side * SHOULDER.x * s];
+      const shoulder = [side * sh.x * c, sh.y, SEAT - side * sh.x * s];
       return limb(model, shoulder, apply(pose.matrix, [side * 0.36, 0, 0]));
     });
     renderer.place(set.arms, arms);
