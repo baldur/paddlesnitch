@@ -514,11 +514,17 @@ summary { cursor: pointer; }
   border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 18, 18, 0.6); color: #fff; font-weight: 600; pointer-events: auto; touch-action: none; }
 #hud.rowing #lookLeft { right: calc(50% + 8px); }
 #hud.rowing #lookRight { left: calc(50% + 8px); }
-/* Held sideways there's room beside the gauge, clear of the coach. */
+/* Held sideways: at the outer edges, just above the speed and the meters (where the thumbs rest)… */
 @media (orientation: landscape) {
+  #hud.rowing .look { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 72px); }
+  #hud.rowing #lookLeft { left: max(16px, env(safe-area-inset-left)); right: auto; }
+  #hud.rowing #lookRight { right: max(16px, env(safe-area-inset-right)); left: auto; }
+}
+/* …and on a wide screen, in the bottom row beside the gauge, where there's room. */
+@media (orientation: landscape) and (min-width: 760px) {
   #hud.rowing .look { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 8px); }
-  #hud.rowing #lookLeft { right: calc(50% + 112px); }
-  #hud.rowing #lookRight { left: calc(50% + 112px); }
+  #hud.rowing #lookLeft { right: calc(50% + 112px); left: auto; }
+  #hud.rowing #lookRight { left: calc(50% + 112px); right: auto; }
 }
 @media (hover: hover) and (pointer: fine) { #hud.rowing #lookLeft::after { content: ' (Q)'; font-weight: 400; opacity: 0.7; } #hud.rowing #lookRight::after { content: ' (E)'; font-weight: 400; opacity: 0.7; } }
 /* The erg's monitor: its numbers just above the machine's own. */

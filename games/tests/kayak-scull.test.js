@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBoat } from '../kayak/sim.js';
-import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow, easeLook } from '../kayak/scull.js';
+import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow, easeLook, lookFromKeys } from '../kayak/scull.js';
 import { readFile } from 'node:fs/promises';
 import { createRace, stepRace, started, DIVISION_9 } from '../kayak/race.js';
 import { practiceRiver, headingAt, pointAt, locate, courseFromFile } from '../kayak/course.js';
@@ -309,4 +309,12 @@ test('looking round over either shoulder: the head turns towards it quickly, not
   assert.ok(look > 0.99, 'and over to the right');
   for (let t = 0; t < 1; t += DT) look = easeLook(look, 0, DT);
   assert.ok(Math.abs(look) < 0.01, 'back down the boat');
+});
+
+test('with look keys held together, the last one still held wins; none held, back down the boat', () => {
+  assert.equal(lookFromKeys([]), 0);
+  assert.equal(lookFromKeys(['KeyE']), 1);
+  assert.equal(lookFromKeys(['KeyE', 'KeyQ']), -1, 'E then Q: left');
+  assert.equal(lookFromKeys(['KeyE']), 1, 'let go of Q: back to E, still held');
+  assert.equal(lookFromKeys(['ArrowUp', 'KeyE']), 1);
 });

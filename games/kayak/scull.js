@@ -299,3 +299,10 @@ export function cleanRow(raw) {
 export function easeLook(look, want, dt) {
   return look + (want - look) * Math.min(1, dt * 6);
 }
+
+// The keys that look round: ↑ or E over your right shoulder, Q over your left
+// (and a phone's two Look buttons, as if keys).
+// With several held, the one pressed last that's still held wins (let go of it
+// and you look the way the other one says).
+export const LOOK_KEYS = { ArrowUp: 1, KeyE: 1, KeyQ: -1, LookLeft: -1, LookRight: 1 }; // (the last two: the phone's buttons)
+export const lookFromKeys = (held) => (held.length ? LOOK_KEYS[held[held.length - 1]] : 0);

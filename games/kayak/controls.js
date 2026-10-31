@@ -260,16 +260,18 @@ export class Controls {
       return Math.abs(v) > DEADZONE ? v : 0;
     };
     const keyRudder = (this.#held.has(KEYS.rudderRight) ? 1 : 0) - (this.#held.has(KEYS.rudderLeft) ? 1 : 0);
-    this.keyRudder = keyRudder; // (a scull takes Q and E for looking round: main.js drops this part)
     // A thumb held still is a forward stroke once it's clearly not a swipe.
     const now = performance.now();
     for (const [id, t] of this.#touches) if (now - t.at >= TAP_WAIT) this.#touchStroke(id, t.side);
     const strokes = this.#strokes;
     this.#strokes = [];
-    this.rudder = clamp(keyRudder + axis(0) + this.#dragRudder + this.twistRudder);
+    const rest = axis(0) + this.#dragRudder + this.twistRudder;
+    this.rudder = clamp(keyRudder + rest);
     return {
       strokes,
       rudder: this.rudder,
+      // Without Q and E (a scull takes them for looking round): the stick, a slid finger, the phone's twist.
+      rudderNoKeys: clamp(rest),
       lean: clamp(this.#keyLean + axis(2) + (this.tilting ? this.#tilt.lean : 0)),
     };
   }

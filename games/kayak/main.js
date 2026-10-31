@@ -6,7 +6,7 @@ import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
 import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
-import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, cleanRow, easeLook } from './scull.js';
+import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, cleanRow, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
@@ -224,13 +224,13 @@ function start() {
   drawMap();
   // A drill that starts under way (wash hanging, the portage) has no starter.
   if (drill && race.start.phase === 'go') state = 'racing';
-  // Rowing: the stroke coach and the Look button instead of the rudder and the paddler's hints.
+  // Rowing: the stroke coach and the Look buttons instead of the rudder and the paddler's hints.
   hud.classList.toggle('rowing', !!mode.row);
   els.touchhelp.textContent = mode.row
-    ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Hold a Look button to look over that shoulder"
+    ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Tap Look to glance over that shoulder, or hold it"
     : TOUCH_HELP;
   // Rowing on a keyboard or a pad (a phone has its own help line): how, once, at the start.
-  if (mode.row && !phone.matches) show('← → (or LT, RT) are your oars: both together for a stroke, lead with one to turn. Hold Q or E (X or Y on a pad) to look over your left or right shoulder', { small: true, hold: 6 });
+  if (mode.row && !phone.matches) show('← → (or LT, RT) are your oars: both together for a stroke, lead with one to turn. Hold Q or E (X or B on a pad) to look over your left or right shoulder', { small: true, hold: 6 });
   // An outing from Caversham Pier: no starter, no clock; off at once.
   hud.classList.toggle('outing', !!mode.outing);
   document.getElementById('outingBar').hidden = !mode.outing;
@@ -1293,7 +1293,7 @@ async function enterLobby(request) {
     history.replaceState(null, '', `#${HASH.has('debug') ? 'debug&' : ''}race=${info.room.code}`);
     showLobby();
   } catch (err) {
-    els.liveError.textContent = err.status === 404 ? 'That race has finished, or it is full.' : "Couldn't get into the race. Check the code and try again.";
+    els.liveError.textContent = err.status === 404 ? 'That race has finished, or it is full.' : "Couldn't get into the race. Please try again.";
   }
 }
 
@@ -1610,7 +1610,7 @@ function simulate(dt) {
   }
   if (race.outing) return outingStep(dt);
   // A scull has no rudder: Q and E look over your shoulders (the phone's twist and a slid finger still nudge it).
-  if (boat.hull.scull) input.rudder = Math.max(-1, Math.min(1, input.rudder - (controls.keyRudder ?? 0)));
+  if (boat.hull.scull) input.rudder = input.rudderNoKeys;
   if (controls.assist) input.lean = Math.max(-1, Math.min(1, input.lean - (boat.roll * 2 + boat.rollRate * 0.6)));
   else if (controls.tilting) input.lean = Math.max(-1, Math.min(1, input.lean - TILT_REFLEX * boat.rollRate));
   if (liveRace) liveBefore(dt);
@@ -1973,8 +1973,8 @@ function render(time) {
   let up = normalize(fr.up.map((v, i) => v * Math.cos(pitch) + fr.f[i] * Math.sin(pitch)));
   let right = fr.right;
   // In a scull: sat facing the stern, eye going up and down the slide with
-  // you, looking down a little at the stretcher and the coach; ↑ (or Y, or the
-  // Look button) turns your head round over your shoulder to see where you're going.
+  // you, looking down a little at the stretcher and the coach; Q or E (X or B,
+  // or a Look button) turns your head round over that shoulder to see where you're going.
   if (boat.hull.scull && state !== 'menu' && myRowing.pose) {
     const local = [0, SCULL_SEAT.y + 0.95 - 0.12 * Math.max(0, myRowing.lean), myRowing.seat + 0.1 + 0.32 * Math.max(0, myRowing.lean)];
     eye = fr.pos.map((p, i) => p + fr.right[i] * local[0] + fr.up[i] * (local[1] + bob + lift) + fr.back[i] * local[2]);
@@ -2078,27 +2078,65 @@ function placeCoach() {
   coachEl.innerHTML = `<span class="rate"><b>${scullRate(boat) || '--'}</b><small>SPM</small></span><span class="split"><b>${sp ? formatTime(sp, 0) : '-:--'}</b><small>/500</small></span><span><b>${formatTime(shown(race.player.finish ?? time), 0)}</b><small>TIME</small></span><span><b>${Math.round(metres)}</b><small>M</small></span>`;
 }
 
-// Looking back over your shoulder in a scull: held ↑, Y, or the Look button.
+// Looking round over either shoulder in a scull: Q or E (↑ for the right), X or B (Y for the right), or the two Look buttons.
 let lookBack = 0; // -1 over your left shoulder, 1 over your right
 let lookWant = 0;
 // In a scull: ↑ or E over your right shoulder, Q over your left (a scull has
-// no rudder, so Q and E aren't steering here); X and Y on a pad; the two Look buttons on a phone.
-const LOOK_KEYS = { ArrowUp: 1, KeyE: 1, KeyQ: -1 };
+// no rudder, so Q and E aren't steering here); X and B on a pad; the two Look buttons on a phone.
+const lookKeys = []; // look keys held, oldest first: the last one still held wins
 const rowingNow = () => race?.player.boat.hull.scull && (state === 'racing' || state === 'start');
-addEventListener('keydown', (e) => { if (LOOK_KEYS[e.code] && rowingNow()) { lookWant = LOOK_KEYS[e.code]; e.preventDefault(); } });
-addEventListener('keyup', (e) => { if (LOOK_KEYS[e.code] === lookWant) lookWant = 0; });
-// Let go of the key while away (another tab, another window): don't come back looking backwards.
-addEventListener('blur', () => { lookWant = 0; });
-document.addEventListener('visibilitychange', () => { if (document.hidden) lookWant = 0; });
-for (const [id, side] of [['lookLeft', -1], ['lookRight', 1]]) {
+addEventListener('keydown', (e) => {
+  if (!(e.code in LOOK_KEYS) || !rowingNow()) return;
+  e.preventDefault();
+  if (!lookKeys.includes(e.code)) lookKeys.push(e.code);
+  lookWant = lookFromKeys(lookKeys);
+});
+addEventListener('keyup', (e) => {
+  const i = lookKeys.indexOf(e.code);
+  if (i < 0) return;
+  lookKeys.splice(i, 1);
+  lookWant = lookFromKeys(lookKeys);
+});
+// Let go of the keys while away (another tab, another window): don't come back looking backwards.
+const stopLooking = () => { lookKeys.length = 0; lookWant = 0; };
+addEventListener('blur', stopLooking);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopLooking(); });
+// The phone's Look buttons: held, they look while held; tapped, a glance that
+// comes back on its own, so the other thumb can keep rowing.
+const GLANCE = 1.2; // seconds
+let glanceUntil = 0;
+for (const [id, code] of [['lookLeft', 'LookLeft'], ['lookRight', 'LookRight']]) {
   const btn = document.getElementById(id);
-  for (const [type, on] of [['pointerdown', true], ['pointerup', false], ['pointercancel', false], ['pointerleave', false]]) {
-    btn.addEventListener(type, (e) => { lookWant = on ? side : lookWant === side ? 0 : lookWant; e.preventDefault(); e.stopPropagation(); });
-  }
+  let down = 0;
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    down = clock();
+    glanceUntil = 0;
+    if (!lookKeys.includes(code)) lookKeys.push(code);
+    lookWant = lookFromKeys(lookKeys);
+  });
+  const up = (e) => {
+    e.stopPropagation();
+    if (!down || !lookKeys.includes(code)) return;
+    if (clock() - down < 0.3) glanceUntil = clock() + GLANCE; // a tap: let it go later
+    else lookKeys.splice(lookKeys.indexOf(code), 1);
+    lookWant = lookFromKeys(lookKeys);
+    down = 0;
+  };
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(type, up);
 }
 function stepLook(dt) {
+  // A glance from a tapped Look button is over.
+  if (glanceUntil && clock() > glanceUntil) {
+    glanceUntil = 0;
+    for (const code of ['LookLeft', 'LookRight']) if (lookKeys.includes(code)) lookKeys.splice(lookKeys.indexOf(code), 1);
+    lookWant = lookFromKeys(lookKeys);
+  }
   const pad = navigator.getGamepads?.()?.find?.((p) => p);
-  const want = lookWant || (pad?.buttons[3]?.pressed ? 1 : pad?.buttons[2]?.pressed ? -1 : 0); // Y right, X left, on a standard pad
+  // On a standard pad: X (the left face button) over the left shoulder, B (the right) or Y over the right.
+  const b = pad?.buttons ?? [];
+  const want = lookWant || (b[2]?.pressed ? -1 : b[1]?.pressed || b[3]?.pressed ? 1 : 0);
   lookBack = easeLook(lookBack, want, dt);
 }
 

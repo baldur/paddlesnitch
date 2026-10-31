@@ -69,3 +69,19 @@ test('a small twist does nothing, more turns harder, and held still it eases bac
   for (let t = 0; t < 3 * TWIST_SETTLE; t += 1 / 60) twist = stepTwist(twist, 0, 1 / 60);
   assert.equal(twistRudder(twist), 0);
 });
+
+test("Q and E steer a kayak; in a scull they look round, and the stick or a twist still steers without them", () => {
+  const listeners = {};
+  const was = globalThis.addEventListener;
+  globalThis.addEventListener = (t, fn) => { listeners[t] = fn; };
+  const c = new Controls(target);
+  globalThis.addEventListener = was;
+  listeners.keydown({ code: 'KeyE', preventDefault() {} });
+  assert.equal(c.take().rudder, 1, 'E: full right rudder in a kayak');
+  listeners.keyup({ code: 'KeyE' });
+  listeners.keydown({ code: 'KeyQ', preventDefault() {} });
+  Object.defineProperty(c, 'twistRudder', { value: -0.5 }); // the phone pushed round a little too
+  const input = c.take();
+  assert.equal(input.rudder, -1, 'Q and the twist together: full left');
+  assert.equal(input.rudderNoKeys, -0.5, "without the keys (a scull's look): the twist alone, not cancelled");
+});
