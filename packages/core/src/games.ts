@@ -75,7 +75,14 @@ export async function getLeaderboard(course: GameCourse, userId?: string) {
 // account's erasure removes it with the rest; the export includes it.
 
 export type GameKit = {
-  skin: string; head: 'cap' | 'hair'; headColour: string; sleeves: 'short' | 'long'; top: string
+  skin: string; sleeves: 'short' | 'long'; top: string
+  body?: 'man' | 'woman'
+  hair?: 'short' | 'crop' | 'ponytail' | 'bun' | 'long' | 'none'; hairColour?: string
+  hat?: 'none' | 'cap' | 'visor' | 'beanie'; hatColour?: string
+  beard?: 'none' | 'stubble' | 'moustache' | 'beard'
+  aid?: boolean; aidColour?: string
+  /** The old head, before the game moved it to hair and hat. */
+  head?: 'cap' | 'hair'; headColour?: string
   glasses: 'none' | 'wrap' | 'round' | 'aviator' | 'square'; glassesColour: string
   boat: (typeof GAME_BOATS)[number]; deck: string; hullColour: string; stripe: string; deckShape: 'modern' | 'wings'; hullShape: 'round' | 'vee'
   paddle: 'wing' | 'flat'; shaftColour: string; bladeColour: string
