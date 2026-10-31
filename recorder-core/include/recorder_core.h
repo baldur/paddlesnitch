@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 /* The core's version, logged with every recording (phase 4: core_ver). */
-#define RC_VERSION "0.1.0"
+#define RC_VERSION "0.2.0"
 
 /* ---- Output streams ---------------------------------------------------- */
 

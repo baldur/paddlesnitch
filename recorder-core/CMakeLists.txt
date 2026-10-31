@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(recorder_core C)
 
-add_library(recorder_core STATIC src/recorder_core.c)
+add_library(recorder_core STATIC src/recorder_core.c src/recorder_phone.c)
 target_include_directories(recorder_core PUBLIC include)
 set_target_properties(recorder_core PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF
                                                POSITION_INDEPENDENT_CODE ON)
@@ -19,7 +19,7 @@ endif()
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     enable_testing()
-    add_executable(run_fixtures test/run_fixtures.c)
+    add_executable(run_fixtures test/run_fixtures.c test/phone_seen.c)
     target_link_libraries(run_fixtures PRIVATE recorder_core)
     file(GLOB fixture_dirs LIST_DIRECTORIES true ${PROJECT_SOURCE_DIR}/fixtures/*)
     list(FILTER fixture_dirs EXCLUDE REGEX "README")

@@ -60,6 +60,33 @@ Three changes from the first sketch, each for a reason:
   GPS fields are `double` (7-decimal lat/lon don't fit a float); motion is
   `float`.
 
+**Phones go through a layer in front of it,**
+[`recorder_phone.h`](../../recorder-core/include/recorder_phone.h) (since 0.2.0).
+A phone delivers accelerometer and gyroscope events in batches, late, and
+out of step with each other, and its once-a-second timer fires late. Putting
+them in time order is the hardest part of a phone adapter, so it's written
+once, here, not once per app:
+
+```
+rc_phone_init(&p, &cfg)                   // cfg: write callback, platform (Android/iPhone), what it has, motion or not
+rc_phone_accel(&p, t_ns, x, y, z)         // as delivered, in the platform's units (m/s² or -g)
+rc_phone_gyro(&p, t_ns, x, y, z)          // rad/s
+rc_phone_location_update(&p, &location)   // the latest fix; current while under 3 s old (the tracker's rule)
+rc_phone_tick(&p, t_ns, batt_mv)          // once a second from the app's timer: asks for a row
+rc_phone_finish(&p)                       // writes what's still held
+```
+
+It converts units, holds events until both sensors have passed a time, pairs
+each accelerometer sample with the gyroscope reading at or before it (within
+100 ms), writes
+each row only after every sample up to it, and drops (and counts) what comes
+too late to place. Ordering is in whole milliseconds, the core's `t_ms`, so a
+replay of the files puts every sample in the same row. It holds batches up to
+15 s late at 50 Hz. Phones leave the satellite count blank (often unknown,
+and the server drops a row reading 0), and stamp a fix with when it was
+taken, so a cached one reads as no fix. Eight fixtures (`fixtures/phone_*`)
+pin it from events in delivery order. The tracker doesn't use it.
+
 It owns everything that turns samples into lines and numbers: the column order
 and number formats, blank lat/lon without a fix (never `0,0`), the per-second
 motion summary, thinning the sidecar to ~10 Hz **by time**, and the live
@@ -69,8 +96,8 @@ running or screens. Those are the adapters, one per platform.
 | Platform | Links the core by | Adapter |
 |---|---|---|
 | Tracker | PlatformIO `lib_deps = file://../recorder-core` | QMI8658 + GNSS → core; core → SD card; live values → OLED |
-| Android | CMake `add_subdirectory` + a small JNI wrapper | `SensorManager` + location → core; core → file; live values → Compose |
-| iPhone | `Package.swift` C target at `recorder-core/` (Swift imports C directly) | Core Motion + Core Location → core; core → file; live values → SwiftUI |
+| Android | CMake `add_subdirectory` + a small JNI wrapper | `SensorManager` + location → `recorder_phone.h`; core → file; live values → Compose |
+| iPhone | `Package.swift` C target at `recorder-core/` (Swift imports C directly) | Core Motion + Core Location → `recorder_phone.h`; core → file; live values → SwiftUI |
 | Server | the core compiled to WASM | replays the raw sidecar to produce the final numbers; replaces `cadence.ts` + `attitude.ts` |
 
 ### The sensor convention (what every adapter delivers)
@@ -82,7 +109,10 @@ running or screens. Those are the adapters, one per platform.
 - Gyroscope in **deg/s** (both phones give rad/s).
 - Timestamps from the **sample's own** timestamp, not when the app received it.
   Neither phone delivers a steady 50 Hz; the core thins by time.
-- GPS fields a platform doesn't have (satellites and HDOP on iPhone; the
+- On the phones, `recorder_phone.h` does the unit and sign conversions: the
+  apps pass the platform's own values and timestamps (its header says which
+  clock on each).
+- GPS fields a platform doesn't have (satellites and HDOP on both phones; the
   tracker's radio `txSeq` on phones) are **blank**, never invented: the
   adapter leaves their `RC_HAS_*` bit clear.
 
@@ -151,9 +181,15 @@ ESP32-S3. Confirm once on the bench build.
      builds, and the WASM build (`make wasm`: every fixture replayed through
      the module under Node, in CI). Next: the tracker switching to the core
      (`firmware`).
+   - **1c, done (0.2.0):** the phone layer, `recorder_phone.h`, so both apps
+     can record motion now. The server works out stroke rate and boat motion
+     from the upload, as for a tracker; live values on the phone wait for
+     phase 2.
 2. **Stroke rate** in the core as a stream; the server switches to the WASM
    build and `cadence.ts` goes once its tests pass against it.
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.
+   Then movement-gated distance, the last motion maths left in
+   `packages/timing`.
 4. **Live values** on the tracker's screen and both phones' recording screens,
    with the `live_*` columns and `core_ver`.
 

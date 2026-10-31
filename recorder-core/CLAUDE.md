@@ -7,7 +7,15 @@ for the tracker, both apps and (as WASM) the server.
 ```
 include/recorder_core.h   the whole API and the sensor convention
 src/recorder_core.c       the implementation
-test/run_fixtures.c       replays fixtures/*/calls.csv, diffs every stream
+include/recorder_phone.h  the phones' layer: events as delivered → core calls in time order
+src/recorder_phone.c      (not in the tracker's build: library.json's srcFilter)
+test/run_fixtures.c       replays fixtures/*/calls.csv or phone.csv, diffs every stream,
+                          checks replay order
+test/gen_phone_fixtures.py  writes the phone fixtures' inputs (delivery order)
+test/phone_seen.c         the phone layer with its core calls routed through the
+                          runner's checks (test builds only)
+test/one_implementation.sh  CI: the apps reach the core only through recorder_phone.h
+                          and don't convert sensor units themselves
 fixtures/                 golden cases (format: fixtures/README.md)
 Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
@@ -64,6 +72,23 @@ phase 2 decides how the server gets it.
   with an unsigned difference, never a signed or widened one
   (`fixtures/clock_wrap`).
 - **Live values are NAN until ready**, never 0 or a guess.
+- **Phones go through `recorder_phone.h`**, never straight to `rc_imu` and
+  `rc_second`: putting batched, late sensor events in order is the hard part
+  of a phone adapter, so it lives here once. The apps pass the platform's own
+  units and clock. It orders in whole milliseconds (the core's `t_ms`), not
+  nanoseconds: a sample 0.3 ms after a row in the same millisecond belongs
+  to that row in a replay, so it must live too (`fixtures/phone_android`).
+- **Never lose a row:** a tick that arrives after later samples or rows have
+  gone on gets its row just after them. Samples that can't be placed are
+  dropped and counted, not put in the wrong row.
+- **Phones leave satellites blank:** the count is often not known on
+  Android, and the server drops a row that reads 0 satellites (`csv.ts`).
+- **A phone fix needs a real date** (2025-2099, as the tracker's
+  `gpsDateOk`) and is current under 3 s old. A row reusing one is stamped
+  with the fix's time plus its age, so the clock runs on as the tracker's
+  receiver's does.
+- **Batching limit:** 15 s at 50 Hz (`RC_PHONE_EVENTS` 2048, `RC_PHONE_ROWS`
+  32, about 100 KB). Change the header's BATCHING note with them.
 - After an API change, tell `lead` (who tells `android`, `ios`, `firmware`),
   and bump `RC_VERSION`.
 
@@ -105,6 +130,25 @@ are byte-identical. Two differences, both from the replay rather than the core:
   module give the native build's output byte for byte (~912k lines, 0.6 s
   under Node). In JavaScript, never `parseFloat(s) || 0`: it turns -0 into 0,
   and the core writes `-0.00` (the first WASM run failed on exactly that).
+- The phone layer's first version dropped a tick that arrived after later
+  samples had gone on, losing that second's row. The fixtures delivered
+  every tick on time, so they passed; a 20-line Swift probe that fed
+  samples then ticked, as an app's timer does, wrote no row at all
+  (2026-10-31). Fixture inputs need the platform's real disorder, not just
+  batches: the generator now makes a tick late on purpose. Also: within one
+  sensor, events arrive in order; a generator that reorders one sensor's
+  events tests something no phone does.
+- The `tester` review of the phone layer (2026-10-31) found what the
+  fixtures and 17 mutations hadn't: "0 satellites" makes the server drop a
+  row; the row queue (8), not the sample buffers, set the batching limit
+  (10 s batches lost 40% of samples while the header promised 20 s); an
+  iPhone fix stamped on arrival lets a cached fix count as fresh; a tick
+  behind a shifted row was dropped. Branch coverage (llvm-cov) showed four
+  checks no fixture reached. Run coverage on the fixtures when adding
+  rules, not just mutations.
+- A fuzz that sorts events by delivery time must keep each stream's own
+  order on ties (`qsort` isn't stable): one that didn't reported 3,228
+  "lost" rows that were ticks it had reordered, which no app can do.
 - macOS `make` compares timestamps to the second: restoring a file within the
   same second as a build leaves a stale binary. `make clean` before trusting
   a mutation test.

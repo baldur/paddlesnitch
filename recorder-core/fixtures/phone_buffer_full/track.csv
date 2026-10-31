@@ -1,0 +1,2 @@
+timestamp,ms,utc_date,utc_time,fix,lat,lon,alt_m,speed_kmh,course_deg,sats,hdop,batt_mv,tx_seq,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps,accel_mag_max_g,gyro_mag_max_dps,imu_temp_c,imu_samples
+2026-09-20T12:00:44Z,125000,2026-09-20,12:00:44,1,51.4613728,-0.9680156,42.4,9.86,89.0,,,,,-0.0150,0.0496,0.9503,-4.27,-22.20,-3.92,1.2030,22.94,,2048
