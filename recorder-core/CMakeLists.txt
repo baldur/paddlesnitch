@@ -19,7 +19,7 @@ endif()
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     enable_testing()
-    add_executable(run_fixtures test/run_fixtures.c)
+    add_executable(run_fixtures test/run_fixtures.c test/phone_seen.c)
     target_link_libraries(run_fixtures PRIVATE recorder_core)
     file(GLOB fixture_dirs LIST_DIRECTORIES true ${PROJECT_SOURCE_DIR}/fixtures/*)
     list(FILTER fixture_dirs EXCLUDE REGEX "README")

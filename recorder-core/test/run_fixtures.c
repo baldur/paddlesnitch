@@ -202,6 +202,46 @@ static long replay_calls(FILE *in, const char *path)
     return (long)has;
 }
 
+/*
+ * Every core call the phone layer makes (test/phone_seen.c routes them here).
+ * A replay of the files sorts by ms, samples before rows on a tie, so the
+ * layer must call in that order: a sample never at or before a row already
+ * written, a row never before a sample already passed on.
+ */
+static struct {
+    int      started, have_row;
+    uint32_t last_ms, row_ms;
+    unsigned rows, errors;
+} g_seen;
+
+static void seen(uint32_t t, int is_row)
+{
+    if (g_seen.started && after(g_seen.last_ms, t)) g_seen.errors++;
+    if (!is_row && g_seen.have_row && !after(t, g_seen.row_ms)) g_seen.errors++;
+    if (is_row) {
+        if (g_seen.have_row && !after(t, g_seen.row_ms)) g_seen.errors++;
+        g_seen.row_ms = t;
+        g_seen.have_row = 1;
+        g_seen.rows++;
+    }
+    g_seen.last_ms = t;
+    g_seen.started = 1;
+}
+
+void rc_imu_seen(rc_state *rc, uint32_t t_ms, float ax, float ay, float az, float gx, float gy, float gz);
+void rc_imu_seen(rc_state *rc, uint32_t t_ms, float ax, float ay, float az, float gx, float gy, float gz)
+{
+    seen(t_ms, 0);
+    rc_imu(rc, t_ms, ax, ay, az, gx, gy, gz);
+}
+
+void rc_second_seen(rc_state *rc, uint32_t t_ms, const rc_gps *gps, const rc_extras *extras);
+void rc_second_seen(rc_state *rc, uint32_t t_ms, const rc_gps *gps, const rc_extras *extras)
+{
+    seen(t_ms, 1);
+    rc_second(rc, t_ms, gps, extras);
+}
+
 /* phone.csv: events into the phone layer, as the phone delivered them.
    Returns the config's has, or -1 (including a failed `expect`). */
 static long replay_phone(FILE *in, const char *path)
@@ -209,6 +249,9 @@ static long replay_phone(FILE *in, const char *path)
     static rc_phone p;
     int started = 0;
     uint32_t has = 0;
+    long long tick_max = -1;
+    unsigned ticks = 0;
+    memset(&g_seen, 0, sizeof(g_seen));
     char line[1024];
     int lineno = 0;
     while (fgets(line, sizeof(line), in)) {
@@ -248,9 +291,10 @@ static long replay_phone(FILE *in, const char *path)
             set_d(f[6], &l.speed_valid, &l.speed_ms);
             set_d(f[7], &l.course_valid, &l.course_deg);
             rc_phone_location_update(&p, &l);
-        } else if (!strcmp(f[0], "tick") && n == 4) {
-            rc_phone_tick(&p, strtoll(f[1], NULL, 10),
-                          (unsigned)strtoul(f[2], NULL, 10), (unsigned)strtoul(f[3], NULL, 10));
+        } else if (!strcmp(f[0], "tick") && n == 3) {
+            long long t = strtoll(f[1], NULL, 10);
+            if (t / 1000000 > tick_max) { tick_max = t / 1000000; ticks++; }   /* not a repeat */
+            rc_phone_tick(&p, t, (unsigned)strtoul(f[2], NULL, 10));
         } else if (!strcmp(f[0], "finish") && n == 1) {
             rc_phone_finish(&p);
         } else if (!strcmp(f[0], "expect") && n == 5 &&
@@ -266,6 +310,14 @@ static long replay_phone(FILE *in, const char *path)
             fprintf(stderr, "%s:%d: can't read '%s' (%d fields)\n", path, lineno, f[0], n);
             return -1;
         }
+    }
+    if (g_seen.errors) {
+        fprintf(stderr, "  %s: %u core calls out of replay order\n", path, g_seen.errors);
+        return -1;
+    }
+    if (g_seen.rows != ticks) {
+        fprintf(stderr, "  %s: %u rows for %u ticks\n", path, g_seen.rows, ticks);
+        return -1;
     }
     return (long)has;
 }

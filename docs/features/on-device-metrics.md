@@ -72,7 +72,7 @@ rc_phone_init(&p, &cfg)                   // cfg: write callback, platform (Andr
 rc_phone_accel(&p, t_ns, x, y, z)         // as delivered, in the platform's units (m/s² or -g)
 rc_phone_gyro(&p, t_ns, x, y, z)          // rad/s
 rc_phone_location_update(&p, &location)   // the latest fix; current while under 3 s old (the tracker's rule)
-rc_phone_tick(&p, t_ns, sats, batt_mv)    // once a second from the app's timer: asks for a row
+rc_phone_tick(&p, t_ns, batt_mv)          // once a second from the app's timer: asks for a row
 rc_phone_finish(&p)                       // writes what's still held
 ```
 
@@ -81,9 +81,11 @@ each accelerometer sample with the gyroscope reading at or before it (within
 100 ms), writes
 each row only after every sample up to it, and drops (and counts) what comes
 too late to place. Ordering is in whole milliseconds, the core's `t_ms`, so a
-replay of the files puts every sample in the same row. Five fixtures
-(`fixtures/phone_*`) pin it from events in delivery order. The tracker
-doesn't use it.
+replay of the files puts every sample in the same row. It holds batches up to
+15 s late at 50 Hz. Phones leave the satellite count blank (often unknown,
+and the server drops a row reading 0), and stamp a fix with when it was
+taken, so a cached one reads as no fix. Eight fixtures (`fixtures/phone_*`)
+pin it from events in delivery order. The tracker doesn't use it.
 
 It owns everything that turns samples into lines and numbers: the column order
 and number formats, blank lat/lon without a fix (never `0,0`), the per-second
@@ -110,7 +112,7 @@ running or screens. Those are the adapters, one per platform.
 - On the phones, `recorder_phone.h` does the unit and sign conversions: the
   apps pass the platform's own values and timestamps (its header says which
   clock on each).
-- GPS fields a platform doesn't have (satellites and HDOP on iPhone; the
+- GPS fields a platform doesn't have (satellites and HDOP on both phones; the
   tracker's radio `txSeq` on phones) are **blank**, never invented: the
   adapter leaves their `RC_HAS_*` bit clear.
 

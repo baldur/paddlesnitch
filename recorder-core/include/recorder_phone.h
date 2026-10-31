@@ -23,14 +23,23 @@
  * CLOCK: t_ns is a monotonic nanosecond clock since boot, never wall time.
  *   Android: SensorEvent.timestamp, Location.getElapsedRealtimeNanos(), and
  *            SystemClock.elapsedRealtimeNanos() for ticks.
- *   iPhone:  CMLogItem.timestamp × 1e9 for samples, and
- *            ProcessInfo.systemUptime × 1e9 for ticks and for when each
- *            CLLocation arrived (its own timestamp is wall time).
+ *   iPhone:  CMLogItem.timestamp × 1e9 for samples;
+ *            ProcessInfo.systemUptime × 1e9 for ticks; and for a CLLocation,
+ *            when it was TAKEN on that clock:
+ *              (systemUptime - (Date().timeIntervalSince1970
+ *                               - location.timestamp.timeIntervalSince1970)) × 1e9
+ *            never when it arrived: the first fix is often a cached one,
+ *            minutes old, and must read as no fix.
  * The core's t_ms is t_ns / 1,000,000, truncated.
  *
  * SAMPLE RATE: ask for about 50 Hz from both sensors. The core thins the
- * uploaded file to one row per 80 ms, stroke rate needs at least 10 Hz, and
- * the buffers below hold about 20 s at 50 Hz.
+ * uploaded file to one row per 80 ms, and stroke rate needs at least 10 Hz.
+ *
+ * BATCHING: events may arrive up to 15 s late at 50 Hz (7 s at 100 Hz):
+ * that's what the buffers below hold. Later than that, rows are written
+ * without them and they're dropped as late. On Android keep
+ * maxReportLatencyUs at or under 5 s and hold a partial wake lock while
+ * recording, or the sensor FIFO is only emptied when the screen wakes.
  */
 #ifndef RECORDER_PHONE_H
 #define RECORDER_PHONE_H
@@ -51,8 +60,10 @@ typedef struct {
     rc_write_fn write;
     void       *user;
     rc_platform platform;
-    uint32_t    has;      /* RC_HAS_SATS and RC_HAS_BATT_MV only: what the app
-                             can supply. Anything else is ignored.             */
+    uint32_t    has;      /* RC_HAS_BATT_MV if the app can supply it; anything
+                             else is ignored. Satellites stay blank on phones:
+                             the count is often not known, and the server drops
+                             a row that reads 0.                               */
     int         motion;   /* 1: the phone has both sensors and will send them.
                              0: track only (no gyroscope): rows aren't held.   */
 } rc_phone_config;
@@ -73,9 +84,9 @@ typedef struct {
     int     course_valid; double course_deg;
 } rc_phone_location;
 
-/* Room for about 20 s of each sensor at 50 Hz, and 8 rows waiting. */
-#define RC_PHONE_EVENTS 1024
-#define RC_PHONE_ROWS   8
+/* Room for batches up to 15 s late at 50 Hz (BATCHING). */
+#define RC_PHONE_EVENTS 2048
+#define RC_PHONE_ROWS   32
 
 typedef struct { int64_t ms; float x, y, z; } rc_phone_event;
 
@@ -85,8 +96,8 @@ typedef struct {
     int64_t   ms;
 } rc_phone_row;
 
-/* Caller-allocated (about 50 KB: keep it off small stacks); treat every
-   field as private. */
+/* Caller-allocated (about 100 KB: never on the stack); treat every field
+   as private. */
 typedef struct {
     rc_state          core;
     rc_phone_config   cfg;
@@ -96,6 +107,7 @@ typedef struct {
     rc_phone_row      rows[RC_PHONE_ROWS];
     uint32_t          rows_head, rows_n;
     int64_t           row_last;                /* last row ms queued (-1)      */
+    int64_t           tick_last;               /* last tick's own ms (-1)      */
     int64_t           done_ms;                 /* last row written (-1)        */
     int64_t           emitted_ms;              /* last sample passed on (-1)   */
     int               have_gyro;
@@ -114,19 +126,20 @@ void rc_phone_accel(rc_phone *p, int64_t t_ns, double x, double y, double z);
 void rc_phone_gyro(rc_phone *p, int64_t t_ns, double x, double y, double z);
 
 /* A new location. The next rows use it while it's under 3 s old (the
-   tracker's rule); after that they have no fix. */
+   tracker's rule) and dated 2025-2099; otherwise they have no fix. A row
+   using it is stamped with the fix's time plus its age. */
 void rc_phone_location_update(rc_phone *p, const rc_phone_location *loc);
 
 /*
  * Asks for this second's row: call once a second from the app's own timer.
- * sats and batt_mv are written when the config has them (pass 0 if not
- * known now). The row is written once both sensors have passed t_ns, or
- * when RC_PHONE_ROWS rows are already waiting (a sensor stopped). A tick
- * that arrives after later samples have gone on (a late timer) writes its
- * row at the latest sample's time. A second tick in the same millisecond
- * is ignored.
+ * batt_mv is written when the config has RC_HAS_BATT_MV (0: not known; the
+ * server reads 0 as "nothing recorded"). The row is written once both
+ * sensors have passed t_ns, or when RC_PHONE_ROWS rows are already waiting
+ * (a sensor stopped). A tick that arrives after later samples or rows (a
+ * late timer) still gets its row, just after them. A tick no later than
+ * the previous one, by its own time, is ignored.
  */
-void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned sats, unsigned batt_mv);
+void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv);
 
 /* Ends the recording: writes everything still held. Call before closing the files. */
 void rc_phone_finish(rc_phone *p);

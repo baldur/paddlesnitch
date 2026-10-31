@@ -20,11 +20,14 @@ samples first on a tie, would put samples in other rows.
 | `android` | Satellites and battery written; HDOP, radio and IMU temperature blank |
 | `clock_wrap` | The millisecond clock wrapping at 2^32: the motion file keeps its 80 ms spacing across it |
 | `fp_contract` | No fused multiply-add: one sample whose gyro peak is 165.56 as written and 165.57 fused (arm64 clang fuses by default) |
-| `phone_android` | m/s² and rad/s in 0.5 s batches, the gyroscope 3 ms behind; a 2.5 s late stretch of accelerometer events (rows wait, nothing lost); the first sample before any gyroscope reading (unpaired); a tick 0.3 ms after a sample in the same millisecond (the sample is in that row); a second tick in a held row's millisecond (ignored) |
-| `phone_ios` | Core Motion's −1 g read as +1; both sensors on the same instants (gyroscope first on a tie); a fix without speed, course or altitude (0); fixes stopping, rows going without one after 3 s, and coming back across midnight UTC; a late tick (its row written at the latest sample, not lost) |
-| `phone_sensor_stops` | The gyroscope stops: rows held until 8 wait, then written with motion down; unpaired samples dropped and counted; a straggler from before a written row dropped as late |
-| `phone_sensors_pause` | Both sensors deliver nothing for 10 s, then resume; a sample in a written row's millisecond dropped as late |
-| `phone_track_only` | No gyroscope (`motion` 0): rows aren't held and sensor events are ignored; a fix 2.999 s old counts and 3.000 s doesn't; 29 Feb; a repeated tick ignored |
+| `phone_android` | m/s² and rad/s in 0.5 s batches, the gyroscope 3 ms behind; a 2.5 s late stretch of accelerometer events (rows wait, nothing lost); the first sample before any gyroscope reading (unpaired); a tick 0.3 ms after a sample in the same millisecond (the sample is in that row); a second tick in a held row's millisecond (ignored); satellites configured but left blank |
+| `phone_ios` | Core Motion's −1 g read as +1; both sensors on the same instants (gyroscope first on a tie); a cached fix 10 minutes old and a tick before the sensors start (no fix, motion down); a fix without speed, course or altitude (0); a fix reused with its clock running on, then none after 3 s, then back across midnight UTC; a late tick (its row written after the latest sample, not lost) |
+| `phone_sensor_stops` | The gyroscope stops: rows held until 32 wait, then written with motion down; unpaired samples dropped and counted; a straggler from before a written row dropped as late |
+| `phone_sensors_pause` | Both sensors deliver nothing for 37.5 s, then resume; rows forced out without them; a sample in a written row's millisecond dropped as late |
+| `phone_long_batches` | Both sensors in 12 s batches, half a batch out of step (inside the 15 s limit): nothing dropped |
+| `phone_timing` | Two ticks delivered over a second late, after later samples (each still gets a row, just after them); a gyroscope timestamp 1 ms before the previous one (late); a tick exactly on a sample whose timestamp repeats in the next batch (the row waits for it) |
+| `phone_buffer_full` | 45 s of accelerometer before any gyroscope event: the 2048-sample buffer full, the oldest going on unpaired, gyroscope readings older than them dropped as late |
+| `phone_track_only` | No gyroscope (`motion` 0): rows aren't held and sensor events are ignored; a tick before any location; a fix 2.999 s old counts and 3.000 s doesn't, with its clock running on; 29 Feb; a repeated tick ignored; a location with no time (0) and one dated 2024 aren't fixes |
 
 ## `calls.csv`
 
@@ -56,16 +59,19 @@ phone,<android|ios>,<flags>,<motion 0|1>
 accel,t_ns,x,y,z
 gyro,t_ns,x,y,z
 location,t_ns,utc_ms,lat,lon,alt_m,speed_ms,course_deg
-tick,t_ns,sats,batt_mv
+tick,t_ns,batt_mv
 finish
 expect,dropped_late,<n>,dropped_unpaired,<n>
 ```
 
-- `phone` → `rc_phone_init`. Flags as `config`'s, but only `sats` and
-  `batt_mv` mean anything on a phone.
+- `phone` → `rc_phone_init`. Flags as `config`'s, but only `batt_mv` means
+  anything on a phone (satellites stay blank).
 - An **empty** `alt_m`, `speed_ms` or `course_deg` means the platform didn't
   give it.
 - `expect` checks the drop counts at that point.
+- The runner also sees every core call the layer makes (`test/phone_seen.c`):
+  they must come in replay order, and each tick later than the one before
+  must get one row.
 - The inputs come from `../test/gen_phone_fixtures.py` (`python3
   test/gen_phone_fixtures.py fixtures`, then `make fixtures`).
 

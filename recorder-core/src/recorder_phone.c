@@ -22,6 +22,10 @@
                                            accelerometer sample is unpaired  */
 #define IMU_OK_MS    1000               /* no sample this long: motion is
                                            down for the row                  */
+/* A fix's date must be real (the tracker's gpsDateOk): Android gives 0 for a
+   location with no time. 2025-01-01 and 2100-01-01, in ms since 1970. */
+#define UTC_MIN_MS   1735689600000LL
+#define UTC_MAX_MS   4102444800000LL
 
 static int64_t to_ms(int64_t t_ns) { return t_ns / 1000000; }
 
@@ -30,8 +34,10 @@ void rc_phone_init(rc_phone *p, const rc_phone_config *cfg)
     memset(p, 0, sizeof(*p));
     p->cfg = *cfg;
     p->accel_last = p->gyro_last = p->row_last = p->done_ms = -1;
-    p->emitted_ms = p->imu_last = -1;
-    rc_config core = { cfg->write, cfg->user, cfg->has & (RC_HAS_SATS | RC_HAS_BATT_MV) };
+    p->emitted_ms = p->imu_last = p->tick_last = -1;
+    /* Only the battery: a phone's satellite count is often not known, and
+       the server drops a row that reads 0 satellites (csv.ts). */
+    rc_config core = { cfg->write, cfg->user, cfg->has & RC_HAS_BATT_MV };
     rc_init(&p->core, &core);
 }
 
@@ -49,7 +55,12 @@ static void civil(int64_t days, int *y, int *m, int *d)
     *y = (int)(yoe + era * 400 + (*m <= 2));
 }
 
-/* The GPS state for a row asked for at `ms`: the latest location, if fresh. */
+/*
+ * The GPS state for a row asked for at `ms`: the latest location, if under
+ * 3 s old and dated. The row's time is the fix's plus its age, so a fix
+ * reused for a row or two repeats its position but not its time, as the
+ * tracker's receiver clock runs on.
+ */
 static void snapshot(const rc_phone *p, int64_t ms, rc_gps *g)
 {
     memset(g, 0, sizeof(*g));
@@ -57,9 +68,10 @@ static void snapshot(const rc_phone *p, int64_t ms, rc_gps *g)
     const rc_phone_location *l = &p->location;
     int64_t age = ms - to_ms(l->t_ns);
     if (age >= STALE_MS) return;
+    if (l->utc_ms < UTC_MIN_MS || l->utc_ms >= UTC_MAX_MS) return;
 
-    int64_t s = l->utc_ms >= 0 ? l->utc_ms / 1000 : (l->utc_ms - 999) / 1000;
-    int64_t days = s >= 0 ? s / 86400 : (s - 86399) / 86400;
+    int64_t s = (l->utc_ms + (age > 0 ? age : 0)) / 1000;
+    int64_t days = s / 86400;
     int64_t sod = s - days * 86400;
     g->fix = 1;
     g->date_valid = g->time_valid = 1;
@@ -184,20 +196,20 @@ void rc_phone_location_update(rc_phone *p, const rc_phone_location *loc)
     p->have_location = 1;
 }
 
-void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned sats, unsigned batt_mv)
+void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv)
 {
     int64_t ms = to_ms(t_ns);
-    if (ms <= p->row_last) return;                    /* this second's row is asked for */
-    /* The app's timer fires late (it's on a busy queue) after samples later
-       than it have gone on: write the row at the latest of them, not drop it.
-       Its window is still exactly the samples a replay puts in it. */
+    if (ms <= p->tick_last) return;     /* the same tick again (or a clock gone back) */
+    p->tick_last = ms;
+    /* The app's timer fired late (it's on a busy queue), after samples or a
+       row later than it: write the row after them, never drop it. Its window
+       is still exactly the samples a replay puts in it. */
     if (ms < p->emitted_ms) ms = p->emitted_ms;
+    if (ms <= p->row_last) ms = p->row_last + 1;
     while (p->rows_n == RC_PHONE_ROWS) step(p, 1);   /* a sensor stopped */
     rc_phone_row *r = &p->rows[(p->rows_head + p->rows_n) % RC_PHONE_ROWS];
     r->ms = ms;
     snapshot(p, ms, &r->gps);
-    r->gps.sats_valid = 1;
-    r->gps.sats = sats;
     memset(&r->extras, 0, sizeof(r->extras));
     r->extras.batt_mv = batt_mv;
     p->rows_n++;

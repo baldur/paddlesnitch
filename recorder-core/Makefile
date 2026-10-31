@@ -8,8 +8,10 @@ BUILD = build
 FIXTURES = $(sort $(dir $(wildcard fixtures/*/calls.csv)))
 # The phone layer's (recorder_phone.h): phones only, so not in the WASM build.
 PHONE_FIXTURES = $(sort $(dir $(wildcard fixtures/*/phone.csv)))
-SRC = src/recorder_core.c src/recorder_phone.c
-HDR = include/recorder_core.h include/recorder_phone.h
+# The phone layer through test/phone_seen.c, so the runner sees every call
+# it makes to the core.
+SRC = src/recorder_core.c test/phone_seen.c
+HDR = include/recorder_core.h include/recorder_phone.h src/recorder_phone.c
 
 .PHONY: test sanitize fixtures wasm clean
 test: $(BUILD)/run_fixtures
