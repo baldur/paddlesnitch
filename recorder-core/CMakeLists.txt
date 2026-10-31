@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(recorder_core C)
 
-add_library(recorder_core STATIC src/recorder_core.c)
+add_library(recorder_core STATIC src/recorder_core.c src/recorder_phone.c)
 target_include_directories(recorder_core PUBLIC include)
 set_target_properties(recorder_core PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF
                                                POSITION_INDEPENDENT_CODE ON)

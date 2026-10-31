@@ -5,12 +5,14 @@
  *   run_fixtures DIR...           check each fixture directory
  *   run_fixtures --write DIR...   (re)write the golden files from the core
  *
- * A fixture directory holds calls.csv (the input, format in
- * fixtures/README.md) and track.csv, motion.csv and, when the config has
- * raw_motion, motion_raw.csv (the expected output). The apps' unit tests and
- * the WASM build replay the same files.
+ * A fixture directory holds the input, either calls.csv (calls to the core)
+ * or phone.csv (events into the phone layer, recorder_phone.h), and the
+ * expected output: track.csv, motion.csv and, when the config has
+ * raw_motion, motion_raw.csv. Formats are in fixtures/README.md. The apps'
+ * unit tests and the WASM build replay the same files.
  */
 #include "recorder_core.h"
+#include "recorder_phone.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -24,11 +26,39 @@ typedef struct {
     char  *buf[3];
     size_t len[3];
     int    overflow;
+    /* Replay order: a sample written after a row must be later than it,
+       and a row no earlier than the samples before it, or a replay of the
+       files (sorted by ms, samples first on a tie) puts samples in other rows. */
+    int      have_row, have_sample;
+    uint32_t row_ms, sample_ms;
+    int      order_errors;
 } outputs;
+
+/* Wrap-safe: is a after b on the 2^32 ms clock? */
+static int after(uint32_t a, uint32_t b) { return (int32_t)(a - b) > 0; }
+
+static void check_order(outputs *o, rc_stream s, const char *line)
+{
+    if (*line == 0 || (s != RC_TRACK && (*line < '0' || *line > '9'))) return;
+    if (s == RC_TRACK) {
+        const char *c = strchr(line, ',');
+        if (!c || c[1] < '0' || c[1] > '9') return;   /* the header */
+        uint32_t ms = (uint32_t)strtoul(c + 1, NULL, 10);
+        if (o->have_sample && after(o->sample_ms, ms)) o->order_errors++;
+        o->row_ms = ms;
+        o->have_row = 1;
+    } else {   /* RC_MOTION and RC_MOTION_RAW */
+        uint32_t ms = (uint32_t)strtoul(line, NULL, 10);
+        if (o->have_row && !after(ms, o->row_ms)) o->order_errors++;
+        o->sample_ms = ms;
+        o->have_sample = 1;
+    }
+}
 
 static void on_write(void *user, rc_stream s, const char *line, size_t len)
 {
     outputs *o = (outputs *)user;
+    check_order(o, s, line);
     if (o->len[s] + len > MAX_OUT) { o->overflow = 1; return; }
     memcpy(o->buf[s] + o->len[s], line, len);
     o->len[s] += len;
@@ -103,20 +133,22 @@ static void report_diff(const char *name, const char *got, size_t glen, const ch
             name, line, wl, want + start, gl, got + start);
 }
 
-static int run(const char *dir, int write_mode)
+static outputs g_out;
+
+static void reset_outputs(void)
 {
-    char path[1024];
-    snprintf(path, sizeof(path), "%s/calls.csv", dir);
-    FILE *in = fopen(path, "r");
-    if (!in) { fprintf(stderr, "%s: can't open\n", path); return 1; }
-
-    static outputs o;
     for (int s = 0; s < 3; s++) {
-        if (!o.buf[s]) o.buf[s] = malloc(MAX_OUT);
-        o.len[s] = 0;
+        if (!g_out.buf[s]) g_out.buf[s] = malloc(MAX_OUT);
+        g_out.len[s] = 0;
     }
-    o.overflow = 0;
+    g_out.overflow = 0;
+    g_out.have_row = g_out.have_sample = 0;
+    g_out.order_errors = 0;
+}
 
+/* calls.csv: one core call per line. Returns the config's has, or -1. */
+static long replay_calls(FILE *in, const char *path)
+{
     rc_state rc;
     int started = 0;
     uint32_t has = 0;
@@ -130,12 +162,12 @@ static int run(const char *dir, int write_mode)
         int n = split(line, f);
         if (!strcmp(f[0], "config")) {
             has = n > 1 ? parse_has(f[1]) : 0;
-            rc_config cfg = { on_write, &o, has };
+            rc_config cfg = { on_write, &g_out, has };
             rc_init(&rc, &cfg);
             started = 1;
         } else if (!started) {
             fprintf(stderr, "%s:%d: the first call must be config\n", path, lineno);
-            return 1;
+            return -1;
         } else if (!strcmp(f[0], "imu") && n == 8) {
             rc_imu(&rc, (uint32_t)strtoul(f[1], NULL, 10),
                    strtof(f[2], NULL), strtof(f[3], NULL), strtof(f[4], NULL),
@@ -164,20 +196,111 @@ static int run(const char *dir, int write_mode)
             rc_second(&rc, t, &g, &x);
         } else {
             fprintf(stderr, "%s:%d: can't read '%s' (%d fields)\n", path, lineno, f[0], n);
-            return 1;
+            return -1;
         }
     }
-    fclose(in);
-    if (o.overflow) { fprintf(stderr, "%s: output too large\n", dir); return 1; }
+    return (long)has;
+}
 
+/* phone.csv: events into the phone layer, as the phone delivered them.
+   Returns the config's has, or -1 (including a failed `expect`). */
+static long replay_phone(FILE *in, const char *path)
+{
+    static rc_phone p;
+    int started = 0;
+    uint32_t has = 0;
+    char line[1024];
+    int lineno = 0;
+    while (fgets(line, sizeof(line), in)) {
+        lineno++;
+        line[strcspn(line, "\r\n")] = 0;
+        if (!line[0] || line[0] == '#') continue;
+        char *f[MAX_FIELDS];
+        int n = split(line, f);
+        if (!strcmp(f[0], "phone") && n == 4) {
+            rc_phone_config cfg;
+            memset(&cfg, 0, sizeof(cfg));
+            cfg.write = on_write;
+            cfg.user = &g_out;
+            if (!strcmp(f[1], "android")) cfg.platform = RC_PHONE_ANDROID;
+            else if (!strcmp(f[1], "ios")) cfg.platform = RC_PHONE_IOS;
+            else { fprintf(stderr, "%s:%d: platform '%s'?\n", path, lineno, f[1]); return -1; }
+            has = cfg.has = parse_has(f[2]);
+            cfg.motion = atoi(f[3]);
+            rc_phone_init(&p, &cfg);
+            started = 1;
+        } else if (!started) {
+            fprintf(stderr, "%s:%d: the first call must be phone\n", path, lineno);
+            return -1;
+        } else if ((!strcmp(f[0], "accel") || !strcmp(f[0], "gyro")) && n == 5) {
+            int64_t t = strtoll(f[1], NULL, 10);
+            double x = strtod(f[2], NULL), y = strtod(f[3], NULL), z = strtod(f[4], NULL);
+            if (f[0][0] == 'a') rc_phone_accel(&p, t, x, y, z);
+            else                rc_phone_gyro(&p, t, x, y, z);
+        } else if (!strcmp(f[0], "location") && n == 8) {
+            rc_phone_location l;
+            memset(&l, 0, sizeof(l));
+            l.t_ns = strtoll(f[1], NULL, 10);
+            l.utc_ms = strtoll(f[2], NULL, 10);
+            l.lat = strtod(f[3], NULL);
+            l.lon = strtod(f[4], NULL);
+            set_d(f[5], &l.alt_valid, &l.alt_m);
+            set_d(f[6], &l.speed_valid, &l.speed_ms);
+            set_d(f[7], &l.course_valid, &l.course_deg);
+            rc_phone_location_update(&p, &l);
+        } else if (!strcmp(f[0], "tick") && n == 4) {
+            rc_phone_tick(&p, strtoll(f[1], NULL, 10),
+                          (unsigned)strtoul(f[2], NULL, 10), (unsigned)strtoul(f[3], NULL, 10));
+        } else if (!strcmp(f[0], "finish") && n == 1) {
+            rc_phone_finish(&p);
+        } else if (!strcmp(f[0], "expect") && n == 5 &&
+                   !strcmp(f[1], "dropped_late") && !strcmp(f[3], "dropped_unpaired")) {
+            unsigned long late = strtoul(f[2], NULL, 10), unpaired = strtoul(f[4], NULL, 10);
+            if (rc_phone_dropped_late(&p) != late || rc_phone_dropped_unpaired(&p) != unpaired) {
+                fprintf(stderr, "  %s:%d: dropped late %u, unpaired %u (want %lu, %lu)\n", path,
+                        lineno, rc_phone_dropped_late(&p), rc_phone_dropped_unpaired(&p),
+                        late, unpaired);
+                return -1;
+            }
+        } else {
+            fprintf(stderr, "%s:%d: can't read '%s' (%d fields)\n", path, lineno, f[0], n);
+            return -1;
+        }
+    }
+    return (long)has;
+}
+
+static int run(const char *dir, int write_mode)
+{
+    char path[1024];
+    long has;
+    reset_outputs();
+    snprintf(path, sizeof(path), "%s/calls.csv", dir);
+    FILE *in = fopen(path, "r");
+    if (in) {
+        has = replay_calls(in, path);
+    } else {
+        snprintf(path, sizeof(path), "%s/phone.csv", dir);
+        in = fopen(path, "r");
+        if (!in) { fprintf(stderr, "%s: no calls.csv or phone.csv\n", dir); return 1; }
+        has = replay_phone(in, path);
+    }
+    fclose(in);
+    if (has < 0) { printf("FAIL %s\n", dir); return 1; }
+    if (g_out.overflow) { fprintf(stderr, "%s: output too large\n", dir); return 1; }
+    outputs *o = &g_out;
     int fails = 0;
+    if (o->order_errors) {
+        fprintf(stderr, "  %d lines out of replay order\n", o->order_errors);
+        fails++;
+    }
     for (int s = 0; s < 3; s++) {
         int expected = s != RC_MOTION_RAW || (has & RC_HAS_RAW_MOTION);
         snprintf(path, sizeof(path), "%s/%s", dir, FILES[s]);
         if (write_mode) {
             if (!expected) { remove(path); continue; }
             FILE *out = fopen(path, "wb");
-            fwrite(o.buf[s], 1, o.len[s], out);
+            fwrite(o->buf[s], 1, o->len[s], out);
             fclose(out);
             continue;
         }
@@ -189,8 +312,8 @@ static int run(const char *dir, int write_mode)
             continue;
         }
         if (!want) { fprintf(stderr, "  %s: missing\n", path); fails++; continue; }
-        if (wlen != o.len[s] || memcmp(want, o.buf[s], wlen)) {
-            report_diff(FILES[s], o.buf[s], o.len[s], want, wlen);
+        if (wlen != o->len[s] || memcmp(want, o->buf[s], wlen)) {
+            report_diff(FILES[s], o->buf[s], o->len[s], want, wlen);
             fails++;
         }
         free(want);

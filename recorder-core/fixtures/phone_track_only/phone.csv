@@ -1,0 +1,14 @@
+# Track only: no motion held or written; a fix is current while under 3 s
+# old (2.999 s yes, 3.000 s no); 29 Feb 2028; sensor calls are ignored.
+phone,android,sats,0
+location,1000000000,1835438400999,-33.8567844,151.2152967,4.0,1.50,270.0
+accel,1100000000,0,0,9.8
+gyro,1100000000,0,0,0
+tick,2000000000,7,0
+tick,3999000000,7,0
+tick,4000000000,7,0
+tick,4000000000,7,0
+location,5000000000,1835481599000,-33.8567844,151.2152967,4.0,1.50,270.0
+tick,5500000000,8,0
+finish
+expect,dropped_late,0,dropped_unpaired,0

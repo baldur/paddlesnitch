@@ -7,7 +7,11 @@ for the tracker, both apps and (as WASM) the server.
 ```
 include/recorder_core.h   the whole API and the sensor convention
 src/recorder_core.c       the implementation
-test/run_fixtures.c       replays fixtures/*/calls.csv, diffs every stream
+include/recorder_phone.h  the phones' layer: events as delivered → core calls in time order
+src/recorder_phone.c      (not in the tracker's build: library.json's srcFilter)
+test/run_fixtures.c       replays fixtures/*/calls.csv or phone.csv, diffs every stream,
+                          checks replay order
+test/gen_phone_fixtures.py  writes the phone fixtures' inputs (delivery order)
 fixtures/                 golden cases (format: fixtures/README.md)
 Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
@@ -64,6 +68,15 @@ phase 2 decides how the server gets it.
   with an unsigned difference, never a signed or widened one
   (`fixtures/clock_wrap`).
 - **Live values are NAN until ready**, never 0 or a guess.
+- **Phones go through `recorder_phone.h`**, never straight to `rc_imu` and
+  `rc_second`: putting batched, late sensor events in order is the hard part
+  of a phone adapter, so it lives here once. The apps pass the platform's own
+  units and clock. It orders in whole milliseconds (the core's `t_ms`), not
+  nanoseconds: a sample 0.3 ms after a row in the same millisecond belongs
+  to that row in a replay, so it must live too (`fixtures/phone_android`).
+- **Never lose a row:** a tick that arrives after later samples have gone on
+  writes its row at the latest sample's time. Samples that can't be placed
+  are dropped and counted, not put in the wrong row.
 - After an API change, tell `lead` (who tells `android`, `ios`, `firmware`),
   and bump `RC_VERSION`.
 
@@ -105,6 +118,14 @@ are byte-identical. Two differences, both from the replay rather than the core:
   module give the native build's output byte for byte (~912k lines, 0.6 s
   under Node). In JavaScript, never `parseFloat(s) || 0`: it turns -0 into 0,
   and the core writes `-0.00` (the first WASM run failed on exactly that).
+- The phone layer's first version dropped a tick that arrived after later
+  samples had gone on, losing that second's row. The fixtures delivered
+  every tick on time, so they passed; a 20-line Swift probe that fed
+  samples then ticked, as an app's timer does, wrote no row at all
+  (2026-10-31). Fixture inputs need the platform's real disorder, not just
+  batches: the generator now makes a tick late on purpose. Also: within one
+  sensor, events arrive in order; a generator that reorders one sensor's
+  events tests something no phone does.
 - macOS `make` compares timestamps to the second: restoring a file within the
   same second as a build leaves a stale binary. `make clean` before trusting
   a mutation test.

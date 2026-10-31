@@ -1,6 +1,6 @@
 {
   "name": "recorder-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The shared recorder core: samples in, recording lines and live values out (docs/features/on-device-metrics.md).",
   "frameworks": "*",
   "platforms": "*",
@@ -8,6 +8,7 @@
   "build": {
     "srcDir": "src",
     "includeDir": "include",
+    "srcFilter": ["+<*>", "-<recorder_phone.c>"],
     "flags": ["-ffp-contract=off"]
   }
 }
