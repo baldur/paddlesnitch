@@ -245,7 +245,7 @@ function start() {
     outingLever = 0;
     state = 'racing';
     showOutingBar();
-    show(OUTINGS[mode.outing].label, { small: true, hold: 2.5 });
+    show(mode.outing === 'hire' ? HIRE_BOATS[hireBoat].label : OUTINGS[mode.outing].label, { small: true, hold: 2.5 });
   }
   if (race.format === 'interval') {
     show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
@@ -643,12 +643,22 @@ canvas.addEventListener('pointerdown', (e) => {
   if (race?.outing) outingTouches.set(e.pointerId, e.clientX < canvas.clientWidth / 2 ? -1 : 1);
 });
 for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => outingTouches.delete(e.pointerId));
+// Out of the choice of boats, back to the bridge's cards, with Hire a boat to hand again.
+function unhire() {
+  club.hiring = false;
+  club.backToHire = true;
+  arrive('path');
+}
 // The boat picked at the pier for a hired-boat outing (outing.js HIRE_BOATS).
 let hireBoat = 'launch';
 // Which of the outing's boats you're on: the trip boat, or the one you hired.
 const outingBoat = () => (race.outing.kind === 'hire' ? race.outing.boat : 'cruise');
 // How far a sinking boat has gone down (metres), and how far over.
-const sunk = () => (race.outing?.sinking == null ? 0 : Math.min(1, (race.time - race.outing.sinking) / SINK));
+const sunk = () => {
+  if (race.outing?.sinking == null) return 0;
+  const k = Math.min(1, (race.time - race.outing.sinking) / SINK);
+  return k * k; // it settles, then goes
+};
 function lever(by) {
   if (race?.outing?.kind !== 'hire') return;
   outingLever = Math.max(-1, Math.min(1, outingLever + by * 0.25));
@@ -661,9 +671,10 @@ function showOutingBar() {
   if (!kind) return;
   document.getElementById('outingName').textContent = kind === 'hire' ? HIRE_BOATS[race.outing.boat].label : OUTINGS[kind].label;
   const hire = kind === 'hire';
-  for (const id of ['outingFaster', 'outingSlower']) document.getElementById(id).hidden = !hire;
-  document.getElementById('outingHint').textContent = hire
-    ? (outingLever === 0 ? 'Stopped' : outingLever > 0 ? `Ahead ${outingLever * 4} of 4` : `Astern ${-outingLever * 4} of 4`) + (phone.matches ? ' · hold either side to steer' : ' · ← → steer, ↑ ↓ throttle')
+  const sinking = race.outing.sinking != null;
+  for (const id of ['outingFaster', 'outingSlower']) document.getElementById(id).hidden = !hire || sinking;
+  document.getElementById('outingHint').textContent = sinking ? 'Sinking…' : hire
+    ? (outingLever === 0 ? 'Stopped' : outingLever > 0 ? `Ahead ${outingLever * 4} of 4` : `Astern ${-outingLever * 4} of 4`) + (phone.matches ? ' · hold either side to steer' : ' · ← → steer, ↑ ↓ throttle') + ' · give packs and eights room'
     : phone.matches ? 'Hold either side to look about' : '← → look about';
 }
 function outingStep(dt) {
@@ -673,6 +684,9 @@ function outingStep(dt) {
   for (const side of outingTouches.values()) turn += side;
   const pad = navigator.getGamepads?.()?.find?.((p) => p);
   if (pad && Math.abs(pad.axes[0] ?? 0) > 0.2) turn += pad.axes[0];
+  // Over (the cruise at Mapledurham, the boat sunk): back to the walk after a moment,
+  // counted in the outing's own time, so a pause in between doesn't leave you stuck.
+  if (race.outing.leaveAt && race.time >= race.outing.leaveAt) return toMenu();
   const was = [race.player.boat.x, race.player.boat.z];
   const events = stepOuting(race, dt, { turn, throttle: outingLever });
   if (play) play.metres += Math.hypot(race.player.boat.x - was[0], race.player.boat.z - was[1]) / (race.course.speedup ?? 1);
@@ -682,7 +696,7 @@ function outingStep(dt) {
     if (e === 'end') {
       endPlay('finished');
       show('Mapledurham Lock: the end of the cruise', { hold: 4 });
-      setTimeout(() => { if (race.outing && state === 'racing') toMenu(); }, 4500);
+      race.outing.leaveAt = race.time + 4.5;
     }
     if (e === 'bump') noise({ freq: 160, to: 90, q: 2, duration: 0.25, gain: 0.12, type: 'lowpass' });
     if (e.startsWith('tipped-')) {
@@ -695,12 +709,12 @@ function outingStep(dt) {
       showOutingBar();
       noise({ freq: 1200, to: 120, q: 0.6, duration: 1.4, gain: 0.25, type: 'lowpass' });
       controls.rumble(1, 500);
-      show(e === 'sinking-pack' ? 'You hit a pack of kayakers! Your boat is sinking' : 'You hit an eight! Your boat is sinking', { hold: SINK - 0.5 });
+      show(e === 'sinking-pack' ? 'You hit a pack of kayakers. Your boat is sinking…' : 'You hit an eight. Your boat is sinking…', { hold: SINK - 0.5 });
     }
     if (e === 'sunk') {
       endPlay('finished');
       show('Sunk! Back to the pier', { hold: 2.5 });
-      setTimeout(() => { if (race.outing && state === 'racing') toMenu(); }, 2500);
+      race.outing.leaveAt = race.time + 2.5;
     }
     if (e === 'swan') {
       outingLever = 0;
@@ -729,7 +743,7 @@ const clubStart = document.getElementById('clubStart');
 // Back goes up a level (a room or the pontoon to the club, the club to the
 // bridge); Start over goes straight back to the bridge. Esc and a gamepad's B go back too.
 const back = () => {
-  if (club?.hiring) { club.hiring = false; return arrive('path'); } // choosing a boat at the pier: back to the bridge's cards
+  if (club?.hiring) return unhire(); // choosing a boat at the pier: back to the bridge's cards
   return club && PLACES[club.place].up && go(PLACES[club.place].up);
 };
 clubBack.addEventListener('click', back);
@@ -811,7 +825,8 @@ function arrive(place) {
   clubBack.hidden = !PLACES[place].up;
   clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
-  document.getElementById('clubPlace').textContent = PLACES[place].label;
+  document.getElementById('clubPlace').textContent = place === 'path' && club.hiring ? 'Hire a boat' : PLACES[place].label;
+  clubCards.classList.toggle('choice', place === 'path' && !!club.hiring);
   const { shots } = club;
   const label = (key) => (MODES[key] ?? DRILL_MODES[key] ?? ROW_MODES[key])?.label;
   // On the bridge the clubs are cards along the bottom, each with a picture,
@@ -821,7 +836,7 @@ function arrive(place) {
   const spots = hiring
     ? [
       ...Object.entries(HIRE_BOATS).map(([id, b]) => ({ card: { picture: clubSvg(id === 'launch' ? 'hire' : id), name: b.label, line: b.line }, act: () => { hireBoat = id; club.hiring = false; choose('hire'); } })),
-      { card: { name: '\u2190 The bridge', line: 'Back to the clubs and outings' }, act: () => { club.hiring = false; arrive('path'); } },
+      { card: { name: '\u2190 Back', line: 'To the clubs and outings' }, act: unhire },
     ]
     : place === 'path'
     ? [
@@ -829,7 +844,7 @@ function arrive(place) {
       { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
       { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise') },
-      { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: 'A speedboat, a launch or a narrowboat' }, act: () => { club.hiring = true; arrive('path'); } },
+      { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => { club.hiring = true; arrive('path'); }, hire: true },
       { pin: 'canoe', at: shots.doors.path.club },
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
@@ -918,7 +933,8 @@ function arrive(place) {
   // Phones held upright: races are sideways.
   if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
   // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
-  if (!menu.open) (club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  if (!menu.open) (club.spots.find((x) => (club.backToHire ? x.hire : x.act && !x.friend)) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  club.backToHire = false;
   // On an upright phone the row sits above Back, not on it.
   clubEl.classList.toggle('backable', !!PLACES[place].up);
   if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
@@ -2110,7 +2126,7 @@ function render(time) {
   // On an outing: standing at the trip boat's bow, or at the launch's helm, looking about.
   if (race.outing && state !== 'menu') {
     const o = race.outing.kind === 'hire' ? HIRE_BOATS[race.outing.boat] : OUTINGS[race.outing.kind];
-    eye = fr.pos.map((p, i) => p + fr.f[i] * o.forward + [0, 1, 0][i] * (o.eye - 1.4 * sunk()));
+    eye = fr.pos.map((p, i) => p + fr.f[i] * o.forward + [0, 1, 0][i] * (o.eye - (o.eye + 0.2) * sunk())); // (every boat's view ends just under the water)
     const yaw = boat.heading + race.outing.look;
     const p = 0.07;
     fwd = [Math.sin(yaw) * Math.cos(p), -Math.sin(p), -Math.cos(yaw) * Math.cos(p)];

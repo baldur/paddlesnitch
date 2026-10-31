@@ -21,7 +21,7 @@ describe("the kayak game's analytics events pass the server's rules untouched", 
       ...['loop', 'hasler79', 'hasler16'].flatMap((key) => [{ mode: { key }, o: { format: 'mass' } }, { mode: { key }, o: { format: 'interval' } }, { mode: { key }, o: { live: true } }]),
       { mode: { key: 'practice', solo: true }, o: {} },
       ...['start', 'wash', 'portage'].map((drill) => ({ mode: { key: `drill-${drill}`, drill, solo: true }, o: {} })),
-      ...['cruise', 'hire'].map((outing) => ({ mode: { key: outing, outing, solo: true }, o: {} })),
+      ...['cruise', 'hire', 'hire-speedboat', 'hire-launch', 'hire-narrowboat'].map((outing) => ({ mode: { key: outing, outing, solo: true }, o: {} })),
       // The rowing club's: a practice row, the Head of the River (a time trial), a 500 m on the erg.
       { mode: { key: 'row-practice', solo: true }, o: {} },
       { mode: { key: 'row-head' }, o: { format: 'interval' } },

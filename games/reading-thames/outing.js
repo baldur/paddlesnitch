@@ -15,7 +15,7 @@ import { MeshBuilder } from './meshes.js';
 // and how far forward of the boat's middle (the cruise's bow, the launch's helm).
 export const OUTINGS = {
   cruise: { label: 'River cruise', line: 'Up the Thames to Mapledurham', eye: 2.9, forward: 4.6 },
-  hire: { label: 'Hire a boat', line: 'An electric launch to drive yourself', eye: 1.35, forward: -1.4 },
+  hire: { label: 'Hire a boat', line: 'A speedboat, a launch or a narrowboat', eye: 1.35, forward: -1.4 },
 };
 // Speeds are real (m/s) and, like a race, go `speedup` times as fast through
 // the true-size world: the Thames's 8 km/h limit is about 2.2 m/s.
@@ -33,9 +33,9 @@ export const BUSY = { gap: 35, ambient: 5, hours: 2 };
 // (`shape`: metres to the bow and the stern, half its width).
 // knock: the speed (m/s) a sculler or kayaker rammed at least this hard goes in.
 export const HIRE_BOATS = {
-  speedboat: { label: 'Speedboat', line: 'Very quick and nimble', top: 50 / 3.6, astern: 2, accel: 3, brake: 4, turn: 0.95, bump: 0.5, knock: 0.5, eye: 1.55, forward: -0.9, shape: { bow: 2.8, stern: 2.6, half: 1.05 } },
+  speedboat: { label: 'Speedboat', line: 'Quick and nimble', top: 50 / 3.6, astern: 2, accel: 3, brake: 4, turn: 0.95, bump: 0.5, knock: 0.5, eye: 1.55, forward: -0.9, shape: { bow: 2.8, stern: 2.6, half: 1.05 } },
   launch: { label: 'Electric launch', line: 'Steady, with cushions and a wheel', top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, bump: 0.3, knock: 0.5, eye: 1.35, forward: -1.4, shape: { bow: 3.25, stern: 3.1, half: 1.1 } },
-  narrowboat: { label: 'Narrowboat', line: 'Long and slow: steer from the back', top: 7 / 3.6, astern: 0.8, accel: 0.25, brake: 0.4, turn: 0.17, bump: 0.15, knock: 0.5, eye: 2.25, forward: -8.2, shape: { bow: 9, stern: 9, half: 1.05 } },
+  narrowboat: { label: 'Narrowboat', line: 'Long and slow: steer from the back', top: 7 / 3.6, astern: 0.8, accel: 0.25, brake: 0.4, turn: 0.17, bump: 0.15, knock: 0.5, eye: 2.6, forward: -8.2, shape: { bow: 9, stern: 9, half: 1.05 } },
 };
 export const HIRE = HIRE_BOATS.launch; // (what the tests and the HUD knew as the launch)
 // Ram a pack of kayakers or an eight and the boat sinks under you: SINK seconds, then back to the pier.
@@ -147,7 +147,8 @@ export function stepOuting(race, dt, input = {}) {
     if (race.traffic) {
       for (const hit of trafficHits(race.traffic, [me])) {
         // A pack of kayakers or an eight: they hold, and your boat is holed and sinks.
-        if (hit.boat.pack || hit.boat.kind === 'eight') {
+        // (At a crawl, a bump: as with anyone else.)
+        if ((hit.boat.pack || hit.boat.kind === 'eight') && Math.abs(b.speed) > H.knock) {
           o.sinking = race.time;
           b.speed *= 0.3;
           events.push('bump', hit.boat.pack ? 'sinking-pack' : 'sinking-eight');

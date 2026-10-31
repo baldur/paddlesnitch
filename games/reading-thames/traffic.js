@@ -151,7 +151,8 @@ export function moveTraffic(traffic, time) {
     }
     // In a pack: in its slot behind the lead (who's moved already: it comes first).
     const lead = b.pack && b.pack.lead !== b ? b.pack.lead : null;
-    if (lead && lead.swim === undefined) {
+    if (lead && lead.swim !== undefined) continue; // the lead's in the water: the pack holds where it is
+    if (lead) {
       const [back, right] = b.pack.slot;
       b.s = lead.s - b.dir * back;
       b.on = lead.on && b.s > T.length && b.s < river.length - T.length;

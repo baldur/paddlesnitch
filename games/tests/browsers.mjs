@@ -161,7 +161,8 @@ async function play(c, page, errors) {
   if (c.club) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
-    const steps = c.outing ? (c.boat ? [[c.outing, null], [c.boat, null]] : [[c.outing, null]])
+    // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
+    const steps = c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
@@ -177,6 +178,12 @@ async function play(c, page, errors) {
       if (label === '@honours') {
         const shown = await page.evaluate(() => ({ note: !document.getElementById('clubNote').hidden && document.getElementById('clubNote').textContent, sheet: document.getElementById('menu').open }));
         if (!shown.note || shown.sheet) errors.push(`the honours board offline showed ${JSON.stringify(shown)}`);
+        continue;
+      }
+      if (label === '@unhire') {
+        await page.keyboard.press('Escape');
+        const back = await page.evaluate(() => ({ canoe: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Canoe Club')), speedboat: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Speedboat')) }));
+        if (!back.canoe || back.speedboat) errors.push(`Back from the choice of boats showed ${JSON.stringify(back)}`);
         continue;
       }
       if (label === '@escape') {
@@ -324,6 +331,13 @@ async function play(c, page, errors) {
     // Closing the page mid-outing still reports the play, ended 'closed', with how far it went.
     const closed = await page.evaluate(() => { dispatchEvent(new Event('pagehide')); return window.gameMetrics.sent.flatMap((b) => b.events).find((e) => e.event === 'game_play'); });
     if (!(closed?.props.end === 'closed' && closed.props.mode === 'outing' && Number(closed.props.km) > 0)) errors.push(`closing the page reported ${JSON.stringify(closed?.props)}`);
+    // A hired boat: the one you picked, and the analytics say which.
+    if (c.boat) {
+      const id = { 'Electric launch': 'launch', Speedboat: 'speedboat', Narrowboat: 'narrowboat' }[c.boat];
+      const boat = await page.evaluate(() => window.kayak.race.outing?.boat);
+      if (boat !== id) errors.push(`hired the ${boat}, picked ${id}`);
+      if (closed?.props.course !== `hire-${id}`) errors.push(`analytics course ${closed?.props.course}, expected hire-${id}`);
+    }
   }
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
 }
