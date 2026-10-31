@@ -167,3 +167,13 @@ test('in whole races the rivals keep right of oncoming boats and let eights by: 
   // (12 against 8, nearly all eights), so the limit grew with the traffic.
   assert.ok(hits / races < 0.625, `${hits} rivals hit in ${races} races`);
 });
+
+test("a race's traffic is exactly as it was before outings could ask for a mix or packs (a change to it must be on purpose)", async () => {
+  // Fingerprints of the boats' timetables, taken before packs came in: any extra random draw on a race's path changes them.
+  const { createHash } = await import('node:crypto');
+  const { readFile } = await import('node:fs/promises');
+  const fp = (boats) => createHash('sha1').update(boats.map((b) => [b.kind, b.at.toFixed(2), b.s.toFixed(1), b.dir].join(':')).join('|')).digest('hex').slice(0, 16);
+  assert.equal(fp(createTraffic(raceRiver(), 5).boats), 'b19213d67b7f2f3f');
+  const loop = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
+  assert.equal(fp(createTraffic(loop, 3).boats), 'aecd4548d1bea4c9');
+});
