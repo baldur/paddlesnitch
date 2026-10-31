@@ -938,7 +938,7 @@ function labelBoards() {
 function honours() {
   if (!account.offline) return boards(Object.values(ROW_MODES)); // your bests go at the top of it
   const lines = rowingBests();
-  note(lines.length ? `Your bests. ${lines.join(' · ')}` : 'No names on it yet: row the Head of the River, or a 500 m on the ergs');
+  note(lines.length ? `Your bests on this device: ${lines.join(' · ')}` : 'No times yet: row the Head of the River, or a 500 m on the ergs.');
 }
 // Your rowing bests on this device: each course, and the erg's 500 m.
 function rowingBests() {
@@ -1271,7 +1271,7 @@ async function showBoards() {
     if (mine.length) top.push(make(`<p class="bests">Your bests on this device: ${mine.join(' · ')}</p>`));
     if (!account.user) {
       const p = document.createElement('p');
-      p.append(link('Sign in', SIGN_IN), ' to put your rows on the boards.');
+      p.append(link('Sign in', SIGN_IN), ' to put your times on the honours board.');
       top.push(p);
     }
   }
@@ -1281,7 +1281,7 @@ async function showBoards() {
     again.type = 'button';
     again.textContent = 'Try again';
     again.addEventListener('click', showBoards);
-    const p = make("<p>Couldn't load the boards. </p>");
+    const p = make(`<p>Couldn't load the ${rowing ? 'honours board' : 'leaderboards'}. </p>`);
     p.append(again);
     return els.boardlist.replaceChildren(...top, p);
   }
@@ -1291,7 +1291,7 @@ async function showBoards() {
     title.textContent = m.label;
     div.append(title);
     if (!b?.top.length) {
-      div.append(!b ? "Couldn't load it." : rowing ? 'No times yet: row it from the plan.' : 'No times yet.');
+      div.append(!b ? "Couldn't load this course." : rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
       return div;
     }
     const table = document.createElement('table');
