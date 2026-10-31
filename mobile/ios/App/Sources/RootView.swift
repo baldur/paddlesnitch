@@ -46,6 +46,9 @@ struct RootView: View {
             if id != nil { Task { await adding.signedIn() } }
         }
         .task { await openLaunchFile() }
+        .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in
+            if PaddlesnitchApp.usesSampleServer { Task { await account.signOut() } }
+        }
         // Google and Strava, for the screens that offer them.
         .task { await account.loadOptions() }
         .tint(Palette.primaryText)

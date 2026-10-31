@@ -86,6 +86,34 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
+    @Test func deletingTheAccountRemovesItsRecordingsAndNoOneElses() async throws {
+        let account = try await signedIn()
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        account.recordingsRoot = root
+        let id = try #require(account.user?.id)
+        let mine = account.recordings(for: id)
+        let theirs = account.recordings(for: "someone-else")
+        for folder in [mine, theirs] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data("timestamp\n".utf8).write(to: folder.appending(path: "track_20260918_062422.csv"))
+        }
+        try await account.deleteAccount()
+        #expect(!FileManager.default.fileExists(atPath: mine.path))
+        #expect(FileManager.default.fileExists(atPath: theirs.appending(path: "track_20260918_062422.csv").path))
+    }
+
+    @Test func signingOutKeepsTheRecordings() async throws {
+        let account = try await signedIn()
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        account.recordingsRoot = root
+        let mine = account.recordings(for: try #require(account.user?.id))
+        try FileManager.default.createDirectory(at: mine, withIntermediateDirectories: true)
+        await account.signOut()
+        #expect(FileManager.default.fileExists(atPath: mine.path), "the only copy until they can be uploaded")
+    }
+
     @Test func aDeletedAccountSaysSoUntilTheNextSignIn() async throws {
         let account = try await signedIn()
         try await account.deleteAccount()

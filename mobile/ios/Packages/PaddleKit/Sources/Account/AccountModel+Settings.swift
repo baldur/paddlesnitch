@@ -52,6 +52,23 @@ extension AccountModel {
 
     static var downloads: URL { FileManager.default.temporaryDirectory }
 
+    /// Where this account's recordings from this phone are kept: one folder
+    /// each, so a later upload only ever sends the signed-in account's, and
+    /// deleting the account removes them in one go. Signing out keeps them:
+    /// until they can be uploaded they're the only copy.
+    public func recordings(for userID: String) -> URL {
+        Self.recordings(for: userID, in: recordingsRoot)
+    }
+
+    public nonisolated static func recordings(for userID: String, in root: URL = recordingsRoot) -> URL {
+        root.appending(path: userID, directoryHint: .isDirectory)
+    }
+
+    /// Documents/Recordings: visible to the app only, left out of backups
+    /// (`RecordingFiles`).
+    public nonisolated static let recordingsRoot = URL.documentsDirectory.appending(
+        path: "Recordings", directoryHint: .isDirectory)
+
     /// Readable only while the phone is unlocked. (macOS, where the package
     /// tests run, has no such protection and refuses the option.)
     #if os(iOS)
@@ -117,6 +134,7 @@ extension AccountModel {
     /// dropped here. A failure leaves you signed in.
     public func deleteAccount() async throws {
         let refreshToken = await session.refreshToken
+        let id = user?.id
         do {
             _ = try await client.send(Endpoints.deleteAccount, DeleteAccount(refreshToken: refreshToken))
         } catch PaddleAPIError.rejected(_, 403, _) {
@@ -126,6 +144,7 @@ extension AccountModel {
         _ = await session.signOut()
         profile.clear()
         removeDownloadedData()
+        if let id { try? FileManager.default.removeItem(at: recordings(for: id)) }
         accountDeleted = true
         state = .signedOut
     }

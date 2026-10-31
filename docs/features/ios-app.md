@@ -46,14 +46,28 @@ First entries (confirm against the docs during the spikes):
 The format and upload are fixed by the recording contract in
 [`mobile-apps.md`](mobile-apps.md). On iPhone:
 
+- **Built (#767), debug builds only until upload (C3, #761):** Record on
+  Paddles when signed in. The `Recorder` package hands Core Motion and Core
+  Location to the shared recorder core's phone layer
+  (`recorder-core/include/recorder_phone.h`) untouched, on one serial queue,
+  and writes its lines to `track_<stamp>.csv` and `_i10.csv`. The screen
+  shows elapsed time, stroke rate "—" until the core has it, the GPS state
+  and hold to stop. Recordings are kept per account
+  (`Documents/Recordings/<user id>`): deleted with the account, kept on
+  sign-out (the only copy until upload), and left out of backups, as on
+  Android (#761). A second recording in the same second is
+  `track_<stamp>_1`, the tracker's rule. Files are encrypted
+  while locked except while open (`completeUnlessOpen`). Not yet: upload,
+  crash recovery, the Live Activity.
 - Recording is **started on screen** and carries on with the screen off using
   the `location` background mode and a background activity session
   (`CLBackgroundActivitySession`, iOS 17). That needs only **"While Using"**
   location permission, never "Always", and shows the system's blue location
   indicator, which is honest about what's happening. App Review checks this.
 - GPS at 1 Hz from `CLLocationUpdate.liveUpdates` with the fitness activity
-  type and best accuracy. Accelerometer + gyro from Core Motion, reduced to the
-  sidecar's 10 Hz.
+  type and best accuracy. Accelerometer + gyro from Core Motion
+  (`CMAccelerometerData`, `CMGyroData`) at 50 Hz, passed as delivered: the
+  recorder core converts units and axes and thins the sidecar by time.
 - Every fix is appended and flushed. iOS doesn't relaunch an app killed while
   recording on "While Using" permission, so on the next open the app recovers
   the file and says "recording recovered, gap 0:42". The Live Activity ends
@@ -127,7 +141,7 @@ mobile/ios/
     DesignSystem             Generated tokens, IBM Plex, shared SwiftUI components (P0)
     ContractGen(Kit)         contract-gen: mobile/contract/ → Swift (P0)
     PaddleAPI                Generated models + a small tRPC/REST client, auth, token refresh
-    Recorder                 Location + motion → tracker CSV + _i10 sidecar, crash recovery
+    Recorder                 Location + motion → recorder core → tracker CSV + _i10 sidecar (built); crash recovery
     TrackerLink              Tracker Bluetooth protocol over a CoreBluetooth abstraction
     UploadQueue              Background URLSession uploads, retries, receipts
     Capabilities             The capability list behind "This iPhone"
@@ -217,7 +231,7 @@ When it's time:
 |---|---|---|---|
 | Package unit tests | Swift Testing (`swift test`) | CSV writer and recovery, Bluetooth protocol, receipts, upload queue, token refresh, capability list | Mac, seconds, every PR |
 | Contract tests | Swift Testing over `mobile/contract/` | Generated models decode every fixture response; recorder output matches the golden CSV byte for byte; Bluetooth exchanges match the protocol fixtures | Every PR |
-| Recorder replay | Swift Testing | Recorded location + motion input played through `Recorder` → expected files, including a kill mid-recording | Every PR |
+| Recorder replay | Swift Testing | Every `recorder-core/fixtures/phone_*` case played through `Recorder` → its files byte for byte (built); a kill mid-recording (with crash recovery) | Every PR |
 | Fake tracker | Swift Testing | `TrackerLink` against a fake peripheral driven by the same fixtures as the web's fake tracker | Every PR |
 | Snapshot tests | swift-snapshot-testing | Every screen, dark, at default and largest Dynamic Type, iOS 17 and newest | Every PR |
 | UI flows | XCUITest | Sign in, Paddles → one paddle, record (simulated GPS route), This iPhone, link-outs; against a stubbed server, plus one smoke run against `pnpm dev` | Simulators: iOS 17 + newest |
@@ -245,7 +259,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
 | **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Strava, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
 | **P1b. Native account** (C5) | Add a paddle from a file ✅ (the file picker, and GPS files opened from Files, Mail, AirDrop or a share sheet; a file opened while signed out is added after sign-in); accept new Terms ✅, download your data ✅, delete account ✅ (as the website: type DELETE, then "Delete for good"); the recent-sign-in check before delete ✅ (sign in again and come straight back; a Strava account with Strava), your details, public profile and handle, contact email for a Strava account ✅; Strava connect, auto-import and disconnect ✅ (Strava's page in `ASWebAuthenticationSession`, back on `com.paddlesnitch.app:/account/strava`; an old sign-in signs in again and comes straight back to connecting); forgot password ✅; Devices ✅ (your trackers, their recordings, removing one); then older Strava paddles (mobile-apps.md, the owner's 2026-10-25 note) | The Account pages leave the website | No |
-| **P2. Record** | Recorder → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
+| **P2. Record** | Recorder ✅ (debug builds, #767) → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |
 | **P5. App Store** | Developer Program enrolment, signed CI → TestFlight internal, then external with the tracker beta group; `apple-app-site-association` with the team ID; store listing, review, release | Real users | For sign-off |

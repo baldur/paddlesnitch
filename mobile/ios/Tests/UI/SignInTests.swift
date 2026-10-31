@@ -58,9 +58,8 @@ final class SignInTests: AppTestCase {
 
     func testCreatingAnAccountNeedsTheTermsTicked() {
         app.buttons["sample-notice-action"].tap()
-        app.buttons["Create account"].firstMatch.tap()
+        showCreateAccount()
         let name = app.textFields["Display name"]
-        XCTAssertTrue(name.appears(timeout: 10))
         fill(email: "new@example.com", password: "Secret123")
         type("New", into: name)
         app.buttons["sign-in-submit"].tap()
@@ -79,8 +78,7 @@ final class SignInTests: AppTestCase {
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
         try audit()
-        app.buttons["Create account"].firstMatch.tap()
-        XCTAssertTrue(app.textFields["Display name"].appears(timeout: 10))
+        showCreateAccount()
         try audit()
     }
 

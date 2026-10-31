@@ -27,6 +27,7 @@ struct PaddleListView: View {
     @State private var loadedID: String?
     @State private var choosingFile = false
     @State private var openedID: String?
+    @State private var recording: URL?
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
@@ -64,6 +65,9 @@ struct PaddleListView: View {
                 }
                 .toolbar {
                     if !isSample {
+                        #if DEBUG  // until a recording can be uploaded (RecordButton)
+                            ToolbarItem(placement: .topBarLeading) { RecordButton(sourceID, $recording) }
+                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Add paddle") { choosingFile = true }
                                 .font(.plexSans(.body))
@@ -73,6 +77,7 @@ struct PaddleListView: View {
                 }
                 .safeAreaInset(edge: .bottom) { addNotice }
         }
+        .recordScreen($recording)
         .fileImporter(isPresented: $choosingFile, allowedContentTypes: Self.fileTypes) { result in
             if case .success(let url) = result { openFile(url) }
         }

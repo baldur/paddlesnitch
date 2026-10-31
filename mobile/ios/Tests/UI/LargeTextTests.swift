@@ -149,6 +149,23 @@ final class LargeTextTests: AppTestCase {
         try checkScreen(at: [element("strava-connected"), app.buttons["Disconnect"]])
     }
 
+    func testRecordAtTheLargestTextSize() throws {
+        app.resetAuthorizationStatus(for: .location)  // ends the app
+        app.launch()
+        signInAndWait()
+        openRecord()
+        let start = app.buttons["record-start"]
+        try checkWholeScreen(last: start)
+        start.tap()
+        answerLocation("While Using")  // asked again: the reset above
+        let stop = element("record-stop")
+        XCTAssertTrue(stop.appears(timeout: 10))
+        try checkWholeScreen(last: stop)
+        stop.press(forDuration: 1.5)
+        XCTAssertTrue(app.buttons["record-done"].appears(timeout: 10))
+        try checkWholeScreen(last: app.buttons["record-done"])
+    }
+
     func testSignInAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))

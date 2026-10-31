@@ -5,9 +5,8 @@ import XCTest
 final class EmailCodeStepTests: AppTestCase {
     private func startAccount() {
         app.buttons["sample-notice-action"].tap()
-        app.buttons["Create account"].firstMatch.tap()
+        showCreateAccount()
         let name = app.textFields["Display name"]
-        XCTAssertTrue(name.appears(timeout: 10))
         fill(email: "new@example.com", password: "Secret123")
         type("New", into: name)
         element("terms-checkbox").tap()
