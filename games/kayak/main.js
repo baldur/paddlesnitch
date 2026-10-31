@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, DOOR_LABELS, firstPlace, clubShots, clubMesh, glide } from './club.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, glide } from './club.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
@@ -527,6 +527,18 @@ const clubEl = document.getElementById('club');
 const clubDoors = document.getElementById('clubDoors');
 const clubNote = document.getElementById('clubNote');
 const clubFade = document.getElementById('clubFade');
+const clubBack = document.getElementById('clubBack');
+const clubStart = document.getElementById('clubStart');
+// Back goes up a level (a room or the pontoon to the club, the club to the
+// bridge); Start over goes straight back to the bridge. Esc and a gamepad's B go back too.
+const back = () => club && PLACES[club.place].up && go(PLACES[club.place].up);
+clubBack.addEventListener('click', back);
+clubStart.addEventListener('click', () => go(START));
+addEventListener('keydown', (e) => {
+  if (!club || menu.open || live.open || state !== 'menu' || (e.code !== 'Escape' && e.code !== 'Backspace')) return;
+  e.preventDefault();
+  back();
+});
 const stillMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let club = null; // { shots, place, from, to, t, length, plan, spots }
 
@@ -553,7 +565,7 @@ function leaveClub() {
 // Walk through a door: outside a glide, through a wall a quick fade.
 function go(to) {
   if (to === 'rowing') return note('Red boards are out: the river is too rough for rowers today. The canoe club is open.');
-  if (!club || club.to || !PLACES[to]) return;
+  if (!club || club.to || !PLACES[to] || to === club.place) return;
   const through = !!PLACES[to].inside !== !!PLACES[club.place].inside;
   club.from = clubCamera();
   club.to = to;
@@ -586,6 +598,8 @@ function clubCamera() {
 function arrive(place) {
   club.place = place;
   clubDoors.replaceChildren();
+  clubBack.hidden = !PLACES[place].up;
+  clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
   document.getElementById('clubPlace').textContent = PLACES[place].label;
   const { shots } = club;
@@ -692,6 +706,7 @@ function placeClub() {
 }
 // A gamepad on the walk: the d-pad moves between the labels, A goes.
 function clubGamepad(pressed) {
+  if (pressed.has(BUTTON.B)) return back();
   const shown = club.spots.filter((s) => !s.el.hidden);
   if (!shown.length) return;
   const i = shown.findIndex((s) => s.el === document.activeElement);

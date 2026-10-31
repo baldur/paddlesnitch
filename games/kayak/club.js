@@ -10,14 +10,16 @@ import { locate, pointAt, widthAt } from './course.js';
 import { groundAt } from './world.js';
 
 // Where each place's doors lead. 'rowing' isn't a place: its door says why not.
+// `up` is where Back goes: the rooms and the pontoon are in the club, the club is off the bridge.
 export const PLACES = {
-  path: { label: 'The Thames at Reading', doors: ['club', 'rowing'] },
-  club: { label: 'Reading Canoe Club', doors: ['changing', 'boathouse', 'clubhouse', 'pontoon', 'path'] },
-  changing: { label: 'The changing room', doors: ['club'], inside: true },
-  boathouse: { label: 'The boathouse', doors: ['club'], inside: true },
-  clubhouse: { label: 'The clubhouse', doors: ['club'], inside: true },
-  pontoon: { label: 'The pontoon', doors: ['club'] },
+  path: { label: 'The Thames at Reading', doors: ['club', 'rowing'], up: null },
+  club: { label: 'Reading Canoe Club', doors: ['changing', 'boathouse', 'clubhouse', 'pontoon', 'path'], up: 'path' },
+  changing: { label: 'The changing room', doors: ['club'], inside: true, up: 'club' },
+  boathouse: { label: 'The boathouse', doors: ['club'], inside: true, up: 'club' },
+  clubhouse: { label: 'The clubhouse', doors: ['club'], inside: true, up: 'club' },
+  pontoon: { label: 'The pontoon', doors: ['club'], up: 'club' },
 };
+export const START = 'path';
 export const DOOR_LABELS = {
   club: 'Reading Canoe Club', rowing: 'Reading Rowing Club', changing: 'Changing room', boathouse: 'Boathouse',
   clubhouse: 'Clubhouse', pontoon: 'Go to the water', path: 'Back to the path',

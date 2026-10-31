@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../kayak/course.js';
 import { waterMap } from '../kayak/water.js';
 import { groundAt } from '../kayak/world.js';
-import { PLACES, DOOR_LABELS, ROOMS, firstPlace, clubShots, clubMesh, glide } from '../kayak/club.js';
+import { PLACES, START, DOOR_LABELS, ROOMS, firstPlace, clubShots, clubMesh, glide } from '../kayak/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -22,6 +22,18 @@ test('every door leads somewhere: another place, or the rowing club (closed: red
   // You can always get back out to the pontoon, and from every room back to the club.
   assert.ok(PLACES.club.doors.includes('pontoon'));
   for (const room of Object.keys(ROOMS)) assert.deepEqual(PLACES[room].doors, ['club']);
+});
+
+test('Back always leads to the bridge: from every place, one level up at a time, through a door that place has', () => {
+  assert.equal(PLACES[START].up, null);
+  for (const [name, place] of Object.entries(PLACES)) {
+    let at = name;
+    for (let steps = 0; at !== START; steps++) {
+      assert.ok(steps < 4, `${name} never gets back to the bridge`);
+      assert.ok(PLACES[at].doors.includes(PLACES[at].up), `${at}: Back goes through one of its doors`);
+      at = PLACES[at].up;
+    }
+  }
 });
 
 test('the walk starts on the path, at the club when invited, and where you were last (never inside a room)', () => {
