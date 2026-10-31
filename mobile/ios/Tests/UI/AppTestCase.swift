@@ -354,7 +354,7 @@ class AppTestCase: XCTestCase {
 
     /// You → Account, signed in.
     func openAccount() {
-        tab("You").tap()
+        selectTab("You")
         let row = app.buttons["Account"]
         XCTAssertTrue(row.appears(timeout: 10))
         row.tap()

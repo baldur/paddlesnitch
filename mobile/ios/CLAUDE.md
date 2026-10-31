@@ -120,3 +120,8 @@ isn't obvious from the code.
   lines, one per app launch. `make test-app` therefore gives each test 6
   minutes (`-default-test-execution-time-allowance`), and CI keeps the results
   when a job is cancelled too.
+- On iOS 26 a tab tapped while the screens are still redrawing (just after
+  signing out) slides towards the new tab and snaps back. Seen once on CI
+  (main's run 41112890501: the recording shows the slide and the snap; never
+  reproduced locally). Switch tabs with `selectTab(_:)` (Waiting.swift), which
+  taps again until the tab is selected, never `tab(...).tap()`.

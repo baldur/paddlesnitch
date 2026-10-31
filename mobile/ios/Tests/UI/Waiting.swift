@@ -85,3 +85,19 @@ func poll(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
     }
     return true
 }
+
+extension AppTestCase {
+    /// Switches tab, tapping again if it didn't take. A tab tapped while the
+    /// screens are still redrawing (just after signing out) slides towards
+    /// the new tab on iOS 26 and snaps back, and a single tap then waits on
+    /// the wrong screen (main's run 41112890501, SignInTests).
+    func selectTab(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        let button = tab(name)
+        XCTAssertTrue(button.appears(timeout: 10), "no \(name) tab", file: file, line: line)
+        for _ in 0..<3 {
+            button.tap()
+            if poll(timeout: 2, { button.isSelected }) { return }
+        }
+        XCTFail("the \(name) tab didn't stay selected", file: file, line: line)
+    }
+}

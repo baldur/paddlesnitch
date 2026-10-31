@@ -43,7 +43,7 @@ final class AccountTests: AppTestCase {
         XCTAssertTrue(forGood.isEnabled)
         forGood.tap()
         XCTAssertTrue(element("account-deleted").appears(timeout: 10), "You says it's gone")
-        tab("Paddles").tap()
+        selectTab("Paddles")
         XCTAssertTrue(element("sample-notice").appears(timeout: 10), "signed out")
     }
 
@@ -83,7 +83,7 @@ final class AccountTests: AppTestCase {
         XCTAssertTrue(app.buttons["confirm-delete-account"].firstMatch.appears(timeout: 10))
         app.buttons["Cancel"].firstMatch.tap()
         XCTAssertTrue(app.buttons["confirm-delete-account"].firstMatch.disappears(timeout: 5))
-        tab("Paddles").tap()
+        selectTab("Paddles")
         XCTAssertFalse(element("sample-notice").exists, "still signed in")
     }
 
