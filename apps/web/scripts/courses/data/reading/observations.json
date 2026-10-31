@@ -1075,6 +1075,410 @@
       "heading": 330,
       "frame": "0095-p0-05500-right",
       "note": "an old white cruiser moored under the trees"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "narrowboat",
+      "length": 17,
+      "exact": true,
+      "at": [
+        51.462786,
+        -0.970583
+      ],
+      "heading": 343,
+      "frame": "0095-p2-00100",
+      "paint": "navy",
+      "note": "narrowboat moored in the back channel"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 9,
+      "exact": true,
+      "at": [
+        51.462867,
+        -0.970268
+      ],
+      "heading": 343,
+      "frame": "0095-p2-00100",
+      "note": "white cruisers moored in the back channel"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 8,
+      "exact": true,
+      "at": [
+        51.46298,
+        -0.970219
+      ],
+      "heading": 343,
+      "frame": "0095-p2-00100"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "cruiser",
+      "length": 10,
+      "exact": true,
+      "at": [
+        51.463289,
+        -0.970941
+      ],
+      "heading": 325,
+      "frame": "0095-p2-00200",
+      "note": "white and blue cruisers along the back channel"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "cruiser",
+      "length": 9,
+      "exact": true,
+      "at": [
+        51.46338,
+        -0.971035
+      ],
+      "heading": 325,
+      "frame": "0095-p2-00200",
+      "note": "white and blue cruisers along the back channel"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "cruiser",
+      "length": 9,
+      "exact": true,
+      "at": [
+        51.463455,
+        -0.971139
+      ],
+      "heading": 325,
+      "frame": "0095-p2-00200",
+      "note": "white and blue cruisers along the back channel"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "cruiser",
+      "length": 10,
+      "exact": true,
+      "at": [
+        51.464219,
+        -0.973106
+      ],
+      "heading": 286,
+      "frame": "0095-p2-00300",
+      "note": "a red and white cruiser"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "cruiser",
+      "length": 9,
+      "exact": true,
+      "at": [
+        51.464256,
+        -0.973269
+      ],
+      "heading": 286,
+      "frame": "0095-p2-00300"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "narrowboat",
+      "length": 18,
+      "exact": true,
+      "at": [
+        51.464272,
+        -0.973475
+      ],
+      "heading": 284,
+      "frame": "0095-p2-00400",
+      "paint": "navy",
+      "note": "a blue barge by the green boat shed"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.462744,
+        -0.970607
+      ],
+      "heading": 343,
+      "frame": "0095-p2-00100",
+      "note": "the big willow over the quay wall, back channel"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.464228,
+        -0.973372
+      ],
+      "heading": 286,
+      "frame": "0095-p2-00300",
+      "note": "willow, back channel"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.464554,
+        -0.973467
+      ],
+      "heading": 284,
+      "frame": "0095-p2-00400",
+      "note": "willow and swans, back channel"
+    },
+    {
+      "kind": "feature",
+      "style": "boat-shed",
+      "at": [
+        51.464261,
+        -0.973673
+      ],
+      "heading": 284,
+      "frame": "0095-p2-00400",
+      "note": "a green boat shed with a white sign board, back channel"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "houseboat",
+      "length": 15,
+      "at": [
+        51.467846,
+        -0.983716
+      ],
+      "heading": 286,
+      "paint": "white",
+      "note": "a white houseboat under the trees"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "houseboat",
+      "length": 13,
+      "at": [
+        51.468042,
+        -0.985124
+      ],
+      "heading": 279,
+      "paint": "white",
+      "note": "a white houseboat and a small powerboat by a hedge and timber wharf"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 8,
+      "at": [
+        51.468778,
+        -0.992234
+      ],
+      "heading": 289,
+      "paint": "navy",
+      "note": "a navy cabin cruiser below the white Victorian house"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 7,
+      "at": [
+        51.469899,
+        -0.996483
+      ],
+      "heading": 289,
+      "paint": "black",
+      "note": "a black motorboat below the white timber houses"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "cruiser",
+      "length": 10,
+      "at": [
+        51.466614,
+        -1.013483
+      ],
+      "heading": 254,
+      "crew": "fenders",
+      "note": "a white Gemini cruiser with fenders at the right-bank jetty"
+    },
+    {
+      "kind": "feature",
+      "style": "jetty",
+      "at": [
+        51.466814,
+        -1.013471
+      ],
+      "heading": 251,
+      "note": "the timber jetty the Gemini lies at"
+    },
+    {
+      "kind": "moorings",
+      "side": "left",
+      "boats": "narrowboat",
+      "length": 18,
+      "at": [
+        51.471706,
+        -1.02791
+      ],
+      "heading": 308,
+      "paint": "navy",
+      "note": "a blue narrowboat under the railway"
+    },
+    {
+      "kind": "feature",
+      "style": "ivy-boathouse",
+      "at": [
+        51.468155,
+        -1.006689
+      ],
+      "heading": 238,
+      "note": "an ivy-covered brick boathouse at the water"
+    },
+    {
+      "kind": "feature",
+      "style": "quay",
+      "at": [
+        51.4686,
+        -1.00721
+      ],
+      "heading": 239,
+      "note": "a timber piled quay with railings and a ladder"
+    },
+    {
+      "kind": "feature",
+      "style": "truss",
+      "at": [
+        51.46721,
+        -1.012428
+      ],
+      "heading": 232,
+      "note": "a steel lattice truss on the bank (an old crane gantry)"
+    },
+    {
+      "kind": "feature",
+      "style": "quay",
+      "at": [
+        51.467015,
+        -1.012725
+      ],
+      "heading": 233,
+      "note": "a long wooden quay"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.468497,
+        -0.992228
+      ],
+      "heading": 288,
+      "note": "a weeping willow at the water"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.468608,
+        -0.992802
+      ],
+      "heading": 291,
+      "note": "a weeping willow at the water"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.470141,
+        -0.996194
+      ],
+      "heading": 289,
+      "note": "a weeping willow at the water"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.480087,
+        -1.038535
+      ],
+      "heading": 16,
+      "note": "a weeping willow at the water"
+    },
+    {
+      "kind": "feature",
+      "style": "willow",
+      "at": [
+        51.480889,
+        -1.03736
+      ],
+      "heading": 21,
+      "note": "a weeping willow at the water"
+    },
+    {
+      "kind": "buildings",
+      "style": "clapboard",
+      "side": "right",
+      "from": {
+        "at": [
+          51.469684,
+          -0.995533
+        ],
+        "heading": 291
+      },
+      "to": {
+        "at": [
+          51.470124,
+          -0.99758
+        ],
+        "heading": 286
+      },
+      "note": "white timber houses with balconies, gardens down to the water"
+    },
+    {
+      "kind": "landmark",
+      "style": "victorian",
+      "at": [
+        51.468982,
+        -0.991809
+      ],
+      "heading": 289,
+      "frame": "0095-p0-01800-right",
+      "note": "a white Victorian house with a turret and cupola, balconies and a boat dock"
+    },
+    {
+      "kind": "landmark",
+      "style": "island-bar",
+      "at": [
+        51.465654,
+        -0.976382
+      ],
+      "heading": 315,
+      "frame": "0095-p1-00600-left",
+      "note": "the bar on Piper's Island: a low white building with a long glass front and a timber deck"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
+      "boats": "trip-boat",
+      "length": 24,
+      "paint": "black",
+      "at": [
+        51.465393,
+        -0.976449
+      ],
+      "heading": 315,
+      "frame": "0095-p1-00600-left",
+      "note": "the Caversham Lady and the trip boats moored along Piper's Island, main channel"
     }
   ]
 }
