@@ -114,9 +114,12 @@ All are needed before the closed test can start.
   | Files and docs | the GPS files you add | No |
 
 - **Not collected:** contacts, photos, messages, the phone's own location,
-  device ids, crash logs, analytics. **Questions for lead:** does the server
-  keep heart rate from FIT files people add (Health info → Heart rate)? Does
-  connecting Strava count as data received only (not shared)?
+  device ids, crash logs, analytics, and heart rate (never stored, even when a
+  FIT or TCX file has it; `/privacy` says so).
+- **Strava** is read only: the server swaps and refreshes its sign-in and
+  disconnects it, and sends Strava nothing of the user's. Nothing to declare as
+  shared. (Strava is switched off for now.)
+- Checked with `lead` against `/privacy` (2026-10-31).
 
 ## Day 3: closed test starts (owner)
 
@@ -133,6 +136,12 @@ All are needed before the closed test can start.
       closed test), then promote the build.
 
 ## Later releases
+
+- **Telemetry from the app** (observability O3: `app_open`, `crash_report`):
+  whoever adds it updates the data safety form in the same release. Declare
+  **App info and performance → Crash logs** and **App activity → App
+  interactions**: collected, not linked to identity, kept indefinitely. They are
+  "not collected" today only because the Android app sends neither yet.
 
 - Phone recording (after C3, #761, and the 2 h screen-off spike): a
   foreground service of type `location` needs a Play declaration with a short
