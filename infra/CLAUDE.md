@@ -138,6 +138,10 @@ CDK does NOT automate this — an AwsCustomResource that flips the active set wo
 
 - `src/tests/email-forwarder.test.ts` — pure-helper coverage for the MIME parser + builder (header unfolding, case-insensitive headers, From/Reply-To fallback, subject prefix). The SES + S3 round trip is manual smoke after deploy.
 
+## Analytics archive
+
+Every analytics event is copied from the server's logs to `s3://paddlesnitch-analytics-prod/events/` (Firehose plus a transform Lambda) and kept indefinitely; the privacy page says so. Details, the one-off backfill script and how to read it: `docs/features/observability.md` § Archive. Don't add an expiry to `events/` without changing the privacy page first.
+
 ## Cost Model (Production, Low Scale)
 
 < 1000 entries/month:

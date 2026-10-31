@@ -41,7 +41,8 @@ describe('who may send events', () => {
 
   it("the platform and version come from the request, never the client's props", async () => {
     await send(event('app_open', { platform: 'ios', appVersion: '9.9.9', build: '1', screen: 'paddles' }), ANDROID)
-    expect(lines[0]).toMatchObject({ platform: 'android', appVersion: '1.0.3', build: '42', screen: 'paddles' })
+    expect(lines[0]).toMatchObject({ platform: 'android', appVersion: '1.0.3', build: '42' })
+    expect(lines[0]).not.toHaveProperty('screen') // app_open has no props: the screen goes in path, app:<screen>
   })
 })
 

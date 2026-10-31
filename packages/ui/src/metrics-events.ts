@@ -72,6 +72,39 @@ export function gameEventProps(event: MetricEvent, props: unknown): unknown {
   }))
 }
 
+// Every other event a client may send, and the only props it may carry. The
+// server's own events (login, signup, upload, campaign_signup, ...) are emitted
+// directly, not through the track route; crash_report and client_error have
+// their own fixed shapes (apps/web/src/lib/client-errors.ts). A prop not listed
+// here is dropped, so nothing typed, no id and no field named like the
+// event's own (Event, ts, _aws) gets into the logs or the archive.
+const CAMPAIGN = test(/^[a-z0-9_-]{1,40}$/)
+const CLIENT_EVENT_PROPS: Partial<Record<MetricEvent, Readonly<Record<string, Rule>>>> = {
+  pageview: { campaign: CAMPAIGN },
+  campaign_cta: { campaign: CAMPAIGN },
+}
+
+/** The props a client may send with this event: a game event's own rules, the
+ *  short list above, or none. */
+export function clientEventProps(event: MetricEvent, props: unknown): Record<string, string> {
+  const rules = (GAME_EVENT_PROPS as Record<string, Record<string, Rule>>)[event] ?? CLIENT_EVENT_PROPS[event] ?? {}
+  if (!props || typeof props !== 'object') return {}
+  const p = props as Record<string, unknown>
+  return Object.fromEntries(Object.entries(rules).flatMap(([k, ok]) => {
+    const v = p[k]
+    return typeof v === 'string' && ok(v) ? [[k, v]] : []
+  }))
+}
+
+/** A client event's path as it may be recorded: an app screen (`app:paddles`),
+ *  or a site page through publicPath; a game event only a page under /games. */
+export function eventPath(event: MetricEvent, path: unknown): string | undefined {
+  if (typeof path !== 'string') return undefined
+  if (event in GAME_EVENT_PROPS) return gamePath(event, path) as string | undefined
+  if (path.startsWith('app:')) return /^app:[a-z0-9_-]{1,40}$/.test(path) ? path : undefined
+  return path.startsWith('/') && !path.startsWith('//') ? publicPath(path.slice(0, 200)) : undefined
+}
+
 /** A game event's path: only a page under /games, else none. */
 export const gamePath = (event: MetricEvent, path: unknown): unknown =>
   !(event in GAME_EVENT_PROPS) ? path : typeof path === 'string' && /^\/games(\/[a-z0-9_-]{1,40}){0,3}\/?$/.test(path) ? path : undefined
@@ -95,13 +128,22 @@ export function campaignFrom(search: string): string | undefined {
 // minutes, a profile handle or tracker id says who someone is. Trial and course
 // ids stay: they're public and are what the analytics are for.
 const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api'])
+const PLAN_STATIC = new Set(['data', 'gaps', 'print', 'shared', 'sources'])
+/** Every page's path as it may be recorded; public-path.test.ts walks every
+ *  dynamic page on disk and fails if a personal id survives. Only trial and
+ *  course ids stay. Never a query string or fragment. */
 export function publicPath(pathname: string): string {
-  const p = pathname.split('/')
+  const p = pathname.split(/[?#]/)[0].split('/')
   const [, a, b] = p
+  const from = (i: number) => { for (let k = i; k < p.length; k++) if (p[k]) p[k] = '[id]' }
   if (a === 'paddles' && b === 'shared' && p[3]) p[3] = '[id]'
   else if (a === 'paddles' && b && !PADDLES_STATIC.has(b)) p[2] = '[id]'
+  else if (a === 'profile' && b === 'me' && p[3] === 'devices') from(4)
   else if (a === 'profile' && b && b !== 'me') p[2] = '[id]'
-  else if (a === 'devices') for (let i = 2; i < p.length; i++) { if (p[i]) p[i] = '[id]' }
+  else if (a === 'devices' || a === 'buddies') from(2)
+  else if (a === 'plan' && b === 'shared') from(3)
+  else if (a === 'plan' && b && !PLAN_STATIC.has(b)) p[2] = '[id]'
+  else if (a === 'att' && (b === 'entries' || b === 'groups')) from(3)
   else if ((a === 'l' || a === 'L') && b) p[2] = '[code]'
   return p.join('/')
 }

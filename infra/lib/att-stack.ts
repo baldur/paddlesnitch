@@ -12,6 +12,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
 import * as logs from 'aws-cdk-lib/aws-logs'
+import * as firehose from 'aws-cdk-lib/aws-kinesisfirehose'
 import * as sns from 'aws-cdk-lib/aws-sns'
 import * as snsSubs from 'aws-cdk-lib/aws-sns-subscriptions'
 import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions'
@@ -1148,6 +1149,131 @@ export class AttStack extends cdk.Stack {
     // line) and trackers reporting a failed boot after an update. Metric
     // filters are free; each custom metric is about $0.30/month.
     const serverLogs = logs.LogGroup.fromLogGroupName(this, 'ServerLogGroup', `/aws/lambda/${serverFn.functionName}`)
+    // ---- Analytics archive (docs/features/observability.md § Archive) ------
+    // Every analytics event (pageviews, game, campaign and app events: EMF
+    // lines with an `Event` name) is copied from the server's log group to S3
+    // and kept indefinitely, for analysis later. Logs go after three months and
+    // CloudWatch keeps only counts, so this is the one long-term copy. The
+    // events carry no account, only a random per-tab id (the privacy page says
+    // so). Log group → subscription filter (a cheap pre-filter on the word
+    // Event) → Firehose → a transform Lambda (keeps only real events, one JSON
+    // object per line) → gzipped files under events/year=/month=/day=/.
+    const analyticsBucket = new s3.Bucket(this, 'AnalyticsArchive', {
+      bucketName: 'paddlesnitch-analytics-prod',
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      // Kept indefinitely: no expiry on events/. Records Firehose couldn't
+      // transform land in errors/ for a look, then go.
+      lifecycleRules: [{ id: 'expire-errors', prefix: 'errors/', expiration: cdk.Duration.days(30) }],
+    })
+    const archiveTransformFn = new lambda.Function(this, 'AnalyticsArchiveTransformFn', {
+      logRetention: LOG_RETENTION,
+      functionName: 'paddlesnitch-analytics-archive',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/analytics-archive')),
+      timeout: cdk.Duration.minutes(1),
+      memorySize: 256,
+    })
+    const archiveFirehoseRole = new iam.Role(this, 'AnalyticsArchiveFirehoseRole', {
+      assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com', {
+        conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
+      }),
+    })
+    // What Firehose needs to write, and no more (no delete).
+    archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject', 's3:AbortMultipartUpload'],
+      resources: [analyticsBucket.arnForObjects('*')],
+    }))
+    archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
+      resources: [analyticsBucket.bucketArn],
+    }))
+    // Firehose's own delivery and transform errors, so a failure shows.
+    const archiveFirehoseLogs = new logs.LogGroup(this, 'AnalyticsArchiveFirehoseLogs', {
+      logGroupName: '/aws/kinesisfirehose/paddlesnitch-analytics-archive',
+      retention: LOG_RETENTION,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    })
+    const archiveFirehoseLogStream = archiveFirehoseLogs.addStream('Delivery', { logStreamName: 'DestinationDelivery' })
+    archiveFirehoseLogs.grantWrite(archiveFirehoseRole)
+    archiveTransformFn.grantInvoke(archiveFirehoseRole)
+    archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['lambda:GetFunctionConfiguration'],
+      resources: [archiveTransformFn.functionArn],
+    }))
+    const archiveStream = new firehose.CfnDeliveryStream(this, 'AnalyticsArchiveStream', {
+      deliveryStreamName: 'paddlesnitch-analytics-archive',
+      deliveryStreamType: 'DirectPut',
+      extendedS3DestinationConfiguration: {
+        bucketArn: analyticsBucket.bucketArn,
+        roleArn: archiveFirehoseRole.roleArn,
+        prefix: 'events/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+        errorOutputPrefix: 'errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+        compressionFormat: 'GZIP',
+        cloudWatchLoggingOptions: {
+          enabled: true,
+          logGroupName: archiveFirehoseLogs.logGroupName,
+          logStreamName: archiveFirehoseLogStream.logStreamName,
+        },
+        // Few, larger files: at most every 15 minutes, or 64 MB.
+        bufferingHints: { intervalInSeconds: 900, sizeInMBs: 64 },
+        processingConfiguration: {
+          enabled: true,
+          processors: [{
+            type: 'Lambda',
+            parameters: [
+              { parameterName: 'LambdaArn', parameterValue: archiveTransformFn.functionArn },
+              // Small batches: a gzipped MB of log lines can come back past the
+              // 6 MB a Lambda may answer (the transform also fails records over budget).
+              { parameterName: 'BufferSizeInMBs', parameterValue: '0.25' },
+              { parameterName: 'BufferIntervalInSeconds', parameterValue: '60' },
+            ],
+          }],
+        },
+      },
+    })
+    archiveStream.node.addDependency(archiveFirehoseRole)
+    const archiveLogsRole = new iam.Role(this, 'AnalyticsArchiveLogsRole', {
+      assumedBy: new iam.ServicePrincipal('logs.amazonaws.com', {
+        conditions: {
+          StringEquals: { 'aws:SourceAccount': this.account },
+          StringLike: { 'aws:SourceArn': `arn:aws:logs:${this.region}:${this.account}:log-group:${serverLogs.logGroupName}:*` },
+        },
+      }),
+    })
+    archiveLogsRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
+      resources: [archiveStream.attrArn],
+    }))
+    new logs.CfnSubscriptionFilter(this, 'AnalyticsArchiveSubscription', {
+      logGroupName: serverLogs.logGroupName,
+      filterName: 'analytics-archive',
+      filterPattern: 'Event',
+      destinationArn: archiveStream.attrArn,
+      roleArn: archiveLogsRole.roleArn,
+    }).node.addDependency(archiveLogsRole)
+    // Zero tolerance: a batch the transform failed, or one Firehose couldn't
+    // write, sits in errors/ (raw, uncleaned lines, so it expires in 30 days).
+    const archiveHelp = 'It is under errors/ in paddlesnitch-analytics-prod for 30 days: see docs/features/observability.md § Archive.'
+    alarm('AnalyticsArchiveTransformAlarm', {
+      alarmName: 'paddlesnitch-analytics-archive-transform',
+      alarmDescription: `The analytics archive's transform failed. ${archiveHelp}`,
+      metric: archiveTransformFn.metricErrors({ period: cdk.Duration.hours(1), statistic: 'Sum' }),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+    alarm('AnalyticsArchiveDeliveryAlarm', {
+      alarmName: 'paddlesnitch-analytics-archive-delivery',
+      alarmDescription: `The analytics archive failed to process or write a batch. ${archiveHelp}`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Firehose', metricName: 'ExecuteProcessing.Success',
+        dimensionsMap: { DeliveryStreamName: 'paddlesnitch-analytics-archive' }, statistic: 'Minimum', period: cdk.Duration.hours(1),
+      }),
+      threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
     const logCount = (id: string, pattern: logs.IFilterPattern, metricName: string) => {
       new logs.MetricFilter(this, id, {
         logGroup: serverLogs, filterPattern: pattern,
