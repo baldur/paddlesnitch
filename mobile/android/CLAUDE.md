@@ -117,3 +117,15 @@ time and isn't obvious from the code.
   `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
 - A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
   that starts below the fold, or the second golden repeats the first.
+- Recording on the phone (`record/`): `PhoneRecorder` hands SensorEvent and Location values to
+  the recorder core's phone layer as Android gives them (m/s², rad/s, `event.timestamp`,
+  `elapsedRealtimeNanos`), every call on one HandlerThread. Never convert or sort them here:
+  `recorder-core/test/one_implementation.sh` fails on 9.80665 or 180/π anywhere in mobile/,
+  tests included (use `SensorManager.STANDARD_GRAVITY` for a test's input). Behind
+  `BuildConfig.DEBUG` until recordings upload (C3).
+- The JNI library is built twice: by the NDK into the APK, and for the host by `hostRecorder`
+  (jni.h copied from the NDK: Android Studio's JDK has no headers), so `RecorderFixturesTest`
+  replays recorder-core's fixtures through the real binding. Two traps: the Test task must list
+  the library as an input or a changed `.c` file leaves the tests "up to date" (a mutation once
+  passed that way); and the JVM loads one library file in one classloader only, so with
+  Robolectric's sandbox as a second one, each loads its own temp copy.

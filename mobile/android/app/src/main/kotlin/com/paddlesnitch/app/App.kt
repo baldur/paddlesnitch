@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -222,12 +224,23 @@ private fun MyPaddles(
             .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
+    // Recording on the phone: debug builds only until recordings upload (C3).
+    var recording by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    if (recording) {
+        androidx.activity.compose.BackHandler { recording = false }
+        Column(modifier.fillMaxSize()) {
+            TextButton(onClick = { recording = false }, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
+            com.paddlesnitch.app.record.Record()
+        }
+        return
+    }
     val current = list
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
             loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) }, action = {
             Row {
+                if (BuildConfig.DEBUG) TextButton(onClick = { recording = true }, colors = textColors()) { Text("Record") }
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
             }

@@ -6,10 +6,10 @@ name: Android
 # ANDROID_UPLOAD_* secrets exist; until then it is skipped.
 on:
   pull_request:
-    paths: ['mobile/android/**', 'mobile/contract/**', '.github/workflows/android.yml']
+    paths: ['mobile/android/**', 'mobile/contract/**', 'recorder-core/**', '.github/workflows/android.yml']
   push:
     branches: [main]
-    paths: ['mobile/android/**', 'mobile/contract/**', '.github/workflows/android.yml']
+    paths: ['mobile/android/**', 'mobile/contract/**', 'recorder-core/**', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:

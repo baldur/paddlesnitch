@@ -13,6 +13,19 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
 
+    <!-- Recording a paddle on the phone (record/RecordingService.kt). A foreground
+         service of type location, started while the app is on screen, keeps GPS
+         going with the screen off with "while using the app" location only: no
+         background location. The wake lock keeps the sensors' batches coming. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+
     <!-- Android 11+ hides other apps unless asked: these find the browser that
          openInBrowser (App.kt) names, so a link the app claims doesn't come back here. -->
     <queries>
@@ -79,6 +92,10 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

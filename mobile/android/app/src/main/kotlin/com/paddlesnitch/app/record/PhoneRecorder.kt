@@ -1,0 +1,176 @@
+package com.paddlesnitch.app.record
+
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.BatteryManager
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.SystemClock
+import android.util.Log
+import java.io.File
+import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * Records the phone as a tracker: accelerometer and gyroscope (about 50 Hz),
+ * GPS (1 Hz) and a tick each second, all handed to the recorder core's phone
+ * layer exactly as Android delivers them (recorder_phone.h). Every core call
+ * happens on one HandlerThread; the core is not thread-safe and needs one
+ * order of calls.
+ *
+ * The caller holds the partial wake lock and the foreground service
+ * (RecordingService); without them the sensor FIFO is only emptied when the
+ * screen wakes and rows are written without their samples.
+ */
+class PhoneRecorder(
+    private val context: Context,
+    private val dir: File,
+    private val now: () -> Instant = Instant::now,
+    private val clock: () -> Long = SystemClock::elapsedRealtimeNanos,   // ticks' t_ns (recorder_phone.h, CLOCK)
+) {
+    private val thread = HandlerThread("recorder").apply { start() }
+    private val handler = Handler(thread.looper)
+    private val sensors = context.getSystemService(SensorManager::class.java)
+    private val locations = context.getSystemService(LocationManager::class.java)
+
+    private var core: RecorderCore? = null
+    private var files: RecordingFiles? = null
+    private var battMv = 0
+    private var nextTick = 0L
+
+    private val _live = MutableStateFlow<RecorderCore.Live?>(null)
+    /** The core's live values after each tick; null when not recording. */
+    val live: StateFlow<RecorderCore.Live?> = _live
+
+    /** The files being written, once started. */
+    @Volatile var current: RecordingFiles? = null
+        private set
+
+    private val sensorListener = object : SensorEventListener {
+        override fun onSensorChanged(e: SensorEvent) {
+            val c = core ?: return
+            val v = e.values
+            when (e.sensor.type) {
+                Sensor.TYPE_ACCELEROMETER -> c.accel(e.timestamp, v[0].toDouble(), v[1].toDouble(), v[2].toDouble())
+                Sensor.TYPE_GYROSCOPE -> c.gyro(e.timestamp, v[0].toDouble(), v[1].toDouble(), v[2].toDouble())
+            }
+        }
+        override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
+    }
+
+    private val locationListener = LocationListener { l -> core?.location(fixOf(l)) }
+
+    private val battery = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) { battMv = i.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0).coerceAtLeast(0) }
+    }
+
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!tickNow()) return
+            // The next whole second from the start, skipping any a stall missed:
+            // ticks must never queue up out of order.
+            val up = SystemClock.uptimeMillis()
+            do nextTick += 1000 while (nextTick <= up)
+            handler.postAtTime(this, nextTick)
+        }
+    }
+
+    /** This second's row. On the recorder thread only. */
+    internal fun tickNow(): Boolean {
+        val c = core ?: return false
+        c.tick(clock(), battMv)
+        _live.value = c.live()
+        logDrops(c, false)
+        return true
+    }
+
+    /** Starts recording; returns once the files exist and the headers are written. */
+    @SuppressLint("MissingPermission")   // RecordingService starts only with location permission
+    fun start(): RecordingFiles = onThread {
+        check(core == null) { "already recording" }
+        val accel = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val gyro = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        val motion = accel != null && gyro != null     // no gyroscope: track only, no sensor events
+        val f = RecordingFiles.create(dir, now())
+        files = f
+        core = RecorderCore(has = RecorderCore.HAS_BATT_MV, motion = motion, lines = f::write)
+        context.registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED), null, handler)
+        if (motion) {
+            sensors.registerListener(sensorListener, accel, SAMPLE_US, MAX_LATENCY_US, handler)
+            sensors.registerListener(sensorListener, gyro, SAMPLE_US, MAX_LATENCY_US, handler)
+        }
+        locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener, thread.looper)
+        nextTick = SystemClock.uptimeMillis() + 1000
+        handler.postAtTime(tick, nextTick)
+        current = f
+        Log.i(TAG, "recording ${f.track.name}, motion=$motion")
+        f
+    }
+
+    /** Stops: writes everything still held, closes the files and ends the thread. */
+    fun stop(): RecordingFiles? = if (!thread.isAlive) null else onThread {
+        val c = core
+        val f = files
+        if (c != null && f != null) {
+            handler.removeCallbacks(tick)
+            sensors.unregisterListener(sensorListener)
+            locations.removeUpdates(locationListener)
+            runCatching { context.unregisterReceiver(battery) }
+            c.finish()
+            logDrops(c, true)
+            c.close()
+            f.close()
+        }
+        core = null
+        files = null
+        current = null
+        _live.value = null
+        f
+    }.also { thread.quitSafely() }
+
+    private var lastDrops = 0L to 0L
+    private fun logDrops(c: RecorderCore, end: Boolean) {
+        val drops = c.droppedLate to c.droppedUnpaired
+        if (end || drops != lastDrops) Log.i(TAG, "dropped late ${drops.first}, unpaired ${drops.second}${if (end) " (final)" else ""}")
+        lastDrops = drops
+    }
+
+    internal fun <T> onThread(work: () -> T): T {
+        if (Thread.currentThread() == thread) return work()
+        var result: Result<T>? = null
+        val done = CountDownLatch(1)
+        check(handler.post { result = runCatching(work); done.countDown() }) { "recorder stopped" }
+        check(done.await(10, TimeUnit.SECONDS)) { "recorder thread stuck" }
+        return result!!.getOrThrow()
+    }
+
+    companion object {
+        private const val TAG = "PhoneRecorder"
+        const val SAMPLE_US = 20_000          // ~50 Hz (recorder_phone.h, SAMPLE RATE)
+        const val MAX_LATENCY_US = 2_000_000  // batches at most 2 s late; the layer holds 15 s
+
+        /** A Location as the core takes it: taken-at on the monotonic clock, and only the fields Android gave. */
+        fun fixOf(l: Location) = RecorderCore.Fix(
+            tNs = l.elapsedRealtimeNanos,
+            utcMs = l.time,
+            lat = l.latitude,
+            lon = l.longitude,
+            alt = if (l.hasAltitude()) l.altitude else null,
+            speedMs = if (l.hasSpeed()) l.speed.toDouble() else null,
+            courseDeg = if (l.hasBearing()) l.bearing.toDouble() else null,
+        )
+    }
+}
