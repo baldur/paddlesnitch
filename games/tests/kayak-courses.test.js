@@ -26,7 +26,7 @@ test('the menu offers the loop, both Hasler courses and practice, each from its 
 test("every course is on the server's list, at its distance: a wrong id or distance would fail every leaderboard submit", async () => {
   const core = await read('../../packages/core/src/games.ts');
   const list = core.slice(core.indexOf('export const GAME_COURSES = {'), core.indexOf('} as const', core.indexOf('export const GAME_COURSES')));
-  const server = Object.fromEntries([...list.matchAll(/(\w+): (\d+)/g)].map(([, k, v]) => [k, +v]));
+  const server = Object.fromEntries([...list.matchAll(/'?([\w-]+)'?: (\d+)/g)].map(([, k, v]) => [k, +v]));
   for (const { key } of await modes()) {
     assert.ok(key in server, `${key} isn't in GAME_COURSES (packages/core/src/games.ts)`);
     const course = courseFromFile(await data(key));

@@ -2066,7 +2066,9 @@ function render(time) {
   // A scull's view is wide: the oars reach out either side of you.
   const wide = shot?.wide ?? (boat.hull.scull && state !== 'menu' ? ROW_WIDE : 0);
   const minX = wide ? (wide * Math.PI) / 180 : MIN_FOV_X;
-  const tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(minX / 2) / aspect);
+  let tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(minX / 2) / aspect);
+  // A wide shot on a phone held upright would be mostly the deck under you: cap its height.
+  if (shot?.wide) tanY = Math.min(tanY, Math.tan((105 * Math.PI) / 360));
   const proj = perspective(2 * Math.atan(tanY), aspect, 0.05, 2500);
 
   viewProj = multiply(proj, view(eye, right, up, fwd));

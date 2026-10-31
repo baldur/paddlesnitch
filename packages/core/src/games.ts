@@ -15,6 +15,8 @@ export const GAME_COURSES = {
   race: 6000, practice: 1000, reading: 6260, loop: 5400,
   // The Reading Hasler courses: Div 7-9 and Div 1-6.
   hasler79: 7900, hasler16: 12600,
+  // Rowing: the head race is rowed on the Loop's route; a practice row.
+  'row-head': 5400, 'row-practice': 1000,
 } as const
 export type GameCourse = keyof typeof GAME_COURSES
 /** The boats you can race (games/kayak/boats.js), then the three hulls the game had before them. */
@@ -22,7 +24,8 @@ export const GAME_BOATS = [
   'nelo-vanquish-3', 'vajda-supersonic', 'kirton-typhoon', 'marsport-macros', 'vajda-cruiser',
   'nelo-viper-51', 'plastex-swift', 'kirton-pulsar', 'vajda-voyageur',
 ] as const
-export const GAME_HULLS = [...GAME_BOATS, 'stable', 'club', 'racing'] as const
+// The sculls are prefixed: 'club' already means the kayak's old hull on the boards.
+export const GAME_HULLS = [...GAME_BOATS, 'stable', 'club', 'racing', 'scull-trainer', 'scull-club', 'scull-fine'] as const
 
 /** Faster than this over a course's shown distance isn't paddling (an elite K1 sprints at about 18 km/h). */
 export const MAX_KMH = 18
@@ -81,6 +84,7 @@ export type GameKit = {
   hat?: 'none' | 'cap' | 'visor' | 'beanie'; hatColour?: string
   beard?: 'none' | 'stubble' | 'moustache' | 'beard'
   aid?: boolean; aidColour?: string
+  scull?: 'trainer' | 'club' | 'fine'; scullColour?: string
   /** The old head, before the game moved it to hair and hat. */
   head?: 'cap' | 'hair'; headColour?: string
   glasses: 'none' | 'wrap' | 'round' | 'aviator' | 'square'; glassesColour: string
