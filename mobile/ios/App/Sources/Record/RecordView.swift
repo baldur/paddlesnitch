@@ -51,6 +51,15 @@ struct RecordView: View {
             }
         }
         .interactiveDismissDisabled(model.phase == .recording)
+        // Never a recording without its screen: if it goes, what's recorded
+        // is saved.
+        .onDisappear { model.stop() }
+        .onChange(of: model.phase) { _, phase in
+            // UI tests: a sign-out the app makes on its own, mid-recording.
+            if phase == .recording, ProcessInfo.processInfo.arguments.contains("-SignOutWhileRecording") {
+                NotificationCenter.default.post(name: .signOutForTest, object: nil)
+            }
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -152,17 +161,40 @@ struct RecordView: View {
 
 /// Opens the record screen, on Paddles when signed in. Debug builds only
 /// until a recording can be uploaded (C3): nobody should record a paddle
-/// that goes nowhere.
+/// that goes nowhere. The account's folder is fixed here, when it opens.
 struct RecordButton: View {
     let userID: String
-    @State private var open = false
+    @Binding var folder: URL?
+
+    init(_ userID: String, _ folder: Binding<URL?>) {
+        self.userID = userID
+        _folder = folder
+    }
 
     var body: some View {
-        Button("Record") { open = true }
+        Button("Record") { folder = AccountModel.recordings(for: userID) }
             .font(.plexSans(.body))
             .accessibilityIdentifier("record")
-            .fullScreenCover(isPresented: $open) { RecordView(directory: AccountModel.recordings(for: userID)) }
     }
+}
+
+extension View {
+    /// The record screen, presented from Paddles itself and not from the
+    /// Record button: a sign-out the app makes on its own (a refresh the
+    /// server refuses, after a password reset elsewhere) takes the button
+    /// away, and with it a screen it presented, mid-paddle.
+    func recordScreen(_ folder: Binding<URL?>) -> some View {
+        fullScreenCover(
+            isPresented: Binding(get: { folder.wrappedValue != nil }, set: { if !$0 { folder.wrappedValue = nil } })
+        ) {
+            if let directory = folder.wrappedValue { RecordView(directory: directory) }
+        }
+    }
+}
+
+extension Notification.Name {
+    /// UI tests only (`-SignOutWhileRecording`, with the sample server).
+    static let signOutForTest = Notification.Name("SignOutForTest")
 }
 
 /// What went wrong, in place of the heading.

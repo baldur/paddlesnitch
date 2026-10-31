@@ -40,6 +40,22 @@ final class RecordTests: AppTestCase {
         XCTAssertTrue(app.buttons["record"].appears(timeout: 5), "back on Paddles")
     }
 
+    /// The app signs out on its own when the server refuses a refresh (a
+    /// password reset elsewhere). The record screen and its Stop stay, and
+    /// the paddle is saved in the account it was started in.
+    func testASignOutMidRecordingKeepsTheScreenAndItsStop() throws {
+        app.terminate()
+        app.launchArguments += ["-SignOutWhileRecording"]
+        app.launch()
+        try startRecording(allow: true)
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        XCTAssertFalse(element("record-recording").disappears(timeout: 5), "still recording after the sign-out")
+        element("record-stop").press(forDuration: 1.5)
+        XCTAssertTrue(text(containing: "Saved on this iPhone").appears(timeout: 10))
+        app.buttons["record-done"].tap()
+        XCTAssertTrue(element("sample-notice").appears(timeout: 10), "signed out behind it")
+    }
+
     func testWithoutLocationItSaysWhereToTurnItOn() throws {
         try startRecording(allow: false)
         XCTAssertTrue(element("record-location-off").appears(timeout: 10))

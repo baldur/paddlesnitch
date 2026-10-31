@@ -144,3 +144,9 @@ isn't obvious from the code.
   locked, but a file already open stays writable. `.complete` would stop a
   screen-off recording seconds after the lock. A killed recording's file
   can't be reopened until the next unlock.
+- A screen that must outlive a sign-out (the record screen) is presented
+  from a view that stays through it (Paddles), never from a signed-in-only
+  toolbar button: the app signs out on its own when a refresh is refused,
+  the button goes, and its full-screen cover goes with it. Here that took
+  Stop away mid-paddle. `RecordTests` signs out mid-recording
+  (`-SignOutWhileRecording`).
