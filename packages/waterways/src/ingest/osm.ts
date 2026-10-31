@@ -146,6 +146,13 @@ export function osmPortageWaysFromOverpass(elements: OverpassElement[]): OsmElem
     })
 }
 
+/** The OSM points with each portage way's centre swapped for its copy with
+ *  ends (both are `way/<id>`), so none is kept twice. */
+export function withPortageEnds(osm: OsmElement[], ended: OsmElement[]): OsmElement[] {
+  const ids = new Set(ended.map(w => w.id))
+  return [...osm.filter(o => !ids.has(o.id)), ...ended]
+}
+
 /** Lock chambers from OSM ways tagged lock=yes, one per chamber (a chamber
  *  drawn as several ways is merged), at the chamber's middle. These are OSM
  *  data (ODbL): the national build publishes them in their own file and they

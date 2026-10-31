@@ -74,7 +74,7 @@ Two of these change the existing spec. First, the spec lists EA Vertical Aerial 
 
 ## Devizes to Westminster portages (checked 2026-10-31)
 
-What each source says about the 77 DW locks: which bank to land on, where to get out and back in, and the carry. The scorecard is `packages/waterways/data/dw-coverage.md`; on 2026-10-31 it had **0 of 77** for all four, and no open source can raise it.
+What each source says about the 77 DW locks: which bank to land on, where to get out and back in, and the carry. The scorecard is `packages/waterways/data/dw-coverage.md`; on 2026-10-31 it had **0 of 77** for portage side, take-out and put-in, and 1 of 77 for the carry (Molesey's rollers, from OSM). No open source can raise the first three.
 
 | Source | Licence | What it has for DW portages | Use |
 |---|---|---|---|
@@ -85,14 +85,14 @@ What each source says about the 77 DW locks: which bank to land on, where to get
 | paddlesnitch contributions (`/plan/data/latest/openportage`) | CC0 | 0 on 2026-10-31. | Yes. The scorecard reads this file since 2026-10-31. |
 | DW race handbook 2026 (`dwrace.co.uk`) | © The Devizes to Westminster Organisation Limited, all rights reserved | A portage diagram for every race portage, including Dreadnought Reach. Images, not data. | Find and check only. Ask 1 below. |
 | Go Paddling paddle trails (Paddle UK) | No open licence found; the site refuses scripted fetches | Trail PDFs for Reading–Henley, Henley–Marlow, Hurley–Maidenhead, Hampton Court–Richmond and Devizes–Honey Street give the portage side at some locks. | Find and check only. Ask 2 below. |
-| PaddlePoints (Paddle UK) | Membership terms, rights to Paddle UK | See above. | No. |
+| PaddlePoints (Paddle UK) | Membership terms, rights to Paddle UK | Access and launch points behind a membership wall; nothing on lock portages. | No. |
 
 **Our own evidence is the way to raise the score.** All three routes land in the same CC0 contribution layer, which the scorecard and `/plan/gaps` read:
 - **The owner's paddles:** a saved paddle past a lock shows "Carries on this paddle" (`portagesFromTrack`), published after the CC0 tick.
-- **On the water:** ADD PORTAGE DETAILS on the lock's stop in Plan, with photos and notes kept by the owner.
-- **Imagery:** landings traced over Esri World Imagery are ours (Esri permits tracing). A side read off imagery alone is a guess, though: confirm it on the water or against a paddle before publishing it.
+- **On the water:** *Add portage details* on the lock's stop in Plan, with photos and notes kept by the owner.
+- **Imagery:** landings traced over Esri World Imagery are ours. Esri's "World Imagery Uses Permitted" allows tracing and publishing the lines, even to open data (`river-planner.md`, "SATELLITE"). A side read off imagery alone is a guess, though: confirm it on the water or against a paddle before publishing it.
 
-A find-and-check source can tell us which bank to look at when we go and confirm a lock. What we publish comes from our own landings, never from their list, and we never commit their facts to this public repo.
+A find-and-check source tells us which bank to look at when we confirm a lock. What we publish comes from our own landings, never from their list, and we never commit their facts to this public repo.
 
 ### Permission asks
 
@@ -101,12 +101,12 @@ The owner sends these; nothing from these sources is copied until one is granted
 **Ask 1: the DW race.**
 - **Who:** The Devizes to Westminster Organisation Limited, through its Course Secretary (`coursesecretary@dwrace.co.uk`, on `dwrace.co.uk/contact`).
 - **What:** permission to use the race portage facts from the handbook in paddlesnitch's free planner: which bank, take-out and put-in for each lock, and the compulsory portage at Dreadnought Reach. Each fact would be credited to the race and linked to the handbook. We'd draw our own maps from the landing points and wouldn't reproduce their diagrams. Best is an open licence (CC BY 4.0), so the facts can sit beside OGL data and in printed sheets. Second best is written permission to use them with credit.
-- **Why:** crews and paddlers training for DW build route sheets by hand. Open data has none of the 77 portage sides, and the race is the authority on where its portages are. In return, the race gets free route and crew sheets for every crew, a public list of what's still unknown (`/plan/gaps`), and corrections from paddlers that it can use too (CC0).
+- **Why:** many crews build their route sheets by hand. Open data has none of the 77 portage sides, and the race is the authority on where its portages are. In return, every crew can print free route and crew sheets from the planner, and the race gets a public list of what's still unknown (`/plan/gaps`), and corrections from paddlers that it can use too (CC0).
 
 **Ask 2: Paddle UK, for the Go Paddling trail guides.**
-- **Who:** Paddle UK, which publishes `gopaddling.info`.
-- **What:** permission to use the portage side and landing points from its Thames and Kennet & Avon trail guides, credited and linked, or the facts behind them under an open licence.
-- **Why:** they cover about ten of the DW Thames locks, from Sonning to Boulters plus Teddington, and other rivers we plan on. Paddle UK's members are the paddlers who use the planner.
+- **Who:** Paddle UK, which publishes `gopaddling.info` (contact still to find).
+- **What:** permission to use the portage side and landing points from its Thames trail guides, credited and linked, or the facts behind them under an open licence.
+- **Why:** they cover about ten of the DW Thames locks (Sonning to Boulters, and Teddington), and other rivers we plan on. Its Kennet & Avon trail, Devizes to Honey Street, has no locks. The planner is free and made for the same paddlers Paddle UK serves, and every fact would credit and link the guide.
 
 ## Ten sources need an owner decision before they ship
 

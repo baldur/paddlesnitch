@@ -16,7 +16,7 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { buildRegion } from '@paddlesnitch/waterways/build'
 import { coverageSummary, lockCoverage, LOCK_FACTS, type LockCoverage } from '@paddlesnitch/waterways/coverage'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
-import { featureQuery, linksFromOverpass, networkQuery, osmElementsFromOverpass, osmPortageWaysFromOverpass, OVERPASS_URLS, portageQuery } from '@paddlesnitch/waterways/ingest/osm'
+import { featureQuery, linksFromOverpass, networkQuery, osmElementsFromOverpass, osmPortageWaysFromOverpass, OVERPASS_URLS, portageQuery, withPortageEnds } from '@paddlesnitch/waterways/ingest/osm'
 import { osmPortages, type PublicPortage } from '@paddlesnitch/waterways/portage'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
 import { route, snap } from '@paddlesnitch/waterways/network'
@@ -50,6 +50,19 @@ async function cached(name: string, fetcher: () => Promise<string>): Promise<{ b
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.writeFile(file, body)
   return { body, fetchedAt: now }
+}
+
+/** Fetch every time, keeping a copy; with no answer, use the last copy. */
+async function fresh(name: string, fetcher: () => Promise<string>): Promise<{ body: string; fetchedAt: string }> {
+  try {
+    const body = await fetcher()
+    await fs.mkdir(CACHE, { recursive: true })
+    await fs.writeFile(path.join(CACHE, name), body)
+    return { body, fetchedAt: now }
+  } catch (e) {
+    console.log(`  ${name}: couldn't fetch (${e}); using the cached copy`)
+    return cached(name, fetcher)
+  }
 }
 
 async function get(url: string): Promise<string> {
@@ -87,8 +100,7 @@ async function main() {
   // Portage paths again with their geometry, so they keep both landings.
   const paths = await cached('osm-portages.json', () => overpass(portageQuery(region.bbox)))
   const pathWays = osmPortageWaysFromOverpass(JSON.parse(paths.body).elements)
-  const withEnds = new Set(pathWays.map(w => w.id))
-  const osm = [...osmElementsFromOverpass(JSON.parse(pts.body).elements).filter(o => !withEnds.has(o.id)), ...pathWays]
+  const osm = withPortageEnds(osmElementsFromOverpass(JSON.parse(pts.body).elements), pathWays)
   console.log(`  OSM: ${links.length} network links, ${osm.length} points, ${pathWays.length} portage paths`)
 
   // Canal & River Trust layers.
@@ -119,8 +131,9 @@ async function main() {
   }
   console.log(`  EA: ${eaLocks.length} Thames locks, ${Object.keys(crewByLock).length} site guides`)
 
-  // Paddlers' landings, from the public CC0 file anyone can download.
-  const shared = await cached('openportage.json', () => get(OPENPORTAGE_URL))
+  // Paddlers' landings, from the public CC0 file anyone can download. Small
+  // and always changing, so fetched every build; the cached copy if offline.
+  const shared = await fresh('openportage.json', () => get(OPENPORTAGE_URL))
   const contributions = (JSON.parse(shared.body).portages ?? []) as PublicPortage[]
   console.log(`  paddlesnitch: ${contributions.length} portage contributions`)
 

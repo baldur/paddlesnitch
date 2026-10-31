@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Locator } from '@playwright/test'
 import { signUpFlow } from '../helpers'
 
 // Critical path: plan a paddle by clicking the water, and open a plan from a
@@ -180,14 +180,21 @@ test('the plan survives a trip to the crew sheet and back (#629)', async ({ page
   await expect(page.getByTestId('plan-summary')).toBeVisible()
 })
 
+// The DW fixture is rebuilt from live OSM, so its length moves by a few
+// hundred metres between rebuilds: check the whole route, not the decimal.
+const DW_KM = /201\.\d km/
+const kmIn = async (l: Locator) => Number((await l.innerText()).match(/(\d+\.\d) km/)?.[1])
+
 test('a plan link opens the whole Devizes to Westminster route', async ({ page }) => {
   await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
   const summary = page.getByTestId('plan-summary')
-  await expect(summary).toContainText('201.3 km', { timeout: 15_000 })
+  await expect(summary).toContainText(DW_KM, { timeout: 15_000 })
   await expect(summary).toContainText('77')
   await expect(page.getByTestId('stop-list')).toContainText('Teddington Lock')
+  const oneWay = await kmIn(summary)
   await page.getByRole('button', { name: 'Return' }).click()
-  await expect(summary).toContainText('402.6 km')
+  // There and back is twice the way, give or take the rounding of each.
+  await expect.poll(async () => Math.abs((await kmIn(summary)) - 2 * oneWay)).toBeLessThanOrEqual(0.1)
   await expect(page.getByTestId('stop-list')).toContainText(/Turn at/)
 })
 
@@ -196,7 +203,7 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   const owner = await ownerCtx.newPage()
   await signUpFlow(owner, { displayName: 'Plan Owner' })
   await owner.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
-  await expect(owner.getByTestId('plan-summary')).toContainText('201.3 km', { timeout: 15_000 })
+  await expect(owner.getByTestId('plan-summary')).toContainText(DW_KM, { timeout: 15_000 })
   await owner.getByLabel('Plan name').fill('DW crew plan')
   await owner.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(owner).toHaveURL(/\/plan\/(?!shared)[^/?]+$/, { timeout: 15_000 })
@@ -208,7 +215,7 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   const guest = await guestCtx.newPage()
   await guest.goto(new URL(link).pathname)
   await expect(guest.getByText('Shared by Plan Owner.', { exact: false })).toBeVisible({ timeout: 15_000 })
-  await expect(guest.getByTestId('plan-summary')).toContainText('201.3 km')
+  await expect(guest.getByTestId('plan-summary')).toContainText(DW_KM)
 
   await owner.getByRole('button', { name: 'Stop sharing' }).click()
   await expect(owner.getByRole('button', { name: 'Share', exact: true })).toBeVisible()
