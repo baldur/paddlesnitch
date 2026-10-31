@@ -120,7 +120,7 @@ export const STROKE_RATE_REASONS: Record<string, (hz: number, windows: number) =
     ? `Motion data is sampled at ${hz.toFixed(1)} Hz, too slow to measure a stroke rate.`
     : "Couldn't tell how often the motion data was sampled, so there's no stroke rate."),
   no_rhythm: () => "No stretch showed a clear, repeating stroke. It may have been still, or somewhere the stroke doesn't reach it.",
-  not_moving: () => 'The GPS never saw the boat moving steadily for 90 seconds, so there\'s no stroke rate.',
+  not_moving: () => "No stretch of the GPS track stayed at 4 km/h or more for 90 s, so there's no stroke rate.",
 }
 
 /**

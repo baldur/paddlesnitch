@@ -137,7 +137,7 @@ describe('stroke rate for a recording', () => {
   it('gives no gated stroke rate when the track never moves (the ungated set is for that)', () => {
     const r = recordingStrokeRate(track([180, 0]), sidecar({ seconds: 180, hz: 50, strokesPerMin: 56 }))
     expect(r.moving.report).toMatchObject({ available: false, code: 'not_moving' })
-    expect(r.moving.report.reason).toBe("The GPS never saw the boat moving steadily for 90 seconds, so there's no stroke rate.")
+    expect(r.moving.report.reason).toBe("No stretch of the GPS track stayed at 4 km/h or more for 90 s, so there's no stroke rate.")
     expect(r.all.report.code).toBe('ok')
     expect(r.all.report.available).toBe(true)
   })

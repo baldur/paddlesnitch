@@ -29,7 +29,7 @@ describe('strokeRateCopy', () => {
   })
   it("says the GPS never saw the boat moving, not that the tracker was loose, when that's why", () => {
     const text = strokeRateCopy(report(), cadence(false, 'not_moving')).text
-    expect(text).toBe('The GPS never saw the boat moving steadily for 90 seconds, so there’s no stroke rate.')
+    expect(text).toBe('The GPS never saw the boat moving for 90 seconds without a break, so there’s no stroke rate.')
     expect(text).not.toMatch(/fixed in the boat/)
   })
   it('says the file carried it when it did', () => {

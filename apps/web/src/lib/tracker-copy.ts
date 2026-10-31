@@ -14,7 +14,7 @@ export function strokeRateCopy(report: DeviceDataReport, cadence: CadenceReport 
   if (cadence?.available) return { spm: cadence.medianStrokesPerMin, text: 'Measured from the tracker’s motion data.' }
   if (report.strokeRate.available) return { spm: null, text: 'Stroke rate came from the file.' }
   if (cadence && !cadence.available && cadence.code === 'not_moving') {
-    return { spm: null, text: 'The GPS never saw the boat moving steadily for 90 seconds, so there’s no stroke rate.' }
+    return { spm: null, text: 'The GPS never saw the boat moving for 90 seconds without a break, so there’s no stroke rate.' }
   }
   if (cadence && !cadence.available) {
     return { spm: null, text: 'The motion data arrived, but we couldn’t find a steady stroke in it. The tracker may not have been fixed in the boat.' }

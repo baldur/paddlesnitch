@@ -325,7 +325,7 @@ const StrokeRateWindow = named('StrokeRateWindow', z.object({
 /** Stroke rate measured from the motion file. */
 export const MotionStrokeRate = named('MotionStrokeRate', z.object({
   available: z.boolean(),
-  /** Why there is or isn't a stroke rate, for an app to choose its words: `not_moving` = the GPS never saw the boat moving steadily for 90 s; `other` = a reason this server's code doesn't know. `reason` is the engineering text. */
+  /** Why there is or isn't a stroke rate, for an app to choose its words: `not_moving` = no stretch of the GPS track stayed at 4 km/h or more for 90 s; `other` = a reason this server's code doesn't know. `reason` is the engineering text. */
   code: z.enum(STROKE_RATE_CODES),
   reason: z.string(),
   sampleRateHz: z.number().nullable(),
