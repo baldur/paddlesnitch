@@ -129,6 +129,30 @@ export function osmElementsFromOverpass(elements: OverpassElement[]): OsmElement
   return out
 }
 
+/** Portage paths with their geometry, so a region build keeps the two ends
+ *  (where you get out and back in) as the national extract does. */
+export function portageQuery(bbox: Bbox): string {
+  return `[out:json][timeout:180]${bboxClause(bbox)};
+way["portage"];
+out geom tags qt;`
+}
+
+/** Portage ways from `portageQuery`, at their middle point, with their ends. */
+export function osmPortageWaysFromOverpass(elements: OverpassElement[]): OsmElement[] {
+  return elements.filter((e): e is OverpassWay => e.type === 'way' && 'geometry' in e && !!e.geometry?.length && !!e.tags)
+    .map(w => {
+      const g = w.geometry.map(p => round6([p.lat, p.lon]))
+      return { id: `way/${w.id}`, at: g[Math.floor(g.length / 2)], tags: w.tags!, ends: [g[0], g[g.length - 1]] as [LatLng, LatLng] }
+    })
+}
+
+/** The OSM points with each portage way's centre swapped for its copy with
+ *  ends (both are `way/<id>`), so none is kept twice. */
+export function withPortageEnds(osm: OsmElement[], ended: OsmElement[]): OsmElement[] {
+  const ids = new Set(ended.map(w => w.id))
+  return [...osm.filter(o => !ids.has(o.id)), ...ended]
+}
+
 /** Lock chambers from OSM ways tagged lock=yes, one per chamber (a chamber
  *  drawn as several ways is merged), at the chamber's middle. These are OSM
  *  data (ODbL): the national build publishes them in their own file and they
