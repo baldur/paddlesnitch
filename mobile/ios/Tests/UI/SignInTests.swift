@@ -32,7 +32,7 @@ final class SignInTests: AppTestCase {
         // Not -ResetAccount this time: the refresh token is in the Keychain.
         app.launchArguments = ["-SampleServer"]
         app.launch()
-        tab("You").tap()
+        selectTab("You")
         XCTAssertTrue(element("signed-in-as").appears(timeout: 10))
         XCTAssertTrue(text(containing: "Pat").exists)
         XCTAssertTrue(app.buttons["Account"].exists)
@@ -40,13 +40,13 @@ final class SignInTests: AppTestCase {
 
     func testSigningOutGoesBackToTheSamples() {
         signInAndWait()
-        tab("You").tap()
+        selectTab("You")
         app.buttons["Sign out"].firstMatch.tap()
         let confirm = app.buttons["confirm-sign-out"].firstMatch
         XCTAssertTrue(confirm.appears(timeout: 10), "asks before signing out")
         confirm.tap()
         XCTAssertTrue(app.buttons["Sign in"].appears(timeout: 10))
-        tab("Paddles").tap()
+        selectTab("Paddles")
         XCTAssertTrue(element("sample-notice").appears(timeout: 10))
     }
 
@@ -86,7 +86,7 @@ final class SignInTests: AppTestCase {
 
     func testYouSignedInPassesTheAccessibilityAudit() throws {
         signInAndWait()
-        tab("You").tap()
+        selectTab("You")
         XCTAssertTrue(element("signed-in-as").appears(timeout: 10))
         try audit()
     }
