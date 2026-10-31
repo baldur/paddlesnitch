@@ -74,8 +74,8 @@ typedef struct {
  * iPhone: verticalAccuracy <= 0, speed < 0, course < 0).
  */
 typedef struct {
-    int64_t t_ns;         /* monotonic: when the fix was taken (Android) or
-                             arrived (iPhone), see CLOCK                       */
+    int64_t t_ns;         /* monotonic: when the fix was TAKEN, on both
+                             platforms (CLOCK), never when it arrived         */
     int64_t utc_ms;       /* wall time of the fix: Location.getTime();
                              CLLocation.timestamp.timeIntervalSince1970 × 1000 */
     double  lat, lon;     /* degrees                                          */
