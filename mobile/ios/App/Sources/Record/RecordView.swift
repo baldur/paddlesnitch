@@ -17,10 +17,12 @@ struct RecordView: View {
     ///   (`AccountModel.recordings(for:)`).
     init(directory: URL) {
         _model = State(
-            initialValue: RecordModel { onStatus in
-                let recording = try PhoneRecording(directory: directory, onStatus: onStatus)
-                return (recording, recording.files.track.lastPathComponent)
-            })
+            initialValue: RecordModel(
+                announce: { AccessibilityNotification.Announcement($0).post() },
+                start: { onStatus in
+                    let recording = try PhoneRecording(directory: directory, onStatus: onStatus)
+                    return (recording, recording.files.track.lastPathComponent)
+                }))
     }
 
     var body: some View {
@@ -130,9 +132,12 @@ struct RecordView: View {
                 .font(.plexSans(.title3, weight: .semibold))
                 .foregroundStyle(Palette.fg)
                 .accessibilityIdentifier("record-recording")
-            Text(model.status.hasFix ? "Position found" : "Finding your position…")
+            let gps = GPSLine(model.status.live)
+            // Not a live region: VoiceOver hears a change once (RecordModel).
+            Text(gps.text)
                 .font(.plexSans(.body))
-                .foregroundStyle(model.status.hasFix ? Palette.green : Palette.muted)
+                .foregroundStyle(gps.state == .fix ? Palette.green : gps.state == .lost ? Palette.red : Palette.muted)
+                .accessibilityLabel(gps.label)
                 .accessibilityIdentifier("record-gps")
             if let started = model.startedAt {
                 TimelineView(.periodic(from: started, by: 1)) { context in

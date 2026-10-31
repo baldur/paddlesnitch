@@ -150,21 +150,56 @@ struct RecordingFilesTests {
     }
 }
 
-struct LastRowFixTests {
-    @Test func theScreenSaysWhatTheLastRowSays() throws {
-        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let files = try RecordingFiles(directory: directory, start: Date())
-        let recorder = PhoneRecorder(platform: .iPhone, motion: false, sink: files)
+/// The core's GPS state through the binding, and the agreed words for it.
+struct GPSLineTests {
+    func live(_ fix: Bool, _ since: Float?) -> LiveValues {
+        var values = LiveValues()
+        values.hasFix = fix
+        values.secondsSinceFix = since
+        return values
+    }
+
+    @Test func theCoreSaysWhetherThereIsAFix() {
+        let recorder = PhoneRecorder(platform: .iPhone, motion: false, sink: MemorySink())
         recorder.tick(nanoseconds: 10_000_000_000)
-        #expect(!files.lastRowHasFix)
-        let fix = PhoneLocation(
-            nanoseconds: 10_500_000_000, utcMilliseconds: 1_789_948_800_000, latitude: 51.46, longitude: -0.97)
-        recorder.location(fix)
+        #expect(!recorder.live.hasFix && recorder.live.secondsSinceFix == nil, "before the first fix")
+        recorder.location(
+            PhoneLocation(
+                nanoseconds: 10_500_000_000, utcMilliseconds: 1_789_948_800_000, latitude: 51.46, longitude: -0.97))
         recorder.tick(nanoseconds: 11_000_000_000)
-        #expect(files.lastRowHasFix)
-        recorder.tick(nanoseconds: 14_000_000_000)  // the fix is 3.5 s old
-        #expect(!files.lastRowHasFix)
+        #expect(recorder.live.hasFix && recorder.live.secondsSinceFix == 0)
+        recorder.tick(nanoseconds: 14_000_000_000)  // the fix is 3.5 s old: none
+        #expect(!recorder.live.hasFix)
+        #expect((recorder.live.secondsSinceFix ?? 0) > 0)
+    }
+
+    @Test func theWordsForEachState() {
+        // swiftlint:disable:next large_tuple
+        let cases: [(LiveValues, String, String)] = [
+            (live(false, nil), "Waiting for GPS", "Waiting for GPS"),
+            (live(true, 0), "GPS fix", "GPS fix"),
+            (live(false, 0), "GPS lost", "GPS lost"),
+            (live(false, 0.9), "GPS lost", "GPS lost"),
+            (live(false, 1), "GPS lost 1 s ago", "GPS lost 1 second ago"),
+            (live(false, 40.7), "GPS lost 40 s ago", "GPS lost 40 seconds ago"),
+            (live(false, 59.9), "GPS lost 59 s ago", "GPS lost 59 seconds ago"),
+            (live(false, 60), "GPS lost 1 min ago", "GPS lost 1 minute ago"),
+            (live(false, 179), "GPS lost 2 min ago", "GPS lost 2 minutes ago"),
+            (live(false, 4500), "GPS lost 75 min ago", "GPS lost 75 minutes ago"),
+        ]
+        for (values, text, label) in cases {
+            let line = GPSLine(values)
+            #expect(line.text == text)
+            #expect(line.label == label)
+        }
+    }
+
+    @Test func announcedOnlyOnAChange() {
+        #expect(GPSLine.announcement(before: live(false, nil), now: live(true, 0)) == nil, "the first fix")
+        #expect(GPSLine.announcement(before: live(true, 0), now: live(false, 0)) == "GPS lost")
+        #expect(GPSLine.announcement(before: live(false, 0), now: live(false, 30)) == nil)
+        #expect(GPSLine.announcement(before: live(false, 30), now: live(true, 0)) == "GPS back")
+        #expect(GPSLine.announcement(before: live(true, 0), now: live(true, 0)) == nil)
     }
 }
 

@@ -137,6 +137,11 @@ public struct LiveValues: Sendable, Equatable {
     public var evennessPercent: Float?
     public var speedKmh: Float?
     public var distanceMetres: Float?
+    /// The latest row has a GPS fix (from the latest tick, not a held row).
+    public var hasFix = false
+    /// Seconds since the last row with a fix: 0 while there's one, nil
+    /// before the first.
+    public var secondsSinceFix: Float?
 
     /// Nothing ready.
     public init() {}
@@ -149,5 +154,7 @@ public struct LiveValues: Sendable, Equatable {
         evennessPercent = ready(values.evenness_pct)
         speedKmh = ready(values.speed_kmh)
         distanceMetres = ready(values.distance_m)
+        hasFix = values.fix == 1
+        secondsSinceFix = ready(values.since_fix_s)
     }
 }

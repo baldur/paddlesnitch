@@ -61,11 +61,32 @@ struct RecordModelTests {
         let model = RecordModel(start: starter.start)
         model.record()
         #expect(model.status.live.strokeRate == nil)  // "—"
-        starter.send?(RecordingStatus(hasFix: true, droppedLate: 3))
-        #expect(model.status.hasFix && model.status.droppedLate == 3)
+        starter.send?(RecordingStatus(droppedLate: 3))
+        #expect(model.status.droppedLate == 3)
         model.stop()
-        starter.send?(RecordingStatus(hasFix: false))  // a tick that was already on its way
-        #expect(model.status.hasFix)
+        starter.send?(RecordingStatus(droppedLate: 9))  // a tick that was already on its way
+        #expect(model.status.droppedLate == 3)
+    }
+
+    @Test func announcesAGPSChangeOnce() {
+        let starter = Starter()
+        var said: [String] = []
+        let model = RecordModel(announce: { said.append($0) }, start: starter.start)
+        model.record()
+        func gps(_ fix: Bool, _ since: Float?) -> RecordingStatus {
+            var live = LiveValues()
+            live.hasFix = fix
+            live.secondsSinceFix = since
+            return RecordingStatus(live: live)
+        }
+        starter.send?(gps(false, nil))  // waiting
+        starter.send?(gps(true, 0))  // the first fix: nothing
+        starter.send?(gps(false, 0))  // lost
+        starter.send?(gps(false, 5))
+        starter.send?(gps(false, 40))
+        starter.send?(gps(true, 0))  // back
+        starter.send?(gps(true, 0))
+        #expect(said == ["GPS lost", "GPS back"])
     }
 
     @Test func saysSoWhenItCannotStart() {

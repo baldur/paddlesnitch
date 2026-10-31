@@ -17,7 +17,9 @@ final class RecordTests: AppTestCase {
     func testARecordingIsSavedOnThePhone() throws {
         try startRecording(allow: true)
         XCTAssertTrue(element("record-recording").appears(timeout: 10))
-        XCTAssertTrue(element("record-gps").exists)
+        let gps = element("record-gps").label
+        XCTAssertTrue(
+            ["Waiting for GPS", "GPS fix"].contains(gps) || gps.hasPrefix("GPS lost"), "agreed words: \(gps)")
         let time = element("record-time")
         let first = time.label
         XCTAssertTrue(first.contains("0:0"), "the time since it started")

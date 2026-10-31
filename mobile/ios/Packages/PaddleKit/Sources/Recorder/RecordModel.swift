@@ -32,11 +32,18 @@ public final class RecordModel {
 
     private let start: Start
     private let now: () -> Date
+    private let announce: @MainActor (String) -> Void
     private var handle: RecordingHandle?
     private var name = ""
 
-    public init(now: @escaping () -> Date = Date.init, start: @escaping Start) {
+    /// - Parameter announce: says a GPS change once to VoiceOver ("GPS
+    ///   lost", "GPS back"); the line itself isn't a live region.
+    public init(
+        now: @escaping () -> Date = Date.init, announce: @escaping @MainActor (String) -> Void = { _ in },
+        start: @escaping Start
+    ) {
         self.now = now
+        self.announce = announce
         self.start = start
     }
 
@@ -75,7 +82,9 @@ public final class RecordModel {
 
     private func update(_ status: RecordingStatus) {
         guard handle != nil else { return }
+        let before = self.status.live
         self.status = status
+        if let said = GPSLine.announcement(before: before, now: status.live) { announce(said) }
         if status.couldNotSave {
             problem = "Couldn't save any more of this recording. Stop to keep what's saved so far."
         }
@@ -84,8 +93,6 @@ public final class RecordModel {
 
 /// What the screen shows while recording, sent after each second's row.
 public struct RecordingStatus: Sendable, Equatable {
-    /// The last row had a usable fix.
-    public var hasFix = false
     public var live = LiveValues()
     public var droppedLate: UInt32 = 0
     public var droppedUnpaired: UInt32 = 0
@@ -93,10 +100,9 @@ public struct RecordingStatus: Sendable, Equatable {
     public var couldNotSave = false
 
     public init(
-        hasFix: Bool = false, live: LiveValues = LiveValues(), droppedLate: UInt32 = 0, droppedUnpaired: UInt32 = 0,
+        live: LiveValues = LiveValues(), droppedLate: UInt32 = 0, droppedUnpaired: UInt32 = 0,
         couldNotSave: Bool = false
     ) {
-        self.hasFix = hasFix
         self.live = live
         self.droppedLate = droppedLate
         self.droppedUnpaired = droppedUnpaired

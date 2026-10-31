@@ -15,9 +15,6 @@ public final class RecordingFiles: RecordingSink {
     public private(set) var failure: Error?
     /// Lines that couldn't be written: the failed one and every one after.
     public private(set) var failedLines = 0
-    /// Whether the last row the core wrote had a usable fix (its `fix`
-    /// column), so the screen says what the file says.
-    public private(set) var lastRowHasFix = false
 
     private let trackHandle: FileHandle
     private let motionHandle: FileHandle
@@ -47,11 +44,7 @@ public final class RecordingFiles: RecordingSink {
         }
         do {
             switch stream {
-            case .track:
-                lastRowHasFix =
-                    line.split(separator: UInt8(ascii: ","), omittingEmptySubsequences: false)
-                    .dropFirst(4).first == Data("1".utf8)
-                try trackHandle.write(contentsOf: line)
+            case .track: try trackHandle.write(contentsOf: line)
             case .motion: try motionHandle.write(contentsOf: line)
             }
         } catch {

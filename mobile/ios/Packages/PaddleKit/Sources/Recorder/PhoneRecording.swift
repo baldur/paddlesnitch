@@ -96,7 +96,7 @@
             guard let recorder else { return }
             recorder.tick(nanoseconds: PhoneRecorder.nanoseconds(ProcessInfo.processInfo.systemUptime))
             let status = RecordingStatus(
-                hasFix: files.lastRowHasFix, live: recorder.live, droppedLate: recorder.droppedLate,
+                live: recorder.live, droppedLate: recorder.droppedLate,
                 droppedUnpaired: recorder.droppedUnpaired, couldNotSave: files.failure != nil)
             let onStatus = onStatus
             // In order, unlike a Task each.
