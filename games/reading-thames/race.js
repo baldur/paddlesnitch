@@ -628,7 +628,7 @@ export const SLOTS = [
 // `reach` metres of it, nearest first: { host, slot (index into SLOTS), s,
 // lateral (along and across the course), x, z, heading, gap (metres along to
 // it: less than 0 when it's behind `r`) }. A place is taken when another boat
-// sits in it, or is heading for it from nearer; a boat hanging on `r` isn't offered (no going round in a ring).
+// sits in it; a boat hanging on `r` isn't offered (no going round in a ring).
 // Only boats under way leave a wash worth sitting in.
 export function washSlots(race, r, reach = 20) {
   const out = [];
@@ -644,11 +644,8 @@ export function washSlots(race, r, reach = 20) {
       const lateral = host.loc.lateral + across;
       const gap = s - loc.s;
       if (gap > reach || gap < -4) return;
-      // Taken: someone's in it, or on the way to it and nearer than r.
-      const near = (o) => Math.abs(o.loc.s - s) + 1.5 * Math.abs(o.loc.lateral - lateral);
       const taken = race.racers.some((o) => o !== r && o !== host && !o.portage && o.boat.swim <= 0
-        && ((Math.abs(o.loc.s - s) < 2 && Math.abs(o.loc.lateral - lateral) < 0.9)
-          || (o.ai?.slot?.host === host && o.ai.slot.slot === slot && near(o) < near(r))));
+        && Math.abs(o.loc.s - s) < 2 && Math.abs(o.loc.lateral - lateral) < 0.9);
       if (taken) return;
       out.push({
         host, slot, s, lateral, gap, heading: host.boat.heading,
@@ -684,7 +681,7 @@ export function washMarks(race, r) {
 // and of the river's boats about to pass (`boats`, from trafficNear), and on
 // water used both ways no more than a hip's width left of the keep-right line
 // (see think).
-function placeFits(race, p, boats) {
+export function placeFits(race, p, boats) {
   const { course } = race;
   if (boats.some((b) => Math.abs(p.lateral - b.lateral) < b.out + 1.5)) return false;
   const room = widthAt(course, p.s);
