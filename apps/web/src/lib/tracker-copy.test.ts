@@ -12,7 +12,7 @@ const report = (over: Partial<DeviceDataReport> = {}): DeviceDataReport => ({
   ...over,
 } as unknown as DeviceDataReport)
 const cadence = (available: boolean): CadenceReport =>
-  ({ available, reason: available ? '' : 'No window showed a clear repeating stroke pattern', medianStrokesPerMin: available ? 58 : null } as unknown as CadenceReport)
+  ({ available, reason: available ? '' : 'No stretch showed a clear, repeating stroke.', medianStrokesPerMin: available ? 58 : null } as unknown as CadenceReport)
 
 // The old text was addressed to a firmware developer.
 const JARGON = /derivable|firmware|sidecar|\bHz\b|accelerometer|cadence|column/i

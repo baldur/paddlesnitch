@@ -68,7 +68,7 @@ describe('stroke rate for a recording', () => {
     expect(r.medianStrokesPerMin).toBeLessThan(57)
     expect(r.windows[0].alternating).toBe(true)
     // 60 s windows at 0, 30, 60 and 90 s: the one at 120 s would end on the last sample
-    expect(r.reason).toBe('Derived from 4 windows of 60s at 50 Hz.')
+    expect(r.reason).toBe('Measured over 4 windows of 60 s at 50 Hz.')
   })
 
   it('does NOT double a single-sided rhythm', () => {
@@ -86,17 +86,17 @@ describe('stroke rate for a recording', () => {
       `${i * 20},0.01,0.02,1.00,${(rnd() * 3).toFixed(3)},${(rnd() * 3).toFixed(3)},${(rnd() * 3).toFixed(3)}`)
     const r = ungated([HEADER, ...rows].join('\n'))
     expect(r).toMatchObject({ available: false, medianStrokesPerMin: null, windows: [] })
-    expect(r.reason).toMatch(/^No window showed a clear repeating stroke pattern/)
+    expect(r.reason).toMatch(/^No stretch showed a clear, repeating stroke\./)
   })
 
   it('refuses data sampled too slowly to carry a stroke', () => {
     const r = ungated(sidecar({ seconds: 300, hz: 1, strokesPerMin: 56 }))
     expect(r.available).toBe(false)
-    expect(r.reason).toBe('Motion data is sampled at 1.0 Hz — too slow for a 0.5–2 Hz stroke.')
+    expect(r.reason).toBe('Motion data is sampled at 1.0 Hz, too slow to measure a stroke rate.')
   })
 
   it('refuses a motion file with too few samples', () => {
-    expect(ungated(sidecar({ seconds: 5, hz: 10, strokesPerMin: 56 })).reason).toBe('Motion file has too few samples to derive cadence.')
+    expect(ungated(sidecar({ seconds: 5, hz: 10, strokesPerMin: 56 })).reason).toBe('Motion file has too few samples to measure a stroke rate.')
   })
 
   it("has words for every reason the core gives, never the raw code", () => {
@@ -106,12 +106,12 @@ describe('stroke rate for a recording', () => {
     for (const r of listed!) expect(STROKE_RATE_REASONS[r]).toBeDefined()
   })
 
-  it("says the rate is unknown when a motion file's clock never moves forward", () => {
+  it("says it can't tell the sample rate when a motion file's clock never moves forward", () => {
     // Lines written backwards: the core reads files as they come (recorder_core.h, rc_replay).
     const [head, ...rows] = sidecar({ seconds: 60, hz: 10, strokesPerMin: 56 }).split('\n')
     const r = ungated([head, ...rows.reverse()].join('\n'))
     expect(r.available).toBe(false)
-    expect(r.reason).toBe('Motion data is sampled at ? Hz — too slow for a 0.5–2 Hz stroke.')
+    expect(r.reason).toBe("Couldn't tell how often the motion data was sampled, so there's no stroke rate.")
   })
 
   it('reads a CR LF track whose speed is the last column', () => {
