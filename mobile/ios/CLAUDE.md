@@ -120,6 +120,36 @@ isn't obvious from the code.
   lines, one per app launch. `make test-app` therefore gives each test 6
   minutes (`-default-test-execution-time-allowance`), and CI keeps the results
   when a job is cancelled too.
+- A UI test that answers a permission prompt leaves the answer for every
+  later test on that simulator: "Don't Allow" in one test hid the record
+  screen's Start button in the next. A test that needs the prompt calls
+  `app.resetAuthorizationStatus(for:)` first (it ends the app; launch again),
+  and helpers wait for the screen, not for a button a permission can hide.
+- Recording in the simulator: no accelerometer or gyroscope (track only), and
+  a fixed `simctl location` gives one fix and then nothing, so rows read "no
+  fix" 3 s later, as the tracker's do. That's the recorder core's rule, not a
+  bug. The sensors are proved by `RecorderTests` and a bench check on a phone.
+- Never compute a recording number in the app: the shared recorder core does
+  it (`recorder-core/test/one_implementation.sh` fails CI on unit
+  conversions (standard gravity, radians to degrees) anywhere in `mobile/`,
+  even quoted in a comment like this one). Pass Core
+  Motion's g, rad/s and `timestamp` untouched; the core negates and converts.
+- Recordings are kept per account (`AccountModel.recordings(for:)`,
+  Documents/Recordings/<user id>), so an upload can only ever send the
+  signed-in account's own. Deleting the account removes that folder; signing
+  out keeps it (the only copy until upload). The folder is left out of
+  backups (lead, #761, as Android): a track shows where someone paddles, and
+  losing an un-uploaded one with the phone is the accepted cost until C3.
+  Same second twice: `track_<stamp>_1`, the tracker's rule. Files are `completeUnlessOpen`: encrypted while
+  locked, but a file already open stays writable. `.complete` would stop a
+  screen-off recording seconds after the lock. A killed recording's file
+  can't be reopened until the next unlock.
+- A screen that must outlive a sign-out (the record screen) is presented
+  from a view that stays through it (Paddles), never from a signed-in-only
+  toolbar button: the app signs out on its own when a refresh is refused,
+  the button goes, and its full-screen cover goes with it. Here that took
+  Stop away mid-paddle. `RecordTests` signs out mid-recording
+  (`-SignOutWhileRecording`).
 - On iOS 26 a tab tapped while the screens are still redrawing (just after
   signing out) slides towards the new tab and snaps back. Seen once on CI
   (main's run 41112890501: the recording shows the slide and the snap; never

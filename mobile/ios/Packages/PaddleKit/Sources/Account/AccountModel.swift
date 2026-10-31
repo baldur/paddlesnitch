@@ -31,6 +31,9 @@ public final class AccountModel {
     /// open yet (iOS drops it without a word). Set by the app; kept here, as
     /// iOS 17 doesn't pass environment changes to pushed screens.
     public var signInSheetUp = false
+    /// The recordings made on this phone, a folder per account
+    /// (`recordings(for:)`). Tests point it elsewhere.
+    public var recordingsRoot = AccountModel.recordingsRoot
     /// The ways in the server offers besides email: none until asked, and
     /// none if asking fails (mobile/contract/README.md, Signing in).
     public internal(set) var options = SignInOptions.emailOnly
