@@ -46,8 +46,7 @@
                 timer?.cancel()
                 locations?.cancel()
                 background?.invalidate()
-                recorder.finish()
-                try files.close(droppedLate: recorder.droppedLate, droppedUnpaired: recorder.droppedUnpaired)
+                try files.finish(recorder)
             }
         }
 

@@ -60,7 +60,7 @@ targets:
         # permission: the location background mode plus a
         # CLBackgroundActivitySession, never "Always" (ios-app.md).
         UIBackgroundModes: [location]
-        NSLocationWhenInUseUsageDescription: Your location records the route of a paddle while you record one.
+        NSLocationWhenInUseUsageDescription: paddlesnitch uses your location to record your route while you're recording a paddle, including with the screen locked.
         # The server. A debug build can point elsewhere with the environment
         # variable PADDLESNITCH_BASE_URL (e.g. http://localhost:3000).
         PaddlesnitchBaseURL: https://paddlesnitch.com

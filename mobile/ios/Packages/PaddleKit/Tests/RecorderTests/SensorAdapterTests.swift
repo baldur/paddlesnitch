@@ -152,3 +152,32 @@ struct LastRowFixTests {
         #expect(!files.lastRowHasFix)
     }
 }
+
+struct FinishingTests {
+    @Test func rowsStillHeldAreInTheFileWhenItCloses() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = try RecordingFiles(directory: directory, start: Date())
+        let recorder = PhoneRecorder(platform: .iPhone, motion: true, sink: files)
+        // Only the accelerometer: the layer holds the row for the gyroscope.
+        for i in 0..<60 { recorder.accel(nanoseconds: 10_000_000_000 + Int64(i) * 20_000_000, x: 0, y: 0, z: -1) }
+        recorder.tick(nanoseconds: 11_000_000_000)
+        let before = try String(contentsOf: files.track, encoding: .utf8)
+        #expect(before.split(separator: "\n").count == 1, "held: header only")
+        try files.finish(recorder)
+        let after = try String(contentsOf: files.track, encoding: .utf8)
+        #expect(after.split(separator: "\n").count == 2, "the held row is written before the file closes")
+        #expect(try String(contentsOf: files.log, encoding: .utf8).hasPrefix("dropped_late,"))
+    }
+
+    @Test func aWriteThatFailsIsKeptAndLaterLinesAreSkipped() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = try RecordingFiles(directory: directory, start: Date())
+        try files.close(droppedLate: 0, droppedUnpaired: 0)
+        files.write(Data("x\n".utf8), to: .track)
+        #expect(files.failure != nil)
+        files.write(Data("y\n".utf8), to: .motion)  // skipped, no crash
+        #expect(try Data(contentsOf: files.motion).isEmpty)
+    }
+}

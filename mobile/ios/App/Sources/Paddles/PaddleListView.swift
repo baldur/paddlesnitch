@@ -65,7 +65,7 @@ struct PaddleListView: View {
                 .toolbar {
                     if !isSample {
                         #if DEBUG  // until a recording can be uploaded (RecordButton)
-                            ToolbarItem(placement: .topBarLeading) { RecordButton() }
+                            ToolbarItem(placement: .topBarLeading) { RecordButton(userID: sourceID) }
                         #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Add paddle") { choosingFile = true }

@@ -47,6 +47,15 @@ struct RecordModelTests {
         #expect(model.phase == .ready)
     }
 
+    @Test func doneDoesNothingWhileRecording() {
+        let starter = Starter()
+        let model = RecordModel(start: starter.start)
+        model.record()
+        model.done()
+        #expect(model.phase == .recording)
+        #expect(starter.recording.stopped == 0)
+    }
+
     @Test func showsWhatTheCoreSends() {
         let starter = Starter()
         let model = RecordModel(start: starter.start)
@@ -73,7 +82,7 @@ struct RecordModelTests {
         let model = RecordModel(start: starter.start)
         model.record()
         starter.send?(RecordingStatus(couldNotSave: true))
-        #expect(model.problem == "Couldn't save the recording. Your iPhone may be full.")
+        #expect(model.problem == "Couldn't save any more of this recording. Stop to keep what's saved so far.")
     }
 
     @Test func aFailedCloseStillEndsTheRecording() {

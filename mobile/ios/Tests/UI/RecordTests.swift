@@ -18,7 +18,10 @@ final class RecordTests: AppTestCase {
         try startRecording(allow: true)
         XCTAssertTrue(element("record-recording").appears(timeout: 10))
         XCTAssertTrue(element("record-gps").exists)
-        XCTAssertTrue(element("record-time").label.contains("0:0"), "the time since it started")
+        let time = element("record-time")
+        let first = time.label
+        XCTAssertTrue(first.contains("0:0"), "the time since it started")
+        XCTAssertTrue(poll(timeout: 5) { time.label != first }, "the clock runs")
         // The recorder core has no live values yet: "—", never a guess.
         XCTAssertTrue(element("record-stroke-rate").label.contains("—"))
         XCTAssertFalse(app.buttons["Close"].exists, "can't be closed while recording")

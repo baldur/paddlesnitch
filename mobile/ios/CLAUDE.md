@@ -134,3 +134,11 @@ isn't obvious from the code.
   conversions (standard gravity, radians to degrees) anywhere in `mobile/`,
   even quoted in a comment like this one). Pass Core
   Motion's g, rad/s and `timestamp` untouched; the core negates and converts.
+- Recordings are kept per account (`AccountModel.recordings(for:)`,
+  Documents/Recordings/<user id>), so an upload can only ever send the
+  signed-in account's own. Deleting the account removes that folder; signing
+  out keeps it (the only copy until upload). They stay in the phone's backup
+  for the same reason. Files are `completeUnlessOpen`: encrypted while
+  locked, but a file already open stays writable. `.complete` would stop a
+  screen-off recording seconds after the lock. A killed recording's file
+  can't be reopened until the next unlock.

@@ -52,7 +52,7 @@ public final class RecordingFiles: RecordingSink {
         try trackHandle.close()
         try motionHandle.close()
         let text = "dropped_late,\(droppedLate)\ndropped_unpaired,\(droppedUnpaired)\n"
-        try Data(text.utf8).write(to: log, options: .atomic)
+        try Data(text.utf8).write(to: log, options: Self.logOptions)
     }
 
     static func stamp(_ date: Date) -> String {
@@ -64,12 +64,32 @@ public final class RecordingFiles: RecordingSink {
             + two(c.minute) + two(c.second)
     }
 
+    /// A precise track shows where someone paddles from: encrypted while the
+    /// phone is locked, except that a file already open stays writable (not
+    /// `.complete`, which would stop the recording seconds after the screen
+    /// locks). macOS, where the package tests run, has no such classes.
+    #if os(iOS)
+        static var protection: [FileAttributeKey: Any]? { [.protectionKey: FileProtectionType.completeUnlessOpen] }
+        static let logOptions: Data.WritingOptions = [.atomic, .completeFileProtectionUnlessOpen]
+    #else
+        static var protection: [FileAttributeKey: Any]? { nil }
+        static let logOptions: Data.WritingOptions = [.atomic]
+    #endif
+
+    /// Ends a recording: what the layer still holds is written, then the
+    /// files are closed with its drop counts. In that order, or the held
+    /// rows are lost.
+    public func finish(_ recorder: PhoneRecorder) throws {
+        recorder.finish()
+        try close(droppedLate: recorder.droppedLate, droppedUnpaired: recorder.droppedUnpaired)
+    }
+
     private static func create(_ url: URL) throws -> FileHandle {
         // Never over an earlier recording.
         guard !FileManager.default.fileExists(atPath: url.path) else {
             throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: url.path])
         }
-        guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+        guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: Self.protection) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
         return try FileHandle(forWritingTo: url)

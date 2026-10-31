@@ -77,7 +77,7 @@ public final class RecordModel {
         guard handle != nil else { return }
         self.status = status
         if status.couldNotSave {
-            problem = "Couldn't save the recording. Your iPhone may be full."
+            problem = "Couldn't save any more of this recording. Stop to keep what's saved so far."
         }
     }
 }
