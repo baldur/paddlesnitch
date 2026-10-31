@@ -22,6 +22,8 @@ const kit = z.object({
   hat: z.enum(['none', 'cap', 'visor', 'beanie']).optional(), hatColour: colour.optional(),
   beard: z.enum(['none', 'stubble', 'moustache', 'beard']).optional(),
   aid: z.boolean().optional(), aidColour: colour.optional(),
+  // The rowing scull (games/kayak: Reading Rowing Club).
+  scull: z.enum(['trainer', 'club', 'fine']).optional(), scullColour: colour.optional(),
   // The old head, before the game's cleanKit moves it to hair and hat.
   head: z.enum(['cap', 'hair']).optional(), headColour: colour.optional(),
   glasses: z.enum(['none', 'wrap', 'round', 'aviator', 'square']), glassesColour: colour,
