@@ -7,10 +7,10 @@ name: Android
 # bundle (.aab) beside it is what goes to Google Play (mobile/android/PLAY-RELEASE.md).
 on:
   pull_request:
-    paths: ['mobile/android/**', 'mobile/contract/**', '.github/workflows/android.yml']
+    paths: ['mobile/android/**', 'mobile/contract/**', 'recorder-core/**', '.github/workflows/android.yml']
   push:
     branches: [main]
-    paths: ['mobile/android/**', 'mobile/contract/**', '.github/workflows/android.yml']
+    paths: ['mobile/android/**', 'mobile/contract/**', 'recorder-core/**', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:

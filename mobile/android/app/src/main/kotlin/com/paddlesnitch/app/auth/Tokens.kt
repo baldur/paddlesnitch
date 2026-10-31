@@ -14,6 +14,8 @@ import javax.crypto.spec.GCMParameterSpec
 interface TokenStore {
     val idToken: String?
     val refreshToken: String?
+    /** Whose tokens these are (SignIn.id): recordings on this phone are kept per account. */
+    var userId: String?
     fun save(idToken: String, refreshToken: String? = null)
     fun clear()
 }
@@ -22,8 +24,9 @@ interface TokenStore {
 class MemoryTokenStore : TokenStore {
     override var idToken: String? = null; private set
     override var refreshToken: String? = null; private set
+    override var userId: String? = null
     override fun save(idToken: String, refreshToken: String?) { this.idToken = idToken; if (refreshToken != null) this.refreshToken = refreshToken }
-    override fun clear() { idToken = null; refreshToken = null }
+    override fun clear() { idToken = null; refreshToken = null; userId = null }
 }
 
 /**
@@ -62,6 +65,9 @@ class KeystoreTokenStore(context: Context) : TokenStore {
 
     override val idToken get() = decrypt(prefs.getString("id", null))
     override val refreshToken get() = decrypt(prefs.getString("refresh", null))
+    override var userId: String?
+        get() = decrypt(prefs.getString("user", null))
+        set(value) { prefs.edit().apply { if (value == null) remove("user") else putString("user", encrypt(value)) }.apply() }
 
     override fun save(idToken: String, refreshToken: String?) {
         prefs.edit().putString("id", encrypt(idToken)).apply {
