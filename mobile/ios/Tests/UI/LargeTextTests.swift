@@ -157,10 +157,7 @@ final class LargeTextTests: AppTestCase {
         let start = app.buttons["record-start"]
         try checkWholeScreen(last: start)
         start.tap()
-        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "While Using")
-        ).firstMatch
-        if allow.appears(timeout: 5) { allow.tap() }  // unless an earlier test allowed it
+        answerLocation("While Using")  // asked again: the reset above
         let stop = element("record-stop")
         XCTAssertTrue(stop.appears(timeout: 10))
         try checkWholeScreen(last: stop)

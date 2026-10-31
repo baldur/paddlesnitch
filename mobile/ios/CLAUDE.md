@@ -164,3 +164,6 @@ isn't obvious from the code.
   where it is: "Create account" tapped just as the sign-in sheet opened left
   it on Sign in (iOS 17, CI). Turn the sheet with `showCreateAccount()`
   (Waiting.swift), which taps again until the form is there.
+  The same goes for iOS's own alerts: a location answer tapped while the
+  alert grows in misses, so use `answerLocation(_:)` (RecordTests.swift),
+  which taps until the alert has gone.

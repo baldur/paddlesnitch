@@ -5,7 +5,6 @@ import XCTest
 /// simulator has no accelerometer or gyroscope, so this records the track
 /// only; the sensors are proved in RecorderTests and on a real phone.
 final class RecordTests: AppTestCase {
-    private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
     override func setUp() async throws {
         try await super.setUp()
@@ -77,10 +76,7 @@ final class RecordTests: AppTestCase {
         let start = app.buttons["record-start"]
         try audit()
         start.tap()
-        let answer = springboard.alerts.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", allow ? "While Using" : "Don"))
-        XCTAssertTrue(answer.firstMatch.appears(timeout: 10), "iOS asks for location")
-        answer.firstMatch.tap()
+        answerLocation(allow ? "While Using" : "Don")
     }
 }
 
@@ -96,5 +92,21 @@ extension AppTestCase {
             if app.navigationBars["Record"].appears(timeout: 3) { return }
         }
         XCTFail("the record screen didn't open", file: file, line: line)
+    }
+
+    /// Answers iOS's location question with the button whose label contains
+    /// `choice`. Tapped while the alert is still growing in, the tap misses
+    /// and the alert stays (#767's run 41247348414, newest iOS), so it taps
+    /// until the alert goes.
+    func answerLocation(_ choice: String, file: StaticString = #filePath, line: UInt = #line) {
+        let answer = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", choice)
+        ).firstMatch
+        XCTAssertTrue(answer.appears(timeout: 10), "iOS asks for location", file: file, line: line)
+        for _ in 0..<3 {
+            answer.tap()
+            if answer.disappears(timeout: 3) { return }
+        }
+        XCTFail("the location alert didn't go", file: file, line: line)
     }
 }
