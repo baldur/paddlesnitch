@@ -1,6 +1,0 @@
-# ninja log v5
-0	428	1793453454992337975	CMakeFiles/recorder.dir/recorder_jni.c.o	ff59ea64e1a1a511
-0	497	1793453455052580536	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_core.c.o	6c710602d4cc1c47
-2	580	1793453455114541483	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_phone.c.o	62302b7bcd88d218
-580	780	1793453455350789000	recorder-core/librecorder_core.a	c98b17ca6534eebe
-780	888	1793453455454380814	/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/build/intermediates/cxx/RelWithDebInfo/6s285y1b/obj/armeabi-v7a/librecorder.so	c30e07f1a6a8c867

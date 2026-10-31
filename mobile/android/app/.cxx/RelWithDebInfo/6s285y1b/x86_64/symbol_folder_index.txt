@@ -1,1 +1,0 @@
-/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/build/intermediates/cxx/RelWithDebInfo/6s285y1b/obj/x86_64
