@@ -6,8 +6,8 @@ import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
 import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
-import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split } from './scull.js';
-import { createErg, stepErg, monitor, ergPose } from './erg.js';
+import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, cleanRow } from './scull.js';
+import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
@@ -74,9 +74,8 @@ const ROW_MODES = {
   'row-head': { label: 'Head of the River', line: 'Round the islands against the clock, scullers 30 seconds apart', base: MODES.loop, rivals: DIVISION_9.slice(0, 5), head: true },
 };
 for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: true });
-let row = { scull: 'club', colour: SCULL_COLOURS[0] };
-try { row = { ...row, ...JSON.parse(localStorage.getItem(ROW_KEY)) }; } catch {}
-if (!SCULL_COLOURS.includes(row.colour)) row.colour = SCULL_COLOURS[0];
+let row = cleanRow(null);
+try { row = cleanRow(JSON.parse(localStorage.getItem(ROW_KEY))); } catch {}
 const storeRow = () => { try { localStorage.setItem(ROW_KEY, JSON.stringify(row)); } catch {} };
 // Anyone can paddle practice and the drills, and row; the kayak races, the leaderboard and live races need an account.
 const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
@@ -226,7 +225,7 @@ function start() {
   // Rowing: the stroke coach and the Look button instead of the rudder and the paddler's hints.
   hud.classList.toggle('rowing', !!mode.row);
   els.touchhelp.textContent = mode.row
-    ? 'Left thumb, left oar; right thumb, right oar · Both together to go straight · One first, or one alone, to turn · Hold Look to see where you are going'
+    ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Hold Look to see where you're going"
     : TOUCH_HELP;
   // An outing from Caversham Pier: no starter, no clock; off at once.
   hud.classList.toggle('outing', !!mode.outing);
@@ -842,8 +841,8 @@ function arrive(place) {
   if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
   // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
   if (!menu.open) club.spots.find((x) => x.act)?.el.focus({ preventScroll: true });
-  if (place === 'rchanging') note('Rowing is in an all-in-one: it takes your top colour');
-  if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Both arrows (or both thumbs, or both triggers) together for each stroke');
+  if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
+  if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Press both arrows, thumbs or triggers together for each stroke');
 }
 // The erg room: a 500 m on your erg, the rower on the next one keeping a
 // steady 2:08. Both sides together for a stroke; the monitor shows how it's going.
@@ -857,7 +856,7 @@ function startErg() {
   ergRun = { erg: createErg({ pace: 128 }), play: beginPlay({ key: 'erg', solo: true }, { from: visit.from, now: clock() }) };
   visit.plays++;
   ergMon.hidden = false;
-  note('Row! Both together for each stroke. Steady beats quick');
+  note('Row! Press both sides together for each stroke. Steady beats quick.');
 }
 function endErg(end = 'quit') {
   if (!ergRun) return;
@@ -871,17 +870,16 @@ function stepErgRun(dt) {
   for (const e of stepErg(erg, dt, { strokes: strokes.filter((x) => !x.startsWith('back-')) })) {
     if (e === 'stroke') noise({ freq: 300, to: 120, q: 0.6, duration: 0.7, gain: 0.08 }); // the flywheel's whirr
     if (e === 'done') {
-      const best = ergBest();
-      const record = !best || erg.done < best;
+      const { text, record } = ergResult(erg.done, ergBest(), erg.other.metres);
       if (record) try { localStorage.setItem(ERG_BEST, String(erg.done)); } catch {}
-      note(`500 m in ${formatTime(erg.done)}${record ? (best ? ': a new best!' : '') : `. Your best: ${formatTime(best)}`}${erg.other.metres >= 500 ? '' : '. You beat the next erg!'}`);
+      note(text);
       tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
       track(playEvent(ergRun.play, { end: 'finished', now: clock() }));
       ergRun.play = null;
     }
   }
   const m = monitor(erg);
-  ergMon.innerHTML = `<b>${formatTime(m.time)}</b><span>${m.pace ? formatTime(m.pace) : '-:--'}<small>/500m</small></span><span>${m.rate || '--'}<small>s/m</small></span><b>${m.left}<small>m to go</small></b><span class="other">Next erg ${m.other ?? 0} m</span>`;
+  ergMon.innerHTML = `<b>${formatTime(m.time)}</b><span>${m.pace ? formatTime(m.pace) : '-:--'}<small>/500</small></span><span>${m.rate || '--'}<small>spm</small></span><b>${m.left}<small>m to go</small></b><span class="other">Rower next to you: ${m.other ?? 0} m</span>`;
 }
 
 // The rowing club's boathouse: take a scull, or paint yours.

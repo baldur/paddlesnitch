@@ -20,9 +20,10 @@ export const SCULL = {
   length: 8.2,
   beam: 0.3,
   // The stroke. An oar's drive lasts `drive`; it can't catch again until it's
-  // been round the recovery, `recover` at the quickest: about 40 a minute.
+  // been round the recovery, `recovery` at the quickest: about 40 a minute.
+  // (Not `recover`: on a kayak's hull that's stamina back a second, and race.js reads it.)
   drive: 0.7,
-  recover: 0.8,
+  recovery: 0.8,
   pair: 0.2, // seconds apart that still count as one stroke of both oars
   // Each full stroke adds `impulse` m/s, spread over the drive: tuned to a club
   // sculler, about 12 km/h at an easy 22, 15 km/h at a racing 32, 16-17 flat out.
@@ -102,7 +103,7 @@ export function stepScull(boat, dt, input) {
       }
       oar.at = t;
       oar.end = t + H.drive;
-      oar.ready = t + H.drive + H.recover;
+      oar.ready = t + H.drive + H.recovery;
       oar.back = s.startsWith('back-');
       const other = o[side === 'left' ? 'right' : 'left'];
       if (t - other.at < H.pair && !other.back === !oar.back) {
@@ -247,7 +248,7 @@ export function scullPose(boat) {
       return { sweep: -1 + 2 * smooth(k), depth: Math.min(1, k / 0.12, (1 - k) / 0.12), feather: false };
     }
     // The recovery: hands away, then up the slide to the catch, at the rate rowed.
-    const back = Math.max(H.recover, Math.min(o.gap - H.drive, 2));
+    const back = Math.max(H.recovery, Math.min(o.gap - H.drive, 2));
     const k = (p - len) / back;
     return { sweep: 1 - 2 * smooth((k - 0.15) / 0.85), depth: 0, feather: k > 0.05 && k < 0.92 && p < len + back * 1.2 };
   };
@@ -255,7 +256,7 @@ export function scullPose(boat) {
   const right = oar('right');
   // The slide follows the oar most recently in.
   const lead = o.left.at > o.right.at ? left : right;
-  const idle = t - Math.max(o.left.at, o.right.at) > H.drive + Math.max(H.recover, Math.min(o.gap - H.drive, 2)) * 1.2;
+  const idle = t - Math.max(o.left.at, o.right.at) > H.drive + Math.max(H.recovery, Math.min(o.gap - H.drive, 2)) * 1.2;
   const slide = idle ? 0.15 : (1 - lead.sweep) / 2;
   if (idle) {
     // Sitting easy: blades flat on the water, square to the boat.
@@ -281,3 +282,13 @@ export const SCULLS = [
 export const scullById = (id) => SCULLS.find((s) => s.id === id) ?? SCULLS[1];
 // A scull's colours, picked from a set (painting it in the boathouse goes round them).
 export const SCULL_COLOURS = ['#f2ede0', '#f5d33a', '#2f6fd1', '#c8332b', '#1f8a5b', '#222428'];
+
+// Your rowing choices as kept on the device (main.js), read back safely: an
+// unknown scull or colour falls back.
+export function cleanRow(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    scull: SCULLS.some((s) => s.id === r.scull) ? r.scull : 'club',
+    colour: SCULL_COLOURS.includes(r.colour) ? r.colour : SCULL_COLOURS[0],
+  };
+}

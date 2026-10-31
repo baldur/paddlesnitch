@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from '../kayak/metrics.js';
+import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent, placeTag } from '../kayak/metrics.js';
 import { cleanKit, randomKit, SKIN_TONES } from '../kayak/kit.js';
 import { PLACES } from '../kayak/club.js';
 
@@ -143,4 +143,13 @@ test('the sender also goes once a minute while something waits, and when the pag
   listeners.pagehide();
   assert.equal(sent(), before + 2, 'leaving the page sends what waits');
   assert.equal(beacons.at(-1).body.events[0].props.mode, 'trial');
+});
+
+test("the walk's places as reported: the canoe club's by name, the rowing club's rooms as one, the erg room on its own", () => {
+  assert.equal(placeTag('boathouse'), 'boathouse');
+  assert.equal(placeTag('rboathouse'), 'rowing');
+  assert.equal(placeTag('erg'), 'erg');
+  const s = createSession(0, 'walk');
+  for (const p of ['rclub', 'rchanging', 'rboathouse', 'rclubhouse', 'rpontoon', 'erg']) s.places.add(p);
+  assert.equal(sessionEvent(s, 10).props.places, 'rowing,erg');
 });

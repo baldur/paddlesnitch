@@ -214,6 +214,16 @@ async function play(c, page, errors) {
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
+  // Rowing really is rowing: a scull, the coach on its screen, gone while you look round.
+  if (c.row) {
+    const scull = await page.evaluate(() => !!window.kayak.boat.hull.scull);
+    if (!scull) errors.push('pushed off in something other than a scull');
+    if (await page.locator('#coach').isHidden()) errors.push("the stroke coach isn't showing");
+    await page.keyboard.down('ArrowUp');
+    await page.waitForTimeout(800);
+    if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
+    await page.keyboard.up('ArrowUp');
+  }
   // Analytics (metrics.js): the paddler and the session go out when the page is
   // hidden; locally they're kept in gameMetrics.sent instead of sent.
   if (c.outing) {

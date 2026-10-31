@@ -45,6 +45,7 @@ export const speedOf = (watts) => (watts > 1 ? Math.cbrt(watts / 2.8) : 0); // m
 // Returns 'stroke', 'rush' (still on the recovery) or 'done'.
 export function stepErg(erg, dt, { strokes = [] } = {}) {
   const events = [];
+  if (erg.done !== null) return events; // the piece is rowed: the monitor holds the time
   const now = erg.started ? erg.time : 0;
   for (const s of strokes) {
     void s;
@@ -72,7 +73,6 @@ export function stepErg(erg, dt, { strokes = [] } = {}) {
   }
   if (!erg.started) return events;
   erg.time += dt;
-  if (erg.done !== null) return events;
   // The power the strokes are putting in, and the shown power easing to it.
   const idle = erg.time - erg.last;
   const pulling = idle < Math.max(erg.gap, ERG.drive + ERG.recover) * 1.3 ? (erg.stroke ?? 0) / Math.max(erg.gap, 1.2) : 0;
@@ -120,3 +120,14 @@ export function ergPose(erg) {
   // Arms away, then up the slide.
   return { slide: smooth((k - 0.25) / 0.75), arms: smooth(k / 0.25) };
 }
+
+// What you're told at the end of a piece: the time, a new best or the old one,
+// and whether you beat the rower next to you.
+export function ergResult(done, best, otherMetres, piece = ERG.piece) {
+  const record = !best || done < best;
+  const parts = [`500 m in ${clock(done)}${record && best ? ': a new best!' : '.'}`];
+  if (!record) parts.push(`Your best: ${clock(best)}.`);
+  if (otherMetres < piece) parts.push('You beat the rower next to you.');
+  return { text: parts.join(' '), record };
+}
+const clock = (t) => `${Math.floor(t / 60)}:${(t - Math.floor(t / 60) * 60).toFixed(1).padStart(4, '0')}`;

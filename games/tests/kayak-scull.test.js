@@ -3,18 +3,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBoat } from '../kayak/sim.js';
-import { SCULL, stepScull, scullRate, scullPose, split } from '../kayak/scull.js';
-import { createRace, stepRace } from '../kayak/race.js';
-import { practiceRiver, headingAt } from '../kayak/course.js';
+import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow } from '../kayak/scull.js';
+import { readFile } from 'node:fs/promises';
+import { createRace, stepRace, started, DIVISION_9 } from '../kayak/race.js';
+import { practiceRiver, headingAt, pointAt, locate, courseFromFile } from '../kayak/course.js';
 import { wrap } from '../kayak/sim.js';
 
 const DT = 1 / 120;
 // Row for `secs` at `rate` strokes a minute: both oars (the right `late`
 // seconds after the left), or one, or the two in turn.
-function row(rate, { secs = 60, late = 0, only = null, alternate = false, lean = 0, rock = 0, boat = createBoat({ hull: SCULL }) } = {}) {
+function row(rate, { secs = 60, late = 0, first = 'left', only = null, alternate = false, lean = 0, rock = 0, boat = createBoat({ hull: SCULL }) } = {}) {
+  const second = first === 'left' ? 'right' : 'left';
   const events = [];
   let next = 0;
-  let second = null;
+  let secondAt = null;
   let n = 0;
   for (let t = 0; t < secs; t += DT) {
     const strokes = [];
@@ -23,13 +25,13 @@ function row(rate, { secs = 60, late = 0, only = null, alternate = false, lean =
       if (only) strokes.push(only);
       else if (alternate) strokes.push(n++ % 2 ? 'left' : 'right');
       else {
-        strokes.push('left');
-        second = t + late;
+        strokes.push(first);
+        secondAt = t + late;
       }
     }
-    if (second !== null && t >= second) {
-      strokes.push('right');
-      second = null;
+    if (secondAt !== null && t >= secondAt) {
+      strokes.push(second);
+      secondAt = null;
     }
     events.push(...stepScull(boat, DT, { strokes, lean, rock }));
   }
@@ -54,9 +56,9 @@ test('steering by timing: the oar in first pulls the longer stroke and the bow c
   const leftFirst = row(30, { late: 0.08, secs: 20 }).boat;
   assert.ok(leftFirst.heading > 0.2, `left first turns the bow right: ${leftFirst.heading}`);
   assert.ok(kmh(leftFirst) > 12, 'still going well');
-  const { boat: rightFirst } = row(30, { late: -0.08, secs: 20 });
-  // (a negative late: the right oar goes first, as the left one's pressed next frame)
-  assert.ok(Math.abs(rightFirst.heading) < 0.05 || rightFirst.heading < 0, 'and the other way round turns it the other way, or not at all');
+  const rightFirst = row(30, { late: 0.08, secs: 20, first: 'right' }).boat;
+  assert.ok(rightFirst.heading < -0.2, `right first turns it left: ${rightFirst.heading}`);
+  assert.ok(Math.abs(row(30, { secs: 20 }).boat.heading) < 0.01, 'together, straight on');
 });
 
 test('one oar alone spins the boat round without a crab, slowly; the other one turns it back', () => {
@@ -98,19 +100,23 @@ test('steady rowing never catches a crab on choppy water; knocked over far enoug
   assert.ok(kmh(after.boat) > 10, 'going again');
 });
 
-test('a wash rocks the boat; leaning against the roll keeps it up', () => {
-  const rocked = row(30, { secs: 60, rock: 1 });
-  const caught = rocked.events.filter((e) => e === 'crab').length;
-  let leaned = createBoat({ hull: SCULL });
-  let crabs = 0;
-  let next = 0;
-  for (let t = 0; t < 60; t += DT) {
-    const strokes = t >= next ? ((next += 2), ['left', 'right']) : [];
-    const lean = Math.max(-1, Math.min(1, -(leaned.roll * 3 + leaned.rollRate)));
-    crabs += stepScull(leaned, DT, { strokes, rock: 1, lean }).filter((e) => e === 'crab').length;
-  }
-  assert.ok(crabs <= caught, `leaning: ${crabs} crabs, not: ${caught}`);
-  assert.ok(Math.abs(leaned.roll) < SCULL.crabAt);
+test('rolled well over, leaning against it keeps the boat up; not leaning, an oar digs in', () => {
+  const tipped = () => Object.assign(createBoat({ hull: SCULL }), { speed: 3, roll: SCULL.crabAt * 0.8, rollRate: 0.25 });
+  const run = (lean) => {
+    const boat = tipped();
+    let crabs = 0;
+    let peak = 0;
+    for (let t = 0; t < 3; t += DT) {
+      crabs += stepScull(boat, DT, { strokes: [], rock: 1, lean: lean(boat) }).filter((e) => e === 'crab').length;
+      peak = Math.max(peak, Math.abs(boat.roll));
+    }
+    return { crabs, peak };
+  };
+  const loose = run(() => 0);
+  const held = run((b) => Math.max(-1, Math.min(1, -(b.roll * 3 + b.rollRate))));
+  assert.ok(loose.crabs > 0, 'not leaning: a crab');
+  assert.equal(held.crabs, 0, 'leaning: none');
+  assert.ok(held.peak < SCULL.crabAt);
 });
 
 test('a big enough knock (a swan) still tips you in, and you climb back in', () => {
@@ -170,7 +176,125 @@ test('three sculls on the rack: the trainer forgives a roll the fine boat crabs 
   assert.deepEqual(SCULLS.map((s) => s.id), ['trainer', 'club', 'fine']);
   assert.equal(scullById('nope'), SCULLS[1]);
   const [trainer, , fine] = SCULLS.map((s) => s.hull);
-  assert.ok(trainer.crabAt > SCULL.crabAt && fine.crabAt < SCULL.crabAt);
+  const crabsAt = (hull) => stepScull(Object.assign(createBoat({ hull }), { roll: 0.3 }), DT, { strokes: [] }).includes('crab');
+  assert.ok(crabsAt(fine), 'the fine boat crabs at 0.3 rad over');
+  assert.ok(!crabsAt(trainer), 'the trainer forgives it');
   const speed = (hull) => row(30, { boat: createBoat({ hull }) }).boat.speed;
   assert.ok(speed(trainer) < speed(SCULL) && speed(SCULL) < speed(fine));
+});
+
+test('backing down: both oars push the boat astern, straight; one backs it round the other way to pulling it', () => {
+  const backs = (strokes, secs = 10) => {
+    const boat = createBoat({ hull: SCULL });
+    let next = 0;
+    for (let t = 0; t < secs; t += DT) stepScull(boat, DT, { strokes: t >= next ? ((next += 2), strokes) : [] });
+    return boat;
+  };
+  const both = backs(['back-left', 'back-right']);
+  assert.ok(both.speed < -0.5 && both.speed > -2, `astern at ${both.speed}`);
+  assert.ok(Math.abs(both.heading) < 0.01, 'straight');
+  assert.ok(backs(['back-left'], 6).heading < -0.2, 'backing the left oar swings the bow left');
+  assert.ok(row(30, { only: 'left', secs: 6 }).boat.heading > 0.2, 'pulling it swings it right');
+  // Pull one, back the other: round on the spot, quicker than one oar alone.
+  const spin = backs(['left', 'back-right'], 6);
+  assert.ok(spin.heading > row(30, { only: 'left', secs: 6 }).boat.heading, `spun ${spin.heading}`);
+});
+
+test("stamina: a sprint spends it, easing off brings it back, and with none left a quick stroke pulls no harder", () => {
+  const boat = row(38).boat;
+  assert.ok(boat.stamina < 0.2);
+  row(18, { secs: 20, boat });
+  assert.ok(boat.stamina > 0.6, `back to ${boat.stamina}`);
+  const gain = (stamina) => {
+    const b = row(40, { secs: 10 }).boat;
+    b.stamina = stamina;
+    const before = b.speed;
+    for (let t = 0; t < 1.5; t += DT) stepScull(b, DT, { strokes: t === 0 ? ['left', 'right'] : [] });
+    // (wait out the recovery first, at 40 a minute)
+    return b.speed - before;
+  };
+  assert.ok(gain(1) >= gain(0), 'fresh, no weaker');
+});
+
+test('the rudder (a slid finger, a twisted phone) nudges the boat round only while it moves', () => {
+  const still = createBoat({ hull: SCULL });
+  for (let t = 0; t < 3; t += DT) stepScull(still, DT, { strokes: [], rudder: 1 });
+  assert.equal(still.heading, 0);
+  const moving = Object.assign(createBoat({ hull: SCULL }), { speed: 3.5 });
+  for (let t = 0; t < 3; t += DT) stepScull(moving, DT, { strokes: [], rudder: 1 });
+  assert.ok(moving.heading > 0.05);
+});
+
+test("a lone oar's catch rolls the boat towards its side; both together hardly at all", () => {
+  const lone = createBoat({ hull: SCULL });
+  stepScull(lone, DT, { strokes: ['left'] });
+  for (let t = 0; t < 0.2; t += DT) stepScull(lone, DT, { strokes: [] });
+  const both = createBoat({ hull: SCULL });
+  stepScull(both, DT, { strokes: ['left', 'right'] });
+  for (let t = 0; t < 0.2; t += DT) stepScull(both, DT, { strokes: [] });
+  assert.ok(lone.rollRate < -0.1, `the left oar rolls it left: ${lone.rollRate}`);
+  assert.ok(Math.abs(both.rollRate) < Math.abs(lone.rollRate) / 5);
+});
+
+test('in the water after a capsize, strokes do nothing', () => {
+  const boat = Object.assign(createBoat({ hull: SCULL }), { speed: 3, roll: SCULL.capsize + 0.05 });
+  stepScull(boat, DT, { strokes: [] });
+  const events = [];
+  for (let t = 0; t < 1; t += DT) events.push(...stepScull(boat, DT, { strokes: ['left', 'right'] }));
+  assert.ok(!events.includes('stroke'));
+  assert.ok(boat.speed < 1);
+});
+
+// Row a race: both oars every 2 s, leading with one to steer for a point 30 m
+// ahead (a long boat: nearer, it cuts the island ends), one oar alone to turn hard.
+function rowRace(race, secs) {
+  const events = [];
+  let next = 0;
+  let pending = null;
+  for (let t = 0; t < secs && race.player.finish === null; t += DT) {
+    const strokes = [];
+    const { boat, loc } = race.player;
+    const aim = pointAt(race.course, loc.s + 30);
+    const err = wrap(Math.atan2(aim.x - boat.x, -(aim.z - boat.z)) - boat.heading);
+    if (started(race) && race.time >= next) {
+      next = race.time + 2;
+      const lead = err > 0 ? 'left' : 'right'; // the left oar first brings the bow right
+      strokes.push(lead);
+      if (Math.abs(err) < 0.4) pending = { side: lead === 'left' ? 'right' : 'left', at: race.time + Math.min(0.18, Math.abs(err) * 0.5) };
+      else next = race.time + 1.6;
+    }
+    if (pending && race.time >= pending.at) {
+      strokes.push(pending.side);
+      pending = null;
+    }
+    const lean = Math.max(-1, Math.min(1, -(boat.roll * 3 + boat.rollRate)));
+    events.push(...stepRace(race, DT, { strokes, rudder: Math.max(-1, Math.min(1, err * 3)), lean }).events);
+  }
+  return events;
+}
+
+test("the Head of the River: rowed round the Loop's islands against scullers sent off 30 s apart, and finished", async () => {
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
+  const race = createRace(course, { you: { hull: SCULL }, rivals: DIVISION_9.slice(0, 5), format: 'interval', birds: false, traffic: false, seed: 3 });
+  rowRace(race, 2400);
+  assert.ok(race.player.finish !== null, `finished: at ${race.player.loc.s.toFixed(0)} of ${course.finish}`);
+  // Then sit easy while the rest come in.
+  for (let t = 0; t < 600 && race.racers.some((r) => r.finish === null); t += DT) stepRace(race, DT, { strokes: [], lean: 0 });
+  assert.ok(race.racers.filter((r) => r.finish !== null).length >= 4, 'and the rivals too, near enough');
+});
+
+test("a swan in a scull's way tips the rower in, who climbs back in", () => {
+  const course = practiceRiver();
+  const race = createRace(course, { you: { hull: SCULL }, birds: false, traffic: false, format: 'interval' });
+  const c = pointAt(course, course.start + 40);
+  race.birds = [{ kind: 'swan', x: c.x, z: c.z, heading: headingAt(course, course.start + 40), speed: 0, phase: 0, loc: locate(course, c.x, c.z), fly: 0, gone: false }];
+  const events = rowRace(race, 40);
+  assert.ok(events.includes('swan') && events.includes('capsize'), events.filter((e) => e !== 'stroke').join(','));
+  assert.ok(events.includes('remount'));
+});
+
+test("rowing choices read back from the device: an unknown scull or colour falls back", () => {
+  assert.deepEqual(cleanRow(null), { scull: 'club', colour: SCULL_COLOURS[0] });
+  assert.deepEqual(cleanRow({ scull: 'fine', colour: SCULL_COLOURS[2] }), { scull: 'fine', colour: SCULL_COLOURS[2] });
+  assert.deepEqual(cleanRow({ scull: 'canoe', colour: '#00ff00' }), { scull: 'club', colour: SCULL_COLOURS[0] });
 });
