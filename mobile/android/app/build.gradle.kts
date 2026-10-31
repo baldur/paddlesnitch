@@ -40,8 +40,12 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "STRAVA_IN_APP", "true")
         }
         release {
+            // The first Play release hides Strava (PLAY-RELEASE.md). Turning it on is
+            // an app release, and the Play data safety form changes with it.
+            buildConfigField("boolean", "STRAVA_IN_APP", "false")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             if (uploadKeystore != null) signingConfig = signingConfigs.getByName("upload")
