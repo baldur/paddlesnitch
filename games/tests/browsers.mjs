@@ -78,12 +78,14 @@ const CASES = [
   { name: 'iphone safari, Time Trial Loop time trial', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'loop', format: 'interval' },
   // A practice drill: under way below the Mapledurham beach, no starter.
   { name: 'webkit, desktop, portage drill', engine: webkit, ctx: desktop, course: 'drill-portage' },
+  // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
+  { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/kayak/${c.query ?? ''}#debug`);
+  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.club ? '&club' : ''}`);
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -95,10 +97,19 @@ async function play(c, page, errors) {
   await page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   const backend = await page.evaluate(() => window.kayak.gpu.backend);
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
+  // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
+  if (c.club) {
+    for (const [label, place] of [['Reading Canoe Club', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]]) {
+      const spot = page.locator('#clubDoors .spot', { hasText: label });
+      await spot.waitFor({ state: 'visible', timeout: 30_000 });
+      await spot.tap();
+      if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
+    }
+  }
   // The practice time trial on your own, or a real river with the pack: there
   // the horn waits for you on the line, so the boat is put there.
   // A first visit opens on making your paddler: Next through boat and paddle to the races.
-  for (let i = 0; i < 3 && await page.locator('#stepHome').isHidden(); i++) {
+  for (let i = 0; i < 3 && !c.club && await page.locator('#stepHome').isHidden(); i++) {
     const next = page.locator('#menu .step:not([hidden]) .step-buttons .next');
     await (c.touch ? next.tap() : next.click());
   }
@@ -107,12 +118,12 @@ async function play(c, page, errors) {
     await (c.touch ? format.tap() : format.click());
   }
   // Practice and its drills are on the practice page.
-  if (!c.course || c.course.startsWith('drill-')) {
+  if (!c.club && (!c.course || c.course.startsWith('drill-'))) {
     const page2 = page.locator('#menu [data-step="practice"]');
     await (c.touch ? page2.tap() : page2.click());
   }
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
-  await (c.touch ? practice.tap() : practice.click());
+  if (!c.club) await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
   await page.evaluate(() => {
     const { race, course, boat } = window.kayak;
@@ -161,6 +172,7 @@ async function play(c, page, errors) {
 let failed = 0;
 for (const c of CASES) {
   if (c.gpuOnly && !process.argv.includes('--gpu')) continue;
+  if (process.env.ONLY && !c.name.includes(process.env.ONLY)) continue; // ONLY=portage: just the cases named so
   const errors = [];
   let line = '';
   const browser = await c.engine.launch(c.launch ?? {});

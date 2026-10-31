@@ -445,3 +445,19 @@ summary { cursor: pointer; }
   #cue { top: 5.3rem; font-size: 0.82rem; padding: 0.3rem 0.7rem; max-width: calc(100vw - 2 * 180px); }
   #cue b { font-size: 1.4rem; }
 }
+
+/* The walk to the club (#club): the place's name, and labels over the scene to tap. */
+#club { position: fixed; inset: 0; pointer-events: none; z-index: 5; font-family: system-ui, sans-serif; }
+#clubPlace { position: absolute; left: max(16px, env(safe-area-inset-left)); top: calc(max(14px, env(safe-area-inset-top)) + 3rem); margin: 0; color: #fff; font-size: clamp(1.3rem, 4vw, 2.2rem); font-weight: 800; letter-spacing: -0.01em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); }
+#clubDoors .spot { position: absolute; left: 0; top: 0; pointer-events: auto; min-height: 44px; padding: 0.5rem 0.95rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(10, 18, 18, 0.62); color: #fff; font: 600 0.95rem/1.1 system-ui, sans-serif; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); cursor: pointer; }
+#clubDoors .spot:hover, #clubDoors .spot:focus-visible { background: rgba(10, 18, 18, 0.85); border-color: #f2c230; outline: none; }
+#clubDoors .spot.go { background: #d6452b; border-color: #d6452b; font-size: 1.05rem; }
+#clubDoors .spot.small { min-width: 34px; min-height: 34px; padding: 0.25rem; font-size: 0.85rem; }
+#clubDoors .spot.on { border: 2px solid #f2c230; color: #f2c230; }
+#clubNote { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); margin: 0; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
+#clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
+/* In the club the editors and the plan are a sheet at the side, the room still in view. */
+#menu.sheet { margin: auto max(16px, env(safe-area-inset-right)) auto auto; width: min(26rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+#menu.sheet::backdrop { background: transparent; }
+#menu.sheet > h2, #menu.sheet .me, #menu.sheet .rotate-hint { display: none; }
