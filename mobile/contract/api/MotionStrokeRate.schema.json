@@ -6,6 +6,17 @@
     "available": {
       "type": "boolean"
     },
+    "code": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "too_few_samples",
+        "too_slow",
+        "no_rhythm",
+        "not_moving",
+        "other"
+      ]
+    },
     "reason": {
       "type": "string"
     },
@@ -35,6 +46,7 @@
   },
   "required": [
     "available",
+    "code",
     "reason",
     "sampleRateHz",
     "rows",

@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
-  recordingStrokeRate, replayStrokeLines, decimateMotionCsv, STROKE_RATE_REASONS, parseMotionCsv, trackClockOffset, withStrokeRate,
+  recordingStrokeRate, replayStrokeLines, decimateMotionCsv, STROKE_RATE_REASONS, STROKE_RATE_CODES, parseMotionCsv, trackClockOffset, withStrokeRate,
 } from '@paddlesnitch/timing/cadence'
 import { movingRangesFromTrack } from '@paddlesnitch/timing/attitude'
 import { addStrokeRate } from '@paddlesnitch/analysis/device-sessions'
@@ -102,8 +102,11 @@ describe('stroke rate for a recording', () => {
   it("has words for every reason the core gives, never the raw code", () => {
     const header = readFileSync(path.join(CORE, 'include/recorder_core.h'), 'utf8')
     const listed = /\* reason: ([a-z_, ]+)\./.exec(header)?.[1].split(', ')
-    expect(listed).toEqual(['ok', 'too_few_samples', 'too_slow', 'no_rhythm'])
-    for (const r of listed!) expect(STROKE_RATE_REASONS[r]).toBeDefined()
+    expect(listed).toEqual(['ok', 'too_few_samples', 'too_slow', 'no_rhythm', 'not_moving'])
+    for (const r of listed!) {
+      expect(STROKE_RATE_REASONS[r]).toBeDefined()
+      expect(STROKE_RATE_CODES).toContain(r)
+    }
   })
 
   it("says it can't tell the sample rate when a motion file's clock never moves forward", () => {
@@ -133,7 +136,9 @@ describe('stroke rate for a recording', () => {
 
   it('gives no gated stroke rate when the track never moves (the ungated set is for that)', () => {
     const r = recordingStrokeRate(track([180, 0]), sidecar({ seconds: 180, hz: 50, strokesPerMin: 56 }))
-    expect(r.moving.report.available).toBe(false)
+    expect(r.moving.report).toMatchObject({ available: false, code: 'not_moving' })
+    expect(r.moving.report.reason).toBe("The GPS never saw the boat moving steadily for 90 seconds, so there's no stroke rate.")
+    expect(r.all.report.code).toBe('ok')
     expect(r.all.report.available).toBe(true)
   })
 

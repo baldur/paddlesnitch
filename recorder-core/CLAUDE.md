@@ -121,7 +121,11 @@ core works them out again.
   - a moving run ends after 3 s with no track row (cadence.ts let a run
     span a 250 s gap in rows; nothing says the boat moved);
   - a recording whose track never moves gets no gated rate (cadence.ts
-    treated "no moving stretches" as "don't gate").
+    treated "no moving stretches" as "don't gate"). Its reason is
+    `not_moving` (0.5.0, owner's decision 2026-10-31): no run reached 90
+    rows at >= 4 km/h, so the page says the GPS never saw the boat moving
+    steadily, not that the tracker was loose (`no_rhythm`: a run, but no
+    stroke in it).
 - **A metric's figures come at `rc_finish`;** a stream's per-window lines come
   as they're decided (a window waits for the track to say whether the boat
   was moving the whole time). Nothing is stored per window: the median is a

@@ -489,6 +489,7 @@ void rcs_row(rc_stroke *s, const rc_config *cfg, uint32_t ms, double speed_kmh)
         }
         r->last_ms = ms;
         r->rows++;
+        if (r->rows > s->longest_run) s->longest_run = r->rows;
     } else if (r && r->active) {
         end_run(s);
     }
@@ -540,7 +541,10 @@ void rcs_finish(rc_stroke *s, const rc_config *cfg)
     const char *why = s->rows < MIN_ROWS ? "too_few_samples" : hz < MIN_HZ ? "too_slow" : 0;
     for (int k = 0; k < SET_SERIES; k++) {
         const rc_stroke_set *set = &s->set[k];
-        const char *reason = why ? why : set->windows == 0 ? "no_rhythm" : "ok";
+        const char *reason = why ? why
+                           : set->windows ? "ok"
+                           : SET[k].min_rows && s->longest_run < SET[k].min_rows ? "not_moving"
+                           : "no_rhythm";
         int ok = reason[0] == 'o';
         int med = ok ? median10(set, s->hist[k]) : 0;
         say(cfg, "session,%s,%d,%s,%lu,%d.%d,%llu,%llu\n", SET[k].name, ok, reason,

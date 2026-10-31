@@ -15,6 +15,7 @@ import { BOAT_CLASSES, type BoatClass } from '@paddlesnitch/core/types'
 import type { AppRouter } from './root'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
+import { STROKE_RATE_CODES } from '@paddlesnitch/timing/stroke-rate-codes'
 
 export const contractRegistry = z.registry<{ id: string }>()
 const named = <T extends z.ZodType>(id: string, schema: T): T => { contractRegistry.add(schema, { id }); return schema }
@@ -324,6 +325,8 @@ const StrokeRateWindow = named('StrokeRateWindow', z.object({
 /** Stroke rate measured from the motion file. */
 export const MotionStrokeRate = named('MotionStrokeRate', z.object({
   available: z.boolean(),
+  /** Why there is or isn't a stroke rate, for an app to choose its words: `not_moving` = the GPS never saw the boat moving steadily for 90 s; `other` = a reason this server's code doesn't know. `reason` is the engineering text. */
+  code: z.enum(STROKE_RATE_CODES),
   reason: z.string(),
   sampleRateHz: z.number().nullable(),
   rows: z.int(),
