@@ -117,9 +117,12 @@ time and isn't obvious from the code.
   `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
 - A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
   that starts below the fold, or the second golden repeats the first.
-- Release declares no location permission. MapLibre adds fine and coarse location, and
-  `src/release/AndroidManifest.xml` removes them with `tools:node="remove"`.
-  `checkReleasePermissions` (part of `check`, run in CI) fails if any permission with
-  LOCATION in its name reaches the merged release manifest. Phone recording declares its own
-  in `src/debug` until it ships (#761). Play takes the `.aab` (`bundleRelease`), not the APK.
-  The steps to Play are in `PLAY-RELEASE.md`.
+- The release build declares exactly the permissions in `releasePermissions`
+  (`app/build.gradle.kts`), because Play's forms ask about each one. Every release build
+  runs `checkReleasePermissions` (and CI runs it on every change). It fails on any
+  permission added or gone, and if `src/main` declares location. MapLibre adds fine and
+  coarse location, which `src/release/AndroidManifest.xml` removes with
+  `tools:node="remove"`. That overlay would also quietly remove the app's own, so phone
+  recording (#761) deletes it, and until then declares its permissions only in `src/debug`.
+- Play takes the `.aab` (`bundleRelease`), not the APK. The steps to publish on Google Play
+  are in `PLAY-RELEASE.md`.

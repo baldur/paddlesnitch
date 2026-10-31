@@ -47,7 +47,7 @@ jobs:
           name: screenshot-diffs
           path: mobile/android/app/build/outputs/roborazzi
           retention-days: 14
-      # Release declares no location permission (app/build.gradle.kts).
+      # Release declares exactly releasePermissions (app/build.gradle.kts), no location.
       - name: Release permissions
         run: ./gradlew --no-configuration-cache :app:checkReleasePermissions
       - name: Debug APK
