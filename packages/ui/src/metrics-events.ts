@@ -16,11 +16,65 @@ export type MetricEvent =
   | 'app_open'         // an app started (crash rate = crash_report ÷ app_open)
   | 'crash_report'     // an app crashed; sent on its next start
   | 'client_error'     // a browser error from our own scripts
+  // The games (games/shared/analytics.js): what was played and chosen, never who.
+  | 'game_play'        // one race, outing or drill
+  | 'game_kit'         // the paddler when play starts, and after a change
+  | 'game_session'     // time in the game since the last send, on hide/close
 
 export const METRIC_EVENTS: readonly MetricEvent[] = [
   'pageview', 'signup', 'login', 'upload', 'trial_create', 'course_create',
   'campaign_cta', 'campaign_signup', 'app_open', 'crash_report', 'client_error',
+  'game_play', 'game_kit', 'game_session',
 ]
+
+// The game events' props: only these keys, each with its own rule, so nothing
+// a player typed and no colour or skin tone reaches the logs. A key with a
+// fixed set in the game takes only that set (a new option in the game is
+// dropped here until it's added: lost data, never a leak); numbers must be
+// numbers; the rest (ids the game picks from its own lists, never typed) are
+// lower-case words. games/kayak/metrics.js sends them. At most 10 keys an
+// event: the track route keeps 10 props.
+const NUM = /^\d{1,7}(\.\d{1,2})?$/
+const WORD = /^[a-z0-9][a-z0-9_-]{0,39}$/
+const WORDS = /^[a-z0-9_-]{1,30}(,[a-z0-9_-]{1,30}){0,19}$/
+const oneOf = (...v: string[]) => (x: string) => v.includes(x)
+const someOf = (...v: string[]) => (x: string) => x.split(',').every(i => v.includes(i))
+const test = (re: RegExp) => (x: string) => re.test(x)
+type Rule = (v: string) => boolean
+const FROM = oneOf('walk', 'menu')
+export const GAME_EVENT_PROPS: Readonly<Record<'game_play' | 'game_kit' | 'game_session', Readonly<Record<string, Rule>>>> = {
+  game_play: {
+    mode: oneOf('race', 'trial', 'live', 'practice', 'drill', 'outing'), course: test(WORD),
+    end: oneOf('finished', 'quit', 'restart', 'closed', 'ended'), secs: test(NUM), place: test(NUM), swims: test(NUM),
+    knocked: test(NUM), bumps: test(NUM), km: test(NUM), from: FROM,
+  },
+  game_kit: {
+    body: oneOf('broad', 'slim', 'curvy'), hair: oneOf('short', 'crop', 'ponytail', 'bun', 'long', 'none'),
+    hat: oneOf('none', 'cap', 'visor', 'beanie'), beard: oneOf('none', 'stubble', 'moustache', 'beard'),
+    aid: oneOf('true', 'false'), glasses: oneOf('none', 'wrap', 'round', 'aviator', 'square'),
+    sleeves: oneOf('short', 'long'), boat: test(WORD), paddle: oneOf('wing', 'flat'), shape: test(WORD),
+  },
+  game_session: {
+    secs: test(NUM), plays: test(NUM), from: FROM, places: test(WORDS),
+    input: someOf('keys', 'mouse', 'pad', 'touch'), gpu: oneOf('webgpu', 'webgl2'),
+  },
+}
+
+/** A game event's props with only its own keys and allowed values; other events' props as they came. */
+export function gameEventProps(event: MetricEvent, props: unknown): unknown {
+  const rules = (GAME_EVENT_PROPS as Record<string, Record<string, Rule>>)[event]
+  if (!rules) return props
+  if (!props || typeof props !== 'object') return undefined
+  const p = props as Record<string, unknown>
+  return Object.fromEntries(Object.entries(rules).flatMap(([k, ok]) => {
+    const v = p[k]
+    return typeof v === 'string' && ok(v) ? [[k, v]] : []
+  }))
+}
+
+/** A game event's path: only a page under /games, else none. */
+export const gamePath = (event: MetricEvent, path: unknown): unknown =>
+  !(event in GAME_EVENT_PROPS) ? path : typeof path === 'string' && /^\/games(\/[a-z0-9_-]{1,40}){0,3}\/?$/.test(path) ? path : undefined
 
 export function isMetricEvent(v: unknown): v is MetricEvent {
   return typeof v === 'string' && (METRIC_EVENTS as readonly string[]).includes(v)
