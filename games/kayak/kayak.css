@@ -471,12 +471,21 @@ summary { cursor: pointer; }
 .pin.canoe { background: #f2c230; }
 .pin.rowing { background: #d6261c; }
 #clubDoors .pin { position: absolute; left: 0; top: 0; width: 16px; height: 16px; }
-@media (max-width: 860px) { #clubCards .card { padding: 0.35rem 0.6rem 0.35rem 0.35rem; column-gap: 0.45rem; } #clubCards .card small, #clubCards .long { display: none; } #clubCards .card svg { width: 50px; height: 34px; } }
+@media (max-width: 860px) { #clubCards .card { padding: 0.35rem 0.6rem 0.35rem 0.35rem; column-gap: 0.45rem; } #clubCards .long { display: none; } #clubCards .card small { font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; } #clubCards .card svg { width: 50px; height: 34px; } }
 @media (max-width: 640px) { #clubCards .card svg { display: none; } #clubCards .card { grid-template-columns: 1fr; } }
 #clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
 #clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
 /* In the club the editors and the plan are a sheet at the side, the room still in view. */
-#menu.sheet { margin: auto max(16px, env(safe-area-inset-right)) auto auto; width: min(26rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+/* Opened with show(), not showModal(), so the scene's buttons work beside it: placed by hand, over the walk's overlay. */
+#menu.sheet { position: fixed; inset: calc(max(16px, env(safe-area-inset-top)) + 48px) max(16px, env(safe-area-inset-right)) auto auto; margin: 0; z-index: 6; width: min(26rem, calc(100vw - 32px)); max-height: calc(100dvh - 48px - 32px); overflow: auto; }
+/* Below the header's Pause and Sound; on a phone held upright, a bottom sheet above Back and Start over, the scene above it. */
+@media (orientation: portrait) and (max-width: 600px) {
+  #menu.sheet { inset: auto 16px calc(max(16px, env(safe-area-inset-bottom)) + 64px) 16px; width: auto; max-height: 52dvh; }
+}
+/* Finish from anywhere in a long step: its buttons stay at the bottom of the sheet. */
+#menu.sheet .step-buttons { position: sticky; bottom: -1px; margin-bottom: 0; padding-block: 0.5rem; background: var(--bg); }
+/* The walk's labels and cards wait for the scene. */
+#club.waiting #clubDoors, #club.waiting #clubCards, #club.waiting #clubNav { visibility: hidden; }
 #menu.sheet::backdrop { background: transparent; }
 #menu.sheet > h2, #menu.sheet .me, #menu.sheet .rotate-hint { display: none; }
 /* In the changing room your paddler stands full size beside the picker, so the picker drops its picture. */
@@ -489,3 +498,27 @@ summary { cursor: pointer; }
   background: rgba(10, 18, 18, 0.6); color: #fff; font: 0.9rem/1.2 system-ui, sans-serif; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: auto; }
 #outingBar button { min-height: 44px; padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
 #outingBar span { opacity: 0.85; }
+
+/* Rowing (scull.js): the stroke coach's numbers on its screen at your feet, a Look button on phones; no rudder. */
+#coach { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.1rem 0.6rem; padding: 0.4rem 0.6rem; border-radius: 6px;
+  background: #9aa88f; color: #101410; font: 600 0.75rem/1 ui-monospace, Menlo, monospace; box-shadow: 0 0 0 3px #161718; pointer-events: none; }
+#coach span { display: flex; align-items: baseline; gap: 0.25rem; }
+#coach b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+#coach small { font-size: 0.6rem; opacity: 0.75; }
+#lookBtn { display: none; }
+#hud.rowing #lookBtn { display: block; position: absolute; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px); transform: translateX(-50%); min-width: 88px; min-height: 48px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 18, 18, 0.6); color: #fff; font-weight: 600; pointer-events: auto; touch-action: none; }
+#hud.rowing .rudder, #hud.rowing #flow { display: none; }
+@media (hover: hover) and (pointer: fine) { #hud.rowing #lookBtn::after { content: ' (↑)'; font-weight: 400; opacity: 0.7; } }
+/* The erg's monitor: its numbers just above the machine's own. */
+#ergMon { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.7rem; padding: 0.5rem 0.7rem; border-radius: 6px;
+  background: #9aa88f; color: #101410; font: 600 0.8rem/1.05 ui-monospace, Menlo, monospace; box-shadow: 0 0 0 4px #161718; pointer-events: none; }
+#ergMon b, #ergMon span { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+#ergMon small { font-size: 0.6rem; margin-left: 0.2rem; opacity: 0.75; }
+#ergMon .other { grid-column: 1 / -1; font-size: 0.75rem; }
+#coach[hidden], #ergMon[hidden] { display: none; }
+/* The rowing club's changing room: no sleeves or buoyancy aid with an all-in-one. */
+#menu.rowing .kayak-only { display: none; }
+/* Rowing: messages above the coach, and the place name out of the way of the phone help. */
+#hud.rowing #flash { top: 20%; }
+#hud.rowing.helping #place { display: none; }

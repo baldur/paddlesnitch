@@ -5,8 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from '../kayak/metrics.js';
+import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent, placeTag } from '../kayak/metrics.js';
 import { cleanKit, randomKit, SKIN_TONES } from '../kayak/kit.js';
+import { PLACES } from '../kayak/club.js';
 
 const fits = ({ props }) => {
   assert.ok(Object.keys(props).length <= 10, `${Object.keys(props).length} props`);
@@ -71,7 +72,7 @@ test('a visit counts only the time the page is in view, sent as what was added s
   fits(first);
   assert.equal(sessionEvent(s, 600), null, 'nothing new while hidden');
   const all = createSession(0, 'walk');
-  for (const p of ['path', 'rowing', 'club', 'changing', 'boathouse', 'clubhouse', 'pontoon']) all.places.add(p);
+  for (const p of Object.keys(PLACES)) all.places.add(p); // both clubs, every room
   for (const i of ['keys', 'mouse', 'pad', 'touch']) all.inputs.add(i);
   fits(sessionEvent(all, 10, 'webgl2')); // every place on the walk and every control, still short enough
   assert.ok(!('places' in sessionEvent(createSession(0, 'menu'), 5).props), 'no places: left out, not empty');
@@ -142,4 +143,13 @@ test('the sender also goes once a minute while something waits, and when the pag
   listeners.pagehide();
   assert.equal(sent(), before + 2, 'leaving the page sends what waits');
   assert.equal(beacons.at(-1).body.events[0].props.mode, 'trial');
+});
+
+test("the walk's places as reported: the canoe club's by name, the rowing club's rooms as one, the erg room on its own", () => {
+  assert.equal(placeTag('boathouse'), 'boathouse');
+  assert.equal(placeTag('rboathouse'), 'rowing');
+  assert.equal(placeTag('erg'), 'erg');
+  const s = createSession(0, 'walk');
+  for (const p of ['rclub', 'rchanging', 'rboathouse', 'rclubhouse', 'rpontoon', 'erg']) s.places.add(p);
+  assert.equal(sessionEvent(s, 10).props.places, 'rowing,erg');
 });

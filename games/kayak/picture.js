@@ -161,7 +161,8 @@ export function clubSvg(which) {
       <rect x="14" y="26" width="62" height="27" fill="#e8dcc2"/><path d="M10 27L45 12L80 27Z" fill="#59626b"/>
       <rect x="22" y="36" width="14" height="17" fill="#3d3a36"/><rect x="42" y="36" width="14" height="17" fill="#3d3a36"/>
       <path d="M60 30l12 12M72 30l-12 12" stroke="#7a5534" stroke-width="2"/>
-      <rect x="92" y="22" width="2.4" height="32" fill="#f4f4f0"/><rect x="83" y="16" width="21" height="12" rx="1" fill="#d6261c"/>
+      <path d="M78 66h36l-3 2h-30z" fill="#f4f4f0"/><path d="M80 63l-9 7M108 63l9 7" stroke="#e8e2d0" stroke-width="1.2"/><rect x="69" y="69" width="5" height="2" fill="#7a1f2e"/><rect x="114" y="69" width="5" height="2" fill="#7a1f2e"/>
+      <rect x="92" y="56" width="5" height="8" fill="#7a1f2e"/><circle cx="94.5" cy="53.5" r="2.6" fill="#d9a27c"/>
     </svg>`;
   }
   return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}

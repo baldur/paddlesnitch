@@ -22,6 +22,10 @@ describe("the kayak game's analytics events pass the server's rules untouched", 
       { mode: { key: 'practice', solo: true }, o: {} },
       ...['start', 'wash', 'portage'].map((drill) => ({ mode: { key: `drill-${drill}`, drill, solo: true }, o: {} })),
       ...['cruise', 'hire'].map((outing) => ({ mode: { key: outing, outing, solo: true }, o: {} })),
+      // The rowing club's: a practice row, the Head of the River (a time trial), a 500 m on the erg.
+      { mode: { key: 'row-practice', solo: true }, o: {} },
+      { mode: { key: 'row-head' }, o: { format: 'interval' } },
+      { mode: { key: 'erg', solo: true }, o: {} },
     ]
     for (const { mode, o } of modes) {
       for (const from of ['walk', 'menu']) {

@@ -81,14 +81,20 @@ const CASES = [
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
+  // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
+  { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
+  { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
+  // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
+  { name: 'webkit, desktop, a practice row', engine: webkit, ctx: desktop, club: true, row: true },
+  { name: 'iphone safari, the ergs', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true, erg: true },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.club ? '&club' : ''}`);
+  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -100,14 +106,50 @@ async function play(c, page, errors) {
   await page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   const backend = await page.evaluate(() => window.kayak.gpu.backend);
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
+  // Which screen opened: the walk by default, the menu with #menu, a race link straight to its race.
+  const opened = await page.evaluate(() => ({ walk: !document.getElementById('club').hidden && !!window.kayak.club, menu: document.getElementById('menu').open }));
+  if (c.club && !(opened.walk && !opened.menu)) errors.push(`expected the walk, got ${JSON.stringify(opened)}`);
+  if (!c.club && opened.walk) errors.push(`the walk opened, expected ${c.raceLink ? 'the race link' : 'the menu'}`);
+  if (c.raceLink) return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}`;
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
-    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+    // Into the changing room, open the picker, and Back out past it (a modal
+    // picker once blocked every button in the room).
+    const steps = c.outing ? [[c.outing, null]]
+      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Go to the water', 'rpontoon'], ['Push off', null]])]
+      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
-      const spot = page.locator('#club button', { hasText: label }).first();
+      // Keys with the picker open: Backspace in one of its fields stays put, Esc goes back.
+      if (label === '@backspace') {
+        await page.locator('#menu input[name="hair"]').first().focus();
+        await page.keyboard.press('Backspace');
+        await page.waitForTimeout(300);
+        if (await page.evaluate(() => window.kayak.club.place !== 'changing' || !!window.kayak.club.to)) errors.push('Backspace in the picker left the room');
+        continue;
+      }
+      if (label === '@escape') {
+        await page.keyboard.press('Escape');
+        await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
+        continue;
+      }
+      const spot = label.startsWith('#') ? page.locator(label) : page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
       await (c.touch ? spot.tap() : spot.click());
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
+      if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
+    }
+    if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
+    // The erg: both sides together for each stroke, and the monitor counts down the 500 m.
+    if (c.erg) {
+      for (let i = 0; i < 6; i++) {
+        if (c.touch) await Promise.all([page.touchscreen.tap(page.viewportSize().width * 0.2, page.viewportSize().height * 0.6), page.touchscreen.tap(page.viewportSize().width * 0.8, page.viewportSize().height * 0.6)]);
+        else await page.keyboard.press('ArrowLeft');
+        await page.waitForTimeout(1600);
+      }
+      const shown = await page.locator('#ergMon').textContent();
+      const left = Number(/(\d+)m to go/.exec(shown)?.[1]);
+      if (!(left < 500)) errors.push(`the erg's monitor says ${shown}`);
+      return `the erg: ${shown.replace(/\s+/g, ' ').slice(0, 60)}`;
     }
   }
   // The practice time trial on your own, or a real river with the pack: there
@@ -172,6 +214,16 @@ async function play(c, page, errors) {
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
+  // Rowing really is rowing: a scull, the coach on its screen, gone while you look round.
+  if (c.row) {
+    const scull = await page.evaluate(() => !!window.kayak.boat.hull.scull);
+    if (!scull) errors.push('pushed off in something other than a scull');
+    if (await page.locator('#coach').isHidden()) errors.push("the stroke coach isn't showing");
+    await page.keyboard.down('ArrowUp');
+    await page.waitForTimeout(800);
+    if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
+    await page.keyboard.up('ArrowUp');
+  }
   // Analytics (metrics.js): the paddler and the session go out when the page is
   // hidden; locally they're kept in gameMetrics.sent instead of sent.
   if (c.outing) {
