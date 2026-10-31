@@ -8,9 +8,9 @@ import { BOATS, DEFAULT_BOAT, DECKS as DECK_SHAPES, HULL_SHAPES, PADDLES, FROM_H
 // default (a first visit gets one at random) and none has a name.
 export const SKIN_TONES = ['#f3d6c1', '#e8bf9f', '#d9a47c', '#c48a60', '#a96f47', '#8b5534', '#6c3f25', '#4b2a19'];
 
-// A man's or a woman's build: shoulders, chest, waist and hips, and the face.
-// Everything else (hair, hats, a beard) is open to either.
-export const BODIES = { man: 'Man', woman: 'Woman' };
+// Body types: the shape of the shoulders, chest and waist, nothing more. None
+// is tied to a gender, and everything else (hair, hats, a beard) goes with any.
+export const BODIES = { broad: 'Broad', slim: 'Slim', curvy: 'Curvy' };
 export const HAIRS = { short: 'Short', crop: 'Cropped', ponytail: 'Ponytail', bun: 'Bun', long: 'Long', none: 'Shaved' };
 export const HATS = { none: 'None', cap: 'Cap', visor: 'Visor', beanie: 'Beanie' };
 export const BEARDS = { none: 'None', stubble: 'Stubble', moustache: 'Moustache', beard: 'Beard' };
@@ -23,7 +23,7 @@ const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
 
 const DEFAULT = {
   skin: SKIN_TONES[3],
-  body: 'man',
+  body: 'broad',
   hair: 'short', hairColour: '#3b2414',
   hat: 'cap', hatColour: '#1d4ed8',
   beard: 'none',
@@ -78,19 +78,18 @@ const DECKS = ['#dc2626', '#facc15', '#2563eb', '#16a34a', '#f97316', '#e5e5e5',
 const LENSES = ['#0ea5e9', '#f97316', '#18181b', '#a855f7', '#16a34a'];
 const HAIR = ['#1c1410', '#3b2414', '#6b4423', '#a0703c', '#d6b370', '#8c8c8c', '#b5452b'];
 
-// A first visit's paddler: a random skin tone, build, hair and hat, colours;
-// the middle boat. rand: () => 0..1.
+// A first visit's paddler: a random skin tone, body type, hair, hat and
+// colours, each picked on its own; the middle boat. rand: () => 0..1.
 export function randomKit(rand = Math.random, hull = null) {
   const pick = (list) => list[Math.floor(rand() * list.length)];
-  const body = pick(Object.keys(BODIES));
   return cleanKit({
     skin: pick(SKIN_TONES),
-    body,
-    hair: pick(body === 'woman' ? ['ponytail', 'bun', 'long', 'short'] : ['short', 'crop', 'short', 'none']),
+    body: pick(Object.keys(BODIES)),
+    hair: pick(Object.keys(HAIRS)),
     hairColour: pick(HAIR),
     hat: pick(['none', 'cap', 'cap', 'visor']),
     hatColour: pick(TOPS),
-    beard: body === 'man' ? pick(['none', 'none', 'stubble', 'beard']) : 'none',
+    beard: pick(['none', 'none', 'none', 'stubble', 'moustache', 'beard']),
     sleeves: pick(SLEEVES),
     top: pick(TOPS),
     aid: rand() < 0.3,

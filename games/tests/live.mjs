@@ -79,8 +79,8 @@ try {
   await ann.page.goto(`${BASE}/games/kayak/#debug`);
   await ann.page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   await ann.page.waitForFunction(() => document.getElementById('account').textContent.includes('Signed in'), null, { timeout: 10_000 });
-  // Ann makes her paddler: a woman's build, a ponytail, the darkest skin tone.
-  await ann.page.check('#menu input[name="body"][value="woman"]');
+  // Ann makes her paddler: a curvy body type, a ponytail, the darkest skin tone.
+  await ann.page.check('#menu input[name="body"][value="curvy"]');
   await ann.page.check('#menu input[name="hair"][value="ponytail"]');
   await ann.page.check('#menu input[name="skin"] >> nth=7');
   await toRaces(ann.page);
@@ -123,7 +123,7 @@ try {
   check(names.includes('You') && names.includes('Ann H.'), `Bob's race has ${names.join(' and ')}`);
   const annKit = await kayak(ann.page, () => JSON.parse(localStorage.getItem('snitchmedia:kayak:kit')));
   const annLook = await kayak(bob.page, () => window.kayak.liveries.get(window.kayak.race.racers.find((r) => r.remote)).key);
-  check(annLook.startsWith(`${annKit.skin},woman,ponytail,`), "and Ann's paddler, as she made her");
+  check(annLook.startsWith(`${annKit.skin},curvy,ponytail,`), "and Ann's paddler, as she made her");
 
   // Ann's starter calls the start, and Bob's game follows it.
   for (const p of [ann, bob]) await p.page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 60_000 });
@@ -156,7 +156,7 @@ try {
     await kayak(ann.page, () => localStorage.clear());
     await ann.page.goto(`${BASE}/games/kayak/#debug`);
     await ann.page.waitForFunction((skin) => document.querySelector('#menu input[name="skin"]:checked')?.value === skin
-      && document.querySelector('#menu input[name="body"]:checked')?.value === 'woman'
+      && document.querySelector('#menu input[name="body"]:checked')?.value === 'curvy'
       && document.querySelector('#menu input[name="hair"]:checked')?.value === 'ponytail', annKit.skin, { timeout: 15_000 });
     check(true, "Ann's paddler came back from her account");
 

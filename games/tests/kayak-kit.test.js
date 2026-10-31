@@ -46,12 +46,12 @@ test('a saved look is read back safely: anything unknown falls back', () => {
   const kit = randomKit(() => 0.5);
   assert.deepEqual(cleanKit(kit), kit);
   assert.equal(cleanKit({ paddle: 'canoe' }).paddle, 'wing');
-  const bad = cleanKit({ skin: '#00ff00', body: 'robot', hair: 'mohican', hairColour: 'red', hat: 'helmet', hatColour: 'blue', beard: 'goatee', aid: 'yes', aidColour: '#zzzzzz', sleeves: 'none', top: '#ABCDEF', boat: 'canoe', deck: '#12345', stripe: null, glasses: 'monocle', deckShape: 'sail', hullShape: 'flat' });
+  const bad = cleanKit({ skin: '#00ff00', body: 'man', hair: 'mohican', hairColour: 'red', hat: 'helmet', hatColour: 'blue', beard: 'goatee', aid: 'yes', aidColour: '#zzzzzz', sleeves: 'none', top: '#ABCDEF', boat: 'canoe', deck: '#12345', stripe: null, glasses: 'monocle', deckShape: 'sail', hullShape: 'flat' });
   assert.equal(bad.glasses, 'none');
   assert.equal(bad.deckShape, 'modern');
   assert.equal(bad.hullShape, 'round');
   assert.ok(SKIN_TONES.includes(bad.skin), 'skin only from the tones');
-  assert.equal(bad.body, 'man');
+  assert.equal(bad.body, 'broad');
   assert.equal(bad.hair, 'short');
   assert.equal(bad.hat, 'cap');
   assert.equal(bad.beard, 'none');
@@ -86,30 +86,36 @@ test('a paddler saved before body types keeps their look: a cap stays a cap, hai
   assert.ok(!('head' in haired) && !('headColour' in haired), 'the old fields are gone');
 });
 
-test('a first visit can be a man or a woman, and a beard only comes with a man', () => {
+test("a first visit's body type, hair and beard are each picked on their own: every pairing turns up", () => {
   const seen = new Set();
-  for (let i = 0; i < 40; i++) {
-    let n = i * 7919;
-    const k = randomKit(() => ((n = (n * 16807 + 11) % 2147483647) / 2147483647));
-    seen.add(k.body);
-    if (k.body === 'woman') assert.equal(k.beard, 'none');
+  let n = 7919;
+  const rand = () => ((n = (n * 16807 + 11) % 2147483647) / 2147483647);
+  for (let i = 0; i < 400; i++) {
+    const k = randomKit(rand);
+    seen.add(`${k.body}:${k.beard !== 'none'}`);
+    seen.add(`${k.body}:${k.hair}`);
   }
-  assert.deepEqual([...seen].sort(), ['man', 'woman']);
+  for (const body of Object.keys(BODIES)) {
+    for (const beard of [true, false]) assert.ok(seen.has(`${body}:${beard}`), `${body} with${beard ? '' : 'out'} a beard`);
+    for (const hair of Object.keys(HAIRS)) assert.ok(seen.has(`${body}:${hair}`), `${body} with ${hair} hair`);
+  }
 });
 
-test("a woman's build: narrower shoulders, a waist, and the arms from her shoulders", () => {
-  const l = livery(cleanKit({ body: 'woman' }));
-  const man = paddlerMesh({ ...l, body: 'man' });
-  const woman = paddlerMesh(l);
-  assert.notDeepEqual(woman.vertices, man.vertices);
+test('the body types differ in shape only: narrower shoulders than broad, and the arms from those shoulders', () => {
+  const l = livery(cleanKit({}));
   const widest = (mesh, y0, y1) => {
     let w = 0;
     for (let i = 0; i < mesh.vertices.length; i += 9) if (mesh.vertices[i + 1] > y0 && mesh.vertices[i + 1] < y1) w = Math.max(w, Math.abs(mesh.vertices[i]));
     return w;
   };
-  assert.ok(widest(woman, 0.55, 0.62) < widest(man, 0.55, 0.62), 'narrower at the shoulders');
-  assert.ok(shoulderOf('woman').x < shoulderOf('man').x);
-  assert.equal(shoulderOf(undefined), shoulderOf('man'), "a rival with no body set is a man's build");
+  const broad = paddlerMesh({ ...l, body: 'broad' });
+  for (const body of ['slim', 'curvy']) {
+    const mesh = paddlerMesh({ ...l, body });
+    assert.notDeepEqual(mesh.vertices, broad.vertices);
+    assert.ok(widest(mesh, 0.55, 0.62) < widest(broad, 0.55, 0.62), `${body}: narrower at the shoulders`);
+    assert.ok(shoulderOf(body).x < shoulderOf('broad').x);
+  }
+  assert.equal(shoulderOf(undefined), shoulderOf('broad'), 'a rival with no body type set is broad');
 });
 
 test('every hair, hat and beard is drawn, and a buoyancy aid goes over the top', () => {
@@ -124,7 +130,7 @@ test('every hair, hat and beard is drawn, and a buoyancy aid goes over the top',
   assert.ok(paddlerMesh({ ...l, aid: [1, 0, 0] }).count > paddlerMesh(l).count);
   assert.notEqual(paddlerSvg(cleanKit({ aid: true })), paddlerSvg(cleanKit({ aid: false })));
   // Small enough for a pack of rivals.
-  assert.ok(paddlerMesh({ ...l, body: 'woman', hair: 'long', hat: 'beanie', beard: 'beard', aid: [1, 0, 0], glasses: 'round' }).count / 3 < 900);
+  assert.ok(paddlerMesh({ ...l, body: 'curvy', hair: 'long', hat: 'beanie', beard: 'beard', aid: [1, 0, 0], glasses: 'round' }).count / 3 < 900);
 });
 
 test('the look reaches the meshes: short sleeves or long', () => {

@@ -4,17 +4,17 @@
 import { boatById, hullFor } from './boats.js';
 
 // Face on, sitting in the boat holding the paddle: viewBox 0 0 120 120. A
-// man's or a woman's build, a face, hair under a hat, a beard, a buoyancy aid.
+// body type, a face, hair under a hat, a beard, a buoyancy aid.
 const shade = (hex, by) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - by)).toString(16).padStart(2, '0')).join('');
 export function paddlerSvg(kit) {
-  const woman = kit.body === 'woman';
+  const narrow = kit.body !== 'broad';
   const arm = (side) => {
-    const [sx, hx] = side < 0 ? [woman ? 46 : 43, 22] : [woman ? 74 : 77, 98];
+    const [sx, hx] = side < 0 ? [narrow ? 46 : 43, 22] : [narrow ? 74 : 77, 98];
     const elbow = [sx + side * 9, 74];
     const sleeve = kit.sleeves === 'long'
       ? `<path d="M${sx} 56 L${elbow[0]} ${elbow[1]} L${hx} 82" stroke="${kit.top}" />`
-      : `<path d="M${sx} 56 L${(sx + elbow[0]) / 2} 65" stroke="${kit.top}" /><path d="M${(sx + elbow[0]) / 2} 65 L${elbow[0]} ${elbow[1]} L${hx} 82" stroke="${kit.skin}" stroke-width="${woman ? 6 : 7}" />`;
-    return `<g fill="none" stroke-width="${woman ? 8 : 9}" stroke-linecap="round" stroke-linejoin="round">${sleeve}</g><circle cx="${hx}" cy="82" r="5" fill="${kit.skin}" />`;
+      : `<path d="M${sx} 56 L${(sx + elbow[0]) / 2} 65" stroke="${kit.top}" /><path d="M${(sx + elbow[0]) / 2} 65 L${elbow[0]} ${elbow[1]} L${hx} 82" stroke="${kit.skin}" stroke-width="${narrow ? 6 : 7}" />`;
+    return `<g fill="none" stroke-width="${narrow ? 8 : 9}" stroke-linecap="round" stroke-linejoin="round">${sleeve}</g><circle cx="${hx}" cy="82" r="5" fill="${kit.skin}" />`;
   };
   const hair = kit.hairColour;
   const hatted = kit.hat === 'cap' || kit.hat === 'beanie'; // a visor has no crown
@@ -41,18 +41,19 @@ export function paddlerSvg(kit) {
     <circle cx="54.5" cy="33" r="1.7" fill="#1c1917" /><circle cx="65.5" cy="33" r="1.7" fill="#1c1917" />
     <path d="M51.5 29.5 L57.5 29" stroke="${brow}" stroke-width="1.6" stroke-linecap="round" /><path d="M62.5 29 L68.5 29.5" stroke="${brow}" stroke-width="1.6" stroke-linecap="round" />
     <path d="M60 34 L59 38.5 L61 38.5" stroke="${shade(kit.skin, 0.25)}" stroke-width="1.1" fill="none" stroke-linecap="round" />
-    <path d="M56 42 Q60 44.5 64 42" stroke="${woman ? '#b4544f' : shade(kit.skin, 0.4)}" stroke-width="${woman ? 2 : 1.4}" fill="none" stroke-linecap="round" />`;
+    <path d="M56 42 Q60 44.5 64 42" stroke="${shade(kit.skin, 0.4)}" stroke-width="1.6" fill="none" stroke-linecap="round" />`;
   const beard = {
     stubble: `<path d="M46 36 Q47 49 60 50 Q73 49 74 36 Q70 45 60 45 Q50 45 46 36Z" fill="${hair}" opacity="0.35" />`,
     moustache: `<path d="M54 40.5 Q60 38 66 40.5 Q60 42 54 40.5Z" fill="${hair}" />`,
     beard: `<path d="M46 36 Q47 50 60 51 Q73 50 74 36 Q71 44 66 44 Q60 46 54 44 Q49 44 46 36Z" fill="${hair}" /><path d="M54 40.5 Q60 38 66 40.5 Q60 42 54 40.5Z" fill="${hair}" />`,
   }[kit.beard] ?? '';
-  const torso = woman
-    ? 'M45 57 Q60 50 75 57 Q73 68 70 74 Q75 85 76 96 L44 96 Q45 85 50 74 Q47 68 45 57Z'
-    : 'M40 56 Q60 48 80 56 L76 96 L44 96Z';
+  const torso = {
+    curvy: 'M45 57 Q60 50 75 57 Q73 68 70 74 Q75 85 76 96 L44 96 Q45 85 50 74 Q47 68 45 57Z',
+    slim: 'M45 57 Q60 51 75 57 L73 96 L47 96Z',
+  }[kit.body] ?? 'M40 56 Q60 48 80 56 L76 96 L44 96Z';
   const aid = !kit.aid ? '' : `
-    <path d="${woman ? 'M47 60 Q60 55 73 60 Q72 70 70 75 Q73 82 74 89 L46 89 Q47 82 50 75 Q48 70 47 60Z' : 'M43 59 Q60 54 77 59 L75 89 L45 89Z'}" fill="${kit.aidColour}" />
-    <rect x="${woman ? 47 : 45}" y="79" width="${woman ? 26 : 30}" height="3.5" fill="${shade(kit.aidColour, 0.6)}" /><rect x="57" y="78" width="6" height="5.5" rx="1" fill="#d4d4d0" />`;
+    <path d="${{ curvy: 'M47 60 Q60 55 73 60 Q72 70 70 75 Q73 82 74 89 L46 89 Q47 82 50 75 Q48 70 47 60Z', slim: 'M47 60 Q60 55 73 60 L72 89 L48 89Z' }[kit.body] ?? 'M43 59 Q60 54 77 59 L75 89 L45 89Z'}" fill="${kit.aidColour}" />
+    <rect x="${narrow ? 47 : 45}" y="79" width="${narrow ? 26 : 30}" height="3.5" fill="${shade(kit.aidColour, 0.6)}" /><rect x="57" y="78" width="6" height="5.5" rx="1" fill="#d4d4d0" />`;
   const frame = '#18181b';
   const lens = kit.glassesColour;
   const glasses = {
@@ -70,7 +71,7 @@ export function paddlerSvg(kit) {
     ${back}
     <path d="${torso}" fill="${kit.top}" />
     ${aid}
-    <rect x="${woman ? 56 : 55}" y="42" width="${woman ? 8 : 10}" height="10" fill="${kit.skin}" />
+    <rect x="${narrow ? 56 : 55}" y="42" width="${narrow ? 8 : 10}" height="10" fill="${kit.skin}" />
     <circle cx="60" cy="33" r="15" fill="${kit.skin}" />
     ${face}
     ${beard}
