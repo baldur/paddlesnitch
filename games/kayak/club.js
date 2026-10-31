@@ -35,7 +35,7 @@ export function firstPlace({ invited = false, last = null } = {}) {
 // you stand in, so the sky and the water never show.
 const UNDER = -60;
 export const PARAPET = 7.6; // the top of Caversham Bridge's parapet (world.js: deck 6.5, parapet 1.1)
-export const SWAN_WALK = [7, 12]; // the stretch of parapet the swan paces, metres along the road from the camera
+export const SWAN_WALK = [6.5, 12.5]; // the stretch of parapet the swan paces, metres along the road from the camera
 export const PATH = { height: 9.8, lean: 5.5, aside: 7, back: 11 }; // the eye on Caversham Bridge (how high, how far over the parapet); how far back from the club you stand
 export const HIPS = 0.9; // a standing paddler's hips above the floor (the paddler mesh starts at the hips)
 export const ROOMS = {
@@ -104,6 +104,10 @@ export function clubShots(course) {
     const k = -side * Math.sign(road[0] * look[1] - road[1] * look[0]) || 1;
     const on = (d) => [o[0] + road[0] * d * k + across[0] * side * 5.75, PARAPET, o[1] + road[1] * d * k + across[1] * side * 5.75];
     swan = { from: on(SWAN_WALK[0]), to: on(SWAN_WALK[1]) };
+    // Which quarter turn from facing up its stretch faces it towards you.
+    const up = [swan.to[0] - swan.from[0], swan.to[2] - swan.from[2]];
+    const toYou = [bridge.eye[0] - swan.from[0], bridge.eye[2] - swan.from[2]];
+    swan.side = Math.sign(-up[1] * toYou[0] + up[0] * toYou[1]) || 1;
   }
   // The club from the road: on its land side, looking at the door.
   const entrance = at(...add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back)).filter((_, i) => i !== 1), 1.7);
@@ -258,27 +262,91 @@ export function legsMesh(skin, shorts = [0.12, 0.13, 0.16], shoes = [0.9, 0.9, 0
   return m.build();
 }
 
-// The swan on Caversham Bridge, a little confused: it sits, stands up, waddles
-// one way, stops and looks about, turns round, waddles back, has another think,
-// and sits down again. `t` in seconds; returns where it is along its stretch
-// (0..1), which way it faces along it (1 or -1, with turns in between as
-// `turn` 0..1), how far it has stood up (0..1), and a waddle for the steps.
+// The swan on Caversham Bridge, a little confused. It sits in the middle of
+// its stretch of parapet facing you, gets up, turns one way or the other (a
+// fresh coin toss each time round), waddles that way, looks about, turns
+// round, waddles back, half turns as if unsure, faces you again and sits down.
+// `t` in seconds; `side` is the turn (1 or -1) that faces it towards you from
+// facing up its stretch; `seed` varies the coin tosses between visits. Returns
+// where it is along its stretch (0..1), which way it faces (radians from up the
+// stretch), how far it has stood (0..1), a turn of the head and the waddle.
 export const SWAN_LOOP = 16;
-export function confusedSwan(t) {
-  const u = ((t % SWAN_LOOP) + SWAN_LOOP) % SWAN_LOOP;
+export function confusedSwan(t, side = 1, seed = 0) {
+  const n = Math.floor(t / SWAN_LOOP);
+  const u = t - n * SWAN_LOOP;
   const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
   const span = (a, b) => ease((u - a) / (b - a));
+  const coin = (k) => (Math.abs(Math.sin((k + seed) * 12.9898) * 43758.5453) % 1 < 0.5 ? 1 : -1);
+  const dir = coin(n);
   const stand = u < 4 ? 0 : u < 4.8 ? span(4, 4.8) : u < 13.6 ? 1 : 1 - span(13.6, 14.4);
-  let along = 0.1;
-  if (u >= 4.8) along = 0.1 + 0.75 * span(4.8, 8);
-  if (u >= 10.4) along = 0.85 - 0.75 * span(10.4, 12.6);
-  // Faces up the stretch; turns round once it has looked about, then half turns
-  // back, unsure; sitting again, it shuffles round to face up the stretch.
-  let turn = u < 4 ? 1 - span(1, 2.5) : span(9, 10.2);
-  if (u >= 12.8) turn = 1 - 0.5 * Math.sin(Math.PI * span(12.8, 13.6));
-  const walking = (u > 4.8 && u < 8) || (u > 10.4 && u < 12.6);
+  // Out from the middle towards the end it chose, and back.
+  let along = 0.5;
+  if (u >= 5) along = 0.5 + dir * 0.4 * span(5, 8);
+  if (u >= 10.4) along = 0.5 + dir * 0.4 * (1 - span(10.4, 12.6));
+  // Facing: you while sitting; the way it goes; round; half back, unsure; you again.
+  const you = (side * Math.PI) / 2;
+  const out = dir > 0 ? 0 : Math.PI;
+  const back = out + Math.PI;
+  const toward = (from, to) => from + (((to - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+  let face = you;
+  if (u >= 2.8) face = you + (toward(you, out) - you) * span(2.8, 4);
+  if (u >= 9) face = out + Math.PI * span(9, 10.2) * (dir > 0 ? 1 : -1);
+  if (u >= 12.8) face = back - (Math.PI / 3) * Math.sin(Math.PI * span(12.8, 13.6)) * (dir > 0 ? 1 : -1);
+  if (u >= 14.6) face = back + (toward(back, you) - back) * span(14.6, 15.8);
+  const walking = (u > 5 && u < 8) || (u > 10.4 && u < 12.6);
   const look = u > 8.1 && u < 9 ? Math.sin((u - 8.1) * 14) * 0.5 : 0;
-  return { along, turn, stand, look, waddle: walking ? Math.sin(u * 12) : 0 };
+  return { along, face, stand, look, dir, waddle: walking ? Math.sin(u * 12) : 0 };
+}
+
+// A swan to look at close up (the river's swans are a few boxes, fine at a
+// distance): a rounded body rising to the tail, an S-curved neck, a head with
+// an orange beak and black knob. Facing -z, sitting on y 0.
+export function bridgeSwanMesh() {
+  const m = new MeshBuilder();
+  const white = [0.97, 0.97, 0.95];
+  const shade = [0.9, 0.9, 0.88];
+  const seg = 8;
+  // Rings of the body along z: [z, half width, bottom, top].
+  const body = [[-0.42, 0.06, 0.12, 0.2], [-0.34, 0.16, 0.05, 0.27], [-0.18, 0.24, 0.02, 0.33], [0.02, 0.27, 0.02, 0.35], [0.22, 0.25, 0.04, 0.35], [0.38, 0.17, 0.09, 0.36], [0.5, 0.04, 0.24, 0.4]];
+  const ring = ([z, w, lo, hi], k) => {
+    const a = (k / seg) * Math.PI * 2;
+    const mid = (lo + hi) / 2;
+    return [Math.cos(a) * w, mid + Math.sin(a) * (hi - lo) / 2, z];
+  };
+  const centre = [0, 0.2, 0.03];
+  for (let r = 0; r < body.length - 1; r++) {
+    for (let k = 0; k < seg; k++) {
+      const [a, b, c, d] = [ring(body[r], k), ring(body[r], k + 1), ring(body[r + 1], k + 1), ring(body[r + 1], k)];
+      const out = [0, 1, 2].map((i) => (a[i] + c[i]) / 2 - centre[i]);
+      const col = k > seg / 2 ? shade : white;
+      m.triFacing(a, b, c, col, out);
+      m.triFacing(a, c, d, col, out);
+    }
+  }
+  // The neck: a tube up an S curve from the breast to the head.
+  const neck = [[0, 0.26, -0.36], [0, 0.42, -0.42], [0, 0.58, -0.38], [0, 0.72, -0.3], [0, 0.82, -0.3], [0, 0.88, -0.36]];
+  const radius = [0.065, 0.055, 0.048, 0.045, 0.045, 0.048];
+  const sides = 6;
+  const around = (i, k) => {
+    const [x, y, z] = neck[i];
+    const a = (k / sides) * Math.PI * 2;
+    return [x + Math.cos(a) * radius[i], y, z + Math.sin(a) * radius[i]];
+  };
+  for (let i = 0; i < neck.length - 1; i++) {
+    for (let k = 0; k < sides; k++) {
+      const [a, b, c, d] = [around(i, k), around(i, k + 1), around(i + 1, k + 1), around(i + 1, k)];
+      const out = [Math.cos(((k + 0.5) / sides) * Math.PI * 2), 0, Math.sin(((k + 0.5) / sides) * Math.PI * 2)];
+      m.triFacing(a, b, c, white, out);
+      m.triFacing(a, c, d, white, out);
+    }
+  }
+  // Head, beak and the black knob.
+  m.sphere([0, 0.9, -0.4], 0.07, white, 4, 7);
+  m.prism([[-0.035, 0.87, -0.45], [0.035, 0.87, -0.45], [0.035, 0.92, -0.45], [-0.035, 0.92, -0.45]],
+    [[-0.012, 0.865, -0.58], [0.012, 0.865, -0.58], [0.012, 0.885, -0.58], [-0.012, 0.885, -0.58]], [0.95, 0.45, 0.1]);
+  m.box([-0.03, 0.9, -0.47], [0.03, 0.94, -0.44], [0.08, 0.08, 0.08]);
+  m.box([-0.072, 0.9, -0.43], [0.072, 0.915, -0.41], [0.08, 0.08, 0.08]); // eyes
+  return m.build();
 }
 
 // The swan's legs, for standing: dark grey, under its body, `SWAN_LEGS` tall.

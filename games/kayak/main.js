@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE } from './club.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh } from './club.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
@@ -542,6 +542,7 @@ addEventListener('keydown', (e) => {
 });
 const stillMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let club = null; // { shots, place, from, to, t, length, plan, spots }
+const SWAN_SEED = Math.floor(Math.random() * 1000); // which way the bridge swan goes, different each visit
 
 function enterClub() {
   const shots = clubShots(mode.course);
@@ -709,7 +710,7 @@ function placeClub() {
     renderer.place(meshes.club, [translation(0, 0, 0)]);
     meshes.rack = new Map();
     meshes.legs = new Map();
-    meshes.bridgeSwan = renderer.createMesh(swanMesh());
+    meshes.bridgeSwan = renderer.createMesh(bridgeSwanMesh());
     meshes.swanLegs = renderer.createMesh(swanLegsMesh());
   }
   // Your kit as it is now, so the picker's changes show at once.
@@ -728,11 +729,11 @@ function placeClub() {
   // The confused swan on Caversham Bridge's parapet.
   const walk = club.shots.swan;
   if (walk) {
-    const sw = confusedSwan(performance.now() / 1000);
+    const sw = confusedSwan(performance.now() / 1000, walk.side, SWAN_SEED);
     const dir = normalize([walk.to[0] - walk.from[0], 0, walk.to[2] - walk.from[2]]);
     const pos = walk.from.map((v, i) => v + (walk.to[i] - v) * sw.along);
-    // Faces along the parapet, turning round through facing the river; its head turns as it looks about.
-    const a = Math.atan2(dir[0], -dir[2]) + Math.PI * sw.turn + sw.look;
+    // Faces up or down the parapet or towards you; its head turns as it looks about.
+    const a = Math.atan2(dir[0], -dir[2]) + sw.face + sw.look;
     const f = [Math.sin(a), 0, -Math.cos(a)];
     const big = SWAN_SIZE; // larger than life, so it shows from up on the bridge
     const lift = sw.stand * SWAN_LEGS * big;

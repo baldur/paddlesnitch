@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../kayak/course.js';
 import { waterMap } from '../kayak/water.js';
 import { groundAt } from '../kayak/world.js';
-import { PLACES, START, DOOR_LABELS, ROOMS, PARAPET, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh } from '../kayak/club.js';
+import { PLACES, START, DOOR_LABELS, ROOMS, PARAPET, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -102,18 +102,28 @@ test('the rooms and the red boards are a small mesh with no NaN', async () => {
   assert.ok(count / 3 < 3000, `${count / 3} triangles`);
 });
 
-test('the swan on the bridge sits, stands, waddles one way, turns round, waddles back and sits, with no jumps where the loop starts again', () => {
-  const at = (t) => confusedSwan(t);
+test('the swan on the bridge sits facing you, stands, waddles off one way or the other, turns round, comes back and sits, with no jumps', () => {
+  const at = (t, seed = 0) => confusedSwan(t, 1, seed);
   assert.equal(at(1).stand, 0, 'sitting to begin with');
+  assert.ok(Math.abs(at(1).face - Math.PI / 2) < 1e-9, 'facing you');
   assert.equal(at(6).stand, 1, 'then standing');
-  assert.ok(at(8).along > at(5).along + 0.5, 'waddles up its stretch');
-  assert.ok(at(8).turn < 0.1 && at(10.3).turn > 0.9, 'and turns round');
-  assert.ok(at(12.7).along < at(10.3).along - 0.5, 'and waddles back');
+  const out = at(8);
+  assert.ok(Math.abs(out.along - 0.5) > 0.35, 'waddles off to one end');
+  assert.ok(Math.abs(at(12.7).along - 0.5) < 0.05, 'and back to the middle');
   assert.equal(at(15).stand, 0, 'and sits down');
-  for (let t = 0; t < SWAN_LOOP * 2; t += 0.05) {
-    const [a, b] = [at(t), at(t + 0.05)];
-    for (const k of ['along', 'turn', 'stand']) assert.ok(Math.abs(a[k] - b[k]) < 0.1, `${k} jumps at ${t.toFixed(2)} s`);
-    assert.ok(a.along >= 0 && a.along <= 1);
+  // Some times one way, some times the other.
+  const ways = new Set(Array.from({ length: 20 }, (_, n) => confusedSwan(n * SWAN_LOOP + 8, 1).dir));
+  assert.deepEqual([...ways].sort(), [-1, 1]);
+  for (const seed of [0, 7, 99]) {
+    for (let t = 0; t < SWAN_LOOP * 6; t += 0.05) {
+      const [a, b] = [at(t, seed), at(t + 0.05, seed)];
+      for (const k of ['along', 'stand', 'face']) {
+        const d = k === 'face' ? Math.abs(((b[k] - a[k] + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) : Math.abs(a[k] - b[k]);
+        // A turn of up to 5 radians a second is a swan turning; more is a jump.
+        assert.ok(d < (k === 'face' ? 0.25 : 0.15), `${k} jumps at ${t.toFixed(2)} s (seed ${seed})`);
+      }
+      assert.ok(a.along >= 0 && a.along <= 1);
+    }
   }
 });
 
@@ -137,4 +147,5 @@ test('your paddler standing in the changing room has legs to the floor; the swan
   for (let i = 1; i < legs.vertices.length; i += 9) low = Math.min(low, legs.vertices[i]);
   assert.ok(Math.abs(shots.changingStand[1] + low - floor) < 0.01, 'shoes on the floor');
   assert.ok(swanLegsMesh().vertices.every(Number.isFinite));
+  assert.ok(bridgeSwanMesh().vertices.every(Number.isFinite));
 });
