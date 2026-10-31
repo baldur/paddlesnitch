@@ -204,3 +204,13 @@ test("the water's reflections ease through the island ends rather than jump", as
   const fresh = riverView(course, course.start, view, 1 / 60);
   assert.equal(fresh.x, pointAt(course, course.start).x);
 });
+
+test('a long boat (its own `shape`) meets the bank along its whole length, not just round its middle', () => {
+  // A bank everything beyond x = 5 is dry, its edge facing back along -x.
+  const shore = { dry: (x) => x > 5, out: (x, z) => ({ x: 5, z, nx: -1, nz: 0 }) };
+  const long = createBoat({ heading: Math.PI / 2 }); // bow along +x
+  long.shape = { bow: 9, stern: 9, half: 1 };
+  assert.ok(bounceOffShore(long, shore, 1 / 120), "its bow 9 m out is on the bank: pushed off");
+  const kayak = createBoat({ heading: Math.PI / 2 });
+  assert.ok(!bounceOffShore(kayak, shore, 1 / 120), "a kayak's bow (3.3 m) isn't");
+});

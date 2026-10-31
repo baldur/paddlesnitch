@@ -20,7 +20,7 @@ function sourceFiles(dir: string): string[] {
     if (name === 'node_modules' || name.startsWith('.')) continue
     const full = path.join(dir, name)
     if (statSync(full).isDirectory()) out.push(...sourceFiles(full))
-    else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name)) out.push(full)
+    else if (/\.(ts|tsx|kt|swift)$/.test(name) && !/\.test\./.test(name) && !/Tests?\.(kt|swift)$/.test(name)) out.push(full)
   }
   return out
 }
@@ -65,6 +65,7 @@ const SERVICES: Record<string, string> = {
 // Our own site, legal links and test-only values -- not processors.
 const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.org.uk', 'creativecommons.org',
   'evil.example.com', 'example.invalid',
+  'example.com',   // the Android app asks which app opens a web link (App.kt); nothing is fetched
   'check-for-flooding.service.gov.uk', 'waterlevels.sepa.org.uk', 'waterinfo.rws.nl', 'www.waterinfo.be',   // links to a gauge's own page
   'kayak.spw.wallonie.be',   // a link to Wallonia's kayak status; nothing is fetched from it
   'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
@@ -84,7 +85,13 @@ const BUILD_TIME_SOURCES = new Set([
 
 describe('privacy page names every outside service the code uses', () => {
   const hosts = new Set<string>()
-  for (const f of [...sourceFiles(path.join(repo, 'apps/web/src')), ...sourceFiles(path.join(repo, 'packages'))]) {
+  // The phone apps too: the Android app loads Esri's tiles itself.
+  const apps = [
+    path.join(repo, 'mobile/android/app/src/main'),
+    path.join(repo, 'mobile/ios/App/Sources'),
+    ...readdirSync(path.join(repo, 'mobile/ios/Packages')).map(p => path.join(repo, 'mobile/ios/Packages', p, 'Sources')),
+  ].filter(d => { try { return statSync(d).isDirectory() } catch { return false } })
+  for (const f of [...sourceFiles(path.join(repo, 'apps/web/src')), ...sourceFiles(path.join(repo, 'packages')), ...apps.flatMap(sourceFiles)]) {
     for (const m of readFileSync(f, 'utf8').matchAll(/https:\/\/([a-z0-9.-]+\.[a-z]{2,})/g)) hosts.add(m[1])
   }
 

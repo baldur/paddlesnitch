@@ -19,6 +19,7 @@ import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
 import { erasePlanDemand, erasePlanShares } from '@paddlesnitch/waterways/plan-store'
 import { erasePortages } from '@paddlesnitch/waterways/portage-store'
+import { eraseGameTimes } from '@paddlesnitch/core/games'
 
 const REAUTH_TEXT = 'For your safety, deleting your account needs a recent sign-in. Please sign in again.'
 
@@ -171,6 +172,10 @@ export async function DELETE(req: Request) {
   if (linked) await disconnectGoogle(linked)
   // By sub: a Google account's username isn't its email.
   await deleteUserBySub(user.id)
+  // Their times on the game's public leaderboards (games/kayak/leaderboard/;
+  // live races expire within a day). After the sign-in is gone, so a game tab
+  // still open can't post a time back in between (#742).
+  await eraseGameTimes(user.id)
 
   // 8. Clear cookies on the response so the browser stops sending stale ones.
   const res = NextResponse.json({ ok: true }, { status: 200 })

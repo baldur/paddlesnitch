@@ -27,6 +27,7 @@ import {
 import { putStravaTokens, putAthleteIndex, getUserIdByAthleteId } from '@/lib/strava-storage'
 import { putGroup, getGroup, addUserToGroupIndex, putJoinRequest, putInvitation } from '@/lib/groups'
 import type { GroupMetadata } from '@/lib/types'
+import { GAME_COURSES } from '@paddlesnitch/core/games'
 
 let dataDir: string
 beforeEach(async () => {
@@ -158,6 +159,30 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await getUserIdByAthleteId(777)).toBeNull()
   })
 
+  it("takes them off every game leaderboard, and leaves everyone else's times (#742)", async () => {
+    const me = await makeUser('Me')
+    const other = await makeUser('Other')
+    const row = (userId: string, time: number) => ({ userId, name: 'X Y.', time, hull: 'club', at: '2026-10-31T00:00:00Z' })
+    const [notOn, noBoard, ...onIt] = Object.keys(GAME_COURSES)
+    for (const course of onIt) {
+      await putJson(`games/kayak/leaderboard/${course}.json`, [row(other.id, 1500), row(me.id, 1600)])
+    }
+    await putJson(`games/kayak/leaderboard/${notOn}.json`, [row(other.id, 1500)])
+    const writes = vi.spyOn(await import('@paddlesnitch/core/storage'), 'putJson')
+
+    signInAs(me.idToken)
+    await deleteAccount(new Request('http://x'))
+
+    for (const course of onIt) {
+      const board = await getJson<{ userId: string }[]>(`games/kayak/leaderboard/${course}.json`)
+      expect(board?.map(e => e.userId), course).toEqual([other.id])
+    }
+    // A board they weren't on isn't rewritten, and no empty board is made.
+    expect(writes.mock.calls.map(c => c[0])).not.toContain(`games/kayak/leaderboard/${notOn}.json`)
+    expect(await getJson(`games/kayak/leaderboard/${noBoard}.json`)).toBeNull()
+    writes.mockRestore()
+  })
+
   it('deletes the private contact records behind their issue reports, and only theirs', async () => {
     const me = await makeUser('Me')
     const other = await makeUser('Other')
@@ -287,6 +312,24 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     expect(body.buddies.buddies.map((b: { userId: string }) => b.userId)).toEqual([buddy.id])
     expect(body.buddies.sharing).toEqual({ paddles: true })
     expect(text).not.toContain(buddy.email)
+  })
+
+  it('exports their own game leaderboard times on every course, and no one else\'s (#742)', async () => {
+    const me = await makeUser('Me')
+    const other = await makeUser('Other')
+    const courses = Object.keys(GAME_COURSES)
+    for (const [i, course] of courses.entries()) {
+      await putJson(`games/kayak/leaderboard/${course}.json`, [
+        { userId: other.id, name: 'Olga T.', time: 3000 + i, hull: 'club', at: '2026-10-30T00:00:00Z' },
+        { userId: me.id, name: 'M E.', time: 3100 + i, hull: 'nelo-viper-51', at: '2026-10-31T00:00:00Z' },
+      ])
+    }
+
+    signInAs(me.idToken)
+    const body = await (await exportData(new Request('http://x'))).json()
+
+    expect(body.account.gameTimes).toEqual(courses.map((course, i) => ({ course, time: 3100 + i, hull: 'nelo-viper-51', at: '2026-10-31T00:00:00Z' })))
+    expect(JSON.stringify(body)).not.toContain('Olga T.')
   })
 
   it("does not include another user's paddles or trackers", async () => {
