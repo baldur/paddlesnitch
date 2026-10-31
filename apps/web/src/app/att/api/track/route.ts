@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { emitMetric, gameEventProps, gamePath, isMetricEvent, type MetricEvent } from '@/lib/metrics'
+import { emitMetric, clientEventProps, eventPath, isMetricEvent, type MetricEvent } from '@/lib/metrics'
 import { isAllowedIngestOrigin } from '@/lib/ingest-origin'
 import { clientOf, type Client } from '@paddlesnitch/core/observe'
 import { crashReportProps, clientErrorProps } from '@/lib/client-errors'
@@ -40,6 +40,11 @@ function safeTs(t: unknown): number | undefined {
   return t
 }
 
+// A random per-tab or per-app-start id: letters, digits, dots and hyphens
+// only (a UUID, Math.random digits, 'anon'), never free text.
+const sidOf = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(v) ? v : undefined
+
 // Set by the server, never taken from a client's props.
 const RESERVED = new Set(['sid', 'path', 'platform', 'appVersion', 'build'])
 
@@ -75,7 +80,7 @@ function propsFor(event: MetricEvent, sid: string | undefined, path: unknown, pr
     const err = clientErrorProps(props, path)
     return err && { ...(sid ? { sid } : {}), ...err, ...clientProps(client) }
   }
-  return buildProps(sid, gamePath(event, path), gameEventProps(event, props), client)
+  return buildProps(sid, eventPath(event, path), clientEventProps(event, props), client)
 }
 
 export async function POST(req: NextRequest) {
@@ -90,7 +95,7 @@ export async function POST(req: NextRequest) {
 
   // Batch shape.
   if (Array.isArray(body?.events)) {
-    const sid = str(body.sid, SID)
+    const sid = sidOf(body.sid)
     for (const e of body.events.slice(0, MAX_EVENTS)) {
       if (!isMetricEvent(e?.event)) continue // strict allowlist
       const props = propsFor(e.event, sid, e?.path ?? (e?.props as Record<string, unknown>)?.path, e?.props, client)
@@ -101,7 +106,7 @@ export async function POST(req: NextRequest) {
 
   // Single-event back-compat shape.
   if (isMetricEvent(body?.event)) {
-    const props = propsFor(body.event, str(body.sid, SID), body.path, undefined, client)
+    const props = propsFor(body.event, sidOf(body.sid), body.path, undefined, client)
     if (props) emitMetric(body.event, props)
   }
   return new NextResponse(null, { status: 204 })

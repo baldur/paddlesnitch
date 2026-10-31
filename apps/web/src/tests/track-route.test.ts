@@ -63,7 +63,7 @@ describe('POST /att/api/track', () => {
       events: [
         { event: 'pageview', path: '/att', t: captureTs },
         { event: 'nope' },                       // dropped
-        { event: 'upload', props: { boat: 'K1' } },
+        { event: 'pageview', path: '/att', props: { campaign: 'betatesters' } },
       ],
     }))
     expect(res.status).toBe(204)
@@ -74,8 +74,8 @@ describe('POST /att/api/track', () => {
     expect(first.sid).toBe('sess1')
     expect(first._aws.Timestamp).toBe(captureTs) // event's own capture time
     const second = JSON.parse(spy.mock.calls[1][0] as string)
-    expect(second.Event).toBe('upload')
-    expect(second.boat).toBe('K1')                        // custom prop attached
+    expect(second.Event).toBe('pageview')
+    expect(second.campaign).toBe('betatesters')           // an allowed prop
     spy.mockRestore()
   })
 
@@ -158,8 +158,48 @@ describe('game events', () => {
     expect(session).not.toHaveProperty('path') // only a page under /games
   })
 
-  it('leaves the other events as they were', async () => {
-    const [upload] = await emitted([{ event: 'upload', path: '/paddles/new', props: { boat: 'K1', note: 'Anything Goes' } }])
-    expect(upload).toMatchObject({ Event: 'upload', path: '/paddles/new', boat: 'K1', note: 'Anything Goes' })
+  it("keeps only each event's own fields, and cleans every path (the archive keeps them for good)", async () => {
+    const [pv, cta, open, up] = await emitted([
+      { event: 'pageview', path: '/buddies/user-123?email=a@b.c', props: { campaign: 'betatesters', note: 'Anything Goes', email: 'a@b.c' } },
+      { event: 'campaign_cta', path: '/plan/shared/Xy12abC_9', props: { campaign: 'Not A Campaign!' } },
+      { event: 'app_open', path: 'app:paddles', props: { who: 'pat' } },
+      { event: 'upload', path: 'https://evil.example/x', props: { boat: 'K1' } },
+    ])
+    expect(pv).toMatchObject({ Event: 'pageview', path: '/buddies/[id]', campaign: 'betatesters' })
+    for (const k of ['note', 'email']) expect(pv).not.toHaveProperty(k)
+    expect(cta.path).toBe('/plan/shared/[id]')
+    expect(cta).not.toHaveProperty('campaign')
+    expect(open.path).toBe('app:paddles')
+    expect(open).not.toHaveProperty('who')
+    expect(up).not.toHaveProperty('path')
+    expect(up).not.toHaveProperty('boat')
+    const bad = (await emitted([{ event: 'app_open', path: 'app:Paddles/123 x' }])).at(-1)
+    expect(bad.Event).toBe('app_open')
+    expect(bad).not.toHaveProperty('path')
+  })
+
+  it('takes a session id only as a random id, never free text', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await track(req({ sid: 'pat@example.com', events: [{ event: 'pageview', path: '/att' }] }))
+    await track(req({ sid: '3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d', events: [{ event: 'pageview', path: '/att' }] }))
+    const [a, b] = spy.mock.calls.map(c => JSON.parse(c[0] as string))
+    expect(a).not.toHaveProperty('sid')
+    expect(b.sid).toBe('3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d')
+  })
+
+  it("keeps a page error's type only if it looks like an error's name", async () => {
+    const out = await emitted([
+      { event: 'client_error', path: '/att', props: { type: 'TypeError', message: 'x is undefined' } },
+      { event: 'client_error', path: '/att', props: { type: 'Pat Rowe <pat@example.com>', message: 'boom' } },
+    ])
+    const [ok, bad] = out.slice(-2)
+    expect(ok.type).toBe('TypeError')
+    expect(bad).not.toHaveProperty('type')
+  })
+
+  it("a prop can't pose as the event's time or name", async () => {
+    const [pv] = await emitted([{ event: 'pageview', path: '/att', props: { ts: 'x', Event: 'login', _aws: {} } }])
+    expect(pv.Event).toBe('pageview')
+    expect(pv).not.toHaveProperty('ts')
   })
 })

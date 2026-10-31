@@ -142,7 +142,7 @@ describe('POST /att/api/feedback', () => {
       url: 'https://paddlesnitch.com/att/groups/g1?join=SECRET-JOIN#frag',
     }))
     const body = sentBody().body
-    expect(body).toContain('Page: https://paddlesnitch.com/att/groups/g1')
+    expect(body).toContain('Page: https://paddlesnitch.com/att/groups/[id]') // a group id isn't for a public issue either
     expect(body).not.toContain('SECRET-JOIN')
     expect(body).not.toContain('#frag')
   })

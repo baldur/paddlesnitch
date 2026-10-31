@@ -50,3 +50,46 @@ describe('zero-tolerance alarms fire on the first one in 15 minutes', () => {
     expect(block).toContain('threshold: 0,')
   })
 })
+
+// The analytics archive (docs/features/observability.md § Archive): every
+// analytics event kept in S3 indefinitely, as the privacy page says.
+describe('analytics archive', () => {
+  const from = stack.indexOf("new s3.Bucket(this, 'AnalyticsArchive'")
+  const block = stack.slice(from, stack.indexOf("alarm('AnalyticsArchiveDeliveryAlarm'", from))
+  const privacy = readFileSync(path.join(root, 'apps/web/src/app/privacy/page.tsx'), 'utf8')
+
+  it('subscribes the server log group, through Firehose and the transform, into the archive bucket', () => {
+    expect(block).toContain('logGroupName: serverLogs.logGroupName')
+    expect(block).toContain("filterPattern: 'Event'")
+    expect(block).toContain("type: 'Lambda'")
+    expect(block).toContain('lambdas/analytics-archive')
+    expect(block).toContain("prefix: 'events/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/'")
+    expect(block).toContain("errorOutputPrefix: 'errors/")
+    expect(block).toContain("compressionFormat: 'GZIP'")
+    expect(block).toContain("{ parameterName: 'BufferSizeInMBs', parameterValue: '0.25' }")
+    expect(block).toContain("actions: ['lambda:GetFunctionConfiguration']")
+  })
+
+  it('keeps events indefinitely: the only rule expires failed batches, and the privacy page says so', () => {
+    expect(block).toContain("lifecycleRules: [{ id: 'expire-errors', prefix: 'errors/', expiration: cdk.Duration.days(30) }],")
+    expect(block.match(/lifecycleRules|expiration|transitions|noncurrentVersion/g)).toEqual(['lifecycleRules', 'expiration'])
+    expect(block).toContain('removalPolicy: cdk.RemovalPolicy.RETAIN')
+    expect(privacy).toContain('We keep these records indefinitely')
+  })
+
+  it('lets Firehose write but never delete, and only on our behalf', () => {
+    expect(block).not.toMatch(/analyticsBucket\.grant(Write|ReadWrite|Delete)/)
+    expect(block).toContain("actions: ['s3:PutObject', 's3:AbortMultipartUpload']")
+    expect(block.match(/'aws:SourceAccount': this\.account/g)).toHaveLength(2)
+  })
+
+  it('lets only the root user read the archive', () => {
+    expect(block).toContain("sid: 'OnlyRootReadsTheArchive'")
+    expect(block).toContain("conditions: { StringNotEquals: { 'aws:PrincipalArn': `arn:aws:iam::${this.account}:root` } }")
+  })
+
+  it('emails on any failed batch', () => {
+    expect(stack).toContain("alarm('AnalyticsArchiveTransformAlarm'")
+    expect(stack).toContain("alarm('AnalyticsArchiveDeliveryAlarm'")
+  })
+})
