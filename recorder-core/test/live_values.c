@@ -108,5 +108,31 @@ int main(void)
     rc_phone_live(&g_phone, &v);
     check(is(&v, 0, 5.0f), "phone, the fix gone stale: 5 s since the last tick with one");
 
+    /* A late timer: ticks arriving after later samples get their rows moved
+       after them (recorder_phone.c), and the fix is judged at the moved
+       time. The screen's since_fix_s must count on that same clock: what
+       the rows say once they're written (tester review, 2026-10-31). */
+    rc_phone_init(&g_phone, &pc);
+    loc.t_ns = 0;
+    rc_phone_location_update(&g_phone, &loc);
+    for (int64_t t = 0; t <= 2900; t += 20) {
+        rc_phone_gyro(&g_phone, t * 1000000LL, 0, 0, 0);
+        rc_phone_accel(&g_phone, t * 1000000LL, 0, 0, 9.80665);
+    }
+    rc_phone_tick(&g_phone, 1000000000LL, 0);    /* moved to just after 2.9 s: fix 2.9 s old, current */
+    for (int64_t t = 2920; t <= 5980; t += 20) {
+        rc_phone_gyro(&g_phone, t * 1000000LL, 0, 0, 0);
+        rc_phone_accel(&g_phone, t * 1000000LL, 0, 0, 9.80665);
+    }
+    rc_phone_tick(&g_phone, 2000000000LL, 0);    /* moved to just after 5.98 s: stale */
+    rc_live_values phone;
+    rc_phone_live(&g_phone, &phone);
+    check(phone.fix == 0 && phone.since_fix_s >= 0.0f, "phone, late ticks: no fix, and never a negative time since one");
+    rc_phone_finish(&g_phone);
+    rc_live(&g_phone.core, &v);
+    check(v.fix == phone.fix && fabsf(v.since_fix_s - phone.since_fix_s) < 0.0005f,
+          "phone, late ticks: the screen's time since the fix is what the written rows say");
+    check(fabsf(phone.since_fix_s - 3.08f) < 0.0005f, "phone, late ticks: 3.08 s between the two moved rows");
+
     return g_fails ? 1 : 0;
 }

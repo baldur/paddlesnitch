@@ -122,7 +122,8 @@ typedef struct {
     int               have_location;
     rc_phone_location location;
     int               tick_fix, tick_fixed;    /* the latest tick: rc_phone_live */
-    int64_t           tick_fix_ms;             /* the latest tick with a fix   */
+    int64_t           tick_ms, tick_fix_ms;    /* the latest tick's row ms, and
+                                                  the latest with a fix         */
     uint32_t          dropped_late, dropped_unpaired;
 } rc_phone;
 
