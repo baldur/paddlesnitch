@@ -170,6 +170,20 @@ abstract class CheckReleasePermissions : DefaultTask() {
     }
 }
 
+// Release hides Strava (PLAY-RELEASE.md): the Play data safety form says so. Turning it
+// on is a decision, so it means changing this check as well as the buildConfigField.
+abstract class CheckReleaseStrava : DefaultTask() {
+    @get:InputFiles abstract val buildConfig: ConfigurableFileCollection
+
+    @TaskAction
+    fun check() {
+        val source = buildConfig.asFileTree.matching { include("**/BuildConfig.java") }.singleFile.readText()
+        check("STRAVA_IN_APP = false;" in source) {
+            "The release build shows Strava. Change the Play data safety form first (PLAY-RELEASE.md, Later releases), then this check."
+        }
+    }
+}
+
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
         val cap = variant.name.replaceFirstChar { it.uppercase() }
@@ -178,9 +192,12 @@ androidComponents {
             appManifest.set(layout.projectDirectory.file("src/main/AndroidManifest.xml"))
             allowed.set(releasePermissions)
         }
-        tasks.named("check") { dependsOn(task) }
-        // Every release build runs it, including one built by hand for Play.
-        tasks.matching { it.name == "assemble$cap" || it.name == "bundle$cap" }.configureEach { dependsOn(task) }
+        val strava = tasks.register<CheckReleaseStrava>("check${cap}Strava") {
+            buildConfig.from(tasks.named("generate${cap}BuildConfig"))
+        }
+        tasks.named("check") { dependsOn(task, strava) }
+        // Every release build runs them, including one built by hand for Play.
+        tasks.matching { it.name == "assemble$cap" || it.name == "bundle$cap" }.configureEach { dependsOn(task, strava) }
     }
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateTokens, GenerateTokens::outputDir)

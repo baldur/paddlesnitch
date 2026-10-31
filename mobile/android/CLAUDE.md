@@ -129,4 +129,8 @@ time and isn't obvious from the code.
 - Release hides Strava (`STRAVA_IN_APP`, a `buildConfigField` per build type). `Api` then
   reads `strava` as false in `signInOptions`, so the app takes its tested "server switched
   Strava off" path everywhere. Don't add a second switch in the screens. Debug keeps
-  Strava, so the screen tests still cover it.
+  Strava, so the screen tests still cover it. `checkReleaseStrava` reads the generated
+  release `BuildConfig.java`, because unit tests only build debug.
+- Every sign-in return address can be opened by any app or link. `Intake.arrived` passes a
+  Strava or Google return on only while this app's verifier for it is waiting
+  (`PrefsVerifierStore.pending`, `PrefsGoogleVerifierStore.pending`) and nobody is signed in.

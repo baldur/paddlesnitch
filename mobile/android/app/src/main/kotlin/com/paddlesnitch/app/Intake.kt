@@ -26,10 +26,11 @@ data class Intake(
 
     /**
      * A link or a file arrived. [name] is the file's name, if the other app gave one.
-     * [googlePending]: this app started a Google sign-in that hasn't come back yet.
+     * [googlePending], [stravaPending]: this app started that sign-in and it hasn't come back yet.
      */
-    fun arrived(incoming: Incoming, signedIn: Boolean, name: String? = null, googlePending: Boolean = false): Pair<Intake, Do> = when (incoming) {
-        is Incoming.StravaReturn -> this to Do.StravaReturn(incoming.uri)
+    fun arrived(incoming: Incoming, signedIn: Boolean, name: String? = null, googlePending: Boolean = false, stravaPending: Boolean = false): Pair<Intake, Do> = when (incoming) {
+        // Anyone can open this address too: only a Strava sign-in this app started, while signed out, goes on.
+        is Incoming.StravaReturn -> this to if (stravaPending && !signedIn) Do.StravaReturn(incoming.uri) else Do.Nothing
         // Anyone can open this address: only a Google sign-in this app started, while signed out, goes on.
         is Incoming.GoogleReturn -> this to if (googlePending && !signedIn) Do.GoogleReturn(incoming.uri) else Do.Nothing
         // Only a signed-in account can have started a connect; anything else is ignored.

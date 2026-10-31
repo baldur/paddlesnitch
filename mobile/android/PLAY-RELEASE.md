@@ -28,7 +28,9 @@ Not in this release:
   switches it off. Sign-in has no Strava button. An account that signed up
   with Strava gets "Email us". An account already connected sees Strava as
   Paused, with Disconnect. Bringing Strava back is an app release, and the
-  data safety form changes with it (see Later releases).
+  data safety form changes with it (see Later releases). The APK on
+  paddlesnitch.com/android is the same release build, so it hides Strava
+  too. `checkReleaseStrava` fails any release build that shows Strava.
 
 Owner decisions (2026-10-31): keep tracker setup and test it first; hide
 Strava.
@@ -199,7 +201,8 @@ All of these must be done before the closed test can start.
   - a foreground service of type `location` needs a Play declaration with a
     short video;
   - the data safety form gains the phone's location and motion.
-- **Strava back in the app:** set `STRAVA_IN_APP` to true for release.
+- **Strava back in the app:** set `STRAVA_IN_APP` to true for release, and
+  change `checkReleaseStrava` (`app/build.gradle.kts`) with it.
   - Location and Fitness info gain "imported from Strava" as a source; Name
     can come from Strava.
   - Strava is read-only: the server reads the user's Strava paddles and sends

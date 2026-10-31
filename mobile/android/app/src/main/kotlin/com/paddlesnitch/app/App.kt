@@ -89,7 +89,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     var reauth by rememberSaveable { mutableStateOf(Reauth()) }
     var reauthEmail by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val strava = remember { StravaSignIn(api, PrefsVerifierStore(context)) }
+    val stravaVerifiers = remember { PrefsVerifierStore(context) }
+    val strava = remember { StravaSignIn(api, stravaVerifiers) }
     var stravaReturn by remember { mutableStateOf<Uri?>(null) }
     val googleVerifiers = remember { PrefsGoogleVerifierStore(context) }
     val google = remember { GoogleSignIn(api, googleVerifiers) }
@@ -119,7 +120,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         incoming.value = null
         if (it is Incoming.OpenPaddle || it is Incoming.AddFile) { inAccount = false; inTrackers = false; settingUpTracker = false }
         val name = (it as? Incoming.AddFile)?.let { f -> withContext(Dispatchers.IO) { displayName(context, Uri.parse(f.uri)) } }
-        run(intake.arrived(it, signedIn, name, googlePending = googleVerifiers.pending))
+        run(intake.arrived(it, signedIn, name, googlePending = googleVerifiers.pending, stravaPending = stravaVerifiers.pending))
     }
     fun forgetReauth() { reauth = reauth.cleared(); reauthEmail = null }
     fun leaveSignIn() { signingIn = false; forgotFor = null; resetNotice = null; intake = intake.signInCancelled(); if (reauth.signingInAgain) inAccount = false; forgetReauth() }
