@@ -662,16 +662,34 @@ export function washSlots(race, r, reach = 20) {
 }
 
 // What the water shows racer `r` (you): up to three free places in the wash
-// ahead, as [x, z, heading, brightness], brightest close up, fading out 25 m
-// off, and dim once you're sitting in one. None before the start, on an
-// outing, off the water or once you've finished.
+// ahead, as [x, z, heading, brightness]. Only places a rival could take too
+// (`placeFits`): a mark is an invitation. Full out to 20 m and gone at 30 (the
+// low camera already shrinks them with distance), softer under 5 m so they
+// don't drown the boats, and dim while you ride the wash of the nearest one
+// (when "On the wash" shows). None before the start, on an outing, off the
+// water or once you've finished.
 export function washMarks(race, r) {
   if (race.outing || !started(race) || r.finish !== null || r.portage || r.boat.swim > 0) return [];
-  return washSlots(race, r, 25).slice(0, 3).map((p) => {
-    const there = Math.hypot(p.x - r.boat.x, p.z - r.boat.z) < 1.2;
-    const fade = 1 - Math.min(1, Math.max(0, (p.gap - 12) / 13));
-    return [p.x, p.z, p.heading, there ? 0.25 : 0.9 * fade];
+  const boats = race.traffic ? trafficNear(race.traffic, r, race.course) : [];
+  return washSlots(race, r, 30).filter((p) => placeFits(race, p, boats)).slice(0, 3).map((p, i) => {
+    const near = Math.hypot(p.x - r.boat.x, p.z - r.boat.z);
+    if (i === 0 && r.draft > 0.3 && near < 3) return [p.x, p.z, p.heading, 0.2];
+    const fade = 1 - Math.min(1, Math.max(0, (p.gap - 20) / 10));
+    const close = 0.5 + 0.4 * Math.min(1, Math.max(0, (near - 2) / 3));
+    return [p.x, p.z, p.heading, close * fade];
   }).filter((m) => m[3] > 0.02);
+}
+
+// Whether a place in a wash is one a boat may sit in: clear of the banks
+// and of the river's boats about to pass (`boats`, from trafficNear), and on
+// water used both ways no more than a hip's width left of the keep-right line
+// (see think).
+function placeFits(race, p, boats) {
+  const { course } = race;
+  if (boats.some((b) => Math.abs(p.lateral - b.lateral) < b.out + 1.5)) return false;
+  const room = widthAt(course, p.s);
+  if (p.lateral < -(room.left - 2.2) || p.lateral > room.right - 2.2) return false;
+  return !course.samples[p.host.loc.i]?.shared || p.lateral >= Math.min(room.right * 0.4, 8) - 1.5;
 }
 
 // A rival's place in a pack: the one it had while that's still free and in
@@ -679,16 +697,7 @@ export function washMarks(race, r) {
 // `boats`: the river's boats about to pass (trafficNear): no place in their way.
 function pickSlot(r, race, boats = []) {
   const { ai, loc } = r;
-  // Only places it may sit in: clear of the banks, and on water used both
-  // ways no more than a hip's width left of the keep-right line (see think).
-  const { course } = race;
-  const fits = (p) => {
-    if (boats.some((b) => Math.abs(p.lateral - b.lateral) < b.out + 1.5)) return false;
-    const room = widthAt(course, p.s);
-    if (p.lateral < -(room.left - 2.2) || p.lateral > room.right - 2.2) return false;
-    return !course.samples[p.host.loc.i]?.shared || p.lateral >= Math.min(room.right * 0.4, 8) - 1.5;
-  };
-  const free = washSlots(race, r, 14).filter((p) => Math.abs(p.lateral - loc.lateral) < 6 && fits(p));
+  const free = washSlots(race, r, 14).filter((p) => Math.abs(p.lateral - loc.lateral) < 6 && placeFits(race, p, boats));
   const kept = ai.slot && free.find((p) => p.host === ai.slot.host && p.slot === ai.slot.slot);
   const p = kept ?? free[0] ?? null;
   ai.slot = p && { host: p.host, slot: p.slot, back: SLOTS[p.slot].back, across: SLOTS[p.slot].across };

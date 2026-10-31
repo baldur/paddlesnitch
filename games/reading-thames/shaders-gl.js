@@ -196,18 +196,19 @@ vec2 wake(vec2 p) {
 }
 
 // The free places in the wash ahead of you: see the WGSL in shaders.js.
-float spots(vec2 p) {
+float spots(vec2 p, float dist) {
   float o = 0.0;
   for (int i = 0; i < 3; i++) {
     vec4 s = frame.spots[i];
     if (s.w <= 0.0) { continue; }
     vec2 f = vec2(sin(s.z), -cos(s.z));
     vec2 d = p - s.xy;
-    float along = dot(d, f) - 0.7;
+    float u = (dot(d, f) - 0.7) / 2.7;
     float lat = d.x * -f.y + d.y * f.x;
-    float e = length(vec2(along / 2.7, lat / 0.6));
-    float ring = smoothstep(0.74, 0.88, e) * (1.0 - smoothstep(0.98, 1.12, e));
-    float fill = 1.0 - smoothstep(0.85, 1.0, e);
+    float e = max(abs(u), abs(lat) / (0.6 * max(1.0 - u * u, 0.04)));
+    float band = 0.1 + dist * 0.004;
+    float ring = smoothstep(1.0 - 2.0 * band, 1.0 - band, e) * (1.0 - smoothstep(1.0, 1.0 + band, e));
+    float fill = 1.0 - smoothstep(1.0 - 2.0 * band, 1.0, e);
     o = max(o, s.w * (ring + fill * 0.25));
   }
   return o;
@@ -259,7 +260,7 @@ void main() {
   c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;
   float foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2(13.0, 9.0)) + t * 6.0));
   c = mix(c, vec3(0.85, 0.9, 0.9), foam * 0.45);
-  c = mix(c, vec3(0.85, 0.97, 1.0), clamp(spots(p), 0.0, 1.0) * 0.7);
+  c = mix(c, vec3(0.22, 0.74, 0.97), clamp(spots(p, dist), 0.0, 1.0) * 0.6);
   outColor = vec4(fog(c, dist), 1.0);
 }
 `,

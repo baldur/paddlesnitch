@@ -330,19 +330,30 @@ test("a place someone sits in isn't offered, nor a boat that's hanging on you (n
   assert.ok(!washSlots(race, me).some((p) => p.host === left), 'not a boat hanging on me');
 });
 
-test('the water shows you the free places ahead: bright close up, gone 25 m off, dim once you sit in one; none before the start or on an outing', () => {
+test('the water shows you the free places ahead: full out to 20 m, gone by 30, softer close up, dim while you ride one; never by the bank; none before the start or on an outing', () => {
   const course = raceRiver();
   const host = boatAt(course, 600, 0);
-  const me = boatAt(course, 590, 0);
+  const me = boatAt(course, 585, 0);
   const race = packRace(course, [host, me]);
-  const close = washMarks(race, me);
-  assert.equal(close.length, 3);
-  assert.ok(close.every((m) => m[3] > 0.8));
-  const far = boatAt(course, 600 - 6.3 - 26, 0); // the nearest place (the stern) 26 m ahead
-  assert.equal(washMarks(packRace(course, [host, far]), far).length, 0);
+  const marks = washMarks(race, me);
+  assert.equal(marks.length, 3);
+  assert.ok(marks.every((m) => m[3] > 0.85), `bright 9-11 m off: ${marks.map((m) => m[3].toFixed(2))}`);
+  const mid = boatAt(course, 600 - 6.3 - 18, 0); // the nearest place (the stern) 18 m ahead
+  assert.ok(washMarks(packRace(course, [host, mid]), mid).every((m) => m[3] > 0.85), 'still full at 18 m');
+  const far = boatAt(course, 600 - 6.3 - 31, 0);
+  assert.equal(washMarks(packRace(course, [host, far]), far).length, 0, 'gone past 30 m');
+  const close = boatAt(course, 600 - 6.3 - 2, 0);
+  assert.ok(washMarks(packRace(course, [host, close]), close).some((m) => m[3] <= 0.6), 'softer 2 m off');
+  // Riding the hip's wash ("On the wash" showing): that place goes dim.
   const sitting = boatAt(course, 600 - SLOTS[1].back, SLOTS[1].across);
-  const marks = washMarks(packRace(course, [host, sitting]), sitting);
-  assert.ok(marks.some((m) => m[3] < 0.3), 'the one you sit in is dim');
+  sitting.draft = 0.6;
+  assert.ok(washMarks(packRace(course, [host, sitting]), sitting)[0][3] < 0.3);
+  // A boat close to the right bank: no mark on its right hip, too near the bank for anyone.
+  const right = widthAt(course, 600).right;
+  const byBank = boatAt(course, 600, right - 2.6);
+  const behind = boatAt(course, 590, right - 2.6);
+  const shown = washMarks(packRace(course, [byBank, behind]), behind).map((m) => locate(course, m[0], m[1]).lateral);
+  assert.ok(shown.length && shown.every((l) => l <= right - 2.2 + 0.01), `marks at ${shown.map((l) => l.toFixed(1))}, bank at ${right.toFixed(1)}`);
   assert.equal(washMarks({ ...race, start: { phase: 'ready' } }, me).length, 0);
   assert.equal(washMarks({ ...race, outing: {} }, me).length, 0);
   me.finish = 100;
