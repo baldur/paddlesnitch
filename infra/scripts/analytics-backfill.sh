@@ -11,7 +11,7 @@
 set -euo pipefail
 PROFILE=${AWS_PROFILE:-paddlesnitch}
 REGION=eu-west-1
-BUCKET=paddlesnitch-analytics-prod
+BUCKET=paddlesnitch-analytics-archive
 DAYS=${1:-90}
 here=$(cd "$(dirname "$0")" && pwd)
 parser="$here/../lambdas/analytics-archive/index.mjs"
