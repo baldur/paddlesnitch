@@ -58,6 +58,14 @@ describe('your paddler and boat', () => {
     }
   })
 
+  it('keeps the scull and its colour on the account', async () => {
+    const withScull = { ...KIT, scull: 'fine', scullColour: '#0369a1' } as const
+    await as(PAT).games.kit.set(withScull)
+    expect(await as(PAT).games.kit.get()).toEqual(withScull)
+    await expect(as(PAT).games.kit.set({ ...withScull, scull: 'racing' } as never)).rejects.toThrow()
+    await expect(as(PAT).games.kit.set({ ...withScull, scullColour: 'blue' } as never)).rejects.toThrow()
+  })
+
   it("knows the same boats as the game", async () => {
     const { BOATS } = await import('../../../../games/kayak/boats.js')
     const { GAME_BOATS } = await import('@paddlesnitch/core/games')
@@ -114,6 +122,19 @@ describe('the leaderboard', () => {
       const { top } = await as(null).games.leaderboard({ course })
       expect(top.map(e => e.name)).toEqual(['Old T.'])
     }
+  })
+
+  it('takes rowing: the head race and practice courses, and the three sculls on the boards', async () => {
+    expect(plausible('row-head', 1080)).toBe(true) // 5400 m at 18 km/h
+    expect(plausible('row-head', 1079)).toBe(false)
+    expect(plausible('row-practice', 200)).toBe(true) // 1000 m
+    expect(plausible('row-practice', 199)).toBe(false)
+    for (const hull of ['scull-trainer', 'scull-club', 'scull-fine'] as const) {
+      await expect(as(PAT).games.submit({ course: 'row-head', time: 1500, hull })).resolves.toBeDefined()
+    }
+    expect((await as(SAM).games.leaderboard({ course: 'row-head' })).top[0].hull).toBe('scull-trainer')
+    await expect(as(PAT).games.submit({ course: 'row-head', time: 1500, hull: 'scull' as never })).rejects.toThrow()
+    expect((await as(PAT).games.live.create({ course: 'row-head' })).room.course).toBe('row-head')
   })
 
   it('keeps the top 100', () => {
