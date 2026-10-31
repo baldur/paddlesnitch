@@ -7,6 +7,7 @@ import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
 import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh } from './club.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
+import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt } from './world.js';
@@ -95,6 +96,26 @@ const els = Object.fromEntries(['account', 'boards', 'boardlist', 'ranked', 'liv
 const controls = new Controls(canvas);
 
 let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'finished'
+// Analytics (metrics.js, sent by ../shared/analytics.js): the visit, the play
+// under way, and the paddler last reported.
+const clock = () => performance.now() / 1000;
+const visit = createSession(clock(), HASH.has('club') ? 'walk' : 'menu');
+let play = null;
+let kitSent = null;
+const track = (e) => { if (e) window.gameMetrics?.track(e.event, e.props); };
+function endPlay(end, extra = {}) {
+  if (!play) return;
+  track(playEvent(play, { end, now: clock(), ...extra }));
+  play = null;
+}
+// The sender (a deferred script after this one in the page) is there by DOMContentLoaded.
+const hookSender = () => window.gameMetrics?.beforeSend(() => track(sessionEvent(visit, clock(), renderer?.backend ?? '')));
+if (window.gameMetrics) hookSender();
+else addEventListener('DOMContentLoaded', hookSender, { once: true });
+document.addEventListener('visibilitychange', () => setVisible(visit, !document.hidden, clock()));
+addEventListener('pagehide', () => endPlay('closed'), { capture: true });
+addEventListener('keydown', () => visit.inputs.add('keys'), { capture: true, passive: true });
+addEventListener('pointerdown', (e) => visit.inputs.add(e.pointerType === 'touch' ? 'touch' : 'mouse'), { capture: true, passive: true });
 let resumeTo = 'racing';
 let mode = MODES.loop;
 let race;
@@ -167,6 +188,11 @@ function setLiveries() {
 }
 
 function start() {
+  endPlay('restart');
+  play = beginPlay(mode, { format: formatOf(mode), live: !!liveRace, from: visit.from, now: clock() });
+  visit.plays++;
+  const k = kitEvent(kit, kitSent);
+  if (k) { track(k); kitSent = k.key; }
   reset();
   controls.calibrate();
   state = 'start';
@@ -237,6 +263,7 @@ function finish() {
   }
 
   submitResult(time);
+  endPlay('finished', { place: solo ? null : place, swims: race.player.boat.capsizes });
   const before = form();
   train((mode.course.finish - mode.course.start) / mode.course.speedup / 1000);
   const gained = form() - before;
@@ -269,6 +296,7 @@ function finish() {
 // A go at a drill is over: how it went, your best, and Again to go again.
 function finishDrill() {
   state = 'finished';
+  endPlay('finished', { swims: race.player.boat.capsizes });
   const { title, lines, best } = drill.result;
   let before = null;
   try { before = JSON.parse(localStorage.getItem(DRILL_BEST(mode))); } catch {}
@@ -283,6 +311,7 @@ function finishDrill() {
 }
 
 function toMenu() {
+  endPlay('quit', { swims: race?.player.boat.capsizes ?? 0 });
   endLive();
   state = 'menu';
   hud.hidden = true;
@@ -527,6 +556,7 @@ addEventListener('keydown', (e) => {
 });
 
 function handleGamepad(pressed) {
+  if (pressed.size) visit.inputs.add('pad');
   if (club && !menu.open && !live.open) return clubGamepad(pressed);
   if (race?.outing && state === 'racing') {
     if (pressed.has(BUTTON.UP) || pressed.has(7)) lever(1);
@@ -583,8 +613,14 @@ function outingStep(dt) {
   for (const side of outingTouches.values()) turn += side;
   const pad = navigator.getGamepads?.()?.find?.((p) => p);
   if (pad && Math.abs(pad.axes[0] ?? 0) > 0.2) turn += pad.axes[0];
-  for (const e of stepOuting(race, dt, { turn, throttle: outingLever })) {
+  const was = [race.player.boat.x, race.player.boat.z];
+  const events = stepOuting(race, dt, { turn, throttle: outingLever });
+  if (play) play.metres += Math.hypot(race.player.boat.x - was[0], race.player.boat.z - was[1]) / (race.course.speedup ?? 1);
+  for (const e of events) {
+    if (play && e === 'bump') play.bumps++;
+    if (play && e.startsWith('tipped-')) play.knocked++;
     if (e === 'end') {
+      endPlay('finished');
       show('Mapledurham Lock: the end of the cruise', { hold: 4 });
       setTimeout(() => { if (race.outing && state === 'racing') toMenu(); }, 4500);
     }
@@ -686,6 +722,7 @@ function clubCamera() {
 // room, boathouse and clubhouse open their sheet as you come in.
 function arrive(place) {
   club.place = place;
+  visit.places.add(place);
   clubDoors.replaceChildren();
   clubCards.replaceChildren();
   clubBack.hidden = !PLACES[place].up;
