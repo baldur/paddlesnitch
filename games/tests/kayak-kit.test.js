@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../kayak/boats.js';
-import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery } from '../kayak/kit.js';
+import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery, withOldScull, boardHull, isScullHull, scullHullName } from '../kayak/kit.js';
+import { SCULLS, SCULL_COLOURS } from '../kayak/scull.js';
 import { HULLS, createBoat } from '../kayak/sim.js';
 import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../kayak/meshes.js';
 import { paddlerSvg } from '../kayak/picture.js';
@@ -144,4 +145,31 @@ test('the look reaches the meshes: short sleeves or long', () => {
   assert.deepEqual(livery(cleanKit({ hullColour: '#000000' })).hull, [0, 0, 0]);
   assert.ok(limbMesh(l.top, { skin: l.skin, sleeve: 0.4 }).count > limbMesh(l.top).count);
   assert.notEqual(kitKey(kit), kitKey({ ...kit, deck: '#000000' }));
+});
+
+test('your scull and its colour are in the kit, read back safely, so they follow you on the account', () => {
+  const kit = cleanKit({ scull: 'fine', scullColour: SCULL_COLOURS[3] });
+  assert.equal(kit.scull, 'fine');
+  assert.equal(kit.scullColour, SCULL_COLOURS[3]);
+  const bad = cleanKit({ scull: 'eight', scullColour: '#123456' });
+  assert.equal(bad.scull, 'club', 'an unknown scull: the club single');
+  assert.equal(bad.scullColour, SCULL_COLOURS[0], 'a colour not in the set: the first');
+  assert.ok(SCULLS.some((b) => b.id === cleanKit({}).scull));
+  assert.notEqual(kitKey(kit), kitKey({ ...kit, scull: 'trainer' }));
+});
+
+test('a scull picked on this device before it went in the kit carries over, unless the saved kit has one', () => {
+  const kit = cleanKit({});
+  assert.deepEqual(withOldScull(kit, { body: 'slim' }, { scull: 'fine', colour: SCULL_COLOURS[2] }), { ...kit, scull: 'fine', scullColour: SCULL_COLOURS[2] });
+  assert.equal(withOldScull(kit, { scull: 'trainer' }, { scull: 'fine' }), kit, 'the saved one wins');
+  assert.equal(withOldScull(kit, null, null), kit);
+  assert.equal(withOldScull(kit, null, { scull: 'canoe', colour: 'red' }).scull, 'club');
+});
+
+test("a leaderboard time records your kayak, or in a row your scull, and the board names it", () => {
+  const kit = cleanKit({ boat: 'kirton-typhoon', scull: 'fine' });
+  assert.equal(boardHull(kit, false), 'kirton-typhoon');
+  assert.equal(boardHull(kit, true), 'scull-fine');
+  assert.ok(isScullHull('scull-club') && !isScullHull('club'), "the kayak's old 'club' hull isn't a scull");
+  assert.equal(scullHullName('scull-trainer'), 'Trainer single');
 });

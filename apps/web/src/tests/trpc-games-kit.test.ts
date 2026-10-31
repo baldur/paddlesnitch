@@ -30,6 +30,10 @@ describe("the game's paddler kit", () => {
         await expect(pat.games.kit.set(kit), `${field}: ${value}`).resolves.toEqual(kit)
       }
     }
+    // The rowing club's scull and its colour (from the set).
+    const { SCULLS, SCULL_COLOURS } = await import('../../../../games/kayak/scull.js')
+    for (const scull of SCULLS.map((b: { id: string }) => b.id)) await expect(pat.games.kit.set(cleanKit({ scull })), `scull: ${scull}`).resolves.toBeTruthy()
+    for (const scullColour of SCULL_COLOURS) await expect(pat.games.kit.set(cleanKit({ scullColour })), `colour: ${scullColour}`).resolves.toBeTruthy()
     for (const aid of [true, false]) await expect(pat.games.kit.set(cleanKit({ aid }))).resolves.toBeTruthy()
   })
 
