@@ -85,6 +85,16 @@ class GoogleSignInTest {
         assertEquals(0, server.requestCount)
     }
 
+    // The first Play release hides Strava (mobile/android/PLAY-RELEASE.md): the release
+    // build reads it as off whatever the server says, so it takes the "Strava off" path.
+    @Test fun aBuildWithoutStravaReadsItAsOffWhateverTheServerSays() = runTest {
+        val noStrava = Api(server.url("/").toString(), tokens, "0.1.0", stravaInApp = false)
+        server.enqueue(MockResponse.Builder().body("""{"google":true,"strava":true}""").build())
+        server.enqueue(MockResponse.Builder().body("""{"google":true,"strava":true}""").build())
+        assertEquals(SignInOptions(google = true, strava = false), noStrava.signInOptions())
+        assertEquals(SignInOptions(google = true, strava = true), api.signInOptions())
+    }
+
     @Test fun optionsDecodeFromTheContractsFixtures() = runTest {
         server.enqueue(MockResponse.Builder().body(fixture("auth.options.json")).build())
         server.enqueue(MockResponse.Builder().body(fixture("auth.options.email-only.json")).build())

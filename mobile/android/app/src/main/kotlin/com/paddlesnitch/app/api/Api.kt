@@ -1,5 +1,6 @@
 package com.paddlesnitch.app.api
 
+import com.paddlesnitch.app.BuildConfig
 import com.paddlesnitch.app.auth.TokenStore
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -79,6 +80,9 @@ class Api(
     private val appVersion: String,
     // Analysing an upload fetches the weather and river flow, so allow it a minute.
     private val http: OkHttpClient = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
+    // False in release until Strava comes back (PLAY-RELEASE.md): the app then reads Strava as
+    // off, as when the server switches it off, so sign-in, connect and import stay hidden.
+    private val stravaInApp: Boolean = BuildConfig.STRAVA_IN_APP,
 ) : AccountApi {
     private val base = baseUrl.trimEnd('/').toHttpUrl()
     private val refreshing = Mutex()
@@ -138,6 +142,7 @@ class Api(
 
     override suspend fun signInOptions(): SignInOptions =
         read(call(Request.Builder().url(base.newBuilder().addPathSegments("att/api/auth/options").build()).get().build()), SignInOptions.serializer())
+            .let { if (stravaInApp) it else it.copy(strava = false) }
 
     suspend fun signOut() {
         motionSeen.clear()

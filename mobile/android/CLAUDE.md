@@ -126,3 +126,7 @@ time and isn't obvious from the code.
   recording (#761) deletes it, and until then declares its permissions only in `src/debug`.
 - Play takes the `.aab` (`bundleRelease`), not the APK. The steps to publish on Google Play
   are in `PLAY-RELEASE.md`.
+- Release hides Strava (`STRAVA_IN_APP`, a `buildConfigField` per build type). `Api` then
+  reads `strava` as false in `signInOptions`, so the app takes its tested "server switched
+  Strava off" path everywhere. Don't add a second switch in the screens. Debug keeps
+  Strava, so the screen tests still cover it.

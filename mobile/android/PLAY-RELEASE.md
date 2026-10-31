@@ -16,17 +16,26 @@ each label on screen; Google moves them.
 The release build as it is today:
 
 - Paddles: the list, one paddle, Boat motion, add paddle, opening paddle links.
-- Sign-in with email, Google and Strava (Strava only while the server has it
-  on), and Account.
+- Sign-in with email or Google, and Account.
 - Trackers: the list, removing one, and **tracker setup over Bluetooth**
   (pair, add to the account, WiFi, sync).
 
-Not phone recording: it is debug only until C3 (#761).
+Not in this release:
 
-- [ ] **Owner decision:** tracker setup is in release but hasn't had its test
-      with a real tracker (`TRACKER-TESTING.md`). Either run that test before
-      the closed test starts, or ask `android` to hide setup in release (the
-      Trackers list stays).
+- **Phone recording:** debug only until C3 (#761).
+- **Strava:** hidden in release (`STRAVA_IN_APP` in `app/build.gradle.kts`).
+  The app reads Strava as off whatever the server says, as when the server
+  switches it off. Sign-in has no Strava button. An account that signed up
+  with Strava gets "Email us". An account already connected sees Strava as
+  Paused, with Disconnect. Bringing Strava back is an app release, and the
+  data safety form changes with it (see Later releases).
+
+Owner decisions (2026-10-31): keep tracker setup and test it first; hide
+Strava.
+
+- [ ] **Owner:** run `TRACKER-TESTING.md` with a real tracker on a release
+      build, before the closed test starts. If it fails, `android` fixes it or
+      hides setup in release; the Trackers list stays either way.
 
 ## Day 1: the developer account (owner)
 
@@ -142,10 +151,10 @@ All of these must be done before the closed test can start.
 
   | Play's data type | What it is here | Required or optional |
   |---|---|---|
-  | Personal info → Name | account name; from Google or Strava when you sign in with them | Required |
-  | Personal info → Email address | sign-in email, contact email | Optional (an account made with Strava may have none) |
+  | Personal info → Name | account name; from Google when you sign in with it | Required |
+  | Personal info → Email address | sign-in email, contact email | Optional (an account made with Strava on the website may have none) |
   | Personal info → User IDs | account id, public handle, Google account id | Required |
-  | Location → Precise location | the GPS tracks in paddles you add, import from Strava, or record with a tracker | Optional (only when you add a paddle) |
+  | Location → Precise location | the GPS tracks in paddles you add or record with a tracker | Optional (only when you add a paddle) |
   | Health and fitness → Fitness info | distance, pace, stroke rate and boat motion of those paddles | Optional (only when you add a paddle) |
   | Files and docs | the GPS files you add, processed ephemerally (the server keeps the paddle, not the file) | Optional |
   | Device or other IDs | the id of each tracker you add to your account | Optional (only with a tracker) |
@@ -156,15 +165,17 @@ All of these must be done before the closed test can start.
   has it, and `/privacy` says so.
 - **WiFi name and password** for a tracker go from the phone to the tracker
   over Bluetooth, never to our server. Nothing to declare.
-- **Strava** is read-only. The server reads the user's Strava paddles and
-  sends Strava nothing back, so there's nothing to declare as shared.
+- **Strava** is hidden in this release, so the app brings nothing in from
+  it. Paddles brought in from Strava on the website show in the app like any
+  other paddle, and the rows above cover them.
 
 ## Closed test starts (owner)
 
 - [ ] **Owner + android:** check the release on the owner's phone from the
       internal track. Install from Play, sign in, open a paddle and add a
-      paddle. Then open a `paddlesnitch.com/paddles/<id>` link. It should open
-      the app (this needs the fingerprint from the Play app signing step).
+      paddle. Sign-in and Account show no way to connect Strava. Then open a
+      `paddlesnitch.com/paddles/<id>` link. It should open the app (this needs
+      the fingerprint from the Play app signing step).
 - [ ] **Owner:** in Play Console, create the closed testing track, add the
       testers and send them the opt-in link. The 14 days count from when 12
       are opted in.
@@ -188,5 +199,11 @@ All of these must be done before the closed test can start.
   - a foreground service of type `location` needs a Play declaration with a
     short video;
   - the data safety form gains the phone's location and motion.
+- **Strava back in the app:** set `STRAVA_IN_APP` to true for release.
+  - Location and Fitness info gain "imported from Strava" as a source; Name
+    can come from Strava.
+  - Strava is read-only: the server reads the user's Strava paddles and sends
+    Strava nothing back, so there's still nothing to declare as shared.
+  - The store listing can mention Strava only once the server has it on.
 - **Automatic tracker sync** (a `connectedDevice` foreground service): its own
   declaration and video.
