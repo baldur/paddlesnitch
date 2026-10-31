@@ -81,6 +81,17 @@ const val KEEP_HOLDING = "Keep holding to stop."
 /** How long "Hold to stop" must be held: long enough that a brush or a drybag doesn't end a paddle. */
 const val HOLD_TO_STOP_MS = 1500
 
+/**
+ * The GPS line under the time, from the core's live values (rc_live_values.fix and
+ * since_fix_s, 0.4.0): never worked out in the app.
+ */
+fun gpsStatus(live: RecorderCore.Live?): String = when {
+    live == null || (!live.fix && live.sinceFixS.isNaN()) -> "Waiting for GPS"
+    live.fix -> "GPS fix"
+    live.sinceFixS < 60 -> "GPS lost ${live.sinceFixS.roundToInt()} s ago"
+    else -> "GPS lost ${(live.sinceFixS / 60).toInt()} min ago"
+}
+
 /** The stroke rate as the core gives it: "—" until it has one (rc_phone_live is NaN until phase 2). */
 fun liveStrokeRate(live: RecorderCore.Live?): String = live?.spm?.takeIf { !it.isNaN() }?.roundToInt()?.toString() ?: "—"
 
@@ -163,6 +174,13 @@ private fun Recording(state: RecordingService.State.Recording, onStop: () -> Uni
     }
     val elapsed = fmtClock(elapsedMs / 1000.0)
     Tile("Elapsed", elapsed, "Elapsed, $elapsed")
+    val now = live
+    val gps = gpsStatus(now)
+    val lost = now != null && !now.fix && !now.sinceFixS.isNaN()
+    // A live region, so TalkBack says when the fix comes or goes; while lost it hears
+    // "GPS lost" once, not a new number every second.
+    Text(gps, color = if (now?.fix == true) PsColor.muted else PsColor.red, fontSize = 18.sp,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = if (lost) "GPS lost" else gps })
     val spm = liveStrokeRate(live)
     Tile("Stroke rate", spm, if (spm == "—") "Stroke rate, not measured yet" else "Stroke rate, $spm strokes per minute")
     Text(

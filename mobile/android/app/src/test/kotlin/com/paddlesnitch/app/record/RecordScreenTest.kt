@@ -165,6 +165,19 @@ class RecordScreenTest {
         }
     }
 
+    @Test fun theGpsLineIsTheCoresState() {
+        assertEquals("Waiting for GPS", gpsStatus(null))
+        assertEquals("Waiting for GPS", gpsStatus(notReady))
+        assertEquals("GPS fix", gpsStatus(notReady.copy(fix = true, sinceFixS = 0f)))
+        assertEquals("GPS lost 40 s ago", gpsStatus(notReady.copy(sinceFixS = 40f)))
+        assertEquals("GPS lost 2 min ago", gpsStatus(notReady.copy(sinceFixS = 150f)))
+    }
+
+    @Test fun recordingWithoutAFixSaysWaitingForGps() {
+        show(recording)
+        compose.onNodeWithText("Waiting for GPS").assertExists()
+    }
+
     @Test fun theStrokeRateIsTheCoresOrADash() {
         assertEquals("—", liveStrokeRate(null))
         assertEquals("—", liveStrokeRate(notReady))

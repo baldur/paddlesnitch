@@ -77,8 +77,9 @@ JNIEXPORT void JNICALL FN(nativeLive)(JNIEnv *env, jobject self, jlong h, jfloat
 {
     rc_live_values v;
     rc_phone_live(&((recorder *)(intptr_t)h)->phone, &v);
-    jfloat f[6] = { v.spm, v.roll_deg, v.pitch_deg, v.evenness_pct, v.speed_kmh, v.distance_m };
-    (*env)->SetFloatArrayRegion(env, out, 0, 6, f);
+    jfloat f[8] = { v.spm, v.roll_deg, v.pitch_deg, v.evenness_pct, v.speed_kmh, v.distance_m,
+                    (jfloat)v.fix, v.since_fix_s };
+    (*env)->SetFloatArrayRegion(env, out, 0, 8, f);
 }
 
 JNIEXPORT jlong JNICALL FN(nativeDroppedLate)(JNIEnv *env, jobject self, jlong h)

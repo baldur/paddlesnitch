@@ -28,7 +28,7 @@ class RecorderCore(has: Int, motion: Boolean, platform: Int = ANDROID, private v
     }
     fun tick(tNs: Long, battMv: Int) = nativeTick(open(), tNs, battMv)
     fun finish() = nativeFinish(open())
-    fun live(): Live = FloatArray(6).also { nativeLive(open(), it) }.let { Live(it[0], it[1], it[2], it[3], it[4], it[5]) }
+    fun live(): Live = FloatArray(8).also { nativeLive(open(), it) }.let { Live(it[0], it[1], it[2], it[3], it[4], it[5], it[6] != 0f, it[7]) }
     val droppedLate: Long get() = nativeDroppedLate(open())
     val droppedUnpaired: Long get() = nativeDroppedUnpaired(open())
 
@@ -57,8 +57,14 @@ class RecorderCore(has: Int, motion: Boolean, platform: Int = ANDROID, private v
     /** A location as the platform gave it; null = the platform didn't give that field. */
     data class Fix(val tNs: Long, val utcMs: Long, val lat: Double, val lon: Double, val alt: Double?, val speedMs: Double?, val courseDeg: Double?)
 
-    /** The core's live values; NaN = not ready (show "—"). */
-    data class Live(val spm: Float, val rollDeg: Float, val pitchDeg: Float, val evennessPct: Float, val speedKmh: Float, val distanceM: Float)
+    /**
+     * The core's live values; NaN = not ready (show "—"). [fix]: the latest tick's row has a
+     * GPS fix; [sinceFixS]: seconds since the last one (0 with a fix, NaN before the first).
+     */
+    data class Live(
+        val spm: Float, val rollDeg: Float, val pitchDeg: Float, val evennessPct: Float, val speedKmh: Float, val distanceM: Float,
+        val fix: Boolean = false, val sinceFixS: Float = Float.NaN,
+    )
 
     companion object {
         // recorder_phone.h: rc_platform, rc_stream and the RC_HAS_* bits.

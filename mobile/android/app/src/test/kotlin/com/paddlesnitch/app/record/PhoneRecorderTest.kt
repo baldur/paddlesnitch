@@ -221,6 +221,21 @@ class PhoneRecorderTest {
         assertEquals("0.0", row[7])
     }
 
+    @Test fun theLiveValuesCarryTheCoresGpsState() {
+        addSensors(gyro = false)
+        recorder.start()
+        tickAt(10)
+        assertEquals(false, recorder.live.value!!.fix)
+        assertTrue(recorder.live.value!!.sinceFixS.isNaN())   // no fix yet
+        recorder.onThread { shadowOf(context.getSystemService(LocationManager::class.java)).simulateLocation(fix()) }   // taken at 11 s
+        tickAt(11)
+        assertEquals(true, recorder.live.value!!.fix)
+        assertEquals(0f, recorder.live.value!!.sinceFixS)
+        tickAt(15)                                            // 4 s old: not a fix any more
+        assertEquals(false, recorder.live.value!!.fix)
+        assertEquals(4f, recorder.live.value!!.sinceFixS)
+    }
+
     @Test fun theFilesAreNamedAsTheTrackersAre() {
         addSensors()
         val f = recorder.start()
