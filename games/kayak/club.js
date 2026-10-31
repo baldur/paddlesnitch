@@ -34,7 +34,10 @@ export function firstPlace({ invited = false, last = null } = {}) {
 // The rooms are built under the club, out of sight of the river: each is a box
 // you stand in, so the sky and the water never show.
 const UNDER = -60;
+export const PARAPET = 7.6; // the top of Caversham Bridge's parapet (world.js: deck 6.5, parapet 1.1)
+export const SWAN_WALK = [7, 12]; // the stretch of parapet the swan paces, metres along the road from the camera
 export const PATH = { height: 9.8, lean: 5.5, aside: 7, back: 11 }; // the eye on Caversham Bridge (how high, how far over the parapet); how far back from the club you stand
+export const HIPS = 0.9; // a standing paddler's hips above the floor (the paddler mesh starts at the hips)
 export const ROOMS = {
   changing: { at: 0, width: 10, depth: 8, height: 3.4 },
   boathouse: { at: 1, width: 13, depth: 10, height: 3.6 },
@@ -67,14 +70,16 @@ export function clubShots(course) {
   const c = frame(canoe);
   const r = frame(rowing);
   const roomAt = (name) => [c.x + ROOMS[name].at * 40, UNDER, c.z];
+  const p = (name, x, y, z) => inRoom(roomAt(name), x, y, z);
   // Inside a room: stand by the wall you came in at, look across to the far one.
   const room = (name, lookUp = 1.3) => {
-    const o = roomAt(name);
     const { depth } = ROOMS[name];
-    return { eye: add(o, [0, 1.65, depth / 2 - 0.6]), look: add(o, [0, lookUp, -depth / 2]) };
+    return { eye: p(name, 0, 1.65, depth / 2 - 0.6), look: p(name, 0, lookUp, -depth / 2) };
   };
+  // Your paddler stands in the changing room, hips this high, facing the camera.
+  const stand = p('changing', -1.2, HIPS, 0.4);
   // The way out: a door at the far end of the right-hand wall.
-  const out = (name) => add(roomAt(name), [ROOMS[name].width / 2 - 0.2, 2.5, -ROOMS[name].depth / 2 + 1.8]);
+  const out = (name) => p(name, ROOMS[name].width / 2 - 0.2, 2.5, -ROOMS[name].depth / 2 + 1.8);
   const pontoon = add(c.edge, c.toWater, -1.5);
   // The opening shot: on Caversham Bridge's deck, looking up the river at both clubs.
   const deck = course.scenery.bridges?.find((b) => b.name === 'Caversham Bridge');
@@ -84,6 +89,22 @@ export function clubShots(course) {
   // Leaning on the upstream parapet, so the bridge itself is out of the shot.
   const lean = [on.tx * PATH.lean - on.tz * PATH.aside, 0, on.tz * PATH.lean + on.tx * PATH.aside];
   const bridge = { eye: [on.x + lean[0], PATH.height, on.z + lean[2]], look: [ahead.x, 5, ahead.z] };
+  // A swan on the bridge's far parapet (the one in view), pacing a few metres of it.
+  let swan = null;
+  if (deck?.ends) {
+    const [a, b] = deck.ends;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const road = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    const across = [-road[1], road[0]];
+    const t = (bridge.eye[0] - a[0]) * road[0] + (bridge.eye[2] - a[1]) * road[1];
+    const o = [a[0] + road[0] * t, a[1] + road[1] * t];
+    const look = [bridge.look[0] - bridge.eye[0], bridge.look[2] - bridge.eye[2]];
+    const side = Math.sign(across[0] * look[0] + across[1] * look[1]) || 1;
+    // Along the road, the stretch of parapet that shows in the lower right.
+    const k = -side * Math.sign(road[0] * look[1] - road[1] * look[0]) || 1;
+    const on = (d) => [o[0] + road[0] * d * k + across[0] * side * 5.75, PARAPET, o[1] + road[1] * d * k + across[1] * side * 5.75];
+    swan = { from: on(SWAN_WALK[0]), to: on(SWAN_WALK[1]) };
+  }
   // The club from the road: on its land side, looking at the door.
   const entrance = at(...add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back)).filter((_, i) => i !== 1), 1.7);
   const entranceDoor = (k) => at(...add(add([c.x, 0, c.z], c.toWater, -c.toEdge * 0.6), c.along, k).filter((_, i) => i !== 1), 1.8);
@@ -95,12 +116,13 @@ export function clubShots(course) {
       path: bridge,
       club: { eye: entrance, look: at(c.x, c.z, 2.6) },
       pontoon: { eye: [pontoon[0], 1.6, pontoon[2]], look: [across[0], 0.6, across[2]] },
-      changing: room('changing'),
+      // Face to face with your paddler, who stands on the left of the screen: the picker sheet covers the right.
+      changing: { eye: p('changing', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('changing', -1.2 + 1.85, HIPS + 0.3, 0.4) },
       boathouse: room('boathouse', 1.5),
       clubhouse: room('clubhouse', 1.5),
     },
     doors: {
-      path: { club: at(c.x, c.z, c.height + 40), rowing: at(r.x, r.z, 0) },
+      path: { club: at(c.x, c.z, c.height + 3), rowing: at(r.x, r.z, r.height + 3) },
       club: { changing: entranceDoor(-10), boathouse: entranceDoor(0), clubhouse: entranceDoor(10), pontoon: at(...add([c.x, 0, c.z], c.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back - 2)), c.along, -10).filter((_, i) => i !== 1), 1.4) },
       changing: { club: out('changing') },
       boathouse: { club: out('boathouse') },
@@ -108,26 +130,33 @@ export function clubShots(course) {
       pontoon: { club: add(c.edge, c.toWater, -8).map((v, i) => (i === 1 ? 1.5 : v)) },
     },
     // Where the boathouse's boats lie on the rack, and the whiteboard and the leaderboard on the clubhouse wall.
-    rack: rackPlaces(roomAt('boathouse')),
-    // Each boat's label at one end, alternating, so the shelves' labels don't stack.
-    rackLabels: rackPlaces(roomAt('boathouse')).map((p, i) => add(p, [(i < 5 ? -1 : 1) * (2.9 + (i % 2) * 0.55), 0.05, 0])),
-    paddles: add(roomAt('boathouse'), [-ROOMS.boathouse.width / 2 + 0.3, 2.5, -ROOMS.boathouse.depth / 2 + 2.6]),
-    boards: { plan: add(roomAt('clubhouse'), [-2.3, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1]), leaders: add(roomAt('clubhouse'), [2.2, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1]) },
-    changingSeat: add(roomAt('changing'), [0, 0.48, -ROOMS.changing.depth / 2 + 1.2]),
+    rack: RACK.map(([x, y, z]) => p('boathouse', x, y, z)),
+    // Each boat's label at its rack's outer end, alternating, so the shelves' labels don't stack.
+    rackLabels: RACK.map(([x, y, z], i) => p('boathouse', x + (i < 5 ? -1 : 1) * (2.9 + (i % 2) * 0.55), y + 0.05, z)),
+    paddles: p('boathouse', -ROOMS.boathouse.width / 2 + 0.3, 2.5, -ROOMS.boathouse.depth / 2 + 2.6),
+    boards: { plan: p('clubhouse', -2.3, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1), leaders: p('clubhouse', 2.2, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1) },
+    changingStand: stand,
+    changeLabel: p('changing', -1.2 + 0.75, HIPS + 0.15, 0.4),
+    swan,
     rowingSign: at(...add(across, r.toWater, -2).filter((_, i) => i !== 1), 0),
     roomAt,
   };
 }
 
+// Rooms are laid out as seen from where you stand (x to your right, z towards
+// you, the far wall at -depth/2) and turned round so you look south: the sun
+// is in the north, so you see the lit side of everything.
+export function inRoom(o, x, y, z) {
+  return [o[0] - x, o[1] + y, o[2] - z];
+}
+
 // The nine boats on two racks along the boathouse's back wall, side on: the
 // tippiest at the bottom left, five shelves on the left and four on the right.
 export const SHELF = 0.62;
-function rackPlaces(o) {
-  return Array.from({ length: 9 }, (_, i) => {
-    const [rack, shelf] = i < 5 ? [-1, i] : [1, i - 5];
-    return add(o, [rack * 3.1, 0.42 + shelf * SHELF, -ROOMS.boathouse.depth / 2 + 0.7]);
-  });
-}
+const RACK = Array.from({ length: 9 }, (_, i) => {
+  const [rack, shelf] = i < 5 ? [-1, i] : [1, i - 5];
+  return [rack * 3.1, 0.42 + shelf * SHELF, -ROOMS.boathouse.depth / 2 + 0.7];
+});
 
 // A camera part of the way from one shot to the next (t 0..1, eased at both ends).
 export function glide(a, b, t) {
@@ -142,19 +171,25 @@ const C = {
   red: [0.86, 0.1, 0.08], post: [0.9, 0.9, 0.88], floor: [0.5, 0.38, 0.27],
 };
 
+// A box in a room, corners in the room's own coordinates (see inRoom).
+function rbox(m, o, [x0, y0, z0], [x1, y1, z1], color) {
+  const a = inRoom(o, x0, y0, z0);
+  const b = inRoom(o, x1, y1, z1);
+  m.box([Math.min(a[0], b[0]), a[1], Math.min(a[2], b[2])], [Math.max(a[0], b[0]), b[1], Math.max(a[2], b[2])], color);
+}
+
 // A room: floor, four walls and a ceiling, `size` big at `o`.
 function shell(m, o, size, floor) {
   const { width: w, depth: d, height: h } = size;
-  const [x0, x1, z0, z1] = [o[0] - w / 2, o[0] + w / 2, o[2] - d / 2, o[2] + d / 2];
-  const [y0, y1] = [o[1], o[1] + h];
-  m.box([x0 - 0.2, y0 - 0.2, z0 - 0.2], [x1 + 0.2, y0, z1 + 0.2], floor);
-  m.box([x0 - 0.2, y1, z0 - 0.2], [x1 + 0.2, y1 + 0.2, z1 + 0.2], C.white);
-  m.box([x0 - 0.2, y0, z0 - 0.2], [x0, y1, z1 + 0.2], C.wall);
-  m.box([x1, y0, z0 - 0.2], [x1 + 0.2, y1, z1 + 0.2], C.wall);
-  m.box([x0, y0, z0 - 0.2], [x1, y1, z0], C.wall);
-  m.box([x0, y0, z1], [x1, y1, z1 + 0.2], C.wall);
+  const [x0, x1, z0, z1] = [-w / 2, w / 2, -d / 2, d / 2];
+  rbox(m, o, [x0 - 0.2, -0.2, z0 - 0.2], [x1 + 0.2, 0, z1 + 0.2], floor);
+  rbox(m, o, [x0 - 0.2, h, z0 - 0.2], [x1 + 0.2, h + 0.2, z1 + 0.2], C.white);
+  rbox(m, o, [x0 - 0.2, 0, z0 - 0.2], [x0, h, z1 + 0.2], C.wall);
+  rbox(m, o, [x1, 0, z0 - 0.2], [x1 + 0.2, h, z1 + 0.2], C.wall);
+  rbox(m, o, [x0, 0, z0 - 0.2], [x1, h, z0], C.wall);
+  rbox(m, o, [x0, 0, z1], [x1, h, z1 + 0.2], C.wall);
   // The way out: a door at the far end of the right-hand wall.
-  m.box([x1 - 0.05, y0, z0 + 1.3], [x1, y0 + 2.1, z0 + 2.3], C.dark);
+  rbox(m, o, [x1 - 0.05, 0, z0 + 1.3], [x1, 2.1, z0 + 2.3], C.dark);
 }
 
 // The three rooms under the club, and the red boards outside the rowing club.
@@ -164,46 +199,97 @@ export function clubMesh(shots) {
   const { roomAt } = shots;
   // Changing room: lockers along the back wall, a bench, a mirror.
   const a = roomAt('changing');
-  const back = a[2] - ROOMS.changing.depth / 2;
+  const back = -ROOMS.changing.depth / 2;
   shell(m, a, ROOMS.changing, C.tile);
   for (let i = 0; i < 8; i++) {
-    const x = a[0] - 4.2 + i * 0.75;
-    m.box([x, a[1], back], [x + 0.7, a[1] + 1.9, back + 0.5], i % 2 ? C.locker : C.locker.map((v) => v * 0.9));
+    const x = -4.2 + i * 0.75;
+    rbox(m, a, [x, 0, back], [x + 0.7, 1.9, back + 0.5], i % 2 ? C.locker : C.locker.map((v) => v * 0.9));
   }
-  m.box([a[0] - 2.5, a[1] + 0.4, back + 0.9], [a[0] + 2.5, a[1] + 0.48, back + 1.5], C.bench);
-  m.box([a[0] + 3.2, a[1] + 0.9, back + 0.51], [a[0] + 4.4, a[1] + 2.3, back + 0.55], C.mirror);
+  rbox(m, a, [-2.5, 0.4, back + 0.9], [2.5, 0.48, back + 1.5], C.bench);
+  rbox(m, a, [3.2, 0.9, back + 0.51], [4.4, 2.3, back + 0.55], C.mirror);
   // Boathouse: a timber floor, two racks on the back wall (uprights and arms).
   const b = roomAt('boathouse');
-  const wall = b[2] - ROOMS.boathouse.depth / 2;
+  const wall = -ROOMS.boathouse.depth / 2;
   shell(m, b, ROOMS.boathouse, C.floor);
   for (const [rack, shelves] of [[-1, 5], [1, 4]]) {
     for (const x of [-1.8, 0, 1.8]) {
-      const px = b[0] + rack * 3.1 + x;
-      m.box([px - 0.05, b[1], wall], [px + 0.05, b[1] + 0.4 + shelves * SHELF, wall + 0.1], C.rack);
-      for (let k = 0; k < shelves; k++) m.box([px - 0.04, b[1] + 0.36 + k * SHELF, wall], [px + 0.04, b[1] + 0.4 + k * SHELF, wall + 1.2], C.rack);
+      const px = rack * 3.1 + x;
+      rbox(m, b, [px - 0.05, 0, wall], [px + 0.05, 0.4 + shelves * SHELF, wall + 0.1], C.rack);
+      for (let k = 0; k < shelves; k++) rbox(m, b, [px - 0.04, 0.36 + k * SHELF, wall], [px + 0.04, 0.4 + k * SHELF, wall + 1.2], C.rack);
     }
   }
   // Paddles on the left-hand wall: a wing and a flat, blades up.
   for (const [k, z] of [[0, 2], [1, 3.1]]) {
     const pz = wall + z;
-    const px = b[0] - ROOMS.boathouse.width / 2 + 0.06;
-    m.box([px, b[1] + 0.3, pz - 0.02], [px + 0.04, b[1] + 2.4, pz + 0.02], C.rack);
-    m.box([px, b[1] + 1.95, pz - (k ? 0.1 : 0.13)], [px + 0.03, b[1] + 2.45, pz + (k ? 0.1 : 0.07)], k ? C.locker : C.gold);
-    m.box([px, b[1] + 0.25, pz - (k ? 0.1 : 0.13)], [px + 0.03, b[1] + 0.75, pz + (k ? 0.1 : 0.07)], k ? C.locker : C.gold);
+    const px = -ROOMS.boathouse.width / 2 + 0.06;
+    const blade = k ? C.locker : C.gold;
+    rbox(m, b, [px, 0.3, pz - 0.02], [px + 0.04, 2.4, pz + 0.02], C.rack);
+    rbox(m, b, [px, 1.95, pz - (k ? 0.1 : 0.13)], [px + 0.03, 2.45, pz + (k ? 0.1 : 0.07)], blade);
+    rbox(m, b, [px, 0.25, pz - (k ? 0.1 : 0.13)], [px + 0.03, 0.75, pz + (k ? 0.1 : 0.07)], blade);
   }
   // Clubhouse: a whiteboard and a leaderboard on the back wall, a trophy cabinet in the corner.
   const c = roomAt('clubhouse');
   shell(m, c, ROOMS.clubhouse, C.floor);
-  const cwall = c[2] - ROOMS.clubhouse.depth / 2;
-  m.box([c[0] - 4.2, c[1] + 0.9, cwall], [c[0] - 0.4, c[1] + 2.6, cwall + 0.06], C.frame);
-  m.box([c[0] - 4.1, c[1] + 1, cwall + 0.06], [c[0] - 0.5, c[1] + 2.5, cwall + 0.08], C.white);
-  m.box([c[0] + 0.6, c[1] + 0.9, cwall], [c[0] + 3.8, c[1] + 2.6, cwall + 0.06], C.frame);
-  m.box([c[0] + 0.7, c[1] + 1, cwall + 0.06], [c[0] + 3.7, c[1] + 2.5, cwall + 0.08], C.board);
-  m.box([c[0] - 4.6, c[1], cwall + 1.5], [c[0] - 3.8, c[1] + 1.8, cwall + 2.4], C.glass);
-  for (let i = 0; i < 3; i++) m.cylinder([c[0] - 4.2, c[1] + 0.4 + i * 0.5, cwall + 1.95], 0.1, 0.3, 6, C.gold);
+  const cw = -ROOMS.clubhouse.depth / 2;
+  rbox(m, c, [-4.2, 0.9, cw], [-0.4, 2.6, cw + 0.06], C.frame);
+  rbox(m, c, [-4.1, 1, cw + 0.06], [-0.5, 2.5, cw + 0.08], C.white);
+  rbox(m, c, [0.6, 0.9, cw], [3.8, 2.6, cw + 0.06], C.frame);
+  rbox(m, c, [0.7, 1, cw + 0.06], [3.7, 2.5, cw + 0.08], C.board);
+  rbox(m, c, [-4.6, 0, cw + 1.5], [-3.8, 1.8, cw + 2.4], C.glass);
+  for (let i = 0; i < 3; i++) m.cylinder(inRoom(c, -4.2, 0.4 + i * 0.5, cw + 1.95), 0.1, 0.3, 6, C.gold);
   // The red boards: a red board on a white post at the rowing club's landing.
   const s = shots.rowingSign;
   m.cylinder([s[0], s[1], s[2]], 0.08, 3.2, 6, C.post);
   m.box([s[0] - 1.1, s[1] + 2.4, s[2] - 0.05], [s[0] + 1.1, s[1] + 3.4, s[2] + 0.05], C.red);
+  return m.build();
+}
+
+// Legs for your paddler standing in the changing room (the paddler mesh, made
+// for sitting in a kayak, stops at the hips): dark shorts, bare calves, shoes.
+// Hips at y 0, the floor at -HIPS, facing -z like the paddler.
+export function legsMesh(skin, shorts = [0.12, 0.13, 0.16], shoes = [0.9, 0.9, 0.88]) {
+  const m = new MeshBuilder();
+  const ring = (x, y, w, d) => [[x - w, y, -d], [x + w, y, -d], [x + w, y, d], [x - w, y, d]];
+  for (const x of [-0.085, 0.085]) {
+    m.prism(ring(x, -0.38, 0.075, 0.08), ring(x, 0.1, 0.09, 0.11), shorts);
+    m.prism(ring(x, -HIPS + 0.07, 0.045, 0.05), ring(x, -0.38, 0.06, 0.065), skin);
+    m.box([x - 0.055, -HIPS, -0.16], [x + 0.055, -HIPS + 0.08, 0.06], shoes);
+  }
+  return m.build();
+}
+
+// The swan on Caversham Bridge, a little confused: it sits, stands up, waddles
+// one way, stops and looks about, turns round, waddles back, has another think,
+// and sits down again. `t` in seconds; returns where it is along its stretch
+// (0..1), which way it faces along it (1 or -1, with turns in between as
+// `turn` 0..1), how far it has stood up (0..1), and a waddle for the steps.
+export const SWAN_LOOP = 16;
+export function confusedSwan(t) {
+  const u = ((t % SWAN_LOOP) + SWAN_LOOP) % SWAN_LOOP;
+  const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+  const span = (a, b) => ease((u - a) / (b - a));
+  const stand = u < 4 ? 0 : u < 4.8 ? span(4, 4.8) : u < 13.6 ? 1 : 1 - span(13.6, 14.4);
+  let along = 0.1;
+  if (u >= 4.8) along = 0.1 + 0.75 * span(4.8, 8);
+  if (u >= 10.4) along = 0.85 - 0.75 * span(10.4, 12.6);
+  // Faces up the stretch; turns round once it has looked about, then half turns
+  // back, unsure; sitting again, it shuffles round to face up the stretch.
+  let turn = u < 4 ? 1 - span(1, 2.5) : span(9, 10.2);
+  if (u >= 12.8) turn = 1 - 0.5 * Math.sin(Math.PI * span(12.8, 13.6));
+  const walking = (u > 4.8 && u < 8) || (u > 10.4 && u < 12.6);
+  const look = u > 8.1 && u < 9 ? Math.sin((u - 8.1) * 14) * 0.5 : 0;
+  return { along, turn, stand, look, waddle: walking ? Math.sin(u * 12) : 0 };
+}
+
+// The swan's legs, for standing: dark grey, under its body, `SWAN_LEGS` tall.
+export const SWAN_LEGS = 0.26;
+export const SWAN_SIZE = 1.7; // the bridge swan, larger than life so it shows from the deck
+export function swanLegsMesh() {
+  const m = new MeshBuilder();
+  const leg = [0.12, 0.12, 0.13];
+  for (const x of [-0.08, 0.08]) {
+    m.box([x - 0.025, -SWAN_LEGS, -0.02], [x + 0.025, 0.02, 0.02], leg);
+    m.box([x - 0.06, -SWAN_LEGS, -0.12], [x + 0.06, -SWAN_LEGS + 0.02, 0.03], leg);
+  }
   return m.build();
 }

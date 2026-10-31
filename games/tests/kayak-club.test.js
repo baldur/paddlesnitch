@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../kayak/course.js';
 import { waterMap } from '../kayak/water.js';
 import { groundAt } from '../kayak/world.js';
-import { PLACES, START, DOOR_LABELS, ROOMS, firstPlace, clubShots, clubMesh, glide } from '../kayak/club.js';
+import { PLACES, START, DOOR_LABELS, ROOMS, PARAPET, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh } from '../kayak/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -100,4 +100,41 @@ test('the rooms and the red boards are a small mesh with no NaN', async () => {
   const { vertices, count } = clubMesh(clubShots(await loop()));
   assert.ok(vertices.every(Number.isFinite));
   assert.ok(count / 3 < 3000, `${count / 3} triangles`);
+});
+
+test('the swan on the bridge sits, stands, waddles one way, turns round, waddles back and sits, with no jumps where the loop starts again', () => {
+  const at = (t) => confusedSwan(t);
+  assert.equal(at(1).stand, 0, 'sitting to begin with');
+  assert.equal(at(6).stand, 1, 'then standing');
+  assert.ok(at(8).along > at(5).along + 0.5, 'waddles up its stretch');
+  assert.ok(at(8).turn < 0.1 && at(10.3).turn > 0.9, 'and turns round');
+  assert.ok(at(12.7).along < at(10.3).along - 0.5, 'and waddles back');
+  assert.equal(at(15).stand, 0, 'and sits down');
+  for (let t = 0; t < SWAN_LOOP * 2; t += 0.05) {
+    const [a, b] = [at(t), at(t + 0.05)];
+    for (const k of ['along', 'turn', 'stand']) assert.ok(Math.abs(a[k] - b[k]) < 0.1, `${k} jumps at ${t.toFixed(2)} s`);
+    assert.ok(a.along >= 0 && a.along <= 1);
+  }
+});
+
+test("the swan paces the bridge's far parapet, in front of you", async () => {
+  const shots = clubShots(await loop());
+  const { eye, look } = shots.places.path;
+  for (const p of [shots.swan.from, shots.swan.to]) {
+    assert.equal(p[1], PARAPET);
+    const ahead = (p[0] - eye[0]) * (look[0] - eye[0]) + (p[2] - eye[2]) * (look[2] - eye[2]);
+    assert.ok(ahead > 0, 'in front of the camera');
+  }
+  const len = Math.hypot(shots.swan.to[0] - shots.swan.from[0], shots.swan.to[2] - shots.swan.from[2]);
+  assert.ok(len > 3 && len < 8, `${len} m of parapet`);
+});
+
+test('your paddler standing in the changing room has legs to the floor; the swan has legs too', async () => {
+  const shots = clubShots(await loop());
+  const floor = shots.roomAt('changing')[1];
+  const legs = legsMesh([0.6, 0.4, 0.3]);
+  let low = Infinity;
+  for (let i = 1; i < legs.vertices.length; i += 9) low = Math.min(low, legs.vertices[i]);
+  assert.ok(Math.abs(shots.changingStand[1] + low - floor) < 0.01, 'shoes on the floor');
+  assert.ok(swanLegsMesh().vertices.every(Number.isFinite));
 });

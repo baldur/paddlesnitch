@@ -5,9 +5,9 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, glide } from './club.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE } from './club.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
-import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
+import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
@@ -525,6 +525,7 @@ const LAST_KEY = 'snitchmedia:kayak:last'; // the last race started, for "Race a
 const PLACE_KEY = 'snitchmedia:kayak:place'; // where you were on the walk
 const clubEl = document.getElementById('club');
 const clubDoors = document.getElementById('clubDoors');
+const clubCards = document.getElementById('clubCards');
 const clubNote = document.getElementById('clubNote');
 const clubFade = document.getElementById('clubFade');
 const clubBack = document.getElementById('clubBack');
@@ -598,21 +599,31 @@ function clubCamera() {
 function arrive(place) {
   club.place = place;
   clubDoors.replaceChildren();
+  clubCards.replaceChildren();
   clubBack.hidden = !PLACES[place].up;
   clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
   document.getElementById('clubPlace').textContent = PLACES[place].label;
   const { shots } = club;
-  const spots = PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
   const label = (key) => (MODES[key] ?? DRILL_MODES[key])?.label;
+  // On the bridge the clubs are cards along the bottom, each with a picture,
+  // and a pin over its building in the view: nothing covers the scene.
+  const spots = place === 'path'
+    ? [
+      { card: { picture: clubSvg('canoe'), name: 'Reading Canoe Club', line: 'Kayak races and practice', pin: 'canoe' }, act: () => go('club') },
+      { card: { picture: clubSvg('rowing'), name: 'Reading Rowing Club', line: 'Red boards: too rough for rowers today', pin: 'rowing' }, act: () => go('rowing') },
+      { pin: 'canoe', at: shots.doors.path.club },
+      { pin: 'rowing', at: shots.doors.path.rowing },
+    ]
+    : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
   if (place === 'path' && label(club.plan)) {
-    spots.push({ label: `Race again: ${label(club.plan)}`, at: shots.doors.club.pontoon, act: () => choose(club.plan), go: true });
+    spots.push({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
   if (place === 'pontoon') {
     const plan = label(club.plan) ? club.plan : 'practice';
     spots.push({ label: `Push off: ${label(plan)}`, at: shots.places.pontoon.look.map((v, i) => (i === 1 ? 1.2 : shots.places.pontoon.eye[i] + (v - shots.places.pontoon.eye[i]) * 0.08)), act: () => choose(plan), go: true });
   }
-  if (place === 'changing') spots.push({ label: 'Your paddler', at: shots.changingSeat.map((v, i) => (i === 1 ? v + 1.3 : v)), act: () => sheet('paddler') });
+  if (place === 'changing') spots.push({ label: 'Change', at: shots.changeLabel, act: () => sheet('paddler') });
   if (place === 'boathouse') {
     BOATS.forEach((b, i) => spots.push({ label: String(b.stability), at: shots.rackLabels[i], act: () => pickBoat(b.id), small: true, on: kit.boat === b.id, title: b.name }));
     spots.push({ label: 'Paint your boat', at: shots.rack[7].map((v, i) => (i === 1 ? v + 1.4 : v)), act: () => sheet('boat') });
@@ -623,19 +634,30 @@ function arrive(place) {
     if (!account.offline) spots.push({ label: 'Leaderboards', at: shots.boards.leaders, act: () => sheet('boards') });
   }
   club.spots = spots.map((spot) => {
+    // A pin only marks a building; it isn't a control.
+    if (!spot.act) {
+      const pin = document.createElement('span');
+      pin.className = `pin ${spot.pin}`;
+      pin.setAttribute('aria-hidden', 'true');
+      clubDoors.append(pin);
+      return { ...spot, el: pin };
+    }
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = ['spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
-    b.textContent = spot.label;
+    b.className = [spot.card ? 'card' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    if (spot.card) {
+      const { picture = '', name, line, pin } = spot.card;
+      b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
+    } else b.textContent = spot.label;
     if (spot.title) b.title = b.ariaLabel = `${spot.title}, stability ${spot.label} of 9`;
     b.addEventListener('click', () => {
       if (phone.matches) controls.enableTilt();
       spot.act();
     });
-    clubDoors.append(b);
+    (spot.card ? clubCards : clubDoors).append(b);
     return { ...spot, el: b };
   });
-  if (place === 'changing' && !kitChosen) sheet('paddler');
+  if (place === 'changing') sheet('paddler');
   if (place === 'clubhouse') sheet('home');
 }
 function note(text) {
@@ -670,6 +692,7 @@ function placeDoors() {
   const h = canvas.clientHeight;
   const m = viewProj;
   for (const s of club.spots) {
+    if (!s.at) continue;
     const [x, y, z] = s.at;
     const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
     const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw;
@@ -685,15 +708,43 @@ function placeClub() {
     meshes.club = renderer.createMesh(clubMesh(club.shots));
     renderer.place(meshes.club, [translation(0, 0, 0)]);
     meshes.rack = new Map();
+    meshes.legs = new Map();
+    meshes.bridgeSwan = renderer.createMesh(swanMesh());
+    meshes.swanLegs = renderer.createMesh(swanLegsMesh());
   }
-  const l = liveries.get(race.player);
+  // Your kit as it is now, so the picker's changes show at once.
+  const l = { key: kitKey(kit), ...livery(kit) };
   const out = [meshes.club];
-  // You, on the changing room's bench, hands on your knees, facing the camera.
-  const set = paddlerFor(race.player);
-  const seat = basis([-1, 0, 0], [0, 1, 0], [0, 0, -1], club.shots.changingSeat);
-  renderer.place(set.body, [seat]);
-  renderer.place(set.arms, [-1, 1].map((side) => limb(seat, [side * SHOULDER.x, SHOULDER.y, 0], [side * 0.22, 0.05, -0.4])));
-  out.push(set.body, set.arms);
+  // You, standing in the changing room, arms by your sides.
+  const set = paddlerOf(l);
+  const stand = basis([1, 0, 0], [0, 1, 0], [0, 0, 1], club.shots.changingStand); // facing north, towards the camera
+  const legsKey = String(l.skin);
+  if (!meshes.legs.has(legsKey)) meshes.legs.set(legsKey, renderer.createMesh(legsMesh(l.skin)));
+  const legs = meshes.legs.get(legsKey);
+  renderer.place(set.body, [stand]);
+  renderer.place(set.arms, [-1, 1].map((side) => limb(stand, [side * SHOULDER.x, SHOULDER.y, 0], [side * (SHOULDER.x + 0.07), SHOULDER.y - 0.62, -0.03])));
+  renderer.place(legs, [stand]);
+  out.push(set.body, set.arms, legs);
+  // The confused swan on Caversham Bridge's parapet.
+  const walk = club.shots.swan;
+  if (walk) {
+    const sw = confusedSwan(performance.now() / 1000);
+    const dir = normalize([walk.to[0] - walk.from[0], 0, walk.to[2] - walk.from[2]]);
+    const pos = walk.from.map((v, i) => v + (walk.to[i] - v) * sw.along);
+    // Faces along the parapet, turning round through facing the river; its head turns as it looks about.
+    const a = Math.atan2(dir[0], -dir[2]) + Math.PI * sw.turn + sw.look;
+    const f = [Math.sin(a), 0, -Math.cos(a)];
+    const big = SWAN_SIZE; // larger than life, so it shows from up on the bridge
+    const lift = sw.stand * SWAN_LEGS * big;
+    const tilt = 0.06 * sw.waddle;
+    const rightV = [-f[2] * Math.cos(tilt), Math.sin(tilt), f[0] * Math.cos(tilt)];
+    const upV = [f[2] * Math.sin(tilt), Math.cos(tilt), -f[0] * Math.sin(tilt)];
+    const at = [pos[0], pos[1] + lift - 0.04 * (1 - sw.stand), pos[2]];
+    const k = (v) => v.map((x) => x * big);
+    renderer.place(meshes.bridgeSwan, [basis(k(rightV), k(upV), k(f.map((v) => -v)), at)]);
+    renderer.place(meshes.swanLegs, sw.stand > 0.05 ? [basis(k(rightV), k(upV).map((v) => v * sw.stand), k(f.map((v) => -v)), at)] : []);
+    out.push(meshes.bridgeSwan, meshes.swanLegs);
+  }
   // The nine boats on the boathouse's racks, side on, in your colours.
   BOATS.forEach((b, i) => {
     const key = `${l.key}:${b.id}`;
@@ -1738,7 +1789,9 @@ function paddleFor(r) {
   return meshes.paddles.get(p.key);
 }
 function paddlerFor(r) {
-  const l = liveries.get(r);
+  return paddlerOf(liveries.get(r));
+}
+function paddlerOf(l) {
   if (!meshes.racers.has(l.key)) {
     meshes.racers.set(l.key, {
       body: renderer.createMesh(paddlerMesh(l)),

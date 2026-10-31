@@ -100,7 +100,7 @@ async function play(c, page, errors) {
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
     for (const [label, place] of [['Reading Canoe Club', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]]) {
-      const spot = page.locator('#clubDoors .spot', { hasText: label });
+      const spot = page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
       await spot.tap();
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
