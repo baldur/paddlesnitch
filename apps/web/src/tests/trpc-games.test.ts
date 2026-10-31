@@ -37,6 +37,27 @@ describe('your paddler and boat', () => {
     await expect(as(PAT).games.kit.set({ ...KIT, extra: 1 } as never)).rejects.toThrow()
   })
 
+  it('takes the paddler kit without the old head (body, hair, hat, beard, buoyancy aid), and an old kit still', async () => {
+    const { head: _h, headColour: _c, ...rest } = KIT
+    const NEW = {
+      ...rest, body: 'curvy', hair: 'ponytail', hairColour: '#3b2414', hat: 'visor', hatColour: '#f5f5f4',
+      beard: 'none', aid: true, aidColour: '#dc2626',
+    } as const
+    await as(PAT).games.kit.set(NEW)
+    expect(await as(PAT).games.kit.get()).toEqual(NEW)
+    await as(SAM).games.kit.set(KIT) // a page cached from before the deploy
+    expect(await as(SAM).games.kit.get()).toEqual(KIT)
+    const mixed = { ...NEW, head: 'cap', headColour: '#18181b' } as const // old and new together
+    await as(PAT).games.kit.set(mixed)
+    expect(await as(PAT).games.kit.get()).toEqual(mixed)
+    for (const bad of [
+      { body: 'other' }, { hair: 'mohawk' }, { hat: 'helmet' }, { beard: 'goatee' }, { aid: 'yes' },
+      { hairColour: 'red' }, { hatColour: 'red' }, { aidColour: 'red' }, { head: 'helmet' }, { headColour: 'red' },
+    ]) {
+      await expect(as(PAT).games.kit.set({ ...NEW, ...bad } as never)).rejects.toThrow()
+    }
+  })
+
   it("knows the same boats as the game", async () => {
     const { BOATS } = await import('../../../../games/kayak/boats.js')
     const { GAME_BOATS } = await import('@paddlesnitch/core/games')

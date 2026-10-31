@@ -218,6 +218,38 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution, alarms
     ], 24),
   )
 
+  // The games (games/shared/analytics.js): what's played, for how long, how it
+  // ends, and which paddlers people make. Never who: sid is a random tab id.
+  // Props arrive as strings; secs, knocked and the rest are whole numbers or
+  // decimals as text.
+  dashboard.addWidgets(
+    table('Game plays by mode and course (median secs)', [
+      'filter Event = "game_play"',
+      'stats count(*) as plays, count_distinct(sid) as tabs, pct(secs, 50) as median_secs by mode, course, `end`',
+      'sort plays desc',
+      'limit 30',
+    ], 12, 8),
+    table('Game outings by rowers knocked in', [
+      'filter Event = "game_play" and mode = "outing"',
+      'stats count(*) as outings by knocked',
+      'sort outings desc',
+    ], 4, 8),
+    table('Game paddlers by body, hair and hat', [
+      'filter Event = "game_kit"',
+      'stats count(*) as kits, count_distinct(sid) as tabs by body, hair, hat',
+      'sort kits desc',
+      'limit 30',
+    ], 8, 8),
+  )
+  dashboard.addWidgets(
+    table('Game time per tab, how it\'s played (where it ran)', [
+      'filter Event = "game_session"',
+      'stats sum(secs) as tab_secs, sum(plays) as tab_plays by sid, input, gpu, `from`',
+      'stats count(*) as tabs, pct(tab_secs, 50) as median_secs, avg(tab_plays) as avg_plays by input, gpu, `from`',
+      'sort tabs desc',
+    ], 24),
+  )
+
   // ---------------------------------------------------------------------------
   // Firmware rollout dashboard (docs/features/device-ota-and-auth.md 2.2)
   // ---------------------------------------------------------------------------

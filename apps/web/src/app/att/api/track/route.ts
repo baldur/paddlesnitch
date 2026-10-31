@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { emitMetric, isMetricEvent, type MetricEvent } from '@/lib/metrics'
+import { emitMetric, gameEventProps, gamePath, isMetricEvent, type MetricEvent } from '@/lib/metrics'
 import { isAllowedIngestOrigin } from '@/lib/ingest-origin'
 import { clientOf, type Client } from '@paddlesnitch/core/observe'
 import { crashReportProps, clientErrorProps } from '@/lib/client-errors'
@@ -75,7 +75,7 @@ function propsFor(event: MetricEvent, sid: string | undefined, path: unknown, pr
     const err = clientErrorProps(props, path)
     return err && { ...(sid ? { sid } : {}), ...err, ...clientProps(client) }
   }
-  return buildProps(sid, path, props, client)
+  return buildProps(sid, gamePath(event, path), gameEventProps(event, props), client)
 }
 
 export async function POST(req: NextRequest) {
