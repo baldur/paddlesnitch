@@ -45,8 +45,12 @@ it replaces them, `packages/timing/src/cadence.ts`, `attitude.ts` and
 8. Distance is movement-gated (anchor ≥3 m at ≥1.5 km/h), never a raw sum of
    fixes: GNSS scatter invents ~115 m.
 
-Reference data: the 13 Sep capture with the motion sidecar, and the 65-minute
-session that reads 58.0 spm (ask `lead` where they are).
+Reference data: the 13 Sep capture with the motion sidecar, a 65-minute
+session (ask `lead` where it is). The core reads it at 50.6 spm from the raw
+or 80 ms motion file and 50.7 from the every-5th one, and resampling the raw
+gyroscope onto an even time grid gives 50.7. The 58.0 spm the server showed
+before phase 2b took the sample rate from the median gap between samples,
+which the tracker's stalls make 14% too short.
 
 ## Testing without devices
 
