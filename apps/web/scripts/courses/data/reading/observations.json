@@ -725,8 +725,8 @@
           -1.037391
         ],
         [
-          51.482371,
-          -1.037451
+          51.48245,
+          -1.03741
         ]
       ],
       "note": "the bank path below Mapledurham Lock, from the beach where Div 1-6 land to where they put in again (the owner's points)"
@@ -919,7 +919,16 @@
       ],
       "heading": 22,
       "frame": "0093-p1 near (owner point 8)",
-      "note": "the put-in: a stepped wall of sandbags with a drain pipe, a timber deck with railings above, brick houses behind"
+      "note": "a stepped wall of sandbags with a drain pipe, a timber deck with railings above, brick houses behind, just below the put-in"
+    },
+    {
+      "kind": "feature",
+      "style": "landing",
+      "at": [
+        51.48245,
+        -1.03733
+      ],
+      "note": "the put-in: a little beach about 10 m up from the sandbag wall, where Div 1-6 get back in (the owner: the wall blocks the water there)"
     },
     {
       "kind": "feature",

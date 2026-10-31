@@ -57,7 +57,7 @@ test('every feature and styled building on the river has a model of its own, and
   assert.ok((await world()).every((t) => t.p.flat().every(Number.isFinite)));
 });
 
-test('Div 1-6 land on the beach for the portage and put in again at the sandbags', async () => {
+test('Div 1-6 land on the beach for the portage and put in again on a little beach, clear of the sandbag wall', async () => {
   const course = courseFromFile(await data('hasler16'));
   const [p] = course.portages;
   const near = (style, s) => {
@@ -66,15 +66,25 @@ test('Div 1-6 land on the beach for the portage and put in again at the sandbags
     return Math.hypot(f.at[0] - q.x, f.at[1] - q.z);
   };
   assert.ok(near('beach', p.from) < 25, `${near('beach', p.from)} m from the beach`);
-  assert.ok(near('sandbags', p.to) < 25, `${near('sandbags', p.to)} m from the sandbags`);
+  assert.ok(near('landing', p.to) < 8, `${near('landing', p.to)} m from the landing beach`);
+  // The sandbag wall stands just below it, not in the way (the owner: it blocked the old put-in).
+  assert.ok(near('sandbags', p.to) > 10, `${near('sandbags', p.to)} m from the sandbag wall`);
+  // Afloat at the put-in, open water all round the boat.
+  const q = pointAt(course, p.to + 1);
+  for (let a = 0; a < 8; a++) {
+    const [x, z] = [q.x + Math.cos((a * Math.PI) / 4) * 3, q.z + Math.sin((a * Math.PI) / 4) * 3];
+    assert.ok(!course.shore.dry(x, z), 'bank within 3 m of the put-in');
+  }
 });
 
-test('nothing grows on the beach', async () => {
+test('nothing grows on either beach', async () => {
   const river = await data('reading');
-  const [bx, bz] = river.features.find((f) => f.style === 'beach').at;
   const trunk = [0.35, 0.25, 0.17];
-  const trunks = (await world()).filter((t) => t.color.every((v, i) => Math.abs(v - trunk[i]) < 0.005) && t.p.some(([x, , z]) => Math.hypot(x - bx, z - bz) < 15));
-  assert.equal(trunks.length, 0);
+  for (const [style, r] of [['beach', 15], ['landing', 6]]) {
+    const [bx, bz] = river.features.find((f) => f.style === style).at;
+    const trunks = (await world()).filter((t) => t.color.every((v, i) => Math.abs(v - trunk[i]) < 0.005) && t.p.some(([x, , z]) => Math.hypot(x - bx, z - bz) < r));
+    assert.equal(trunks.length, 0, style);
+  }
 });
 
 test("the Lara Croft boat is moored on the right going up, and solid: you can't paddle through it", async () => {
