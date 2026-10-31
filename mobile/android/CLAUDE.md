@@ -117,3 +117,29 @@ time and isn't obvious from the code.
   `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
 - A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
   that starts below the fold, or the second golden repeats the first.
+- Recording on the phone (`record/`): `PhoneRecorder` hands SensorEvent and Location values to
+  the recorder core's phone layer as Android gives them (m/s², rad/s, `event.timestamp`,
+  `elapsedRealtimeNanos`), every call on one HandlerThread. Never convert or sort them here:
+  `recorder-core/test/one_implementation.sh` fails on the standard-gravity number or 180/π written
+  anywhere in mobile/, tests and this file included (use `SensorManager.STANDARD_GRAVITY` for a test's input). Behind
+  `BuildConfig.DEBUG` until recordings upload (C3).
+- The JNI library is built twice: by the NDK into the APK, and for the host by `hostRecorder`
+  (jni.h copied from the NDK: Android Studio's JDK has no headers), so `RecorderFixturesTest`
+  replays recorder-core's fixtures through the real binding. Two traps: the Test task must list
+  the library as an input or a changed `.c` file leaves the tests "up to date" (a mutation once
+  passed that way); and the JVM loads one library file in one classloader only, so with
+  Robolectric's sandbox as a second one, each loads its own temp copy.
+- Recording's permissions and `RecordingService` live in `src/debug/AndroidManifest.xml` until
+  recordings upload. MapLibre's manifest adds fine/coarse location to release builds by itself.
+- The recorder thread's own clock in tests: Robolectric's `idleFor` jumps the clock in one go, so
+  step a second at a time to see each tick, and give the recorder a clock that moves
+  (`SystemClock.uptimeMillis()`), or the core ignores every tick after the first as a repeat.
+  Robolectric's `sendSensorEventToListeners` ignores the Handler, so tests send from the
+  recorder thread themselves (`onThread`).
+- A recording's write errors never reach the core: `RecordingFiles.write` catches and counts
+  them, and the JNI callback returns early while an exception is pending (CheckJNI aborts a
+  debug build that makes JNI calls with one pending).
+- Record sits above every screen (`WithRecording` wraps App's `when (screen)`), never inside a
+  signed-in screen: a refused token refresh signs out by itself (#702), and a Record screen
+  owned by Paddles would vanish mid-paddle with its Hold to stop while the service kept
+  recording (found by ios in #767). Signed out, it's reachable only while a recording runs.

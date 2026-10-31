@@ -15,6 +15,8 @@ val uploadKeystore = System.getenv("PS_UPLOAD_KEYSTORE")
 android {
     namespace = "com.paddlesnitch.app"
     compileSdk = 37
+    // The recorder core (recorder-core/) is C, built with the app's JNI wrapper.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.paddlesnitch.app"
@@ -26,6 +28,10 @@ android {
         // -Ppaddlesnitch.api=http://<your Mac's LAN address>:3000
         val api = (project.findProperty("paddlesnitch.api") as String?) ?: "https://paddlesnitch.com"
         buildConfigField("String", "API_BASE_URL", "\"$api\"")
+    }
+
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt") }
     }
 
     signingConfigs {
@@ -164,6 +170,38 @@ dependencies {
 
 // Screenshot goldens are committed beside the tests: `./gradlew recordRoborazziDebug`
 // writes them, `verifyRoborazziDebug` (run by CI) fails on any difference.
+// The same JNI library built for this computer, so the unit tests replay
+// recorder-core/fixtures through the real binding (RecorderFixturesTest).
+// Needs cmake and a C compiler on the PATH (both are on CI's runners).
+val hostRecorderDir = layout.buildDirectory.dir("host-recorder")
+val hostRecorder = tasks.register("hostRecorder") {
+    val src = file("src/main/cpp")
+    val out = hostRecorderDir.get().asFile
+    inputs.dir(src)
+    inputs.dir(rootProject.file("../../recorder-core/src"))
+    inputs.dir(rootProject.file("../../recorder-core/include"))
+    outputs.dir(out)
+    // jni.h from the NDK (it's the standard interface; Android Studio's JDK has no headers).
+    val ndk = androidComponents.sdkComponents.ndkDirectory
+    doLast {
+        val headers = out.resolve("jni").apply { mkdirs() }
+        ndk.get().asFile.resolve("toolchains/llvm/prebuilt").listFiles()!!.first()
+            .resolve("sysroot/usr/include/jni.h").copyTo(headers.resolve("jni.h"), overwrite = true)
+        fun run(vararg args: String) {
+            val p = ProcessBuilder(*args).inheritIO().start()
+            check(p.waitFor() == 0) { "failed: ${args.joinToString(" ")}" }
+        }
+        run("cmake", "-S", src.path, "-B", out.path, "-DCMAKE_BUILD_TYPE=Release", "-DHOST_JNI_INCLUDE=${headers.path}")
+        run("cmake", "--build", out.path, "--target", "recorder")
+    }
+}
+tasks.withType<Test>().configureEach {
+    dependsOn(hostRecorder)
+    val lib = hostRecorderDir.get().asFile.resolve(if (System.getProperty("os.name").startsWith("Mac")) "librecorder.dylib" else "librecorder.so")
+    inputs.file(lib).withPropertyName("recorderLib")   // a changed library reruns the tests
+    systemProperty("paddlesnitch.recorder.lib", lib.path)
+}
+
 roborazzi {
     outputDir.set(file("src/test/screenshots"))
 }

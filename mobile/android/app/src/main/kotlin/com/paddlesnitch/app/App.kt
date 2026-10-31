@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -135,6 +137,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             onClose = { intake = intake.cardClosed() })
     }) { inner ->
         val m = Modifier.padding(inner)
+        // Record sits above every screen, so a recording keeps its screen and Hold to stop
+        // through a forced sign-out. Release builds never reach it (no location: lead, #761).
+        com.paddlesnitch.app.record.WithRecording(signedIn = signedIn, modifier = m) { recordEntry ->
         when (screen) {
             Screen.SignIn -> {
                 // Signed in, from the sign-in screen or a password reset.
@@ -149,7 +154,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                     ForgotPasswordScreen(api, forgot, onSignedIn = signedInWith,
                         onPasswordSet = { email -> forgotFor = null; reauthEmail = email; resetNotice = "Your password is set. Please sign in." },
                         onBack = { forgotFor = null }, modifier = m)
-                    return@Scaffold
+                    return@WithRecording
                 }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
@@ -184,12 +189,14 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                     })
             }
             Screen.Paddles -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
-                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m)
+                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m, recordEntry = recordEntry)
             Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m,
                 // One motion answer ships, the fixture for the river sample's recording: only that sample offers it.
-                loadMotion = { readMotionSample(context) }, offersMotion = { it.source.deviceSessionId == SAMPLE_MOTION_RECORDING }, action = {
+                loadMotion = { readMotionSample(context) }, offersMotion = { it.source.deviceSessionId == SAMPLE_MOTION_RECORDING },
+                notice = recordEntry, action = {
                 Button(onClick = { signingIn = true }) { Text("Sign in") }
             })
+        }
         }
     }
 }
@@ -211,6 +218,8 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 private fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier,
+    /** The way to Record (WithRecording); null in release builds. */
+    recordEntry: (@Composable () -> Unit)?,
 ) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -226,7 +235,8 @@ private fun MyPaddles(
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
-            loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) }, action = {
+            loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
+            notice = recordEntry, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
