@@ -1,36 +1,32 @@
-// Stroke rate from the tracker's raw motion sidecar (`track_<stamp>_imu.csv`).
+// Stroke rate from a tracker's (or phone's) recording: the track CSV and its
+// motion file (`track_<stamp>_i10.csv`, or an older `_imu.csv`).
 //
-// This is the thing the 1 Hz track CSV cannot give us: `describeDeviceData` is
-// honest that a per-second accelerometer PEAK can never yield a 0.5-2 Hz cadence.
-// The sidecar carries the underlying stream, and cadence falls straight out of it.
+// The maths isn't here. It's the recorder core (recorder-core/, C), the one
+// implementation that runs on the tracker, in both apps and, built for
+// WebAssembly, here (docs/features/on-device-metrics.md). This file replays
+// the uploaded files through it (rc_replay) and reads back the lines it
+// writes (recorder_core.h, "Stroke rate"). The method, its lessons and the
+// numbers it was checked against are in recorder-core/CLAUDE.md; change
+// them there, never here.
 //
-// The method, and why each step is there:
-//
-//  1. Pick the gyro axis with the most variance in the window. Which axis carries
-//     the stroke depends entirely on how the device happens to be oriented — in a
-//     pocket, strapped to a deck, face up or face down — so hardcoding one axis
-//     works until the day someone mounts it differently.
-//  2. Autocorrelate, and take the best LOCAL maximum in the band. The global
-//     maximum inside a band sits on the band edge whenever there is broadband
-//     high-frequency content, which reports the edge back as though it were a
-//     measurement. (Observed: an early version confidently returned exactly the
-//     band limit for every stationary window.)
-//  3. Check the correlation at HALF that lag. Alternating left/right strokes
-//     produce mirror-image deflections, so a real paddling cycle shows a strongly
-//     NEGATIVE half-lag correlation, and the stroke rate is twice the cycle rate.
-//     Measured at -0.82 to -0.88 on real paddling data. Without this test the
-//     reported rate is out by a factor of two, which is worse than reporting
-//     nothing.
-//
-// Verified against a 65-minute session (8.2 MB, 170k samples): ~25-29 cycles/min
-// at r = 0.74-0.82, i.e. ~50-58 spm, stable across separate moving stretches.
+// Replaying the files gives exactly what a device running the core worked
+// out while recording (streaming = batch, checked on every fixture), so the
+// number a paddler saw live and the one the site shows are the same.
+
+import { RC_VERSION, RC_SOURCES_SHA256, RC_WASM_BASE64 } from './recorder-core-wasm'
+
+/**
+ * Which core this is: its version and the C sources it was built from. Any
+ * change to the core can change a number, so cached figures key on this.
+ */
+export const STROKE_RATE_VERSION = `${RC_VERSION}+${RC_SOURCES_SHA256.slice(0, 12)}`
 
 export type CadenceWindow = {
   tMs: number             // window start, on the same millis() clock as the track CSV
   cyclesPerMin: number    // what was measured
   strokesPerMin: number   // cyclesPerMin, doubled when the stroke alternates
   alternating: boolean
-  confidence: number      // |autocorrelation| at the chosen lag, 0..1
+  confidence: number      // how strongly the stroke repeats at that rate, 0..1
 }
 
 export type CadenceReport = {
@@ -42,39 +38,134 @@ export type CadenceReport = {
   windows: CadenceWindow[]
 }
 
-export type MotionSample = { ms: number; ax: number; ay: number; az: number; gx: number; gy: number; gz: number }
+/** Stroke rate at one moment of a paddle: the centre of one short window. */
+export type StrokeRatePoint = { ms: number; strokesPerMin: number; confidence: number }
 
-// Paddling sits far inside this; the band only has to exclude DC wander and
-// high-frequency hull slap.
-const MIN_CYCLE_HZ = 0.2
-const MAX_CYCLE_HZ = 2.0
-// Below this the autocorrelation peak is not distinguishable from noise.
-const MIN_CONFIDENCE = 0.35
-// Alternating strokes mirror each other, so the half-lag correlation is not just
-// negative but very nearly the full inverse of the peak. The test is the RATIO,
-// not an absolute floor: a single-sided pulse train also correlates negatively at
-// half its period (measured -0.67), so an absolute threshold calls everything
-// alternating and silently doubles every reading.
-//
-//   measured, real alternating paddling   peak +0.82, half -0.88  ratio -1.07
-//   synthetic single-sided pulse train    peak +0.96, half -0.67  ratio -0.69
-//
-// CALIBRATION DEBT: the alternating end is real data, the single-sided end is
-// synthetic. Confirm against a genuine one-sided recording (canoe, SUP) before
-// trusting this on anything but kayak.
-const ALTERNATING_RATIO = -0.85
-const WINDOW_S = 60
-const STEP_S = 30
-// Cadence needs nothing like 50 Hz (verified: identical results down to 5 Hz), and
-// autocorrelation cost is quadratic in the sample count, so decimate first.
-const WORK_HZ = 10
+/** What the motion data alone says about a paddle (#414): time with a clear stroke, about how many strokes, the rate. */
+export type PaddlingFromMotion = { paddlingS: number; strokes: number; strokesPerMin: number }
 
-const median = (xs: number[]): number | null => {
-  if (xs.length === 0) return null
-  const s = [...xs].sort((a, b) => a - b)
-  const m = Math.floor(s.length / 2)
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+/** One set of the core's 60 s windows (every 30 s). */
+export type StrokeRateSet = {
+  report: CadenceReport
+  /** Null when no window showed a clear stroke. */
+  paddling: PaddlingFromMotion | null
+  /** Gaps of at least 60 s between windows with a clear stroke, [from, to] on the tracker's millis() clock. */
+  rests: [number, number][]
 }
+
+export type RecordingStrokeRate = {
+  /** Windows wholly inside a stretch where the GPS saw the boat moving (>= 4 km/h for >= 90 s): the recording's stroke rate. */
+  moving: StrokeRateSet
+  /** Every window, ungated: for a recording whose GPS failed, since it can't say where the boat moved (#414). */
+  all: StrokeRateSet
+  /** Through the paddle: 15 s windows every 5 s, while moving, left/right decided once. Empty for single-sided paddling. */
+  series: StrokeRatePoint[]
+}
+
+// The series' step, for putting its points on the track (withStrokeRate).
+export const SERIES_STEP_S = 5
+const WINDOW_S = 60
+
+let compiled: WebAssembly.Module | null = null
+
+/**
+ * The core's RC_STROKE lines for one recording, as written (no newline):
+ * what recordingStrokeRate reads. Exported for the test that replays the
+ * core's fixtures through this module.
+ */
+export function replayStrokeLines(trackCsv: string, motionCsv: string): string[] {
+  compiled ??= new WebAssembly.Module(Buffer.from(RC_WASM_BASE64, 'base64'))
+  const out: string[] = []
+  const decoder = new TextDecoder()
+  let memory: WebAssembly.Memory
+  // libc's stdio comes along with snprintf, but the core never writes a file.
+  const never = (name: string) => () => { throw new Error(`the recorder core called ${name}`) }
+  const instance = new WebAssembly.Instance(compiled, {
+    env: {
+      rcw_write(stream: number, ptr: number, len: number) {
+        if (stream === 3) out.push(decoder.decode(new Uint8Array(memory.buffer, ptr, len)))
+      },
+    },
+    wasi_snapshot_preview1: { fd_close: never('fd_close'), fd_seek: never('fd_seek'), fd_write: never('fd_write') },
+  })
+  const core = instance.exports as {
+    memory: WebAssembly.Memory; _initialize(): void
+    rcw_alloc(n: number): number; rcw_replay(t: number, tn: number, m: number, mn: number): void
+  }
+  memory = core.memory
+  core._initialize()
+  const encoder = new TextEncoder()
+  const put = (s: string): [number, number] => {
+    const bytes = encoder.encode(s)
+    const p = core.rcw_alloc(bytes.length)
+    new Uint8Array(core.memory.buffer, p, bytes.length).set(bytes)
+    return [p, bytes.length]
+  }
+  const [t, tn] = put(trackCsv)
+  const [m, mn] = put(motionCsv)
+  core.rcw_replay(t, tn, m, mn)
+  // The instance (and its memory) goes with this call: nothing to free.
+  return out.join('').split('\n').filter(Boolean)
+}
+
+const REASONS: Record<string, (hz: number, windows: number) => string> = {
+  ok: (hz, n) => `Derived from ${n} window${n === 1 ? '' : 's'} of ${WINDOW_S}s at ${Math.round(hz)} Hz.`,
+  too_few_samples: () => 'Motion file has too few samples to derive cadence.',
+  too_slow: hz => `Motion data is sampled at ${hz.toFixed(1)} Hz — too slow for a 0.5–2 Hz stroke.`,
+  no_rhythm: () => 'No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.',
+}
+
+/**
+ * Stroke rate for a recording, from its track CSV and motion file as
+ * uploaded. A recording with no track (or one that doesn't parse) still has
+ * `all`; `moving` and `series` need the track to say the boat moved.
+ */
+export function recordingStrokeRate(trackCsv: string, motionCsv: string): RecordingStrokeRate {
+  const windows: Record<string, CadenceWindow[]> = { moving: [], all: [] }
+  const rests: Record<string, [number, number][]> = { moving: [], all: [] }
+  const sessions: Record<string, string[]> = {}
+  const points: StrokeRatePoint[] = []
+  let rows = 0, hz = 0, seriesOk = false
+  for (const line of replayStrokeLines(trackCsv, motionCsv)) {
+    const f = line.split(',')
+    switch (f[0]) {
+      case 'window':
+        if (f[1] in windows) {
+          windows[f[1]].push({ tMs: Number(f[2]), cyclesPerMin: Number(f[3]), strokesPerMin: Number(f[4]), alternating: f[5] === '1', confidence: Number(f[6]) })
+        }
+        break
+      case 'point': points.push({ ms: Number(f[1]), strokesPerMin: Number(f[2]), confidence: Number(f[3]) }); break
+      case 'rest': rests[f[1]]?.push([Number(f[2]), Number(f[3])]); break
+      case 'motion': rows = Number(f[1]); hz = Number(f[2]); break
+      case 'session': sessions[f[1]] = f; break
+      case 'series': seriesOk = f[1] === '1'; break
+    }
+  }
+  const set = (name: 'moving' | 'all'): StrokeRateSet => {
+    // session,<set>,<available>,<reason>,<windows>,<median>,<paddling s>,<strokes>
+    const s = sessions[name]
+    if (!s) throw new Error(`the recorder core wrote no ${name} session line`)
+    const available = s[2] === '1'
+    const median = Number(s[5])
+    const report: CadenceReport = {
+      available,
+      reason: (REASONS[s[3]] ?? (() => s[3]))(hz, Number(s[4])),
+      sampleRateHz: hz > 0 ? hz : null,
+      rows,
+      medianStrokesPerMin: available ? median : null,
+      windows: available ? windows[name] : [],
+    }
+    return {
+      report,
+      paddling: available ? { paddlingS: Number(s[6]), strokes: Number(s[7]), strokesPerMin: median } : null,
+      rests: available ? rests[name] : [],
+    }
+  }
+  return { moving: set('moving'), all: set('all'), series: seriesOk ? points : [] }
+}
+
+/** One motion sample of a sidecar: accelerometer in g, gyroscope in deg/s. */
+export type MotionSample = { ms: number; ax: number; ay: number; az: number; gx: number; gy: number; gz: number }
 
 /** Parses the sidecar CSV. Tolerates the header being present or absent. */
 export function parseMotionCsv(csv: string): MotionSample[] {
@@ -94,258 +185,11 @@ export function parseMotionCsv(csv: string): MotionSample[] {
   return out
 }
 
-function variance(xs: number[]): number {
-  if (xs.length < 2) return 0
-  const m = xs.reduce((a, b) => a + b, 0) / xs.length
-  return xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length
-}
-
-/** Autocorrelation of a detrended series at one lag, normalised to lag 0. */
-function autocorr(x: number[], lag: number, denom: number): number {
-  let s = 0
-  for (let i = 0; i + lag < x.length; i++) s += x[i] * x[i + lag]
-  return denom > 0 ? s / denom : 0
-}
-
-function analyseWindow(samples: MotionSample[], fs: number, tMs: number): CadenceWindow | null {
-  if (samples.length < 16) return null
-  // Orientation-agnostic: whichever gyro axis actually carries the stroke.
-  const axes: (keyof MotionSample)[] = ['gx', 'gy', 'gz']
-  let best: number[] | null = null
-  let bestVar = -1
-  for (const a of axes) {
-    const series = samples.map(s => s[a] as number)
-    const v = variance(series)
-    if (v > bestVar) { bestVar = v; best = series }
-  }
-  if (!best || bestVar <= 0) return null
-
-  const mean = best.reduce((a, b) => a + b, 0) / best.length
-  const x = best.map(v => v - mean)
-  const denom = x.reduce((a, b) => a + b * b, 0)
-  if (denom <= 0) return null
-
-  const lo = Math.max(2, Math.floor(fs / MAX_CYCLE_HZ))
-  const hi = Math.min(x.length - 2, Math.ceil(fs / MIN_CYCLE_HZ))
-  if (hi <= lo + 2) return null
-
-  const r: number[] = []
-  for (let lag = lo; lag <= hi; lag++) r.push(autocorr(x, lag, denom))
-
-  // Best LOCAL maximum — never the band edge. See the header note.
-  let peakLag = -1
-  let peakR = -1
-  for (let i = 1; i < r.length - 1; i++) {
-    if (r[i] > r[i - 1] && r[i] > r[i + 1] && r[i] > peakR) { peakR = r[i]; peakLag = lo + i }
-  }
-  if (peakLag < 0 || peakR < MIN_CONFIDENCE) return null
-
-  // Sub-sample the peak. At the 5 Hz we upload, one lag step is ~10% of a stroke
-  // period, so snapping to the nearest whole lag alone costs more accuracy than
-  // the downsampling itself does (measured: 52.2 vs 57.1 spm against the same
-  // 50 Hz source). Parabolic interpolation through the peak and its neighbours
-  // recovers it for three lines of arithmetic.
-  const i = peakLag - lo
-  let refinedLag = peakLag
-  if (i > 0 && i < r.length - 1) {
-    const denomP = r[i - 1] - 2 * r[i] + r[i + 1]
-    if (denomP !== 0) {
-      const shift = (0.5 * (r[i - 1] - r[i + 1])) / denomP
-      if (Math.abs(shift) <= 1) refinedLag = peakLag + shift
-    }
-  }
-
-  const halfR = autocorr(x, Math.max(1, Math.round(peakLag / 2)), denom)
-  const alternating = peakR > 0 && halfR / peakR < ALTERNATING_RATIO
-  const cyclesPerMin = (60 * fs) / refinedLag
-
-  return {
-    tMs,
-    cyclesPerMin: Math.round(cyclesPerMin * 10) / 10,
-    strokesPerMin: Math.round(cyclesPerMin * (alternating ? 2 : 1) * 10) / 10,
-    alternating,
-    confidence: Math.round(peakR * 1000) / 1000,
-  }
-}
-
-/**
- * Derives stroke rate from a motion sidecar.
- *
- * `movingRanges` (millis() spans where the boat was actually moving, from the
- * track CSV) matters more than it looks: a session usually opens with the device
- * sitting at the launch, and a stationary window produces a confident-looking
- * periodicity that is nothing to do with paddling.
- */
-export function deriveCadence(
-  csv: string,
-  opts: { movingRanges?: [number, number][] } = {},
-): CadenceReport {
-  const prep = prepareMotion(csv)
-  if ('reason' in prep) return { available: false, ...prep, medianStrokesPerMin: null, windows: [] }
-  const { fsRaw, rows } = prep
-
-  const windows = windowsOver(prep, WINDOW_S, STEP_S, opts.movingRanges)
-
-  if (windows.length === 0) {
-    return { available: false, reason: 'No window showed a clear repeating stroke pattern — the device may have been stationary, or carried somewhere the stroke does not reach it.', sampleRateHz: Math.round(fsRaw * 10) / 10, rows, medianStrokesPerMin: null, windows: [] }
-  }
-
-  const med = median(windows.map(w => w.strokesPerMin))
-  return {
-    available: true,
-    reason: `Derived from ${windows.length} window${windows.length === 1 ? '' : 's'} of ${WINDOW_S}s at ${Math.round(fsRaw)} Hz.`,
-    sampleRateHz: Math.round(fsRaw * 10) / 10,
-    rows,
-    medianStrokesPerMin: med == null ? null : Math.round(med * 10) / 10,
-    windows,
-  }
-}
-
-type Prepared = { work: MotionSample[]; fs: number; fsRaw: number; rows: number }
-
-/** Parses and decimates a sidecar, or says why it can't give a stroke rate. */
-function prepareMotion(csv: string): Prepared | { reason: string; sampleRateHz: number | null; rows: number } {
-  const all = parseMotionCsv(csv)
-  if (all.length < 64) {
-    return { reason: 'Motion file has too few samples to derive cadence.', sampleRateHz: null, rows: all.length }
-  }
-
-  const deltas: number[] = []
-  for (let i = 1; i < Math.min(all.length, 2000); i++) deltas.push(all[i].ms - all[i - 1].ms)
-  const step = median(deltas.filter(d => d > 0))
-  const fsRaw = step && step > 0 ? 1000 / step : null
-  if (!fsRaw || fsRaw < 2) {
-    return { reason: `Motion data is sampled at ${fsRaw ? fsRaw.toFixed(1) : '?'} Hz — too slow for a 0.5–2 Hz stroke.`, sampleRateHz: fsRaw, rows: all.length }
-  }
-
-  const factor = Math.max(1, Math.round(fsRaw / WORK_HZ))
-  const work = factor > 1 ? all.filter((_, i) => i % factor === 0) : all
-  return { work, fs: fsRaw / factor, fsRaw, rows: all.length }
-}
-
-/** Every window of `windowS` seconds, `stepS` apart, that shows a stroke. */
-function windowsOver({ work, fs }: Prepared, windowS: number, stepS: number, movingRanges?: [number, number][]): CadenceWindow[] {
-  // The WHOLE window must be moving, not just its midpoint: a window that is half
-  // parked at the launch and half paddling averages the two into a worse estimate
-  // than either.
-  const inMoving = (from: number, to: number) =>
-    !movingRanges?.length || movingRanges.some(([a, b]) => from >= a && to <= b)
-
-  const windows: CadenceWindow[] = []
-  const lastMs = work[work.length - 1].ms
-  let lo = 0
-  for (let t = work[0].ms; t + windowS * 1000 <= lastMs; t += stepS * 1000) {
-    if (!inMoving(t, t + windowS * 1000)) continue
-    while (lo < work.length && work[lo].ms < t) lo++
-    let hi = lo
-    while (hi < work.length && work[hi].ms < t + windowS * 1000) hi++
-    const w = analyseWindow(work.slice(lo, hi), fs, t)
-    if (w) windows.push(w)
-  }
-  return windows
-}
-
-/** Stroke rate at one moment of a paddle: the centre of one short window. */
-export type StrokeRatePoint = { ms: number; strokesPerMin: number; confidence: number }
-
-// Through-the-paddle stroke rate (docs/features/one-paddle.md, phase 1): short
-// windows close together, so efforts and rests show. Chosen by the sweep in
-// docs/features/device-data.md against the 13 Sep reference capture.
-export const SERIES_WINDOW_S = 15
-export const SERIES_STEP_S = 5
-// Moving stretches this short still hold a whole window; the 90 s the session
-// figure uses would drop most interval pieces (measured: 237 windows instead of
-// 137 on the reference capture, median 57.0 against 57.6).
-export const SERIES_MIN_RUN_S = 20
-
-/**
- * Stroke rate through the paddle, one value per `stepS`, on the tracker's
- * millis() clock. Windows with no clear stroke give NO value (a rest is a gap,
- * not a zero, and never a guess).
- */
-export function strokeRateSeries(
-  csv: string,
-  opts: { movingRanges?: [number, number][]; windowS?: number; stepS?: number } = {},
-): StrokeRatePoint[] {
-  const prep = prepareMotion(csv)
-  if ('reason' in prep) return []
-  const windowS = opts.windowS ?? SERIES_WINDOW_S
-  const stepS = opts.stepS ?? SERIES_STEP_S
-  const windows = windowsOver(prep, windowS, stepS, opts.movingRanges)
-  // Left/right is decided ONCE for the paddle, by majority. On a 15 s window
-  // the half-lag test flips back and forth while the cycle rate holds steady
-  // (measured on a real 81 min paddle: ~31 cycles/min throughout, 234 of 316
-  // windows alternating), and every flip read as half the stroke rate. Nobody
-  // changes paddling style mid-outing, so one decision is right for all of it.
-  //
-  // Only alternating paddles get a series for now. Single-sided strokes (canoe,
-  // SUP) are calibrated on synthetic data alone, and a real recording read as
-  // single-sided swung between 35 and 87: no number is better than that.
-  if (windows.length < MIN_SERIES_WINDOWS) return []
-  const alternating = windows.filter(w => w.alternating).length / windows.length >= MIN_ALTERNATING_SHARE
-  if (!alternating) return []
-  const pts = windows.map(w => ({
-    ms: w.tMs + windowS * 500,
-    strokesPerMin: Math.round(w.cyclesPerMin * 2 * 10) / 10,
-    confidence: w.confidence,
-  }))
-  return pts.filter((p, i) => agreesWithNeighbours(pts, i, stepS * 1000))
-}
-
-// Too few windows to decide left/right by majority (a 9-minute test recording
-// gave 2, both reading half the rate).
-const MIN_SERIES_WINDOWS = 6
-const MIN_ALTERNATING_SHARE = 0.6
-
-// Neighbouring windows overlap by two thirds, so a real change of rate moves
-// through several of them. A lone window far from both its neighbours is the
-// alternating test missing once (measured on the reference capture: 22.5 spm
-// between 56.2 and 54.6, exactly half), and a window with no neighbour at all
-// is too little to trust. Both are dropped: a gap, never a wrong number.
-const NEIGHBOUR_TOLERANCE = 0.3
-
-function agreesWithNeighbours(pts: StrokeRatePoint[], i: number, stepMs: number): boolean {
-  const near = [pts[i - 1], pts[i + 1]].filter(q => q && Math.abs(q.ms - pts[i].ms) <= stepMs * 1.5)
-  if (near.length === 0) return false
-  const ref = near.reduce((a, q) => a + q.strokesPerMin, 0) / near.length
-  return Math.abs(pts[i].strokesPerMin - ref) <= ref * NEIGHBOUR_TOLERANCE
-}
-
-/**
- * Millisecond spans where the boat was actually moving, from the track CSV
- * (its `ms` and `speed_kmh` columns): at least 4 km/h for `minRunS` rows in a
- * row (the track is 1 Hz).
- *
- * Without this the cadence search runs over the parked minutes at the start of a
- * session too, where a stationary device produces a confident-looking periodicity
- * that has nothing to do with paddling.
- */
-export function movingRangesFromTrack(csv: string, minRunS = 90): [number, number][] {
-  // The header is the first line naming the columns: a serial capture opens
-  // with a <<<CAT …>>> marker before it.
-  const lines = csv.split(/\r?\n/)
-  const hi = lines.findIndex(l => /(^|,)\s*ms\s*,/i.test(l))
-  if (hi < 0) return []
-  const head = lines[hi].split(',').map(h => h.trim().toLowerCase().replace(/[\s_]/g, ''))
-  const msI = head.indexOf('ms')
-  const spI = head.findIndex(h => h === 'speedkmh' || h === 'speed')
-  if (msI < 0 || spI < 0) return []
-
-  const ranges: [number, number][] = []
-  let run: number[] = []
-  for (const line of lines.slice(hi + 1)) {
-    const p = line.split(',')
-    if (p.length <= Math.max(msI, spI)) continue
-    const ms = Number(p[msI]), sp = Number(p[spI])
-    if (!Number.isFinite(ms) || !Number.isFinite(sp)) continue
-    if (sp >= 4) run.push(ms)
-    else {
-      if (run.length >= minRunS) ranges.push([run[0], run[run.length - 1]])
-      run = []
-    }
-  }
-  if (run.length >= minRunS) ranges.push([run[0], run[run.length - 1]])
-  return ranges
+const median = (xs: number[]): number | null => {
+  if (xs.length === 0) return null
+  const s = [...xs].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
 
 /**
@@ -391,24 +235,12 @@ export function withStrokeRate<T extends { timestamp: Date; strokeRate?: number 
 }
 
 /**
- * Decimates a sidecar to `targetHz`, preserving the header.
- *
- * The device keeps the full 50 Hz stream on its card; only this reduction is
- * uploaded, which is what keeps an hour-long paddle inside the upload cap instead
- * of needing a chunked or presigned-S3 path for 8 MB.
- *
- * 10 Hz is not an arbitrary round number. Measured against a real 65-minute
- * session (reference: 58.0 spm from the full 50 Hz stream):
- *
- *   25 Hz   3.78 MB/h   58.1 spm   +0.2%   (over the upload cap)
- *   10 Hz   1.51 MB/h   57.7 spm   -0.5%   <- chosen
- *    8 Hz   1.26 MB/h   46.5 spm  -19.8%
- *    5 Hz   0.76 MB/h   50.6 spm  -12.8%
- *
- * The collapse below 10 Hz is lag quantisation, not lost signal: at 5 Hz one
- * autocorrelation lag step is ~10% of a stroke period, and the peak can no longer
- * be located between steps. Do not lower this to save bytes without re-running
- * that sweep.
+ * Thins a sidecar to every Nth line, about `targetHz`, keeping the header:
+ * the motion file trackers uploaded from 13 to 17 Sep 2026 (#234), before
+ * firmware thinned by time (an 80 ms gate, #242). Only the performance test
+ * account uses it, to upload such a file. Never use it to make a file for
+ * stroke rate: the tracker's samples stall, so every Nth sample isn't even
+ * in time (recorder-core/CLAUDE.md, "The sample rate").
  */
 export function decimateMotionCsv(csv: string, targetHz = 10): string {
   const lines = csv.split(/\r?\n/).filter(l => l.trim() !== '')
@@ -430,51 +262,4 @@ export function decimateMotionCsv(csv: string, targetHz = 10): string {
 
   const kept = factor > 1 ? body.filter((_, i) => i % factor === 0) : body
   return [...(header ? [header] : []), ...kept].join('\n') + '\n'
-}
-
-/**
- * What the motion data alone says about a paddle (#414), for a recording whose
- * GPS failed: time spent paddling (the windows with a clear stroke, overlaps
- * merged) and about how many strokes (each window's rate over its share of the
- * time). Null when no window showed a clear stroke.
- */
-export function paddlingFromMotion(report: CadenceReport): { paddlingS: number; strokes: number; strokesPerMin: number } | null {
-  if (!report.available || report.windows.length === 0 || report.medianStrokesPerMin == null) return null
-  const ws = [...report.windows].sort((a, b) => a.tMs - b.tMs)
-  let paddlingMs = 0, strokes = 0, end = -Infinity
-  for (const w of ws) {
-    const from = Math.max(w.tMs, end), to = w.tMs + WINDOW_S * 1000
-    if (to <= from) continue
-    paddlingMs += to - from
-    strokes += (w.strokesPerMin * (to - from)) / 60_000
-    end = to
-  }
-  return { paddlingS: Math.round(paddlingMs / 1000), strokes: Math.round(strokes), strokesPerMin: report.medianStrokesPerMin }
-}
-
-/**
- * The rests in a paddle from the motion data alone (#414): gaps of at least
- * `minS` between stretches with a clear stroke, as [from, to] on the tracker's
- * millis() clock. A single missed window (a turn, a splash) leaves a 30 s gap,
- * so the default asks for twice that before calling it a rest.
- */
-export function restsFromMotion(report: CadenceReport, minS = 60): [number, number][] {
-  const ws = [...report.windows].sort((a, b) => a.tMs - b.tMs)
-  const out: [number, number][] = []
-  let end = -Infinity
-  for (const w of ws) {
-    if (Number.isFinite(end) && w.tMs - end >= minS * 1000) out.push([end, w.tMs])
-    end = Math.max(end, w.tMs + WINDOW_S * 1000)
-  }
-  return out
-}
-
-/**
- * Where to look for strokes in a recording's motion data: where the GPS saw the
- * boat moving, or (`gpsFailed`) the whole recording, since after the GPS lost
- * the sky it can't say whether the boat moved, and limiting to what it saw
- * would drop the rest of the paddle (#414).
- */
-export function strokeRangesFor(trackCsv: string, gpsFailed: boolean): [number, number][] {
-  return gpsFailed ? [] : movingRangesFromTrack(trackCsv)
 }

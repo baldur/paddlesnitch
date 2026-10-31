@@ -7,7 +7,7 @@
 // nothing another paddler couldn't already reach.
 import { listUserDeviceSessions, getDeviceSessionTrace, getDeviceSessionMotion } from '@paddlesnitch/core/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
-import { strokeRateSeries, movingRangesFromTrack, trackClockOffset, withStrokeRate, SERIES_MIN_RUN_S } from '@paddlesnitch/timing/cadence'
+import { recordingStrokeRate, trackClockOffset, withStrokeRate } from '@paddlesnitch/timing/cadence'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 export { listUserDeviceSessions } from '@paddlesnitch/core/devices'
@@ -36,7 +36,7 @@ export function addStrokeRate(track: TrackPoint[], trackCsv: string, motionCsv: 
   try {
     const offset = trackClockOffset(trackCsv)
     if (offset == null) return track
-    const series = strokeRateSeries(motionCsv, { movingRanges: movingRangesFromTrack(trackCsv, SERIES_MIN_RUN_S) })
+    const series = recordingStrokeRate(trackCsv, motionCsv).series
     return withStrokeRate(track, series, offset)
   } catch {
     return track
