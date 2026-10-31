@@ -227,7 +227,8 @@ private fun MyPaddles(
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     var recording by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    if (recording) {
+    // Release builds never reach Record, so they never ask for location (lead, #761).
+    if (recording && canRecord) {
         androidx.activity.compose.BackHandler { recording = false }
         Column(modifier.fillMaxSize()) {
             TextButton(onClick = { recording = false }, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
