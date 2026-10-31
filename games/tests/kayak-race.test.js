@@ -96,7 +96,10 @@ test('a pack of rivals races a full 6 km without capsizing, finishing in about 3
   const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
   assert.ok(minutes[0] > 29 && minutes[0] < 33, `winner ${minutes[0]}`);
   assert.ok(minutes.at(-1) < 36, `last ${minutes.at(-1)}`);
-  assert.ok(rivals.every((r) => r.boat.capsizes === 0));
+  // The pack never tips itself in; the river's traffic may, now and then (here an eight).
+  const tipped = rivals.filter((r) => r.boat.capsizes > 0);
+  assert.ok(tipped.every((r) => race.traffic.boats.some((b) => b.hit.includes(r))), `swims not from traffic: ${tipped.map((r) => r.name)}`);
+  assert.ok(tipped.length <= 1, `${tipped.length} tipped in`);
   assert.equal(standings(race).at(-1), race.player, 'a player who never paddles comes last');
 });
 

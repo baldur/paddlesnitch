@@ -399,6 +399,24 @@ export function motorboatMesh() {
   return m.build();
 }
 
+// A kayaker out paddling (river traffic): a club touring boat with its paddler
+// sitting in it and arms forward to the paddle, which main.js swings.
+export function kayakerMesh({ deck = [0.15, 0.45, 0.75], hull = [0.92, 0.92, 0.9], stripe = [0.95, 0.95, 0.95], top = [0.95, 0.75, 0.15], skin = [0.82, 0.62, 0.48], cap = [0.15, 0.45, 0.75] } = {}) {
+  const boat = kayakMesh({ deck, hull, stripe, beam: 1.15 });
+  const body = paddlerMesh({ top, skin, cap });
+  const m = new MeshBuilder();
+  for (const side of [-1, 1]) m.prism([[side * 0.18, SHOULDER.y - 0.06, SEAT - 0.04], [side * 0.26, SHOULDER.y - 0.06, SEAT - 0.04], [side * 0.26, SHOULDER.y, SEAT + 0.04], [side * 0.18, SHOULDER.y, SEAT + 0.04]],
+    [[side * 0.3, 0.44, SEAT - 0.5], [side * 0.36, 0.44, SEAT - 0.5], [side * 0.36, 0.5, SEAT - 0.44], [side * 0.3, 0.5, SEAT - 0.44]], top);
+  const arms = m.build();
+  const seated = new Float32Array(body.vertices);
+  for (let i = 2; i < seated.length; i += 9) seated[i] += SEAT;
+  const vertices = new Float32Array(boat.vertices.length + seated.length + arms.vertices.length);
+  vertices.set(boat.vertices, 0);
+  vertices.set(seated, boat.vertices.length);
+  vertices.set(arms.vertices, boat.vertices.length + seated.length);
+  return { vertices, count: boat.count + body.count + arms.count };
+}
+
 // One oar along +z, from the rowlock (z 0) to the blade tip (z 1); x and y in
 // metres, so stretching it along z keeps the blade's size.
 export function oarMesh() {

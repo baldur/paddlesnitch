@@ -92,6 +92,25 @@ export function paddleSvg(kit) {
 // The two clubs on the walk's opening view (club.js), as little pictures for their cards.
 export function clubSvg(which) {
   const sky = '<rect width="120" height="80" fill="#bcdcef"/>';
+  if (which === 'cruise') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
+      <rect y="50" width="120" height="30" fill="#4f7f86"/>
+      <path d="M8 50h96l10 -6h-8v-8h-90v8h-14z" fill="#f2f2ee"/><rect x="10" y="45" width="100" height="3" fill="#1c3880"/>
+      <rect x="20" y="28" width="70" height="9" fill="#33475a"/><rect x="18" y="26" width="76" height="3" fill="#f2f2ee"/>
+      ${[24, 34, 44, 54, 64, 74, 84].map((x) => `<rect x="${x}" y="29" width="1.5" height="8" fill="#f2f2ee"/>`).join('')}
+      <path d="M95 36l14 0" stroke="#f2f2ee" stroke-width="1.5"/><circle cx="104" cy="38" r="2.2" fill="none" stroke="#f08a24" stroke-width="1.5"/>
+      <path d="M6 60q12 -3 24 0q12 3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
+    </svg>`;
+  }
+  if (which === 'hire') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
+      <rect y="48" width="120" height="32" fill="#4f7f86"/>
+      <path d="M22 50h70l14 -7h-90z" fill="#efe6cf"/><rect x="18" y="43" width="86" height="2.5" fill="#7a4a24"/>
+      <rect x="54" y="26" width="40" height="3" fill="#1f2a55"/><rect x="56" y="29" width="1.5" height="14" fill="#c9c9c4"/><rect x="91" y="29" width="1.5" height="14" fill="#c9c9c4"/>
+      <circle cx="64" cy="38" r="3.5" fill="#d9a27c"/><rect x="61" y="40" width="7" height="4" fill="#2a6fd6"/>
+      <path d="M100 52q8 2 16 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/><path d="M4 58q10 -3 20 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
+    </svg>`;
+  }
   if (which === 'rowing') {
     return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
       <rect y="52" width="120" height="28" fill="#4f7f86"/>

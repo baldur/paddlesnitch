@@ -80,6 +80,9 @@ const CASES = [
   { name: 'webkit, desktop, portage drill', engine: webkit, ctx: desktop, course: 'drill-portage' },
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
+  // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
+  { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
+  { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -99,10 +102,11 @@ async function play(c, page, errors) {
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
-    for (const [label, place] of [['Reading Canoe Club', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]]) {
+    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+    for (const [label, place] of steps) {
       const spot = page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
-      await spot.tap();
+      await (c.touch ? spot.tap() : spot.click());
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
     }
   }
@@ -155,6 +159,8 @@ async function play(c, page, errors) {
     tick();
   });
   const { width, height } = page.viewportSize();
+  // The hired launch: throttle full ahead first (then the arrow presses below steer it).
+  if (c.outing === 'Hire a boat') for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
   for (let i = 0; i < 12; i++) {
     if (c.touch) await page.touchscreen.tap(i % 2 ? width * 0.8 : width * 0.2, height * 0.6);
     else await page.keyboard.press(i % 2 ? 'ArrowRight' : 'ArrowLeft');

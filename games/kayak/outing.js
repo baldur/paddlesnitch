@@ -1,0 +1,231 @@
+// Outings from Caversham Pier (prototype, picked on the walk's bridge, club.js):
+// a river cruise, standing at the bow of a trip boat as it goes up the Thames
+// to Mapledurham (as Thames Rivercruise's boats do from the pier), and a hired
+// electric launch you drive yourself anywhere on the water. The river is as in
+// a race (race.js): swans, ducks and the other boats, places named as you pass.
+// An outing is a race with no rivals whose one boat moves by these rules
+// instead of paddling. Pure: no DOM.
+import { pointAt, locate, widthAt } from './course.js';
+import { createTraffic, moveTraffic, trafficHits } from './traffic.js';
+import { stepBirds } from './birds.js';
+import { bounceOffShore, wrap } from './sim.js';
+import { MeshBuilder } from './meshes.js';
+
+// The boat under you and where you stand on it: eye height above the water,
+// and how far forward of the boat's middle (the cruise's bow, the launch's helm).
+export const OUTINGS = {
+  cruise: { label: 'River cruise', line: 'Up the Thames to Mapledurham', eye: 2.9, forward: 4.6 },
+  hire: { label: 'Hire a boat', line: 'An electric launch to drive yourself', eye: 1.35, forward: -1.4 },
+};
+// Speeds are real (m/s) and, like a race, go `speedup` times as fast through
+// the true-size world: the Thames's 8 km/h limit is about 2.2 m/s.
+export const CRUISE = { speed: 2.2, keepRight: 0.3, ahead: 30, look: 1.4, lookRate: 1.8 };
+// Outings see more of the river's life than a race (owner, 2026-10-31): the
+// cruise meets a boat every `gap` seconds on average along its way; the launch,
+// which goes anywhere, has boats up and down the whole river, a new one about
+// every `ambient` seconds (some 20 on the water at once).
+export const BUSY = { gap: 35, ambient: 5, hours: 2 };
+export const HIRE = { top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, bump: 0.3 };
+
+// Puts the race's one boat at the pier (`s` along the river line, upstream of
+// Caversham Bridge) on the right of the river going up, and starts the outing,
+// with its own, busier river traffic from `seed`.
+export function startOuting(race, kind, s, seed = 1) {
+  const river = race.course.scenery?.river ?? race.course;
+  const k = race.course.speedup ?? 1;
+  race.traffic = kind === 'cruise'
+    ? createTraffic(race.course, seed, { gap: BUSY.gap, route: { at: (t) => pointAt(river, Math.min(river.length, s + CRUISE.speed * k * t)), seconds: (river.length - s) / (CRUISE.speed * k) } })
+    : createTraffic(race.course, seed, { gap: BUSY.ambient, ambient: BUSY.hours * 3600 });
+  const o = { kind, river, s, look: 0, done: false, lat: rightOf(river, s, race.course.shore) };
+  race.outing = o;
+  const b = race.player.boat;
+  const at = keepRight(river, s, race.course.shore);
+  const ahead = keepRight(river, s + CRUISE.ahead, race.course.shore);
+  Object.assign(b, { x: at[0], z: at[1], heading: Math.atan2(ahead[0] - at[0], -(ahead[1] - at[1])), speed: kind === 'cruise' ? CRUISE.speed : 0, roll: 0, rollRate: 0, yawRate: 0, swim: 0 });
+  race.player.loc = locate(race.course, b.x, b.z);
+  return o;
+}
+
+// A point on the right of the river going upstream (lateral is positive to the
+// right), only as far right as the mapped water goes (round islands and bends
+// the river line's width can take in land, and an islet near 2.7 km sits on the line).
+function rightOf(river, s, shore) {
+  const half = widthAt(river, s).half;
+  // Right of the line if there's water there; else nearer it, or past an islet on the line, left of it.
+  for (const k of [1, 0.75, 0.5, 0.25, 0, -0.5, -1, -1.5, -2]) {
+    const d = half * CRUISE.keepRight * k;
+    const [x, z] = across(river, s, d);
+    if (!shore?.dry(x, z)) return d;
+  }
+  return 0;
+}
+// The point `d` metres right of the river line, `s` along it.
+function across(river, s, d) {
+  const c = pointAt(river, Math.min(s, river.length));
+  return [c.x - c.tz * d, c.z + c.tx * d];
+}
+function keepRight(river, s, shore) {
+  return across(river, s, rightOf(river, s, shore));
+}
+
+// One step of an outing. `input`: `turn` -1 (left) to 1 (right) and `throttle`
+// -1 (astern) to 1 (ahead). On the cruise, turn looks about. Returns events:
+// 'end' (the cruise reached Mapledurham), 'bump' (the launch hit a boat or the
+// bank), 'swan' (a swan wouldn't move).
+export function stepOuting(race, dt, input = {}) {
+  const o = race.outing;
+  const me = race.player;
+  const b = me.boat;
+  const k = race.course.speedup ?? 1;
+  const events = [];
+  race.time += dt;
+  b.time += dt;
+  if (race.traffic) moveTraffic(race.traffic, race.time);
+  const turn = Math.max(-1, Math.min(1, input.turn ?? 0));
+  if (o.kind === 'cruise') {
+    // Along the right of the river, the bow eased towards a point ahead.
+    const end = o.river.length - 40;
+    if (!o.done) o.s = Math.min(end, o.s + CRUISE.speed * k * dt);
+    if (o.s >= end && !o.done) {
+      o.done = true;
+      events.push('end');
+    }
+    b.speed = o.done ? 0 : CRUISE.speed;
+    // Eased across, so the boat doesn't hop where the water narrows (3 m a second through the world).
+    // Moving over in good time: the narrowest of the next 30 m.
+    const lat = Math.min(...[0, 10, 20, 30].map((d) => rightOf(o.river, o.s + d, race.course.shore)));
+    o.lat += Math.max(-3 * dt, Math.min(3 * dt, lat - o.lat));
+    const [x, z] = across(o.river, o.s, o.lat);
+    const ahead = keepRight(o.river, o.s + CRUISE.ahead, race.course.shore);
+    b.x = x;
+    b.z = z;
+    const want = Math.atan2(ahead[0] - x, -(ahead[1] - z));
+    b.heading += wrap(want - b.heading) * Math.min(1, dt * 2);
+    // Looking about: the arrows turn your head, and it comes back when let go.
+    const target = turn * CRUISE.look;
+    o.look += Math.max(-CRUISE.lookRate * dt, Math.min(CRUISE.lookRate * dt, target - o.look));
+    stepBirds(race.birds, [me], race.course, dt);
+  } else {
+    // The launch: throttle ahead or astern, steer by the arrows (only while moving).
+    const throttle = Math.max(-1, Math.min(1, input.throttle ?? 0));
+    const want = throttle >= 0 ? throttle * HIRE.top : throttle * HIRE.astern;
+    const rate = Math.sign(want - b.speed) !== Math.sign(b.speed) && b.speed ? HIRE.brake : HIRE.accel;
+    b.speed += Math.max(-rate * dt, Math.min(rate * dt, want - b.speed));
+    b.heading += turn * HIRE.turn * Math.min(1, Math.abs(b.speed) / 0.8) * Math.sign(b.speed || 1) * dt;
+    b.x += Math.sin(b.heading) * b.speed * k * dt;
+    b.z -= Math.cos(b.heading) * b.speed * k * dt;
+    if (race.course.shore && bounceOffShore(b, race.course.shore, dt)) events.push('bump');
+    if (race.traffic) {
+      for (const _ of trafficHits(race.traffic, [me])) {
+        b.speed = -HIRE.bump;
+        events.push('bump');
+      }
+    }
+    // Swans won't get out of your way: you stop.
+    for (const _ of stepBirds(race.birds, [me], race.course, dt)) {
+      b.speed = 0;
+      events.push('swan');
+    }
+  }
+  b.swim = 0;
+  me.loc = locate(race.course, b.x, b.z, me.loc?.i);
+  return events;
+}
+
+// --- the boats ------------------------------------------------------------------
+// In boat space like the kayak (x right, y up from the water, -z forward), the
+// middle of the boat at the origin.
+
+// A hull from a deck outline (points going round, [x, z]): sides from the deck
+// down to the waterline, drawn in, with a coloured band along them.
+function hull(m, outline, deck, band, colors) {
+  const n = outline.length;
+  const at = (i, y, k) => [outline[i % n][0] * k, y, outline[i % n][1] * (k < 1 ? 0.97 : 1)];
+  for (let i = 0; i < n; i++) {
+    const [x0, z0] = outline[i];
+    const [x1, z1] = outline[(i + 1) % n];
+    const out = [(z1 - z0), 0, -(x1 - x0)];
+    // Waterline to band, the band, band to deck: each strip [bottom, top, colour, how far in at the bottom].
+    const strips = [[-0.3, band[0], colors.hull, 0.88], [band[0], band[1], colors.band, 1], [band[1], deck, colors.hull, 1]];
+    for (const [y0, y1, c, k] of strips) {
+      const a = at(i, y0, k), b = at(i + 1, y0, k), cc = at(i + 1, y1, 1), d = at(i, y1, 1);
+      m.triFacing(a, b, cc, c, out);
+      m.triFacing(a, cc, d, c, out);
+    }
+  }
+  // A whole deck (a fan from the middle), or for an open boat just a rim round the edge.
+  const mid = [0, deck, outline.reduce((a, p) => a + p[1], 0) / n];
+  for (let i = 0; i < n; i++) {
+    const [p, q] = [outline[i], outline[(i + 1) % n]];
+    if (!colors.rim) m.tri(mid, [p[0], deck, p[1]], [q[0], deck, q[1]], colors.deck);
+    else {
+      const inner = (pt) => [mid[0] + (pt[0] - mid[0]) * 0.88, deck, mid[2] + (pt[1] - mid[2]) * 0.96];
+      m.quad([p[0], deck, p[1]], [q[0], deck, q[1]], inner(q), inner(p), colors.rim);
+    }
+  }
+}
+
+// A rail along a run of outline points, `h` above the deck: posts and a top rail.
+function rail(m, points, deck, h, color) {
+  for (let i = 0; i < points.length; i++) {
+    const [x, z] = points[i];
+    m.box([x - 0.03, deck, z - 0.03], [x + 0.03, deck + h, z + 0.03], color);
+    if (i) {
+      const [px, pz] = points[i - 1];
+      m.quad([px, deck + h, pz], [x, deck + h, z], [x, deck + h + 0.05, z], [px, deck + h + 0.05, pz], color);
+      m.quad([px, deck + h * 0.5, pz], [x, deck + h * 0.5, z], [x, deck + h * 0.5 + 0.03, z], [px, deck + h * 0.5 + 0.03, pz], color);
+    }
+  }
+}
+
+const WHITE = [0.94, 0.94, 0.92];
+// The trip boat: about 21 m by 4.6 m, a white hull with a blue band, a long
+// glazed saloon, and the open foredeck with its rail where you stand.
+export function tripBoatMesh() {
+  const m = new MeshBuilder();
+  const deck = 1.15;
+  const outline = [[-2.3, 10.5], [2.3, 10.5], [2.3, -5], [1.9, -8], [1.1, -9.8], [0, -10.6], [-1.1, -9.8], [-1.9, -8], [-2.3, -5]];
+  hull(m, outline, deck, [0.55, 0.85], { hull: WHITE, band: [0.1, 0.22, 0.5], deck: [0.55, 0.42, 0.3] });
+  rail(m, [[2.2, -4.2], [2.2, -5], [1.85, -7.8], [1.05, -9.6], [0, -10.4], [-1.05, -9.6], [-1.85, -7.8], [-2.2, -5], [-2.2, -4.2]], deck, 1.0, WHITE);
+  // The saloon: walls, a band of windows, a roof with a rail round it.
+  m.box([-2.1, deck, -4], [2.1, deck + 0.8, 9.8], WHITE);
+  m.box([-2.12, deck + 0.8, -4], [2.12, deck + 1.9, 9.8], [0.2, 0.28, 0.34]);
+  for (let z = -3.6; z < 9.8; z += 1.6) m.box([-2.14, deck + 0.8, z], [2.14, deck + 1.9, z + 0.12], WHITE);
+  m.box([-2.25, deck + 1.9, -4.2], [2.25, deck + 2.1, 10], WHITE);
+  // A wheelhouse on the roof, a lifebuoy on the bow rail and the club pennant.
+  m.box([-1, deck + 2.1, -3.8], [1, deck + 3.1, -1.8], WHITE);
+  m.box([-1.02, deck + 2.5, -3.82], [1.02, deck + 2.95, -1.78], [0.2, 0.28, 0.34]);
+  m.box([2.17, deck + 0.45, -4.6], [2.22, deck + 0.85, -4.25], [0.95, 0.4, 0.1]);
+  m.cylinder([0, deck, -10.2], 0.025, 1.6, 4, WHITE);
+  m.box([0, deck + 1.3, -10.2], [0.02, deck + 1.6, -9.75], [0.85, 0.12, 0.12]);
+  return m.build();
+}
+
+// The hired launch: an electric day boat about 6.4 m long, cream with a
+// varnished gunwale, blue cushions round the sides, a canopy over the back and
+// the wheel at the helm (where you sit).
+export function launchMesh() {
+  const m = new MeshBuilder();
+  const deck = 0.55;
+  const outline = [[-1.05, 3.1], [1.05, 3.1], [1.1, 1], [1, -1], [0.7, -2.4], [0, -3.25], [-0.7, -2.4], [-1, -1], [-1.1, 1]];
+  hull(m, outline, deck, [0.38, 0.5], { hull: [0.93, 0.89, 0.78], band: [0.45, 0.28, 0.14], rim: [0.55, 0.34, 0.17] });
+  // The well you sit in: a floor below the gunwale, cushions round it.
+  m.box([-0.9, 0.2, -1.6], [0.9, 0.25, 2.9], [0.7, 0.56, 0.38]);
+  m.box([-0.95, 0.25, -1.4], [-0.6, 0.5, 2.8], [0.16, 0.3, 0.6]);
+  m.box([0.6, 0.25, -1.4], [0.95, 0.5, 2.8], [0.16, 0.3, 0.6]);
+  m.box([-0.9, 0.25, 2.5], [0.9, 0.5, 2.9], [0.16, 0.3, 0.6]);
+  // The foredeck, and the gunwale's varnished top.
+  m.prism([[-0.95, deck, -1.6], [0.95, deck, -1.6], [0.5, deck, -2.7], [-0.5, deck, -2.7]], [[-0.93, deck + 0.05, -1.6], [0.93, deck + 0.05, -1.6], [0, deck + 0.08, -3.2], [0, deck + 0.08, -3.2]], [0.6, 0.38, 0.2]);
+  // The canopy: four posts and a navy cover over the back.
+  for (const [x, z] of [[-0.95, 0.2], [0.95, 0.2], [-0.95, 2.9], [0.95, 2.9]]) m.box([x - 0.012, deck, z - 0.012], [x + 0.012, 1.85, z + 0.012], [0.75, 0.75, 0.72]);
+  m.box([-1.02, 1.85, 0.1], [1.02, 1.9, 3], [0.12, 0.16, 0.3]);
+  // The wheel, in front of the helm on the right.
+  m.box([0.25, 0.25, 0.75], [0.75, 0.8, 1.05], [0.4, 0.28, 0.18]);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const b = ((i + 1) / 8) * Math.PI * 2;
+    const p = (t) => [0.5 + Math.cos(t) * 0.16, 0.95 + Math.sin(t) * 0.16, 0.9 - Math.sin(t) * 0.05];
+    m.quad(p(a), p(b), p(b).map((v, k) => (k === 2 ? v + 0.03 : v)), p(a).map((v, k) => (k === 2 ? v + 0.03 : v)), [0.1, 0.1, 0.1]);
+  }
+  return m.build();
+}

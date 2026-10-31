@@ -831,7 +831,7 @@
     },
     {
       "kind": "moorings",
-      "side": "right",
+      "side": "left",
       "boats": "narrowboat",
       "length": 19,
       "paint": "maroon",
@@ -842,7 +842,7 @@
       ],
       "heading": 308,
       "frame": "pair GS030094 6:33 (owner)",
-      "note": "maroon narrowboat with white window frames and life-size figures on the front deck, one of them Lara Croft"
+      "note": "maroon narrowboat with white window frames and life-size figures, one of them Lara Croft; on the left going up (owner, 2026-10-31: it was on the wrong side), the figures standing on the roof"
     },
     {
       "kind": "moorings",

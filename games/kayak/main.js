@@ -11,7 +11,8 @@ import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.j
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
-import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
+import { OUTINGS, startOuting, stepOuting, tripBoatMesh, launchMesh } from './outing.js';
+import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
 import { TRAFFIC } from './traffic.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
@@ -54,8 +55,11 @@ const DRILL_MODES = {
 };
 for (const [key, m] of Object.entries(DRILL_MODES)) Object.assign(m, { key, solo: true, rivals: DRILLS[m.drill].rivals, base: MODES[DRILLS[m.drill].course] });
 const DRILL_BEST = (m) => `snitchmedia:kayak:drill:${m.drill}`;
+// Outings from Caversham Pier (outing.js), picked on the walk's bridge: on the
+// Div 1-6 course's river, which goes all the way up to Mapledurham.
+const OUTING_MODES = Object.fromEntries(Object.entries(OUTINGS).map(([key, o]) => [key, { key, outing: key, label: o.label, solo: true, rivals: [], base: MODES.hasler16 }]));
 // Anyone can paddle practice and the drills; the races, the leaderboard and live races need an account.
-const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES)]);
+const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 // #club: the walk to the club before a race (prototype; club.js).
@@ -171,6 +175,17 @@ function start() {
   drawMap();
   // A drill that starts under way (wash hanging, the portage) has no starter.
   if (drill && race.start.phase === 'go') state = 'racing';
+  // An outing from Caversham Pier: no starter, no clock; off at once.
+  hud.classList.toggle('outing', !!mode.outing);
+  document.getElementById('outingBar').hidden = !mode.outing;
+  if (mode.outing) {
+    const bridge = race.course.scenery?.bridges?.find((b) => b.name === 'Caversham Bridge');
+    startOuting(race, mode.outing, (bridge?.s ?? 0) + 30, (Math.random() * 2 ** 31) | 0);
+    outingLever = 0;
+    state = 'racing';
+    showOutingBar();
+    show(OUTINGS[mode.outing].label, { small: true, hold: 2.5 });
+  }
   if (race.format === 'interval') {
     show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
   }
@@ -462,7 +477,7 @@ menu.addEventListener('close', () => {
 // Start a race, a drill or a live race by its menu value.
 async function choose(value) {
   if (value === 'live') return openLive();
-  const next = MODES[value] ?? DRILL_MODES[value];
+  const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value];
   if (!next) return;
   if (!OPEN.has(next.key) && !account.offline && !account.user) {
     location.href = SIGN_IN;
@@ -480,7 +495,7 @@ async function choose(value) {
     }
   }
   mode = next;
-  try { localStorage.setItem(LAST_KEY, value); } catch {}
+  if (!next.outing) try { localStorage.setItem(LAST_KEY, value); } catch {}
   leaveClub();
   if (renderer) useWorld();
   start();
@@ -508,11 +523,74 @@ addEventListener('keydown', (e) => {
 
 function handleGamepad(pressed) {
   if (club && !menu.open && !live.open) return clubGamepad(pressed);
+  if (race?.outing && state === 'racing') {
+    if (pressed.has(BUTTON.UP) || pressed.has(7)) lever(1);
+    if (pressed.has(BUTTON.DOWN) || pressed.has(6)) lever(-1);
+  }
   if (pressed.has(BUTTON.START) && paused.open) {
     paused.close('resume');
     return;
   }
   if (!gamepadDialogs([menu, live, paused, finished], pressed) && pressed.has(BUTTON.START)) pause();
+}
+
+// --- outings from Caversham Pier (outing.js) -------------------------------------
+//
+// The river cruise (you stand at the bow; the arrows, a finger or the stick look
+// about) and the hired launch (the arrows or the stick steer; up and down, or
+// Faster and Slower, set the throttle in steps, as on a real boat).
+const outingKeys = new Set();
+let outingLever = 0; // the launch's throttle, -1 (astern) to 1, in quarters
+const outingTouches = new Map(); // pointer id -> -1 (left half) or 1 (right half)
+addEventListener('keydown', (e) => {
+  if (!race?.outing || state !== 'racing') return;
+  outingKeys.add(e.code);
+  if (!e.repeat && (e.code === 'ArrowUp' || e.code === 'KeyW')) lever(1);
+  if (!e.repeat && (e.code === 'ArrowDown' || e.code === 'KeyS')) lever(-1);
+});
+addEventListener('keyup', (e) => outingKeys.delete(e.code));
+addEventListener('blur', () => outingKeys.clear());
+canvas.addEventListener('pointerdown', (e) => {
+  if (race?.outing) outingTouches.set(e.pointerId, e.clientX < canvas.clientWidth / 2 ? -1 : 1);
+});
+for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => outingTouches.delete(e.pointerId));
+function lever(by) {
+  if (race?.outing?.kind !== 'hire') return;
+  outingLever = Math.max(-1, Math.min(1, outingLever + by * 0.25));
+  showOutingBar();
+}
+document.getElementById('outingFaster').addEventListener('click', () => lever(1));
+document.getElementById('outingSlower').addEventListener('click', () => lever(-1));
+function showOutingBar() {
+  const kind = race?.outing?.kind;
+  if (!kind) return;
+  document.getElementById('outingName').textContent = OUTINGS[kind].label;
+  const hire = kind === 'hire';
+  for (const id of ['outingFaster', 'outingSlower']) document.getElementById(id).hidden = !hire;
+  document.getElementById('outingHint').textContent = hire
+    ? (outingLever === 0 ? 'Stopped' : outingLever > 0 ? `Ahead ${outingLever * 4} of 4` : `Astern ${-outingLever * 4} of 4`) + (phone.matches ? ' · hold either side to steer' : ' · ← → steer, ↑ ↓ throttle')
+    : phone.matches ? 'Hold either side to look about' : '← → look about';
+}
+function outingStep(dt) {
+  let turn = 0;
+  if (outingKeys.has('ArrowLeft') || outingKeys.has('KeyA')) turn -= 1;
+  if (outingKeys.has('ArrowRight') || outingKeys.has('KeyD')) turn += 1;
+  for (const side of outingTouches.values()) turn += side;
+  const pad = navigator.getGamepads?.()?.find?.((p) => p);
+  if (pad && Math.abs(pad.axes[0] ?? 0) > 0.2) turn += pad.axes[0];
+  for (const e of stepOuting(race, dt, { turn, throttle: outingLever })) {
+    if (e === 'end') {
+      show('Mapledurham Lock: the end of the cruise', { hold: 4 });
+      setTimeout(() => { if (race.outing && state === 'racing') toMenu(); }, 4500);
+    }
+    if (e === 'bump') noise({ freq: 160, to: 90, q: 2, duration: 0.25, gain: 0.12, type: 'lowpass' });
+    if (e === 'swan') {
+      outingLever = 0;
+      showOutingBar();
+      tone({ freq: 330, to: 260, duration: 0.25, type: 'square', gain: 0.06 });
+      show("The swan won't move", { small: true, hold: 1.5 });
+    }
+  }
 }
 
 // --- the walk to the club (prototype, #club; club.js) ----------------------------
@@ -611,8 +689,11 @@ function arrive(place) {
   // and a pin over its building in the view: nothing covers the scene.
   const spots = place === 'path'
     ? [
-      { card: { picture: clubSvg('canoe'), name: 'Reading Canoe Club', line: 'Kayak races and practice', pin: 'canoe' }, act: () => go('club') },
-      { card: { picture: clubSvg('rowing'), name: 'Reading Rowing Club', line: 'Red boards: too rough for rowers today', pin: 'rowing' }, act: () => go('rowing') },
+      { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races and practice', pin: 'canoe' }, act: () => go('club') },
+      { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Red boards: too rough for rowers today', pin: 'rowing' }, act: () => go('rowing') },
+      // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
+      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise') },
+      { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => choose('hire') },
       { pin: 'canoe', at: shots.doors.path.club },
       { pin: 'rowing', at: shots.doors.path.rowing },
     ]
@@ -1185,6 +1266,7 @@ function simulate(dt) {
   } else if (state !== 'racing' && state !== 'start') {
     return;
   }
+  if (race.outing) return outingStep(dt);
   if (controls.assist) input.lean = Math.max(-1, Math.min(1, input.lean - (boat.roll * 2 + boat.rollRate * 0.6)));
   else if (controls.tilting) input.lean = Math.max(-1, Math.min(1, input.lean - TILT_REFLEX * boat.rollRate));
   if (liveRace) liveBefore(dt);
@@ -1341,11 +1423,17 @@ function oarFrom(model, from, to) {
 function placeTraffic() {
   const where = Object.fromEntries(Object.keys(TRAFFIC).map((k) => [k, []]));
   const oars = [];
+  const paddles = [];
   for (const b of race.traffic?.boats ?? []) {
     if (!b.on) continue;
     const f = [Math.sin(b.heading), 0, -Math.cos(b.heading)];
     const model = basis([-f[2], 0, f[0]], [0, 1, 0], f.map((v) => -v), [b.x, 0.03 * Math.sin(race.time * 1.3 + b.phase), b.z]);
     where[b.kind].push(model);
+    // A kayaker's paddle swings from side to side, about a stroke a second each side.
+    if (b.kind === 'kayaker') {
+      const w = 0.55 * Math.sin(race.time * Math.PI * 1.7 + b.phase);
+      paddles.push(multiply(model, frameFrom([0, 0.5, SEAT - 0.5], normalize([Math.cos(w), -0.45 * Math.sin(w), 0.35 * Math.sin(w)]))));
+    }
     if (!ROWLOCKS[b.kind]) continue;
     const p = (race.time * STROKE[b.kind] + b.phase) % 1;
     const drive = p < 0.4;
@@ -1358,6 +1446,7 @@ function placeTraffic() {
   }
   for (const [kind, list] of Object.entries(where)) renderer.place(meshes.traffic[kind], list);
   renderer.place(meshes.oar, oars);
+  renderer.place(meshes.trafficPaddle, paddles);
 }
 
 // A motorboat's engine: a low rumble, louder as it comes by.
@@ -1395,6 +1484,11 @@ function placeRacers() {
     const model = basis(fr.right, fr.up, fr.back, fr.pos);
     // Carried, the boat's on your right shoulder; no paddling.
     const hullAt = lift ? [fr.pos[0] + fr.right[0] * 0.55, lift.boat, fr.pos[2] + fr.right[2] * 0.55] : fr.pos;
+    // On an outing you're on the trip boat or the launch, not in a kayak.
+    if (r === race.player && race.outing) {
+      renderer.place(meshes.outing[race.outing.kind], [basis(fr.right, fr.up, fr.back, fr.pos)]);
+      continue;
+    }
     renderer.place(kayakFor(r), [basis(fr.right, fr.up, fr.back, hullAt)]);
     if (r === race.player) {
       if (!lift) hold(r, multiply(model, paddlePose(r.boat).matrix));
@@ -1449,6 +1543,16 @@ function render(time) {
   let fwd = normalize(fr.f.map((v, i) => v * Math.cos(pitch) - fr.up[i] * Math.sin(pitch)));
   let up = normalize(fr.up.map((v, i) => v * Math.cos(pitch) + fr.f[i] * Math.sin(pitch)));
   let right = fr.right;
+  // On an outing: standing at the trip boat's bow, or at the launch's helm, looking about.
+  if (race.outing && state !== 'menu') {
+    const o = OUTINGS[race.outing.kind];
+    eye = fr.pos.map((p, i) => p + fr.f[i] * o.forward + [0, 1, 0][i] * o.eye);
+    const yaw = boat.heading + race.outing.look;
+    const p = 0.07;
+    fwd = [Math.sin(yaw) * Math.cos(p), -Math.sin(p), -Math.cos(yaw) * Math.cos(p)];
+    right = normalize([-fwd[2], 0, fwd[0]]);
+    up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+  }
   // On the walk to the club, the place's camera instead.
   const shot = club && state === 'menu' ? clubCamera() : null;
   if (shot) {
@@ -1492,10 +1596,10 @@ function render(time) {
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
   for (const r of race.racers) {
-    list.push(kayakFor(r));
+    list.push(r === race.player && race.outing ? meshes.outing[race.outing.kind] : kayakFor(r));
     if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
-  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar);
+  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle);
   if (shot) list.push(...placeClub());
   renderer.draw(frameData, list);
   if (shot) placeDoors();
@@ -1557,11 +1661,13 @@ function updateHud(dt) {
   els.rate.textContent = strokeRate(boat);
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
   els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
-  sprintHint(boat, dt);
-  stuckHint(boat, dt);
+  if (!race.outing) {
+    sprintHint(boat, dt);
+    stuckHint(boat, dt);
+  }
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
-  showCue(course, loc.s, dt);
+  if (!race.outing) showCue(course, loc.s, dt);
   els.drill.hidden = !drill?.readout;
   if (drill) els.drill.textContent = drill.readout;
   moveMap();
@@ -1865,12 +1971,15 @@ try {
     worlds: new Map(),
     marks: new Map(),
     paddles: new Map(),
-    traffic: { sculler: renderer.createMesh(scullerMesh(), 8), eight: renderer.createMesh(eightMesh(), 8), cruiser: renderer.createMesh(cruiserMesh(), 8), motorboat: renderer.createMesh(motorboatMesh(), 8) },
-    oar: renderer.createMesh(oarMesh(), 128),
+    // Room for the outings' busier river (outing.js BUSY): some 20 boats on the water at once.
+    traffic: { sculler: renderer.createMesh(scullerMesh(), 24), kayaker: renderer.createMesh(kayakerMesh(), 24), eight: renderer.createMesh(eightMesh(), 24), cruiser: renderer.createMesh(cruiserMesh(), 24), motorboat: renderer.createMesh(motorboatMesh(), 24) },
+    oar: renderer.createMesh(oarMesh(), 256),
+    trafficPaddle: renderer.createMesh(paddleMesh(RIVAL_PADDLE), 24),
     kayaks: new Map(),
     swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
     duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),
     racers: new Map(),
+    outing: { cruise: renderer.createMesh(tripBoatMesh()), hire: renderer.createMesh(launchMesh()) },
   };
   useWorld();
   requestAnimationFrame(frame);
