@@ -14,6 +14,7 @@
 // number a paddler saw live and the one the site shows are the same.
 
 import { RC_VERSION, RC_SOURCES_SHA256, RC_WASM_BASE64 } from './recorder-core-wasm'
+import { STROKE_RATE_CODES, type StrokeRateCode } from './stroke-rate-codes'
 
 /**
  * Which core this is: its version and the C sources it was built from. Any
@@ -29,8 +30,11 @@ export type CadenceWindow = {
   confidence: number      // how strongly the stroke repeats at that rate, 0..1
 }
 
+export { STROKE_RATE_CODES, type StrokeRateCode }
+
 export type CadenceReport = {
   available: boolean
+  code: StrokeRateCode
   reason: string
   sampleRateHz: number | null
   rows: number
@@ -116,6 +120,7 @@ export const STROKE_RATE_REASONS: Record<string, (hz: number, windows: number) =
     ? `Motion data is sampled at ${hz.toFixed(1)} Hz, too slow to measure a stroke rate.`
     : "Couldn't tell how often the motion data was sampled, so there's no stroke rate."),
   no_rhythm: () => "No stretch showed a clear, repeating stroke. It may have been still, or somewhere the stroke doesn't reach it.",
+  not_moving: () => "No stretch of the GPS track stayed at 4 km/h or more for 90 s, so there's no stroke rate.",
 }
 
 /**
@@ -124,12 +129,17 @@ export const STROKE_RATE_REASONS: Record<string, (hz: number, windows: number) =
  * `all`; `moving` and `series` need the track to say the boat moved.
  */
 export function recordingStrokeRate(trackCsv: string, motionCsv: string): RecordingStrokeRate {
+  return strokeRateFromLines(replayStrokeLines(trackCsv, motionCsv))
+}
+
+/** Reads the core's RC_STROKE lines (replayStrokeLines). Exported for tests. */
+export function strokeRateFromLines(lines: string[]): RecordingStrokeRate {
   const windows: Record<string, CadenceWindow[]> = { moving: [], all: [] }
   const rests: Record<string, [number, number][]> = { moving: [], all: [] }
   const sessions: Record<string, string[]> = {}
   const points: StrokeRatePoint[] = []
   let rows = 0, hz = 0, seriesOk = false
-  for (const line of replayStrokeLines(trackCsv, motionCsv)) {
+  for (const line of lines) {
     const f = line.split(',')
     switch (f[0]) {
       case 'window':
@@ -150,8 +160,10 @@ export function recordingStrokeRate(trackCsv: string, motionCsv: string): Record
     if (!s) throw new Error(`the recorder core wrote no ${name} session line`)
     const available = s[2] === '1'
     const median = Number(s[5])
+    const code: StrokeRateCode = (STROKE_RATE_CODES as readonly string[]).includes(s[3]) ? s[3] as StrokeRateCode : 'other'
     const report: CadenceReport = {
       available,
+      code,
       // A reason this code doesn't know yet (a newer core) gets plain words, never the raw code.
       reason: (STROKE_RATE_REASONS[s[3]] ?? (() => "Couldn't work out a stroke rate from this motion data."))(hz, Number(s[4])),
       sampleRateHz: hz > 0 ? hz : null,

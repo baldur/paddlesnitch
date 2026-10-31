@@ -121,7 +121,11 @@ core works them out again.
   - a moving run ends after 3 s with no track row (cadence.ts let a run
     span a 250 s gap in rows; nothing says the boat moved);
   - a recording whose track never moves gets no gated rate (cadence.ts
-    treated "no moving stretches" as "don't gate").
+    treated "no moving stretches" as "don't gate"). Its reason is
+    `not_moving` (0.5.0, owner's decision 2026-10-31): no run reached 90
+    rows at >= 4 km/h, so the page says the GPS never saw the boat moving
+    steadily, not that the tracker was loose (`no_rhythm`: a run, but no
+    stroke in it).
 - **A metric's figures come at `rc_finish`;** a stream's per-window lines come
   as they're decided (a window waits for the track to say whether the boat
   was moving the whole time). Nothing is stored per window: the median is a
@@ -255,3 +259,11 @@ are byte-identical. Two differences, both from the replay rather than the core:
   every column position for CR LF, not only the core's own layout. Also:
   `rc_replay` reads files in the order they're written and never sorts them
   (header). The old server sorted, and nothing needs it.
+- `not_moving` (0.5.0) asks whether any run reached 90 rows, not whether a
+  window ever fit inside one. A run of exactly 90-91 rows can miss every
+  60 s window on the 30 s grid (about 1 phase in 30, found by the `tester`
+  review), and then reads `no_rhythm` though nothing showed the stroke was
+  missing. Rare enough to leave. The honest fix is to count windows the
+  moving gate let through, whatever their rhythm, which means deciding
+  rhythm-less windows against the track too. Do that if it's ever seen on
+  a real recording.
