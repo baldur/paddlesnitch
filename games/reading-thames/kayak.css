@@ -470,6 +470,14 @@ summary { cursor: pointer; }
 #clubCards .card small { opacity: 0.8; font-size: 0.74rem; max-width: 9.5rem; line-height: 1.2; }
 #clubCards .card.go { background: #d6452b; border-color: #d6452b; grid-template-columns: 1fr; padding: 0.45rem 1rem; }
 #clubCards .card:hover, #clubCards .card:focus-visible { border-color: #f2c230; outline: none; }
+/* Racing friends, on the bridge and at the canoe club: a row of its own above the cards, in the accent colour. */
+#clubCards .friends { flex-basis: 100%; display: flex; justify-content: center; gap: 0.5rem; }
+#clubCards .friend { pointer-events: auto; display: grid; text-align: left; min-height: 44px; padding: 0.45rem 1rem; border-radius: 12px; border: 1px solid #f2c230;
+  background: #f2c230; color: #1b1a14; font: 0.92rem/1.2 system-ui, sans-serif; cursor: pointer; }
+#clubCards .friend .name { font-weight: 700; }
+#clubCards .friend small { font-size: 0.74rem; opacity: 0.85; }
+#clubCards .friend:hover, #clubCards .friend:focus-visible { border-color: #fff; outline: none; }
+@media (max-width: 860px) { #clubCards .friend small { display: none; } }
 .pin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .pin.canoe { background: #f2c230; }
 .pin.rowing { background: #d6261c; }

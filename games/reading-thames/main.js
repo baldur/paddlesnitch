@@ -799,6 +799,11 @@ function arrive(place) {
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
+  // Racing friends, live, up front: make a race and send the link, or join one with its code.
+  if (place === 'path' || place === 'club') {
+    spots.push({ friend: { name: 'Invite friends', line: 'Make a live race and send the link' }, act: () => openLive('', 'make') });
+    spots.push({ friend: { name: 'Join a race', line: 'Race with friends: type their code' }, act: () => openLive('', 'join') });
+  }
   if (place === 'path' && label(club.plan)) {
     spots.push({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
@@ -841,7 +846,19 @@ function arrive(place) {
     }
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = [spot.card ? 'card' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    b.className = [spot.card ? 'card' : spot.friend ? 'friend' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    if (spot.friend) {
+      b.innerHTML = `<span class="name">${spot.friend.name}</span><small>${spot.friend.line}</small>`;
+      let row = clubCards.querySelector('.friends');
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'friends';
+        clubCards.prepend(row);
+      }
+      b.addEventListener('click', () => spot.act());
+      row.append(b);
+      return { ...spot, el: b };
+    }
     if (spot.card) {
       const { picture = '', name, line, pin } = spot.card;
       b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
@@ -1324,14 +1341,15 @@ let sendTimer = 0;
 let lobbyTimer = null; // refreshes the lobby's round-trip times
 const STATUS = { open: 'connected', connecting: 'connecting…', waiting: 'joining…', gone: 'left' };
 
-function openLive(code = '') {
+function openLive(code = '', which = code ? 'join' : 'make') {
   els.liveError.replaceChildren();
   els.liveCode.value = code;
-  chooseLive(code ? 'join' : 'make');
+  chooseLive(which);
   if (account.offline) els.liveError.textContent = 'Live races need paddlesnitch.com: open the game there.';
   else if (!account.user) els.liveError.replaceChildren('Live races need an account. ', link('Sign in', SIGN_IN + encodeURIComponent(code ? `#race=${code}` : '')));
   showLobby();
   openDialog(live);
+  if (which === 'join' && !code) els.liveCode.focus();
   if (code && account.user && !lobby) joinRace(code);
 }
 

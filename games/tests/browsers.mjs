@@ -83,6 +83,7 @@ const CASES = [
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
   { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
+  { name: 'webkit, desktop, race friends from the bridge', engine: webkit, ctx: desktop, club: true, friends: true },
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
@@ -111,6 +112,17 @@ async function play(c, page, errors) {
   if (c.club && !(opened.walk && !opened.menu)) errors.push(`expected the walk, got ${JSON.stringify(opened)}`);
   if (!c.club && opened.walk) errors.push(`the walk opened, expected ${c.raceLink ? 'the race link' : 'the menu'}`);
   if (c.raceLink) return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}`;
+  // Racing friends from the bridge: Invite friends opens the race dialog to make one, Join a race at the code box.
+  if (c.friends) {
+    await page.locator('#clubCards .friend', { hasText: 'Join a race' }).click();
+    const join = await page.evaluate(() => ({ open: document.getElementById('live').open, join: document.getElementById('liveJoinTab').getAttribute('aria-pressed'), focus: document.activeElement?.id }));
+    if (!(join.open && join.join === 'true' && join.focus === 'liveCode')) errors.push(`Join a race opened ${JSON.stringify(join)}`);
+    await page.keyboard.press('Escape');
+    await page.locator('#clubCards .friend', { hasText: 'Invite friends' }).click();
+    const make = await page.evaluate(() => ({ open: document.getElementById('live').open, make: document.getElementById('liveMakeTab').getAttribute('aria-pressed') }));
+    if (!(make.open && make.make === 'true')) errors.push(`Invite friends opened ${JSON.stringify(make)}`);
+    return 'race friends from the bridge: both open the race dialog the right way';
+  }
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
     // Into the changing room, open the picker, and Back out past it (a modal
