@@ -15,7 +15,15 @@ const course = z.enum(Object.keys(GAME_COURSES) as [GameCourse, ...GameCourse[]]
 const code = z.string().regex(/^[A-Z]{4}$/)
 const colour = z.string().regex(/^#[0-9a-f]{6}$/)
 const kit = z.object({
-  skin: colour, head: z.enum(['cap', 'hair']), headColour: colour, sleeves: z.enum(['short', 'long']), top: colour,
+  skin: colour, sleeves: z.enum(['short', 'long']), top: colour,
+  // The paddler. Optional while pages cached from before it still send the old head.
+  body: z.enum(['broad', 'slim', 'curvy']).optional(),
+  hair: z.enum(['short', 'crop', 'ponytail', 'bun', 'long', 'none']).optional(), hairColour: colour.optional(),
+  hat: z.enum(['none', 'cap', 'visor', 'beanie']).optional(), hatColour: colour.optional(),
+  beard: z.enum(['none', 'stubble', 'moustache', 'beard']).optional(),
+  aid: z.boolean().optional(), aidColour: colour.optional(),
+  // The old head, before the game's cleanKit moves it to hair and hat.
+  head: z.enum(['cap', 'hair']).optional(), headColour: colour.optional(),
   glasses: z.enum(['none', 'wrap', 'round', 'aviator', 'square']), glassesColour: colour,
   boat: z.enum(GAME_BOATS), deck: colour, hullColour: colour, stripe: colour, deckShape: z.enum(['modern', 'wings']), hullShape: z.enum(['round', 'vee']),
   paddle: z.enum(['wing', 'flat']), shaftColour: colour, bladeColour: colour,
