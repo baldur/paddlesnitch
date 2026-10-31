@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 /* The core's version, logged with every recording (phase 4: core_ver). */
-#define RC_VERSION "0.2.0"
+#define RC_VERSION "0.3.0"
 
 /* ---- Output streams ---------------------------------------------------- */
 
@@ -58,8 +58,12 @@ typedef enum {
     RC_TRACK      = 0, /* track_<stamp>.csv: one row a second, uploaded        */
     RC_MOTION     = 1, /* track_<stamp>_i10.csv: motion thinned by time to
                           ~12 Hz (one row per 80 ms of t_ms), uploaded         */
-    RC_MOTION_RAW = 2  /* track_<stamp>_imu.csv: every sample, kept on the
+    RC_MOTION_RAW = 2, /* track_<stamp>_imu.csv: every sample, kept on the
                           card, not uploaded. Only if RC_HAS_RAW_MOTION.       */
+    RC_STROKE     = 3  /* stroke rate as it's measured, and the recording's
+                          figures at rc_finish (STROKE RATE below). Not a file
+                          a device needs to keep: the server rebuilds it from
+                          the other two with rc_replay.                        */
 } rc_stream;
 
 /*
@@ -138,6 +142,78 @@ typedef struct {
     float distance_m;      /* movement-gated, never a raw sum of fixes         */
 } rc_live_values;
 
+/* ---- Stroke rate ----------------------------------------------------------
+ *
+ * Read from the uploaded files only, so a replay of them gives the same lines
+ * (streaming = batch): every RC_MOTION line as written (80 ms apart, values as
+ * printed) and each RC_TRACK row's ms and speed. Each window: the gyroscope
+ * axis with the most variance, its autocorrelation, the best LOCAL maximum
+ * for 0.2-2 Hz (never the band edge), refined between lags; alternating
+ * strokes (half-lag correlation < -0.85 x the peak) are twice the cycle.
+ *
+ * Three sets of windows:
+ *   moving  60 s every 30 s, wholly inside a moving run (>= 4 km/h for >= 90
+ *           rows): the recording's stroke rate
+ *   all     the same, ungated: for a recording whose GPS failed
+ *   series  15 s every 5 s, inside a moving run of >= 20 rows: stroke rate
+ *           through the paddle, left/right decided once by majority
+ *
+ * RC_STROKE lines (no header; the first field says which):
+ *   window,<set>,<t_ms>,<cycles/min>,<strokes/min>,<alternating 0|1>,<confidence>
+ *   point,<ms>,<strokes/min>,<confidence>     series, after its neighbour check
+ *   rest,<moving|all>,<from_ms>,<to_ms>         a gap of >= 60 s between windows
+ * and at rc_finish:
+ *   motion,<rows>,<sample Hz>
+ *   session,<moving|all>,<available 0|1>,<reason>,<windows>,<median spm>,<paddling s>,<strokes>
+ *   series,<ok 0|1>,<windows>,<alternating windows>
+ * reason: ok, too_few_samples, too_slow, no_rhythm. When a set isn't
+ * available, its window and rest lines don't count; when series isn't ok,
+ * no point counts (single-sided paddling isn't calibrated yet).
+ */
+#define RC_STROKE_RING 1024   /* samples held: 80 s at the 12.5 Hz most     */
+#define RC_STROKE_PENDING 8   /* windows waiting for the track to decide     */
+#define RC_STROKE_RUNS 8      /* recent moving runs                          */
+#define RC_STROKE_BINS 3001   /* 0.0-300.0 strokes/min, in tenths (more: top) */
+
+typedef struct { uint32_t ms; float gx, gy, gz; } rc_stroke_sample;
+
+typedef struct {
+    uint32_t t_ms;
+    int      cpm10, spm10, alternating, conf1000;
+} rc_stroke_window;
+
+typedef struct {
+    uint32_t         next_t;                 /* the next window's start         */
+    rc_stroke_window pending[RC_STROKE_PENDING];
+    uint32_t         npending;
+    uint32_t         windows, alternating;
+    uint16_t         hist[RC_STROKE_BINS];   /* session sets: the median        */
+    int              have_end;
+    uint32_t         end_ms;                 /* rests and paddling time         */
+    uint64_t         paddling_ms, strokes_x; /* strokes x 600,000               */
+    int              nearby;                 /* series: windows held for the    */
+    rc_stroke_window near[2];                /* neighbour check (prev, current) */
+} rc_stroke_set;
+
+typedef struct { uint32_t start_ms, last_ms, rows; int active; } rc_stroke_run;
+
+typedef struct {
+    int              started;
+    uint32_t         anchor_ms;              /* the first sample: windows start here */
+    rc_stroke_sample ring[RC_STROKE_RING];
+    uint32_t         ring_head, ring_n;
+    int              gate_started;
+    uint32_t         gate_last_ms;           /* the 80 ms gate, re-applied on replay */
+    uint32_t         rows;                   /* motion lines read                    */
+    int              have_last;
+    uint32_t         last_ms;                /* the line before, for the sample rate */
+    uint16_t         delta_hist[1024];       /* first 2000 gaps, in ms               */
+    uint32_t         deltas;
+    rc_stroke_run    runs[RC_STROKE_RUNS];
+    uint32_t         runs_n;
+    rc_stroke_set    set[3];                 /* moving, all, series                  */
+} rc_stroke;
+
 /* ---- State --------------------------------------------------------------- */
 
 /*
@@ -153,6 +229,7 @@ typedef struct {
     float     ax, ay, az, gx, gy, gz;   /* the latest sample            */
     float     accel_mag_max, gyro_mag_max;
     uint32_t  window_samples;
+    rc_stroke stroke;
 } rc_state;
 
 /* ---- Calls --------------------------------------------------------------- */
@@ -177,6 +254,23 @@ void rc_second(rc_state *rc, uint32_t t_ms, const rc_gps *gps, const rc_extras *
 
 /* The current live values (see rc_live_values). */
 void rc_live(const rc_state *rc, rc_live_values *out);
+
+/*
+ * Ends the recording: decides what's still waiting and writes the RC_STROKE
+ * figures. Call once, after the last rc_second, before closing the files.
+ */
+void rc_finish(rc_state *rc);
+
+/*
+ * The server's way in: replays a recording's uploaded files (the track CSV
+ * and the motion CSV, whole) and writes only RC_STROKE, exactly as the device
+ * did. Lines are merged by ms, motion first on a tie (CALL ORDER). Columns
+ * are found by name in the track's header, so older trackers' files work.
+ * `rc` is scratch space; cfg->has is ignored.
+ */
+void rc_replay(rc_state *rc, const rc_config *cfg,
+               const char *track, size_t track_len,
+               const char *motion, size_t motion_len);
 
 #ifdef __cplusplus
 }

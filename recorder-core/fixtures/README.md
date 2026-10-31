@@ -27,6 +27,7 @@ samples first on a tie, would put samples in other rows.
 | `phone_long_batches` | Both sensors in 12 s batches, half a batch out of step (inside the 15 s limit): nothing dropped |
 | `phone_timing` | Two ticks delivered over a second late, after later samples (each still gets a row, just after them); a gyroscope timestamp 1 ms before the previous one (late); a tick exactly on a sample whose timestamp repeats in the next batch (the row waits for it) |
 | `phone_buffer_full` | 45 s of accelerometer before any gyroscope event: the 2048-sample buffer full, the oldest going on unpaired, gyroscope readings older than them dropped as late |
+| `stroke_paddle` | Real stroke windows on every platform's float maths: parked, 56 spm, an 80 s rest drifting, 62 spm (each stretch reads its own rate); samples ~80 ms apart with the tracker's jitter, so the rate must come from each window's mean spacing, not the median gap; known answers in `expect_*` lines |
 | `phone_track_only` | No gyroscope (`motion` 0): rows aren't held and sensor events are ignored; a tick before any location; a fix 2.999 s old counts and 3.000 s doesn't, with its clock running on; 29 Feb; a repeated tick ignored; a location with no time (0) and one dated 2024 aren't fixes |
 
 ## `calls.csv`
@@ -37,6 +38,10 @@ One call per line; `#` starts a comment. The first call is `config`.
 config,<flags>
 imu,t_ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps
 second,t_ms,fix,utc_date,utc_time,lat,lon,alt_m,speed_kmh,course_deg,sats,hdop,batt_mv,tx_seq,imu_ok,imu_temp_c
+finish
+expect_session,<moving|all>,<min spm>,<max spm>   (or <moving|all>,none)
+expect_series,<0|1>
+expect_points,<min count>,<max count>,<min spm>,<max spm>
 ```
 
 - `config` → `rc_init`. Flags, space-separated: `tracker` (all of them), `sats`,
@@ -47,6 +52,11 @@ second,t_ms,fix,utc_date,utc_time,lat,lon,alt_m,speed_kmh,course_deg,sats,hdop,b
   `YYYY-MM-DD` and `utc_time` is `HH:MM:SS`. An **empty** date, time, `alt_m`,
   `speed_kmh`, `course_deg`, `sats` or `hdop` means that field isn't valid
   this second (its `*_valid` is 0). GPS values are parsed as `double`.
+- `finish` → `rc_finish`, which writes the stroke figures. Every case ends
+  with it (the runner refuses one that doesn't).
+- `expect_*` are known answers, checked against the stroke lines written so
+  far (so after `finish`), independent of the golden files the core wrote.
+  Other platforms' runners may skip them.
 
 ## `phone.csv`
 
@@ -82,6 +92,11 @@ expect,dropped_late,<n>,dropped_unpaired,<n>
 | `track.csv` | `RC_TRACK` | always |
 | `motion.csv` | `RC_MOTION` (the uploaded `_i10.csv`) | always |
 | `motion_raw.csv` | `RC_MOTION_RAW` (the tracker's `_imu.csv`) | `raw_motion` is set |
+| `stroke.csv` | `RC_STROKE` (not a file a device keeps) | always |
+
+**Streaming = batch** is checked on every case: the `track.csv` and
+`motion.csv` the case wrote, replayed through `rc_replay` as the server
+does, must give exactly its `stroke.csv`.
 
 ## Changing them
 

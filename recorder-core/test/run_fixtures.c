@@ -23,8 +23,8 @@
 #define MAX_FIELDS 32
 
 typedef struct {
-    char  *buf[3];
-    size_t len[3];
+    char  *buf[4];
+    size_t len[4];
     int    overflow;
     /* Replay order: a sample written after a row must be later than it,
        and a row no earlier than the samples before it, or a replay of the
@@ -39,6 +39,7 @@ static int after(uint32_t a, uint32_t b) { return (int32_t)(a - b) > 0; }
 
 static void check_order(outputs *o, rc_stream s, const char *line)
 {
+    if (s == RC_STROKE) return;
     if (*line == 0 || (s != RC_TRACK && (*line < '0' || *line > '9'))) return;
     if (s == RC_TRACK) {
         const char *c = strchr(line, ',');
@@ -101,7 +102,7 @@ static int set_d(const char *s, int *valid, double *v)
     return *valid;
 }
 
-static const char *const FILES[3] = { "track.csv", "motion.csv", "motion_raw.csv" };
+static const char *const FILES[4] = { "track.csv", "motion.csv", "motion_raw.csv", "stroke.csv" };
 
 static char *slurp(const char *path, size_t *len)
 {
@@ -134,16 +135,131 @@ static void report_diff(const char *name, const char *got, size_t glen, const ch
 }
 
 static outputs g_out;
+static int g_finished;
 
 static void reset_outputs(void)
 {
-    for (int s = 0; s < 3; s++) {
+    for (int s = 0; s < 4; s++) {
         if (!g_out.buf[s]) g_out.buf[s] = malloc(MAX_OUT);
         g_out.len[s] = 0;
     }
     g_out.overflow = 0;
     g_out.have_row = g_out.have_sample = 0;
+    g_finished = 0;
     g_out.order_errors = 0;
+}
+
+/* The RC_STROKE line written so far that starts with `prefix`, or 0. */
+static const char *stroke_line(const char *prefix)
+{
+    const char *b = g_out.buf[RC_STROKE], *end = b + g_out.len[RC_STROKE];
+    size_t n = strlen(prefix);
+    for (const char *p = b; p < end; ) {
+        const char *nl = memchr(p, '\n', (size_t)(end - p));
+        if ((size_t)(end - p) >= n && !memcmp(p, prefix, n)) return p;
+        p = nl ? nl + 1 : end;
+    }
+    return 0;
+}
+
+/*
+ * Known answers, independent of the golden files (which the core wrote):
+ *   expect_session,<moving|all>,<min spm>,<max spm>   available, median in range
+ *   expect_session,<moving|all>,none                  not available
+ *   expect_series,<0|1>                               series verdict
+ *   expect_points,<min>,<max>                         how many points, their spm
+ *                                                     (given after the counts:
+ *                                                     expect_points,<n lo>,<n hi>,<spm lo>,<spm hi>)
+ */
+static int expect_stroke(char **f, int n, const char *path, int lineno)
+{
+    char prefix[64];
+    if (!strcmp(f[0], "expect_session") && (n == 4 || n == 3)) {
+        snprintf(prefix, sizeof(prefix), "session,%s,", f[1]);
+        const char *l = stroke_line(prefix);
+        if (!l) { fprintf(stderr, "  %s:%d: no session line for %s\n", path, lineno, f[1]); return 0; }
+        char buf[200];
+        size_t k = 0;
+        while (l[k] && l[k] != '\n' && k < sizeof(buf) - 1) { buf[k] = l[k]; k++; }
+        buf[k] = 0;
+        char *v[12];
+        int m = split(buf, v);
+        int ok = m >= 6 && !strcmp(v[2], "1");
+        if (n == 3) {
+            if (strcmp(f[2], "none") || ok) {
+                fprintf(stderr, "  %s:%d: wanted no %s stroke rate, got %s\n", path, lineno, f[1], l);
+                return 0;
+            }
+            return 1;
+        }
+        double med = m >= 6 ? strtod(v[5], NULL) : -1, lo = strtod(f[2], NULL), hi = strtod(f[3], NULL);
+        if (!ok || med < lo || med > hi) {
+            fprintf(stderr, "  %s:%d: %s stroke rate %s (want %s-%s)\n", path, lineno, f[1], ok ? v[5] : "none", f[2], f[3]);
+            return 0;
+        }
+        return 1;
+    }
+    if (!strcmp(f[0], "expect_series") && n == 2) {
+        snprintf(prefix, sizeof(prefix), "series,%s,", f[1]);
+        if (!stroke_line(prefix)) { fprintf(stderr, "  %s:%d: series verdict isn't %s\n", path, lineno, f[1]); return 0; }
+        return 1;
+    }
+    if (!strcmp(f[0], "expect_points") && n == 5) {
+        long count = 0, nlo = strtol(f[1], NULL, 10), nhi = strtol(f[2], NULL, 10);
+        double lo = strtod(f[3], NULL), hi = strtod(f[4], NULL);
+        const char *b = g_out.buf[RC_STROKE], *end = b + g_out.len[RC_STROKE];
+        for (const char *p = b; p < end; ) {
+            const char *nl = memchr(p, '\n', (size_t)(end - p));
+            if (!strncmp(p, "point,", 6)) {
+                const char *c = strchr(p + 6, ',');
+                double spm = c ? strtod(c + 1, NULL) : -1;
+                if (spm < lo || spm > hi) {
+                    fprintf(stderr, "  %s:%d: a point at %.1f spm (want %s-%s)\n", path, lineno, spm, f[3], f[4]);
+                    return 0;
+                }
+                count++;
+            }
+            p = nl ? nl + 1 : end;
+        }
+        if (count < nlo || count > nhi) {
+            fprintf(stderr, "  %s:%d: %ld points (want %s-%s)\n", path, lineno, count, f[1], f[2]);
+            return 0;
+        }
+        return 1;
+    }
+    fprintf(stderr, "  %s:%d: can't read '%s'\n", path, lineno, f[0]);
+    return 0;
+}
+
+/* Streaming = batch: the files this fixture wrote, replayed the way the
+   server does, must give exactly the stroke lines the device path gave. */
+static outputs g_replay;
+static void on_replay(void *user, rc_stream s, const char *line, size_t len)
+{
+    outputs *o = (outputs *)user;
+    if (s != RC_STROKE) { o->overflow = 1; return; }   /* replay writes nothing else */
+    if (o->len[s] + len > MAX_OUT) { o->overflow = 1; return; }
+    memcpy(o->buf[s] + o->len[s], line, len);
+    o->len[s] += len;
+}
+
+static int check_replay(const char *dir)
+{
+    static rc_state rc;
+    if (!g_replay.buf[RC_STROKE]) g_replay.buf[RC_STROKE] = malloc(MAX_OUT);
+    g_replay.len[RC_STROKE] = 0;
+    g_replay.overflow = 0;
+    rc_config cfg = { on_replay, &g_replay, 0 };
+    rc_replay(&rc, &cfg, g_out.buf[RC_TRACK], g_out.len[RC_TRACK], g_out.buf[RC_MOTION], g_out.len[RC_MOTION]);
+    if (g_replay.overflow) { fprintf(stderr, "  %s: replay wrote outside RC_STROKE\n", dir); return 1; }
+    if (g_replay.len[RC_STROKE] != g_out.len[RC_STROKE] ||
+        memcmp(g_replay.buf[RC_STROKE], g_out.buf[RC_STROKE], g_out.len[RC_STROKE])) {
+        fprintf(stderr, "  %s: replaying the files doesn't give the device's stroke lines\n", dir);
+        report_diff("stroke (replay)", g_replay.buf[RC_STROKE], g_replay.len[RC_STROKE],
+                    g_out.buf[RC_STROKE], g_out.len[RC_STROKE]);
+        return 1;
+    }
+    return 0;
 }
 
 /* calls.csv: one core call per line. Returns the config's has, or -1. */
@@ -172,6 +288,11 @@ static long replay_calls(FILE *in, const char *path)
             rc_imu(&rc, (uint32_t)strtoul(f[1], NULL, 10),
                    strtof(f[2], NULL), strtof(f[3], NULL), strtof(f[4], NULL),
                    strtof(f[5], NULL), strtof(f[6], NULL), strtof(f[7], NULL));
+        } else if (!strcmp(f[0], "finish") && n == 1) {
+            rc_finish(&rc);
+            g_finished = 1;
+        } else if (!strncmp(f[0], "expect_", 7)) {
+            if (!expect_stroke(f, n, path, lineno)) return -1;
         } else if (!strcmp(f[0], "second") && n == 16) {
             rc_gps g;
             rc_extras x;
@@ -297,6 +418,9 @@ static long replay_phone(FILE *in, const char *path)
             rc_phone_tick(&p, t, (unsigned)strtoul(f[2], NULL, 10));
         } else if (!strcmp(f[0], "finish") && n == 1) {
             rc_phone_finish(&p);
+            g_finished = 1;
+        } else if (!strncmp(f[0], "expect_", 7)) {
+            if (!expect_stroke(f, n, path, lineno)) return -1;
         } else if (!strcmp(f[0], "expect") && n == 5 &&
                    !strcmp(f[1], "dropped_late") && !strcmp(f[3], "dropped_unpaired")) {
             unsigned long late = strtoul(f[2], NULL, 10), unpaired = strtoul(f[4], NULL, 10);
@@ -342,11 +466,17 @@ static int run(const char *dir, int write_mode)
     if (g_out.overflow) { fprintf(stderr, "%s: output too large\n", dir); return 1; }
     outputs *o = &g_out;
     int fails = 0;
+    if (!g_finished) {
+        fprintf(stderr, "  %s: no finish call (the stroke figures come at the end)\n", dir);
+        fails++;
+    } else if (!write_mode) {
+        fails += check_replay(dir);
+    }
     if (o->order_errors) {
         fprintf(stderr, "  %d lines out of replay order\n", o->order_errors);
         fails++;
     }
-    for (int s = 0; s < 3; s++) {
+    for (int s = 0; s < 4; s++) {
         int expected = s != RC_MOTION_RAW || (has & RC_HAS_RAW_MOTION);
         snprintf(path, sizeof(path), "%s/%s", dir, FILES[s]);
         if (write_mode) {
@@ -380,7 +510,7 @@ static int check_live_not_ready(void)
     static outputs o;
     rc_state rc;
     rc_config cfg = { on_write, &o, 0 };
-    for (int s = 0; s < 3; s++) if (!o.buf[s]) o.buf[s] = malloc(MAX_OUT);
+    for (int s = 0; s < 4; s++) if (!o.buf[s]) o.buf[s] = malloc(MAX_OUT);
     rc_init(&rc, &cfg);
     rc_live_values v;
     rc_live(&rc, &v);

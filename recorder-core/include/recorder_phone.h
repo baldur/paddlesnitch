@@ -141,7 +141,8 @@ void rc_phone_location_update(rc_phone *p, const rc_phone_location *loc);
  */
 void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv);
 
-/* Ends the recording: writes everything still held. Call before closing the files. */
+/* Ends the recording: writes everything still held, then the stroke
+   figures (rc_finish). Call before closing the files. */
 void rc_phone_finish(rc_phone *p);
 
 /* Live values (rc_live on the core). */
