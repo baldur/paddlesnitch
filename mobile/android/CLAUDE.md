@@ -143,3 +143,15 @@ time and isn't obvious from the code.
   signed-in screen: a refused token refresh signs out by itself (#702), and a Record screen
   owned by Paddles would vanish mid-paddle with its Hold to stop while the service kept
   recording (found by ios in #767). Signed out, it's reachable only while a recording runs.
+- Recordings are kept per account, as on iOS (#767; lead's rules in #761): `recordings/<user id>/`,
+  the id kept with the tokens (`TokenStore.userId`, set at every sign-in; `api.accountId()` asks
+  `me` once for an older sign-in). Deleting the account removes its folder (`deleteRecordings`);
+  signing out keeps it (the only copy until upload). Recordings stay out of backup, and a second
+  recording in the same second is `track_<stamp>_1` (the tracker's rule): both decided by lead,
+  2026-10-31, for both apps.
+- A recording belongs to whoever started it. `RecordingService` notes that account in its own
+  prefs, and a sticky restart reads the note, never the token store (someone else may have
+  signed in by then). Deleting an account stops only a recording in that account's folder. An
+  account erased on the website leaves its folder on the phone until that account deletes from
+  the app (C3 should cover it). Test a sticky restart by calling `onStartCommand(null, …)`:
+  `ServiceController.withIntent(null)` still sends an intent.

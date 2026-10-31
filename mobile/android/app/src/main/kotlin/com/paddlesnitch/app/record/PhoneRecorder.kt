@@ -144,7 +144,7 @@ class PhoneRecorder(
             runCatching { context.unregisterReceiver(battery) }
             try {
                 c?.finish()
-                c?.let { logDrops(it, true) }
+                c?.let { logDrops(it, true); f?.writeLog(it.droppedLate, it.droppedUnpaired) }
             } finally {
                 c?.close()
                 f?.close()

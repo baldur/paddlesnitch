@@ -129,7 +129,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
-    fun signedOut() { signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
+    fun signedOut() { com.paddlesnitch.app.record.RecordingService.forgetFinished(); signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
@@ -139,7 +139,8 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
         val m = Modifier.padding(inner)
         // Record sits above every screen, so a recording keeps its screen and Hold to stop
         // through a forced sign-out. Release builds never reach it (no location: lead, #761).
-        com.paddlesnitch.app.record.WithRecording(signedIn = signedIn, modifier = m) { recordEntry ->
+        com.paddlesnitch.app.record.WithRecording(signedIn = signedIn, modifier = m,
+            record = { com.paddlesnitch.app.record.Record(accountId = { api.accountId() }) }) { recordEntry ->
         when (screen) {
             Screen.SignIn -> {
                 // Signed in, from the sign-in screen or a password reset.
@@ -176,8 +177,10 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
             }
             Screen.Account -> {
                 BackHandler { inAccount = false }
+                // Read while still signed in: deleting the account clears the tokens it's kept with.
+                val deletedAccount = api.keptAccountId
                 AccountScreen(api, onBack = { inAccount = false }, onTracker = { settingUpTracker = true }, onTrackers = { inTrackers = true }, onSignedOut = ::signedOut,
-                    onDeleted = ::signedOut, onSignOut = { scope.launch { api.signOut(); signedOut() } }, modifier = m,
+                    onDeleted = { deleteRecordings(context, deletedAccount); signedOut() }, onSignOut = { scope.launch { api.signOut(); signedOut() } }, modifier = m,
                     resume = reauth.resume, onResumed = { reauth = reauth.resumed() },
                     stravaReturn = stravaConnectReturn, onStravaReturnHandled = { stravaConnectReturn = null },
                     onSignInAgain = { userId, email, viaStrava, then ->
@@ -253,6 +256,20 @@ private fun MyPaddles(
 
 private suspend fun readSample(context: android.content.Context, file: String): AnalysisSession = withContext(Dispatchers.IO) {
     context.assets.open(file).bufferedReader().use { ApiJson.decodeFromString(AnalysisSession.serializer(), it.readText()) }
+}
+
+/**
+ * Deleting an account removes the recordings it made on this phone (sign-out keeps them:
+ * until upload they're the only copy). This account's recording, if one is still going, is stopped.
+ */
+internal fun deleteRecordings(context: android.content.Context, accountId: String?) {
+    if (accountId == null) return
+    val base = com.paddlesnitch.app.record.RecordingService.recordingsDir(context)
+    val folder = com.paddlesnitch.app.record.RecordingFiles.accountDir(base, accountId)
+    // Only this account's recording: another account's may still be going after a sign-out.
+    val running = com.paddlesnitch.app.record.RecordingService.state.value as? com.paddlesnitch.app.record.RecordingService.State.Recording
+    if (running != null && running.files.track.parentFile == folder) com.paddlesnitch.app.record.RecordingService.stop(context)
+    com.paddlesnitch.app.record.RecordingFiles.deleteAccount(base, accountId)
 }
 
 /** The recording behind the measured motion fixture (paddles.get.json's tracker paddle). */

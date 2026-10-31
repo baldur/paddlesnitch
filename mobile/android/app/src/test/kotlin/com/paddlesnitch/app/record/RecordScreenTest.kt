@@ -216,7 +216,7 @@ class RecordScreenTest {
     private fun showApp(canRecord: Boolean = true) = compose.setContent {
         PaddlesnitchTheme {
             Surface(color = PsColor.bg) {
-                WithRecording(signedIn = signedIn, canRecord = canRecord) { entry ->
+                WithRecording(signedIn = signedIn, canRecord = canRecord, record = { Record(accountId = { "u-77" }) }) { entry ->
                     Column {
                         Text(if (signedIn) "Your paddles" else "Sample paddles")
                         entry?.invoke()

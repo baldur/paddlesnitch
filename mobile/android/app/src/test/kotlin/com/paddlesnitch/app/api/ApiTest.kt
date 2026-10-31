@@ -39,6 +39,23 @@ class ApiTest {
         assertEquals("id-1", tokens.idToken)
         assertEquals("r-1", tokens.refreshToken)
         assertTrue(api.signedIn)
+        // Whose sign-in it is, kept for the recordings' folder (record/RecordingFiles.kt).
+        assertEquals("u1", api.keptAccountId)
+    }
+
+    @Test fun aSignInFromBeforeIdsWereKeptAsksMeOnce() = runTest {
+        tokens.save("id-1", "r-1")
+        trpc("""{"user":{"id":"u-77","email":"pat@example.com","displayName":"Pat"}}""")
+        assertEquals("u-77", api.accountId())
+        assertEquals("u-77", api.accountId())   // kept: no second request
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun signingOutForgetsWhoseItWas() = runTest {
+        tokens.save("id-1", "r-1"); tokens.userId = "u-77"
+        answer(200, """{"ok":true}""")
+        api.signOut()
+        assertEquals(null, api.keptAccountId)
     }
 
     @Test fun aRefusalCarriesTheServersOwnWords() = runTest {

@@ -123,8 +123,9 @@ fun liveStrokeRate(live: RecorderCore.Live?): String = live?.spm?.takeIf { !it.i
  * RecordingService and asks for location (and notifications) first.
  */
 @Composable
-fun Record(modifier: Modifier = Modifier) {
+fun Record(accountId: suspend () -> String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val state by RecordingService.state.collectAsState()
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) RecordingService.start(context)
@@ -134,11 +135,15 @@ fun Record(modifier: Modifier = Modifier) {
         state = state,
         onStart = {
             RecordingService.set(RecordingService.State.Starting)
-            ask.launch(buildList {
-                add(Manifest.permission.ACCESS_FINE_LOCATION)
-                add(Manifest.permission.ACCESS_COARSE_LOCATION)
-                if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            }.toTypedArray())
+            scope.launch {
+                // The recording goes in this account's folder; a sign-in from before ids were kept asks once.
+                if (runCatching { accountId() }.isFailure) { RecordingService.set(RecordingService.State.Failed(locationRefused = false)); return@launch }
+                ask.launch(buildList {
+                    add(Manifest.permission.ACCESS_FINE_LOCATION)
+                    add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                    if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+                }.toTypedArray())
+            }
         },
         onStop = { RecordingService.stop(context) },
         onSettings = {
@@ -294,7 +299,7 @@ fun WithRecording(
     signedIn: Boolean,
     modifier: Modifier = Modifier,
     canRecord: Boolean = BuildConfig.DEBUG,
-    record: @Composable () -> Unit = { Record() },
+    record: @Composable () -> Unit,
     content: @Composable (entry: (@Composable () -> Unit)?) -> Unit,
 ) {
     val state by RecordingService.state.collectAsState()

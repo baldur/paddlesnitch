@@ -17,6 +17,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.paddlesnitch.app.MainActivity
 import com.paddlesnitch.app.R
+import com.paddlesnitch.app.auth.KeystoreTokenStore
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,8 +35,11 @@ class RecordingService : Service() {
     private var wake: PowerManager.WakeLock? = null
     private val main = Handler(Looper.getMainLooper())
 
-    /** Makes the recorder; tests swap in one with a fake clock. */
-    internal var makeRecorder: (Context) -> PhoneRecorder = { PhoneRecorder(it, recordingsDir(it)) }
+    /** Makes the recorder for an account's folder; tests swap in their own. */
+    internal var makeRecorder: (Context, File) -> PhoneRecorder = { c, dir -> PhoneRecorder(c, dir) }
+
+    /** Who's signed in now; tests swap in their own. */
+    internal var signedInAccount: (Context) -> String? = { KeystoreTokenStore(it).userId }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -44,16 +48,31 @@ class RecordingService : Service() {
             ACTION_STOP -> { stopRecording(); return START_NOT_STICKY }
             // A start, or the system bringing a killed recording back (null
             // intent): either way a new pair of files, as the tracker does.
-            else -> if (recorder == null && !startRecording()) return START_NOT_STICKY
+            else -> if (recorder == null && !startRecording(restarted = intent == null)) return START_NOT_STICKY
         }
         return START_STICKY
     }
 
-    private fun startRecording(): Boolean = try {
+    /**
+     * The account a recording goes to: whoever was signed in when it started. A restart
+     * after a kill reads it back from the service's own note, never from whoever is
+     * signed in by then (someone else may be).
+     */
+    private fun accountFor(restarted: Boolean): String {
+        val note = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val account = if (restarted) note.getString(ACCOUNT, null) else signedInAccount(this)
+        checkNotNull(account) { "no account for the recording" }
+        note.edit().putString(ACCOUNT, account).apply()
+        return account
+    }
+
+    private fun forgetAccount() = getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(ACCOUNT).apply()
+
+    private fun startRecording(restarted: Boolean): Boolean = try {
         startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         // A backstop: a recording that's never stopped mustn't hold the phone awake for ever.
         wake = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "paddlesnitch:recording").apply { acquire(MAX_RECORDING_MS) }
-        val r = makeRecorder(this)
+        val r = makeRecorder(this, RecordingFiles.accountDir(recordingsDir(this), accountFor(restarted)))
         val files = r.start()   // on failure it has already undone itself
         recorder = r
         startedAt = SystemClock.elapsedRealtime()
@@ -62,6 +81,7 @@ class RecordingService : Service() {
     } catch (e: Exception) {
         Log.w(TAG, "couldn't start recording", e)
         _state.value = State.Failed(locationRefused = e is SecurityException)
+        forgetAccount()
         releaseAndStop()
         false
     }
@@ -70,6 +90,7 @@ class RecordingService : Service() {
     private fun stopRecording() {
         val r = recorder ?: run { if (_state.value is State.Recording) _state.value = State.Idle; releaseAndStop(); return }
         recorder = null
+        forgetAccount()
         val elapsed = SystemClock.elapsedRealtime() - startedAt
         Thread({
             val files = runCatching { r.stop() }.onFailure { Log.w(TAG, "couldn't finish the recording", it) }.getOrNull()
@@ -129,16 +150,21 @@ class RecordingService : Service() {
         private const val CHANNEL = "recording"
         private const val NOTIFICATION = 1
         internal const val ACTION_STOP = "com.paddlesnitch.app.record.STOP"
+        private const val PREFS = "recording"
+        private const val ACCOUNT = "account"
         private const val MAX_RECORDING_MS = 12 * 60 * 60 * 1000L
 
         private val _state = MutableStateFlow<State>(State.Idle)
         val state: StateFlow<State> = _state
 
-        /** Where recordings are kept until they're uploaded (app-private). */
+        /** Where recordings are kept until they're uploaded (app-private), a folder per account inside. */
         fun recordingsDir(context: Context) = File(context.filesDir, "recordings")
 
         fun start(context: Context) { context.startForegroundService(Intent(context, RecordingService::class.java)) }
         fun stop(context: Context) { context.startService(Intent(context, RecordingService::class.java).setAction(ACTION_STOP)) }
         internal fun set(state: State) { _state.value = state }
+
+        /** Signed out or deleted: a finished recording's message isn't the next person's. */
+        fun forgetFinished() { if (_state.value !is State.Recording) _state.value = State.Idle }
     }
 }

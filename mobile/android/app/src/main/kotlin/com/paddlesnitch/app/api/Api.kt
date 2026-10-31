@@ -119,8 +119,15 @@ class Api(
         if (!done.signedIn || id == null || refresh == null) return null
         tokens.save(id, refresh)
         val user = runCatching { me().user }.getOrNull() ?: return null.also { tokens.clear() }
+        tokens.userId = user.id
         return SignIn(user.id, user.email, user.displayName, needsTerms = null, idToken = id, refreshToken = refresh)
     }
+
+    /** The signed-in account's id, kept with the tokens; asked of `me` once for a sign-in from before it was kept. */
+    suspend fun accountId(): String = tokens.userId ?: (me().user?.id ?: throw SignedOut()).also { tokens.userId = it }
+
+    /** The kept account id, without asking the server (null: not known yet). */
+    val keptAccountId: String? get() = tokens.userId
 
     /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
     fun stravaStartUrl(challenge: String): String =
@@ -270,6 +277,7 @@ class Api(
     private suspend fun signIn(path: String, body: String): SignIn {
         val answer = read(post(path, body), SignIn.serializer())
         tokens.save(answer.idToken, answer.refreshToken)
+        tokens.userId = answer.id
         return answer
     }
 
