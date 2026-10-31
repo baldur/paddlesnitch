@@ -4,13 +4,15 @@ import { createRace, stepRace, standings, elapsed, projected, applyCall, release
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
-import { BOATS, boatById, hullOf, describe } from './boats.js';
+import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh } from './club.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
-import { paddlerSvg, boatSvg, sectionSvg, paddleSvg } from './picture.js';
+import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
-import { kayakMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
+import { OUTINGS, startOuting, stepOuting, tripBoatMesh, launchMesh } from './outing.js';
+import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, oarMesh, ROWLOCKS, SEAT, SHOULDER } from './meshes.js';
 import { TRAFFIC } from './traffic.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationY, rotationZ } from './mat4.js';
@@ -53,10 +55,15 @@ const DRILL_MODES = {
 };
 for (const [key, m] of Object.entries(DRILL_MODES)) Object.assign(m, { key, solo: true, rivals: DRILLS[m.drill].rivals, base: MODES[DRILLS[m.drill].course] });
 const DRILL_BEST = (m) => `snitchmedia:kayak:drill:${m.drill}`;
+// Outings from Caversham Pier (outing.js), picked on the walk's bridge: on the
+// Div 1-6 course's river, which goes all the way up to Mapledurham.
+const OUTING_MODES = Object.fromEntries(Object.entries(OUTINGS).map(([key, o]) => [key, { key, outing: key, label: o.label, solo: true, rivals: [], base: MODES.hasler16 }]));
 // Anyone can paddle practice and the drills; the races, the leaderboard and live races need an account.
-const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES)]);
+const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
+// #club: the walk to the club before a race (prototype; club.js).
+const CLUB = HASH.has('club');
 
 // The computer rivals' boat and club colours (the first was the player's,
 // before you chose your own).
@@ -168,6 +175,17 @@ function start() {
   drawMap();
   // A drill that starts under way (wash hanging, the portage) has no starter.
   if (drill && race.start.phase === 'go') state = 'racing';
+  // An outing from Caversham Pier: no starter, no clock; off at once.
+  hud.classList.toggle('outing', !!mode.outing);
+  document.getElementById('outingBar').hidden = !mode.outing;
+  if (mode.outing) {
+    const bridge = race.course.scenery?.bridges?.find((b) => b.name === 'Caversham Bridge');
+    startOuting(race, mode.outing, (bridge?.s ?? 0) + 30, (Math.random() * 2 ** 31) | 0);
+    outingLever = 0;
+    state = 'racing';
+    showOutingBar();
+    show(OUTINGS[mode.outing].label, { small: true, hold: 2.5 });
+  }
   if (race.format === 'interval') {
     show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
   }
@@ -279,6 +297,7 @@ function toMenu() {
   const t = training();
   if (t.races) lines.push(`Form this session: +${(form() * 100).toFixed(1)}% after ${t.races} race${t.races > 1 ? 's' : ''}`);
   els.best.textContent = lines.filter(Boolean).join(' · ');
+  if (CLUB) return enterClub();
   showStep(kitChosen ? 'home' : 'paddler');
   openDialog(menu);
 }
@@ -296,16 +315,24 @@ function showStep(name) {
     storeKit();
   }
   for (const [step, id] of Object.entries(STEPS)) document.getElementById(id).hidden = step !== name;
-  for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen;
+  for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen || !!club;
   for (const b of menu.querySelectorAll('.step-buttons .next')) {
-    b.innerHTML = kitChosen ? 'Done' : b.dataset.first;
+    b.innerHTML = kitChosen || club ? 'Done' : b.dataset.first;
   }
   menu.scrollTop = 0;
   if (name === 'boards') showBoards();
   drawKit();
 }
 for (const b of menu.querySelectorAll('[data-step]')) {
-  b.addEventListener('click', () => showStep(b.matches('.next') && kitChosen ? 'home' : b.dataset.step));
+  b.addEventListener('click', () => {
+    // In the club the editors are sheets over the room: Done puts them away.
+    if (club && b.matches('.next')) {
+      kitChosen = true;
+      storeKit();
+      return menu.close('');
+    }
+    showStep(b.matches('.next') && kitChosen ? 'home' : b.dataset.step);
+  });
 }
 
 const make = (html) => {
@@ -376,7 +403,7 @@ async function loadKit() {
       kit = cleanKit(saved, kit);
       try { localStorage.setItem(KIT_KEY, JSON.stringify(kit)); } catch {}
       showKit();
-      if (!kitChosen && state === 'menu') showStep('home');
+      if (!kitChosen && state === 'menu' && !club) showStep('home');
       kitChosen = true;
     } else if (kitChosen) {
       storeKit();
@@ -443,9 +470,14 @@ for (const b of formatButtons) {
 showFormat();
 
 menu.addEventListener('cancel', (e) => e.preventDefault());
-menu.addEventListener('close', async () => {
-  if (menu.returnValue === 'live') return openLive();
-  const next = MODES[menu.returnValue] ?? DRILL_MODES[menu.returnValue];
+menu.addEventListener('close', () => {
+  if (club) return planned(menu.returnValue);
+  choose(menu.returnValue);
+});
+// Start a race, a drill or a live race by its menu value.
+async function choose(value) {
+  if (value === 'live') return openLive();
+  const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value];
   if (!next) return;
   if (!OPEN.has(next.key) && !account.offline && !account.user) {
     location.href = SIGN_IN;
@@ -458,14 +490,16 @@ menu.addEventListener('close', async () => {
       else next.course = await loadCourse(next.file);
     } catch (err) {
       els.best.textContent = `${err.message} Check your connection and try again.`;
-      openDialog(menu);
+      if (!club) openDialog(menu);
       return;
     }
   }
   mode = next;
+  if (!next.outing) try { localStorage.setItem(LAST_KEY, value); } catch {}
+  leaveClub();
   if (renderer) useWorld();
   start();
-});
+}
 paused.addEventListener('close', () => {
   if (paused.returnValue === 'leave') leave();
   else if (paused.returnValue === 'menu') toMenu();
@@ -488,11 +522,330 @@ addEventListener('keydown', (e) => {
 });
 
 function handleGamepad(pressed) {
+  if (club && !menu.open && !live.open) return clubGamepad(pressed);
+  if (race?.outing && state === 'racing') {
+    if (pressed.has(BUTTON.UP) || pressed.has(7)) lever(1);
+    if (pressed.has(BUTTON.DOWN) || pressed.has(6)) lever(-1);
+  }
   if (pressed.has(BUTTON.START) && paused.open) {
     paused.close('resume');
     return;
   }
   if (!gamepadDialogs([menu, live, paused, finished], pressed) && pressed.has(BUTTON.START)) pause();
+}
+
+// --- outings from Caversham Pier (outing.js) -------------------------------------
+//
+// The river cruise (you stand at the bow; the arrows, a finger or the stick look
+// about) and the hired launch (the arrows or the stick steer; up and down, or
+// Faster and Slower, set the throttle in steps, as on a real boat).
+const outingKeys = new Set();
+let outingLever = 0; // the launch's throttle, -1 (astern) to 1, in quarters
+const outingTouches = new Map(); // pointer id -> -1 (left half) or 1 (right half)
+addEventListener('keydown', (e) => {
+  if (!race?.outing || state !== 'racing') return;
+  outingKeys.add(e.code);
+  if (!e.repeat && (e.code === 'ArrowUp' || e.code === 'KeyW')) lever(1);
+  if (!e.repeat && (e.code === 'ArrowDown' || e.code === 'KeyS')) lever(-1);
+});
+addEventListener('keyup', (e) => outingKeys.delete(e.code));
+addEventListener('blur', () => outingKeys.clear());
+canvas.addEventListener('pointerdown', (e) => {
+  if (race?.outing) outingTouches.set(e.pointerId, e.clientX < canvas.clientWidth / 2 ? -1 : 1);
+});
+for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => outingTouches.delete(e.pointerId));
+function lever(by) {
+  if (race?.outing?.kind !== 'hire') return;
+  outingLever = Math.max(-1, Math.min(1, outingLever + by * 0.25));
+  showOutingBar();
+}
+document.getElementById('outingFaster').addEventListener('click', () => lever(1));
+document.getElementById('outingSlower').addEventListener('click', () => lever(-1));
+function showOutingBar() {
+  const kind = race?.outing?.kind;
+  if (!kind) return;
+  document.getElementById('outingName').textContent = OUTINGS[kind].label;
+  const hire = kind === 'hire';
+  for (const id of ['outingFaster', 'outingSlower']) document.getElementById(id).hidden = !hire;
+  document.getElementById('outingHint').textContent = hire
+    ? (outingLever === 0 ? 'Stopped' : outingLever > 0 ? `Ahead ${outingLever * 4} of 4` : `Astern ${-outingLever * 4} of 4`) + (phone.matches ? ' · hold either side to steer' : ' · ← → steer, ↑ ↓ throttle')
+    : phone.matches ? 'Hold either side to look about' : '← → look about';
+}
+function outingStep(dt) {
+  let turn = 0;
+  if (outingKeys.has('ArrowLeft') || outingKeys.has('KeyA')) turn -= 1;
+  if (outingKeys.has('ArrowRight') || outingKeys.has('KeyD')) turn += 1;
+  for (const side of outingTouches.values()) turn += side;
+  const pad = navigator.getGamepads?.()?.find?.((p) => p);
+  if (pad && Math.abs(pad.axes[0] ?? 0) > 0.2) turn += pad.axes[0];
+  for (const e of stepOuting(race, dt, { turn, throttle: outingLever })) {
+    if (e === 'end') {
+      show('Mapledurham Lock: the end of the cruise', { hold: 4 });
+      setTimeout(() => { if (race.outing && state === 'racing') toMenu(); }, 4500);
+    }
+    if (e === 'bump') noise({ freq: 160, to: 90, q: 2, duration: 0.25, gain: 0.12, type: 'lowpass' });
+    if (e === 'swan') {
+      outingLever = 0;
+      showOutingBar();
+      tone({ freq: 330, to: 260, duration: 0.25, type: 'square', gain: 0.06 });
+      show("The swan won't move", { small: true, hold: 1.5 });
+    }
+  }
+}
+
+// --- the walk to the club (prototype, #club; club.js) ----------------------------
+//
+// Before a race you stand on the Thames at Reading: the path, Reading Canoe
+// Club, its changing room, boathouse and clubhouse, and the pontoon. Each is a
+// fixed camera shot; doors are labels over the scene, tapped (or Tab and Enter,
+// or the d-pad and A). The kit editors and the plan open as sheets over the room.
+const LAST_KEY = 'snitchmedia:kayak:last'; // the last race started, for "Race again"
+const PLACE_KEY = 'snitchmedia:kayak:place'; // where you were on the walk
+const clubEl = document.getElementById('club');
+const clubDoors = document.getElementById('clubDoors');
+const clubCards = document.getElementById('clubCards');
+const clubNote = document.getElementById('clubNote');
+const clubFade = document.getElementById('clubFade');
+const clubBack = document.getElementById('clubBack');
+const clubStart = document.getElementById('clubStart');
+// Back goes up a level (a room or the pontoon to the club, the club to the
+// bridge); Start over goes straight back to the bridge. Esc and a gamepad's B go back too.
+const back = () => club && PLACES[club.place].up && go(PLACES[club.place].up);
+clubBack.addEventListener('click', back);
+clubStart.addEventListener('click', () => go(START));
+addEventListener('keydown', (e) => {
+  if (!club || menu.open || live.open || state !== 'menu' || (e.code !== 'Escape' && e.code !== 'Backspace')) return;
+  e.preventDefault();
+  back();
+});
+const stillMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let club = null; // { shots, place, from, to, t, length, plan, spots }
+const SWAN_SEED = Math.floor(Math.random() * 1000); // which way the bridge swan goes, different each visit
+
+function enterClub() {
+  const shots = clubShots(mode.course);
+  if (!shots) return;
+  let last = null;
+  try { last = localStorage.getItem(PLACE_KEY); } catch {}
+  const place = firstPlace({ last });
+  club = { shots, place, from: null, to: null, t: 1, length: 0, plan: null, spots: [] };
+  try { club.plan = localStorage.getItem(LAST_KEY); } catch {}
+  menu.classList.add('sheet');
+  clubEl.hidden = false;
+  arrive(place);
+}
+function leaveClub() {
+  if (!club) return;
+  club = null;
+  clubEl.hidden = true;
+  menu.classList.remove('sheet');
+  if (menu.open) menu.close('');
+}
+
+// Walk through a door: outside a glide, through a wall a quick fade.
+function go(to) {
+  if (to === 'rowing') return note('Red boards are out: the river is too rough for rowers today. The canoe club is open.');
+  if (!club || club.to || !PLACES[to] || to === club.place) return;
+  const through = !!PLACES[to].inside !== !!PLACES[club.place].inside;
+  club.from = clubCamera();
+  club.to = to;
+  club.t = 0;
+  club.length = stillMotion.matches ? 0 : through ? 0.7 : 1.4;
+  club.through = through;
+  clubDoors.replaceChildren();
+  clubNote.hidden = true;
+}
+function stepClub(dt) {
+  if (!club.to) return;
+  club.t = club.length ? Math.min(1, club.t + dt / club.length) : 1;
+  clubFade.style.opacity = club.through ? String(1 - Math.abs(2 * club.t - 1)) : '0';
+  if (club.t >= 1) {
+    clubFade.style.opacity = '0';
+    const to = club.to;
+    club.to = null;
+    arrive(to);
+  }
+}
+function clubCamera() {
+  const at = club.shots.places;
+  if (!club.to) return at[club.place];
+  if (club.through) return club.t < 0.5 ? club.from : at[club.to];
+  return glide(club.from, at[club.to], club.t);
+}
+
+// In a place: its name, its doors and the things there to tap. The changing
+// room, boathouse and clubhouse open their sheet as you come in.
+function arrive(place) {
+  club.place = place;
+  clubDoors.replaceChildren();
+  clubCards.replaceChildren();
+  clubBack.hidden = !PLACES[place].up;
+  clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
+  if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
+  document.getElementById('clubPlace').textContent = PLACES[place].label;
+  const { shots } = club;
+  const label = (key) => (MODES[key] ?? DRILL_MODES[key])?.label;
+  // On the bridge the clubs are cards along the bottom, each with a picture,
+  // and a pin over its building in the view: nothing covers the scene.
+  const spots = place === 'path'
+    ? [
+      { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races and practice', pin: 'canoe' }, act: () => go('club') },
+      { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Red boards: too rough for rowers today', pin: 'rowing' }, act: () => go('rowing') },
+      // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
+      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise') },
+      { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => choose('hire') },
+      { pin: 'canoe', at: shots.doors.path.club },
+      { pin: 'rowing', at: shots.doors.path.rowing },
+    ]
+    : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
+  if (place === 'path' && label(club.plan)) {
+    spots.push({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
+  }
+  if (place === 'pontoon') {
+    const plan = label(club.plan) ? club.plan : 'practice';
+    spots.push({ label: `Push off: ${label(plan)}`, at: shots.places.pontoon.look.map((v, i) => (i === 1 ? 1.2 : shots.places.pontoon.eye[i] + (v - shots.places.pontoon.eye[i]) * 0.08)), act: () => choose(plan), go: true });
+  }
+  if (place === 'changing') spots.push({ label: 'Change', at: shots.changeLabel, act: () => sheet('paddler') });
+  if (place === 'boathouse') {
+    BOATS.forEach((b, i) => spots.push({ label: String(b.stability), at: shots.rackLabels[i], act: () => pickBoat(b.id), small: true, on: kit.boat === b.id, title: b.name }));
+    spots.push({ label: 'Paint your boat', at: shots.rack[7].map((v, i) => (i === 1 ? v + 1.4 : v)), act: () => sheet('boat') });
+    spots.push({ label: 'Paddles', at: shots.paddles, act: () => sheet('paddle') });
+  }
+  if (place === 'clubhouse') {
+    spots.push({ label: 'The plan', at: shots.boards.plan, act: () => sheet('home') });
+    if (!account.offline) spots.push({ label: 'Leaderboards', at: shots.boards.leaders, act: () => sheet('boards') });
+  }
+  club.spots = spots.map((spot) => {
+    // A pin only marks a building; it isn't a control.
+    if (!spot.act) {
+      const pin = document.createElement('span');
+      pin.className = `pin ${spot.pin}`;
+      pin.setAttribute('aria-hidden', 'true');
+      clubDoors.append(pin);
+      return { ...spot, el: pin };
+    }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = [spot.card ? 'card' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    if (spot.card) {
+      const { picture = '', name, line, pin } = spot.card;
+      b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
+    } else b.textContent = spot.label;
+    if (spot.title) b.title = b.ariaLabel = `${spot.title}, stability ${spot.label} of 9`;
+    b.addEventListener('click', () => {
+      if (phone.matches) controls.enableTilt();
+      spot.act();
+    });
+    (spot.card ? clubCards : clubDoors).append(b);
+    return { ...spot, el: b };
+  });
+  if (place === 'changing') sheet('paddler');
+  if (place === 'clubhouse') sheet('home');
+}
+function note(text) {
+  clubNote.textContent = text;
+  clubNote.hidden = false;
+}
+function sheet(step) {
+  showStep(step);
+  openDialog(menu);
+}
+function pickBoat(id) {
+  kit = cleanKit({ ...kit, boat: id }, kit);
+  kitChosen = true;
+  storeKit();
+  showKit();
+  setLiveries();
+  for (const s of club.spots) if (s.small) s.el.classList.toggle('on', s.title === boatById(id).name);
+  note(`${boatById(id).name}: ${describe(boatById(id))}`);
+}
+// The plan picked on the whiteboard: off to the pontoon to push off.
+function planned(value) {
+  if (value === 'live') return choose('live');
+  if (!MODES[value] && !DRILL_MODES[value]) return;
+  club.plan = value;
+  go('pontoon');
+}
+
+// Each frame: the door labels over the points they name.
+function placeDoors() {
+  if (!viewProj) return;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  const m = viewProj;
+  for (const s of club.spots) {
+    if (!s.at) continue;
+    const [x, y, z] = s.at;
+    const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+    const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw;
+    const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw;
+    const show = cw > 0 && Math.abs(cx) < 1.1 && Math.abs(cy) < 1.1;
+    s.el.hidden = !show;
+    if (show) s.el.style.transform = `translate(${((cx + 1) / 2) * w}px, ${((1 - cy) / 2) * h}px) translate(-50%, -50%)`;
+  }
+}
+// The rooms, and you, your boats on the rack: built the first time, rebuilt when your kit changes.
+function placeClub() {
+  if (!meshes.club) {
+    meshes.club = renderer.createMesh(clubMesh(club.shots));
+    renderer.place(meshes.club, [translation(0, 0, 0)]);
+    meshes.rack = new Map();
+    meshes.legs = new Map();
+    meshes.bridgeSwan = renderer.createMesh(bridgeSwanMesh());
+    meshes.swanLegs = renderer.createMesh(swanLegsMesh());
+  }
+  // Your kit as it is now, so the picker's changes show at once.
+  const l = { key: kitKey(kit), ...livery(kit) };
+  const out = [meshes.club];
+  // You, standing in the changing room, arms by your sides.
+  const set = paddlerOf(l);
+  const stand = basis([1, 0, 0], [0, 1, 0], [0, 0, 1], club.shots.changingStand); // facing north, towards the camera
+  const legsKey = String(l.skin);
+  if (!meshes.legs.has(legsKey)) meshes.legs.set(legsKey, renderer.createMesh(legsMesh(l.skin)));
+  const legs = meshes.legs.get(legsKey);
+  renderer.place(set.body, [stand]);
+  renderer.place(set.arms, [-1, 1].map((side) => limb(stand, [side * SHOULDER.x, SHOULDER.y, 0], [side * (SHOULDER.x + 0.07), SHOULDER.y - 0.62, -0.03])));
+  renderer.place(legs, [stand]);
+  out.push(set.body, set.arms, legs);
+  // The confused swan on Caversham Bridge's parapet.
+  const walk = club.shots.swan;
+  if (walk) {
+    const sw = confusedSwan(performance.now() / 1000, walk.side, SWAN_SEED);
+    const dir = normalize([walk.to[0] - walk.from[0], 0, walk.to[2] - walk.from[2]]);
+    const pos = walk.from.map((v, i) => v + (walk.to[i] - v) * sw.along);
+    // Faces up or down the parapet or towards you; its head turns as it looks about.
+    const a = Math.atan2(dir[0], -dir[2]) + sw.face + sw.look;
+    const f = [Math.sin(a), 0, -Math.cos(a)];
+    const big = SWAN_SIZE; // larger than life, so it shows from up on the bridge
+    const lift = sw.stand * SWAN_LEGS * big;
+    const tilt = 0.06 * sw.waddle;
+    const rightV = [-f[2] * Math.cos(tilt), Math.sin(tilt), f[0] * Math.cos(tilt)];
+    const upV = [f[2] * Math.sin(tilt), Math.cos(tilt), -f[0] * Math.sin(tilt)];
+    const at = [pos[0], pos[1] + lift - 0.04 * (1 - sw.stand), pos[2]];
+    const k = (v) => v.map((x) => x * big);
+    renderer.place(meshes.bridgeSwan, [basis(k(rightV), k(upV), k(f.map((v) => -v)), at)]);
+    renderer.place(meshes.swanLegs, sw.stand > 0.05 ? [basis(k(rightV), k(upV).map((v) => v * sw.stand), k(f.map((v) => -v)), at)] : []);
+    out.push(meshes.bridgeSwan, meshes.swanLegs);
+  }
+  // The nine boats on the boathouse's racks, side on, in your colours.
+  BOATS.forEach((b, i) => {
+    const key = `${l.key}:${b.id}`;
+    if (!meshes.rack.has(key)) meshes.rack.set(key, renderer.createMesh(kayakMesh({ ...l, beam: hullFor(b.stability).beam })));
+    const mesh = meshes.rack.get(key);
+    renderer.place(mesh, [basis([0, 0, 1], [0, 1, 0], [-1, 0, 0], club.shots.rack[i])]);
+    out.push(mesh);
+  });
+  return out;
+}
+// A gamepad on the walk: the d-pad moves between the labels, A goes.
+function clubGamepad(pressed) {
+  if (pressed.has(BUTTON.B)) return back();
+  const shown = club.spots.filter((s) => !s.el.hidden);
+  if (!shown.length) return;
+  const i = shown.findIndex((s) => s.el === document.activeElement);
+  if (pressed.has(BUTTON.RIGHT) || pressed.has(BUTTON.DOWN)) shown[(i + 1) % shown.length].el.focus();
+  if (pressed.has(BUTTON.LEFT) || pressed.has(BUTTON.UP)) shown[(i - 1 + shown.length) % shown.length].el.focus();
+  if (pressed.has(BUTTON.A) && i >= 0) shown[i].el.click();
 }
 
 // --- account and leaderboards ---------------------------------------------------
@@ -913,6 +1266,7 @@ function simulate(dt) {
   } else if (state !== 'racing' && state !== 'start') {
     return;
   }
+  if (race.outing) return outingStep(dt);
   if (controls.assist) input.lean = Math.max(-1, Math.min(1, input.lean - (boat.roll * 2 + boat.rollRate * 0.6)));
   else if (controls.tilting) input.lean = Math.max(-1, Math.min(1, input.lean - TILT_REFLEX * boat.rollRate));
   if (liveRace) liveBefore(dt);
@@ -1069,11 +1423,17 @@ function oarFrom(model, from, to) {
 function placeTraffic() {
   const where = Object.fromEntries(Object.keys(TRAFFIC).map((k) => [k, []]));
   const oars = [];
+  const paddles = [];
   for (const b of race.traffic?.boats ?? []) {
     if (!b.on) continue;
     const f = [Math.sin(b.heading), 0, -Math.cos(b.heading)];
     const model = basis([-f[2], 0, f[0]], [0, 1, 0], f.map((v) => -v), [b.x, 0.03 * Math.sin(race.time * 1.3 + b.phase), b.z]);
     where[b.kind].push(model);
+    // A kayaker's paddle swings from side to side, about a stroke a second each side.
+    if (b.kind === 'kayaker') {
+      const w = 0.55 * Math.sin(race.time * Math.PI * 1.7 + b.phase);
+      paddles.push(multiply(model, frameFrom([0, 0.5, SEAT - 0.5], normalize([Math.cos(w), -0.45 * Math.sin(w), 0.35 * Math.sin(w)]))));
+    }
     if (!ROWLOCKS[b.kind]) continue;
     const p = (race.time * STROKE[b.kind] + b.phase) % 1;
     const drive = p < 0.4;
@@ -1086,6 +1446,7 @@ function placeTraffic() {
   }
   for (const [kind, list] of Object.entries(where)) renderer.place(meshes.traffic[kind], list);
   renderer.place(meshes.oar, oars);
+  renderer.place(meshes.trafficPaddle, paddles);
 }
 
 // A motorboat's engine: a low rumble, louder as it comes by.
@@ -1123,6 +1484,11 @@ function placeRacers() {
     const model = basis(fr.right, fr.up, fr.back, fr.pos);
     // Carried, the boat's on your right shoulder; no paddling.
     const hullAt = lift ? [fr.pos[0] + fr.right[0] * 0.55, lift.boat, fr.pos[2] + fr.right[2] * 0.55] : fr.pos;
+    // On an outing you're on the trip boat or the launch, not in a kayak.
+    if (r === race.player && race.outing) {
+      renderer.place(meshes.outing[race.outing.kind], [basis(fr.right, fr.up, fr.back, fr.pos)]);
+      continue;
+    }
     renderer.place(kayakFor(r), [basis(fr.right, fr.up, fr.back, hullAt)]);
     if (r === race.player) {
       if (!lift) hold(r, multiply(model, paddlePose(r.boat).matrix));
@@ -1160,6 +1526,7 @@ function placeRacers() {
 }
 
 let reflected = null; // the river line the water's reflections are taken from, eased
+let viewProj = null; // the last frame's camera, for placing the club's door labels
 function render(time) {
   placeRacers();
   placeTraffic();
@@ -1171,18 +1538,38 @@ function render(time) {
   const bob = 0.012 * Math.sin(boat.time * 7) * Math.min(1, boat.speed / 3);
   const lift = boat.swim > 0 ? -0.45 : 0;
   const lean = 0.06 * paddlePose(boat).reach;
-  const eye = fr.pos.map((p, i) => p + fr.up[i] * (EYE_HEIGHT + bob + lift - lean * 0.3) + fr.back[i] * (0.15 - lean));
+  let eye = fr.pos.map((p, i) => p + fr.up[i] * (EYE_HEIGHT + bob + lift - lean * 0.3) + fr.back[i] * (0.15 - lean));
   const pitch = 0.11;
-  const fwd = normalize(fr.f.map((v, i) => v * Math.cos(pitch) - fr.up[i] * Math.sin(pitch)));
-  const up = normalize(fr.up.map((v, i) => v * Math.cos(pitch) + fr.f[i] * Math.sin(pitch)));
+  let fwd = normalize(fr.f.map((v, i) => v * Math.cos(pitch) - fr.up[i] * Math.sin(pitch)));
+  let up = normalize(fr.up.map((v, i) => v * Math.cos(pitch) + fr.f[i] * Math.sin(pitch)));
+  let right = fr.right;
+  // On an outing: standing at the trip boat's bow, or at the launch's helm, looking about.
+  if (race.outing && state !== 'menu') {
+    const o = OUTINGS[race.outing.kind];
+    eye = fr.pos.map((p, i) => p + fr.f[i] * o.forward + [0, 1, 0][i] * o.eye);
+    const yaw = boat.heading + race.outing.look;
+    const p = 0.07;
+    fwd = [Math.sin(yaw) * Math.cos(p), -Math.sin(p), -Math.cos(yaw) * Math.cos(p)];
+    right = normalize([-fwd[2], 0, fwd[0]]);
+    up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+  }
+  // On the walk to the club, the place's camera instead.
+  const shot = club && state === 'menu' ? clubCamera() : null;
+  if (shot) {
+    eye = shot.eye;
+    fwd = normalize(shot.look.map((v, i) => v - eye[i]));
+    right = normalize([-fwd[2], 0, fwd[0]]);
+    up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+  }
   // Portrait screens widen the vertical view so the horizontal one stays usable.
   const aspect = renderer.aspect;
   const tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(MIN_FOV_X / 2) / aspect);
   const proj = perspective(2 * Math.atan(tanY), aspect, 0.05, 2500);
 
-  frameData.set(multiply(proj, view(eye, fr.right, up, fwd)), 0);
+  viewProj = multiply(proj, view(eye, right, up, fwd));
+  frameData.set(viewProj, 0);
   frameData.set([...eye, time], 16);
-  frameData.set([...fr.right, tanY * aspect], 20);
+  frameData.set([...right, tanY * aspect], 20);
   frameData.set([...up, tanY], 24);
   frameData.set([...fwd, 0], 28);
   frameData.set([...SUN, 0], 32);
@@ -1209,11 +1596,13 @@ function render(time) {
   frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
   for (const r of race.racers) {
-    list.push(kayakFor(r));
+    list.push(r === race.player && race.outing ? meshes.outing[race.outing.kind] : kayakFor(r));
     if (r !== race.player) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
-  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar);
+  list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle);
+  if (shot) list.push(...placeClub());
   renderer.draw(frameData, list);
+  if (shot) placeDoors();
 }
 
 // Open the page with #tilt to see what the motion sensors are doing.
@@ -1272,11 +1661,13 @@ function updateHud(dt) {
   els.rate.textContent = strokeRate(boat);
   els.stamina.style.transform = `scaleX(${boat.stamina.toFixed(3)})`;
   els.stamina.parentElement.classList.toggle('spending', boat.sprinting && boat.stamina > 0);
-  sprintHint(boat, dt);
-  stuckHint(boat, dt);
+  if (!race.outing) {
+    sprintHint(boat, dt);
+    stuckHint(boat, dt);
+  }
   els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
   showPlace(course, loc.s, dt);
-  showCue(course, loc.s, dt);
+  if (!race.outing) showCue(course, loc.s, dt);
   els.drill.hidden = !drill?.readout;
   if (drill) els.drill.textContent = drill.readout;
   moveMap();
@@ -1462,6 +1853,7 @@ function frame(now) {
     if (state === 'menu') for (const r of race.racers) r.boat.time += dt;
   }
   updateHud(dt);
+  if (club) stepClub(dt);
   render(now / 1000);
   requestAnimationFrame(frame);
 }
@@ -1504,7 +1896,9 @@ function paddleFor(r) {
   return meshes.paddles.get(p.key);
 }
 function paddlerFor(r) {
-  const l = liveries.get(r);
+  return paddlerOf(liveries.get(r));
+}
+function paddlerOf(l) {
   if (!meshes.racers.has(l.key)) {
     meshes.racers.set(l.key, {
       body: renderer.createMesh(paddlerMesh(l)),
@@ -1546,6 +1940,8 @@ if (HASH.has('debug')) {
     get live() { return liveRace; },
     get lobby() { return lobby; },
     get liveries() { return liveries; },
+    get club() { return club; },
+    clubAt: (place) => arrive(place),
   };
 }
 
@@ -1575,12 +1971,15 @@ try {
     worlds: new Map(),
     marks: new Map(),
     paddles: new Map(),
-    traffic: { sculler: renderer.createMesh(scullerMesh(), 8), eight: renderer.createMesh(eightMesh(), 8), cruiser: renderer.createMesh(cruiserMesh(), 8), motorboat: renderer.createMesh(motorboatMesh(), 8) },
-    oar: renderer.createMesh(oarMesh(), 128),
+    // Room for the outings' busier river (outing.js BUSY): some 20 boats on the water at once.
+    traffic: { sculler: renderer.createMesh(scullerMesh(), 24), kayaker: renderer.createMesh(kayakerMesh(), 24), eight: renderer.createMesh(eightMesh(), 24), cruiser: renderer.createMesh(cruiserMesh(), 24), motorboat: renderer.createMesh(motorboatMesh(), 24) },
+    oar: renderer.createMesh(oarMesh(), 256),
+    trafficPaddle: renderer.createMesh(paddleMesh(RIVAL_PADDLE), 24),
     kayaks: new Map(),
     swan: renderer.createMesh(swanMesh(), BIRDS_DRAWN),
     duck: renderer.createMesh(duckMesh(), BIRDS_DRAWN),
     racers: new Map(),
+    outing: { cruise: renderer.createMesh(tripBoatMesh()), hire: renderer.createMesh(launchMesh()) },
   };
   useWorld();
   requestAnimationFrame(frame);

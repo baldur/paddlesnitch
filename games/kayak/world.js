@@ -287,31 +287,34 @@ function narrowboat(m, course, boat, [paint, trim]) {
   }
   const chimney = at(0.3, 1.78, half - 4.5);
   m.cylinder(chimney, 0.08, 0.6, 6, COLORS.boatHull);
-  if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 2.6);
+  if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 3.7);
 }
 
-// Life-size figures on a narrowboat's front deck, facing the river: Lara Croft
+// Figures standing on a narrowboat's roof, in front of the chimney: Lara Croft
 // (green vest, blue cargo trousers, holsters on her thighs, a long brown plait)
-// beside a woman in black. At `z` along the boat, standing on the deck.
+// beside a woman in black. At `z` along the boat, a little larger than life
+// (`STATUE`) so they show from the water (owner, 2026-10-31).
 const FIGURE = { skin: [0.86, 0.68, 0.55], hair: [0.3, 0.18, 0.1], vest: [0.3, 0.5, 0.33], cargo: [0.2, 0.3, 0.48], holster: [0.15, 0.12, 0.1], boot: [0.12, 0.1, 0.09], black: [0.1, 0.1, 0.11] };
+const STATUE = 1.25;
 function statues(m, at, right, fwd, z) {
-  const deck = 0.55;
+  const deck = 1.78; // the cabin roof
+  const k = STATUE;
   const figure = (x, top, legs, hair, plait) => {
-    const box = (xr, yr, zr, color) => orientedBox(m, at(0, 0, 0), right, fwd, xr.map((v) => v + x), yr.map((v) => v + deck), zr.map((v) => v + z), color);
+    const box = (xr, yr, zr, color) => orientedBox(m, at(0, 0, 0), right, fwd, xr.map((v) => v * k + x), yr.map((v) => v * k + deck), zr.map((v) => v * k + z), color);
     for (const e of [-1, 1]) {
       box([e * 0.12 - 0.07, e * 0.12 + 0.07], [0, 0.12], [-0.08, 0.12], FIGURE.boot);
       box([e * 0.12 - 0.07, e * 0.12 + 0.07], [0.12, 0.85], [-0.07, 0.07], legs);
       box([e * 0.24 - 0.04, e * 0.24 + 0.04], [0.95, 1.4], [-0.04, 0.04], FIGURE.skin); // arms
     }
     box([-0.19, 0.19], [0.85, 1.42], [-0.1, 0.1], top);
-    m.sphere(at(x, deck + 1.58, z), 0.12, FIGURE.skin, 3, 6);
-    m.sphere(at(x, deck + 1.62, z - 0.03), 0.125, hair, 3, 6);
+    m.sphere(at(x, deck + 1.58 * k, z), 0.12 * k, FIGURE.skin, 3, 6);
+    m.sphere(at(x, deck + 1.62 * k, z - 0.03 * k), 0.125 * k, hair, 3, 6);
     if (plait) box([-0.03, 0.03], [1.05, 1.55], [-0.16, -0.1], hair);
     return box;
   };
-  const lara = figure(-0.4, FIGURE.vest, FIGURE.cargo, FIGURE.hair, true);
+  const lara = figure(-0.42, FIGURE.vest, FIGURE.cargo, FIGURE.hair, true);
   for (const e of [-1, 1]) lara([e * 0.2 - 0.04, e * 0.2 + 0.04], [0.5, 0.72], [-0.06, 0.06], FIGURE.holster);
-  figure(0.4, FIGURE.black, FIGURE.black, [0.2, 0.14, 0.1], false);
+  figure(0.42, FIGURE.black, FIGURE.black, [0.2, 0.14, 0.1], false);
 }
 
 // An old brick road bridge: one arch over the whole river, the deck and
@@ -616,6 +619,12 @@ function realScenery(m, course, real, rand) {
   const nowhere = new MeshBuilder();
   // And so are the things pointed out in the footage (a beach, a club's lawn).
   const clearings = (real.features ?? []).filter((f) => CLEAR[f.style]).map((f) => [...f.at, CLEAR[f.style]]);
+  // And the boat with figures on its roof, so no riverside tree stands over them.
+  for (const b of real.moorings ?? []) {
+    if (b.crew !== 'statues' || b.at) continue;
+    const { origin, fwd } = berth(course, b, 1.05);
+    for (let d = -b.length / 2; d <= b.length / 2; d += 3) clearings.push([origin[0] + fwd[0] * d, origin[2] + fwd[1] * d, 5]);
+  }
   const cleared = (x, z) => clearings.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r);
   const plant = (x, z, willow, hidden = false) => {
     const g = ground(course, x, z);

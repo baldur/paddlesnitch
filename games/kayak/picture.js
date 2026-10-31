@@ -88,3 +88,43 @@ export function paddleSvg(kit) {
     <line x1="50" y1="25" x2="190" y2="25" stroke="${kit.shaftColour}" stroke-width="5" stroke-linecap="round" />
     ${blade(52, -1)}${blade(188, 1)}`;
 }
+
+// The two clubs on the walk's opening view (club.js), as little pictures for their cards.
+export function clubSvg(which) {
+  const sky = '<rect width="120" height="80" fill="#bcdcef"/>';
+  if (which === 'cruise') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
+      <rect y="50" width="120" height="30" fill="#4f7f86"/>
+      <path d="M8 50h96l10 -6h-8v-8h-90v8h-14z" fill="#f2f2ee"/><rect x="10" y="45" width="100" height="3" fill="#1c3880"/>
+      <rect x="20" y="28" width="70" height="9" fill="#33475a"/><rect x="18" y="26" width="76" height="3" fill="#f2f2ee"/>
+      ${[24, 34, 44, 54, 64, 74, 84].map((x) => `<rect x="${x}" y="29" width="1.5" height="8" fill="#f2f2ee"/>`).join('')}
+      <path d="M95 36l14 0" stroke="#f2f2ee" stroke-width="1.5"/><circle cx="104" cy="38" r="2.2" fill="none" stroke="#f08a24" stroke-width="1.5"/>
+      <path d="M6 60q12 -3 24 0q12 3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
+    </svg>`;
+  }
+  if (which === 'hire') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
+      <rect y="48" width="120" height="32" fill="#4f7f86"/>
+      <path d="M22 50h70l14 -7h-90z" fill="#efe6cf"/><rect x="18" y="43" width="86" height="2.5" fill="#7a4a24"/>
+      <rect x="54" y="26" width="40" height="3" fill="#1f2a55"/><rect x="56" y="29" width="1.5" height="14" fill="#c9c9c4"/><rect x="91" y="29" width="1.5" height="14" fill="#c9c9c4"/>
+      <circle cx="64" cy="38" r="3.5" fill="#d9a27c"/><rect x="61" y="40" width="7" height="4" fill="#2a6fd6"/>
+      <path d="M100 52q8 2 16 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/><path d="M4 58q10 -3 20 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
+    </svg>`;
+  }
+  if (which === 'rowing') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
+      <rect y="52" width="120" height="28" fill="#4f7f86"/>
+      ${[58, 64, 70, 76].map((y, i) => `<path d="M${4 + i * 7} ${y}l6 -3l6 3l6 -3l6 3l6 -3l6 3l6 -3l6 3l6 -3l6 3l6 -3l6 3l6 -3l6 3" fill="none" stroke="#e8f2f4" stroke-width="1.4"/>`).join('')}
+      <rect x="14" y="26" width="62" height="27" fill="#e8dcc2"/><path d="M10 27L45 12L80 27Z" fill="#59626b"/>
+      <rect x="22" y="36" width="14" height="17" fill="#3d3a36"/><rect x="42" y="36" width="14" height="17" fill="#3d3a36"/>
+      <path d="M60 30l12 12M72 30l-12 12" stroke="#7a5534" stroke-width="2"/>
+      <rect x="92" y="22" width="2.4" height="32" fill="#f4f4f0"/><rect x="83" y="16" width="21" height="12" rx="1" fill="#d6261c"/>
+    </svg>`;
+  }
+  return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
+    <rect y="50" width="120" height="12" fill="#6aa05a"/><rect y="62" width="120" height="18" fill="#4f7f86"/>
+    <rect x="18" y="24" width="84" height="27" fill="#b5543c"/><path d="M12 25L60 10L108 25Z" fill="#333c45"/>
+    <rect x="26" y="33" width="20" height="18" fill="#3a2a20"/><rect x="52" y="33" width="20" height="18" fill="#3a2a20"/><rect x="78" y="33" width="16" height="10" fill="#cfe3ee"/>
+    <path d="M14 66q22 -5 44 0q-22 3 -44 0Z" fill="#f2c230"/><path d="M60 72q24 -5 48 0q-24 3 -48 0Z" fill="#d6452b"/>
+  </svg>`;
+}
