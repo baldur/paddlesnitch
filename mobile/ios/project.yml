@@ -42,6 +42,8 @@ targets:
         product: Account
       - package: PaddleKit
         product: SampleServer
+      - package: PaddleKit
+        product: Recorder
     info:
       path: App/Info.plist
       properties:
@@ -54,6 +56,11 @@ targets:
           - UIInterfaceOrientationPortrait
         UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
+        # Recording carries on with the screen off on "While Using"
+        # permission: the location background mode plus a
+        # CLBackgroundActivitySession, never "Always" (ios-app.md).
+        UIBackgroundModes: [location]
+        NSLocationWhenInUseUsageDescription: Your location records the route of a paddle while you record one.
         # The server. A debug build can point elsewhere with the environment
         # variable PADDLESNITCH_BASE_URL (e.g. http://localhost:3000).
         PaddlesnitchBaseURL: https://paddlesnitch.com

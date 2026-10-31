@@ -8,12 +8,16 @@ on:
     paths:
       - 'mobile/ios/**'
       - 'mobile/contract/**'
+      # The package tests replay recorder-core's phone fixtures.
+      - 'recorder-core/**'
       - '.github/workflows/ios.yml'
   push:
     branches: [main]
     paths:
       - 'mobile/ios/**'
       - 'mobile/contract/**'
+      # The package tests replay recorder-core's phone fixtures.
+      - 'recorder-core/**'
       - '.github/workflows/ios.yml'
   workflow_dispatch:
 

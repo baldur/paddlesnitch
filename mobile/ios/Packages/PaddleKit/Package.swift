@@ -12,7 +12,12 @@ let package = Package(
         .library(name: "Paddles", targets: ["Paddles"]),
         .library(name: "Account", targets: ["Account"]),
         .library(name: "SampleServer", targets: ["SampleServer"]),
+        .library(name: "Recorder", targets: ["Recorder"]),
         .executable(name: "contract-gen", targets: ["ContractGen"]),
+    ],
+    dependencies: [
+        // The shared C recorder core (recorder-core/ at the repo root).
+        .package(name: "RecorderCore", path: "../../../../recorder-core")
     ],
     targets: [
         // Colours, radii and fonts generated from mobile/contract/tokens/.
@@ -27,6 +32,9 @@ let package = Package(
         .target(name: "Account", dependencies: ["PaddleAPI"]),
         // paddlesnitch.com played from the contract's fixtures, for UI tests.
         .target(name: "SampleServer", dependencies: ["PaddleAPI"]),
+        // Recording on the phone: sensor events into the recorder core's phone
+        // layer, its lines into the tracker's files.
+        .target(name: "Recorder", dependencies: [.product(name: "RecorderCore", package: "RecorderCore")]),
         // Turns mobile/contract/ into Swift. The logic is a library so it
         // can be tested; the executable only reads and writes files.
         .target(name: "ContractGenKit"),
@@ -35,6 +43,7 @@ let package = Package(
         .testTarget(name: "ContractGenKitTests", dependencies: ["ContractGenKit"]),
         .testTarget(name: "PaddleAPITests", dependencies: ["PaddleAPI"]),
         .testTarget(name: "PaddlesTests", dependencies: ["Paddles", "PaddleAPI", "SampleServer"]),
+        .testTarget(name: "RecorderTests", dependencies: ["Recorder"]),
         .testTarget(name: "AccountTests", dependencies: ["Account", "PaddleAPI", "SampleServer"]),
     ]
 )

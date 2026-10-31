@@ -64,6 +64,9 @@ struct PaddleListView: View {
                 }
                 .toolbar {
                     if !isSample {
+                        #if DEBUG  // until a recording can be uploaded (RecordButton)
+                            ToolbarItem(placement: .topBarLeading) { RecordButton() }
+                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Add paddle") { choosingFile = true }
                                 .font(.plexSans(.body))

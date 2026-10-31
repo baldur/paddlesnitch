@@ -120,3 +120,17 @@ isn't obvious from the code.
   lines, one per app launch. `make test-app` therefore gives each test 6
   minutes (`-default-test-execution-time-allowance`), and CI keeps the results
   when a job is cancelled too.
+- A UI test that answers a permission prompt leaves the answer for every
+  later test on that simulator: "Don't Allow" in one test hid the record
+  screen's Start button in the next. A test that needs the prompt calls
+  `app.resetAuthorizationStatus(for:)` first (it ends the app; launch again),
+  and helpers wait for the screen, not for a button a permission can hide.
+- Recording in the simulator: no accelerometer or gyroscope (track only), and
+  a fixed `simctl location` gives one fix and then nothing, so rows read "no
+  fix" 3 s later, as the tracker's do. That's the recorder core's rule, not a
+  bug. The sensors are proved by `RecorderTests` and a bench check on a phone.
+- Never compute a recording number in the app: the shared recorder core does
+  it (`recorder-core/test/one_implementation.sh` fails CI on unit
+  conversions (standard gravity, radians to degrees) anywhere in `mobile/`,
+  even quoted in a comment like this one). Pass Core
+  Motion's g, rad/s and `timestamp` untouched; the core negates and converts.
