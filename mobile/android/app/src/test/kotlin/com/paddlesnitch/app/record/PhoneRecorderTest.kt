@@ -236,6 +236,34 @@ class PhoneRecorderTest {
         assertEquals(4f, recorder.live.value!!.sinceFixS)
     }
 
+    @Test fun theDropCountsAreLoggedBesideTheRecording() {
+        addSensors()
+        recorder.start()
+        send(Sensor.TYPE_ACCELEROMETER, 9_000_000_000L, 0f, 0f, G)   // a second before any gyroscope: unpaired
+        hold(10, 12, Triple(0f, 0f, G), Triple(0f, 0f, 0f))
+        tickAt(11)
+        val f = recorder.stop()!!
+        assertEquals("track_20261031_091407.log", f.log.name)
+        assertEquals("dropped_late,0\ndropped_unpaired,1\nfailed_lines,0\n", f.log.readText())
+    }
+
+    @Test fun eachAccountHasItsOwnFolderAndDeletingOneLeavesTheOthers() {
+        val a = RecordingFiles.accountDir(dir, "u-77")
+        val b = RecordingFiles.accountDir(dir, "u-78")
+        RecordingFiles.create(a, Instant.parse("2026-10-31T09:14:07Z")).close()
+        RecordingFiles.create(b, Instant.parse("2026-10-31T09:14:07Z")).close()
+        assertEquals("u-77", a.name)
+        RecordingFiles.deleteAccount(dir, "u-77")
+        assertFalse(a.exists())
+        assertTrue(File(b, "track_20261031_091407.csv").exists())
+    }
+
+    @Test fun anIdThatIsntAPlainNameNeverLeavesTheFolder() {
+        val odd = RecordingFiles.accountDir(dir, "../../etc")
+        assertEquals(dir, odd.parentFile)
+        assertEquals(64, odd.name.length)
+    }
+
     @Test fun theFilesAreNamedAsTheTrackersAre() {
         addSensors()
         val f = recorder.start()

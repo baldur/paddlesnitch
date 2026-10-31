@@ -16,6 +16,9 @@ import java.time.format.DateTimeFormatter
  * recorder: the recording carries on and keeps what it can.
  */
 class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
+    /** track_<stamp>.log: what the recording dropped, written when it finishes (not uploaded). */
+    val log = File(track.path.removeSuffix(".csv") + ".log")
+
     private val trackOut = FileOutputStream(track, true)
     private val motionOut = FileOutputStream(motion, true)
 
@@ -43,6 +46,11 @@ class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
         runCatching { trackOut.fd.sync(); motionOut.fd.sync() }
     }
 
+    /** Writes the drop counts beside the recording (recorder_phone.h: log them with the recording). */
+    fun writeLog(droppedLate: Long, droppedUnpaired: Long) {
+        runCatching { log.writeText("dropped_late,$droppedLate\ndropped_unpaired,$droppedUnpaired\nfailed_lines,$failedLines\n") }
+    }
+
     override fun close() {
         sync()
         trackOut.close()
@@ -50,6 +58,18 @@ class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
     }
 
     companion object {
+        /**
+         * This account's recordings: one folder per account, so a later upload only
+         * ever reads the signed-in account's paddles (the same as iOS, #767).
+         */
+        fun accountDir(base: File, userId: String): File =
+            File(base, if (userId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) userId else sha256(userId))
+
+        /** Deleting an account removes its recordings, in one go; other accounts' stay. */
+        fun deleteAccount(base: File, userId: String) { accountDir(base, userId).deleteRecursively() }
+
+        private fun sha256(s: String) = java.security.MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
+
         private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").withZone(ZoneOffset.UTC)
 
         /** New files in [dir] for a recording started at [start]; never reuses a name. */

@@ -89,4 +89,16 @@ class RecordingServiceTest {
         assertFalse(ShadowPowerManager.getLatestWakeLock().isHeld)
         assertTrue(files.track.readText().startsWith("timestamp,"))
     }
+
+    // App.kt's onDeleted: the deleted account's recordings go; others', and a sign-out's, stay.
+    @Test fun deletingAnAccountRemovesItsRecordingsOnly() {
+        val base = RecordingService.recordingsDir(app)
+        val mine = RecordingFiles.accountDir(base, "u-77").apply { mkdirs(); resolve("track_x.csv").writeText("x") }
+        val theirs = RecordingFiles.accountDir(base, "u-78").apply { mkdirs(); resolve("track_y.csv").writeText("y") }
+        com.paddlesnitch.app.deleteRecordings(app, null)   // no account known: nothing goes
+        assertTrue(mine.exists())
+        com.paddlesnitch.app.deleteRecordings(app, "u-77")
+        assertFalse(mine.exists())
+        assertTrue(theirs.resolve("track_y.csv").exists())
+    }
 }

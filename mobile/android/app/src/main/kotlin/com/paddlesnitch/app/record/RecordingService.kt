@@ -17,6 +17,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.paddlesnitch.app.MainActivity
 import com.paddlesnitch.app.R
+import com.paddlesnitch.app.auth.KeystoreTokenStore
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +36,12 @@ class RecordingService : Service() {
     private val main = Handler(Looper.getMainLooper())
 
     /** Makes the recorder; tests swap in one with a fake clock. */
-    internal var makeRecorder: (Context) -> PhoneRecorder = { PhoneRecorder(it, recordingsDir(it)) }
+    internal var makeRecorder: (Context) -> PhoneRecorder = {
+        // The signed-in account's folder, read from the token store, so a recording the
+        // system brings back after a kill still goes to the right account.
+        val user = KeystoreTokenStore(it).userId ?: throw IllegalStateException("no account signed in")
+        PhoneRecorder(it, RecordingFiles.accountDir(recordingsDir(it), user))
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -134,7 +140,7 @@ class RecordingService : Service() {
         private val _state = MutableStateFlow<State>(State.Idle)
         val state: StateFlow<State> = _state
 
-        /** Where recordings are kept until they're uploaded (app-private). */
+        /** Where recordings are kept until they're uploaded (app-private), a folder per account inside. */
         fun recordingsDir(context: Context) = File(context.filesDir, "recordings")
 
         fun start(context: Context) { context.startForegroundService(Intent(context, RecordingService::class.java)) }
