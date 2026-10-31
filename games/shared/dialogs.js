@@ -6,13 +6,15 @@ export function openDialog(dialog) {
 }
 
 // Lets a gamepad drive whichever of `dialogs` is open: d-pad moves focus between
-// its form buttons (and inputs, e.g. radios), A or Start presses. Returns false if no dialog is open, so the
-// caller can treat the buttons as game input instead.
+// its buttons and inputs (e.g. radios) that are showing, A or Start presses.
+// Returns false if no dialog is open, or the open one has nothing to press, so
+// the caller can treat the buttons as game input instead. (Hidden ones are
+// skipped: a hidden step's button pressed by A once took a player off to a race.)
 export function gamepadDialogs(dialogs, pressed) {
   const dialog = dialogs.find((d) => d.open);
   if (!dialog) return false;
-  const buttons = [...dialog.querySelectorAll('form button, form input')];
-  if (!buttons.length) return true;
+  const buttons = [...dialog.querySelectorAll('button, input')].filter((b) => !b.closest('[hidden]') && !b.disabled);
+  if (!buttons.length) return false;
   const i = buttons.indexOf(document.activeElement);
   if (pressed.has(BUTTON.DOWN)) buttons[(i + 1) % buttons.length].focus();
   if (pressed.has(BUTTON.UP)) buttons[(i - 1 + buttons.length) % buttons.length].focus();

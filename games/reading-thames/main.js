@@ -6,9 +6,9 @@ import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
 import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
-import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, cleanRow } from './scull.js';
+import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
-import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
+import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, moveOldScull, boardHull, isScullHull, scullHullName } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
@@ -34,7 +34,7 @@ const FORM_KEY = 'snitchmedia:kayak:form'; // sessionStorage: this visit only, f
 const FORMAT_KEY = 'snitchmedia:kayak:format'; // a race or a time trial, as last picked
 // The rowing club's: your scull and its colour, and your best on the ergs (on
 // this device for now: the account keeps the kayak's kit).
-const ROW_KEY = 'snitchmedia:kayak:row';
+const ROW_KEY = 'snitchmedia:kayak:row'; // where the scull was kept before it went in the kit
 const ERG_BEST = 'snitchmedia:kayak:erg';
 
 // The courses, all on the one real river at Reading (courses/*.json, made by
@@ -74,9 +74,7 @@ const ROW_MODES = {
   'row-head': { label: 'Head of the River', line: 'Round the islands against the clock, scullers 30 seconds apart', base: MODES.loop, rivals: DIVISION_9.slice(0, 5), head: true },
 };
 for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: true });
-let row = cleanRow(null);
-try { row = cleanRow(JSON.parse(localStorage.getItem(ROW_KEY))); } catch {}
-const storeRow = () => { try { localStorage.setItem(ROW_KEY, JSON.stringify(row)); } catch {} };
+// Your scull and its colour are in the kit (kit.js), so they follow you on the account.
 // Anyone can paddle practice and the drills, and row; the kayak races, the leaderboard and live races need an account.
 const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
@@ -152,6 +150,12 @@ try {
 } catch {
   kit = randomKit();
 }
+// A scull picked before it went in the kit (on this device only) carries over, once.
+{
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KIT_KEY)); } catch {}
+  try { kit = moveOldScull(localStorage, kit, saved, { rowKey: ROW_KEY, kitKey: KIT_KEY }); } catch {}
+}
 const kits = new Map(); // the other players' kits in a live race, by player id
 let renderer = null;
 let meshes = null;
@@ -174,7 +178,7 @@ function reset() {
     rivals: mode.rivals,
     format: formatOf(mode),
     seed: liveRace?.seed ?? ((Math.random() * 2 ** 31) | 0),
-    you: { hull: mode.row ? scullById(row.scull).hull : hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
+    you: { hull: mode.row ? scullById(kit.scull).hull : hullOf(kit), power: 1 + f, endurance: 1 + f * 1.5 },
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
     // A drill is about the one thing: no swans or other boats in the way.
     birds: !mode.drill, traffic: !mode.drill,
@@ -292,7 +296,7 @@ function finish() {
     try { localStorage.setItem(bestKey(mode, formatOf(mode)), JSON.stringify(best)); } catch {}
   }
 
-  if (!mode.row) submitResult(time); // the leaderboards are the kayak's
+  submitResult(time);
   endPlay('finished', { place: solo ? null : place, swims: race.player.boat.capsizes });
   const before = form();
   train((mode.course.finish - mode.course.start) / mode.course.speedup / 1000);
@@ -368,6 +372,9 @@ function toMenu() {
 // one tap from home, and its button says Done.
 const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', paddle: 'stepPaddle', boards: 'stepBoards', practice: 'stepPractice' };
 function showStep(name) {
+  // The menu's own home and its Leaderboards are the canoe club's.
+  if (name === 'home') boardModes = null;
+  if (name === 'boards') labelBoards();
   // Getting as far as the races counts as having chosen.
   if (name === 'home' && !kitChosen) {
     kitChosen = true;
@@ -392,6 +399,8 @@ for (const b of menu.querySelectorAll('[data-step]')) {
       storeKit();
       return menu.close('');
     }
+    // The rowing club's boards have no kayak plan behind them: Done puts them away.
+    if (club && boardModes && b.closest('#stepBoards')) return menu.close('');
     showStep(b.matches('.next') && kitChosen ? 'home' : b.dataset.step);
   });
 }
@@ -468,6 +477,8 @@ async function loadKit() {
     if (saved) {
       kit = cleanKit(saved, kit);
       try { localStorage.setItem(KIT_KEY, JSON.stringify(kit)); } catch {}
+      // An account kit from before sculls were in it: this device's scull goes up to it.
+      if (!saved.scull) storeKit();
       showKit();
       if (!kitChosen && state === 'menu' && !club) showStep('home');
       kitChosen = true;
@@ -596,6 +607,11 @@ function handleGamepad(pressed) {
   }
   if (pressed.has(BUTTON.START) && paused.open) {
     paused.close('resume');
+    return;
+  }
+  // A room's sheet with nothing to press: the d-pad and A go to the room's labels.
+  if (club && menu.open && !live.open) {
+    if (!gamepadDialogs([menu], pressed)) clubGamepad(pressed);
     return;
   }
   if (!gamepadDialogs([menu, live, paused, finished], pressed) && pressed.has(BUTTON.START)) pause();
@@ -795,7 +811,7 @@ function arrive(place) {
   // The rowing club: your all-in-one, the sculls, the plan, the ergs.
   if (place === 'rchanging') spots.push({ label: 'Change', at: shots.rChangeLabel, act: () => sheet('paddler') });
   if (place === 'rboathouse') {
-    SCULLS.forEach((b, i) => spots.push({ label: b.name, at: shots.scullLabels[i], act: () => pickScull(b.id), on: row.scull === b.id, scull: b.id }));
+    SCULLS.forEach((b, i) => spots.push({ label: b.name, at: shots.scullLabels[i], act: () => pickScull(b.id), on: kit.scull === b.id, scull: b.id }));
     spots.push({ label: 'Paint your scull', at: shots.paint, act: paintScull });
   }
   if (place === 'rclubhouse') {
@@ -812,7 +828,7 @@ function arrive(place) {
   }
   if (place === 'clubhouse') {
     spots.push({ label: 'The plan', at: shots.boards.plan, act: () => sheet('home') });
-    if (!account.offline) spots.push({ label: 'Leaderboards', at: shots.boards.leaders, act: () => sheet('boards') });
+    if (!account.offline) spots.push({ label: 'Leaderboards', at: shots.boards.leaders, act: () => boards(null) });
   }
   club.spots = spots.map((spot) => {
     // A pin only marks a building; it isn't a control.
@@ -892,27 +908,47 @@ function stepErgRun(dt) {
 
 // The rowing club's boathouse: take a scull, or paint yours.
 function pickScull(id) {
-  row.scull = id;
-  storeRow();
+  kit = cleanKit({ ...kit, scull: id }, kit);
+  kitChosen = true;
+  storeKit();
   for (const s of club.spots) if (s.scull) s.el.classList.toggle('on', s.scull === id);
   note(`${scullById(id).name}: ${scullById(id).line}`);
 }
 function paintScull() {
-  row.colour = SCULL_COLOURS[(SCULL_COLOURS.indexOf(row.colour) + 1) % SCULL_COLOURS.length];
-  storeRow();
+  kit = cleanKit({ ...kit, scullColour: SCULL_COLOURS[(SCULL_COLOURS.indexOf(kit.scullColour) + 1) % SCULL_COLOURS.length] }, kit);
+  kitChosen = true;
+  storeKit();
 }
 function plannedRow(key) {
   club.rplan = key;
   go('rpontoon');
 }
+// The leaderboards as a sheet: the canoe club's courses (`modes` null), or the
+// rowing club's. From the rowing club there's no kayak plan to go back to.
+function boards(modes) {
+  boardModes = modes;
+  sheet('boards');
+}
+// The boards' heading and button: the rowing club's honours board (Done), or the leaderboards (back to the plan).
+function labelBoards() {
+  document.querySelector('#stepBoards h3').textContent = boardModes ? 'Honours board' : 'Leaderboards';
+  document.querySelector('#stepBoards .back').innerHTML = boardModes ? 'Done' : '&larr; Back';
+}
+// The honours board: the rowing leaderboards (signed in, on the site), and your bests on this device.
 function honours() {
+  if (!account.offline) return boards(Object.values(ROW_MODES)); // your bests go at the top of it
+  const lines = rowingBests();
+  note(lines.length ? `Your bests on this device: ${lines.join(' · ')}` : 'No times yet: row the Head of the River, or a 500 m on the ergs.');
+}
+// Your rowing bests on this device: each course, and the erg's 500 m.
+function rowingBests() {
   const lines = Object.values(ROW_MODES).map((m) => {
     let b = null;
     try { b = JSON.parse(localStorage.getItem(bestKey(m, formatOf(m)))); } catch {}
     return b?.time ? `${m.label}: ${formatTime(b.time)}` : '';
   }).filter(Boolean);
   if (ergBest()) lines.push(`Erg 500 m: ${formatTime(ergBest())}`);
-  note(lines.length ? `Your bests. ${lines.join(' · ')}` : 'No names on it yet: row the Head of the River, or a 500 m on the ergs');
+  return lines;
 }
 function note(text) {
   clubNote.textContent = text;
@@ -1122,7 +1158,7 @@ function placeRowingClub(l) {
   };
   const byColour = new Map();
   SCULLS.forEach((b, i) => {
-    const mesh = scullMesh(b.id === row.scull ? row.colour : SCULL_COLOURS[0]);
+    const mesh = scullMesh(b.id === kit.scull ? kit.scullColour : SCULL_COLOURS[0]);
     if (!byColour.has(mesh)) byColour.set(mesh, []);
     byColour.get(mesh).push(basis([0, 0, 1], [0, 1, 0], [-1, 0, 0], shots.sculls[i]));
   });
@@ -1210,7 +1246,7 @@ async function submitResult(time) {
   els.ranked.textContent = '';
   if (!account.user) return;
   try {
-    const { best, rank } = await call('games.submit', { course: mode.key, time, hull: kit.boat }, { mutation: true });
+    const { best, rank } = await call('games.submit', { course: mode.key, time, hull: boardHull(kit, !!mode.row) }, { mutation: true });
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
       : rank ? `Your best on the ${mode.label} leaderboard is ${ordinal(rank)}.` : '';
   } catch {
@@ -1221,17 +1257,41 @@ async function submitResult(time) {
 // The leaderboards page: the top ten on each course, with the boat each time
 // was paddled in, and where you are if you're further down.
 const SHOW = 10;
-const boatName = (hull) => boatById(hull)?.name ?? HULLS[hull]?.name ?? hull;
+const boatName = (hull) => (isScullHull(hull) ? scullHullName(hull) : boatById(hull)?.name ?? HULLS[hull]?.name ?? hull);
+// Which boards the leaderboards page shows: the canoe club's courses, or the rowing club's.
+let boardModes = null;
 async function showBoards() {
   els.boardlist.replaceChildren(make('<p>Loading…</p>'));
-  const boards = await Promise.all(Object.values(MODES).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
-  els.boardlist.replaceChildren(...boards.map(([m, b]) => {
+  const rowing = !!boardModes;
+  const boards = await Promise.all((boardModes ?? Object.values(MODES)).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
+  const top = [];
+  // The rowing club's: your bests on this device first, and how to get on the boards.
+  if (rowing) {
+    const mine = rowingBests();
+    if (mine.length) top.push(make(`<p class="bests">Your bests on this device: ${mine.join(' · ')}</p>`));
+    if (!account.user) {
+      const p = document.createElement('p');
+      p.append(link('Sign in', SIGN_IN), ' to put your times on the honours board.');
+      top.push(p);
+    }
+  }
+  // None of them loaded: one message, and a way to try again.
+  if (boards.every(([, b]) => !b)) {
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.textContent = 'Try again';
+    again.addEventListener('click', showBoards);
+    const p = make(`<p>Couldn't load the ${rowing ? 'honours board' : 'leaderboards'}. </p>`);
+    p.append(again);
+    return els.boardlist.replaceChildren(...top, p);
+  }
+  els.boardlist.replaceChildren(...top, ...boards.map(([m, b]) => {
     const div = document.createElement('div');
     const title = document.createElement('h4');
     title.textContent = m.label;
     div.append(title);
     if (!b?.top.length) {
-      div.append(b ? 'No times yet.' : "Couldn't load it.");
+      div.append(!b ? "Couldn't load this course." : rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
       return div;
     }
     const table = document.createElement('table');
@@ -1854,8 +1914,8 @@ let rowingRivals = [];
 // (handles in your hands, blades out over the water), your legs and arms.
 function placeMyScull(model, boat) {
   meshes.myScull ??= new Map();
-  if (!meshes.myScull.has(row.colour)) meshes.myScull.set(row.colour, renderer.createMesh(scullHullMesh({ deck: rgbOf(row.colour), hull: rgbOf(row.colour).map((v) => v * 0.94) })));
-  const hull = meshes.myScull.get(row.colour);
+  if (!meshes.myScull.has(kit.scullColour)) meshes.myScull.set(kit.scullColour, renderer.createMesh(scullHullMesh({ deck: rgbOf(kit.scullColour), hull: rgbOf(kit.scullColour).map((v) => v * 0.94) })));
+  const hull = meshes.myScull.get(kit.scullColour);
   renderer.place(hull, [model]);
   myRowing.list = [hull];
   const pose = scullPose(boat);
