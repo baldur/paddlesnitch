@@ -81,6 +81,9 @@ const CASES = [
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
+  // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
+  { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
+  { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
 ];
@@ -88,7 +91,7 @@ const CASES = [
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.club ? '' : '&menu'}`); // the walk opens unless #menu
+  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -100,12 +103,30 @@ async function play(c, page, errors) {
   await page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   const backend = await page.evaluate(() => window.kayak.gpu.backend);
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
+  // Which screen opened: the walk by default, the menu with #menu, a race link straight to its race.
+  const opened = await page.evaluate(() => ({ walk: !document.getElementById('club').hidden && !!window.kayak.club, menu: document.getElementById('menu').open }));
+  if (c.club && !(opened.walk && !opened.menu)) errors.push(`expected the walk, got ${JSON.stringify(opened)}`);
+  if (!c.club && opened.walk) errors.push(`the walk opened, expected ${c.raceLink ? 'the race link' : 'the menu'}`);
+  if (c.raceLink) return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}`;
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
-    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
+      // Keys with the picker open: Backspace in one of its fields stays put, Esc goes back.
+      if (label === '@backspace') {
+        await page.locator('#menu input[name="hair"]').first().focus();
+        await page.keyboard.press('Backspace');
+        await page.waitForTimeout(300);
+        if (await page.evaluate(() => window.kayak.club.place !== 'changing' || !!window.kayak.club.to)) errors.push('Backspace in the picker left the room');
+        continue;
+      }
+      if (label === '@escape') {
+        await page.keyboard.press('Escape');
+        await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
+        continue;
+      }
       const spot = label.startsWith('#') ? page.locator(label) : page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
       await (c.touch ? spot.tap() : spot.click());

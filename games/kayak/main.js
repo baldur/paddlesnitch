@@ -346,6 +346,8 @@ function showStep(name) {
     storeKit();
   }
   for (const [step, id] of Object.entries(STEPS)) document.getElementById(id).hidden = step !== name;
+  // Named by its step's heading (the menu's own "Kayak" heading is hidden as a sheet).
+  menu.setAttribute('aria-label', document.getElementById(STEPS[name])?.querySelector('h3')?.textContent || 'Kayak');
   for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen || !!club;
   for (const b of menu.querySelectorAll('.step-buttons .next')) {
     b.innerHTML = kitChosen || club ? 'Done' : b.dataset.first;
@@ -662,8 +664,10 @@ clubBack.addEventListener('click', back);
 clubStart.addEventListener('click', () => go(START));
 addEventListener('keydown', (e) => {
   if (!club || live.open || state !== 'menu') return;
-  // With a room's picker open, Esc goes back (Backspace is left to the picker's fields).
-  if (menu.open ? e.code !== 'Escape' : e.code !== 'Escape' && e.code !== 'Backspace') return;
+  // With a room's picker open, Esc goes back and Backspace does nothing (the
+  // picker has no text to delete, and a browser would go back a page).
+  if (menu.open && e.code === 'Backspace') return e.preventDefault();
+  if (e.code !== 'Escape' && e.code !== 'Backspace') return;
   e.preventDefault();
   back();
 });
@@ -681,6 +685,8 @@ function enterClub() {
   try { club.plan = localStorage.getItem(LAST_KEY); } catch {}
   menu.classList.add('sheet');
   clubEl.hidden = false;
+  // Its labels and cards wait for the first frame of the scene behind them.
+  if (!renderer) clubEl.classList.add('waiting');
   arrive(place);
 }
 function leaveClub() {
@@ -792,6 +798,12 @@ function arrive(place) {
   });
   if (place === 'changing') sheet('paddler');
   if (place === 'clubhouse') sheet('home');
+  // A first visit: where to make your paddler, and where the races are.
+  if (place === 'club' && !kitChosen) note('New here? Make your paddler in the changing room, then pick a race in the clubhouse');
+  // Phones held upright: races are sideways.
+  if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
+  // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
+  if (!menu.open) club.spots.find((x) => x.act)?.el.focus({ preventScroll: true });
 }
 function note(text) {
   clubNote.textContent = text;
@@ -828,6 +840,7 @@ function placeDoors() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const m = viewProj;
+  const placed = [];
   for (const s of club.spots) {
     if (!s.at) continue;
     const [x, y, z] = s.at;
@@ -836,8 +849,20 @@ function placeDoors() {
     const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw;
     const show = cw > 0 && Math.abs(cx) < 1.1 && Math.abs(cy) < 1.1;
     s.el.hidden = !show;
-    if (show) s.el.style.transform = `translate(${((cx + 1) / 2) * w}px, ${((1 - cy) / 2) * h}px) translate(-50%, -50%)`;
+    if (!show) continue;
+    // Kept on the screen, 16 px in from its edges (a narrow phone's view is wider than it is).
+    const half = (s.el.offsetWidth || 0) / 2;
+    placed.push({ el: s.el, x: Math.max(16 + half, Math.min(w - 16 - half, ((cx + 1) / 2) * w)), y: ((1 - cy) / 2) * h, w: s.el.offsetWidth || 0, h: s.el.offsetHeight || 0 });
   }
+  // Labels that would overlap (a narrow phone squeezes a club's doors together) move apart, downwards.
+  placed.sort((a, b) => a.y - b.y);
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = 0; j < i; j++) {
+      const [a, b] = [placed[j], placed[i]];
+      if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 4 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + 4) b.y = a.y + (a.h + b.h) / 2 + 4;
+    }
+  }
+  for (const p of placed) p.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
 }
 // The rooms, and you, your boats on the rack: built the first time, rebuilt when your kit changes.
 function placeClub() {
@@ -1677,6 +1702,7 @@ function render(time) {
   list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle, meshes.swimmer);
   if (shot) list.push(...placeClub());
   renderer.draw(frameData, list);
+  if (shot) clubEl.classList.remove('waiting');
   if (shot) placeDoors();
 }
 

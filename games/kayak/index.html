@@ -70,7 +70,7 @@
   <pre id="tiltdebug" hidden></pre>
 
   <div id="club" hidden>
-    <p id="clubPlace"></p>
+    <p id="clubPlace" aria-live="polite"></p>
     <p id="clubNav"><button type="button" id="clubBack" hidden>&larr; Back</button> <button type="button" id="clubStart" hidden>Start over</button></p>
     <div id="clubDoors"></div>
     <div id="clubCards"></div>
@@ -78,7 +78,7 @@
     <div id="clubFade" aria-hidden="true"></div>
   </div>
 
-  <dialog id="menu">
+  <dialog id="menu" tabindex="-1">
     <h2>Kayak</h2>
     <p id="nogpu" class="warning" hidden></p>
 
