@@ -22,6 +22,7 @@ test/stroke_known.c       stroke rate on synthetic signals with known answers, e
                           also replayed (streaming = batch)
 test/gen_stroke_fixture.py  writes fixtures/stroke_paddle/calls.csv
 test/stroke_rules.c       the stroke rules at their edges (compiles stroke.c into itself)
+test/live_values.c        rc_live / rc_phone_live: the GPS state a screen shows
 fixtures/                 golden cases (format: fixtures/README.md)
 Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
@@ -97,6 +98,13 @@ core works them out again.
   with an unsigned difference, never a signed or widened one
   (`fixtures/clock_wrap`).
 - **Live values are NAN until ready**, never 0 or a guess.
+- **The GPS state is live already (0.4.0):** `fix` and `since_fix_s` from
+  the latest row (the tracker) or the latest tick (phones, whose rows wait
+  for late samples), so a recording screen can say "waiting for GPS" or
+  "GPS lost" without the app working it out (`test/live_values.c`).
+- **Phone altitude is above sea level,** as the tracker's GGA: Android only
+  with `hasMslAltitude()` (API 34+), else not valid; never the ellipsoid
+  height (`recorder_phone.h`).
 - **Stroke rate reads only what the files hold:** each RC_MOTION line as
   written (the 80 ms gate, values as printed, parsed back) and each track
   row's ms and speed. The device feeds the stream its own lines; `rc_replay`

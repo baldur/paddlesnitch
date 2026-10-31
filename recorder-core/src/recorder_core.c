@@ -114,6 +114,11 @@ void rc_second(rc_state *rc, uint32_t t_ms, const rc_gps *g, const rc_extras *x)
     char row[384];
     size_t p = 0;
 
+    rc->rows = 1;
+    rc->row_ms = t_ms;
+    rc->fix = g->fix ? 1 : 0;
+    if (g->fix) { rc->fixed = 1; rc->fix_ms = t_ms; }
+
     /* Timestamp, lat and lon only with a fix: blank, never 0,0. */
     if (g->fix) {
         put(row, sizeof(row), &p, "%04d-%02d-%02dT%02d:%02d:%02dZ",
@@ -173,11 +178,12 @@ void rc_finish(rc_state *rc)
 
 void rc_live(const rc_state *rc, rc_live_values *out)
 {
-    (void)rc;
     out->spm = NAN;
     out->roll_deg = NAN;
     out->pitch_deg = NAN;
     out->evenness_pct = NAN;
     out->speed_kmh = NAN;
     out->distance_m = NAN;
+    out->fix = rc->rows && rc->fix;
+    out->since_fix_s = rc->fixed ? (float)(uint32_t)(rc->row_ms - rc->fix_ms) / 1000.0f : NAN;
 }

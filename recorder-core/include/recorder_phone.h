@@ -70,7 +70,7 @@ typedef struct {
 
 /*
  * The latest location, as the platform reported it. A *_valid of 0 means
- * the platform didn't give that field (Android: !hasAltitude() etc.;
+ * the platform didn't give that field (Android: !hasMslAltitude() etc.;
  * iPhone: verticalAccuracy <= 0, speed < 0, course < 0).
  */
 typedef struct {
@@ -79,7 +79,13 @@ typedef struct {
     int64_t utc_ms;       /* wall time of the fix: Location.getTime();
                              CLLocation.timestamp.timeIntervalSince1970 × 1000 */
     double  lat, lon;     /* degrees                                          */
-    int     alt_valid;    double alt_m;
+    int     alt_valid;    double alt_m;       /* above MEAN SEA LEVEL, as the
+                             tracker's receiver gives it (GGA). Android:
+                             getMslAltitudeMeters() when hasMslAltitude() (API
+                             34+); otherwise alt_valid 0, never getAltitude(),
+                             which is above the WGS84 ellipsoid (~45-50 m
+                             lower in the UK). iPhone: CLLocation.altitude
+                             (already sea level), when verticalAccuracy > 0 */
     int     speed_valid;  double speed_ms;    /* m/s; the row has km/h        */
     int     course_valid; double course_deg;
 } rc_phone_location;
@@ -115,6 +121,8 @@ typedef struct {
     int64_t           imu_last;                /* last accel passed on (-1)    */
     int               have_location;
     rc_phone_location location;
+    int               tick_fix, tick_fixed;    /* the latest tick: rc_phone_live */
+    int64_t           tick_fix_ms;             /* the latest tick with a fix   */
     uint32_t          dropped_late, dropped_unpaired;
 } rc_phone;
 
@@ -145,7 +153,8 @@ void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv);
    figures (rc_finish). Call before closing the files. */
 void rc_phone_finish(rc_phone *p);
 
-/* Live values (rc_live on the core). */
+/* Live values (rc_live on the core). The GPS state (fix, since_fix_s) is
+   the latest tick's, not the latest row written: rows wait for late samples. */
 void rc_phone_live(const rc_phone *p, rc_live_values *out);
 
 /*

@@ -1,6 +1,6 @@
 {
   "name": "recorder-core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The shared recorder core: samples in, recording lines and live values out (docs/features/on-device-metrics.md).",
   "frameworks": "*",
   "platforms": "*",
