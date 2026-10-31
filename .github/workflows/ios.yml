@@ -22,7 +22,9 @@ permissions:
 
 concurrency:
   group: ios-${{ github.ref }}
-  cancel-in-progress: true
+  # A new push to a PR cancels its earlier run, so it doesn't hold macOS
+  # runners. Pushes to main each finish, so every commit there has a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:

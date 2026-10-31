@@ -37,13 +37,12 @@ ifeq ($(SHARD),1)
   SHARD_TESTS := $(foreach c,$(SHARD_1),-only-testing:PaddlesnitchUITests/$(c))
 else ifeq ($(SHARD),2)
   SHARD_TESTS := $(foreach c,$(SHARD_1),-skip-testing:PaddlesnitchUITests/$(c))
-else ifneq ($(SHARD),)
-  $(error SHARD is 1, 2 or unset)
 endif
 
 # A test that hangs fails after 6 minutes (with a spindump in the results)
 # instead of running into CI's job timeout. The slowest passes in about 3.5 minutes on CI.
 test-app: project
+	@case "$(SHARD)" in ""|1|2) ;; *) echo "SHARD is 1, 2 or unset"; exit 1;; esac
 	set -o pipefail && xcodebuild test \
 	  -project Paddlesnitch.xcodeproj -scheme Paddlesnitch \
 	  -destination "platform=iOS Simulator,id=$$(scripts/simulator.sh $(IOS))" \
@@ -52,11 +51,13 @@ test-app: project
 	  $(SHARD_TESTS) \
 	  | xcbeautify
 
-# Every shard-1 name is a test class: -only-testing with a misspelt one
-# runs nothing and passes.
+# Every shard-1 name is a test class (every one subclasses AppTestCase,
+# which has no tests itself): -only-testing with a misspelt one, or with
+# AppTestCase, runs nothing and passes.
 check-shards:
 	@for c in $(SHARD_1); do \
-	  grep -Eq "^(final )?class $$c[: ]" Tests/UI/*.swift || { echo "SHARD_1: no test class $$c in Tests/UI"; exit 1; }; \
+	  grep -Eq "^(final )?class $$c *: *AppTestCase([^A-Za-z0-9_]|$$)" Tests/UI/*.swift \
+	    || { echo "SHARD_1: no test class $$c in Tests/UI"; exit 1; }; \
 	done
 
 lint: check-shards
