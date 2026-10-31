@@ -3,7 +3,8 @@ name: Android
 # The Android app (mobile/android, docs/features/android-app.md): unit tests
 # and a debug APK on every change to the app or the shared contract it is
 # generated from. The release APK is signed with the upload key once the
-# ANDROID_UPLOAD_* secrets exist; until then it is skipped.
+# ANDROID_UPLOAD_* secrets exist; until then it is skipped. The release
+# bundle (.aab) beside it is what goes to Google Play (mobile/android/PLAY-RELEASE.md).
 on:
   pull_request:
     paths: ['mobile/android/**', 'mobile/contract/**', '.github/workflows/android.yml']
@@ -46,6 +47,9 @@ jobs:
           name: screenshot-diffs
           path: mobile/android/app/build/outputs/roborazzi
           retention-days: 14
+      # Release declares exactly releasePermissions (app/build.gradle.kts), no location.
+      - name: Release permissions
+        run: ./gradlew --no-configuration-cache :app:checkReleasePermissions
       - name: Debug APK
         run: ./gradlew --no-configuration-cache :app:assembleDebug
       - uses: actions/upload-artifact@v7
@@ -53,7 +57,8 @@ jobs:
           name: paddlesnitch-debug-apk
           path: mobile/android/app/build/outputs/apk/debug/*.apk
           retention-days: 14
-      - name: Release APK (signed with the upload key)
+      # The APK is for paddlesnitch.com/android; Play takes only the bundle (.aab).
+      - name: Release APK and bundle (signed with the upload key)
         if: env.HAS_UPLOAD_KEY == 'true'
         env:
           KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
@@ -63,13 +68,19 @@ jobs:
           PS_VERSION_CODE: ${{ github.run_number }}
         run: |
           echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
-          PS_UPLOAD_KEYSTORE="$RUNNER_TEMP/upload.jks" ./gradlew --no-configuration-cache :app:assembleRelease
+          PS_UPLOAD_KEYSTORE="$RUNNER_TEMP/upload.jks" ./gradlew --no-configuration-cache :app:assembleRelease :app:bundleRelease
           rm "$RUNNER_TEMP/upload.jks"
       - uses: actions/upload-artifact@v7
         if: env.HAS_UPLOAD_KEY == 'true'
         with:
           name: paddlesnitch-release-apk
           path: mobile/android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        if: env.HAS_UPLOAD_KEY == 'true'
+        with:
+          name: paddlesnitch-release-bundle
+          path: mobile/android/app/build/outputs/bundle/release/*.aab
           retention-days: 30
 
   # paddlesnitch.com/android/download (apps/web/src/lib/android-download.ts)

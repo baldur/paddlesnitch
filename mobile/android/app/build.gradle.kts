@@ -126,7 +126,58 @@ val generateModels = tasks.register<GenerateModels>("generateModels") {
     outputDir.set(layout.buildDirectory.dir("generated/models"))
 }
 
+// The release build declares exactly these permissions, because Play's forms ask
+// about each one. Changing the list is a decision: it changes the Play data safety
+// form and the declarations (PLAY-RELEASE.md). The map library adds fine and coarse
+// location, which src/release/AndroidManifest.xml removes. The app's own manifest
+// may not declare location while that overlay exists, or the overlay would quietly
+// remove it from release too. Phone recording (#761) deletes the overlay and adds
+// its permissions here.
+val releasePermissions = setOf(
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",           // OkHttp, MapLibre
+    "android.permission.ACCESS_WIFI_STATE",              // MapLibre
+    "android.permission.BLUETOOTH",                      // tracker setup, Android 10-11
+    "android.permission.BLUETOOTH_ADMIN",                // tracker setup, Android 10-11
+    "android.permission.BLUETOOTH_CONNECT",              // tracker setup, Android 12+
+    "com.paddlesnitch.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",  // androidx, app-internal
+)
+
+abstract class CheckReleasePermissions : DefaultTask() {
+    @get:InputFile abstract val merged: RegularFileProperty
+    @get:InputFile abstract val appManifest: RegularFileProperty
+    @get:Input abstract val allowed: SetProperty<String>
+
+    @TaskAction
+    fun check() {
+        val names = Regex("""<uses-permission(?:-sdk-23)?\s[^>]*android:name="([^"]+)"""")
+        val declared = names.findAll(merged.get().asFile.readText()).map { it.groupValues[1] }.toSet()
+        val extra = declared - allowed.get()
+        val missing = allowed.get() - declared
+        check(extra.isEmpty() && missing.isEmpty()) {
+            "The release build's permissions changed: added $extra, gone $missing. " +
+                "Update releasePermissions in app/build.gradle.kts and the Play forms (PLAY-RELEASE.md)."
+        }
+        val own = names.findAll(appManifest.get().asFile.readText()).map { it.groupValues[1] }.filter { "LOCATION" in it }.toList()
+        check(own.isEmpty()) {
+            "src/main/AndroidManifest.xml declares $own, which src/release/AndroidManifest.xml removes from release. " +
+                "Delete that overlay and add the permissions to releasePermissions (#761)."
+        }
+    }
+}
+
 androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val cap = variant.name.replaceFirstChar { it.uppercase() }
+        val task = tasks.register<CheckReleasePermissions>("check${cap}Permissions") {
+            merged.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
+            appManifest.set(layout.projectDirectory.file("src/main/AndroidManifest.xml"))
+            allowed.set(releasePermissions)
+        }
+        tasks.named("check") { dependsOn(task) }
+        // Every release build runs it, including one built by hand for Play.
+        tasks.matching { it.name == "assemble$cap" || it.name == "bundle$cap" }.configureEach { dependsOn(task) }
+    }
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateTokens, GenerateTokens::outputDir)
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateModels, GenerateModels::outputDir)
