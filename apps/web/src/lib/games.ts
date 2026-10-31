@@ -5,9 +5,9 @@ export type Game = { slug: string; title: string; blurb: string; href: string }
 
 export const GAMES: Game[] = [
   {
-    slug: 'kayak',
-    title: 'Kayak',
-    blurb: 'Walk down to the canoe club at Reading. Race the Hasler courses, practise a drill or take a boat up the Thames.',
-    href: '/games/kayak/',
+    slug: 'reading-thames',
+    title: 'Reading Thames',
+    blurb: 'Walk from Caversham Bridge to the canoe and rowing clubs at Reading. Race a kayak, row a scull or take a boat up the Thames.',
+    href: '/games/reading-thames/',
   },
 ]

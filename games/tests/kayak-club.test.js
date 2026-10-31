@@ -3,12 +3,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate } from '../kayak/course.js';
-import { waterMap } from '../kayak/water.js';
-import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../kayak/world.js';
-import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
+import { courseFromFile, locate } from '../reading-thames/course.js';
+import { waterMap } from '../reading-thames/water.js';
+import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
+import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
-const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
+const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
 
 test('every door leads to another place; both clubs open off the bridge, each with its rooms and a way to the water', () => {

@@ -7,6 +7,18 @@
 function handler(event) {
   var request = event.request
   var uri = request.uri
+  // The river game moved from /games/kayak/ (owner, 2026-10-31): old links and
+  // shared #race= links (the browser keeps the fragment) still arrive.
+  if (uri === '/games/kayak' || uri.indexOf('/games/kayak/') === 0) {
+    var qs0 = request.querystring || {}
+    var q0 = Object.keys(qs0).map(function (k) { return k + '=' + qs0[k].value }).join('&')
+    var rest = uri === '/games/kayak' ? '/' : uri.substring('/games/kayak'.length)
+    return {
+      statusCode: 301,
+      statusDescription: 'Moved Permanently',
+      headers: { location: { value: '/games/reading-thames' + rest + (q0 ? '?' + q0 : '') } },
+    }
+  }
   if (uri === '/games/') {
     return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: '/games' } } }
   }

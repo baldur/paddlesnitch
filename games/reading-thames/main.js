@@ -374,8 +374,8 @@ function showStep(name) {
     storeKit();
   }
   for (const [step, id] of Object.entries(STEPS)) document.getElementById(id).hidden = step !== name;
-  // Named by its step's heading (the menu's own "Kayak" heading is hidden as a sheet).
-  menu.setAttribute('aria-label', document.getElementById(STEPS[name])?.querySelector('h3')?.textContent || 'Kayak');
+  // Named by its step's heading (the menu's own "Reading Thames" heading is hidden as a sheet).
+  menu.setAttribute('aria-label', document.getElementById(STEPS[name])?.querySelector('h3')?.textContent || 'Reading Thames');
   for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen || !!club;
   for (const b of menu.querySelectorAll('.step-buttons .next')) {
     b.innerHTML = kitChosen || club ? 'Done' : b.dataset.first;

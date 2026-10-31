@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPacer } from '../kayak/pacing.js';
+import { createPacer } from '../reading-thames/pacing.js';
 
 // Feeds the pacer `seconds` of frames, each `ms` long.
 function run(pacer, ms, seconds) {

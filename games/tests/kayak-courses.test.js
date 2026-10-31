@@ -3,17 +3,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, pointAt, locate } from '../kayak/course.js';
-import { createRace, stepRace, standings, PORTAGE, portageTime, DIVISION_9, DIVISION_3 } from '../kayak/race.js';
+import { courseFromFile, pointAt, locate } from '../reading-thames/course.js';
+import { createRace, stepRace, standings, PORTAGE, portageTime, DIVISION_9, DIVISION_3 } from '../reading-thames/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
 const read = async (path) => readFile(new URL(path, import.meta.url), 'utf8');
-const data = async (id) => JSON.parse(await read(`../kayak/courses/${id}.json`));
+const data = async (id) => JSON.parse(await read(`../reading-thames/courses/${id}.json`));
 
 // The menu's courses, from main.js's MODES (it runs in a browser, so read as text).
 async function modes() {
-  const src = await read('../kayak/main.js');
+  const src = await read('../reading-thames/main.js');
   const block = src.slice(src.indexOf('const MODES = {'), src.indexOf('};', src.indexOf('const MODES = {')));
   return [...block.matchAll(/^\s+(\w+): \{ file: 'courses\/(\w+)\.json'/gm)].map(([, key, file]) => ({ key, file }));
 }

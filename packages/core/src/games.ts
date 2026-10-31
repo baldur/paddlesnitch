@@ -19,7 +19,7 @@ export const GAME_COURSES = {
   'row-head': 5400, 'row-practice': 1000,
 } as const
 export type GameCourse = keyof typeof GAME_COURSES
-/** The boats you can race (games/kayak/boats.js), then the three hulls the game had before them. */
+/** The boats you can race (games/reading-thames/boats.js), then the three hulls the game had before them. */
 export const GAME_BOATS = [
   'nelo-vanquish-3', 'vajda-supersonic', 'kirton-typhoon', 'marsport-macros', 'vajda-cruiser',
   'nelo-viper-51', 'plastex-swift', 'kirton-pulsar', 'vajda-voyageur',
@@ -74,7 +74,7 @@ export async function getLeaderboard(course: GameCourse, userId?: string) {
 }
 
 // --- your paddler and boat ------------------------------------------------------
-// As chosen in the game's menu (games/kayak/kit.js). Under users/{id}/, so the
+// As chosen in the game's menu (games/reading-thames/kit.js). Under users/{id}/, so the
 // account's erasure removes it with the rest; the export includes it.
 
 export type GameKit = {

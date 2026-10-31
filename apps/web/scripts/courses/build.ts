@@ -4,7 +4,7 @@
 //
 //   pnpm --filter web course:build <course-id>
 //
-// Writes games/kayak/courses/<id>.json, which the game loads when the course is
+// Writes games/reading-thames/courses/<id>.json, which the game loads when the course is
 // picked. Everything is in real metres around the course's first point (x east,
 // z south); the game moves boats `speedup` times their speed through it, and shows
 // times `warp` times longer, so a real river plays in a few minutes.
@@ -58,7 +58,7 @@ const out = courseFile({
   },
 })
 
-const file = path.resolve(process.cwd(), '../../games/kayak/courses', `${id}.json`)
+const file = path.resolve(process.cwd(), '../../games/reading-thames/courses', `${id}.json`)
 fs.mkdirSync(path.dirname(file), { recursive: true })
 fs.writeFileSync(file, JSON.stringify(out))
 console.log(`${path.relative(process.cwd(), file)}: ${(fs.statSync(file).size / 1024).toFixed(0)} KB — ${out.line.length} points, ${out.buildings.length} buildings, ${out.bridges.length} bridges, ${out.moorings.length} moorings, ${out.woods.length} woods, ${out.banks.length} bank stretches, ${out.places.length} places${out.route ? `, a ${(out.route.line.length * 5 / 1000).toFixed(1)} km route` : ''}`)

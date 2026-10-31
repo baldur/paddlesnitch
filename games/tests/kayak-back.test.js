@@ -10,11 +10,11 @@ const canvas = {};
 const target = { addEventListener: on(canvas), getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }) };
 const fire = (store, type, e) => (store[type] ?? []).forEach((fn) => fn({ preventDefault() {}, ...e }));
 
-const { Controls } = await import('../kayak/controls.js');
-const { createBoat, step, strokeRate, BOAT } = await import('../kayak/sim.js');
-const { courseFromFile, pointAt, locate } = await import('../kayak/course.js');
-const { createRace, stepRace } = await import('../kayak/race.js');
-const { wrap } = await import('../kayak/sim.js');
+const { Controls } = await import('../reading-thames/controls.js');
+const { createBoat, step, strokeRate, BOAT } = await import('../reading-thames/sim.js');
+const { courseFromFile, pointAt, locate } = await import('../reading-thames/course.js');
+const { createRace, stepRace } = await import('../reading-thames/race.js');
+const { wrap } = await import('../reading-thames/sim.js');
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -118,7 +118,7 @@ test('touch: a thumb held still is a forward stroke after a moment, not a swipe'
   assert.deepEqual(c.take().strokes, [], 'already taken: no back stroke after it');
 });
 
-const loop = async () => courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
+const loop = async () => courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
 
 // A paddler at St Mary's Island steering at a point 15 m up the course, 8 m
 // right of it: past the island's end that point is on land, and they grind
