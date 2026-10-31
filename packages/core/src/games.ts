@@ -63,6 +63,25 @@ export async function submitResult(course: GameCourse, entry: BoardEntry) {
   return { best, rank: rank || null }
 }
 
+/** A player's own times, one per course they're on, for the account export (#742). */
+export async function myGameTimes(userId: string) {
+  const out: { course: GameCourse; time: number; hull: string; at: string }[] = []
+  for (const course of Object.keys(GAME_COURSES) as GameCourse[]) {
+    const mine = ((await getJson<BoardEntry[]>(boardKey(course))) ?? []).find((e) => e.userId === userId)
+    if (mine) out.push({ course, time: mine.time, hull: mine.hull, at: mine.at })
+  }
+  return out
+}
+
+/** Takes a deleted account off every leaderboard (#742): one read per course, a write only where it was. */
+export async function eraseGameTimes(userId: string) {
+  await Promise.all((Object.keys(GAME_COURSES) as GameCourse[]).map(async (course) => {
+    const board = (await getJson<BoardEntry[]>(boardKey(course))) ?? []
+    const kept = board.filter((e) => e.userId !== userId)
+    if (kept.length !== board.length) await putJson(boardKey(course), kept)
+  }))
+}
+
 export async function getLeaderboard(course: GameCourse, userId?: string) {
   const board = (await getJson<BoardEntry[]>(boardKey(course))) ?? []
   const strip = ({ name, time, hull, at }: BoardEntry) => ({ name, time, hull, at })
