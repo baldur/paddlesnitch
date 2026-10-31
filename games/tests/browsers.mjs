@@ -219,10 +219,15 @@ async function play(c, page, errors) {
     const scull = await page.evaluate(() => !!window.kayak.boat.hull.scull);
     if (!scull) errors.push('pushed off in something other than a scull');
     if (await page.locator('#coach').isHidden()) errors.push("the stroke coach isn't showing");
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(800);
-    if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
-    await page.keyboard.up('ArrowUp');
+    // Over each shoulder: Q left, E right; the coach goes while you look.
+    for (const [key, side] of [['KeyQ', -1], ['KeyE', 1]]) {
+      await page.keyboard.down(key);
+      await page.waitForTimeout(800);
+      const look = await page.evaluate(() => window.kayak.look);
+      if (!(look * side > 0.9)) errors.push(`holding ${key} looked ${look}, expected ${side}`);
+      if (await page.locator('#coach').isVisible()) errors.push('the coach stayed up while looking round');
+      await page.keyboard.up(key);
+    }
   }
   // Analytics (metrics.js): the paddler and the session go out when the page is
   // hidden; locally they're kept in gameMetrics.sent instead of sent.

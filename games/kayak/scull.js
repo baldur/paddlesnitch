@@ -292,3 +292,10 @@ export function cleanRow(raw) {
     colour: SCULL_COLOURS.includes(r.colour) ? r.colour : SCULL_COLOURS[0],
   };
 }
+
+// Looking round from a scull: your head turns towards `want` (-1 over your left
+// shoulder, 1 over your right, 0 back down the boat), quickly but not in a jump,
+// and from one shoulder to the other through facing the stern.
+export function easeLook(look, want, dt) {
+  return look + (want - look) * Math.min(1, dt * 6);
+}

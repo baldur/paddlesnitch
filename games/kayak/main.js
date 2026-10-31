@@ -6,7 +6,7 @@ import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
 import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
-import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, cleanRow } from './scull.js';
+import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, cleanRow, easeLook } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
@@ -227,10 +227,10 @@ function start() {
   // Rowing: the stroke coach and the Look button instead of the rudder and the paddler's hints.
   hud.classList.toggle('rowing', !!mode.row);
   els.touchhelp.textContent = mode.row
-    ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Hold Look to see where you're going"
+    ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Hold a Look button to look over that shoulder"
     : TOUCH_HELP;
   // Rowing on a keyboard or a pad (a phone has its own help line): how, once, at the start.
-  if (mode.row && !phone.matches) show('← → (or LT, RT) are your oars: both together for a stroke, lead with one to turn. Hold ↑ (or Y) to look where you\'re going', { small: true, hold: 6 });
+  if (mode.row && !phone.matches) show('← → (or LT, RT) are your oars: both together for a stroke, lead with one to turn. Hold Q or E (X or Y on a pad) to look over your left or right shoulder', { small: true, hold: 6 });
   // An outing from Caversham Pier: no starter, no clock; off at once.
   hud.classList.toggle('outing', !!mode.outing);
   document.getElementById('outingBar').hidden = !mode.outing;
@@ -1293,7 +1293,7 @@ async function enterLobby(request) {
     history.replaceState(null, '', `#${HASH.has('debug') ? 'debug&' : ''}race=${info.room.code}`);
     showLobby();
   } catch (err) {
-    els.liveError.textContent = err.status === 404 ? 'That race has finished, or it is full.' : `Couldn't get into the race (${err.message}).`;
+    els.liveError.textContent = err.status === 404 ? 'That race has finished, or it is full.' : "Couldn't get into the race. Check the code and try again.";
   }
 }
 
@@ -1609,6 +1609,8 @@ function simulate(dt) {
     return;
   }
   if (race.outing) return outingStep(dt);
+  // A scull has no rudder: Q and E look over your shoulders (the phone's twist and a slid finger still nudge it).
+  if (boat.hull.scull) input.rudder = Math.max(-1, Math.min(1, input.rudder - (controls.keyRudder ?? 0)));
   if (controls.assist) input.lean = Math.max(-1, Math.min(1, input.lean - (boat.roll * 2 + boat.rollRate * 0.6)));
   else if (controls.tilting) input.lean = Math.max(-1, Math.min(1, input.lean - TILT_REFLEX * boat.rollRate));
   if (liveRace) liveBefore(dt);
@@ -1976,8 +1978,8 @@ function render(time) {
   if (boat.hull.scull && state !== 'menu' && myRowing.pose) {
     const local = [0, SCULL_SEAT.y + 0.95 - 0.12 * Math.max(0, myRowing.lean), myRowing.seat + 0.1 + 0.32 * Math.max(0, myRowing.lean)];
     eye = fr.pos.map((p, i) => p + fr.right[i] * local[0] + fr.up[i] * (local[1] + bob + lift) + fr.back[i] * local[2]);
-    const turn = lookBack * 2.6; // radians: over the right shoulder
-    const pitch = 0.42 * (1 - lookBack) + 0.05;
+    const turn = lookBack * 2.6; // radians: over the right shoulder (+) or the left (-)
+    const pitch = 0.42 * (1 - Math.abs(lookBack)) + 0.05;
     const ahead = fr.back.map((v, i) => v * Math.cos(turn) + fr.right[i] * -Math.sin(turn));
     fwd = normalize(ahead.map((v, i) => v * Math.cos(pitch) - fr.up[i] * Math.sin(pitch)));
     right = normalize([-fwd[2], 0, fwd[0]]);
@@ -2058,7 +2060,7 @@ function render(time) {
 const coachEl = document.getElementById('coach');
 function placeCoach() {
   const boat = race.player.boat;
-  const on = !!boat.hull.scull && state !== 'menu' && !hud.hidden && lookBack < 0.1;
+  const on = !!boat.hull.scull && state !== 'menu' && !hud.hidden && Math.abs(lookBack) < 0.1;
   coachEl.hidden = !on;
   if (!on || !viewProj) return;
   const fr = boatFrame(boat);
@@ -2077,20 +2079,29 @@ function placeCoach() {
 }
 
 // Looking back over your shoulder in a scull: held ↑, Y, or the Look button.
-let lookBack = 0;
-let lookWant = false;
-addEventListener('keydown', (e) => { if (e.code === 'ArrowUp' && race?.player.boat.hull.scull && (state === 'racing' || state === 'start')) { lookWant = true; e.preventDefault(); } });
-addEventListener('keyup', (e) => { if (e.code === 'ArrowUp') lookWant = false; });
+let lookBack = 0; // -1 over your left shoulder, 1 over your right
+let lookWant = 0;
+// In a scull: ↑ or E over your right shoulder, Q over your left (a scull has
+// no rudder, so Q and E aren't steering here); X and Y on a pad; the two Look buttons on a phone.
+const LOOK_KEYS = { ArrowUp: 1, KeyE: 1, KeyQ: -1 };
+const rowingNow = () => race?.player.boat.hull.scull && (state === 'racing' || state === 'start');
+addEventListener('keydown', (e) => { if (LOOK_KEYS[e.code] && rowingNow()) { lookWant = LOOK_KEYS[e.code]; e.preventDefault(); } });
+addEventListener('keyup', (e) => { if (LOOK_KEYS[e.code] === lookWant) lookWant = 0; });
 // Let go of the key while away (another tab, another window): don't come back looking backwards.
-addEventListener('blur', () => { lookWant = false; });
-document.addEventListener('visibilitychange', () => { if (document.hidden) lookWant = false; });
-const lookBtn = document.getElementById('lookBtn');
-for (const [type, want] of [['pointerdown', true], ['pointerup', false], ['pointercancel', false], ['pointerleave', false]]) lookBtn.addEventListener(type, (e) => { lookWant = want; e.preventDefault(); e.stopPropagation(); });
+addEventListener('blur', () => { lookWant = 0; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) lookWant = 0; });
+for (const [id, side] of [['lookLeft', -1], ['lookRight', 1]]) {
+  const btn = document.getElementById(id);
+  for (const [type, on] of [['pointerdown', true], ['pointerup', false], ['pointercancel', false], ['pointerleave', false]]) {
+    btn.addEventListener(type, (e) => { lookWant = on ? side : lookWant === side ? 0 : lookWant; e.preventDefault(); e.stopPropagation(); });
+  }
+}
 function stepLook(dt) {
   const pad = navigator.getGamepads?.()?.find?.((p) => p);
-  const want = lookWant || !!pad?.buttons[3]?.pressed; // Y, on a standard pad
-  lookBack += ((want ? 1 : 0) - lookBack) * Math.min(1, dt * 6);
+  const want = lookWant || (pad?.buttons[3]?.pressed ? 1 : pad?.buttons[2]?.pressed ? -1 : 0); // Y right, X left, on a standard pad
+  lookBack = easeLook(lookBack, want, dt);
 }
+
 
 // Open the page with #tilt to see what the motion sensors are doing.
 const tiltReadout = HASH.has('tilt') ? document.getElementById('tiltdebug') : null;
@@ -2425,6 +2436,7 @@ if (HASH.has('debug')) {
     get course() { return race.course; },
     get state() { return state; },
     get gpu() { return renderer?.stats; },
+    get look() { return lookBack; }, // in a scull: -1 over the left shoulder, 1 over the right
     get tilt() { return controls.tiltLean; },
     get live() { return liveRace; },
     get lobby() { return lobby; },

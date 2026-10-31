@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBoat } from '../kayak/sim.js';
-import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow } from '../kayak/scull.js';
+import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow, easeLook } from '../kayak/scull.js';
 import { readFile } from 'node:fs/promises';
 import { createRace, stepRace, started, DIVISION_9 } from '../kayak/race.js';
 import { practiceRiver, headingAt, pointAt, locate, courseFromFile } from '../kayak/course.js';
@@ -297,4 +297,16 @@ test("rowing choices read back from the device: an unknown scull or colour falls
   assert.deepEqual(cleanRow(null), { scull: 'club', colour: SCULL_COLOURS[0] });
   assert.deepEqual(cleanRow({ scull: 'fine', colour: SCULL_COLOURS[2] }), { scull: 'fine', colour: SCULL_COLOURS[2] });
   assert.deepEqual(cleanRow({ scull: 'canoe', colour: '#00ff00' }), { scull: 'club', colour: SCULL_COLOURS[0] });
+});
+
+test('looking round over either shoulder: the head turns towards it quickly, not in a jump, and comes back', () => {
+  let look = 0;
+  look = easeLook(look, -1, DT);
+  assert.ok(look < 0 && look > -0.2, 'starts towards the left shoulder, no jump');
+  for (let t = 0; t < 1; t += DT) look = easeLook(look, -1, DT);
+  assert.ok(look < -0.99, 'over the left shoulder within a second');
+  for (let t = 0; t < 1; t += DT) look = easeLook(look, 1, DT);
+  assert.ok(look > 0.99, 'and over to the right');
+  for (let t = 0; t < 1; t += DT) look = easeLook(look, 0, DT);
+  assert.ok(Math.abs(look) < 0.01, 'back down the boat');
 });

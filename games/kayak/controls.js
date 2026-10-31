@@ -260,6 +260,7 @@ export class Controls {
       return Math.abs(v) > DEADZONE ? v : 0;
     };
     const keyRudder = (this.#held.has(KEYS.rudderRight) ? 1 : 0) - (this.#held.has(KEYS.rudderLeft) ? 1 : 0);
+    this.keyRudder = keyRudder; // (a scull takes Q and E for looking round: main.js drops this part)
     // A thumb held still is a forward stroke once it's clearly not a swipe.
     const now = performance.now();
     for (const [id, t] of this.#touches) if (now - t.at >= TAP_WAIT) this.#touchStroke(id, t.side);
