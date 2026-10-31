@@ -26,7 +26,7 @@ describe("the game's paddler kit", () => {
     for (const [field, list] of lists) {
       for (const value of Object.keys(list)) {
         const kit = cleanKit({ [field]: value })
-        expect(kit[field]).toBe(value)
+        expect((kit as Record<string, unknown>)[field]).toBe(value)
         await expect(pat.games.kit.set(kit), `${field}: ${value}`).resolves.toEqual(kit)
       }
     }
