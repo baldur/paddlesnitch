@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release asks for no location (checkReleasePermissions in app/build.gradle.kts
+     checks it). MapLibre declares fine and coarse location, but the app never
+     shows the phone's location on a map. When phone recording ships (#761),
+     delete this file and add its permissions to releasePermissions. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />
+</manifest>

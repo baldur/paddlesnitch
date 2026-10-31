@@ -6,18 +6,18 @@ import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { createRace } from '../reading-thames/race.js';
-import { OUTINGS, CRUISE, HIRE, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh } from '../reading-thames/outing.js';
-import { SWIM, TRAFFIC, moveTraffic, overturned } from '../reading-thames/traffic.js';
+import { OUTINGS, CRUISE, HIRE, HIRE_BOATS, HIRE_MIX, SINK, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from '../reading-thames/outing.js';
+import { SWIM, TRAFFIC, PACKS, createTraffic, moveTraffic, overturned } from '../reading-thames/traffic.js';
 import { swimmerMesh } from '../reading-thames/meshes.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const DT = 1 / 60;
 
-async function outing(kind) {
+async function outing(kind, boat = 'launch') {
   const course = courseFromFile(await data('hasler16'));
   const race = createRace(course, { rivals: [], seed: 4 });
   const pier = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge').s + 30;
-  startOuting(race, kind, pier);
+  startOuting(race, kind, pier, 1, { boat });
   return { race, pier, land: waterMap((await data('reading')).water) };
 }
 
@@ -106,9 +106,10 @@ test('outings are busier than a race: the cruise meets a boat about every half m
 async function ram(kind, speed, off = 8) {
   const { race } = await outing('hire');
   race.course.shore = null;
-  const t = race.traffic.boats.find((x) => x.kind === kind && x.at > 60);
+  // A boat on its own of that kind, or a pack of kayakers (rammed at its lead, the whole pack kept).
+  const t = race.traffic.boats.find((x) => x.at > 60 && (kind === 'pack' ? x.pack?.lead === x : x.kind === kind && !x.pack));
   race.time = t.at;
-  race.traffic.boats = [t];
+  race.traffic.boats = kind === 'pack' ? race.traffic.boats.filter((x) => x.pack?.lead === t) : [t];
   moveTraffic(race.traffic, race.time);
   const b = race.player.boat;
   const side = [Math.cos(t.heading), Math.sin(t.heading)]; // the boat's right
@@ -142,8 +143,8 @@ test('ram a sculler or a kayaker with the launch and they fall in, swim by the u
   }
 });
 
-test("an eight, a cruiser or a motorboat doesn't go over, and nobody does at a crawl", async () => {
-  for (const kind of ['eight', 'cruiser', 'motorboat']) {
+test("a cruiser or a motorboat doesn't go over, and nobody does at a crawl", async () => {
+  for (const kind of ['cruiser', 'motorboat']) {
     const { events } = await ram(kind, HIRE.top);
     assert.ok(events.includes('bump') && !events.some((e) => e.startsWith('tipped')), `${kind}: ${events}`);
   }
@@ -152,7 +153,7 @@ test("an eight, a cruiser or a motorboat doesn't go over, and nobody does at a c
 });
 
 test('a boat you bumped is solid again once you are 10 m clear; a crew already in the water is not knocked in twice', async () => {
-  const { race, t, events } = await ram('eight', HIRE.top);
+  const { race, t, events } = await ram('cruiser', HIRE.top); // (an eight now sinks you: see below)
   assert.ok(events.includes('bump'));
   const b = race.player.boat;
   // Back off 12 m, then come at it again.
@@ -185,8 +186,129 @@ test('backing the launch into a sculler at full astern knocks them in too (owner
 });
 
 test("the boats you're on, and a swimmer, are small meshes with no NaN", () => {
-  for (const mesh of [tripBoatMesh(), launchMesh(), swimmerMesh()]) {
+  for (const mesh of [tripBoatMesh(), launchMesh(), speedboatMesh(), narrowboatMesh(), swimmerMesh()]) {
     assert.ok(mesh.vertices.every(Number.isFinite));
     assert.ok(mesh.count / 3 < 1500);
   }
+});
+
+test('three boats for hire: the speedboat very quick and nimble, the launch steady, the narrowboat slow and slow to turn', async () => {
+  const drive = async (boat) => {
+    const { race } = await outing('hire', boat);
+    race.course.shore = null;
+    const b = race.player.boat;
+    for (let t = 0; t < 30; t += DT) stepOuting(race, DT, { throttle: 1 });
+    const top = b.speed;
+    const h0 = b.heading;
+    for (let t = 0; t < 2; t += DT) stepOuting(race, DT, { throttle: 1, turn: 1 });
+    return { top, turned: b.heading - h0, shape: b.shape };
+  };
+  const [fast, steady, slow] = await Promise.all(['speedboat', 'launch', 'narrowboat'].map(drive));
+  assert.ok(Math.abs(fast.top - HIRE_BOATS.speedboat.top) < 0.1, `speedboat ${fast.top * 3.6} km/h`);
+  assert.ok(fast.top * 3.6 > 45 && steady.top * 3.6 < 21 && slow.top * 3.6 < 8);
+  assert.ok(fast.turned > steady.turned && steady.turned > slow.turned, 'nimble, steady, slow to turn');
+  assert.equal(slow.shape.bow + slow.shape.stern, 18, 'the narrowboat is 18 m long, for knocks and banks');
+});
+
+test('ram an eight or a pack of kayakers and the boat sinks under you, then it\'s back to the pier', async () => {
+  for (const kind of ['eight', 'pack']) {
+    const { race, events } = await ram(kind, HIRE.top);
+    assert.ok(events.includes(kind === 'pack' ? 'sinking-pack' : 'sinking-eight'), `${kind}: ${events}`);
+    assert.ok(!events.some((e) => e.startsWith('tipped')), 'they hold; you go down');
+    // Sunk once, SINK seconds after it was holed (not before).
+    let sunkAt = null;
+    let count = 0;
+    for (let t = 0; t < SINK + 1; t += DT) {
+      if (stepOuting(race, DT, { throttle: 1 }).includes('sunk')) { count++; sunkAt ??= t; }
+    }
+    assert.equal(count, 1, `${kind}: sunk once`);
+    assert.ok(sunkAt >= SINK - 2 * DT && sunkAt <= SINK + DT, `${kind}: sunk at ${sunkAt}`);
+    assert.ok(race.player.boat.speed < 0.5, 'and stopped');
+  }
+});
+
+test('kayakers out together hold a triangle of three or a diamond of four, the lead first and the rest in their slots behind', async () => {
+  const course = courseFromFile(await data('hasler16'));
+  const traffic = createTraffic(course, 9, { gap: 5, ambient: 4000, mix: HIRE_MIX });
+  const leads = traffic.boats.filter((b) => b.pack?.lead === b);
+  assert.ok(leads.length > 5, `${leads.length} packs`);
+  const sizes = new Set(leads.map((l) => traffic.boats.filter((b) => b.pack?.lead === l).length));
+  assert.deepEqual([...sizes].sort(), [3, 4], 'triangles and diamonds');
+  // On the water: each in its slot, as far from the lead as its slot says, all heading the same way.
+  const lead = leads.find((l) => l.at > 100);
+  moveTraffic(traffic, lead.at);
+  for (const b of traffic.boats.filter((x) => x.pack?.lead === lead && x !== lead)) {
+    const [back, right] = b.pack.slot;
+    // Behind the lead and to its own side: along the lead's heading and across it to its right.
+    const f = [Math.sin(lead.heading), -Math.cos(lead.heading)];
+    const dx = b.x - lead.x;
+    const dz = b.z - lead.z;
+    const along = dx * f[0] + dz * f[1];
+    const across = dx * -f[1] + dz * f[0];
+    assert.ok(Math.abs(along + back) < 0.8 && Math.abs(across - right) < 0.8, `slot ${b.pack.slot}: ${along.toFixed(2)} along, ${across.toFixed(2)} across`);
+    assert.ok(Math.abs(b.heading - lead.heading) < 0.1);
+    assert.equal(b.kind, 'kayaker');
+  }
+  assert.deepEqual(PACKS.diamond.length, 4);
+});
+
+test("the hired boat's river has more rowers and kayakers than a race's, packs among them; a race has no packs", async () => {
+  const course = courseFromFile(await data('hasler16'));
+  const share = (boats) => boats.filter((b) => b.kind === 'sculler' || b.kind === 'kayaker' || b.kind === 'eight').length / boats.length;
+  const hire = createTraffic(course, 3, { gap: 4, ambient: 7200, mix: HIRE_MIX }).boats;
+  const plain = createTraffic(course, 3, { gap: 4, ambient: 7200 }).boats;
+  assert.ok(share(hire) > share(plain) + 0.1, `${share(hire).toFixed(2)} against ${share(plain).toFixed(2)}`);
+  for (const seed of [1, 2, 3]) assert.ok(!createTraffic(course, seed).boats.some((b) => b.pack), 'no packs in a race');
+});
+
+test('the other way up the river too, the pack keeps each in its slot; with the lead in the water, the pack holds', async () => {
+  const course = courseFromFile(await data('hasler16'));
+  const traffic = createTraffic(course, 9, { gap: 5, ambient: 4000, mix: HIRE_MIX });
+  for (const dir of [1, -1]) {
+    const lead = traffic.boats.find((b) => b.pack?.lead === b && b.dir === dir && b.at > 100);
+    moveTraffic(traffic, lead.at);
+    const f = [Math.sin(lead.heading), -Math.cos(lead.heading)];
+    for (const b of traffic.boats.filter((x) => x.pack?.lead === lead && x !== lead)) {
+      const along = (b.x - lead.x) * f[0] + (b.z - lead.z) * f[1];
+      assert.ok(along < -3, `dir ${dir}: behind the lead (${along.toFixed(1)})`);
+    }
+  }
+  const { knockIn } = await import('../reading-thames/traffic.js');
+  const lead = traffic.boats.find((b) => b.pack?.lead === b && b.at > 100);
+  moveTraffic(traffic, lead.at);
+  lead.kind = 'kayaker';
+  knockIn(lead, lead.at);
+  const before = traffic.boats.filter((x) => x.pack?.lead === lead && x !== lead).map((b) => [b.x, b.z]);
+  moveTraffic(traffic, lead.at + 3);
+  traffic.boats.filter((x) => x.pack?.lead === lead && x !== lead).forEach((b, i) => {
+    assert.deepEqual([b.x, b.z], before[i], 'holding where they were');
+    assert.ok(Math.hypot(b.x - lead.x, b.z - lead.z) > 3, 'not piled on the lead');
+  });
+});
+
+test('nudged into an eight or a pack at a crawl, you bump off, as with anyone; a boat name not for hire is the launch', async () => {
+  for (const kind of ['eight', 'pack']) {
+    const { events } = await ram(kind, HIRE.knock * 0.8, 2.6);
+    assert.ok(events.includes('bump') && !events.some((e) => e.startsWith('sinking')), `${kind} at a crawl: ${events}`);
+  }
+  const course = courseFromFile(await data('hasler16'));
+  const race = createRace(course, { rivals: [], seed: 4 });
+  startOuting(race, 'hire', course.scenery.bridges.find((b) => b.name === 'Caversham Bridge').s + 30, 1, { boat: 'yacht' });
+  assert.equal(race.outing.boat, 'launch');
+  assert.deepEqual(race.player.boat.shape, HIRE_BOATS.launch.shape);
+});
+
+test("a narrowboat's stern, 8 m behind you, hits a sculler there; a kayak's wouldn't reach", async () => {
+  const { trafficHits } = await import('../reading-thames/traffic.js');
+  const { createBoat } = await import('../reading-thames/sim.js');
+  const sculler = { kind: 'sculler', on: true, hit: [], x: 0, z: 7.5, heading: Math.PI / 2 }; // across our keel line, 7.5 m astern
+  const traffic = { boats: [sculler] };
+  const me = (shape) => {
+    const boat = createBoat({ heading: 0 });
+    if (shape) boat.shape = shape;
+    return { boat };
+  };
+  assert.equal(trafficHits(traffic, [me(HIRE_BOATS.narrowboat.shape)]).length, 1, 'the narrowboat');
+  sculler.hit = [];
+  assert.equal(trafficHits(traffic, [me(null)]).length, 0, 'a kayak');
 });

@@ -559,3 +559,6 @@ summary { cursor: pointer; }
 /* Rowing: messages above the coach, and the place name out of the way of the phone help. */
 #hud.rowing #flash { top: 20%; }
 #hud.rowing.helping #place { display: none; }
+
+/* Choosing a boat to hire: each card keeps its line (how the boats differ), wrapping, whatever the screen. */
+#clubCards.choice .card small { display: block; white-space: normal; max-width: 11rem; }
