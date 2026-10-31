@@ -56,7 +56,9 @@ Checked 2026-10-11. Licence decides what we may store, show and print, so every 
 - Paddle UK PaddlePoints
 - CanalPlan
 
-**Decided (owner, 2026-10-11):** we use these with a clear credit and link to where each fact came from, and stop if the owner asks. paddlesnitch is a free utility; anyone who pays does so to support running it. Every feature's `source` records the origin, so one source can be withdrawn without hunting through the data.
+**Decided (owner, 2026-10-31; replaces the 2026-10-11 "use them with credit"):** citing a source is not permission to copy it. A source with no licence, or all rights reserved, is used to **find and check** facts. We never copy its text or diagrams, or rebuild its lists. A fact we confirm ourselves is ours: on the water, from a paddle, or from imagery we may trace over. A fact confirmed from an open source carries that source's licence. Where such a source would be worth using directly, we write up the ask (who, what, why) and the owner requests permission. The asks, and the sources checked for the DW portages, are in [`waterways-uk-ireland-sources.md`](waterways-uk-ireland-sources.md) § "Devizes to Westminster portages". Every feature's `source` still records the origin, so one source can be withdrawn without hunting through the data.
+
+**Open (owner):** data already copied under the 2026-10-11 rule stays until the owner decides: CRT `Customer_Service_Facilities_View_Public` and `Towpath_Access_Points` (most of the DW crew-access and facilities scores) and the EA uMap layers. The options are to ask CRT and the EA for a licence, keep them until asked to stop, or drop them.
 
 **Explicit prohibitions are different from a missing licence.** A source whose terms forbid our use stays out:
 - PLA tide predictions say "use in any other product or service is prohibited". ADMIRALTY covers tides instead.
