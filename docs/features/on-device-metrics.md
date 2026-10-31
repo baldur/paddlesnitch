@@ -187,6 +187,17 @@ ESP32-S3. Confirm once on the bench build.
      phase 2.
 2. **Stroke rate** in the core as a stream; the server switches to the WASM
    build and `cadence.ts` goes once its tests pass against it.
+   - **2a, done (0.3.0):** `src/stroke.c` reads the motion lines and track
+     rows as written; `rc_replay` gives the server the same figures from the
+     uploaded files (pinned on every fixture). On the 13 and 16 Sep
+     captures its windows, rests and paddling time match the server's
+     exactly; its rate is ~5% lower, because it takes the sample rate from
+     each window's mean spacing where the server took the median gap, and
+     an independent check on an even time grid agrees with it (details in
+     `recorder-core/CLAUDE.md`).
+   - **2b, next:** the server calls the WASM build (`packages/timing`),
+     `cadence.ts`'s maths goes, and the site's stroke rates move ~5%.
+     Live stroke rate on the phones waits for phase 4.
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.
    Then movement-gated distance, the last motion maths left in
    `packages/timing`.

@@ -1,0 +1,10 @@
+window,series,45020,60.2,120.4,1,0.909
+window,series,50020,60.2,120.4,1,0.909
+point,52520,120.4,0.909
+window,series,55020,60.2,120.4,1,0.909
+point,57520,120.4,0.909
+point,62520,120.4,0.909
+motion,450,12.5
+session,moving,0,no_rhythm,0,0.0,0,0
+session,all,0,no_rhythm,0,0.0,0,0
+series,0,3,3

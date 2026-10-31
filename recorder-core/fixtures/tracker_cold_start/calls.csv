@@ -284,3 +284,4 @@ imu,16966,0.0094,-0.0100,1.0042,-2.65,-0.40,0.15
 imu,16989,0.0165,-0.0100,1.0014,-0.86,-0.40,0.15
 # the sensor answers again: its window stayed open while dead, so this row covers both seconds (88 samples)
 second,16995,1,2026-09-13,08:11:34,45.1234750,-7.6542740,60.7,7.33,82.5,9,1.2,4102,4,1,21.5
+finish

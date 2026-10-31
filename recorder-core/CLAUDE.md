@@ -5,8 +5,10 @@ One C implementation of "samples in, recording lines and live values out",
 for the tracker, both apps and (as WASM) the server.
 
 ```
-include/recorder_core.h   the whole API and the sensor convention
-src/recorder_core.c       the implementation
+include/recorder_core.h   the whole API, the sensor convention and the stroke lines
+src/recorder_core.c       the recording format
+src/stroke.c, stroke.h    stroke rate as a stream (moved from packages/timing cadence.ts)
+src/recorder_replay.c     rc_replay: the uploaded files back through the stream (server)
 include/recorder_phone.h  the phones' layer: events as delivered → core calls in time order
 src/recorder_phone.c      (not in the tracker's build: library.json's srcFilter)
 test/run_fixtures.c       replays fixtures/*/calls.csv or phone.csv, diffs every stream,
@@ -16,6 +18,10 @@ test/phone_seen.c         the phone layer with its core calls routed through the
                           runner's checks (test builds only)
 test/one_implementation.sh  CI: the apps reach the core only through recorder_phone.h
                           and don't convert sensor units themselves
+test/stroke_known.c       stroke rate on synthetic signals with known answers, each
+                          also replayed (streaming = batch)
+test/gen_stroke_fixture.py  writes fixtures/stroke_paddle/calls.csv
+test/stroke_rules.c       the stroke rules at their edges (compiles stroke.c into itself)
 fixtures/                 golden cases (format: fixtures/README.md)
 Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
@@ -72,6 +78,27 @@ phase 2 decides how the server gets it.
   with an unsigned difference, never a signed or widened one
   (`fixtures/clock_wrap`).
 - **Live values are NAN until ready**, never 0 or a guess.
+- **Stroke rate reads only what the files hold:** each RC_MOTION line as
+  written (the 80 ms gate, values as printed, parsed back) and each track
+  row's ms and speed. The device feeds the stream its own lines; `rc_replay`
+  feeds it the same lines from the files, merged by ms, samples first on a
+  tie. So streaming = batch holds by construction, and every fixture checks
+  it. Never feed the stream a value the files don't carry.
+- **The rate comes from each window's mean spacing,** not the median gap:
+  index lags are time only through the mean (lessons).
+- **Where the port differs from cadence.ts on purpose** (none of these
+  occur in the 13 or 16 Sep captures, which read the same windows):
+  - a window with a hole in its samples (a gap over 0.5 s) gives no rate,
+    because lags in samples stop being time (a phone that paused read 17%
+    low and passed the neighbour check);
+  - a moving run ends after 3 s with no track row (cadence.ts let a run
+    span a 250 s gap in rows; nothing says the boat moved);
+  - a recording whose track never moves gets no gated rate (cadence.ts
+    treated "no moving stretches" as "don't gate").
+- **A metric's figures come at `rc_finish`;** a stream's per-window lines come
+  as they're decided (a window waits for the track to say whether the boat
+  was moving the whole time). Nothing is stored per window: the median is a
+  0.1 spm histogram, paddling time and rests are running sums.
 - **Phones go through `recorder_phone.h`**, never straight to `rc_imu` and
   `rc_second`: putting batched, late sensor events in order is the hard part
   of a phone adapter, so it lives here once. The apps pass the platform's own
@@ -149,6 +176,45 @@ are byte-identical. Two differences, both from the replay rather than the core:
 - A fuzz that sorts events by delivery time must keep each stream's own
   order on ties (`qsort` isn't stable): one that didn't reported 3,228
   "lost" rows that were ticks it had reordered, which no app can do.
+- **The sample rate (stroke rate, 2026-10-31).** The server took the rate
+  from the MEDIAN gap between samples, but index lags map to time through
+  the MEAN. The tracker's samples have stalls (9% of raw gaps over 25 ms,
+  the SD card holding the SPI bus): raw median 20 ms, mean 22.9 ms; uploaded
+  80 ms-gated, median 80, mean 83.9. So the 58.0 spm reference for the
+  13 Sep session (the raw 50 Hz) was 14% high, and the server's figure from
+  the uploaded file (53.1) about 5% high. Resampling the raw gyroscope onto
+  an even 50 Hz time grid gave 50.7 against the core's 50.6 (window by
+  window within 0.34%). The core's windows, rests and paddling time match
+  the server's exactly on both captures; only the rate moves. The site's
+  stroke rates drop ~5% when the server switches (phase 2b).
+- **16 Sep is two clusters, not one rate.** Its windows split between ~29
+  (not doubled) and ~68 (doubled): only 52% look alternating, so the series
+  is refused, and the median sits between the clusters, where a few windows
+  flipping a harmonic move it far (C 57.0, TypeScript 59.2, a time-grid
+  check 35.5 with 88 of 101 windows agreeing within 3%). That's the
+  single-sided calibration debt, not the port: it needs a real canoe or SUP
+  recording, and probably a per-paddle left/right decision for the session
+  figure too, as the series already has.
+- The streaming = batch check caught the known-answer test's harness writing a row
+  before a sample in the same ms (the header's call order says samples
+  first): the device path and the replay then decided windows in a
+  different order. Keep the check on every new test, not just the fixtures.
+- Known-answer signals need to test what they say: twice the rate is a
+  harmonic (it still correlates at the slower lag, so a "burst at double
+  rate" read the slower rate); copies of the stroke on every axis make any
+  axis right. Mutate the code to see each test fail once.
+- The `tester` review of the stroke port (2026-10-31) found the hole
+  regression, results that depended on how many windows could wait (rows
+  stopping) and on the runs ring (a speed flickering about 4 km/h started
+  20 runs and pushed out the one a window needed; runs too short for any
+  set are now dropped), and replay parsing tested only on the core's own
+  output. Its fuzz against cadence.ts (160 speed patterns, 60 row gaps)
+  is what showed them. Run a fuzz against the old code for any port.
+- Check a test can fail before trusting it: two of the review's cases
+  passed for the wrong reason at first (a stretch count that left the last
+  stretch out; a run that ended before the window it was meant to keep),
+  and only asserting the case's own premise ("this window must exist")
+  showed it.
 - macOS `make` compares timestamps to the second: restoring a file within the
   same second as a build leaves a stale binary. `make clean` before trusting
   a mutation test.

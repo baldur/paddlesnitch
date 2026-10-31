@@ -220,6 +220,7 @@ void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv)
 void rc_phone_finish(rc_phone *p)
 {
     while (step(p, 1)) {}
+    rc_finish(&p->core);
 }
 
 void rc_phone_live(const rc_phone *p, rc_live_values *out) { rc_live(&p->core, out); }

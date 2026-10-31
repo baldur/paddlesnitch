@@ -8,6 +8,7 @@
  * read these columns.
  */
 #include "recorder_core.h"
+#include "stroke.h"
 
 /* No fused multiply-add. Apple and Android clang on arm64 fuse a*b + c by
    default and x86 and WASM don't, which changed about one row in a few
@@ -53,6 +54,7 @@ void rc_init(rc_state *rc, const rc_config *cfg)
 {
     memset(rc, 0, sizeof(*rc));
     rc->cfg = *cfg;
+    rcs_init(&rc->stroke);
     emit_str(rc, RC_TRACK, TRACK_HEADER);
     emit_str(rc, RC_MOTION, MOTION_HEADER);
     if (rc->cfg.has & RC_HAS_RAW_MOTION) emit_str(rc, RC_MOTION_RAW, MOTION_HEADER);
@@ -81,6 +83,12 @@ void rc_imu(rc_state *rc, uint32_t t_ms,
         rc->motion_started = 1;
         rc->motion_last_ms = t_ms;
         emit(rc, RC_MOTION, line, n);
+        /* Stroke rate reads the line as written, as a replay of the file
+           will: the same values, rounded the same way. */
+        uint32_t ms;
+        float gx_, gy_, gz_;
+        if (n > 0 && rcs_parse_motion(line, (size_t)n, &ms, &gx_, &gy_, &gz_))
+            rcs_sample(&rc->stroke, &rc->cfg, ms, gx_, gy_, gz_);
     }
 }
 
@@ -151,6 +159,16 @@ void rc_second(rc_state *rc, uint32_t t_ms, const rc_gps *g, const rc_extras *x)
     if (row[p - 1] != '\n') row[p - 1] = '\n';
 
     emit(rc, RC_TRACK, row, (int)p);
+
+    uint32_t ms;
+    double speed;
+    if (rcs_parse_row(row, p, RCS_ROW_MS_COL, RCS_ROW_SPEED_COL, &ms, &speed))
+        rcs_row(&rc->stroke, &rc->cfg, ms, speed);
+}
+
+void rc_finish(rc_state *rc)
+{
+    rcs_finish(&rc->stroke, &rc->cfg);
 }
 
 void rc_live(const rc_state *rc, rc_live_values *out)

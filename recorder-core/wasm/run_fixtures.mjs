@@ -11,7 +11,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const HAS = { tracker: 0x3f, sats: 1, hdop: 2, batt_mv: 4, tx_seq: 8, imu_temp: 16, raw_motion: 32 };
-const FILES = ['track.csv', 'motion.csv', 'motion_raw.csv'];
+const FILES = ['track.csv', 'motion.csv', 'motion_raw.csv', 'stroke.csv'];
 const RC_HAS_RAW_MOTION = 32;
 
 const [wasmPath, ...dirs] = process.argv.slice(2);
@@ -24,6 +24,24 @@ const module = new WebAssembly.Module(readFileSync(wasmPath));
 // libc's stdio comes along with snprintf, but the core never writes a file:
 // these stay uncalled, so the module needs no WASI host.
 const neverCalled = (name) => () => { throw new Error(`the core called ${name}`); };
+
+// Streaming = batch through the module: the track and motion files this
+// fixture wrote, replayed as the server will, give the same stroke lines.
+function replay(track, motion) {
+  const out = [[], [], [], []];
+  const core = instantiate(out);
+  const put = (buf) => {
+    const p = core.rcw_alloc(buf.length);
+    new Uint8Array(core.memory.buffer, p, buf.length).set(buf);
+    return p;
+  };
+  const t = put(track), m = put(motion);
+  core.rcw_replay(t, track.length, m, motion.length);
+  core.rcw_free(t);
+  core.rcw_free(m);
+  if (out[0].length || out[1].length || out[2].length) throw new Error('replay wrote outside RC_STROKE');
+  return Buffer.concat(out[3]);
+}
 
 function instantiate(out) {
   let memory;
@@ -41,7 +59,7 @@ function instantiate(out) {
   });
   memory = instance.exports.memory;
   instance.exports._initialize();
-  return instance.exports;
+  return { ...instance.exports, memory };
 }
 
 // strtoul/atoi/strtod/strtof read a leading number and give 0 for none.
@@ -73,7 +91,7 @@ function firstDiff(name, got, want) {
 }
 
 function run(dir) {
-  const out = [[], [], []];
+  const out = [[], [], [], []];
   let core = null, has = 0, lineno = 0;
   for (const raw of readFileSync(join(dir, 'calls.csv'), 'latin1').split('\n')) {
     lineno++;
@@ -86,6 +104,10 @@ function run(dir) {
       core.rcw_init(has);
     } else if (!core) {
       throw new Error(`${dir}/calls.csv:${lineno}: the first call must be config`);
+    } else if (f[0] === 'finish' && f.length === 1) {
+      core.rcw_finish();
+    } else if (f[0].startsWith('expect_')) {
+      // known answers: checked by the host runner (test/run_fixtures.c)
     } else if (f[0] === 'imu' && f.length === 8) {
       core.rcw_imu(int(f[1]) >>> 0, ...f.slice(2, 8).map(num));
     } else if (f[0] === 'second' && f.length === 16) {
@@ -118,6 +140,8 @@ function run(dir) {
     const want = readFileSync(path);
     if (!got.equals(want)) problems.push(firstDiff(name, got, want));
   });
+  const stroke = replay(Buffer.concat(out[0]), Buffer.concat(out[1]));
+  if (!stroke.equals(Buffer.concat(out[3]))) problems.push('  replaying the files gives different stroke lines (streaming != batch)');
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${dir}`);
   for (const p of problems) console.error(p);
   return problems.length === 0;
