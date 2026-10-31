@@ -492,16 +492,21 @@ showKit();
 // Phones: the race buttons are the tap that lets us ask for the motion
 // sensors, and for full screen held sideways where the browser allows it.
 const phone = matchMedia('(pointer: coarse)');
-menu.querySelector('form').addEventListener('click', (e) => {
-  if (!e.target.closest('button') || !phone.matches) return;
+// A tap on a phone that may lead to a race: ask for the motion sensors, and
+// say a silent word (iOS only lets a page speak once it has spoken in answer
+// to a tap, and the starter speaks). Every walk button does this too.
+function phoneReady() {
+  if (!phone.matches) return;
   controls.enableTilt();
-  // iOS only lets a page speak once it has spoken in response to a tap, so the
-  // starter's voice needs a silent word now.
   if (window.speechSynthesis && !speechSynthesis.speaking) {
     const u = new SpeechSynthesisUtterance(' ');
     u.volume = 0;
     speechSynthesis.speak(u);
   }
+}
+menu.querySelector('form').addEventListener('click', (e) => {
+  if (!e.target.closest('button') || !phone.matches) return;
+  phoneReady();
   if (document.fullscreenEnabled && !document.fullscreenElement) {
     document.documentElement.requestFullscreen({ navigationUI: 'hide' })
       .then(() => screen.orientation?.lock?.('landscape'))
@@ -799,8 +804,17 @@ function arrive(place) {
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
+  // Race again first among the cards (it was last, alone on a row of its own on a phone).
   if (place === 'path' && label(club.plan)) {
-    spots.push({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
+    spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
+  }
+  // Racing friends, live, up front: make a race and send the link, or join one
+  // with its code. Not where there's no site to race through (offline).
+  if ((place === 'path' || place === 'club') && !account.offline) {
+    spots.unshift(
+      { friend: { name: 'Invite friends', line: 'Make a live race and send the link' }, act: () => openLive('', 'make') },
+      { friend: { name: 'Join a race', line: 'Type the code from the link you were sent' }, act: () => openLive('', 'join') },
+    );
   }
   if (place === 'pontoon' || place === 'rpontoon') {
     const rowing = place === 'rpontoon';
@@ -841,14 +855,26 @@ function arrive(place) {
     }
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = [spot.card ? 'card' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    b.className = [spot.card ? 'card' : spot.friend ? 'friend' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    if (spot.friend) {
+      b.innerHTML = `<span class="name">${spot.friend.name}</span><small>${spot.friend.line}</small>`;
+      let row = clubCards.querySelector('.friends');
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'friends';
+        clubCards.prepend(row);
+      }
+      b.addEventListener('click', () => { phoneReady(); spot.act(); });
+      row.append(b);
+      return { ...spot, el: b };
+    }
     if (spot.card) {
       const { picture = '', name, line, pin } = spot.card;
       b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
     } else b.textContent = spot.label;
     if (spot.title) b.title = b.ariaLabel = `${spot.title}, stability ${spot.label} of 9`;
     b.addEventListener('click', () => {
-      if (phone.matches) controls.enableTilt();
+      phoneReady();
       spot.act();
     });
     (spot.card ? clubCards : clubDoors).append(b);
@@ -862,7 +888,9 @@ function arrive(place) {
   // Phones held upright: races are sideways.
   if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
   // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
-  if (!menu.open) club.spots.find((x) => x.act)?.el.focus({ preventScroll: true });
+  if (!menu.open) (club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  // On an upright phone the row sits above Back, not on it.
+  clubEl.classList.toggle('backable', !!PLACES[place].up);
   if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
   if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Press both arrows, thumbs or triggers together for each stroke');
 }
@@ -1324,14 +1352,15 @@ let sendTimer = 0;
 let lobbyTimer = null; // refreshes the lobby's round-trip times
 const STATUS = { open: 'connected', connecting: 'connecting…', waiting: 'joining…', gone: 'left' };
 
-function openLive(code = '') {
+function openLive(code = '', which = code ? 'join' : 'make') {
   els.liveError.replaceChildren();
   els.liveCode.value = code;
-  chooseLive(code ? 'join' : 'make');
+  chooseLive(which);
   if (account.offline) els.liveError.textContent = 'Live races need paddlesnitch.com: open the game there.';
   else if (!account.user) els.liveError.replaceChildren('Live races need an account. ', link('Sign in', SIGN_IN + encodeURIComponent(code ? `#race=${code}` : '')));
   showLobby();
   openDialog(live);
+  if (which === 'join' && !code && account.user) els.liveCode.focus(); // (signed out, a keyboard over a box you can't use yet)
   if (code && account.user && !lobby) joinRace(code);
 }
 
@@ -2557,6 +2586,8 @@ toMenu();
 whoAmI().then((a) => {
   account = a;
   showAccount();
+  // The walk's buttons that need the site (racing friends, the leaderboards) once we know it's there.
+  if (club && !club.to) arrive(club.place);
   if (account.user) loadKit();
   // Opened from a live race's link.
   if (HASH.get('race') && state === 'menu') {

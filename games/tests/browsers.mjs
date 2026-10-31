@@ -21,7 +21,8 @@ const { chromium, webkit, firefox, devices } = require('@playwright/test');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
+  // (also under /games/, as on the site: a case standing in for the site's API loads it there)
+  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '').replace(/^\/games\//, '/');
   if (path === '/favicon.ico') return res.writeHead(204).end(); // the site's, not ours
   try {
     const file = join(ROOT, path.endsWith('/') ? `${path}index.html` : path);
@@ -83,6 +84,7 @@ const CASES = [
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
   { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
+  { name: 'webkit, desktop, race friends from the bridge', engine: webkit, ctx: desktop, club: true, friends: true, site: true },
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat' },
@@ -95,7 +97,11 @@ const CASES = [
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
+  // A case with the site: under /games/, signed in as a stand-in player (the game only asks who's signed in).
+  if (c.site) {
+    await page.route('**/api/trpc/**', (r) => r.fulfill({ json: { result: { data: r.request().url().includes('/api/trpc/me') ? { user: { id: 'test', displayName: 'Pat R.' } } : null } } }));
+  }
+  await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -111,7 +117,45 @@ async function play(c, page, errors) {
   const opened = await page.evaluate(() => ({ walk: !document.getElementById('club').hidden && !!window.kayak.club, menu: document.getElementById('menu').open }));
   if (c.club && !(opened.walk && !opened.menu)) errors.push(`expected the walk, got ${JSON.stringify(opened)}`);
   if (!c.club && opened.walk) errors.push(`the walk opened, expected ${c.raceLink ? 'the race link' : 'the menu'}`);
-  if (c.raceLink) return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}`;
+  if (c.raceLink) {
+    // …and opens the race dialog on Join, its code filled in.
+    await page.waitForFunction(() => document.getElementById('live').open, null, { timeout: 15_000 });
+    const join = await page.evaluate(() => ({ join: document.getElementById('liveJoinTab').getAttribute('aria-pressed'), code: document.getElementById('liveCode').value }));
+    if (!(join.join === 'true' && join.code === 'ABCD')) errors.push(`the race link opened ${JSON.stringify(join)}`);
+    return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}, the race dialog on Join with ${join.code}`;
+  }
+  // Offline (no site behind the game), there's nobody to race: no racing-friends buttons.
+  if (c.club && !c.site && (await page.locator('#clubCards .friend').count())) errors.push('racing-friends buttons offline');
+  // Racing friends from the bridge (signed in): Invite friends opens the race dialog to make one, Join a race at the code box.
+  if (c.friends) {
+    await page.waitForFunction(() => document.querySelectorAll('#clubCards .friend').length === 2, null, { timeout: 15_000 });
+    const opens = async (label, tab, focus) => {
+      await page.locator('#clubCards .friend', { hasText: label }).click();
+      const got = await page.evaluate((tab) => ({ open: document.getElementById('live').open, tab: document.getElementById(tab).getAttribute('aria-pressed'), focus: document.activeElement?.id }), tab);
+      if (!(got.open && got.tab === 'true' && (!focus || got.focus === focus))) errors.push(`${label} opened ${JSON.stringify(got)}`);
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.getElementById('live').open && window.kayak.club);
+    };
+    await opens('Join a race', 'liveJoinTab', 'liveCode');
+    await opens('Invite friends', 'liveMakeTab');
+    // A keyboard reaches them: Tab to Join a race, Enter.
+    // (Safari's Tab skips buttons unless you hold Option, as WebKit does here.)
+    const tab = c.engine === webkit ? 'Alt+Tab' : 'Tab';
+    for (let i = 0; i < 12 && !(await page.evaluate(() => document.activeElement?.textContent?.startsWith('Join a race'))); i++) await page.keyboard.press(tab);
+    await page.keyboard.press('Enter');
+    if (!(await page.evaluate(() => document.getElementById('live').open))) errors.push("Tab and Enter didn't reach Join a race");
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('live').open && window.kayak.club);
+    // Outside the canoe club too; not in its rooms.
+    await page.locator('#clubCards .card', { hasText: 'Canoe Club' }).click();
+    await page.waitForFunction(() => window.kayak.club?.place === 'club' && !window.kayak.club.to, null, { timeout: 60_000 });
+    if ((await page.locator('#clubCards .friend').count()) !== 2) errors.push('no racing-friends buttons outside the canoe club');
+    await opens('Join a race', 'liveJoinTab', 'liveCode');
+    await page.locator('#club button', { hasText: 'Changing room' }).first().click();
+    await page.waitForFunction(() => window.kayak.club?.place === 'changing' && !window.kayak.club.to, null, { timeout: 60_000 });
+    if (await page.locator('#clubCards .friend').count()) errors.push('racing-friends buttons in the changing room');
+    return 'race friends: on the bridge and at the canoe club, by click and by keyboard, none in the rooms';
+  }
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
     // Into the changing room, open the picker, and Back out past it (a modal
