@@ -13,7 +13,7 @@ struct RecordModelTests {
         }
     }
 
-    final class Starter {
+    @MainActor final class Starter {
         let recording = FakeRecording()
         var send: (@MainActor @Sendable (RecordingStatus) -> Void)?
         var fails = false

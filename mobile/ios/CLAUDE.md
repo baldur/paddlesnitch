@@ -155,3 +155,12 @@ isn't obvious from the code.
   (main's run 41112890501: the recording shows the slide and the snap; never
   reproduced locally). Switch tabs with `selectTab(_:)` (Waiting.swift), which
   taps again until the tab is selected, never `tab(...).tap()`.
+- CI builds with Xcode 26.6, an older Swift than a newer local Xcode, and
+  it is stricter about Sendable: passing a method of a non-Sendable test
+  fake as a `@MainActor` closure compiled here but failed on CI ("converting
+  non-Sendable function value … may introduce data races"). Make such fakes
+  `@MainActor final class`.
+- A tap on a sheet that's still sliding up lands where the control was, not
+  where it is: "Create account" tapped just as the sign-in sheet opened left
+  it on Sign in (iOS 17, CI). Turn the sheet with `showCreateAccount()`
+  (Waiting.swift), which taps again until the form is there.

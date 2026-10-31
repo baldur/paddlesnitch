@@ -107,4 +107,18 @@ extension AppTestCase {
         }
         XCTFail("the \(name) tab didn't stay selected", file: file, line: line)
     }
+
+    /// Turns the sign-in sheet to Create account, tapping again if it didn't
+    /// take. Tapped while the sheet is still sliding up, the tap lands where
+    /// the segment was, not where it is, and the sheet stays on Sign in (PR
+    /// #767's run 41225875032, iOS 17: the recording shows the segment move
+    /// about 65 points under the tap).
+    func showCreateAccount(file: StaticString = #filePath, line: UInt = #line) {
+        let name = app.textFields["Display name"]
+        for _ in 0..<3 {
+            app.buttons["Create account"].firstMatch.tap()
+            if name.appears(timeout: 3) { return }
+        }
+        XCTFail("the sheet didn't turn to Create account", file: file, line: line)
+    }
 }
