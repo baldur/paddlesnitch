@@ -8,7 +8,8 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { buildRegion, lockKey } from '@paddlesnitch/waterways/build'
 import { coverageSummary, lockCoverage } from '@paddlesnitch/waterways/coverage'
 import { featuresFromCrt } from '@paddlesnitch/waterways/ingest/crt'
-import { linksFromOverpass, networkQuery, osmElementsFromOverpass } from '@paddlesnitch/waterways/ingest/osm'
+import { linksFromOverpass, networkQuery, osmElementsFromOverpass, osmPortageWaysFromOverpass } from '@paddlesnitch/waterways/ingest/osm'
+import { osmPortages, type PublicPortage } from '@paddlesnitch/waterways/portage'
 import { crewFromGuide, guidePaths, locksFromThamesPage } from '@paddlesnitch/waterways/ingest/thames'
 import { cumulative, project, simplify, slice } from '@paddlesnitch/waterways/line'
 import { reverseRoute, route, snap } from '@paddlesnitch/waterways/network'
@@ -245,6 +246,30 @@ describe('region build and coverage', () => {
     expect(row.known.crewAccess).toBe(true)
     expect(row.known.parking).toBe(true)
     expect(row.sources).toEqual(expect.arrayContaining(['ea-thames-locks', 'crt', 'osm']))
+  })
+
+  it('counts a paddler’s landings at a lock as its portage side, take-out, put-in and carry, credited to them', () => {
+    const along = featuresAlong(link.line, [lock('ea', 'ea-thames-locks', [51.5, -0.99])])
+    const landings: PublicPortage = {
+      id: 'p1', name: 'Ann', featureId: 'ea', at: [51.5, -0.99], landings: [[51.5003, -0.9915], [51.5003, -0.9885]],
+      licence: 'CC0-1.0', createdAt: AT, updatedAt: AT,
+    }
+    const [row] = lockCoverage(along, [], [landings])
+    expect(row.known).toMatchObject({ portageSide: true, takeOut: true, putIn: true, carry: true })
+    expect(row.sources).toContain('contribution')
+    expect(lockCoverage(along, [], [{ ...landings, hidden: true }])[0].known.portageSide).toBe(false)
+  })
+
+  it('counts a portage path mapped in OpenStreetMap at a lock, credited to OpenStreetMap', () => {
+    const along = featuresAlong(link.line, [lock('ea', 'ea-thames-locks', [51.5, -0.99])])
+    const path = osmPortageWaysFromOverpass([
+      { type: 'way', id: 7, nodes: [1, 2, 3], geometry: [{ lat: 51.5003, lon: -0.9915 }, { lat: 51.5004, lon: -0.99 }, { lat: 51.5003, lon: -0.9885 }], tags: { portage: 'yes' } },
+    ])
+    expect(path).toEqual([{ id: 'way/7', at: [51.5004, -0.99], tags: { portage: 'yes' }, ends: [[51.5003, -0.9915], [51.5003, -0.9885]] }])
+    const [row] = lockCoverage(along, path, osmPortages(path))
+    expect(row.known).toMatchObject({ portageSide: true, takeOut: true, putIn: true, carry: true })
+    expect(row.sources).toContain('osm')
+    expect(row.sources).not.toContain('contribution')
   })
 
   it('reads OSM points at a node or at a way’s centre', () => {

@@ -1,6 +1,8 @@
 // Every source the planner draws on, with its licence and the credit line we
-// show on screen and in print. Restrictions must be explicit to keep a source
-// out; with none stated we use it and credit it (docs/features/river-planner.md).
+// show on screen and in print. Only open licences may be copied. A source with
+// no licence or all rights reserved is for finding and checking facts, not for
+// copying (owner, 2026-10-31; the "no licence stated" entries below predate
+// that and await a decision: docs/features/river-planner.md, "Data sources").
 import type { SourceId } from './types'
 
 export type SourceInfo = {

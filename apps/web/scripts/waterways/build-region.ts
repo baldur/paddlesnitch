@@ -3,7 +3,8 @@
 //
 //   pnpm --filter web waterways [region] [--refresh]
 //
-// Fetches OSM (Overpass), Canal & River Trust layers and the EA Thames pages,
+// Fetches OSM (Overpass), Canal & River Trust layers, the EA Thames pages and
+// paddlers' CC0 portage contributions (our own public OpenPortage file),
 // caching every raw response under apps/web/.cache/waterways/<region>/ so a
 // rebuild doesn't hammer anyone (--refresh refetches). Writes
 //   packages/waterways/data/<region>.json           the dataset
@@ -15,7 +16,8 @@ import { featuresAlong } from '@paddlesnitch/waterways/along'
 import { buildRegion } from '@paddlesnitch/waterways/build'
 import { coverageSummary, lockCoverage, LOCK_FACTS, type LockCoverage } from '@paddlesnitch/waterways/coverage'
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
-import { featureQuery, linksFromOverpass, networkQuery, osmElementsFromOverpass, OVERPASS_URLS } from '@paddlesnitch/waterways/ingest/osm'
+import { featureQuery, linksFromOverpass, networkQuery, osmElementsFromOverpass, osmPortageWaysFromOverpass, OVERPASS_URLS, portageQuery } from '@paddlesnitch/waterways/ingest/osm'
+import { osmPortages, type PublicPortage } from '@paddlesnitch/waterways/portage'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
@@ -23,6 +25,7 @@ import { SOURCES } from '@paddlesnitch/waterways/sources'
 import type { CrewDetail, Feature } from '@paddlesnitch/waterways/types'
 
 const UA = 'paddlesnitch-river-planner/0.1 (+https://paddlesnitch.com)'
+const OPENPORTAGE_URL = 'https://paddlesnitch.com/plan/data/latest/openportage'
 const args = process.argv.slice(2)
 const regionId = args.find(a => !a.startsWith('--')) ?? 'dw'
 const refresh = args.includes('--refresh')
@@ -81,8 +84,12 @@ async function main() {
   const links = linksFromOverpass(JSON.parse(net.body).elements)
     .filter(l => navigable.has(l.name) || / cut$/i.test(l.name) || l.name === '' || /lock/i.test(l.name))
   const pts = await cached('osm-features.json', () => overpass(featureQuery(region.bbox)))
-  const osm = osmElementsFromOverpass(JSON.parse(pts.body).elements)
-  console.log(`  OSM: ${links.length} network links, ${osm.length} points`)
+  // Portage paths again with their geometry, so they keep both landings.
+  const paths = await cached('osm-portages.json', () => overpass(portageQuery(region.bbox)))
+  const pathWays = osmPortageWaysFromOverpass(JSON.parse(paths.body).elements)
+  const withEnds = new Set(pathWays.map(w => w.id))
+  const osm = [...osmElementsFromOverpass(JSON.parse(pts.body).elements).filter(o => !withEnds.has(o.id)), ...pathWays]
+  console.log(`  OSM: ${links.length} network links, ${osm.length} points, ${pathWays.length} portage paths`)
 
   // Canal & River Trust layers.
   const features: Feature[] = []
@@ -112,16 +119,21 @@ async function main() {
   }
   console.log(`  EA: ${eaLocks.length} Thames locks, ${Object.keys(crewByLock).length} site guides`)
 
+  // Paddlers' landings, from the public CC0 file anyone can download.
+  const shared = await cached('openportage.json', () => get(OPENPORTAGE_URL))
+  const contributions = (JSON.parse(shared.body).portages ?? []) as PublicPortage[]
+  console.log(`  paddlesnitch: ${contributions.length} portage contributions`)
+
   const dataset = buildRegion({ region: region.id, bbox: region.bbox, builtAt: now, links, features, osm, crewByLock })
   await fs.mkdir(OUT, { recursive: true })
   await fs.writeFile(path.join(OUT, `${region.id}.json`), JSON.stringify(dataset))
   console.log(`  wrote ${region.id}.json — ${dataset.features.length} features, ${dataset.osm.length} OSM points`)
 
-  await fs.writeFile(path.join(OUT, `${region.id}-coverage.md`), report(dataset))
+  await fs.writeFile(path.join(OUT, `${region.id}-coverage.md`), report(dataset, [...contributions, ...osmPortages(dataset.osm)]))
   console.log(`  wrote ${region.id}-coverage.md`)
 }
 
-function report(dataset: ReturnType<typeof buildRegion>): string {
+function report(dataset: ReturnType<typeof buildRegion>, portages: PublicPortage[]): string {
   const lines: string[] = [
     `# Coverage: ${region.name}`,
     '',
@@ -137,7 +149,7 @@ function report(dataset: ReturnType<typeof buildRegion>): string {
       lines.push('**No route found.** The network is broken somewhere between start and finish.', '')
     } else {
       const along = featuresAlong(r.line, dataset.features)
-      const rows = lockCoverage(along, dataset.osm)
+      const rows = lockCoverage(along, dataset.osm, portages)
       const km = r.lengthM / 1000
       lines.push(
         `| | We find | Reference |`,
