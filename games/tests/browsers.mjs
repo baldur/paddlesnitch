@@ -88,7 +88,7 @@ const CASES = [
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.club ? '&club' : ''}`);
+  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.club ? '' : '&menu'}`); // the walk opens unless #menu
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -102,13 +102,17 @@ async function play(c, page, errors) {
   if (c.expect && backend !== c.expect) errors.push(`drew with ${backend}, expected ${c.expect}`);
   // The walk: tap the club's label on the bridge, then the water, then push off (practice, with no race picked yet).
   if (c.club) {
-    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+    // Into the changing room, open the picker, and Back out past it (a modal
+    // picker once blocked every button in the room).
+    const steps = c.outing ? [[c.outing, null]] : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
-      const spot = page.locator('#club button', { hasText: label }).first();
+      const spot = label.startsWith('#') ? page.locator(label) : page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
       await (c.touch ? spot.tap() : spot.click());
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
+      if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
+    if (!c.outing && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
   }
   // The practice time trial on your own, or a real river with the pack: there
   // the horn waits for you on the line, so the boat is put there.

@@ -76,7 +76,7 @@ try {
   const bob = await player(browser, 'Bob Guest');
 
   // Ann makes a race on the practice river.
-  await ann.page.goto(`${BASE}/games/kayak/#debug`);
+  await ann.page.goto(`${BASE}/games/kayak/#debug&menu`);
   await ann.page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   await ann.page.waitForFunction(() => document.getElementById('account').textContent.includes('Signed in'), null, { timeout: 10_000 });
   // Ann makes her paddler: a curvy body type, a ponytail, the darkest skin tone.
@@ -154,14 +154,14 @@ try {
     check(posted.result?.data?.best === true, 'a practice time went on the leaderboard');
     // Ann's paddler is on her account: a device that hasn't seen it gets it.
     await kayak(ann.page, () => localStorage.clear());
-    await ann.page.goto(`${BASE}/games/kayak/#debug`);
+    await ann.page.goto(`${BASE}/games/kayak/#debug&menu`);
     await ann.page.waitForFunction((skin) => document.querySelector('#menu input[name="skin"]:checked')?.value === skin
       && document.querySelector('#menu input[name="body"]:checked')?.value === 'curvy'
       && document.querySelector('#menu input[name="hair"]:checked')?.value === 'ponytail', annKit.skin, { timeout: 15_000 });
     check(true, "Ann's paddler came back from her account");
 
     const fresh = await (await browser.newContext()).newPage();
-    await fresh.goto(`${BASE}/games/kayak/`);
+    await fresh.goto(`${BASE}/games/kayak/#menu`);
     await toRaces(fresh);
     await fresh.waitForFunction(() => !document.getElementById('boards').hidden, null, { timeout: 15_000 });
     await fresh.click('#boards');

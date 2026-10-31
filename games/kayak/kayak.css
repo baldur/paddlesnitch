@@ -476,7 +476,8 @@ summary { cursor: pointer; }
 #clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
 #clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
 /* In the club the editors and the plan are a sheet at the side, the room still in view. */
-#menu.sheet { margin: auto max(16px, env(safe-area-inset-right)) auto auto; width: min(26rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+/* Opened with show(), not showModal(), so the scene's buttons work beside it: placed by hand, over the walk's overlay. */
+#menu.sheet { position: fixed; inset: 50% max(16px, env(safe-area-inset-right)) auto auto; transform: translateY(-50%); margin: 0; z-index: 6; width: min(26rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
 #menu.sheet::backdrop { background: transparent; }
 #menu.sheet > h2, #menu.sheet .me, #menu.sheet .rotate-hint { display: none; }
 /* In the changing room your paddler stands full size beside the picker, so the picker drops its picture. */

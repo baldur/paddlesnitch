@@ -63,8 +63,10 @@ const OUTING_MODES = Object.fromEntries(Object.entries(OUTINGS).map(([key, o]) =
 const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
-// #club: the walk to the club before a race (prototype; club.js).
-const CLUB = HASH.has('club');
+// The walk to the club (club.js) is what opens (owner 2026-10-31). #menu opens
+// the menu instead, and a #race= link goes straight to its live race. No
+// graphics, no walk: the menu says why.
+let walking = !HASH.has('menu') && !HASH.has('race');
 
 // The computer rivals' boat and club colours (the first was the player's,
 // before you chose your own).
@@ -99,7 +101,7 @@ let state = 'menu'; // 'menu' | 'start' (on the line) | 'racing' | 'paused' | 'f
 // Analytics (metrics.js, sent by ../shared/analytics.js): the visit, the play
 // under way, and the paddler last reported.
 const clock = () => performance.now() / 1000;
-const visit = createSession(clock(), HASH.has('club') ? 'walk' : 'menu');
+const visit = createSession(clock(), walking ? 'walk' : 'menu');
 let play = null;
 let kitSent = null;
 const track = (e) => { if (e) window.gameMetrics?.track(e.event, e.props); };
@@ -326,7 +328,7 @@ function toMenu() {
   const t = training();
   if (t.races) lines.push(`Form this session: +${(form() * 100).toFixed(1)}% after ${t.races} race${t.races > 1 ? 's' : ''}`);
   els.best.textContent = lines.filter(Boolean).join(' · ');
-  if (CLUB) return enterClub();
+  if (walking) return enterClub();
   showStep(kitChosen ? 'home' : 'paddler');
   openDialog(menu);
 }
@@ -557,7 +559,7 @@ addEventListener('keydown', (e) => {
 
 function handleGamepad(pressed) {
   if (pressed.size) visit.inputs.add('pad');
-  if (club && !menu.open && !live.open) return clubGamepad(pressed);
+  if (club && !live.open && (!menu.open || pressed.has(BUTTON.B))) return clubGamepad(pressed);
   if (race?.outing && state === 'racing') {
     if (pressed.has(BUTTON.UP) || pressed.has(7)) lever(1);
     if (pressed.has(BUTTON.DOWN) || pressed.has(6)) lever(-1);
@@ -659,7 +661,9 @@ const back = () => club && PLACES[club.place].up && go(PLACES[club.place].up);
 clubBack.addEventListener('click', back);
 clubStart.addEventListener('click', () => go(START));
 addEventListener('keydown', (e) => {
-  if (!club || menu.open || live.open || state !== 'menu' || (e.code !== 'Escape' && e.code !== 'Backspace')) return;
+  if (!club || live.open || state !== 'menu') return;
+  // With a room's picker open, Esc goes back (Backspace is left to the picker's fields).
+  if (menu.open ? e.code !== 'Escape' : e.code !== 'Escape' && e.code !== 'Backspace') return;
   e.preventDefault();
   back();
 });
@@ -691,6 +695,7 @@ function leaveClub() {
 function go(to) {
   if (to === 'rowing') return note('Red boards are out: the river is too rough for rowers today. The canoe club is open.');
   if (!club || club.to || !PLACES[to] || to === club.place) return;
+  closeSheet();
   const through = !!PLACES[to].inside !== !!PLACES[club.place].inside;
   club.from = clubCamera();
   club.to = to;
@@ -792,10 +797,14 @@ function note(text) {
   clubNote.textContent = text;
   clubNote.hidden = false;
 }
+// A room's picker, beside the scene: not modal, so Back, Start over and the
+// room's own labels still work while it's open (a modal dialog blocks them).
 function sheet(step) {
   showStep(step);
-  openDialog(menu);
+  menu.returnValue = '';
+  if (!menu.open) menu.show();
 }
+const closeSheet = () => { if (club && menu.open) menu.close(''); };
 function pickBoat(id) {
   kit = cleanKit({ ...kit, boat: id }, kit);
   kitChosen = true;
@@ -2054,4 +2063,11 @@ try {
   els.nogpu.hidden = false;
   els.nogpu.textContent = `${err.message} Kayak needs WebGPU or WebGL 2: try a current version of Chrome, Edge, Safari or Firefox.`;
   for (const b of menu.querySelectorAll('form button')) b.disabled = true;
+  if (walking) {
+    walking = false;
+    visit.from = 'menu';
+    leaveClub();
+    showStep('home');
+    openDialog(menu);
+  }
 }
