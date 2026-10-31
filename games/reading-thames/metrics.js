@@ -50,6 +50,12 @@ export function kitEvent(kit, last = null) {
   return key === last ? null : { event: 'game_kit', props, key };
 }
 
+// The walk's places as reported: the canoe club's each by name, the rowing
+// club's rooms as 'rowing' and its erg room as 'erg', so every place visited
+// fits the endpoint's 60 characters.
+const ROWING = new Set(['rclub', 'rchanging', 'rboathouse', 'rclubhouse', 'rpontoon']);
+export const placeTag = (place) => (ROWING.has(place) ? 'rowing' : place);
+
 // A visit: time is counted only while the page is in view.
 export function createSession(now, from) {
   return { from, since: now, visible: true, secs: 0, plays: 0, places: new Set(), inputs: new Set() };
@@ -66,7 +72,7 @@ export function sessionEvent(session, now, gpu = '') {
   setVisible(session, session.visible, now);
   if (session.secs < 1 && !session.plays) return null;
   const props = { secs: round(session.secs), plays: String(session.plays), from: session.from };
-  if (session.places.size) props.places = [...session.places].join(',');
+  if (session.places.size) props.places = [...new Set([...session.places].map(placeTag))].join(',');
   if (session.inputs.size) props.input = [...session.inputs].sort().join(',');
   if (gpu) props.gpu = gpu;
   session.secs = 0;

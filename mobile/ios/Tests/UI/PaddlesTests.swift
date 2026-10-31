@@ -33,7 +33,7 @@ final class PaddlesTests: AppTestCase {
     }
 
     func testYouSignedOutOffersToSignIn() {
-        tab("You").tap()
+        selectTab("You")
         XCTAssertTrue(app.buttons["Privacy policy"].appears(timeout: 10))
         XCTAssertTrue(app.buttons["Sign in"].exists)
         XCTAssertFalse(app.buttons["Account settings"].exists, "account pages need an account")
@@ -69,7 +69,7 @@ final class PaddlesTests: AppTestCase {
     }
 
     func testYouPassesTheAccessibilityAudit() throws {
-        tab("You").tap()
+        selectTab("You")
         XCTAssertTrue(app.buttons["Privacy policy"].appears(timeout: 10))
         try audit()
     }

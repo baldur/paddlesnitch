@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
       { source: '/att/tos/:path*', destination: '/terms/:path*', permanent: true },
       // The kayak game, served from S3 under /games/* (see infra). Not permanent:
       // /game may become a page listing more games.
-      { source: '/game', destination: '/games/kayak/', permanent: false },
+      { source: '/game', destination: '/games/reading-thames/', permanent: false },
     ]
   },
 };

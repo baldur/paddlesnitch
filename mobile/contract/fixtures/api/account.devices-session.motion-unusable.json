@@ -20,6 +20,7 @@
   },
   "cadence": {
     "available": false,
+    "code": "no_rhythm",
     "reason": "No stretch showed a clear, repeating stroke. It may have been still, or somewhere the stroke doesn't reach it.",
     "sampleRateHz": 10,
     "rows": 90,

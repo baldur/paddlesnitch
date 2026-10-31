@@ -5,7 +5,7 @@ import XCTest
 final class TrackersTests: AppTestCase {
     private func openTrackers() {
         signInAndWait()
-        tab("You").tap()
+        selectTab("You")
         let row = app.buttons["Devices"]
         XCTAssertTrue(row.appears(timeout: 10))
         row.tap()

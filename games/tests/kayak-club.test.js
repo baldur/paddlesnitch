@@ -3,25 +3,54 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate } from '../kayak/course.js';
-import { waterMap } from '../kayak/water.js';
-import { groundAt, bridgeBay, BRIDGE } from '../kayak/world.js';
-import { PLACES, START, DOOR_LABELS, ROOMS, STANDING, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../kayak/club.js';
+import { courseFromFile, locate } from '../reading-thames/course.js';
+import { waterMap } from '../reading-thames/water.js';
+import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
+import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
-const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
+const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
 
-test('every door leads somewhere: another place, or the rowing club (closed: red boards)', () => {
+test('every door leads to another place; both clubs open off the bridge, each with its rooms and a way to the water', () => {
   for (const [name, place] of Object.entries(PLACES)) {
     assert.ok(place.label, name);
     for (const to of place.doors) {
-      assert.ok(PLACES[to] || to === 'rowing', `${name} -> ${to}`);
+      assert.ok(PLACES[to], `${name} -> ${to}`);
       assert.ok(DOOR_LABELS[to], `${to} has a label`);
     }
   }
-  // You can always get back out to the pontoon, and from every room back to the club.
+  assert.deepEqual(PLACES.path.doors, ['club', 'rclub']);
   assert.ok(PLACES.club.doors.includes('pontoon'));
-  for (const room of Object.keys(ROOMS)) assert.deepEqual(PLACES[room].doors, ['club']);
+  assert.ok(PLACES.rclub.doors.includes('rpontoon') && PLACES.rclub.doors.includes('erg'));
+  // Every room's one door is back out to its own club.
+  for (const [room, r] of Object.entries(ROOMS)) assert.deepEqual(PLACES[room].doors, [r.club === 'rowing' ? 'rclub' : 'club']);
+});
+
+test("the rowing club's shots: from its land side, the landing stage at its water, the erg room with your erg in front of you", async () => {
+  const course = await loop();
+  const shots = clubShots(course);
+  const land = waterMap((await data('reading')).water);
+  const { rclub, rpontoon, erg } = shots.places;
+  assert.ok(!land.inside(rclub.eye[0], rclub.eye[2]), 'on land');
+  const r = course.scenery.buildings.find((b) => b.style === 'rowing-club');
+  const [cx, cz] = r.shape.reduce((a, p) => [a[0] + p[0] / r.shape.length, a[1] + p[1] / r.shape.length], [0, 0]);
+  assert.ok(Math.hypot(rclub.eye[0] - cx, rclub.eye[2] - cz) < 40, 'at the rowing club');
+  assert.ok(Math.hypot(rpontoon.eye[0] - cx, rpontoon.eye[2] - cz) < 60, 'its landing stage');
+  assert.ok(Math.abs(rpontoon.eye[1] - 1.6) < 1e-9);
+  // Underground, like the canoe club's rooms, and apart from them.
+  for (const name of ['rchanging', 'rboathouse', 'rclubhouse', 'erg']) {
+    const at = shots.roomAt(name);
+    assert.ok(at[1] < -50, `${name} is under ground`);
+    assert.ok(Math.hypot(at[0] - cx, at[2] - cz) < 200, `${name} is under the rowing club`);
+  }
+  // Your erg is in front of you, the rest of the room beyond it.
+  const mine = shots.ergs[MY_ERG];
+  const toErg = Math.hypot(mine[0] - erg.eye[0], mine[2] - erg.eye[2]);
+  assert.ok(toErg > 2 && toErg < 5, `${toErg} m to your erg`);
+  // The sculls (8.2 m) fit the boathouse, each with its label.
+  assert.ok(ROOMS.rboathouse.width > 8.2 + 1);
+  assert.equal(shots.sculls.length, 3);
+  assert.equal(shots.scullLabels.length, 3);
 });
 
 test('Back always leads to the bridge: from every place, one level up at a time, through a door that place has', () => {
@@ -100,7 +129,7 @@ test('inside, you stand in a closed room under the ground, so the sky and river 
   for (const p of shots.rack) assert.ok(Math.abs(p[0] - o[0]) + 2.6 <= ROOMS.boathouse.width / 2, 'a 5.2 m boat fits on the rack');
 });
 
-test('the rooms and the red boards are a small mesh with no NaN', async () => {
+test('the rooms under both clubs, with the mural, are a small mesh with no NaN', async () => {
   const { vertices, count } = clubMesh(clubShots(await loop()));
   assert.ok(vertices.every(Number.isFinite));
   assert.ok(count / 3 < 3000, `${count / 3} triangles`);
@@ -157,4 +186,21 @@ test('your paddler standing in the changing room has legs to the floor; the swan
   assert.ok(Math.abs(shots.changingStand[1] + low - floor) < 0.01, 'shoes on the floor');
   assert.ok(swanLegsMesh().vertices.every(Number.isFinite));
   assert.ok(bridgeSwanMesh().vertices.every(Number.isFinite));
+});
+
+test("Caversham Bridge with its bay, balustrade and lamps stays inside its own share of the river's triangles", async () => {
+  const course = await loop();
+  const bridge = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge');
+  const n = bridgeTriangles(course.scenery.river, bridge);
+  assert.ok(n < 9000, `${n} triangles`);
+});
+
+test("a glide blends a shot's wider view into the next, and adds none between two ordinary shots", async () => {
+  const shots = clubShots(await loop());
+  const bridge = shots.places.path;
+  assert.equal(bridge.wide, 100);
+  const club = shots.places.club;
+  assert.equal(glide(bridge, club, 0.5).wide, (100 + WIDE) / 2);
+  assert.equal(glide(bridge, club, 1).wide, WIDE);
+  assert.ok(!('wide' in glide(club, shots.places.pontoon, 0.5)));
 });

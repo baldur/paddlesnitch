@@ -81,5 +81,30 @@ int main(void)
     check(set.paddling_ms == 210000, "paddling time merges overlapping windows");
     check((set.strokes_x + 300000) / 600000 == 170, "strokes follow each window's rate over its share");
 
+    /* not_moving: no run reached the moving set's 90 rows. 89 rows is
+       not_moving; 90 is a run, so with no stroke in it, no_rhythm. */
+    static rc_stroke st;
+    for (uint32_t rows = 89; rows <= 90; rows++) {
+        rcs_init(&st);
+        g_len = 0;
+        for (uint32_t ms = 0; ms <= 120000; ms += 80) rcs_sample(&st, &cfg, ms, 0, 0, 0);
+        for (uint32_t i = 0; i < rows; i++) rcs_row(&st, &cfg, 1000 + i * 1000, 8.0);
+        rcs_row(&st, &cfg, 1000 + rows * 1000, 0.0);
+        rcs_finish(&st, &cfg);
+        g_buf[g_len] = 0;
+        if (rows == 89) check(strstr(g_buf, "session,moving,0,not_moving,") != 0, "89 rows moving: not_moving");
+        else            check(strstr(g_buf, "session,moving,0,no_rhythm,") != 0, "90 rows moving, no stroke: no_rhythm");
+    }
+    /* The longest run counts, not the last: 95 rows, a stop, then 25. */
+    rcs_init(&st);
+    g_len = 0;
+    for (uint32_t ms = 0; ms <= 200000; ms += 80) rcs_sample(&st, &cfg, ms, 0, 0, 0);
+    for (uint32_t i = 0; i < 95; i++) rcs_row(&st, &cfg, 1000 + i * 1000, 8.0);
+    rcs_row(&st, &cfg, 96000, 0.0);
+    for (uint32_t i = 0; i < 25; i++) rcs_row(&st, &cfg, 97000 + i * 1000, 8.0);
+    rcs_finish(&st, &cfg);
+    g_buf[g_len] = 0;
+    check(strstr(g_buf, "session,moving,0,no_rhythm,") != 0, "a long run, then a short one: the long one counts (no_rhythm)");
+
     return g_fails ? 1 : 0;
 }

@@ -1,6 +1,6 @@
 # Game courses from 360 video
 
-✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/kayak/`). Since 2026-10-30 Reading Thames is the **world** every course is raced on: the Time Trial Loop, **Hasler Div 7-9**, **Hasler Div 1-6** (with a portage at Mapledurham) and **Practice** (see [One river, many courses](#one-river-many-courses)).
+✅ Shipped 2026-10-24: **Reading Thames**, Christchurch Bridge to Mapledurham, and the **Time Trial Loop**, the canoe club's loop round St Mary's and Fry's islands, in the kayak game (`/games/reading-thames/`). Since 2026-10-30 Reading Thames is the **world** every course is raced on: the Time Trial Loop, **Hasler Div 7-9**, **Hasler Div 1-6** (with a portage at Mapledurham) and **Practice** (see [One river, many courses](#one-river-many-courses)).
 
 A toolchain that turns paddling videos with GPS into a real river in the kayak game. It's built so that more courses are the same few commands. The longer-term aim is to let other people submit video, so the toolchain doubles as a way of surveying rivers: what's on each bank, where boats moor, where the locks and slipways are.
 
@@ -18,7 +18,7 @@ All steps live in `apps/web/scripts/courses/`, run with `pnpm --filter web <step
 | 2. River | `course:river <id>` | `data/<id>/course.json`, the tracks, OSM (Overpass, cached) | `.cache/courses/<id>/river.json` (centreline every 10 m, bank distances, everything mapped beside it) + `river.svg` map |
 | 3. Frames | `course:frames <id> [--step 50]` | tracks, river line, the videos | a 360 frame and ahead/left/right/behind views every 50 m of every pass, `frames.json`, contact sheets |
 | 4. Observations | by hand (for now) | the frames | `data/<id>/observations.json` (committed) |
-| 5. Course file | `course:build <id>` | river + observations | `games/kayak/courses/<id>.json` (committed, shipped with the game) |
+| 5. Course file | `course:build <id>` | river + observations | `games/reading-thames/courses/<id>.json` (committed, shipped with the game) |
 | 6. Review | `course:compare <id>` | course file + frames | `.cache/courses/<id>/compare.html`: the game's view next to the camera every 250 m |
 
 ### 1. Telemetry (`ingest.ts`, parser `packages/timing/src/gpmf.ts`)
@@ -137,7 +137,7 @@ It's a time trial with **interval starts**: boats wait in two columns by the ban
 
 ## One river, many courses
 
-Owner's choice, 2026-10-30: the courses differ, the river doesn't. `reading.json` (built by `course:build reading`) is the world. Every other course's `course.json` says `"world": "reading"` and gives only its route and what goes along it, and `course:route <id>` writes `games/kayak/courses/<id>.json` as the world's file with that route (and `world: 'reading'`, which the game uses to build the river once for all of them). The game's `kayak-courses.test.js` checks the scenery is identical in every file.
+Owner's choice, 2026-10-30: the courses differ, the river doesn't. `reading.json` (built by `course:build reading`) is the world. Every other course's `course.json` says `"world": "reading"` and gives only its route and what goes along it, and `course:route <id>` writes `games/reading-thames/courses/<id>.json` as the world's file with that route (and `world: 'reading'`, which the game uses to build the river once for all of them). The game's `kayak-courses.test.js` checks the scenery is identical in every file.
 
 - **Hasler Div 7-9** (7.9 km): from the canoe club up the main channel, keeping right of Appletree Eyot, round its upstream end and down its back channel (a gate there), down past the club, keep right of Piper's Island (the south arch), down the right of Fry's Island, round its end before Christchurch Bridge, up its back channel, keep right of Piper's going up (its narrow north channel, by the Reading University boathouses: a gate and a buoy), and home to the club. Appletree Eyot is the lower of the two islands (Poplar Island is just above it).
 - **Hasler Div 1-6** (12.6 km): up to Mapledurham, keeping to the main channel; land on the beach on the left (the owner's point 51.48366, -1.03732), run about 160 m down the bank path, put in from a little beach behind the island (51.48245, -1.03733), about 10 m up from the sandbag wall (owner, 2026-10-31: the wall blocks the water at the old put-in), down its back channel, then as Div 7-9 from the club. Raced against a quicker pack (`DIVISION_3`).
@@ -152,7 +152,7 @@ The start and the finish are both at the club: `course:route` puts the start on 
 3. Run `course:river <id>` and look at `river.svg`.
 4. Run `course:frames <id>`. Check the camera direction first: is the bow ahead in the `-ahead` views? Then go through the left/right contact sheets.
 5. Write `observations.json` from what the frames show.
-6. Run `course:build <id>`, then add a mode to `MODES` in `games/kayak/main.js` and a menu button in `index.html`. Add the course to the browser cases in `games/tests/browsers.mjs`.
+6. Run `course:build <id>`, then add a mode to `MODES` in `games/reading-thames/main.js` and a menu button in `index.html`. Add the course to the browser cases in `games/tests/browsers.mjs`.
 7. Run `course:compare <id>`, tune, and repeat.
 
 ## Later: submissions

@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../kayak/boats.js';
-import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery } from '../kayak/kit.js';
-import { HULLS, createBoat } from '../kayak/sim.js';
-import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../kayak/meshes.js';
-import { paddlerSvg } from '../kayak/picture.js';
+import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../reading-thames/boats.js';
+import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery, withOldScull, moveOldScull, boardHull, isScullHull, scullHullName } from '../reading-thames/kit.js';
+import { SCULLS, SCULL_COLOURS } from '../reading-thames/scull.js';
+import { HULLS, createBoat } from '../reading-thames/sim.js';
+import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../reading-thames/meshes.js';
+import { paddlerSvg } from '../reading-thames/picture.js';
 
 test('nine boats, one for each stability from 1 (tippy) to 9 (stable)', () => {
   assert.deepEqual(BOATS.map((b) => b.stability), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -144,4 +145,58 @@ test('the look reaches the meshes: short sleeves or long', () => {
   assert.deepEqual(livery(cleanKit({ hullColour: '#000000' })).hull, [0, 0, 0]);
   assert.ok(limbMesh(l.top, { skin: l.skin, sleeve: 0.4 }).count > limbMesh(l.top).count);
   assert.notEqual(kitKey(kit), kitKey({ ...kit, deck: '#000000' }));
+});
+
+test('your scull and its colour are in the kit, read back safely, so they follow you on the account', () => {
+  const kit = cleanKit({ scull: 'fine', scullColour: SCULL_COLOURS[3] });
+  assert.equal(kit.scull, 'fine');
+  assert.equal(kit.scullColour, SCULL_COLOURS[3]);
+  const bad = cleanKit({ scull: 'eight', scullColour: '#123456' });
+  assert.equal(bad.scull, 'club', 'an unknown scull: the club single');
+  assert.equal(bad.scullColour, SCULL_COLOURS[0], 'a colour not in the set: the first');
+  assert.ok(SCULLS.some((b) => b.id === cleanKit({}).scull));
+  assert.notEqual(kitKey(kit), kitKey({ ...kit, scull: 'trainer' }));
+});
+
+test('a scull picked on this device before it went in the kit carries over, unless the saved kit has one', () => {
+  const kit = cleanKit({});
+  assert.deepEqual(withOldScull(kit, { body: 'slim' }, { scull: 'fine', colour: SCULL_COLOURS[2] }), { ...kit, scull: 'fine', scullColour: SCULL_COLOURS[2] });
+  assert.equal(withOldScull(kit, { scull: 'trainer' }, { scull: 'fine' }), kit, 'the saved one wins');
+  assert.equal(withOldScull(kit, null, null), kit);
+  assert.equal(withOldScull(kit, null, { scull: 'canoe', colour: 'red' }).scull, 'club');
+});
+
+test("a leaderboard time records your kayak, or in a row your scull, and the board names it", () => {
+  const kit = cleanKit({ boat: 'kirton-typhoon', scull: 'fine' });
+  assert.equal(boardHull(kit, false), 'kirton-typhoon');
+  assert.equal(boardHull(kit, true), 'scull-fine');
+  assert.ok(isScullHull('scull-club') && !isScullHull('club'), "the kayak's old 'club' hull isn't a scull");
+  assert.equal(scullHullName('scull-trainer'), 'Trainer single');
+});
+
+test('an old scull kept on the device moves into the saved kit once, and a corrupt one is just dropped', () => {
+  const store = (init) => {
+    const data = new Map(Object.entries(init));
+    return { getItem: (k) => (data.has(k) ? data.get(k) : null), setItem: (k, v) => data.set(k, v), removeItem: (k) => data.delete(k), data };
+  };
+  const keys = { rowKey: 'row', kitKey: 'kit' };
+  const saved = { body: 'slim', hair: 'bun' }; // as saved before sculls were in the kit
+  const s = store({ kit: JSON.stringify(saved), row: JSON.stringify({ scull: 'fine', colour: SCULL_COLOURS[2] }) });
+  const kit = moveOldScull(s, cleanKit(saved), saved, keys);
+  assert.equal(kit.scull, 'fine');
+  assert.equal(JSON.parse(s.data.get('kit')).scull, 'fine', 'saved, so the next load has it');
+  assert.ok(!s.data.has('row'), 'the old value gone');
+  assert.equal(moveOldScull(s, kit, JSON.parse(s.data.get('kit')), keys), kit, 'a second load does nothing');
+  // A first visit (no saved kit yet) still takes it.
+  const fresh = store({ row: JSON.stringify({ scull: 'trainer' }) });
+  assert.equal(moveOldScull(fresh, cleanKit({}), null, keys).scull, 'trainer');
+  // Corrupt: dropped, and the saved kit kept as it was.
+  const bad = store({ kit: JSON.stringify(saved), row: '{not json' });
+  const kept = cleanKit(saved);
+  assert.equal(moveOldScull(bad, kept, saved, keys), kept);
+  assert.ok(!bad.data.has('row'));
+});
+
+test("a live-race peer's kit with a scull the game doesn't know reads back as the club single", () => {
+  assert.equal(cleanKit({ scull: 'quad', scullColour: 'pink' }).scull, 'club');
 });

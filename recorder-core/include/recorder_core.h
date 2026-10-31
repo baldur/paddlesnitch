@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 /* The core's version, logged with every recording (phase 4: core_ver). */
-#define RC_VERSION "0.4.0"
+#define RC_VERSION "0.5.0"
 
 /* ---- Output streams ---------------------------------------------------- */
 
@@ -174,7 +174,10 @@ typedef struct {
  *   motion,<rows>,<sample Hz>
  *   session,<moving|all>,<available 0|1>,<reason>,<windows>,<median spm>,<paddling s>,<strokes>
  *   series,<ok 0|1>,<windows>,<alternating windows>
- * reason: ok, too_few_samples, too_slow, no_rhythm. When a set isn't
+ * reason: ok, too_few_samples, too_slow, no_rhythm, not_moving.
+ * not_moving: moving only, when no stretch of the track ever reached the
+ * set's 90 rows at >= 4 km/h (no_rhythm: it did, and no window there showed
+ * a stroke). The motion file's own reasons come first. When a set isn't
  * available, its window and rest lines don't count; when series isn't ok,
  * no point counts (single-sided paddling isn't calibrated yet).
  *
@@ -234,6 +237,7 @@ typedef struct {
     uint32_t         deltas;
     rc_stroke_run    runs[RC_STROKE_RUNS];
     uint32_t         runs_n;
+    uint32_t         longest_run;            /* rows, of any run so far              */
     rc_stroke_set    set[3];                 /* moving, all, series                  */
     uint16_t         hist[2][RC_STROKE_BINS];/* moving, all: the median              */
 } rc_stroke;

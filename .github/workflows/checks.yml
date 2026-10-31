@@ -177,10 +177,16 @@ jobs:
           # The module the site ships (packages/timing) is this build, byte for byte.
           node recorder-core/wasm/embed.mjs same recorder-core/build/recorder_core.wasm
 
-  games:
-    name: games in browsers
+  # The three browsers run side by side (one ran after another: ~25 min);
+  # `games in browsers` below keeps the check's name and passes only if all do.
+  games-browser:
+    name: games in ${{ matrix.engine }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit, firefox]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -204,9 +210,20 @@ jobs:
       - name: Install browsers
         if: steps.changed.outputs.yes == 'true'
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium webkit firefox
+        run: pnpm exec playwright install --with-deps ${{ matrix.engine }}
       # Each game played in Chromium, WebKit and Firefox, desktop and phone,
       # with and without WebGPU and other optional features (games/tests/browsers.mjs).
       - name: Play the games
         if: steps.changed.outputs.yes == 'true'
+        env:
+          ENGINE: ${{ matrix.engine }}
         run: pnpm test:games:browsers
+
+  games:
+    name: games in browsers
+    needs: games-browser
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every browser passed
+        run: test "${{ needs.games-browser.result }}" = success

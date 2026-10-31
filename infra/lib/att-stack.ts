@@ -796,7 +796,7 @@ export class AttStack extends cdk.Stack {
     })
 
     // The games live at games/ in the assets bucket (bucket root, no prefix),
-    // so /games/kayak/main.js is the key games/kayak/main.js.
+    // so /games/reading-thames/main.js is the key games/reading-thames/main.js.
     const gamesOrigin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket)
     const gamesRouter = new cloudfront.Function(this, 'GamesRouter', {
       functionName: 'paddlesnitch-games-router',

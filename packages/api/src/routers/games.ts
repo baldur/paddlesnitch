@@ -1,4 +1,4 @@
-// The kayak game (games/kayak): a leaderboard per course, and making and joining
+// The kayak game (games/reading-thames): a leaderboard per course, and making and joining
 // live races, whose messages then go through the relay (docs/features/game-accounts-leaderboard-live.md).
 // Plain JSON over tRPC: the game is static files on the same origin, so it calls
 // these with fetch and the visitor's sign-in cookie.
@@ -22,6 +22,8 @@ const kit = z.object({
   hat: z.enum(['none', 'cap', 'visor', 'beanie']).optional(), hatColour: colour.optional(),
   beard: z.enum(['none', 'stubble', 'moustache', 'beard']).optional(),
   aid: z.boolean().optional(), aidColour: colour.optional(),
+  // The rowing scull (games/reading-thames: Reading Rowing Club).
+  scull: z.enum(['trainer', 'club', 'fine']).optional(), scullColour: colour.optional(),
   // The old head, before the game's cleanKit moves it to hair and hat.
   head: z.enum(['cap', 'hair']).optional(), headColour: colour.optional(),
   glasses: z.enum(['none', 'wrap', 'round', 'aviator', 'square']), glassesColour: colour,

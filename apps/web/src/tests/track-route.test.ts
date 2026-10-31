@@ -110,9 +110,9 @@ describe('game events', () => {
     const KIT = { body: 'slim', hair: 'bun', hat: 'none', beard: 'none', aid: 'true', glasses: 'wrap', sleeves: 'long', boat: 'nelo-vanquish-3', paddle: 'wing', shape: 'modern-round' }
     const SESSION = { secs: '61.5', plays: '2', from: 'menu', places: 'path,club,changing', input: 'keys,mouse', gpu: 'webgl2' }
     const [play, kit, session] = await emitted([
-      { event: 'game_play', path: '/games/kayak/', props: PLAY },
-      { event: 'game_kit', path: '/games/kayak/', props: KIT },
-      { event: 'game_session', path: '/games/kayak/', props: SESSION },
+      { event: 'game_play', path: '/games/reading-thames/', props: PLAY },
+      { event: 'game_kit', path: '/games/reading-thames/', props: KIT },
+      { event: 'game_session', path: '/games/reading-thames/', props: SESSION },
     ])
     const props = (e: Record<string, unknown>) => {
       const { _aws: _a, Event: _e, Count: _c, sid: _s, path: _p, platform: _pl, ...rest } = e
@@ -121,7 +121,7 @@ describe('game events', () => {
     expect(props(play)).toEqual(PLAY)
     expect(props(kit)).toEqual(KIT)
     expect(props(session)).toEqual(SESSION)
-    expect(play).toMatchObject({ Event: 'game_play', sid: 'tab1', path: '/games/kayak/' })
+    expect(play).toMatchObject({ Event: 'game_play', sid: 'tab1', path: '/games/reading-thames/' })
   })
 
   it('has no more keys an event than the route keeps (10)', () => {
@@ -129,8 +129,8 @@ describe('game events', () => {
   })
 
   it('still sends a game event with no props, or props that are not an object', async () => {
-    const [a, b] = await emitted([{ event: 'game_session', path: '/games/kayak/' }, { event: 'game_play', props: 'x' }])
-    expect(a).toMatchObject({ Event: 'game_session', sid: 'tab1', path: '/games/kayak/' })
+    const [a, b] = await emitted([{ event: 'game_session', path: '/games/reading-thames/' }, { event: 'game_play', props: 'x' }])
+    expect(a).toMatchObject({ Event: 'game_session', sid: 'tab1', path: '/games/reading-thames/' })
     expect(b).toMatchObject({ Event: 'game_play', sid: 'tab1' })
   })
 
@@ -145,12 +145,12 @@ describe('game events', () => {
   it("takes a fixed choice only from the game's own set, and numbers only as numbers", async () => {
     const [kit, play, session] = await emitted([
       { event: 'game_kit', props: { body: 'slim', hair: 'patrowe', hat: 'pat.rowe', aid: 'yes', paddle: 'wing' } },
-      { event: 'game_play', path: '/games/kayak/', props: { mode: 'outing', secs: 'patrowe', place: '1', end: 'whatever', km: '3.5km', swims: 2, sid: 'forged', platform: 'ios' } },
+      { event: 'game_play', path: '/games/reading-thames/', props: { mode: 'outing', secs: 'patrowe', place: '1', end: 'whatever', km: '3.5km', swims: 2, sid: 'forged', platform: 'ios' } },
       { event: 'game_session', path: '/att/someone', props: { input: 'keys,patrowe', gpu: 'webgpu', secs: '12' } },
     ])
     expect(kit).toMatchObject({ body: 'slim', paddle: 'wing' })
     for (const k of ['hair', 'hat', 'aid']) expect(kit).not.toHaveProperty(k)
-    expect(play).toMatchObject({ mode: 'outing', place: '1', path: '/games/kayak/' })
+    expect(play).toMatchObject({ mode: 'outing', place: '1', path: '/games/reading-thames/' })
     for (const k of ['secs', 'end', 'km', 'swims']) expect(play).not.toHaveProperty(k) // swims sent as a number
     expect(play).toMatchObject({ sid: 'tab1', platform: 'web' })                        // never the client's
     expect(session).toMatchObject({ gpu: 'webgpu', secs: '12' })

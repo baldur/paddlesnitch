@@ -6,6 +6,7 @@ import Foundation
 
 public struct MotionStrokeRate: Codable, Hashable, Sendable {
     public var available: Bool
+    public var code: Code
     public var medianStrokesPerMin: Double?
     public var reason: String
     public var rows: Int
@@ -14,6 +15,7 @@ public struct MotionStrokeRate: Codable, Hashable, Sendable {
 
     public init(
         available: Bool,
+        code: Code,
         medianStrokesPerMin: Double? = nil,
         reason: String,
         rows: Int,
@@ -21,10 +23,58 @@ public struct MotionStrokeRate: Codable, Hashable, Sendable {
         windows: [StrokeRateWindow]
     ) {
         self.available = available
+        self.code = code
         self.medianStrokesPerMin = medianStrokesPerMin
         self.reason = reason
         self.rows = rows
         self.sampleRateHz = sampleRateHz
         self.windows = windows
+    }
+
+    public enum Code: Codable, Hashable, Sendable {
+        case ok
+        case tooFewSamples
+        case tooSlow
+        case noRhythm
+        case notMoving
+        case other
+        /// A value this version of the app doesn't know yet.
+        case unknown(String)
+
+        /// Every value this version of the app knows.
+        public static let known: [Code] = [.ok, .tooFewSamples, .tooSlow, .noRhythm, .notMoving, .other]
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "ok": self = .ok
+            case "too_few_samples": self = .tooFewSamples
+            case "too_slow": self = .tooSlow
+            case "no_rhythm": self = .noRhythm
+            case "not_moving": self = .notMoving
+            case "other": self = .other
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .ok: "ok"
+            case .tooFewSamples: "too_few_samples"
+            case .tooSlow: "too_slow"
+            case .noRhythm: "no_rhythm"
+            case .notMoving: "not_moving"
+            case .other: "other"
+            case .unknown(let rawValue): rawValue
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 }

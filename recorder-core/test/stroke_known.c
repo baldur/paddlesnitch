@@ -484,8 +484,31 @@ int main(void)
         stretch st[] = { { 300, 43.7f, 56, ALTERNATING, 0, 0 } };
         run(st, 1, 1000);
         if (median("moving") >= 0) fail("a still track gave a moving stroke rate");
+        if (strcmp(reason("moving"), "not_moving")) fail("a still track's reason isn't not_moving");
+        if (strcmp(reason("all"), "ok")) fail("the ungated set isn't ok");
         near(median("all"), 56.0, 0.6, "all median (GPS failed: whole recording)");
         if (series_ok()) fail("a still track gave a series");
+        same_on_replay();
+    }
+    done(f);
+
+    /* not_moving is about the track (no stretch of 90 rows at >= 4 km/h),
+       no_rhythm about the motion (a stretch, but no stroke in it). */
+    begin("not_moving: the track never moved for 90 rows; no_rhythm: it did"); f = g_fails;
+    {
+        stretch slow[] = { { 300, 43.7f, 56, ALTERNATING, 3.9f, 0 } };   /* SUP under 4 km/h */
+        run(slow, 1, 1000);
+        if (strcmp(reason("moving"), "not_moving")) fail("paddling at 3.9 km/h isn't not_moving");
+        stretch sprint[] = { { 120, 43.7f, 0, STILL, 0, 0 }, { 89, 43.7f, 70, ALTERNATING, 9, 0 }, { 120, 43.7f, 0, STILL, 0, 0 } };
+        run(sprint, 3, 1000);
+        if (strcmp(reason("moving"), "not_moving")) fail("an 89 s piece isn't not_moving");
+        same_on_replay();
+        stretch drift[] = { { 300, 43.7f, 0, NOISE, 8, 0 } };           /* moving, no stroke */
+        run(drift, 1, 1000);
+        if (strcmp(reason("moving"), "no_rhythm")) fail("moving with no stroke isn't no_rhythm");
+        stretch flat[] = { { 120, 43.7f, 0, STILL, 0, 0 }, { 95, 43.7f, 0, NOISE, 9, 0 }, { 120, 43.7f, 0, STILL, 0, 0 } };
+        run(flat, 3, 1000);
+        if (strcmp(reason("moving"), "no_rhythm")) fail("a 95 s run with no stroke isn't no_rhythm");
         same_on_replay();
     }
     done(f);

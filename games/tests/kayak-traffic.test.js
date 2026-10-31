@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { raceRiver, practiceRiver, courseFromFile, pointAt, widthAt, locate } from '../kayak/course.js';
-import { TRAFFIC, createTraffic, moveTraffic, trafficHits, trafficWash, trafficWarnings } from '../kayak/traffic.js';
-import { createBoat } from '../kayak/sim.js';
+import { raceRiver, practiceRiver, courseFromFile, pointAt, widthAt, locate } from '../reading-thames/course.js';
+import { TRAFFIC, createTraffic, moveTraffic, trafficHits, trafficWash, trafficWarnings } from '../reading-thames/traffic.js';
+import { createBoat } from '../reading-thames/sim.js';
 
-const fromFile = async (name) => courseFromFile(JSON.parse(await readFile(new URL(`../kayak/courses/${name}.json`, import.meta.url), 'utf8')));
+const fromFile = async (name) => courseFromFile(JSON.parse(await readFile(new URL(`../reading-thames/courses/${name}.json`, import.meta.url), 'utf8')));
 const reach = (b) => Math.max(TRAFFIC[b.kind].hull, TRAFFIC[b.kind].oars?.[2] ?? 0);
 
 test('the same race has the same traffic (every copy of a live race), another race other traffic', () => {
@@ -142,7 +142,7 @@ test('an eight coming up behind is called once, in time, with the side it is com
 });
 
 test('in whole races the rivals keep right of oncoming boats and let eights by: a boat rarely tips one in', async () => {
-  const { createRace, stepRace, DIVISION_9 } = await import('../kayak/race.js');
+  const { createRace, stepRace, DIVISION_9 } = await import('../reading-thames/race.js');
   const DT = 1 / 120;
   let races = 0;
   let hits = 0;

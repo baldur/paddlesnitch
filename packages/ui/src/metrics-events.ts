@@ -32,7 +32,7 @@ export const METRIC_EVENTS: readonly MetricEvent[] = [
 // fixed set in the game takes only that set (a new option in the game is
 // dropped here until it's added: lost data, never a leak); numbers must be
 // numbers; the rest (ids the game picks from its own lists, never typed) are
-// lower-case words. games/kayak/metrics.js sends them. At most 10 keys an
+// lower-case words. games/reading-thames/metrics.js sends them. At most 10 keys an
 // event: the track route keeps 10 props.
 const NUM = /^\d{1,7}(\.\d{1,2})?$/
 const WORD = /^[a-z0-9][a-z0-9_-]{0,39}$/

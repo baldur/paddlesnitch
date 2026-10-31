@@ -222,10 +222,9 @@ export function launchMesh() {
   m.box([-0.9, 0.25, 2.5], [0.9, 0.5, 2.9], [0.16, 0.3, 0.6]);
   // The foredeck, and the gunwale's varnished top.
   m.prism([[-0.95, deck, -1.6], [0.95, deck, -1.6], [0.5, deck, -2.7], [-0.5, deck, -2.7]], [[-0.93, deck + 0.05, -1.6], [0.93, deck + 0.05, -1.6], [0, deck + 0.08, -3.2], [0, deck + 0.08, -3.2]], [0.6, 0.38, 0.2]);
-  // The canopy: four posts and a navy cover over the back.
-  for (const [x, z] of [[-0.95, 0.2], [0.95, 0.2], [-0.95, 2.9], [0.95, 2.9]]) m.box([x - 0.012, deck, z - 0.012], [x + 0.012, 1.85, z + 0.012], [0.75, 0.75, 0.72]);
-  m.box([-1.02, 1.85, 0.1], [1.02, 1.9, 3], [0.12, 0.16, 0.3]);
-  // The wheel, in front of the helm on the right.
+  // Open to the sky: no canopy (seen from the helm on a phone its cover was a
+  // dark slab across the top of the screen; owner 2026-10-31).
+  // The wheel, on its console in front of the helm on the right: rim, spokes and hub.
   m.box([0.25, 0.25, 0.75], [0.75, 0.8, 1.05], [0.4, 0.28, 0.18]);
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
@@ -233,5 +232,11 @@ export function launchMesh() {
     const p = (t) => [0.5 + Math.cos(t) * 0.16, 0.95 + Math.sin(t) * 0.16, 0.9 - Math.sin(t) * 0.05];
     m.quad(p(a), p(b), p(b).map((v, k) => (k === 2 ? v + 0.03 : v)), p(a).map((v, k) => (k === 2 ? v + 0.03 : v)), [0.1, 0.1, 0.1]);
   }
+  for (let i = 0; i < 3; i++) {
+    const t = (i / 3) * Math.PI * 2 + 0.5;
+    const [cx, cy] = [0.5 + Math.cos(t) * 0.15, 0.95 + Math.sin(t) * 0.15];
+    m.box([Math.min(0.5, cx) - 0.008, Math.min(0.95, cy) - 0.008, 0.9], [Math.max(0.5, cx) + 0.008, Math.max(0.95, cy) + 0.008, 0.915], [0.15, 0.15, 0.16]);
+  }
+  m.box([0.47, 0.92, 0.88], [0.53, 0.98, 0.93], [0.7, 0.7, 0.72]); // the hub
   return m.build();
 }
