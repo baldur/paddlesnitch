@@ -1335,7 +1335,7 @@ function spot(course, [x, z]) {
 }
 
 // How far round each feature other trees keep off (metres).
-const CLEAR = { 'boat-shed': 7, 'ivy-boathouse': 6, quay: 4, truss: 8, wharf: 8, jetty: 3, beach: 21, marina: 45, willow: 7, 'sculling-club': 14, 'glass-restaurant': 14, 'ferry-landing': 8, sandbags: 8, gazebo: 5 };
+const CLEAR = { 'boat-shed': 7, 'ivy-boathouse': 6, quay: 4, truss: 8, wharf: 8, jetty: 3, beach: 21, landing: 7, marina: 45, willow: 7, 'sculling-club': 14, 'glass-restaurant': 14, 'ferry-landing': 8, sandbags: 8, gazebo: 5 };
 
 const FEAT = {
   sand: [0.82, 0.73, 0.54], wetSand: [0.62, 0.55, 0.42], bag: [0.74, 0.65, 0.48], bagDark: [0.66, 0.57, 0.42], pipe: [0.15, 0.15, 0.16],
@@ -1345,13 +1345,14 @@ const FEAT = {
   frame: [0.12, 0.13, 0.14], umbrella: [0.12, 0.3, 0.65], red: [0.82, 0.08, 0.08], blue: [0.08, 0.25, 0.65], gazebo: [0.42, 0.3, 0.2],
 };
 
-// A sandy beach running into the shallows: the landing for the portage.
-function beach(m, course, f) {
-  const [n, rows] = [10, 6];
+// A sandy beach running into the shallows, `half` metres each way along the
+// bank and `deep` up it: the landing for the portage (the put-in is a little one).
+function beach(m, course, f, half = 20, deep = 18) {
+  const [n, rows] = [Math.round(half / 2), 6];
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < rows; j++) {
-      const [a0, a1] = [-20 + (40 * i) / n, -20 + (40 * (i + 1)) / n];
-      const [b0, b1] = [-18 + j * 3.6, -18 + (j + 1) * 3.6];
+      const [a0, a1] = [-half + (2 * half * i) / n, -half + (2 * half * (i + 1)) / n];
+      const [b0, b1] = [-deep + (j * deep) / rows, -deep + ((j + 1) * deep) / rows];
       // A shelving beach: a little above the bank's own ground, down into the shallows.
       const y = (a, b) => Math.max(-0.3, f.ground(a, b) + 0.15 * Math.min(1, -b / 4)) + 0.05;
       const pts = [[a0, b0], [a1, b0], [a1, b1], [a0, b1]].map(([a, b]) => f.at(a, y(a, b), b));
@@ -1584,7 +1585,7 @@ function jetty(m, course, f) {
 }
 
 const FEATURES = {
-  'boat-shed': boatShed, 'ivy-boathouse': ivyBoathouse, quay, truss, wharf, jetty, beach, sandbags, 'channel-sign': channelSign, mailbox, gazebo, 'sculling-club': scullingClub,
+  'boat-shed': boatShed, 'ivy-boathouse': ivyBoathouse, quay, truss, wharf, jetty, beach, landing: (m, course, f) => beach(m, course, f, 6, 7), sandbags, 'channel-sign': channelSign, mailbox, gazebo, 'sculling-club': scullingClub,
   'glass-restaurant': glassRestaurant, 'ferry-landing': ferryLanding, marina, willow,
 };
 export const FEATURE_STYLES = Object.keys(FEATURES);
