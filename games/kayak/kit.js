@@ -142,3 +142,21 @@ export function withOldScull(kit, saved, row) {
 export const boardHull = (kit, rowing) => (rowing ? `scull-${kit.scull}` : kit.boat);
 export const isScullHull = (hull) => typeof hull === 'string' && hull.startsWith('scull-');
 export const scullHullName = (hull) => scullById(hull.slice(6)).name;
+
+// On load: a scull kept on its own on this device (`rowKey`, from before it
+// went in the kit) is moved into the kit and the kit saved (`kitKey`), the old
+// value removed: once only. A value that can't be read is just dropped.
+// `storage` is localStorage (or anything like it); returns the kit.
+export function moveOldScull(storage, kit, saved, { rowKey, kitKey: key }) {
+  let raw = null;
+  try { raw = storage.getItem(rowKey); } catch { return kit; }
+  if (raw === null) return kit;
+  let row = null;
+  try { row = JSON.parse(raw); } catch {}
+  const moved = withOldScull(kit, saved, row);
+  try {
+    if (moved !== kit) storage.setItem(key, JSON.stringify(moved));
+    storage.removeItem(rowKey);
+  } catch {}
+  return moved;
+}

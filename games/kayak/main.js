@@ -8,7 +8,7 @@ import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
 import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
-import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, withOldScull, boardHull, isScullHull, scullHullName } from './kit.js';
+import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, moveOldScull, boardHull, isScullHull, scullHullName } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
@@ -147,12 +147,14 @@ try {
   const saved = JSON.parse(localStorage.getItem(KIT_KEY));
   kitChosen = !!saved;
   kit = saved ? cleanKit(saved) : randomKit(Math.random, localStorage.getItem(HULL_KEY));
-  // A scull picked before it went in the kit (on this device only) carries over.
-  const before = localStorage.getItem(ROW_KEY);
-  kit = withOldScull(kit, saved, before && JSON.parse(before));
-  if (before) localStorage.removeItem(ROW_KEY);
 } catch {
   kit = randomKit();
+}
+// A scull picked before it went in the kit (on this device only) carries over, once.
+{
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KIT_KEY)); } catch {}
+  try { kit = moveOldScull(localStorage, kit, saved, { rowKey: ROW_KEY, kitKey: KIT_KEY }); } catch {}
 }
 const kits = new Map(); // the other players' kits in a live race, by player id
 let renderer = null;
@@ -372,6 +374,7 @@ const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', padd
 function showStep(name) {
   // The menu's own home and its Leaderboards are the canoe club's.
   if (name === 'home') boardModes = null;
+  if (name === 'boards') labelBoards();
   // Getting as far as the races counts as having chosen.
   if (name === 'home' && !kitChosen) {
     kitChosen = true;
@@ -396,6 +399,8 @@ for (const b of menu.querySelectorAll('[data-step]')) {
       storeKit();
       return menu.close('');
     }
+    // The rowing club's boards have no kayak plan behind them: Done puts them away.
+    if (club && boardModes && b.closest('#stepBoards')) return menu.close('');
     showStep(b.matches('.next') && kitChosen ? 'home' : b.dataset.step);
   });
 }
@@ -472,6 +477,8 @@ async function loadKit() {
     if (saved) {
       kit = cleanKit(saved, kit);
       try { localStorage.setItem(KIT_KEY, JSON.stringify(kit)); } catch {}
+      // An account kit from before sculls were in it: this device's scull goes up to it.
+      if (!saved.scull) storeKit();
       showKit();
       if (!kitChosen && state === 'menu' && !club) showStep('home');
       kitChosen = true;
@@ -600,6 +607,11 @@ function handleGamepad(pressed) {
   }
   if (pressed.has(BUTTON.START) && paused.open) {
     paused.close('resume');
+    return;
+  }
+  // A room's sheet with nothing to press: the d-pad and A go to the room's labels.
+  if (club && menu.open && !live.open) {
+    if (!gamepadDialogs([menu], pressed)) clubGamepad(pressed);
     return;
   }
   if (!gamepadDialogs([menu, live, paused, finished], pressed) && pressed.has(BUTTON.START)) pause();
@@ -915,19 +927,28 @@ function plannedRow(key) {
 // rowing club's. From the rowing club there's no kayak plan to go back to.
 function boards(modes) {
   boardModes = modes;
-  document.querySelector('#stepBoards .back').hidden = !!modes;
   sheet('boards');
+}
+// The boards' heading and button: the rowing club's honours board (Done), or the leaderboards (back to the plan).
+function labelBoards() {
+  document.querySelector('#stepBoards h3').textContent = boardModes ? 'Honours board' : 'Leaderboards';
+  document.querySelector('#stepBoards .back').innerHTML = boardModes ? 'Done' : '&larr; Back';
 }
 // The honours board: the rowing leaderboards (signed in, on the site), and your bests on this device.
 function honours() {
-  if (!account.offline) boards(Object.values(ROW_MODES));
+  if (!account.offline) return boards(Object.values(ROW_MODES)); // your bests go at the top of it
+  const lines = rowingBests();
+  note(lines.length ? `Your bests. ${lines.join(' · ')}` : 'No names on it yet: row the Head of the River, or a 500 m on the ergs');
+}
+// Your rowing bests on this device: each course, and the erg's 500 m.
+function rowingBests() {
   const lines = Object.values(ROW_MODES).map((m) => {
     let b = null;
     try { b = JSON.parse(localStorage.getItem(bestKey(m, formatOf(m)))); } catch {}
     return b?.time ? `${m.label}: ${formatTime(b.time)}` : '';
   }).filter(Boolean);
   if (ergBest()) lines.push(`Erg 500 m: ${formatTime(ergBest())}`);
-  note(lines.length ? `Your bests. ${lines.join(' · ')}` : 'No names on it yet: row the Head of the River, or a 500 m on the ergs');
+  return lines;
 }
 function note(text) {
   clubNote.textContent = text;
@@ -1241,14 +1262,36 @@ const boatName = (hull) => (isScullHull(hull) ? scullHullName(hull) : boatById(h
 let boardModes = null;
 async function showBoards() {
   els.boardlist.replaceChildren(make('<p>Loading…</p>'));
+  const rowing = !!boardModes;
   const boards = await Promise.all((boardModes ?? Object.values(MODES)).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
-  els.boardlist.replaceChildren(...boards.map(([m, b]) => {
+  const top = [];
+  // The rowing club's: your bests on this device first, and how to get on the boards.
+  if (rowing) {
+    const mine = rowingBests();
+    if (mine.length) top.push(make(`<p class="bests">Your bests on this device: ${mine.join(' · ')}</p>`));
+    if (!account.user) {
+      const p = document.createElement('p');
+      p.append(link('Sign in', SIGN_IN), ' to put your rows on the boards.');
+      top.push(p);
+    }
+  }
+  // None of them loaded: one message, and a way to try again.
+  if (boards.every(([, b]) => !b)) {
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.textContent = 'Try again';
+    again.addEventListener('click', showBoards);
+    const p = make("<p>Couldn't load the boards. </p>");
+    p.append(again);
+    return els.boardlist.replaceChildren(...top, p);
+  }
+  els.boardlist.replaceChildren(...top, ...boards.map(([m, b]) => {
     const div = document.createElement('div');
     const title = document.createElement('h4');
     title.textContent = m.label;
     div.append(title);
     if (!b?.top.length) {
-      div.append(b ? 'No times yet.' : "Couldn't load it.");
+      div.append(!b ? "Couldn't load it." : rowing ? 'No times yet: row it from the plan.' : 'No times yet.');
       return div;
     }
     const table = document.createElement('table');

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../kayak/boats.js';
-import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery, withOldScull, boardHull, isScullHull, scullHullName } from '../kayak/kit.js';
+import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery, withOldScull, moveOldScull, boardHull, isScullHull, scullHullName } from '../kayak/kit.js';
 import { SCULLS, SCULL_COLOURS } from '../kayak/scull.js';
 import { HULLS, createBoat } from '../kayak/sim.js';
 import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../kayak/meshes.js';
@@ -172,4 +172,31 @@ test("a leaderboard time records your kayak, or in a row your scull, and the boa
   assert.equal(boardHull(kit, true), 'scull-fine');
   assert.ok(isScullHull('scull-club') && !isScullHull('club'), "the kayak's old 'club' hull isn't a scull");
   assert.equal(scullHullName('scull-trainer'), 'Trainer single');
+});
+
+test('an old scull kept on the device moves into the saved kit once, and a corrupt one is just dropped', () => {
+  const store = (init) => {
+    const data = new Map(Object.entries(init));
+    return { getItem: (k) => (data.has(k) ? data.get(k) : null), setItem: (k, v) => data.set(k, v), removeItem: (k) => data.delete(k), data };
+  };
+  const keys = { rowKey: 'row', kitKey: 'kit' };
+  const saved = { body: 'slim', hair: 'bun' }; // as saved before sculls were in the kit
+  const s = store({ kit: JSON.stringify(saved), row: JSON.stringify({ scull: 'fine', colour: SCULL_COLOURS[2] }) });
+  const kit = moveOldScull(s, cleanKit(saved), saved, keys);
+  assert.equal(kit.scull, 'fine');
+  assert.equal(JSON.parse(s.data.get('kit')).scull, 'fine', 'saved, so the next load has it');
+  assert.ok(!s.data.has('row'), 'the old value gone');
+  assert.equal(moveOldScull(s, kit, JSON.parse(s.data.get('kit')), keys), kit, 'a second load does nothing');
+  // A first visit (no saved kit yet) still takes it.
+  const fresh = store({ row: JSON.stringify({ scull: 'trainer' }) });
+  assert.equal(moveOldScull(fresh, cleanKit({}), null, keys).scull, 'trainer');
+  // Corrupt: dropped, and the saved kit kept as it was.
+  const bad = store({ kit: JSON.stringify(saved), row: '{not json' });
+  const kept = cleanKit(saved);
+  assert.equal(moveOldScull(bad, kept, saved, keys), kept);
+  assert.ok(!bad.data.has('row'));
+});
+
+test("a live-race peer's kit with a scull the game doesn't know reads back as the club single", () => {
+  assert.equal(cleanKit({ scull: 'quad', scullColour: 'pink' }).scull, 'club');
 });
