@@ -1252,14 +1252,20 @@ export class AttStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('logs.amazonaws.com', {
         conditions: {
           StringEquals: { 'aws:SourceAccount': this.account },
-          StringLike: { 'aws:SourceArn': `arn:aws:logs:${this.region}:${this.account}:log-group:${serverLogs.logGroupName}:*` },
+          // AWS's documented form for CloudWatch Logs; a narrower log-group ARN
+          // made the subscription's test delivery fail on the first deploy.
+          StringLike: { 'aws:SourceArn': `arn:aws:logs:${this.region}:${this.account}:*` },
         },
       }),
     })
+    // By name, not by the stream's attribute, so the role and its policy can be
+    // made before the stream: Firehose takes a minute or two to create, which
+    // gives IAM time to take effect before the subscription's test delivery.
     archiveLogsRole.addToPolicy(new iam.PolicyStatement({
       actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
-      resources: [archiveStream.attrArn],
+      resources: [`arn:aws:firehose:${this.region}:${this.account}:deliverystream/paddlesnitch-analytics-archive`],
     }))
+    archiveStream.node.addDependency(archiveLogsRole)
     new logs.CfnSubscriptionFilter(this, 'AnalyticsArchiveSubscription', {
       logGroupName: serverLogs.logGroupName,
       filterName: 'analytics-archive',
