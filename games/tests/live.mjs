@@ -76,7 +76,7 @@ try {
   const bob = await player(browser, 'Bob Guest');
 
   // Ann makes a race on the practice river.
-  await ann.page.goto(`${BASE}/games/kayak/#debug`);
+  await ann.page.goto(`${BASE}/games/reading-thames/#debug&menu`);
   await ann.page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   await ann.page.waitForFunction(() => document.getElementById('account').textContent.includes('Signed in'), null, { timeout: 10_000 });
   // Ann makes her paddler: a curvy body type, a ponytail, the darkest skin tone.
@@ -92,7 +92,7 @@ try {
   check(true, `Ann made race ${code}`);
 
   // Bob opens the link.
-  await bob.page.goto(`${BASE}/games/kayak/#debug&race=${code}`);
+  await bob.page.goto(`${BASE}/games/reading-thames/#debug&race=${code}`);
   await bob.page.waitForFunction(() => window.kayak?.gpu, null, { timeout: 30_000 });
   await bob.page.waitForFunction(() => document.getElementById('livePlayers').children.length === 2, null, { timeout: 15_000 }).catch(async (e) => {
     console.log(await bob.page.evaluate(() => ({ error: document.getElementById('liveError').textContent, live: document.getElementById('live').open, menu: document.getElementById('menu').open, hash: location.hash, account: document.getElementById('account').textContent, players: document.getElementById('livePlayers').textContent })), bob.errors);
@@ -154,14 +154,14 @@ try {
     check(posted.result?.data?.best === true, 'a practice time went on the leaderboard');
     // Ann's paddler is on her account: a device that hasn't seen it gets it.
     await kayak(ann.page, () => localStorage.clear());
-    await ann.page.goto(`${BASE}/games/kayak/#debug`);
+    await ann.page.goto(`${BASE}/games/reading-thames/#debug&menu`);
     await ann.page.waitForFunction((skin) => document.querySelector('#menu input[name="skin"]:checked')?.value === skin
       && document.querySelector('#menu input[name="body"]:checked')?.value === 'curvy'
       && document.querySelector('#menu input[name="hair"]:checked')?.value === 'ponytail', annKit.skin, { timeout: 15_000 });
     check(true, "Ann's paddler came back from her account");
 
     const fresh = await (await browser.newContext()).newPage();
-    await fresh.goto(`${BASE}/games/kayak/`);
+    await fresh.goto(`${BASE}/games/reading-thames/#menu`);
     await toRaces(fresh);
     await fresh.waitForFunction(() => !document.getElementById('boards').hidden, null, { timeout: 15_000 });
     await fresh.click('#boards');
@@ -171,7 +171,7 @@ try {
 
     // Signed out, a race button goes to sign in; practice doesn't.
     await fresh.waitForFunction(() => document.getElementById('account').textContent.includes('Sign in'));
-    await Promise.all([fresh.waitForURL(/\/signin\?next=/, { timeout: 15_000 }), fresh.click('#menu button[value="race"]')]);
+    await Promise.all([fresh.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), fresh.click('#menu button[value="race"]')]);
     check(true, 'signed out, Division 9 sends you to sign in');
   }
 

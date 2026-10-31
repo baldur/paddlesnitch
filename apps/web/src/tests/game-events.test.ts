@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Every analytics event the kayak game can make (games/kayak/metrics.js)
+// Every analytics event the kayak game can make (games/reading-thames/metrics.js)
 // against the server's own rules for them (gameEventProps in
 // @paddlesnitch/ui/metrics-events): the server silently drops a prop that
 // fails its rule, so a choice added only in the game (a hair style, a course)
@@ -15,13 +15,17 @@ const kept = (e: Ev) => {
 
 describe("the kayak game's analytics events pass the server's rules untouched", () => {
   it('every way a play can go: each kind, course, ending, and how the visit began (the walk or the menu)', async () => {
-    const { beginPlay, playEvent } = await import('../../../../games/kayak/metrics.js')
+    const { beginPlay, playEvent } = await import('../../../../games/reading-thames/metrics.js')
     type Case = { mode: { key: string; solo?: boolean; drill?: string; outing?: string }; o: { format?: string; live?: boolean } }
     const modes: Case[] = [
       ...['loop', 'hasler79', 'hasler16'].flatMap((key) => [{ mode: { key }, o: { format: 'mass' } }, { mode: { key }, o: { format: 'interval' } }, { mode: { key }, o: { live: true } }]),
       { mode: { key: 'practice', solo: true }, o: {} },
       ...['start', 'wash', 'portage'].map((drill) => ({ mode: { key: `drill-${drill}`, drill, solo: true }, o: {} })),
       ...['cruise', 'hire'].map((outing) => ({ mode: { key: outing, outing, solo: true }, o: {} })),
+      // The rowing club's: a practice row, the Head of the River (a time trial), a 500 m on the erg.
+      { mode: { key: 'row-practice', solo: true }, o: {} },
+      { mode: { key: 'row-head' }, o: { format: 'interval' } },
+      { mode: { key: 'erg', solo: true }, o: {} },
     ]
     for (const { mode, o } of modes) {
       for (const from of ['walk', 'menu']) {
@@ -34,10 +38,10 @@ describe("the kayak game's analytics events pass the server's rules untouched", 
   })
 
   it('every paddler choice, and plenty of random paddlers', async () => {
-    const { kitEvent } = await import('../../../../games/kayak/metrics.js')
-    const kit = await import('../../../../games/kayak/kit.js')
+    const { kitEvent } = await import('../../../../games/reading-thames/metrics.js')
+    const kit = await import('../../../../games/reading-thames/kit.js')
     const { BOAT_IDS } = kit
-    const { DECKS, HULL_SHAPES, PADDLES } = await import('../../../../games/kayak/boats.js')
+    const { DECKS, HULL_SHAPES, PADDLES } = await import('../../../../games/reading-thames/boats.js')
     const base = kit.cleanKit({})
     const options: [string, string[] | boolean[]][] = [
       ['body', Object.keys(kit.BODIES)], ['hair', Object.keys(kit.HAIRS)], ['hat', Object.keys(kit.HATS)], ['beard', Object.keys(kit.BEARDS)],
@@ -49,8 +53,8 @@ describe("the kayak game's analytics events pass the server's rules untouched", 
   })
 
   it('a visit: every place on the walk, every control, each renderer', async () => {
-    const { createSession, sessionEvent } = await import('../../../../games/kayak/metrics.js')
-    const { PLACES } = await import('../../../../games/kayak/club.js')
+    const { createSession, sessionEvent } = await import('../../../../games/reading-thames/metrics.js')
+    const { PLACES } = await import('../../../../games/reading-thames/club.js')
     for (const gpu of ['webgpu', 'webgl2']) {
       const s = createSession(0, 'walk')
       for (const p of Object.keys(PLACES)) s.places.add(p)
@@ -61,7 +65,7 @@ describe("the kayak game's analytics events pass the server's rules untouched", 
   })
 
   it('the server has rules for exactly the props the game sends', async () => {
-    const { KIT_FIELDS } = await import('../../../../games/kayak/metrics.js')
+    const { KIT_FIELDS } = await import('../../../../games/reading-thames/metrics.js')
     expect(Object.keys(GAME_EVENT_PROPS.game_kit).sort()).toEqual([...KIT_FIELDS].sort())
   })
 })

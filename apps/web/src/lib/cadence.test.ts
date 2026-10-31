@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
-  recordingStrokeRate, replayStrokeLines, decimateMotionCsv, STROKE_RATE_REASONS, parseMotionCsv, trackClockOffset, withStrokeRate,
+  recordingStrokeRate, replayStrokeLines, strokeRateFromLines, decimateMotionCsv, STROKE_RATE_REASONS, STROKE_RATE_CODES, parseMotionCsv, trackClockOffset, withStrokeRate,
 } from '@paddlesnitch/timing/cadence'
 import { movingRangesFromTrack } from '@paddlesnitch/timing/attitude'
 import { addStrokeRate } from '@paddlesnitch/analysis/device-sessions'
@@ -102,8 +102,26 @@ describe('stroke rate for a recording', () => {
   it("has words for every reason the core gives, never the raw code", () => {
     const header = readFileSync(path.join(CORE, 'include/recorder_core.h'), 'utf8')
     const listed = /\* reason: ([a-z_, ]+)\./.exec(header)?.[1].split(', ')
-    expect(listed).toEqual(['ok', 'too_few_samples', 'too_slow', 'no_rhythm'])
-    for (const r of listed!) expect(STROKE_RATE_REASONS[r]).toBeDefined()
+    expect(listed).toEqual(['ok', 'too_few_samples', 'too_slow', 'no_rhythm', 'not_moving'])
+    for (const r of listed!) {
+      expect(STROKE_RATE_REASONS[r]).toBeDefined()
+      expect(STROKE_RATE_CODES).toContain(r)
+    }
+  })
+
+  it("gives a reason this code doesn't know (a newer core) the code `other` and plain words, never the raw code", () => {
+    const lines = replayStrokeLines('', sidecar({ seconds: 120, hz: 10, strokesPerMin: 56 }))
+      .map(l => l.replace(/^session,moving,0,not_moving,/, 'session,moving,0,gps_lost,'))
+    expect(lines.some(l => l.startsWith('session,moving,0,gps_lost,'))).toBe(true)
+    const { report } = strokeRateFromLines(lines).moving
+    expect(report.code).toBe('other')
+    expect(report.reason).toBe("Couldn't work out a stroke rate from this motion data.")
+  })
+
+  it('knows no codes but the core\'s reasons and `other`', () => {
+    const header = readFileSync(path.join(CORE, 'include/recorder_core.h'), 'utf8')
+    const listed = /\* reason: ([a-z_, ]+)\./.exec(header)![1].split(', ')
+    expect([...STROKE_RATE_CODES].sort()).toEqual([...listed, 'other'].sort())
   })
 
   it("says it can't tell the sample rate when a motion file's clock never moves forward", () => {
@@ -133,7 +151,9 @@ describe('stroke rate for a recording', () => {
 
   it('gives no gated stroke rate when the track never moves (the ungated set is for that)', () => {
     const r = recordingStrokeRate(track([180, 0]), sidecar({ seconds: 180, hz: 50, strokesPerMin: 56 }))
-    expect(r.moving.report.available).toBe(false)
+    expect(r.moving.report).toMatchObject({ available: false, code: 'not_moving' })
+    expect(r.moving.report.reason).toBe("No stretch of the GPS track stayed at 4 km/h or more for 90 s, so there's no stroke rate.")
+    expect(r.all.report.code).toBe('ok')
     expect(r.all.report.available).toBe(true)
   })
 

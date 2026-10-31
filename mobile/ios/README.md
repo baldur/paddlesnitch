@@ -27,6 +27,8 @@ make run              build and launch the app in the simulator, against
 make open             generate the Xcode project and open it (▶ runs the app)
 make test             package tests, then app tests on the newest simulator
 make test-app IOS=17  app tests on iOS 17 (needs Xcode 26; CI runs it)
+make test-app SHARD=1 half the app tests (SHARD=2 the rest); CI runs the two
+                      halves as parallel jobs for each iOS version
 make lint             swift-format + SwiftLint, both strict
 make format           fix formatting
 make generate         regenerate Swift from mobile/contract/

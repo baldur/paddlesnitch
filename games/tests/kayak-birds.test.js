@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCourse, practiceRiver, raceRiver, pointAt, locate, headingAt } from '../kayak/course.js';
-import { createRace, stepRace, started, DIVISION_9 } from '../kayak/race.js';
-import { wrap } from '../kayak/sim.js';
+import { createCourse, practiceRiver, raceRiver, pointAt, locate, headingAt } from '../reading-thames/course.js';
+import { createRace, stepRace, started, DIVISION_9 } from '../reading-thames/race.js';
+import { wrap } from '../reading-thames/sim.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));

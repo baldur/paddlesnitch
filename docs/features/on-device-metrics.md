@@ -207,6 +207,9 @@ ESP32-S3. Confirm once on the bench build.
      reports are worked out again (they key on the core's version); saved
      paddles keep their numbers until recomputed (owner's decision). Live
      stroke rate on the phones waits for phase 4.
+   - **0.5.0:** a recording whose GPS never saw the boat moving at >= 4 km/h
+     for 90 s gets the reason `not_moving` and says so on its page (owner,
+     2026-10-31), instead of suggesting the tracker was loose.
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.
    Then movement-gated distance, the last motion maths left in
    `packages/timing`.

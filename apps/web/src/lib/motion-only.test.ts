@@ -74,7 +74,7 @@ describe('totals and the logbook', () => {
 // its maths is tested in recorder-core/ and cadence.test.ts): `paddlingMin`
 // with a clear stroke at 50 spm, and the rests between.
 const strokes = (paddlingMin: number, rests: [number, number][] = []): StrokeRateSet => ({
-  report: { available: true, reason: '', sampleRateHz: 12.5, rows: 1, medianStrokesPerMin: 50, windows: [] },
+  report: { available: true, code: 'ok', reason: '', sampleRateHz: 12.5, rows: 1, medianStrokesPerMin: 50, windows: [] },
   paddling: { paddlingS: paddlingMin * 60, strokes: paddlingMin * 50, strokesPerMin: 50 },
   rests,
 })

@@ -11,8 +11,8 @@ const report = (over: Partial<DeviceDataReport> = {}): DeviceDataReport => ({
   gnss: { fixTrend: 'steady' },
   ...over,
 } as unknown as DeviceDataReport)
-const cadence = (available: boolean): CadenceReport =>
-  ({ available, reason: available ? '' : 'No stretch showed a clear, repeating stroke.', medianStrokesPerMin: available ? 58 : null } as unknown as CadenceReport)
+const cadence = (available: boolean, code: CadenceReport['code'] = available ? 'ok' : 'no_rhythm'): CadenceReport =>
+  ({ available, code, reason: available ? '' : 'No stretch showed a clear, repeating stroke.', medianStrokesPerMin: available ? 58 : null } as unknown as CadenceReport)
 
 // The old text was addressed to a firmware developer.
 const JARGON = /derivable|firmware|sidecar|\bHz\b|accelerometer|cadence|column/i
@@ -27,11 +27,16 @@ describe('strokeRateCopy', () => {
   it('says the stroke wasn\'t steady when motion data gave nothing', () => {
     expect(strokeRateCopy(report(), cadence(false)).text).toMatch(/couldn’t find a steady stroke/)
   })
+  it("says the GPS never saw the boat moving, not that the tracker was loose, when that's why", () => {
+    const text = strokeRateCopy(report(), cadence(false, 'not_moving')).text
+    expect(text).toBe('The GPS never saw the boat moving for 90 seconds without a break, so there’s no stroke rate.')
+    expect(text).not.toMatch(/fixed in the boat/)
+  })
   it('says the file carried it when it did', () => {
     expect(strokeRateCopy(report({ strokeRate: { available: true, reason: 'x', evidence: null } }), null).text).toBe('Stroke rate came from the file.')
   })
   it('never uses engineering words', () => {
-    for (const c of [cadence(true), cadence(false), null]) {
+    for (const c of [cadence(true), cadence(false), cadence(false, 'not_moving'), null]) {
       for (const r of [report(), report({ hasImu: false })]) expect(strokeRateCopy(r, c).text).not.toMatch(JARGON)
     }
   })

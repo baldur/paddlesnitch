@@ -3,14 +3,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, headingAt, pointAt } from '../kayak/course.js';
-import { wrap } from '../kayak/sim.js';
-import { createRace, stepRace } from '../kayak/race.js';
-import { DRILLS, setupDrill, trackDrill } from '../kayak/drills.js';
+import { courseFromFile, headingAt, pointAt } from '../reading-thames/course.js';
+import { wrap } from '../reading-thames/sim.js';
+import { createRace, stepRace } from '../reading-thames/race.js';
+import { DRILLS, setupDrill, trackDrill } from '../reading-thames/drills.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
-const load = async (id) => courseFromFile(JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8')));
+const load = async (id) => courseFromFile(JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8')));
 
 // A drill's race as main.js makes it: no swans or other boats.
 async function drill(kind) {

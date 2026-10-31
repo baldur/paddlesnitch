@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { practiceRiver, raceRiver, courseFromFile, locate, pointAt } from '../kayak/course.js';
-import { courseMap, headingDegrees, closeUp, follow } from '../kayak/map.js';
+import { practiceRiver, raceRiver, courseFromFile, locate, pointAt } from '../reading-thames/course.js';
+import { courseMap, headingDegrees, closeUp, follow } from '../reading-thames/map.js';
 
-const fromFile = async (name) => courseFromFile(JSON.parse(await readFile(new URL(`../kayak/courses/${name}.json`, import.meta.url), 'utf8')));
+const fromFile = async (name) => courseFromFile(JSON.parse(await readFile(new URL(`../reading-thames/courses/${name}.json`, import.meta.url), 'utf8')));
 
 // Paddles a line along the course at a fixed share of the open water to one
 // side, as a boat would (each position found from the last), and returns the

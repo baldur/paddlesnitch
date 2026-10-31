@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBoat, step, strokeRate, bounceOffBank, BOAT, HULLS } from '../kayak/sim.js';
-import { practiceRiver, raceRiver, locate, pointAt, headingAt, widthAt } from '../kayak/course.js';
+import { createBoat, step, strokeRate, bounceOffBank, BOAT, HULLS } from '../reading-thames/sim.js';
+import { practiceRiver, raceRiver, locate, pointAt, headingAt, widthAt } from '../reading-thames/course.js';
 
 const DT = 1 / 120;
 
@@ -330,9 +330,9 @@ test('a moored narrowboat is bank: you bounce off it', () => {
 
 test('a real river from a course file: true size, and boats cover it speedup times faster', async () => {
   const { readFile } = await import('node:fs/promises');
-  const { courseFromFile } = await import('../kayak/course.js');
-  const { buildWorld } = await import('../kayak/world.js');
-  const data = JSON.parse(await readFile(new URL('../kayak/courses/reading.json', import.meta.url), 'utf8'));
+  const { courseFromFile } = await import('../reading-thames/course.js');
+  const { buildWorld } = await import('../reading-thames/world.js');
+  const data = JSON.parse(await readFile(new URL('../reading-thames/courses/reading.json', import.meta.url), 'utf8'));
   const course = courseFromFile(data);
   // 6.3 km of Thames between the lines, 20-100 m wide, shown as its true distance.
   const km = ((course.finish - course.start) * course.warp) / course.speedup / 1000;
@@ -356,7 +356,7 @@ test('a real river from a course file: true size, and boats cover it speedup tim
 });
 
 test('a real course: moored boats narrow the open water by their own beam', async () => {
-  const { courseFromFile } = await import('../kayak/course.js');
+  const { courseFromFile } = await import('../reading-thames/course.js');
   const line = Array.from({ length: 51 }, (_, i) => [0, -i * 10]);
   const course = courseFromFile({
     line, width: line.map(() => 40), start: 20, finish: 480, warp: 4, speedup: 4,
