@@ -1159,7 +1159,9 @@ export class AttStack extends cdk.Stack {
     // Event) → Firehose → a transform Lambda (keeps only real events, one JSON
     // object per line) → gzipped files under events/year=/month=/day=/.
     const analyticsBucket = new s3.Bucket(this, 'AnalyticsArchive', {
-      bucketName: 'paddlesnitch-analytics-prod',
+      // Not -prod: the first deploy's rollback kept a bucket of that name
+      // (RETAIN), empty and unused; delete it by hand when convenient.
+      bucketName: 'paddlesnitch-analytics-archive',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -1275,7 +1277,7 @@ export class AttStack extends cdk.Stack {
     }).node.addDependency(archiveLogsRole)
     // Zero tolerance: a batch the transform failed, or one Firehose couldn't
     // write, sits in errors/ (raw, uncleaned lines, so it expires in 30 days).
-    const archiveHelp = 'It is under errors/ in paddlesnitch-analytics-prod for 30 days: see docs/features/observability.md § Archive.'
+    const archiveHelp = 'It is under errors/ in paddlesnitch-analytics-archive for 30 days: see docs/features/observability.md § Archive.'
     alarm('AnalyticsArchiveTransformAlarm', {
       alarmName: 'paddlesnitch-analytics-archive-transform',
       alarmDescription: `The analytics archive's transform failed. ${archiveHelp}`,

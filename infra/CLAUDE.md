@@ -140,7 +140,9 @@ CDK does NOT automate this — an AwsCustomResource that flips the active set wo
 
 ## Analytics archive
 
-Every analytics event is copied from the server's logs to `s3://paddlesnitch-analytics-prod/events/` (Firehose plus a transform Lambda) and kept indefinitely; the privacy page says so. Details, the one-off backfill script and how to read it: `docs/features/observability.md` § Archive. Don't add an expiry to `events/` without changing the privacy page first.
+Every analytics event is copied from the server's logs to `s3://paddlesnitch-analytics-archive/events/` (Firehose plus a transform Lambda) and kept indefinitely; the privacy page says so. Details, the one-off backfill script and how to read it: `docs/features/observability.md` § Archive. Don't add an expiry to `events/` without changing the privacy page first.
+
+**Lesson (2026-10-31): a new `RETAIN` bucket with a fixed name survives a failed first deploy,** and the next deploy fails with "already exists". The archive's first deploy rolled back on the subscription filter (fixed in #786), left `paddlesnitch-analytics-prod` behind, and the bucket became `paddlesnitch-analytics-archive`. Delete the empty `-prod` bucket by hand. A subscription filter's first deploy sends Firehose a test record: the logs role needs AWS's documented `aws:SourceArn` form (`arn:aws:logs:<region>:<account>:*`), and its policy must exist well before the subscription.
 
 ## Cost Model (Production, Low Scale)
 
