@@ -84,6 +84,8 @@ final class AccountTests: AppTestCase {
         app.buttons["Cancel"].firstMatch.tap()
         XCTAssertTrue(app.buttons["confirm-delete-account"].firstMatch.disappears(timeout: 5))
         selectTab("Paddles")
+        // A signed-in list has Add paddle; then the notice's absence means something.
+        XCTAssertTrue(app.buttons["Add paddle"].appears(timeout: 10), "still signed in")
         XCTAssertFalse(element("sample-notice").exists, "still signed in")
     }
 
