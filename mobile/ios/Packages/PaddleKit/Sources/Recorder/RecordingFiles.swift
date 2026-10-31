@@ -20,12 +20,20 @@ public final class RecordingFiles: RecordingSink {
     private let trackHandle: FileHandle
     private let motionHandle: FileHandle
 
+    /// A second recording started in the same second becomes
+    /// `track_<stamp>_1`, `_2` and so on, the tracker's rule
+    /// (firmware/src/storage.cpp), so the server sees one naming scheme.
     public init(directory: URL, start: Date) throws {
-        let stem = "track_" + Self.stamp(start)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Self.excludeFromBackup(directory)
+        let base = "track_" + Self.stamp(start)
+        var stem = base
+        for i in 1..<100 where FileManager.default.fileExists(atPath: directory.appending(path: stem + ".csv").path) {
+            stem = "\(base)_\(i)"
+        }
         track = directory.appending(path: stem + ".csv")
         motion = directory.appending(path: stem + "_i10.csv")
         log = directory.appending(path: stem + ".log")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         trackHandle = try Self.create(track)
         motionHandle = try Self.create(motion)
     }
@@ -82,6 +90,16 @@ public final class RecordingFiles: RecordingSink {
     public func finish(_ recorder: PhoneRecorder) throws {
         recorder.finish()
         try close(droppedLate: recorder.droppedLate, droppedUnpaired: recorder.droppedUnpaired)
+    }
+
+    /// Not in iCloud or computer backups: a track shows where someone
+    /// paddles from (lead, #761, as Android's allowBackup=false). Until
+    /// upload (C3) a recording lost with the phone is the accepted cost.
+    static func excludeFromBackup(_ directory: URL) throws {
+        var folder = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try folder.setResourceValues(values)
     }
 
     private static func create(_ url: URL) throws -> FileHandle {

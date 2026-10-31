@@ -126,12 +126,25 @@ struct RecordingFilesTests {
         #expect(try String(contentsOf: files.log, encoding: .utf8) == "dropped_late,2\ndropped_unpaired,1\n")
     }
 
-    @Test func neverWritesOverAnEarlierRecording() throws {
+    @Test func aSecondRecordingInTheSameSecondGetsTheTrackersSuffix() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let start = Date()
-        _ = try RecordingFiles(directory: directory, start: start)
-        #expect(throws: (any Error).self) { try RecordingFiles(directory: directory, start: start) }
+        let start = Date(timeIntervalSince1970: 1_789_712_662)
+        let first = try RecordingFiles(directory: directory, start: start)
+        let second = try RecordingFiles(directory: directory, start: start)
+        let third = try RecordingFiles(directory: directory, start: start)
+        #expect(first.track.lastPathComponent == "track_20260918_062422.csv")
+        #expect(second.track.lastPathComponent == "track_20260918_062422_1.csv")
+        #expect(second.motion.lastPathComponent == "track_20260918_062422_1_i10.csv")
+        #expect(third.track.lastPathComponent == "track_20260918_062422_2.csv")
+    }
+
+    @Test func recordingsAreLeftOutOfBackups() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        _ = try RecordingFiles(directory: directory, start: Date())
+        let values = try directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        #expect(values.isExcludedFromBackup == true)
     }
 }
 

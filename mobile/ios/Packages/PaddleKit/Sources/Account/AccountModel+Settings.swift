@@ -64,7 +64,8 @@ extension AccountModel {
         root.appending(path: userID, directoryHint: .isDirectory)
     }
 
-    /// Documents/Recordings: kept (and backed up), visible to the app only.
+    /// Documents/Recordings: visible to the app only, left out of backups
+    /// (`RecordingFiles`).
     public nonisolated static let recordingsRoot = URL.documentsDirectory.appending(
         path: "Recordings", directoryHint: .isDirectory)
 

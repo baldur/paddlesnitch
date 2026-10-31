@@ -54,7 +54,9 @@ The format and upload are fixed by the recording contract in
   shows elapsed time, stroke rate "—" until the core has it, the GPS state
   and hold to stop. Recordings are kept per account
   (`Documents/Recordings/<user id>`): deleted with the account, kept on
-  sign-out (the only copy until upload), as on Android. Files are encrypted
+  sign-out (the only copy until upload), and left out of backups, as on
+  Android (#761). A second recording in the same second is
+  `track_<stamp>_1`, the tracker's rule. Files are encrypted
   while locked except while open (`completeUnlessOpen`). Not yet: upload,
   crash recovery, the Live Activity.
 - Recording is **started on screen** and carries on with the screen off using

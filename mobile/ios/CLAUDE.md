@@ -137,8 +137,10 @@ isn't obvious from the code.
 - Recordings are kept per account (`AccountModel.recordings(for:)`,
   Documents/Recordings/<user id>), so an upload can only ever send the
   signed-in account's own. Deleting the account removes that folder; signing
-  out keeps it (the only copy until upload). They stay in the phone's backup
-  for the same reason. Files are `completeUnlessOpen`: encrypted while
+  out keeps it (the only copy until upload). The folder is left out of
+  backups (lead, #761, as Android): a track shows where someone paddles, and
+  losing an un-uploaded one with the phone is the accepted cost until C3.
+  Same second twice: `track_<stamp>_1`, the tracker's rule. Files are `completeUnlessOpen`: encrypted while
   locked, but a file already open stays writable. `.complete` would stop a
   screen-off recording seconds after the lock. A killed recording's file
   can't be reopened until the next unlock.
