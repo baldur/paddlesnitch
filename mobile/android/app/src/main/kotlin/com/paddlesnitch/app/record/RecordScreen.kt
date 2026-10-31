@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import com.paddlesnitch.app.ui.outlinedColors
 import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -81,15 +82,36 @@ const val KEEP_HOLDING = "Keep holding to stop."
 /** How long "Hold to stop" must be held: long enough that a brush or a drybag doesn't end a paddle. */
 const val HOLD_TO_STOP_MS = 1500
 
+/** The GPS line: what it shows, and what a screen reader reads for it. */
+data class GpsLine(val shown: String, val spoken: String)
+
 /**
  * The GPS line under the time, from the core's live values (rc_live_values.fix and
- * since_fix_s, 0.4.0): never worked out in the app.
+ * since_fix_s, 0.4.0), in the words lead and copy-style set for both apps
+ * (#761, Phone recording). Never worked out in the app.
  */
-fun gpsStatus(live: RecorderCore.Live?): String = when {
-    live == null || (!live.fix && live.sinceFixS.isNaN()) -> "Waiting for GPS"
-    live.fix -> "GPS fix"
-    live.sinceFixS < 60 -> "GPS lost ${live.sinceFixS.roundToInt()} s ago"
-    else -> "GPS lost ${(live.sinceFixS / 60).toInt()} min ago"
+fun gpsLine(live: RecorderCore.Live?): GpsLine {
+    if (live == null || (!live.fix && live.sinceFixS.isNaN())) return GpsLine("Waiting for GPS", "Waiting for GPS")
+    if (live.fix) return GpsLine("GPS fix", "GPS fix")
+    val s = live.sinceFixS
+    if (s < 1) return GpsLine("GPS lost", "GPS lost")
+    if (s < 60) { val n = s.toInt(); return GpsLine("GPS lost $n s ago", "GPS lost $n ${if (n == 1) "second" else "seconds"} ago") }
+    val m = (s / 60).toInt()   // whole minutes, rounded down, and still minutes past an hour
+    return GpsLine("GPS lost $m min ago", "GPS lost $m ${if (m == 1) "minute" else "minutes"} ago")
+}
+
+/**
+ * What to announce once when the GPS state changes from [before] to [now]: "GPS lost" as
+ * it goes, "GPS back" when it returns after a loss, otherwise nothing (the line itself is
+ * not a live region, so the count never talks every second).
+ */
+fun gpsAnnouncement(before: RecorderCore.Live?, now: RecorderCore.Live?): String? {
+    fun lost(l: RecorderCore.Live?) = l != null && !l.fix && !l.sinceFixS.isNaN()
+    return when {
+        lost(now) && !lost(before) -> "GPS lost"
+        now?.fix == true && lost(before) -> "GPS back"
+        else -> null
+    }
 }
 
 /** The stroke rate as the core gives it: "—" until it has one (rc_phone_live is NaN until phase 2). */
@@ -174,13 +196,15 @@ private fun Recording(state: RecordingService.State.Recording, onStop: () -> Uni
     }
     val elapsed = fmtClock(elapsedMs / 1000.0)
     Tile("Elapsed", elapsed, "Elapsed, $elapsed")
-    val now = live
-    val gps = gpsStatus(now)
-    val lost = now != null && !now.fix && !now.sinceFixS.isNaN()
-    // A live region, so TalkBack says when the fix comes or goes; while lost it hears
-    // "GPS lost" once, not a new number every second.
-    Text(gps, color = if (now?.fix == true) PsColor.muted else PsColor.red, fontSize = 18.sp,
-        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = if (lost) "GPS lost" else gps })
+    val gps = gpsLine(live)
+    val view = LocalView.current
+    var before by remember { mutableStateOf<RecorderCore.Live?>(null) }
+    LaunchedEffect(live) {
+        gpsAnnouncement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
+        before = live
+    }
+    Text(gps.shown, color = if (live?.fix == true) PsColor.muted else PsColor.red, fontSize = 18.sp,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = gps.spoken })
     val spm = liveStrokeRate(live)
     Tile("Stroke rate", spm, if (spm == "—") "Stroke rate, not measured yet" else "Stroke rate, $spm strokes per minute")
     Text(

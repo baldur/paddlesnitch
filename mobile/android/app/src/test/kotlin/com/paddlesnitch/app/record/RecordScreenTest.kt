@@ -165,17 +165,43 @@ class RecordScreenTest {
         }
     }
 
-    @Test fun theGpsLineIsTheCoresState() {
-        assertEquals("Waiting for GPS", gpsStatus(null))
-        assertEquals("Waiting for GPS", gpsStatus(notReady))
-        assertEquals("GPS fix", gpsStatus(notReady.copy(fix = true, sinceFixS = 0f)))
-        assertEquals("GPS lost 40 s ago", gpsStatus(notReady.copy(sinceFixS = 40f)))
-        assertEquals("GPS lost 2 min ago", gpsStatus(notReady.copy(sinceFixS = 150f)))
+    private fun lost(s: Float) = notReady.copy(fix = false, sinceFixS = s)
+    private val fixed = notReady.copy(fix = true, sinceFixS = 0f)
+
+    // The table lead and copy-style set for both apps (#761, Phone recording).
+    @Test fun theGpsLineIsTheCoresStateInTheAgreedWords() {
+        assertEquals(GpsLine("Waiting for GPS", "Waiting for GPS"), gpsLine(null))
+        assertEquals(GpsLine("Waiting for GPS", "Waiting for GPS"), gpsLine(notReady))
+        assertEquals(GpsLine("GPS fix", "GPS fix"), gpsLine(fixed))
+        assertEquals(GpsLine("GPS lost", "GPS lost"), gpsLine(lost(0.4f)))
+        assertEquals(GpsLine("GPS lost 1 s ago", "GPS lost 1 second ago"), gpsLine(lost(1.9f)))
+        assertEquals(GpsLine("GPS lost 40 s ago", "GPS lost 40 seconds ago"), gpsLine(lost(40.7f)))
+        assertEquals(GpsLine("GPS lost 1 min ago", "GPS lost 1 minute ago"), gpsLine(lost(60f)))
+        assertEquals(GpsLine("GPS lost 2 min ago", "GPS lost 2 minutes ago"), gpsLine(lost(179f)))
+        assertEquals(GpsLine("GPS lost 75 min ago", "GPS lost 75 minutes ago"), gpsLine(lost(4_530f)))
+    }
+
+    @Test fun onlyLosingAndRegainingTheFixAreAnnounced() {
+        assertEquals(null, gpsAnnouncement(null, notReady))            // waiting: nothing
+        assertEquals(null, gpsAnnouncement(notReady, fixed))           // a first fix isn't "back"
+        assertEquals("GPS lost", gpsAnnouncement(fixed, lost(0.2f)))
+        assertEquals(null, gpsAnnouncement(lost(0.2f), lost(1.2f)))     // the count never talks
+        assertEquals(null, gpsAnnouncement(lost(59f), lost(60f)))
+        assertEquals("GPS back", gpsAnnouncement(lost(12f), fixed))
+        assertEquals(null, gpsAnnouncement(fixed, fixed))
+    }
+
+    @Test fun theGpsLineIsNotALiveRegion() {
+        RecordingService.set(recording)
+        show(RecordingService.State.Recording(files, MutableStateFlow(lost(40f)), startedAt = 1_000L))
+        val node = compose.onNodeWithContentDescription("GPS lost 40 seconds ago").fetchSemanticsNode()
+        assertEquals(false, node.config.contains(androidx.compose.ui.semantics.SemanticsProperties.LiveRegion))
+        compose.onNodeWithText("GPS lost 40 s ago", useUnmergedTree = true).assertDoesNotExist()   // cleared: one label, the spoken one
     }
 
     @Test fun recordingWithoutAFixSaysWaitingForGps() {
         show(recording)
-        compose.onNodeWithText("Waiting for GPS").assertExists()
+        compose.onNodeWithContentDescription("Waiting for GPS").assertExists()
     }
 
     @Test fun theStrokeRateIsTheCoresOrADash() {
