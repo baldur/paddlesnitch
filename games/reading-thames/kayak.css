@@ -28,7 +28,8 @@ header {
   color: #fff;
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
 }
-header h1 { font-size: 1.25rem; margin: 0 auto 0 0.5rem; }
+header h1 { font-size: 1.25rem; margin: 0 auto 0 0.5rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header a, header button { white-space: nowrap; } /* "Reading Thames" never wraps the bar on a narrow phone */
 header a { color: #fff; text-decoration: none; opacity: 0.85; }
 header button {
   color: #fff;
@@ -300,7 +301,7 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 #menu { width: min(36rem, calc(100vw - 32px)); }
 #menu h3 { margin: 0 0 0.6rem; }
 #menu .progress { margin: -0.6rem 0 0.2rem; color: var(--accent); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-#menu .step-buttons { display: flex; justify-content: flex-end; gap: 0.5rem; margin: 1rem 0 0; }
+#menu .step-buttons { display: flex; justify-content: flex-end; gap: 0.5rem; margin: 1rem 0 0; position: sticky; bottom: -1px; padding-block: 0.5rem; background: var(--bg); } /* Next and Done in reach from anywhere in a long step */
 #menu .step-buttons button { padding: 0.6rem 1rem; }
 #menu .step-buttons .next { background: var(--accent); border-color: var(--accent); color: #fff; }
 #menu .step-buttons .back { margin-right: auto; }
@@ -320,17 +321,19 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 #menu fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 0.6rem; padding: 0.4rem 0.75rem 0.6rem; }
 #menu legend { color: var(--dim); font-size: 0.85rem; padding: 0 0.25rem; }
 #menu .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; }
-#menu .row label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; min-height: 32px; }
+#menu .row label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; min-height: 44px; }
 #menu .swatch input { width: 2.4rem; height: 1.8rem; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
 .pic { display: block; background: radial-gradient(ellipse at 50% 85%, #7fb3cf 0 45%, #b9d6e4 46%); border-radius: 12px; }
 #menu .maker { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 0.9rem; align-items: start; }
+#menu .maker > .pic { position: sticky; top: 0; } /* stays in view while you scroll the choices */
 #paddlerPic { width: 100%; aspect-ratio: 1; }
-#skinTones { display: grid; grid-template-columns: repeat(8, minmax(0, 2.2rem)); gap: 0.3rem; }
+#skinTones { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.75rem, 2.75rem)); gap: 0.2rem; } /* each tone 44 px to tap: two rows on a phone */
+#skinTones label { padding: 0.2rem; }
 #skinTones label { position: relative; cursor: pointer; }
 #skinTones input { position: absolute; opacity: 0; }
 #skinTones span { display: block; aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--line); }
 #skinTones input:checked + span { border-color: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
-#skinTones input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
+#skinTones input:focus-visible + span { outline: 2px dashed var(--ink); outline-offset: 4px; } /* not the chosen tone's ring */
 #menu .boat-pics { display: grid; grid-template-columns: 1fr 22%; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
 #boatPic { width: 100%; height: auto; background: #7fb3cf; }
 #sectionPic { width: 100%; height: auto; background: #b9d6e4; }
@@ -348,6 +351,7 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 @media (max-width: 520px) {
   #menu .maker { grid-template-columns: 1fr; }
   #paddlerPic { width: 55%; margin: 0 auto; }
+  #menu .maker > .pic { position: static; } /* one column: above the choices, it would cover them */
 }
 @media (max-height: 500px) {
   #menu .maker { grid-template-columns: 30% 1fr; }
@@ -467,6 +471,25 @@ summary { cursor: pointer; }
 #clubCards .card small { opacity: 0.8; font-size: 0.74rem; max-width: 9.5rem; line-height: 1.2; }
 #clubCards .card.go { background: #d6452b; border-color: #d6452b; grid-template-columns: 1fr; padding: 0.45rem 1rem; }
 #clubCards .card:hover, #clubCards .card:focus-visible { border-color: #f2c230; outline: none; }
+/* Racing friends, on the bridge and at the canoe club: a row of its own above the cards, in the accent colour. */
+#clubCards .friends { flex-basis: 100%; display: flex; justify-content: center; gap: 0.5rem; }
+#clubCards .friend { pointer-events: auto; display: grid; text-align: left; min-height: 44px; padding: 0.45rem 1rem; border-radius: 14px; border: 1px solid #f2c230;
+  background: #f2c230; color: #1b1a14; font: 0.92rem/1.2 system-ui, sans-serif; cursor: pointer; }
+#clubCards .friend .name { font-weight: 700; }
+#clubCards .friend small { font-size: 0.74rem; opacity: 0.85; }
+#clubCards .friend:hover { border-color: #fff; }
+#clubCards .friend:focus-visible { outline: 3px solid #fff; outline-offset: 2px; } /* plain to see on the yellow, for a keyboard or a d-pad */
+/* A phone held sideways: one row for everything, names only, so the scene (and the canoe club's pin) shows. */
+@media (max-height: 500px) {
+  #clubCards .friends { flex-basis: auto; }
+  #clubCards .card small, #clubCards .card svg { display: none; }
+}
+/* An upright phone with Back showing: the cards sit above Back and Start over. */
+@media (orientation: portrait) and (max-width: 600px) {
+  #club.backable #clubCards { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
+  #club.backable #clubNote { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 116px); } /* and the note above the cards */
+}
+@media (max-width: 860px) { #clubCards .friend small { display: none; } }
 .pin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .pin.canoe { background: #f2c230; }
 .pin.rowing { background: #d6261c; }
@@ -505,11 +528,25 @@ summary { cursor: pointer; }
 #coach span { display: flex; align-items: baseline; gap: 0.25rem; }
 #coach b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 #coach small { font-size: 0.6rem; opacity: 0.75; }
-#lookBtn { display: none; }
-#hud.rowing #lookBtn { display: block; position: absolute; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px); transform: translateX(-50%); min-width: 88px; min-height: 48px;
+#hud .look { display: none; }
+/* Two Look buttons on a phone, one each side of the balance gauge: hold one to look over that shoulder. */
+#hud.rowing .look { display: block; position: absolute; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px); min-width: 88px; min-height: 48px;
   border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 18, 18, 0.6); color: #fff; font-weight: 600; pointer-events: auto; touch-action: none; }
-#hud.rowing .rudder, #hud.rowing #flow { display: none; }
-@media (hover: hover) and (pointer: fine) { #hud.rowing #lookBtn::after { content: ' (↑)'; font-weight: 400; opacity: 0.7; } }
+#hud.rowing #lookLeft { right: calc(50% + 8px); }
+#hud.rowing #lookRight { left: calc(50% + 8px); }
+/* Held sideways: at the outer edges, just above the speed and the meters (where the thumbs rest)… */
+@media (orientation: landscape) {
+  #hud.rowing .look { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 72px); }
+  #hud.rowing #lookLeft { left: max(16px, env(safe-area-inset-left)); right: auto; }
+  #hud.rowing #lookRight { right: max(16px, env(safe-area-inset-right)); left: auto; }
+}
+/* …and on a wide screen, in the bottom row beside the gauge, where there's room. */
+@media (orientation: landscape) and (min-width: 760px) {
+  #hud.rowing .look { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 8px); }
+  #hud.rowing #lookLeft { right: calc(50% + 112px); left: auto; }
+  #hud.rowing #lookRight { left: calc(50% + 112px); right: auto; }
+}
+@media (hover: hover) and (pointer: fine) { #hud.rowing #lookLeft::after { content: ' (Q)'; font-weight: 400; opacity: 0.7; } #hud.rowing #lookRight::after { content: ' (E)'; font-weight: 400; opacity: 0.7; } }
 /* The erg's monitor: its numbers just above the machine's own. */
 #ergMon { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.7rem; padding: 0.5rem 0.7rem; border-radius: 6px;
   background: #9aa88f; color: #101410; font: 600 0.8rem/1.05 ui-monospace, Menlo, monospace; box-shadow: 0 0 0 4px #161718; pointer-events: none; }

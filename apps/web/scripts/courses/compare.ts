@@ -25,9 +25,9 @@ const SHOTS = path.join(OUT, 'compare')
 fs.mkdirSync(SHOTS, { recursive: true })
 const GAMES = path.resolve(process.cwd(), '../../games')
 const frames = JSON.parse(fs.readFileSync(path.join(OUT, 'frames.json'), 'utf8')) as Array<{ s: number; dir: 1 | -1; name: string }>
-const course = JSON.parse(fs.readFileSync(path.join(GAMES, 'kayak/courses', `${id}.json`), 'utf8')) as { start: number; finish: number }
+const course = JSON.parse(fs.readFileSync(path.join(GAMES, 'reading-thames/courses', `${id}.json`), 'utf8')) as { start: number; finish: number }
 
-// What the game exposes on window.kayak with #debug (games/kayak/main.js).
+// What the game exposes on window.kayak with #debug (games/reading-thames/main.js).
 type Sample = { x: number; z: number; s: number; tx: number; tz: number }
 type Kayak = { gpu?: unknown; state: string; course: { samples: Sample[] }; boat: Record<string, number>; race: { player: { loc: unknown }; start: { line: number } } }
 
@@ -43,7 +43,7 @@ async function main() {
   const port = (server.address() as { port: number }).port
   const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch())
   const page = await browser.newPage({ viewport: { width: 800, height: 500 } })
-  await page.goto(`http://localhost:${port}/kayak/#debug`)
+  await page.goto(`http://localhost:${port}/reading-thames/#debug`)
   await page.waitForFunction(() => (window as unknown as { kayak?: Kayak }).kayak?.gpu, null, { timeout: 30000 })
   await page.click(`#menu button[value="${id}"]`)
   // The horn comes once you sit still on the line: put the boat there.

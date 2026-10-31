@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBoat } from '../kayak/sim.js';
-import { encodeState, decodeState, createTrack, receive, sample, applyState, DELAY } from '../kayak/net.js';
+import { createBoat } from '../reading-thames/sim.js';
+import { encodeState, decodeState, createTrack, receive, sample, applyState, DELAY } from '../reading-thames/net.js';
 
 test('a boat\'s state goes over the wire and back', () => {
   const boat = Object.assign(createBoat({ x: 12.3456, z: -40.1, heading: 0.5 }), { speed: 3.21, roll: 0.05, time: 10, paddle: { side: 'right', at: 9.8 } });

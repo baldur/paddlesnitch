@@ -30,11 +30,11 @@ API Gateway charges per message, about $1 per million; a phone sends 10 a second
 
 ### Accounts
 
-`games/kayak/account.js` asks `GET /api/trpc/me` once (only when served under `/games/`; served on its own there's no API and nothing is gated). Signed out, the race buttons go to `/signin?next=/games/kayak/`; practice still works.
+`games/reading-thames/account.js` asks `GET /api/trpc/me` once (only when served under `/games/`; served on its own there's no API and nothing is gated). Signed out, the race buttons go to `/signin?next=/games/reading-thames/`; practice still works.
 
 ### Leaderboard
 
-- Stored per course at `games/kayak/leaderboard/<course>.json`: each player's best (time as shown, boat, when), sorted, the top 100 kept. The boat is one of the nine in `games/kayak/boats.js` (`GAME_BOATS` in core, a test keeps them the same); times from before there were boats say `stable`, `club` or `racing`.
+- Stored per course at `games/kayak/leaderboard/<course>.json`: each player's best (time as shown, boat, when), sorted, the top 100 kept. The boat is one of the nine in `games/reading-thames/boats.js` (`GAME_BOATS` in core, a test keeps them the same); times from before there were boats say `stable`, `club` or `racing`.
 - Your paddler and boat (`games.kit.get`/`.set`, signed in): kept at `users/{id}/game-kit.json`, so the account's erasure removes it and the export includes it. Only colours and the known choices are accepted.
 - `games.submit` (signed in) records a finished race: kept if it's your best on that course and plausible (no faster than about 18 km/h over the course's shown distance).
 - `games.leaderboard` (public) returns the top 20 and your own best and rank.
@@ -56,7 +56,7 @@ API Gateway charges per message, about $1 per million; a phone sends 10 a second
 - `$disconnect`: deletes the connection's objects and tells the others.
 - Each warm Lambda keeps a race's connections in memory for 2 s, so most messages never touch S3. Sending to a connection that has gone fails with "gone"; the relay then deletes it.
 
-**The game** (`games/kayak/live.js`): one WebSocket; the lobby shows who's connected and the round trip to each through the relay (an echo every 2 s, every 10 s once racing). Boat states (`net.js`, 10 a second) are dropped while disconnected; race events queue. A player who disappears from the relay's list is treated as having left.
+**The game** (`games/reading-thames/live.js`): one WebSocket; the lobby shows who's connected and the round trip to each through the relay (an echo every 2 s, every 10 s once racing). Boat states (`net.js`, 10 a second) are dropped while disconnected; race events queue. A player who disappears from the relay's list is treated as having left.
 
 **Racing**:
 

@@ -2,12 +2,12 @@
 // by timing, a gentler balance than the kayak's, crabs, and racing it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBoat } from '../kayak/sim.js';
-import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow } from '../kayak/scull.js';
+import { createBoat } from '../reading-thames/sim.js';
+import { SCULL, SCULL_COLOURS, stepScull, scullRate, scullPose, split, cleanRow, easeLook, lookFromKeys } from '../reading-thames/scull.js';
 import { readFile } from 'node:fs/promises';
-import { createRace, stepRace, started, DIVISION_9 } from '../kayak/race.js';
-import { practiceRiver, headingAt, pointAt, locate, courseFromFile } from '../kayak/course.js';
-import { wrap } from '../kayak/sim.js';
+import { createRace, stepRace, started, DIVISION_9 } from '../reading-thames/race.js';
+import { practiceRiver, headingAt, pointAt, locate, courseFromFile } from '../reading-thames/course.js';
+import { wrap } from '../reading-thames/sim.js';
 
 const DT = 1 / 120;
 // Row for `secs` at `rate` strokes a minute: both oars (the right `late`
@@ -172,7 +172,7 @@ test('a race takes a scull: you row the course to the finish', () => {
 });
 
 test('three sculls on the rack: the trainer forgives a roll the fine boat crabs on, and is slower', async () => {
-  const { SCULLS, scullById } = await import('../kayak/scull.js');
+  const { SCULLS, scullById } = await import('../reading-thames/scull.js');
   assert.deepEqual(SCULLS.map((s) => s.id), ['trainer', 'club', 'fine']);
   assert.equal(scullById('nope'), SCULLS[1]);
   const [trainer, , fine] = SCULLS.map((s) => s.hull);
@@ -274,7 +274,7 @@ function rowRace(race, secs) {
 }
 
 test("the Head of the River: rowed round the Loop's islands against scullers sent off 30 s apart, and finished", async () => {
-  const course = courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
   const race = createRace(course, { you: { hull: SCULL }, rivals: DIVISION_9.slice(0, 5), format: 'interval', birds: false, traffic: false, seed: 3 });
   rowRace(race, 2400);
   assert.ok(race.player.finish !== null, `finished: at ${race.player.loc.s.toFixed(0)} of ${course.finish}`);
@@ -297,4 +297,24 @@ test("rowing choices read back from the device: an unknown scull or colour falls
   assert.deepEqual(cleanRow(null), { scull: 'club', colour: SCULL_COLOURS[0] });
   assert.deepEqual(cleanRow({ scull: 'fine', colour: SCULL_COLOURS[2] }), { scull: 'fine', colour: SCULL_COLOURS[2] });
   assert.deepEqual(cleanRow({ scull: 'canoe', colour: '#00ff00' }), { scull: 'club', colour: SCULL_COLOURS[0] });
+});
+
+test('looking round over either shoulder: the head turns towards it quickly, not in a jump, and comes back', () => {
+  let look = 0;
+  look = easeLook(look, -1, DT);
+  assert.ok(look < 0 && look > -0.2, 'starts towards the left shoulder, no jump');
+  for (let t = 0; t < 1; t += DT) look = easeLook(look, -1, DT);
+  assert.ok(look < -0.99, 'over the left shoulder within a second');
+  for (let t = 0; t < 1; t += DT) look = easeLook(look, 1, DT);
+  assert.ok(look > 0.99, 'and over to the right');
+  for (let t = 0; t < 1; t += DT) look = easeLook(look, 0, DT);
+  assert.ok(Math.abs(look) < 0.01, 'back down the boat');
+});
+
+test('with look keys held together, the last one still held wins; none held, back down the boat', () => {
+  assert.equal(lookFromKeys([]), 0);
+  assert.equal(lookFromKeys(['KeyE']), 1);
+  assert.equal(lookFromKeys(['KeyE', 'KeyQ']), -1, 'E then Q: left');
+  assert.equal(lookFromKeys(['KeyE']), 1, 'let go of Q: back to E, still held');
+  assert.equal(lookFromKeys(['ArrowUp', 'KeyE']), 1);
 });

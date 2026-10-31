@@ -26,6 +26,9 @@ permissions:
 
 concurrency:
   group: ios-${{ github.ref }}
+  # A newer run replaces an older one on the same PR or on main, so it
+  # doesn't hold macOS runners (5 jobs a run): when several merges land
+  # together, only the newest main result matters.
   cancel-in-progress: true
 
 defaults:
@@ -50,12 +53,17 @@ jobs:
         run: make test-packages
 
   app:
-    name: iOS app (${{ matrix.name }})
+    # Two jobs per iOS version, each half the UI tests (Makefile, SHARD), so
+    # the slowest check takes about half as long. Two, not three: a public
+    # repo runs 5 macOS jobs at once, and this is 4 plus the packages job.
+    name: iOS app (${{ matrix.name }}, ${{ matrix.shard }} of 2)
     runs-on: macos-26
     timeout-minutes: 70
     strategy:
       fail-fast: false
       matrix:
+        ios: [latest, '17']
+        shard: [1, 2]
         include:
           - name: newest iOS
             ios: latest
@@ -81,13 +89,13 @@ jobs:
           done
           exit 1
       - name: App tests
-        run: make test-app IOS=${{ matrix.ios }}
+        run: make test-app IOS=${{ matrix.ios }} SHARD=${{ matrix.shard }}
       - name: Keep the test results
         # Also when the job's timeout cancels it: that's when they're needed most.
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results-${{ matrix.ios }}
+          name: ios-test-results-${{ matrix.ios }}-${{ matrix.shard }}
           # Crash reports from the simulator land in the runner's own logs.
           path: |
             mobile/ios/.build/DerivedData/Logs/Test

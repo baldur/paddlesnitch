@@ -6,7 +6,7 @@
 //
 //   pnpm --filter web course:route <course-id>
 //
-// Writes games/kayak/courses/<id>.json's route (rounded to turns a K1 can
+// Writes games/reading-thames/courses/<id>.json's route (rounded to turns a K1 can
 // make, kept on the water), and what's placed along it: the places named on
 // screen, where swans crowd, the gates you must go through, the cues as you
 // come up to a turn, and turning buoys. Names (Reading Rowing Club, Piper's
@@ -17,7 +17,7 @@ import path from 'path'
 import { banks, cumulative, projection, resample, type LatLng, type XZ } from './lib/river'
 import { routePlaces, sides, type Landmark } from './lib/course-file'
 import { along, joinRuns, offLand, routePoints, smoothTurns, tightest, type Leg, type Portage } from './lib/route'
-import { waterMap } from '../../../../games/kayak/water.js'
+import { waterMap } from '../../../../games/reading-thames/water.js'
 
 const id = process.argv[2]
 if (!id) throw new Error('usage: course:route <course-id>')
@@ -32,7 +32,7 @@ const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'scripts/cour
   cues?: Array<{ at: LatLng; heading: number; turn: 'left' | 'right' | 'either'; text: string }>
   marks?: Array<{ at: LatLng }>
 }
-const courses = path.resolve(process.cwd(), '../../games/kayak/courses')
+const courses = path.resolve(process.cwd(), '../../games/reading-thames/courses')
 const file = path.join(courses, `${id}.json`)
 const course = JSON.parse(fs.readFileSync(config.world ? path.join(courses, `${config.world}.json`) : file, 'utf8'))
 if (config.world) for (const k of ['name', 'title', 'blurb'] as const) if (config[k]) course[k] = config[k]

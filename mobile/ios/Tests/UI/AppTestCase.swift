@@ -354,7 +354,7 @@ class AppTestCase: XCTestCase {
 
     /// You → Account, signed in.
     func openAccount() {
-        tab("You").tap()
+        selectTab("You")
         let row = app.buttons["Account"]
         XCTAssertTrue(row.appears(timeout: 10))
         row.tap()
@@ -381,7 +381,12 @@ class AppTestCase: XCTestCase {
     }
 
     /// Tab items, wherever this iOS draws the tab bar.
+    /// The tab bar's button, not a back button with the same label ("You"
+    /// on Account). iOS 26's floating bar may not be a tab bar to XCTest, so
+    /// then any button.
     func tab(_ name: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
+        let label = NSPredicate(format: "label == %@", name)
+        let inBar = app.tabBars.buttons.matching(label).firstMatch
+        return inBar.exists ? inBar : app.buttons.matching(label).firstMatch
     }
 }

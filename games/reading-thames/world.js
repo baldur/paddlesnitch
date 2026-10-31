@@ -1877,6 +1877,14 @@ function lamp(m, f, x, z, along) {
   m.sphere([p[0], top + 0.35, p[2]], 0.1, BRONZE, 2, 5);
 }
 
+// Triangles in one bridge on its own (for the budget test: the river as a
+// whole is near its limit, so a bridge has its own).
+export function bridgeTriangles(course, bridge) {
+  const m = new MeshBuilder();
+  concreteBridge(m, course, bridge);
+  return m.build().count / 3;
+}
+
 function concreteBridge(m, course, bridge) {
   const f = bridgeFrame(course, bridge);
   const { origin, right, fwd } = f;

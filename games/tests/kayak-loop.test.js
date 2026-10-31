@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate, pointAt, riverView } from '../kayak/course.js';
-import { createRace, stepRace, started } from '../kayak/race.js';
-import { createBoat, step, bounceOffShore, wrap } from '../kayak/sim.js';
+import { courseFromFile, locate, pointAt, riverView } from '../reading-thames/course.js';
+import { createRace, stepRace, started } from '../reading-thames/race.js';
+import { createBoat, step, bounceOffShore, wrap } from '../reading-thames/sim.js';
 
-const loop = async () => courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
+const loop = async () => courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
 const gate = (course, words) => course.scenery.gates.find((g) => g.label.includes(words));
 const fromRiver = (course, s) => {
   const p = pointAt(course, s);

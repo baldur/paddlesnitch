@@ -150,3 +150,8 @@ isn't obvious from the code.
   the button goes, and its full-screen cover goes with it. Here that took
   Stop away mid-paddle. `RecordTests` signs out mid-recording
   (`-SignOutWhileRecording`).
+- On iOS 26 a tab tapped while the screens are still redrawing (just after
+  signing out) slides towards the new tab and snaps back. Seen once on CI
+  (main's run 41112890501: the recording shows the slide and the snap; never
+  reproduced locally). Switch tabs with `selectTab(_:)` (Waiting.swift), which
+  taps again until the tab is selected, never `tab(...).tap()`.

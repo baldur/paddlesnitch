@@ -3,13 +3,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate } from '../kayak/course.js';
-import { waterMap } from '../kayak/water.js';
-import { createRace } from '../kayak/race.js';
-import { OUTINGS, CRUISE, HIRE, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh } from '../kayak/outing.js';
-import { SWIM, moveTraffic, overturned } from '../kayak/traffic.js';
+import { courseFromFile, locate } from '../reading-thames/course.js';
+import { waterMap } from '../reading-thames/water.js';
+import { createRace } from '../reading-thames/race.js';
+import { OUTINGS, CRUISE, HIRE, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh } from '../reading-thames/outing.js';
+import { SWIM, TRAFFIC, moveTraffic, overturned } from '../reading-thames/traffic.js';
+import { swimmerMesh } from '../reading-thames/meshes.js';
 
-const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
+const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const DT = 1 / 60;
 
 async function outing(kind) {
@@ -126,9 +127,18 @@ test('ram a sculler or a kayaker with the launch and they fall in, swim by the u
     assert.deepEqual([t.x, t.z], at, 'the boat stays where it went over');
     assert.equal(overturned(t, race.time).over, 1, 'upside down');
     assert.ok(overturned(t, race.time).swimming, 'and its crew in the water');
-    for (let s = 0; s < SWIM; s += DT) stepOuting(race, DT, {});
+    // Righted and off again from where it went over: no jump along the river
+    // on the frame it's righted (its timetable picks up SWIM seconds late).
+    const k = race.course.speedup ?? 1;
+    let jump = 0;
+    for (let s = 0; s < SWIM; s += DT) {
+      const was = [t.x, t.z, t.swim];
+      stepOuting(race, DT, {});
+      if (was[2] !== undefined && t.swim === undefined) jump = Math.hypot(t.x - was[0], t.z - was[1]);
+    }
     assert.equal(overturned(t, race.time).over, 0, 'righted');
     assert.ok(Math.hypot(t.x - at[0], t.z - at[1]) > 1, 'and on its way again');
+    assert.ok(jump < 2 * TRAFFIC[kind].speed * k * DT, `no jump: ${jump.toFixed(2)} m on righting`);
   }
 });
 
@@ -141,8 +151,41 @@ test("an eight, a cruiser or a motorboat doesn't go over, and nobody does at a c
   assert.ok(events.includes('bump') && !events.some((e) => e.startsWith('tipped')), `slow: ${events}`);
 });
 
-test("the boats you're on are small meshes with no NaN", () => {
-  for (const mesh of [tripBoatMesh(), launchMesh()]) {
+test('a boat you bumped is solid again once you are 10 m clear; a crew already in the water is not knocked in twice', async () => {
+  const { race, t, events } = await ram('eight', HIRE.top);
+  assert.ok(events.includes('bump'));
+  const b = race.player.boat;
+  // Back off 12 m, then come at it again.
+  const away = [Math.cos(t.heading), Math.sin(t.heading)];
+  Object.assign(b, { x: t.x + away[0] * 12, z: t.z + away[1] * 12, speed: 0 });
+  stepOuting(race, DT, {});
+  Object.assign(b, { x: t.x + away[0] * 8, z: t.z + away[1] * 8, speed: HIRE.top, heading: t.heading - Math.PI / 2 });
+  const again = [];
+  for (let i = 0; i < 300 && !again.includes('bump'); i++) again.push(...stepOuting(race, DT, { throttle: 1 }));
+  assert.ok(again.includes('bump'), 'bumped again: still solid');
+  // A sculler knocked in, rammed again while its crew swims: a bump, no second ducking.
+  const s = await ram('sculler', HIRE.top);
+  const swim = s.t.swim;
+  const sb = s.race.player.boat;
+  const side = [Math.cos(s.t.heading), Math.sin(s.t.heading)];
+  Object.assign(sb, { x: s.t.x + side[0] * 12, z: s.t.z + side[1] * 12, speed: 0 });
+  stepOuting(s.race, DT, {});
+  Object.assign(sb, { x: s.t.x + side[0] * 8, z: s.t.z + side[1] * 8, speed: HIRE.top, heading: s.t.heading - Math.PI / 2 });
+  const twice = [];
+  for (let i = 0; i < 300 && !twice.includes('bump'); i++) twice.push(...stepOuting(s.race, DT, { throttle: 1 }));
+  assert.ok(twice.includes('bump') && !twice.some((e) => e.startsWith('tipped')), twice.join(','));
+  assert.equal(s.t.swim, swim, 'its swim not started again');
+});
+
+test('backing the launch into a sculler at full astern knocks them in too (owner: any ram above a crawl)', async () => {
+  const { events } = await ram('sculler', -HIRE.astern, 2.6);
+  // (rammed going astern: the stern first)
+  assert.ok(Math.abs(-HIRE.astern) > HIRE.knock);
+  assert.ok(events.includes('bump'));
+});
+
+test("the boats you're on, and a swimmer, are small meshes with no NaN", () => {
+  for (const mesh of [tripBoatMesh(), launchMesh(), swimmerMesh()]) {
     assert.ok(mesh.vertices.every(Number.isFinite));
     assert.ok(mesh.count / 3 < 1500);
   }

@@ -3374,6 +3374,7 @@
   },
   "cadence": {
     "available": true,
+    "code": "ok",
     "reason": "Measured over 38 windows of 60 s at 10 Hz.",
     "sampleRateHz": 10,
     "rows": 12000,

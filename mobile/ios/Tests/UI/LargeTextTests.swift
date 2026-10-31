@@ -37,7 +37,7 @@ final class LargeTextTests: AppTestCase {
     }
 
     func testYouAtTheLargestTextSize() throws {
-        tab("You").tap()
+        selectTab("You")
         XCTAssertTrue(app.buttons["Privacy policy"].appears(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(text(containing: "Version").exists)
@@ -100,7 +100,7 @@ final class LargeTextTests: AppTestCase {
 
     func testTrackersAtTheLargestTextSize() throws {
         signInAndWait()
-        tab("You").tap()
+        selectTab("You")
         scrollToElement(app.buttons["Devices"]).tap()
         XCTAssertTrue(app.navigationBars["Devices"].appears(timeout: 10))
         XCTAssertTrue(element("tracker-C0FFEE01").appears(timeout: 10))
