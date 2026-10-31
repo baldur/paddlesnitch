@@ -83,6 +83,11 @@ describe('analytics archive', () => {
     expect(block.match(/'aws:SourceAccount': this\.account/g)).toHaveLength(2)
   })
 
+  it('lets only the root user read the archive', () => {
+    expect(block).toContain("sid: 'OnlyRootReadsTheArchive'")
+    expect(block).toContain("conditions: { StringNotEquals: { 'aws:PrincipalArn': `arn:aws:iam::${this.account}:root` } }")
+  })
+
   it('emails on any failed batch', () => {
     expect(stack).toContain("alarm('AnalyticsArchiveTransformAlarm'")
     expect(stack).toContain("alarm('AnalyticsArchiveDeliveryAlarm'")

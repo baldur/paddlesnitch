@@ -1168,6 +1168,18 @@ export class AttStack extends cdk.Stack {
       // transform land in errors/ for a look, then go.
       lifecycleRules: [{ id: 'expire-errors', prefix: 'errors/', expiration: cdk.Duration.days(30) }],
     })
+    // Only the account's root user may read what's archived (owner,
+    // 2026-10-31): the AWS account is shared with other projects, and IAM
+    // read rights elsewhere in it shouldn't reach these records. Firehose only
+    // writes; listing stays open so the backfill can see which days exist.
+    analyticsBucket.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'OnlyRootReadsTheArchive',
+      effect: iam.Effect.DENY,
+      principals: [new iam.AnyPrincipal()],
+      actions: ['s3:GetObject', 's3:GetObjectVersion'],
+      resources: [analyticsBucket.arnForObjects('*')],
+      conditions: { StringNotEquals: { 'aws:PrincipalArn': `arn:aws:iam::${this.account}:root` } },
+    }))
     const archiveTransformFn = new lambda.Function(this, 'AnalyticsArchiveTransformFn', {
       logRetention: LOG_RETENTION,
       functionName: 'paddlesnitch-analytics-archive',

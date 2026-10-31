@@ -27,7 +27,8 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 for ((d = DAYS; d >= 0; d--)); do
   day=$(date -u -v-"${d}"d +%Y-%m-%d 2>/dev/null || date -u -d "-${d} days" +%Y-%m-%d)
   key="events/year=${day:0:4}/month=${day:5:2}/day=${day:8:2}/backfill.json.gz"
-  if aws s3api head-object --bucket "$BUCKET" --key "$key" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
+  # Listing, not reading: only the root user may read the archive.
+  if [ "$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$key" --max-items 1 --query 'KeyCount' --output text --profile "$PROFILE" --region "$REGION" 2>/dev/null)" = "1" ]; then
     echo "$day already there"; continue
   fi
   start=$(node -e "console.log(Date.parse('${day}T00:00:00Z'))")
