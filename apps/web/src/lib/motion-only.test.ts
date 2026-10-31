@@ -16,7 +16,7 @@ import { findSimilar, buildRace } from '@paddlesnitch/analysis/similar'
 import { isSameOuting } from '@paddlesnitch/analysis/same-outing'
 import { passesIn, sectionOf } from '@paddlesnitch/analysis/section-passes'
 import type { AnalysisSession, SessionSummary } from '@paddlesnitch/analysis/analysis-store'
-import { restsFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
+import type { StrokeRateSet } from '@paddlesnitch/timing/cadence'
 import { recordingStart, type NoPaddleReason } from '@paddlesnitch/timing/device'
 
 const NOW = new Date('2026-10-07T12:00:00Z')   // a Wednesday
@@ -70,26 +70,25 @@ describe('totals and the logbook', () => {
 })
 
 // --- the paddle itself ---
-const w = (tMin: number, spm: number) => ({ tMs: tMin * 60_000, cyclesPerMin: spm / 2, strokesPerMin: spm, alternating: true, confidence: 0.8 })
-const cadence = (windows: ReturnType<typeof w>[]): CadenceReport => ({ available: true, reason: '', sampleRateHz: 10, rows: 1, medianStrokesPerMin: 50, windows })
-// Windows every 30 s: 0-12 min paddling, a 5 min rest, 17-29 min paddling.
-const steady = (from: number, to: number) => Array.from({ length: Math.round((to - from) * 2) - 1 }, (_, i) => w(from + i / 2, 50))
-const TWO_STRETCHES = cadence([...steady(0, 12), ...steady(17, 29)])
+// What the recorder core says about a recording (recordingStrokeRate(...).all;
+// its maths is tested in recorder-core/ and cadence.test.ts): `paddlingMin`
+// with a clear stroke at 50 spm, and the rests between.
+const strokes = (paddlingMin: number, rests: [number, number][] = []): StrokeRateSet => ({
+  report: { available: true, reason: '', sampleRateHz: 12.5, rows: 1, medianStrokesPerMin: 50, windows: [] },
+  paddling: { paddlingS: paddlingMin * 60, strokes: paddlingMin * 50, strokesPerMin: 50 },
+  rests,
+})
+// 0-12 min paddling, a 5 min rest, 17-29 min paddling.
+const TWO_STRETCHES = strokes(24, [[12 * 60_000, 17 * 60_000]])
 const START = Date.parse('2026-10-11T07:00:00Z')
 const LOST: NoPaddleReason = { kind: 'gps_lost', lostAfterS: 30, recordedS: 1800 }
 
 function motionPaddle(): AnalysisResult {
   // The tracker's millis() clock read 0 at 07:00:00 UTC.
-  return motionOnlyResult({ reason: LOST, cadence: TWO_STRETCHES, startMs: START, clockOffsetMs: START, track: null })!
+  return motionOnlyResult({ reason: LOST, strokes: TWO_STRETCHES, startMs: START, clockOffsetMs: START, track: null })!
 }
 
 describe('a paddle from the motion data alone', () => {
-  it('rests are the gaps of a minute or more between stretches with a stroke', () => {
-    expect(restsFromMotion(TWO_STRETCHES)).toEqual([[12 * 60_000, 17 * 60_000]])
-    // One missed window (30 s) is a turn or a splash, not a rest.
-    expect(restsFromMotion(cadence([...steady(0, 5), ...steady(5.5, 12)]))).toEqual([])
-  })
-
   it('has paddling time, median stroke rate, strokes and rests, and no distance, speed or pace', () => {
     const r = motionPaddle()
     expect(r.durationS).toBe(24 * 60)
@@ -102,30 +101,30 @@ describe('a paddle from the motion data alone', () => {
 
   it('keeps the route from before the GPS was lost, if any', () => {
     const track = [0, 1, 2].map(s => ({ lat: 51.5 + s * 1e-5, lng: -0.9, timestamp: new Date(START + (s + 5) * 1000) }))
-    const r = motionOnlyResult({ reason: LOST, cadence: TWO_STRETCHES, startMs: START, clockOffsetMs: START, track })!
+    const r = motionOnlyResult({ reason: LOST, strokes: TWO_STRETCHES, startMs: START, clockOffsetMs: START, track })!
     expect(r.points.map(q => [q.t, q.lat])).toEqual([[5, 51.5], [6, 51.50001], [7, 51.50002]])
   })
 
   it('needs 10 minutes of paddling', () => {
     expect(MIN_MOTION_PADDLE_S).toBe(600)
-    expect(motionOnlyResult({ reason: LOST, cadence: cadence(steady(0, 9)), startMs: START, clockOffsetMs: START })).toBeNull()
-    expect(motionOnlyResult({ reason: LOST, cadence: cadence(steady(0, 10)), startMs: START, clockOffsetMs: START })).not.toBeNull()
+    expect(motionOnlyResult({ reason: LOST, strokes: strokes(9), startMs: START, clockOffsetMs: START })).toBeNull()
+    expect(motionOnlyResult({ reason: LOST, strokes: strokes(10), startMs: START, clockOffsetMs: START })).not.toBeNull()
   })
 
   it('never for a desk test, or without a clear stroke', () => {
-    expect(motionOnlyResult({ reason: { kind: 'too_short', movedM: 0, minM: 500 }, cadence: TWO_STRETCHES, startMs: START, clockOffsetMs: START })).toBeNull()
-    expect(motionOnlyResult({ reason: LOST, cadence: { ...cadence([]), available: false, medianStrokesPerMin: null }, startMs: START, clockOffsetMs: START })).toBeNull()
+    expect(motionOnlyResult({ reason: { kind: 'too_short', movedM: 0, minM: 500 }, strokes: TWO_STRETCHES, startMs: START, clockOffsetMs: START })).toBeNull()
+    expect(motionOnlyResult({ reason: LOST, strokes: { report: { ...strokes(0).report, available: false, medianStrokesPerMin: null }, paddling: null, rests: [] }, startMs: START, clockOffsetMs: START })).toBeNull()
   })
 
   it('without the tracker clock it cannot place rests, so it claims none', () => {
-    expect(motionOnlyResult({ reason: LOST, cadence: TWO_STRETCHES, startMs: START, clockOffsetMs: null })!.stops).toEqual([])
+    expect(motionOnlyResult({ reason: LOST, strokes: TWO_STRETCHES, startMs: START, clockOffsetMs: null })!.stops).toEqual([])
   })
 
   it('the plain summary says only what the motion data shows', () => {
     const r = motionPaddle()
     expect(r.insight).toBe("A 24-min paddle from the boat's motion: about 1,200 strokes at 50 spm. 1 rest. No distance or pace: the GPS lost the sky.")
     expect(plainInsight(r)).toBe(r.insight)
-    const never = motionOnlyResult({ reason: { kind: 'no_gps', recordedS: 1800 }, cadence: TWO_STRETCHES, startMs: START, clockOffsetMs: START })!
+    const never = motionOnlyResult({ reason: { kind: 'no_gps', recordedS: 1800 }, strokes: TWO_STRETCHES, startMs: START, clockOffsetMs: START })!
     expect(never.insight).toMatch(/the GPS never found the sky\.$/)
     expect(roundStrokes(5234)).toBe('5,200')
     expect(roundStrokes(640)).toBe('640')
@@ -142,7 +141,7 @@ describe('a paddle from the motion data alone', () => {
 
   it('the share card shows no route, distance or pace', () => {
     const track = [0, 1, 2].map(s => ({ lat: 51.5 + s * 1e-4, lng: -0.9, timestamp: new Date(START + s * 1000) }))
-    const result = motionOnlyResult({ reason: LOST, cadence: TWO_STRETCHES, startMs: START, clockOffsetMs: START, track })!
+    const result = motionOnlyResult({ reason: LOST, strokes: TWO_STRETCHES, startMs: START, clockOffsetMs: START, track })!
     const card = shareCard({ id: 'm', userId: 'u', createdAt: '', paddledAt: '2026-10-11T07:00:00Z', source: { type: 'device' }, doubleStrokeRate: false, note: '', insight: '', result })
     expect(card).toMatchObject({ distance: '—', pace: '—', duration: '24:00', spm: '50 spm', pts: [] })
   })

@@ -6,7 +6,7 @@
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import type { NoPaddleReason } from '@paddlesnitch/timing/device'
-import { paddlingFromMotion, restsFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
+import type { StrokeRateSet } from '@paddlesnitch/timing/cadence'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
 
 export type AnalysisPoint = { t: number; lat: number; lng: number; speed: number; sr: number | null; dps: number | null }
@@ -211,18 +211,19 @@ export const MIN_MOTION_PADDLE_S = 600
  * A paddle from the motion data alone, for a tracker recording whose GPS
  * failed (#414); null when it shows under 10 minutes of paddling. `startMs`:
  * when the recording started (UTC). `clockOffsetMs`: tracker millis() to UTC,
- * which places the rests (none without it). `track`: what the GPS recorded
+ * which places the rests (none without it). `strokes`: the core's ungated
+ * stroke rate set (recordingStrokeRate(...).all). `track`: what the GPS recorded
  * before it was lost, if anything. No distance, speed or pace: the motion
  * data can't show them, and an estimate would sit in the log looking real.
  */
 export function motionOnlyResult(o: {
-  reason: NoPaddleReason; cadence: CadenceReport; startMs: number; clockOffsetMs: number | null; track?: TrackPoint[] | null
+  reason: NoPaddleReason; strokes: StrokeRateSet; startMs: number; clockOffsetMs: number | null; track?: TrackPoint[] | null
 }): AnalysisResult | null {
   if (o.reason.kind === 'too_short') return null
-  const m = paddlingFromMotion(o.cadence)
+  const m = o.strokes.paddling
   if (!m || m.paddlingS < MIN_MOTION_PADDLE_S) return null
   const offset = o.clockOffsetMs
-  const stops: Segment[] = offset == null ? [] : restsFromMotion(o.cadence).map(([from, to]) => ({
+  const stops: Segment[] = offset == null ? [] : o.strokes.rests.map(([from, to]) => ({
     kind: 'rest' as const, fromT: q((from + offset - o.startMs) / 1000, 1), toT: q((to + offset - o.startMs) / 1000, 1), durS: (to - from) / 1000,
     distM: 0, avgSpeed: 0, splitPer500: 0, avgSR: null, srCv: null, avgDps: null,
   }))

@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { noPaddleReason, noPaddleMessage } from '@paddlesnitch/timing/device'
 import { storeDeviceSession, storeDeviceMotion } from '@paddlesnitch/core/devices'
-import { paddlingFromMotion, type CadenceReport } from '@paddlesnitch/timing/cadence'
 import { sidecar } from './tracker-fixtures'
 import { recordingReport, motionMessage } from '@/lib/recording-report'
 import { makeDataDir, cleanDataDir } from './helpers'
@@ -81,19 +80,7 @@ describe("the recording's report carries the reason", () => {
 })
 
 describe('what the motion data says when the GPS failed (#414)', () => {
-  const w = (tMin: number, spm: number) => ({ tMs: tMin * 60_000, cyclesPerMin: spm / 2, strokesPerMin: spm, alternating: true, confidence: 0.8 })
-  const report = (windows: ReturnType<typeof w>[]): CadenceReport => ({ available: true, reason: '', sampleRateHz: 10, rows: 1, medianStrokesPerMin: 50, windows })
-
-  it('paddling time merges overlapping windows; strokes follow each window\'s rate', () => {
-    // Windows every 30 s, 60 s long: 0-2.5 min solid, a rest, then 10-11 min.
-    const r = paddlingFromMotion(report([w(0, 50), w(0.5, 50), w(1, 50), w(1.5, 60), w(10, 40)]))
-    expect(r).toEqual({ paddlingS: 150 + 60, strokes: Math.round(50 * 2 + 60 * 0.5 + 40), strokesPerMin: 50 })
-  })
-
-  it('nothing when no window showed a clear stroke', () => {
-    expect(paddlingFromMotion({ ...report([]), available: false, medianStrokesPerMin: null })).toBeNull()
-  })
-
+  // Paddling time and strokes are the recorder core's (recorder-core/test/stroke_rules.c).
   it('says it in plain words, rounded', () => {
     expect(motionMessage({ paddlingS: 6060, strokes: 5234, strokesPerMin: 51.6 })).toBe('From the motion data: about 1 h 41 min paddling, about 5,200 strokes at 52 spm.')
     expect(motionMessage({ paddlingS: 1500, strokes: 640, strokesPerMin: 48 })).toBe('From the motion data: about 25 min paddling, about 640 strokes at 48 spm.')

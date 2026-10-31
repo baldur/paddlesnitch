@@ -19,6 +19,7 @@ platform's own window only when that platform has a lot of work going on.
 | `firmware` | builder | helper, or a window when busy | `firmware/` | `../paddlesnitch-firmware` |
 | `motion-core` | builder | helper, or a window when busy | `recorder-core/`, `packages/timing/src/{cadence,attitude,device}.ts` | `../paddlesnitch-motion-core` |
 | `game` | builder | helper, or a window when busy | `games/` | `../paddlesnitch-game` |
+| `planner` | builder | window | `packages/waterways/`, `apps/web/scripts/waterways/`, the waterways docs in `docs/features/` | `../paddlesnitch-planner` |
 | `tester` | reviewer | helper | nothing (reports) | none |
 | `security-privacy` | reviewer | helper | nothing (reports) | none |
 | `design-usability` | reviewer | helper | nothing (reports) | none |
@@ -111,6 +112,7 @@ The owner runs everything in one herdr workspace, a tab per role.
 | `firmware` | `firmware/CLAUDE.md`, `docs/features/release-testing.md`, `docs/features/device-uplink.md` |
 | `motion-core` | `packages/timing/CLAUDE.md`, `docs/features/on-device-metrics.md`, `docs/features/one-paddle.md`, `docs/features/motion-only-paddles.md` |
 | `game` | `games/CLAUDE.md` |
+| `planner` | `packages/waterways/CLAUDE.md`, `docs/features/river-planner.md`, `docs/features/waterways-uk-ireland-sources.md` |
 | `design-usability` | `docs/features/design-system.md` |
 | `security-privacy` | `apps/web/CLAUDE.md`, `infra/CLAUDE.md`, `docs/features/devices-platform.md` |
 | `copy-style` | `CLAUDE.md` § Writing for the site |
@@ -118,7 +120,7 @@ The owner runs everything in one herdr workspace, a tab per role.
 ## Local servers and ports
 
 Each window gets its own port so two `next dev`s don't collide:
-`lead` 3200, `android` 3300, `ios` 3400 (`pnpm --filter web exec next dev -p <port>`).
+`lead` 3200, `android` 3300, `ios` 3400, `planner` 3500 (`pnpm --filter web exec next dev -p <port>`).
 The games serve on 8000/8001 (`pnpm games`, `pnpm games:site`).
 
 `pnpm dev` starts cognito-local on :9229 and **reuses** one that's already

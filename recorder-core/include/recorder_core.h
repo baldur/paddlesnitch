@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 /* The core's version, logged with every recording (phase 4: core_ver). */
-#define RC_VERSION "0.3.0"
+#define RC_VERSION "0.4.0"
 
 /* ---- Output streams ---------------------------------------------------- */
 
@@ -130,8 +130,12 @@ typedef struct {
 
 /*
  * What a screen shows now. NAN means "not ready" (show "—"), never a guess.
- * Phase 1 fills none of these; phases 2–4 add them one at a time, each
- * pinned so that replaying a whole recording gives the server's number.
+ * The metrics come in phases 2–4, one at a time, each pinned so that
+ * replaying a whole recording gives the server's number. The GPS state is
+ * there now (0.4.0): it's what the latest row says, so a screen can show
+ * "waiting for GPS" or "GPS lost 40 s ago" without working it out itself.
+ * A phone's comes from its latest tick, not from a row still held for late
+ * samples, so it's never behind by the sensors' batching.
  */
 typedef struct {
     float spm;             /* stroke rate, strokes a minute                    */
@@ -140,6 +144,10 @@ typedef struct {
     float evenness_pct;    /* side A/B imbalance, %                            */
     float speed_kmh;
     float distance_m;      /* movement-gated, never a raw sum of fixes         */
+    int   fix;             /* 1: the latest row has a GPS fix                  */
+    float since_fix_s;     /* seconds from the latest row with a fix to the
+                              latest row: 0 while there's a fix, NAN before
+                              the first                                        */
 } rc_live_values;
 
 /* ---- Stroke rate ----------------------------------------------------------
@@ -246,6 +254,9 @@ typedef struct {
     float     ax, ay, az, gx, gy, gz;   /* the latest sample            */
     float     accel_mag_max, gyro_mag_max;
     uint32_t  window_samples;
+    /* the GPS state for rc_live: the latest row, the latest with a fix */
+    int       rows, fixed, fix;
+    uint32_t  row_ms, fix_ms;
     rc_stroke stroke;
 } rc_state;
 
@@ -283,7 +294,9 @@ void rc_finish(rc_state *rc);
  * and the motion CSV, whole) and writes only RC_STROKE, exactly as the device
  * did. Lines are merged by ms, motion first on a tie (CALL ORDER). Columns
  * are found by name in the track's header, so older trackers' files work.
- * `rc` is scratch space; cfg->has is ignored.
+ * Each file must be in time order, as every recorder writes it: lines are
+ * read as they come, never sorted (a file written backwards reads as a
+ * stopped clock, too_slow). `rc` is scratch space; cfg->has is ignored.
  */
 void rc_replay(rc_state *rc, const rc_config *cfg,
                const char *track, size_t track_len,

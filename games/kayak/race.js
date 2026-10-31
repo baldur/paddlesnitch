@@ -6,6 +6,7 @@
 // avoid and bump into each other and kick for the finish. Pure, no DOM, so
 // whole races run in tests.
 import { createBoat, step, bounceOffBank, bounceOffShore, wrap, steadyBeat, BOAT } from './sim.js';
+import { stepScull } from './scull.js';
 import { locate, pointAt, headingAt, widthAt, roomAhead } from './course.js';
 import { createBirds, stepBirds, swansAhead } from './birds.js';
 import { createAnglers, snagLines, linesAhead } from './anglers.js';
@@ -503,7 +504,7 @@ export function stepRace(race, dt, input) {
     }
     r.draft = washes[i].draft;
     const rock = washes[i].rock + (race.traffic ? trafficWash(race.traffic, r.boat) : 0);
-    const result = step(r.boat, dt, { ...intent, draft: r.draft, rock });
+    const result = (r.boat.hull.scull ? stepScull : step)(r.boat, dt, { ...intent, draft: r.draft, rock });
     // Holding water on the line (but you can paddle up to it from behind).
     if ((!going && bowAt(r) > race.start.line - 4) || !released(race, r)) r.boat.speed *= Math.exp(-0.6 * dt);
     r.loc = locate(course, r.boat.x, r.boat.z, r.loc.i);

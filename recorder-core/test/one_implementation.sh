@@ -8,7 +8,11 @@
 #     in order, and rows stop matching a replay;
 #   - the apps don't convert sensor units (the phone layer does): a second
 #     conversion either doubles it or drifts from the core's.
-# Phases 2-3 add: the TypeScript stroke rate and boat motion are gone.
+#   - stroke rate is worked out only in the core: no autocorrelation or
+#     left/right ratio anywhere else (the server's ran in TypeScript until
+#     phase 2b), and the module the server runs is built from the C sources
+#     as they are (recorder-core/wasm/embed.mjs check).
+# Phase 3 adds boat motion and distance.
 set -euo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 fail=0
@@ -27,5 +31,14 @@ if [ -n "$units" ]; then
     fail=1
 fi
 
-[ "$fail" -eq 0 ] && echo "ok   one implementation: the apps reach the core only through recorder_phone.h"
+maths=$(git grep -n -I --untracked -iE 'autocorr(elat|[[:space:]]*\()|alternating_ratio' -- packages apps mobile ':!*.md' || true)
+if [ -n "$maths" ]; then
+    echo "FAIL: stroke rate maths outside recorder-core/; the server and apps get it from the core:"
+    echo "$maths"
+    fail=1
+fi
+
+node recorder-core/wasm/embed.mjs check || fail=1
+
+[ "$fail" -eq 0 ] && echo "ok   one implementation: the apps reach the core only through recorder_phone.h, stroke rate only in the core"
 exit "$fail"

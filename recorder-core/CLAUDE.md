@@ -22,13 +22,15 @@ test/stroke_known.c       stroke rate on synthetic signals with known answers, e
                           also replayed (streaming = batch)
 test/gen_stroke_fixture.py  writes fixtures/stroke_paddle/calls.csv
 test/stroke_rules.c       the stroke rules at their edges (compiles stroke.c into itself)
+test/live_values.c        rc_live / rc_phone_live: the GPS state a screen shows
 fixtures/                 golden cases (format: fixtures/README.md)
 Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
 library.json              tracker: lib_deps = symlink://../recorder-core (carries -ffp-contract=off)
 test/esp32_no_fma.sh      the tracker's gcc build has no fused multiply-adds
-wasm/                     the server's build: a shim taking plain numbers, and
-                          run_fixtures.mjs, which replays the fixtures under Node
+wasm/                     the server's build: a shim taking plain numbers,
+                          run_fixtures.mjs, which replays the fixtures under Node,
+                          and embed.mjs, which puts the module in packages/timing
 make test                 host build + every fixture; CI runs this
 make wasm WASI_SDK=...    the WebAssembly build + every fixture (wasi-sdk 25)
 ```
@@ -47,8 +49,26 @@ every `rc_gps` and `rc_extras` field in header order. Lines come back
 through the import `env.rcw_write(stream, ptr, len)`. One recording per
 instance. libc's stdio comes along with `snprintf`, so the module imports
 `fd_write`, `fd_seek` and `fd_close`; the core never calls them, so a host
-stubs them and needs no WASI. The module is built in CI and not committed;
-phase 2 decides how the server gets it.
+stubs them and needs no WASI.
+
+**The server runs it from `packages/timing/src/recorder-core-wasm.ts`**
+(phase 2b): the module as base64 in a generated TypeScript file, so the
+site needs no build step, asset path or wasi-sdk. `cadence.ts` replays a
+recording's uploaded files through it (`rcw_replay`) and reads the stroke
+lines back (`recordingStrokeRate`). After changing any C source the module
+is built from, rebuild it:
+
+```
+make wasm WASI_SDK=/path/to/wasi-sdk-25.0
+node wasm/embed.mjs write build/recorder_core.wasm
+```
+
+The file carries the C sources' SHA-256: `embed.mjs check` (in
+`test/one_implementation.sh`, every PR, no compiler needed) fails when they
+changed and the module didn't, and `embed.mjs same` (after CI's own
+`make wasm`) fails unless CI's Linux build is the same bytes. The site's
+recording reports key on that hash too (`STROKE_RATE_VERSION`), so a new
+core works them out again.
 
 ## Rules
 
@@ -78,6 +98,13 @@ phase 2 decides how the server gets it.
   with an unsigned difference, never a signed or widened one
   (`fixtures/clock_wrap`).
 - **Live values are NAN until ready**, never 0 or a guess.
+- **The GPS state is live already (0.4.0):** `fix` and `since_fix_s` from
+  the latest row (the tracker) or the latest tick (phones, whose rows wait
+  for late samples), so a recording screen can say "waiting for GPS" or
+  "GPS lost" without the app working it out (`test/live_values.c`).
+- **Phone altitude is above sea level,** as the tracker's GGA: Android only
+  with `hasMslAltitude()` (API 34+), else not valid; never the ellipsoid
+  height (`recorder_phone.h`).
 - **Stroke rate reads only what the files hold:** each RC_MOTION line as
   written (the 80 ms gate, values as printed, parsed back) and each track
   row's ms and speed. The device feeds the stream its own lines; `rc_replay`
@@ -185,8 +212,11 @@ are byte-identical. Two differences, both from the replay rather than the core:
   the uploaded file (53.1) about 5% high. Resampling the raw gyroscope onto
   an even 50 Hz time grid gave 50.7 against the core's 50.6 (window by
   window within 0.34%). The core's windows, rests and paddling time match
-  the server's exactly on both captures; only the rate moves. The site's
-  stroke rates drop ~5% when the server switches (phase 2b).
+  the server's exactly on both captures; only the rate moves. How far
+  depends on the file: the every-5th files uploaded 13-17 Sep (#234, before
+  the 80 ms gate, #242) stall like the raw stream (median 100 ms, mean
+  114.4), so they read 58.0 on the old server and 50.7 now (-13%); 80 ms
+  files drop ~5%.
 - **16 Sep is two clusters, not one rate.** Its windows split between ~29
   (not doubled) and ~68 (doubled): only 52% look alternating, so the series
   is refused, and the median sits between the clusters, where a few windows
@@ -218,3 +248,10 @@ are byte-identical. Two differences, both from the replay rather than the core:
 - macOS `make` compares timestamps to the second: restoring a file within the
   same second as a build leaves a stale binary. `make clean` before trusting
   a mutation test.
+- The `tester` review of phase 2b (2026-10-31) found that a CR LF track whose
+  speed is the last column lost its moving gate: the header's last cell
+  ended in CR (the old TypeScript trimmed it). Real headers put speed in
+  the middle, so only a hand-made track hit it. Replay tests now cover
+  every column position for CR LF, not only the core's own layout. Also:
+  `rc_replay` reads files in the order they're written and never sorts them
+  (header). The old server sorted, and nothing needs it.

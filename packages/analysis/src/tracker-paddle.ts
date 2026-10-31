@@ -21,7 +21,7 @@ import { getSession, listSessionSummaries, saveSession, type AnalysisSession } f
 import { motionOnlyResult, type AnalysisResult } from './analysis'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { movementDistanceM, noPaddleReason, recordingStart } from '@paddlesnitch/timing/device'
-import { deriveCadence, strokeRangesFor, trackClockOffset } from '@paddlesnitch/timing/cadence'
+import { recordingStrokeRate, trackClockOffset } from '@paddlesnitch/timing/cadence'
 
 export type TrackerPaddleOutcome =
   | { status: 'created' | 'updated'; paddleId: string }
@@ -108,8 +108,8 @@ async function motionPlan(userId: string, deviceId: string, deviceSessionId: str
   // can't say where the boat moved after it failed.
   let result: AnalysisResult | null
   try {
-    const cadence = deriveCadence(motion.toString('utf8'), { movingRanges: strokeRangesFor(csv, true) })
-    result = motionOnlyResult({ reason, cadence, startMs: Date.parse(start), clockOffsetMs: trackClockOffset(csv), track })
+    const strokes = recordingStrokeRate(csv, motion.toString('utf8')).all
+    result = motionOnlyResult({ reason, strokes, startMs: Date.parse(start), clockOffsetMs: trackClockOffset(csv), track })
   } catch { return null }
   return result && { action: 'create_motion', result, paddledAt: start }
 }
