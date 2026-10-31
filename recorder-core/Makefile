@@ -15,9 +15,10 @@ SRC = $(CORE_SRC) test/phone_seen.c
 HDR = include/recorder_core.h include/recorder_phone.h src/recorder_phone.c src/stroke.h
 
 .PHONY: test sanitize fixtures wasm clean
-test: $(BUILD)/run_fixtures $(BUILD)/stroke_known
+test: $(BUILD)/run_fixtures $(BUILD)/stroke_known $(BUILD)/stroke_rules
 	$(BUILD)/run_fixtures $(FIXTURES) $(PHONE_FIXTURES)
 	$(BUILD)/stroke_known
+	$(BUILD)/stroke_rules
 
 # The same, under the address and undefined-behaviour sanitizers.
 sanitize: | $(BUILD)
@@ -27,6 +28,9 @@ sanitize: | $(BUILD)
 	$(CC) $(CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
 	    -Iinclude $(CORE_SRC) test/stroke_known.c -lm -o $(BUILD)/stroke_known_san
 	$(BUILD)/stroke_known_san
+	$(CC) $(CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+	    -Iinclude -Isrc test/stroke_rules.c -lm -o $(BUILD)/stroke_rules_san
+	$(BUILD)/stroke_rules_san
 
 # Rewrites the golden files from the core. Review every changed line before
 # committing: a changed byte here changes every recording.
@@ -51,6 +55,10 @@ $(BUILD)/run_fixtures: $(SRC) test/run_fixtures.c $(HDR) | $(BUILD)
 
 $(BUILD)/stroke_known: $(CORE_SRC) test/stroke_known.c $(HDR) | $(BUILD)
 	$(CC) $(CFLAGS) -Iinclude $(CORE_SRC) test/stroke_known.c -lm -o $@
+
+# stroke.c compiled into the test itself, for its static rules
+$(BUILD)/stroke_rules: src/stroke.c test/stroke_rules.c $(HDR) | $(BUILD)
+	$(CC) $(CFLAGS) -Iinclude -Isrc test/stroke_rules.c -lm -o $@
 
 $(BUILD):
 	mkdir -p $@

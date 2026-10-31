@@ -47,6 +47,9 @@
 #define RATE_DELTAS       1999u    /* the sample rate: median of the first gaps */
 #define MIN_ROWS          64u      /* fewer motion lines: no stroke rate        */
 #define MIN_HZ            2.0f
+#define HOLE_MS           500u     /* a bigger gap inside a window: no rate     */
+#define ROW_GAP_MS        3000u    /* no track row this long: the run ended     */
+#define SHORTEST_RUN      20u      /* the fewest rows any set needs             */
 /* series: a recording needs this many windows to decide left/right, and this
    share alternating; a point this far from its neighbours' mean is dropped */
 #define SERIES_MIN_WINDOWS 6u
@@ -188,6 +191,11 @@ static int analyse(const rc_stroke *s, uint32_t t, uint32_t window_ms, rc_stroke
     while (k0 + n < s->ring_n && after(t + window_ms, held(s, k0 + n)->ms)) n++;
     if (n < MIN_SAMPLES) return 0;
 
+    /* A hole in the samples (a phone that paused, a stalled sensor): lags in
+       samples stop being time, and the rate reads low by the hole's share. */
+    for (uint32_t i = 1; i < n; i++)
+        if (held(s, k0 + i)->ms - held(s, k0 + i - 1)->ms > HOLE_MS) return 0;
+
     /* The window's own sample rate: n - 1 gaps over its span. */
     uint32_t span = held(s, k0 + n - 1)->ms - held(s, k0)->ms;
     if (span == 0) return 0;
@@ -239,6 +247,9 @@ static int analyse(const rc_stroke *s, uint32_t t, uint32_t window_ms, rc_stroke
         if (fabsf(shift) <= 1.0f) lag += shift;
     }
 
+    /* Half the lag, rounded half up as the server's Math.round did. (Either
+       way reads the same: a periodic signal's autocorrelation is symmetric
+       about half its period.) */
     float half_r = autocorr(s, k0, n, best, best_mean, (uint32_t)(peak_lag + 1) / 2, denom);
     int alternating = peak_r > 0.0f && half_r / peak_r < ALTERNATING_RATIO;
     float cycles = 60.0f * fs / lag;
@@ -255,13 +266,15 @@ static int analyse(const rc_stroke *s, uint32_t t, uint32_t window_ms, rc_stroke
 
 /* Is [t, t + window) wholly inside a moving run of at least min_rows rows?
    1 yes, 0 no, -1 not known yet (the run is still going). */
-static int inside_run(const rc_stroke *s, uint32_t t, uint32_t window_ms, uint32_t min_rows, int final)
+static int inside_run(const rc_stroke *s, uint32_t t, uint32_t window_ms, uint32_t min_rows)
 {
     const rc_stroke_run *r = 0;
     for (uint32_t i = 0; i < s->runs_n; i++)       /* the latest run starting by t */
         if (at_or_after(t, s->runs[i].start_ms)) r = &s->runs[i];
     if (!r) return 0;
-    int open = r->active && !final;
+    /* still going: active, and a row seen within ROW_GAP_MS of the newest
+       sample (rows stopping while motion goes on end it) */
+    int open = r->active && !after(s->last_sample_ms, r->last_ms + ROW_GAP_MS);
     if (after(t + window_ms, r->last_ms)) return open ? -1 : 0;
     if (r->rows >= min_rows) return 1;
     return open ? -1 : 0;
@@ -269,7 +282,7 @@ static int inside_run(const rc_stroke *s, uint32_t t, uint32_t window_ms, uint32
 
 /* ---- accepted windows --------------------------------------------------- */
 
-static void accept_session(rc_stroke_set *set, const rc_config *cfg, const char *name,
+static void accept_session(rc_stroke_set *set, uint16_t *hist, const rc_config *cfg, const char *name,
                            const rc_stroke_window *w, uint32_t window_ms)
 {
     say(cfg, "window,%s,%lu,%d.%d,%d.%d,%d,%d.%03d\n", name, (unsigned long)w->t_ms,
@@ -278,7 +291,7 @@ static void accept_session(rc_stroke_set *set, const rc_config *cfg, const char 
     if (w->alternating) set->alternating++;
     int bin = w->spm10 < RC_STROKE_BINS ? w->spm10 : RC_STROKE_BINS - 1;
     if (bin < 0) bin = 0;
-    if (set->hist[bin] < 0xffff) set->hist[bin]++;
+    if (hist[bin] < 0xffff) hist[bin]++;
 
     /* Rests (gaps between windows) and paddling time (windows, overlaps
        merged, each at its own rate): windows arrive in time order. */
@@ -345,18 +358,18 @@ static void accept_series(rc_stroke_set *set, const rc_config *cfg, const rc_str
 static void accept(rc_stroke *s, const rc_config *cfg, int k, const rc_stroke_window *w)
 {
     if (k == SET_SERIES) accept_series(&s->set[k], cfg, w);
-    else accept_session(&s->set[k], cfg, SET[k].name, w, SET[k].window_ms);
+    else accept_session(&s->set[k], s->hist[k], cfg, SET[k].name, w, SET[k].window_ms);
 }
 
 /* Passes on the waiting windows the track has now decided, in order. */
-static void decide(rc_stroke *s, const rc_config *cfg, int final)
+static void decide(rc_stroke *s, const rc_config *cfg)
 {
     for (int k = 0; k < SETS; k++) {
         rc_stroke_set *set = &s->set[k];
         uint32_t done = 0;
         while (done < set->npending) {
             const rc_stroke_window *w = &set->pending[done];
-            int in = inside_run(s, w->t_ms, SET[k].window_ms, SET[k].min_rows, final);
+            int in = inside_run(s, w->t_ms, SET[k].window_ms, SET[k].min_rows);
             if (in < 0) break;
             if (in) accept(s, cfg, k, w);
             done++;
@@ -371,12 +384,16 @@ static void decide(rc_stroke *s, const rc_config *cfg, int final)
 static void wait_for_track(rc_stroke *s, const rc_config *cfg, int k, const rc_stroke_window *w)
 {
     rc_stroke_set *set = &s->set[k];
-    if (set->npending == RC_STROKE_PENDING) {   /* can't wait any longer */
+    /* Can't happen: a window waits only for its run's 90th (or 20th) row or
+       3 s of samples without one, so the next window of its set closes after
+       it's decided (at most one waits per set). If it ever does, the oldest
+       isn't kept. */
+    if (set->npending == RC_STROKE_PENDING) {
         memmove(set->pending, set->pending + 1, (RC_STROKE_PENDING - 1) * sizeof(set->pending[0]));
         set->npending--;
     }
     set->pending[set->npending++] = *w;
-    decide(s, cfg, 0);
+    decide(s, cfg);
 }
 
 /* ---- the stream -------------------------------------------------------- */
@@ -397,6 +414,9 @@ void rcs_sample(rc_stroke *s, const rc_config *cfg, uint32_t ms, float gx, float
     }
     s->have_last = 1;
     s->last_ms = ms;
+    s->last_sample_ms = ms;
+    if (s->set[SET_MOVING].npending || s->set[SET_SERIES].npending)
+        decide(s, cfg);   /* rows may have stopped: their run is over */
 
     /* The 80 ms gate: a device's RC_MOTION lines pass it already; a file
        sampled faster is thinned the same way. */
@@ -406,7 +426,6 @@ void rcs_sample(rc_stroke *s, const rc_config *cfg, uint32_t ms, float gx, float
 
     if (!s->started) {
         s->started = 1;
-        s->anchor_ms = ms;
         for (int k = 0; k < SETS; k++) s->set[k].next_t = ms;
     }
 
@@ -441,9 +460,22 @@ void rcs_sample(rc_stroke *s, const rc_config *cfg, uint32_t ms, float gx, float
     s->ring_n++;
 }
 
+/* Ends the newest run; one too short for any set is dropped, so a speed
+   flickering about 4 km/h can't push a long run out of the ring. */
+static void end_run(rc_stroke *s)
+{
+    rc_stroke_run *r = &s->runs[s->runs_n - 1];
+    r->active = 0;
+    if (r->rows < SHORTEST_RUN) s->runs_n--;
+}
+
 void rcs_row(rc_stroke *s, const rc_config *cfg, uint32_t ms, double speed_kmh)
 {
     rc_stroke_run *r = s->runs_n ? &s->runs[s->runs_n - 1] : 0;
+    if (r && r->active && after(ms, r->last_ms + ROW_GAP_MS)) {   /* rows stopped */
+        end_run(s);
+        r = s->runs_n ? &s->runs[s->runs_n - 1] : 0;
+    }
     if (speed_kmh >= MOVING_KMH) {
         if (!r || !r->active) {
             if (s->runs_n == RC_STROKE_RUNS) {
@@ -457,18 +489,18 @@ void rcs_row(rc_stroke *s, const rc_config *cfg, uint32_t ms, double speed_kmh)
         }
         r->last_ms = ms;
         r->rows++;
-    } else if (r) {
-        r->active = 0;
+    } else if (r && r->active) {
+        end_run(s);
     }
-    decide(s, cfg, 0);
+    decide(s, cfg);
 }
 
-static int median10(const rc_stroke_set *set)
+static int median10(const rc_stroke_set *set, const uint16_t *hist)
 {
     uint32_t n = set->windows, lo = (n - 1) / 2, hi = n / 2, seen = 0;
     int a = -1, b = -1;
     for (int v = 0; v < RC_STROKE_BINS && b < 0; v++) {
-        seen += set->hist[v];
+        seen += hist[v];
         if (a < 0 && seen > lo) a = v;
         if (seen > hi) b = v;
     }
@@ -477,7 +509,10 @@ static int median10(const rc_stroke_set *set)
 
 void rcs_finish(rc_stroke *s, const rc_config *cfg)
 {
-    decide(s, cfg, 1);
+    /* The recording ends every run: what still waits needed rows that never
+       came, so it isn't kept. */
+    if (s->runs_n && s->runs[s->runs_n - 1].active) end_run(s);
+    decide(s, cfg);
     rc_stroke_set *series = &s->set[SET_SERIES];
     if (series->nearby == 2)
         point(cfg, &series->near[1], &series->near[0], 0,
@@ -507,7 +542,7 @@ void rcs_finish(rc_stroke *s, const rc_config *cfg)
         const rc_stroke_set *set = &s->set[k];
         const char *reason = why ? why : set->windows == 0 ? "no_rhythm" : "ok";
         int ok = reason[0] == 'o';
-        int med = ok ? median10(set) : 0;
+        int med = ok ? median10(set, s->hist[k]) : 0;
         say(cfg, "session,%s,%d,%s,%lu,%d.%d,%llu,%llu\n", SET[k].name, ok, reason,
             (unsigned long)set->windows, TENTHS(med),
             (unsigned long long)((set->paddling_ms + 500) / 1000),

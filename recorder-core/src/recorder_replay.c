@@ -16,7 +16,7 @@
 
 typedef struct { const char *p, *end; } cursor;
 
-/* The next line (without its newline), or 0 at the end. */
+/* The next line (without its newline; the parsers drop a CR), or 0 at the end. */
 static int next_line(cursor *c, const char **line, size_t *len)
 {
     if (c->p >= c->end) return 0;
@@ -24,7 +24,6 @@ static int next_line(cursor *c, const char **line, size_t *len)
     const char *stop = nl ? nl : c->end;
     *line = c->p;
     *len = (size_t)(stop - c->p);
-    if (*len && (*line)[*len - 1] == '\r') (*len)--;
     c->p = nl ? nl + 1 : c->end;
     return 1;
 }

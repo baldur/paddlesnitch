@@ -169,6 +169,22 @@ typedef struct {
  * reason: ok, too_few_samples, too_slow, no_rhythm. When a set isn't
  * available, its window and rest lines don't count; when series isn't ok,
  * no point counts (single-sided paddling isn't calibrated yet).
+ *
+ * Reading them (the server's wrapper):
+ *   - Keep every line until rc_finish: points come before the series
+ *     verdict, and a set's windows and rests before its session line.
+ *   - Lines of different sets aren't in time order: a moving window waits
+ *     for the track (up to ~30 s, the 90-row run), the others don't.
+ *   - All ms are the device's own clock (millis since boot, may wrap).
+ *   - motion's Hz is the median gap between the file's lines, as the server
+ *     always reported it; windows use their own mean spacing.
+ *
+ * Rules the windows follow, beyond the maths:
+ *   - A window with a hole in its samples (a gap over 0.5 s) gives no rate:
+ *     lags in samples stop being time.
+ *   - A moving run ends at a slow row (< 4 km/h) or after 3 s with no track
+ *     row (no evidence the boat moved): a recording whose GPS failed is
+ *     what the "all" set is for.
  */
 #define RC_STROKE_RING 1024   /* samples held: 80 s at the 12.5 Hz most     */
 #define RC_STROKE_PENDING 8   /* windows waiting for the track to decide     */
@@ -187,7 +203,6 @@ typedef struct {
     rc_stroke_window pending[RC_STROKE_PENDING];
     uint32_t         npending;
     uint32_t         windows, alternating;
-    uint16_t         hist[RC_STROKE_BINS];   /* session sets: the median        */
     int              have_end;
     uint32_t         end_ms;                 /* rests and paddling time         */
     uint64_t         paddling_ms, strokes_x; /* strokes x 600,000               */
@@ -198,8 +213,8 @@ typedef struct {
 typedef struct { uint32_t start_ms, last_ms, rows; int active; } rc_stroke_run;
 
 typedef struct {
-    int              started;
-    uint32_t         anchor_ms;              /* the first sample: windows start here */
+    int              started;               /* windows start at the first sample    */
+    uint32_t         last_sample_ms;         /* the newest line read                 */
     rc_stroke_sample ring[RC_STROKE_RING];
     uint32_t         ring_head, ring_n;
     int              gate_started;
@@ -212,12 +227,14 @@ typedef struct {
     rc_stroke_run    runs[RC_STROKE_RUNS];
     uint32_t         runs_n;
     rc_stroke_set    set[3];                 /* moving, all, series                  */
+    uint16_t         hist[2][RC_STROKE_BINS];/* moving, all: the median              */
 } rc_stroke;
 
 /* ---- State --------------------------------------------------------------- */
 
 /*
- * Caller-allocated; treat every field as private. It grows as metrics are
+ * About 31 KB: allocate it statically (or on the heap), never on a task
+ * stack. Caller-allocated; treat every field as private. It grows as metrics are
  * added, so bindings take sizeof(rc_state) from this header, never a copy.
  */
 typedef struct {
