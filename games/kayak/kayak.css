@@ -517,3 +517,8 @@ summary { cursor: pointer; }
 #ergMon small { font-size: 0.6rem; margin-left: 0.2rem; opacity: 0.75; }
 #ergMon .other { grid-column: 1 / -1; font-size: 0.75rem; }
 #coach[hidden], #ergMon[hidden] { display: none; }
+/* The rowing club's changing room: no sleeves or buoyancy aid with an all-in-one. */
+#menu.rowing .kayak-only { display: none; }
+/* Rowing: messages above the coach, and the place name out of the way of the phone help. */
+#hud.rowing #flash { top: 20%; }
+#hud.rowing.helping #place { display: none; }

@@ -190,6 +190,8 @@ function reset() {
   cueNext = 0;
   cueTimer = 0;
   hints = { left: 3, wait: 8 };
+  // Off from the rowing club's landing stage: don't name the canoe club across the river as you go.
+  if (mode.row) placeNext = Math.max(0, (mode.course.scenery?.places ?? []).findIndex((p) => p.s > mode.course.start + 40));
   stuck = { left: 2, for: 0, s: 0 };
 }
 
@@ -227,6 +229,8 @@ function start() {
   els.touchhelp.textContent = mode.row
     ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Hold Look to see where you're going"
     : TOUCH_HELP;
+  // Rowing on a keyboard or a pad (a phone has its own help line): how, once, at the start.
+  if (mode.row && !phone.matches) show('← → (or LT, RT) are your oars: both together for a stroke, lead with one to turn. Hold ↑ (or Y) to look where you\'re going', { small: true, hold: 6 });
   // An outing from Caversham Pier: no starter, no clock; off at once.
   hud.classList.toggle('outing', !!mode.outing);
   document.getElementById('outingBar').hidden = !mode.outing;
@@ -791,14 +795,15 @@ function arrive(place) {
   // The rowing club: your all-in-one, the sculls, the plan, the ergs.
   if (place === 'rchanging') spots.push({ label: 'Change', at: shots.rChangeLabel, act: () => sheet('paddler') });
   if (place === 'rboathouse') {
-    SCULLS.forEach((b, i) => spots.push({ label: b.name, at: shots.scullLabels[i], act: () => pickScull(b.id), small: true, on: row.scull === b.id, scull: b.id }));
+    SCULLS.forEach((b, i) => spots.push({ label: b.name, at: shots.scullLabels[i], act: () => pickScull(b.id), on: row.scull === b.id, scull: b.id }));
     spots.push({ label: 'Paint your scull', at: shots.paint, act: paintScull });
   }
   if (place === 'rclubhouse') {
     Object.entries(ROW_MODES).forEach(([key, m], i) => spots.push({ label: m.label, at: shots.rplan[i], act: () => plannedRow(key), on: club.rplan === key }));
     spots.push({ label: 'Honours board', at: shots.honours, act: honours });
   }
-  if (place === 'erg') spots.push({ label: 'Row a 500 m', at: shots.ergLabel, act: startErg, go: true });
+  // (Hidden while you row, where a tap would start again; then "Row again".)
+  if (place === 'erg') spots.push({ label: 'Row a 500 m', at: shots.ergLabel, act: startErg, go: true, hideWhile: () => ergRun && ergRun.erg.done === null, erg: true });
   if (place === 'changing') spots.push({ label: 'Change', at: shots.changeLabel, act: () => sheet('paddler') });
   if (place === 'boathouse') {
     BOATS.forEach((b, i) => spots.push({ label: String(b.stability), at: shots.rackLabels[i], act: () => pickBoat(b.id), small: true, on: kit.boat === b.id, title: b.name }));
@@ -833,6 +838,7 @@ function arrive(place) {
     (spot.card ? clubCards : clubDoors).append(b);
     return { ...spot, el: b };
   });
+  menu.classList.toggle('rowing', place === 'rchanging');
   if (place === 'changing' || place === 'rchanging') sheet('paddler');
   if (place === 'clubhouse') sheet('home');
   // A first visit: where to make your paddler, and where the races are.
@@ -873,6 +879,8 @@ function stepErgRun(dt) {
       const { text, record } = ergResult(erg.done, ergBest(), erg.other.metres);
       if (record) try { localStorage.setItem(ERG_BEST, String(erg.done)); } catch {}
       note(text);
+      const again = club.spots.find((x) => x.erg);
+      if (again) again.el.textContent = 'Row again';
       tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
       track(playEvent(ergRun.play, { end: 'finished', now: clock() }));
       ergRun.play = null;
@@ -948,7 +956,7 @@ function placeDoors() {
     const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
     const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw;
     const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw;
-    const show = cw > 0 && Math.abs(cx) < 1.1 && Math.abs(cy) < 1.1;
+    const show = cw > 0 && Math.abs(cx) < 1.1 && Math.abs(cy) < 1.1 && !s.hideWhile?.();
     s.el.hidden = !show;
     if (!show) continue;
     // Kept on the screen, 16 px in from its edges (a narrow phone's view is wider than it is).
@@ -970,7 +978,9 @@ function placeDoors() {
     const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
     const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw;
     const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw;
-    ergMon.style.transform = `translate(${((cx + 1) / 2) * w}px, ${((1 - cy) / 2) * h}px) translate(-50%, -165%)`;
+    const half = ergMon.offsetWidth / 2;
+    const left = Math.max(16 + half, Math.min(w - 16 - half, ((cx + 1) / 2) * w));
+    ergMon.style.transform = `translate(${left}px, ${((1 - cy) / 2) * h}px) translate(-50%, -165%)`;
   }
 }
 // The rooms, and you, your boats on the rack: built the first time, rebuilt when your kit changes.
@@ -2046,7 +2056,7 @@ function render(time) {
 const coachEl = document.getElementById('coach');
 function placeCoach() {
   const boat = race.player.boat;
-  const on = !!boat.hull.scull && state !== 'menu' && !hud.hidden && lookBack < 0.3;
+  const on = !!boat.hull.scull && state !== 'menu' && !hud.hidden && lookBack < 0.1;
   coachEl.hidden = !on;
   if (!on || !viewProj) return;
   const fr = boatFrame(boat);
@@ -2067,8 +2077,11 @@ function placeCoach() {
 // Looking back over your shoulder in a scull: held ↑, Y, or the Look button.
 let lookBack = 0;
 let lookWant = false;
-addEventListener('keydown', (e) => { if (e.code === 'ArrowUp' && race?.player.boat.hull.scull) { lookWant = true; e.preventDefault(); } });
+addEventListener('keydown', (e) => { if (e.code === 'ArrowUp' && race?.player.boat.hull.scull && (state === 'racing' || state === 'start')) { lookWant = true; e.preventDefault(); } });
 addEventListener('keyup', (e) => { if (e.code === 'ArrowUp') lookWant = false; });
+// Let go of the key while away (another tab, another window): don't come back looking backwards.
+addEventListener('blur', () => { lookWant = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) lookWant = false; });
 const lookBtn = document.getElementById('lookBtn');
 for (const [type, want] of [['pointerdown', true], ['pointerup', false], ['pointercancel', false], ['pointerleave', false]]) lookBtn.addEventListener(type, (e) => { lookWant = want; e.preventDefault(); e.stopPropagation(); });
 function stepLook(dt) {

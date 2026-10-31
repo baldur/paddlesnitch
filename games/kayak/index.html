@@ -129,7 +129,7 @@
           <li>The portage (Hasler Div 1-6): slow right down into the beach, then press both sides together to jump out (<kbd>&larr;</kbd> and <kbd>&rarr;</kbd> at once, both thumbs, or <kbd>LT</kbd> and <kbd>RT</kbd>). Come in too fast and you run aground. Tap left, right to run with the boat: 2 a second is a jog, quicker is faster but spends the sprint bar. At the put-in press both sides together to get in, and keep it level a moment before you paddle</li>
           <li>Swans won't get out of your way: paddle into one and you're in. Ducks fly off</li>
         <li>Other boats use the river too: scullers, eights, cruisers and motorboats. They keep to their right, so keep right and they pass on your left. Hit one, or its oars, and you're in; a motorboat's wash rocks you. Now and then an eight comes up from behind: the cox shouts and an arrow shows which side, so move over the other way</li>
-          <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes, <kbd>LB</kbd> <kbd>RB</kbd> back strokes, left stick rudder, right stick lean</li>
+          <li>Gamepad: <kbd>LT</kbd> <kbd>RT</kbd> strokes (in a scull, your oars), <kbd>LB</kbd> <kbd>RB</kbd> back strokes, left stick rudder, right stick lean, <kbd>Y</kbd> held looks round in a scull</li>
           <li>Phone, held sideways: tap the left or right half of the screen to stroke, and swipe a thumb down for a back stroke on that side. To steer, push one side of the phone away from you: push the right side forward to go left, the left side to go right. Or put a finger down and slide it left or right. The bar under the balance gauge shows your rudder. Turn the phone like a steering wheel to shift your weight: when the boat dips one way, lean the other, as you would in a real kayak. (Tilt needs the page over HTTPS on iPhone; without it, balance is done for you)</li>
           <li><kbd>P</kbd> or <kbd>Esc</kbd> to pause, <kbd>M</kbd> to toggle sound</li>
         </ul>
@@ -200,12 +200,12 @@
           <fieldset>
             <legend>Top</legend>
             <div class="row">
-              <label><input type="radio" name="sleeves" value="short"> T-shirt</label>
-              <label><input type="radio" name="sleeves" value="long"> Long sleeves</label>
+              <label class="kayak-only"><input type="radio" name="sleeves" value="short"> T-shirt</label>
+              <label class="kayak-only"><input type="radio" name="sleeves" value="long"> Long sleeves</label>
               <label class="swatch">Colour <input type="color" id="topColour"></label>
             </div>
           </fieldset>
-          <fieldset>
+          <fieldset class="kayak-only">
             <legend>Buoyancy aid</legend>
             <div class="row">
               <label><input type="checkbox" id="aid"> Wear one</label>
