@@ -12,8 +12,8 @@ import java.time.format.DateTimeFormatter
  * server reads a phone recording as it reads a tracker's. Every line is
  * appended and flushed to the system as it comes, so a killed app keeps what
  * it had; [sync] (once a second) puts it on the flash against a power cut.
- * A failed write (storage full) is logged and counted, never thrown into the
- * recorder: the recording carries on and keeps what it can.
+ * A failed write (storage full) is logged, never thrown into the recorder; from
+ * then on lines are counted, not written, and the files keep what came before.
  */
 class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
     /** track_<stamp>.log: what the recording dropped, written when it finishes (not uploaded). */
@@ -29,6 +29,9 @@ class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
             RecorderCore.MOTION -> motionOut
             else -> return   // RC_MOTION_RAW is never configured on a phone; RC_STROKE (phase 4) is ignored
         }
+        // After the first failure nothing more is written (a half-written line followed by
+        // good ones would be a broken row mid-file); each line from then on is counted (as iOS).
+        if (failedLines > 0) { failedLines++; return }
         try {
             out.write(line)
             out.flush()
@@ -37,7 +40,7 @@ class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
         }
     }
 
-    /** Lines that couldn't be written (storage full, say). */
+    /** Lines not written: the one that failed (storage full, say) and every one after it. */
     var failedLines = 0
         private set
 
@@ -48,7 +51,8 @@ class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
 
     /** Writes the drop counts beside the recording (recorder_phone.h: log them with the recording). */
     fun writeLog(droppedLate: Long, droppedUnpaired: Long) {
-        runCatching { log.writeText("dropped_late,$droppedLate\ndropped_unpaired,$droppedUnpaired\nfailed_lines,$failedLines\n") }
+        // Never re-create a folder that deleting the account removed while this was stopping.
+        if (log.parentFile?.isDirectory == true) runCatching { log.writeText("dropped_late,$droppedLate\ndropped_unpaired,$droppedUnpaired\nfailed_lines,$failedLines\n") }
     }
 
     override fun close() {

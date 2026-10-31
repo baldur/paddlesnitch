@@ -129,7 +129,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
-    fun signedOut() { signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
+    fun signedOut() { com.paddlesnitch.app.record.RecordingService.forgetFinished(); signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {
@@ -260,13 +260,16 @@ private suspend fun readSample(context: android.content.Context, file: String): 
 
 /**
  * Deleting an account removes the recordings it made on this phone (sign-out keeps them:
- * until upload they're the only copy). A recording still going is stopped first.
+ * until upload they're the only copy). This account's recording, if one is still going, is stopped.
  */
 internal fun deleteRecordings(context: android.content.Context, accountId: String?) {
     if (accountId == null) return
-    if (com.paddlesnitch.app.record.RecordingService.state.value is com.paddlesnitch.app.record.RecordingService.State.Recording)
-        com.paddlesnitch.app.record.RecordingService.stop(context)
-    com.paddlesnitch.app.record.RecordingFiles.deleteAccount(com.paddlesnitch.app.record.RecordingService.recordingsDir(context), accountId)
+    val base = com.paddlesnitch.app.record.RecordingService.recordingsDir(context)
+    val folder = com.paddlesnitch.app.record.RecordingFiles.accountDir(base, accountId)
+    // Only this account's recording: another account's may still be going after a sign-out.
+    val running = com.paddlesnitch.app.record.RecordingService.state.value as? com.paddlesnitch.app.record.RecordingService.State.Recording
+    if (running != null && running.files.track.parentFile == folder) com.paddlesnitch.app.record.RecordingService.stop(context)
+    com.paddlesnitch.app.record.RecordingFiles.deleteAccount(base, accountId)
 }
 
 /** The recording behind the measured motion fixture (paddles.get.json's tracker paddle). */

@@ -264,6 +264,26 @@ class PhoneRecorderTest {
         assertEquals(64, odd.name.length)
     }
 
+    @Test fun afterAWriteFailsNothingMoreIsWrittenAndEachLineIsCounted() {
+        val f = RecordingFiles.create(dir, Instant.parse("2026-10-31T09:14:07Z"))
+        f.write(RecorderCore.TRACK, "a\n".toByteArray())
+        f.close()   // the stream is gone: the next write fails, as a full disk would
+        f.write(RecorderCore.TRACK, "b\n".toByteArray())
+        f.write(RecorderCore.MOTION, "c\n".toByteArray())
+        assertEquals(2, f.failedLines)
+        assertEquals("a\n", f.track.readText())
+        assertEquals("", f.motion.readText())
+    }
+
+    @Test fun theLogNeverRecreatesADeletedFolder() {
+        val folder = File(dir, "u-77")
+        val f = RecordingFiles.create(folder, Instant.parse("2026-10-31T09:14:07Z"))
+        folder.deleteRecursively()
+        f.writeLog(0, 0)
+        assertFalse(folder.exists())
+        f.close()
+    }
+
     @Test fun theFilesAreNamedAsTheTrackersAre() {
         addSensors()
         val f = recorder.start()

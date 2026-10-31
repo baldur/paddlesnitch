@@ -36,8 +36,15 @@ class RecordingServiceTest {
 
     @After fun tearDown() { dir.deleteRecursively() }
 
-    private fun service(recordingsDir: File = dir) = Robolectric.buildService(RecordingService::class.java).create().also {
-        it.get().makeRecorder = { c -> PhoneRecorder(c, recordingsDir) }
+    private var account: String? = "u-77"
+    private val made = mutableListOf<File>()
+
+    private fun service(broken: Boolean = false) = Robolectric.buildService(RecordingService::class.java).create().also {
+        it.get().signedInAccount = { account }
+        it.get().makeRecorder = { c, folder ->
+            made += folder
+            PhoneRecorder(c, if (broken) File(File(dir, "taken").apply { writeText("") }, "recordings") else File(dir, folder.name))
+        }
     }
 
     /** Stopping finishes the files on another thread, then comes back to the main one. */
@@ -66,19 +73,28 @@ class RecordingServiceTest {
     }
 
     @Test fun aStartThatFailsLetsGoOfEverything() {
-        val s = service(File(File(dir, "taken").apply { writeText("") }, "recordings"))
+        val s = service(broken = true)
         s.startCommand(0, 1)
         assertEquals(RecordingService.State.Failed(locationRefused = false), RecordingService.state.value)
         assertFalse(ShadowPowerManager.getLatestWakeLock().isHeld)
         assertTrue(shadowOf(s.get()).isStoppedBySelf)
     }
 
-    @Test fun aRecordingTheSystemBringsBackStartsNewFiles() {
-        val s = service()
-        s.withIntent(null).startCommand(0, 1)
+    @Test fun aRecordingTheSystemBringsBackKeepsItsAccountWhoeverIsSignedInNow() {
+        service().startCommand(0, 1)                 // u-77 starts recording
+        account = "u-78"                             // signs out; someone else signs in
+        val restarted = service()                    // the system kills and restarts the service
+        restarted.get().onStartCommand(null, 0, 1)   // as the system restarts a sticky service
         assertTrue(RecordingService.state.value is RecordingService.State.Recording)
-        s.destroy()
+        assertEquals(listOf("u-77", "u-77"), made.map { it.name })
+        restarted.destroy()
         assertFalse(ShadowPowerManager.getLatestWakeLock().isHeld)
+    }
+
+    @Test fun aStartWithNoOneSignedInFails() {
+        account = null
+        service().startCommand(0, 1)
+        assertEquals(RecordingService.State.Failed(locationRefused = false), RecordingService.state.value)
     }
 
     @Test fun destroyingTheServiceEndsTheRecording() {
@@ -100,5 +116,25 @@ class RecordingServiceTest {
         com.paddlesnitch.app.deleteRecordings(app, "u-77")
         assertFalse(mine.exists())
         assertTrue(theirs.resolve("track_y.csv").exists())
+    }
+
+    @Test fun deletingAnAccountDoesntStopSomeoneElsesRecording() {
+        val base = RecordingService.recordingsDir(app)
+        val theirs = RecordingFiles.create(RecordingFiles.accountDir(base, "u-78"), java.time.Instant.parse("2026-10-31T09:14:07Z"))
+        RecordingService.set(RecordingService.State.Recording(theirs, kotlinx.coroutines.flow.MutableStateFlow(null), 0L))
+        com.paddlesnitch.app.deleteRecordings(app, "u-77")
+        assertEquals(null, shadowOf(app).nextStartedService)
+        RecordingService.set(RecordingService.State.Idle)
+        com.paddlesnitch.app.deleteRecordings(app, "u-78")   // but its own is stopped
+        RecordingService.set(RecordingService.State.Recording(theirs, kotlinx.coroutines.flow.MutableStateFlow(null), 0L))
+        com.paddlesnitch.app.deleteRecordings(app, "u-78")
+        assertEquals(RecordingService.ACTION_STOP, shadowOf(app).nextStartedService?.action)
+        theirs.close()
+    }
+
+    @Test fun signingOutForgetsAFinishedRecordingsMessage() {
+        RecordingService.set(RecordingService.State.Stopped(RecordingFiles(File(dir, "a.csv"), File(dir, "b.csv")), 1000L))
+        RecordingService.forgetFinished()
+        assertEquals(RecordingService.State.Idle, RecordingService.state.value)
     }
 }
