@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "recorder-core",
+		"source" : "/Users/baldur/Documents/Code/paddlesnitch-android/recorder-core"
+	}
+}

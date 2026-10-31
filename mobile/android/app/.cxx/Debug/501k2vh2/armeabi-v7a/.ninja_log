@@ -1,0 +1,13 @@
+# ninja log v5
+119	192	1793452469195755160	/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/build/intermediates/cxx/Debug/501k2vh2/obj/armeabi-v7a/librecorder.so	c0ad0b60025d2a8
+64	119	1793452469125634000	recorder-core/librecorder_core.a	c98b17ca6534eebe
+1	64	1793452469069240412	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_phone.c.o	d2395a91f30cbca
+0	60	1793452469064129042	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_core.c.o	ff772dfa956ef355
+0	59	1793452469064532878	CMakeFiles/recorder.dir/recorder_jni.c.o	c9eb2429a0096fc4
+1	392	1793470341462400356	CMakeFiles/recorder.dir/recorder_jni.c.o	c9eb2429a0096fc4
+4	400	1793470341471470047	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_phone.c.o	d2395a91f30cbca
+3	403	1793470341474926713	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_replay.c.o	82d512e94de48fa
+2	411	1793470341483346438	recorder-core/CMakeFiles/recorder_core.dir/src/recorder_core.c.o	ff772dfa956ef355
+3	436	1793470341507994649	recorder-core/CMakeFiles/recorder_core.dir/src/stroke.c.o	4a9698d949ae978b
+436	498	1793470341565887000	recorder-core/librecorder_core.a	7cdaedfaab676899
+498	658	1793470341726843924	/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/build/intermediates/cxx/Debug/501k2vh2/obj/armeabi-v7a/librecorder.so	c0ad0b60025d2a8

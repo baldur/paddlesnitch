@@ -126,7 +126,30 @@ val generateModels = tasks.register<GenerateModels>("generateModels") {
     outputDir.set(layout.buildDirectory.dir("generated/models"))
 }
 
+// Release asks for no location: phone recording is debug only until it ships
+// (#761), and Play's forms ask about every permission a build declares. The map
+// library adds fine and coarse location; src/release/AndroidManifest.xml
+// removes them, and this fails the build if any come back.
+abstract class CheckReleasePermissions : DefaultTask() {
+    @get:InputFile abstract val manifest: RegularFileProperty
+
+    @TaskAction
+    fun check() {
+        val text = manifest.get().asFile.readText()
+        val declared = Regex("""<uses-permission[^>]*android:name="([^"]+)"""").findAll(text).map { it.groupValues[1] }.toList()
+        val refused = declared.filter { "LOCATION" in it }
+        check(refused.isEmpty()) { "The release build declares $refused. Release must not ask for location (see app/build.gradle.kts)." }
+    }
+}
+
 androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val name = "check${variant.name.replaceFirstChar { it.uppercase() }}Permissions"
+        val task = tasks.register<CheckReleasePermissions>(name) {
+            manifest.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
+        }
+        tasks.named("check") { dependsOn(task) }
+    }
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateTokens, GenerateTokens::outputDir)
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateModels, GenerateModels::outputDir)

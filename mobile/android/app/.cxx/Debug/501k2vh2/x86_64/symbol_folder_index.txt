@@ -1,0 +1,1 @@
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/build/intermediates/cxx/Debug/501k2vh2/obj/x86_64

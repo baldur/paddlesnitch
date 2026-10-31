@@ -1,0 +1,2 @@
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/src/main/cpp/CMakeLists.txt
+/Users/baldur/Documents/Code/paddlesnitch-android/recorder-core/CMakeLists.txt

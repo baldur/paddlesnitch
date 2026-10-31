@@ -117,3 +117,9 @@ time and isn't obvious from the code.
   `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
 - A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
   that starts below the fold, or the second golden repeats the first.
+- Release declares no location permission. MapLibre adds fine and coarse location, and
+  `src/release/AndroidManifest.xml` removes them with `tools:node="remove"`.
+  `checkReleasePermissions` (part of `check`, run in CI) fails if any permission with
+  LOCATION in its name reaches the merged release manifest. Phone recording declares its own
+  in `src/debug` until it ships (#761). Play takes the `.aab` (`bundleRelease`), not the APK.
+  The steps to Play are in `PLAY-RELEASE.md`.

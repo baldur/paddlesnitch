@@ -1,0 +1,6 @@
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/.cxx/RelWithDebInfo/6s285y1b/arm64-v8a/CMakeFiles/recorder.dir
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/.cxx/RelWithDebInfo/6s285y1b/arm64-v8a/CMakeFiles/edit_cache.dir
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/.cxx/RelWithDebInfo/6s285y1b/arm64-v8a/CMakeFiles/rebuild_cache.dir
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/.cxx/RelWithDebInfo/6s285y1b/arm64-v8a/recorder-core/CMakeFiles/recorder_core.dir
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/.cxx/RelWithDebInfo/6s285y1b/arm64-v8a/recorder-core/CMakeFiles/edit_cache.dir
+/Users/baldur/Documents/Code/paddlesnitch-android/mobile/android/app/.cxx/RelWithDebInfo/6s285y1b/arm64-v8a/recorder-core/CMakeFiles/rebuild_cache.dir
