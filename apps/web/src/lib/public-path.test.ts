@@ -19,7 +19,7 @@ describe('publicPath', () => {
 
   it.each([
     '/', '/paddles', '/paddles/new', '/paddles/compare', '/paddles/compare/section',
-    '/profile/me', '/devices', '/account', '/guide/wifi', '/att/trials/abc123', '/att/courses/c1',
+    '/profile/me', '/devices', '/account', '/guide/wifi', '/att/trials/abc123', '/att/courses/c1', '/paddles/section', '/paddles/sections',
   ])('keeps %s', p => expect(publicPath(p)).toBe(p))
 })
 

@@ -127,7 +127,7 @@ export function campaignFrom(search: string): string | undefined {
 // placeholders: a share id publishes a paddle's route, a claim code is live for
 // minutes, a profile handle or tracker id says who someone is. Trial and course
 // ids stay: they're public and are what the analytics are for.
-const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api'])
+const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
 const PLAN_STATIC = new Set(['data', 'gaps', 'print', 'shared', 'sources'])
 /** Every page's path as it may be recorded; public-path.test.ts walks every
  *  dynamic page on disk and fails if a personal id survives. Only trial and

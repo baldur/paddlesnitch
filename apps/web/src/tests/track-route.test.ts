@@ -187,6 +187,16 @@ describe('game events', () => {
     expect(b.sid).toBe('3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d')
   })
 
+  it("keeps a page error's type only if it looks like an error's name", async () => {
+    const out = await emitted([
+      { event: 'client_error', path: '/att', props: { type: 'TypeError', message: 'x is undefined' } },
+      { event: 'client_error', path: '/att', props: { type: 'Pat Rowe <pat@example.com>', message: 'boom' } },
+    ])
+    const [ok, bad] = out.slice(-2)
+    expect(ok.type).toBe('TypeError')
+    expect(bad).not.toHaveProperty('type')
+  })
+
   it("a prop can't pose as the event's time or name", async () => {
     const [pv] = await emitted([{ event: 'pageview', path: '/att', props: { ts: 'x', Event: 'login', _aws: {} } }])
     expect(pv.Event).toBe('pageview')

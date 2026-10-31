@@ -14,10 +14,21 @@ const line = (o: unknown) => `2026-10-31T18:00:00.000Z\tabc-123\tINFO\t${JSON.st
 const emf = buildEmf('game_play', { sid: 'tab1', path: '/games/reading-thames/', mode: 'outing', secs: '312', platform: 'web' }, 1793469600000)
 
 describe('eventFromLine', () => {
-  it('keeps an analytics event: its fields and its time to the minute, without the metric wrapper', () => {
-    expect(eventFromLine(line(buildEmf('game_play', { sid: 'tab1', path: '/games/reading-thames/', mode: 'outing', secs: '312', platform: 'web' }, 1793469612345)))).toEqual({
-      Event: 'game_play', sid: 'tab1', path: '/games/reading-thames/', mode: 'outing', secs: '312', platform: 'web', ts: 1793469600000,
+  it('keeps an analytics event: its fields and its time to the hour, without the metric wrapper', () => {
+    expect(eventFromLine(line(buildEmf('game_kit', { sid: 'tab1', path: '/games/reading-thames/', body: 'slim', platform: 'web' }, 1793469612345)))).toEqual({
+      Event: 'game_kit', sid: 'tab1', path: '/games/reading-thames/', body: 'slim', platform: 'web', ts: 1793469600000 - (1793469600000 % 3600000),
     })
+  })
+
+  it("keeps a game result without its tab id, so it can't be matched to a name on the public leaderboard and then to a whole visit", () => {
+    const e = eventFromLine(line(buildEmf('game_play', { sid: 'tab1', mode: 'race', course: 'loop', secs: '1802', place: '3' }, 1793469612345)))
+    expect(e).not.toHaveProperty('sid')
+    expect(e).toMatchObject({ Event: 'game_play', course: 'loop', secs: '1802' })
+  })
+
+  it('keeps a value only if it looks like a word, number or code: an older line with free text loses that field', () => {
+    const e = eventFromLine(line(buildEmf('pageview', { sid: 'pat@example.com', campaign: 'Hello Pat, your code is 1234!', path: '/att', type: 'x' }, 1)))
+    expect(e).toEqual({ Event: 'pageview', path: '/att', type: 'x', ts: 0 })
   })
 
   it("cleans a path logged before the server cleaned them (the backfill reads 90 days of those)", () => {

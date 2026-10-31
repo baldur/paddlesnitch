@@ -23,7 +23,7 @@ export const KEEP = new Set([
   'plays', 'places', 'input', 'gpu',          // game events
 ])
 
-const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api'])
+const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
 const PLAN_STATIC = new Set(['data', 'gaps', 'print', 'shared', 'sources'])
 /** packages/ui/src/metrics-events.ts publicPath, for lines logged before the
  *  route applied it to every path. Keep the two in step (the test compares). */
@@ -46,6 +46,13 @@ export function cleanPath(path) {
   return p.join('/')
 }
 
+// Every value must look like a word, number, code or list of them: no @, no
+// sentences. The track route checks each field already; this also covers the
+// older lines the backfill reads, logged before it did.
+const SID = /^[A-Za-z0-9._-]{1,64}$/
+const VALUE = /^[A-Za-z0-9_.,:|$<>()\/[\]-]{1,200}$/
+const looksSafe = (k, v) => k === 'sid' ? SID.test(v) : k === 'os' ? /^[A-Za-z0-9 ._-]{1,40}$/.test(v) : VALUE.test(v)
+
 /** One log line → the event it carries, or null. The JSON starts at the first `{`. */
 export function eventFromLine(message) {
   const at = message.indexOf('{')
@@ -54,9 +61,14 @@ export function eventFromLine(message) {
   try { o = JSON.parse(message.slice(at)) } catch { return null }
   if (!o || typeof o !== 'object' || typeof o.Event !== 'string' || !o._aws || typeof o._aws.Timestamp !== 'number') return null
   const out = {}
-  for (const [k, v] of Object.entries(o)) if (KEEP.has(k) && typeof v === 'string') out[k] = v
-  if ('path' in out) { const p = cleanPath(out.path); if (p) out.path = p; else delete out.path }
-  out.ts = Math.floor(o._aws.Timestamp / 60000) * 60000
+  for (const [k, v] of Object.entries(o)) if (KEEP.has(k) && typeof v === 'string' && looksSafe(k, v)) out[k] = v
+  if ('path' in o) { const p = cleanPath(o.path); if (p) out.path = p; else delete out.path }
+  // A result on a public leaderboard (name, course, time) could be matched to
+  // this event; without the tab id that match names nothing else.
+  if (o.Event === 'game_play') delete out.sid
+  // To the hour: close enough for use over time, too coarse to line a page
+  // view up with a public result or entry made the same minute.
+  out.ts = Math.floor(o._aws.Timestamp / 3600000) * 3600000
   return out
 }
 
