@@ -16,18 +16,33 @@ const run = (uri: string, querystring = {}) => handler({ request: { uri, queryst
 
 describe('games router', () => {
   it('serves index.html for a folder URL', () => {
-    expect((run('/games/kayak/') as Req).uri).toBe('/games/kayak/index.html')
+    expect((run('/games/reading-thames/') as Req).uri).toBe('/games/reading-thames/index.html')
   })
 
   it('redirects a folder URL without its slash, so relative imports resolve', () => {
-    const res = run('/games/kayak') as Res
+    const res = run('/games/reading-thames') as Res
     expect(res.statusCode).toBe(301)
-    expect(res.headers.location.value).toBe('/games/kayak/')
+    expect(res.headers.location.value).toBe('/games/reading-thames/')
   })
 
   it('keeps the query string on that redirect', () => {
-    const res = run('/games/kayak', { seed: { value: '42' } }) as Res
-    expect(res.headers.location.value).toBe('/games/kayak/?seed=42')
+    const res = run('/games/reading-thames', { seed: { value: '42' } }) as Res
+    expect(res.headers.location.value).toBe('/games/reading-thames/?seed=42')
+  })
+
+  it('sends the old /games/kayak/ address to /games/reading-thames/, query kept (a #race= link survives: browsers carry the fragment)', () => {
+    for (const [from, to] of [
+      ['/games/kayak/', '/games/reading-thames/'],
+      ['/games/kayak', '/games/reading-thames/'],
+      ['/games/kayak/index.html', '/games/reading-thames/index.html'],
+      ['/games/kayak/courses/loop.json', '/games/reading-thames/courses/loop.json'],
+    ]) {
+      const res = run(from) as Res
+      expect(res.statusCode, from).toBe(301)
+      expect(res.headers.location.value, from).toBe(to)
+    }
+    expect((run('/games/kayak/', { seed: { value: '42' } }) as Res).headers.location.value).toBe('/games/reading-thames/?seed=42')
+    expect((run('/games/kayaking/') as Req).uri).toBe('/games/kayaking/index.html') // only that folder
   })
 
   it('sends the games folder itself to the /games page', () => {

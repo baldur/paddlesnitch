@@ -2,6 +2,7 @@
 // on your account when you're signed in (games.kit). Colours are "#rrggbb".
 // Pure: no DOM.
 import { BOATS, DEFAULT_BOAT, DECKS as DECK_SHAPES, HULL_SHAPES, PADDLES, FROM_HULL, boatById } from './boats.js';
+import { SCULLS, SCULL_COLOURS, cleanRow, scullById } from './scull.js';
 
 // Skin tones, lightest to deepest, from real skin. Picked from a set rather
 // than a free colour picker so every choice looks like a person; none is the
@@ -32,6 +33,8 @@ const DEFAULT = {
   glasses: 'none', glassesColour: '#0ea5e9',
   boat: DEFAULT_BOAT, deck: '#dc2626', hullColour: '#f2ede0', stripe: '#f5f5f4', deckShape: 'modern', hullShape: 'round',
   paddle: 'wing', shaftColour: '#3a3b42', bladeColour: '#facc15',
+  // The rowing club's: your single scull, and its colour from the set.
+  scull: 'club', scullColour: SCULL_COLOURS[0],
 };
 
 // Anything read back (storage, the account, another player) made safe and
@@ -61,6 +64,8 @@ export function cleanKit(raw, fallback = DEFAULT) {
     paddle: oneOf(k.paddle, Object.keys(PADDLES), fallback.paddle),
     shaftColour: colour(k.shaftColour, fallback.shaftColour),
     bladeColour: colour(k.bladeColour, fallback.bladeColour),
+    scull: oneOf(k.scull, SCULLS.map((b) => b.id), fallback.scull),
+    scullColour: oneOf(colour(k.scullColour, ''), SCULL_COLOURS, fallback.scullColour),
   };
 }
 
@@ -123,3 +128,35 @@ export function livery(kit) {
 export const kitKey = (kit) => Object.values(cleanKit(kit)).join(',');
 
 export const BOAT_IDS = BOATS.map((b) => b.id);
+
+// A scull picked before it went in the kit was kept on the device on its own
+// (`row`, { scull, colour }): it carries over, unless the kit saved already has one.
+export function withOldScull(kit, saved, row) {
+  if (!row || saved?.scull) return kit;
+  const { scull, colour } = cleanRow(row);
+  return cleanKit({ ...kit, scull, scullColour: colour }, kit);
+}
+
+// The boat a leaderboard time records: your kayak, or in a row your scull
+// (`scull-` before its id: 'club' was one of the kayak's hulls once). And its name.
+export const boardHull = (kit, rowing) => (rowing ? `scull-${kit.scull}` : kit.boat);
+export const isScullHull = (hull) => typeof hull === 'string' && hull.startsWith('scull-');
+export const scullHullName = (hull) => scullById(hull.slice(6)).name;
+
+// On load: a scull kept on its own on this device (`rowKey`, from before it
+// went in the kit) is moved into the kit and the kit saved (`kitKey`), the old
+// value removed: once only. A value that can't be read is just dropped.
+// `storage` is localStorage (or anything like it); returns the kit.
+export function moveOldScull(storage, kit, saved, { rowKey, kitKey: key }) {
+  let raw = null;
+  try { raw = storage.getItem(rowKey); } catch { return kit; }
+  if (raw === null) return kit;
+  let row = null;
+  try { row = JSON.parse(raw); } catch {}
+  const moved = withOldScull(kit, saved, row);
+  try {
+    if (moved !== kit) storage.setItem(key, JSON.stringify(moved));
+    storage.removeItem(rowKey);
+  } catch {}
+  return moved;
+}

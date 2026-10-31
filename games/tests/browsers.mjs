@@ -95,7 +95,7 @@ const CASES = [
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
+  await page.goto(`${base}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -117,7 +117,7 @@ async function play(c, page, errors) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
     const steps = c.outing ? [[c.outing, null]]
-      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Go to the water', 'rpontoon'], ['Push off', null]])]
+      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
       // Keys with the picker open: Backspace in one of its fields stays put, Esc goes back.
@@ -126,6 +126,12 @@ async function play(c, page, errors) {
         await page.keyboard.press('Backspace');
         await page.waitForTimeout(300);
         if (await page.evaluate(() => window.kayak.club.place !== 'changing' || !!window.kayak.club.to)) errors.push('Backspace in the picker left the room');
+        continue;
+      }
+      // The honours board with no site behind it (offline): your bests as a note, no sheet.
+      if (label === '@honours') {
+        const shown = await page.evaluate(() => ({ note: !document.getElementById('clubNote').hidden && document.getElementById('clubNote').textContent, sheet: document.getElementById('menu').open }));
+        if (!shown.note || shown.sheet) errors.push(`the honours board offline showed ${JSON.stringify(shown)}`);
         continue;
       }
       if (label === '@escape') {

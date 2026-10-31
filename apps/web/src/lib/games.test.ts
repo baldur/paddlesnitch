@@ -26,6 +26,12 @@ describe('games', () => {
     expect(html).toContain('<script src="../shared/analytics.js" defer></script>')
   })
 
+  it("brings a player back to the river game's own address after sign-in, not the old /games/kayak/", async () => {
+    const { SIGN_IN } = await import('../../../../games/reading-thames/account.js')
+    const game = GAMES.find(g => g.slug === 'reading-thames')!
+    expect(SIGN_IN).toBe(`/signin?next=${game.href}`)
+  })
+
   it('links each game by its folder, with the trailing slash its relative imports need', () => {
     expect(GAMES.map(g => g.href)).toEqual(GAMES.map(g => `/games/${g.slug}/`))
   })

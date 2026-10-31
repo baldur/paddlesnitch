@@ -1,6 +1,6 @@
 // The game's course file, made from a real river: pure, so it's tested on its
-// own (course-file.test.ts). The format is read by games/kayak/course.js
-// (loadCourse) and drawn by games/kayak/world.js.
+// own (course-file.test.ts). The format is read by games/reading-thames/course.js
+// (loadCourse) and drawn by games/reading-thames/world.js.
 import { cumulative, type LatLng, type XZ } from './river'
 
 export type RiverThing = { kind: string; name?: string; s: number; lateral: number; tags: Record<string, string>; shape?: XZ[] }
