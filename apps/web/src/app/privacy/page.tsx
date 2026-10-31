@@ -75,7 +75,7 @@ export default function PrivacyPolicy() {
             We keep your data for as long as your account exists. You can delete your account at any time
             from your{' '}
             <Link href="/account" className="tt-link">account page</Link>. That deletes your
-            account, paddles, diary notes, results, river plans, portage details, shared links, buddies and tracker recordings, and disconnects
+            account, paddles, diary notes, results, river plans, portage details, shared links, buddies, tracker recordings, game times and saved paddler, and disconnects
             Strava. Courses and trials you created are deleted too, unless a group owns them or someone
             else has a result in them: those stay for the other paddlers, without your results. It
             happens at once and can&apos;t be undone. Our storage keeps earlier copies for 30 days so we

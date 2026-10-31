@@ -15,6 +15,7 @@ import { listTrials, listCourses, listUserEntryResultKeys, listUserFailedUploadK
 import { listSavedSections } from '@paddlesnitch/analysis/saved-sections'
 import { listPlans } from '@paddlesnitch/waterways/plan-store'
 import { listMyPortages } from '@paddlesnitch/waterways/portage-store'
+import { myGameTimes } from '@paddlesnitch/core/games'
 
 export async function buildAccountExport(user: AuthUser) {
   // Courses the user owns.
@@ -52,6 +53,8 @@ export async function buildAccountExport(user: AuthUser) {
     stravaAutoImport: await getJson(`users/${user.id}/strava-prefs.json`),
     // The kayak game's paddler and boat.
     gameKit: await getJson(`users/${user.id}/game-kit.json`),
+    // Their times on the game's public leaderboards (#742).
+    gameTimes: await myGameTimes(user.id),
     // Saved sections (#435): names and the gates you picked.
     sections: await listSavedSections(user.id),
     // River plans: the clicks, shape, start time and pace of each.
