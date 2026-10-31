@@ -23,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowSensor
 import org.robolectric.shadows.SensorEventBuilder
 
@@ -194,6 +195,30 @@ class PhoneRecorderTest {
         // Taken 0.5 s before the row: the row is the fix's time plus its age.
         assertEquals("2026-10-31T09:14:08Z", row[0])
         assertEquals(listOf("1", "51.4600000", "-0.9700000", "0.0", "8.28", "45.0"), row.subList(4, 10))
+    }
+
+    private fun rowWithFix(l: Location): List<String> {
+        addSensors(gyro = false)
+        val f = recorder.start()
+        recorder.onThread { shadowOf(context.getSystemService(LocationManager::class.java)).simulateLocation(l) }
+        tickAt(11)
+        return f.track.readLines()[1].split(',')
+    }
+
+    private fun fix() = Location(LocationManager.GPS_PROVIDER).apply {
+        latitude = 51.46; longitude = -0.97; time = Instant.parse("2026-10-31T09:14:07Z").toEpochMilli()
+        elapsedRealtimeNanos = 11_000_000_000L
+    }
+
+    @Test @Config(sdk = [34]) fun theAltitudeIsAboveSeaLevel() {
+        val row = rowWithFix(fix().apply { altitude = 100.0; mslAltitudeMeters = 52.3 })
+        assertEquals("52.3", row[7])
+    }
+
+    // getAltitude() is above the ellipsoid (~47 m off in the UK): with no sea-level value, no altitude.
+    @Test @Config(sdk = [34]) fun theEllipsoidHeightIsNeverUsed() {
+        val row = rowWithFix(fix().apply { altitude = 100.0 })
+        assertEquals("0.0", row[7])
     }
 
     @Test fun theFilesAreNamedAsTheTrackersAre() {

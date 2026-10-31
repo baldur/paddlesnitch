@@ -13,6 +13,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
@@ -199,7 +200,9 @@ class PhoneRecorder(
             utcMs = l.time,
             lat = l.latitude,
             lon = l.longitude,
-            alt = if (l.hasAltitude()) l.altitude else null,
+            // Above sea level, as the tracker's GGA (recorder_phone.h). getAltitude() is above
+            // the WGS84 ellipsoid, ~47 m off in the UK: never mixed in, so no MSL = no altitude.
+            alt = if (Build.VERSION.SDK_INT >= 34 && l.hasMslAltitude()) l.mslAltitudeMeters else null,
             speedMs = if (l.hasSpeed()) l.speed.toDouble() else null,
             courseDeg = if (l.hasBearing()) l.bearing.toDouble() else null,
         )
