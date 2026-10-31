@@ -299,7 +299,7 @@ fun WithRecording(
     signedIn: Boolean,
     modifier: Modifier = Modifier,
     canRecord: Boolean = BuildConfig.DEBUG,
-    record: @Composable () -> Unit = { Record() },
+    record: @Composable () -> Unit,
     content: @Composable (entry: (@Composable () -> Unit)?) -> Unit,
 ) {
     val state by RecordingService.state.collectAsState()

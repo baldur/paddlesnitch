@@ -91,6 +91,23 @@ class RecordingServiceTest {
         assertFalse(ShadowPowerManager.getLatestWakeLock().isHeld)
     }
 
+    // A refused token refresh signs out by itself (#702): the recording goes on, in the folder
+    // of the account that tapped Record, and App.kt's signedOut() leaves it alone.
+    @Test fun aForcedSignOutMidRecordingKeepsRecordingToTheSameAccount() {
+        val s = service()
+        s.startCommand(0, 1)
+        val files = (RecordingService.state.value as RecordingService.State.Recording).files
+        account = null
+        RecordingService.forgetFinished()            // what signedOut() does
+        assertTrue(RecordingService.state.value is RecordingService.State.Recording)
+        assertTrue(ShadowPowerManager.getLatestWakeLock().isHeld)
+        assertEquals(listOf("u-77"), made.map { it.name })
+        s.withIntent(Intent(app, RecordingService::class.java).setAction(RecordingService.ACTION_STOP)).startCommand(0, 2)
+        waitFor("stopped") { RecordingService.state.value is RecordingService.State.Stopped }
+        assertEquals(File(dir, "u-77"), files.track.parentFile)
+        assertTrue(files.log.exists())
+    }
+
     @Test fun aStartWithNoOneSignedInFails() {
         account = null
         service().startCommand(0, 1)
