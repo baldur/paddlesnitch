@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate, pointAt, raceRiver } from '../kayak/course.js';
-import { waterMap } from '../kayak/water.js';
-import { createAnglers, snagLines, linesAhead, segmentGap, SNAG } from '../kayak/anglers.js';
-import { createRace, stepRace, DIVISION_9 } from '../kayak/race.js';
-import { buildWorld } from '../kayak/world.js';
+import { courseFromFile, locate, pointAt, raceRiver } from '../reading-thames/course.js';
+import { waterMap } from '../reading-thames/water.js';
+import { createAnglers, snagLines, linesAhead, segmentGap, SNAG } from '../reading-thames/anglers.js';
+import { createRace, stepRace, DIVISION_9 } from '../reading-thames/race.js';
+import { buildWorld } from '../reading-thames/world.js';
 
-const load = async (id) => courseFromFile(JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8')));
+const load = async (id) => courseFromFile(JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8')));
 const racer = (x, z, heading, speed = 4) => ({ boat: { x, z, heading, speed, swim: 0 } });
 
 test('segments that cross are 0 apart; parallel ones their gap', () => {

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The kayak game's paddler kit (games/kayak/kit.js) against the router's kit
+// The kayak game's paddler kit (games/reading-thames/kit.js) against the router's kit
 // schema: the game saves with a fire-and-forget call that swallows errors, so a
 // style added only in the game would silently stop every save to the account.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
@@ -21,7 +21,7 @@ afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); dele
 
 describe("the game's paddler kit", () => {
   it('every body, hair, hat and beard the game offers is one the account will save', async () => {
-    const { BODIES, HAIRS, HATS, BEARDS, cleanKit } = await import('../../../../games/kayak/kit.js')
+    const { BODIES, HAIRS, HATS, BEARDS, cleanKit } = await import('../../../../games/reading-thames/kit.js')
     const lists: [string, Record<string, string>][] = [['body', BODIES], ['hair', HAIRS], ['hat', HATS], ['beard', BEARDS]]
     for (const [field, list] of lists) {
       for (const value of Object.keys(list)) {
@@ -31,7 +31,7 @@ describe("the game's paddler kit", () => {
       }
     }
     // The rowing club's scull and its colour (from the set).
-    const { SCULLS, SCULL_COLOURS } = await import('../../../../games/kayak/scull.js')
+    const { SCULLS, SCULL_COLOURS } = await import('../../../../games/reading-thames/scull.js')
     for (const scull of SCULLS.map((b: { id: string }) => b.id)) {
       await expect(pat.games.kit.set(cleanKit({ scull })), `scull: ${scull}`).resolves.toEqual(cleanKit({ scull }))
       expect((await pat.games.kit.get())?.scull, 'and comes back').toBe(scull)
@@ -44,7 +44,7 @@ describe("the game's paddler kit", () => {
   })
 
   it("a first visit's random paddler saves, and comes back the same", async () => {
-    const { randomKit } = await import('../../../../games/kayak/kit.js')
+    const { randomKit } = await import('../../../../games/reading-thames/kit.js')
     for (let i = 0; i < 20; i++) {
       const kit = randomKit()
       await pat.games.kit.set(kit)
@@ -53,7 +53,7 @@ describe("the game's paddler kit", () => {
   })
 
   it('a style the game has never heard of is turned down', async () => {
-    const { cleanKit } = await import('../../../../games/kayak/kit.js')
+    const { cleanKit } = await import('../../../../games/reading-thames/kit.js')
     await expect(pat.games.kit.set({ ...cleanKit({}), hair: 'mohican' } as never)).rejects.toThrow()
   })
 })

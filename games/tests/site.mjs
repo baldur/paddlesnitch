@@ -8,7 +8,7 @@
 // keeps its files, so it can read the tickets the site's API writes.
 //
 //   pnpm dev            # the site, on :3000
-//   pnpm games:site     # then http://localhost:8001/games/kayak/
+//   pnpm games:site     # then http://localhost:8001/games/reading-thames/
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -85,4 +85,4 @@ server.on('upgrade', async (req, socket, head) => {
   });
 });
 
-server.listen(PORT, () => console.log(`games with the site: http://localhost:${PORT}/games/kayak/ (relay at ws://localhost:${PORT}/live)`));
+server.listen(PORT, () => console.log(`games with the site: http://localhost:${PORT}/games/reading-thames/ (relay at ws://localhost:${PORT}/live)`));

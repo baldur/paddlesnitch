@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 // navigator has no getGamepads, like browsers without the Gamepad API
 // (Firefox on Android), which used to throw on every frame.
 globalThis.addEventListener ??= () => {};
-const { Controls, twistRate, stepTwist, twistRudder, TWIST_FULL, TWIST_SETTLE } = await import('../kayak/controls.js');
+const { Controls, twistRate, stepTwist, twistRudder, TWIST_FULL, TWIST_SETTLE } = await import('../reading-thames/controls.js');
 const { Input } = await import('../shared/input.js');
 const target = { addEventListener() {}, setPointerCapture() {} };
 

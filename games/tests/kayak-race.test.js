@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBoat, step } from '../kayak/sim.js';
+import { createBoat, step } from '../reading-thames/sim.js';
 import { readFile } from 'node:fs/promises';
-import { raceRiver, courseFromFile, pointAt, locate, headingAt } from '../kayak/course.js';
-import { wrap } from '../kayak/sim.js';
-import { createRace, stepRace, standings, started, wash, elapsed, applyCall, DIVISION_9 } from '../kayak/race.js';
+import { raceRiver, courseFromFile, pointAt, locate, headingAt } from '../reading-thames/course.js';
+import { wrap } from '../reading-thames/sim.js';
+import { createRace, stepRace, standings, started, wash, elapsed, applyCall, DIVISION_9 } from '../reading-thames/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -181,7 +181,7 @@ test('jumping the start holds it until the field comes up level, then starts aga
 });
 
 test('a pack races the true-size Reading Thames: lined up at true speed, then four times faster from the horn', async () => {
-  const course = courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/reading.json', import.meta.url), 'utf8')));
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/reading.json', import.meta.url), 'utf8')));
   const race = createRace(course, { rivals: DIVISION_9, seed: 2 });
   for (let t = 0; !started(race); t += DT) {
     assert.ok(t < 60, 'the start never came');
@@ -204,7 +204,7 @@ test('a pack races the true-size Reading Thames: lined up at true speed, then fo
   assert.ok(banked < 15, `rivals spent ${banked} s on the banks`); // a few brushes, swerving round swans
 });
 
-const loopCourse = async () => courseFromFile(JSON.parse(await readFile(new URL('../kayak/courses/loop.json', import.meta.url), 'utf8')));
+const loopCourse = async () => courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
 
 test('a time trial lets boats go one at a time, and times each from the start line', async () => {
   const course = await loopCourse();

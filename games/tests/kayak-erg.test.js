@@ -2,7 +2,7 @@
 // pace from power the way rowing machines work it out.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ERG, createErg, stepErg, monitor, paceOf, speedOf, ergPose, ergResult } from '../kayak/erg.js';
+import { ERG, createErg, stepErg, monitor, paceOf, speedOf, ergPose, ergResult } from '../reading-thames/erg.js';
 
 const DT = 1 / 60;
 function piece(rate, { pace = null, max = 400 } = {}) {

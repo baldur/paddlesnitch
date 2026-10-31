@@ -1,13 +1,13 @@
-// Analytics from play (kayak/metrics.js) and the games' batched sender
+// Analytics from play (reading-thames/metrics.js) and the games' batched sender
 // (shared/analytics.js): what's recorded, that it never says who, and that it
 // fits the site's endpoint (at most 10 string props of 200 characters an event).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent, placeTag } from '../kayak/metrics.js';
-import { cleanKit, randomKit, SKIN_TONES } from '../kayak/kit.js';
-import { PLACES } from '../kayak/club.js';
+import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent, placeTag } from '../reading-thames/metrics.js';
+import { cleanKit, randomKit, SKIN_TONES } from '../reading-thames/kit.js';
+import { PLACES } from '../reading-thames/club.js';
 
 const fits = ({ props }) => {
   assert.ok(Object.keys(props).length <= 10, `${Object.keys(props).length} props`);
@@ -87,7 +87,7 @@ async function page(hostname = 'localhost') {
   const listeners = {};
   const beacons = [];
   const win = {
-    location: { hostname, pathname: '/games/kayak/' },
+    location: { hostname, pathname: '/games/reading-thames/' },
     sessionStorage: { store: {}, getItem(k) { return this.store[k] ?? null; }, setItem(k, v) { this.store[k] = v; } },
     crypto: { randomUUID: () => 'abcd-1234' },
     navigator: { sendBeacon: (url, body) => beacons.push({ url, body: JSON.parse(body) }) },
@@ -115,7 +115,7 @@ test('the sender counts the visit at once, then sends a game\'s events together 
   assert.equal(url, '/att/api/track');
   assert.equal(body.sid, 'abcd-1234');
   assert.deepEqual(body.events.map((e) => e.event), ['game_play', 'game_kit', 'game_session']);
-  assert.ok(body.events.every((e) => e.path === '/games/kayak/' && typeof e.t === 'number'));
+  assert.ok(body.events.every((e) => e.path === '/games/reading-thames/' && typeof e.t === 'number'));
 });
 
 test('the sender never sends more than 20 events at once, and off the real site keeps them to look at instead', async () => {

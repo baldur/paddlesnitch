@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../kayak/boats.js';
-import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery, withOldScull, moveOldScull, boardHull, isScullHull, scullHullName } from '../kayak/kit.js';
-import { SCULLS, SCULL_COLOURS } from '../kayak/scull.js';
-import { HULLS, createBoat } from '../kayak/sim.js';
-import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../kayak/meshes.js';
-import { paddlerSvg } from '../kayak/picture.js';
+import { BOATS, FROM_HULL, hullFor, hullOf, boatById } from '../reading-thames/boats.js';
+import { SKIN_TONES, BODIES, HAIRS, HATS, BEARDS, cleanKit, randomKit, kitKey, livery, withOldScull, moveOldScull, boardHull, isScullHull, scullHullName } from '../reading-thames/kit.js';
+import { SCULLS, SCULL_COLOURS } from '../reading-thames/scull.js';
+import { HULLS, createBoat } from '../reading-thames/sim.js';
+import { paddlerMesh, limbMesh, kayakMesh, paddleMesh, shoulderOf } from '../reading-thames/meshes.js';
+import { paddlerSvg } from '../reading-thames/picture.js';
 
 test('nine boats, one for each stability from 1 (tippy) to 9 (stable)', () => {
   assert.deepEqual(BOATS.map((b) => b.stability), [1, 2, 3, 4, 5, 6, 7, 8, 9]);

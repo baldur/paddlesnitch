@@ -3,14 +3,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, locate } from '../kayak/course.js';
-import { waterMap } from '../kayak/water.js';
-import { createRace } from '../kayak/race.js';
-import { OUTINGS, CRUISE, HIRE, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh } from '../kayak/outing.js';
-import { SWIM, TRAFFIC, moveTraffic, overturned } from '../kayak/traffic.js';
-import { swimmerMesh } from '../kayak/meshes.js';
+import { courseFromFile, locate } from '../reading-thames/course.js';
+import { waterMap } from '../reading-thames/water.js';
+import { createRace } from '../reading-thames/race.js';
+import { OUTINGS, CRUISE, HIRE, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh } from '../reading-thames/outing.js';
+import { SWIM, TRAFFIC, moveTraffic, overturned } from '../reading-thames/traffic.js';
+import { swimmerMesh } from '../reading-thames/meshes.js';
 
-const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
+const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const DT = 1 / 60;
 
 async function outing(kind) {

@@ -1,10 +1,10 @@
 // The player's paddlesnitch account, and the site's API (tRPC, plain JSON over
 // fetch). The game is served from the same origin as the site, under /games/,
 // so the sign-in cookie comes along. Served on its own (`pnpm games`, the
-// browser tests: /kayak/) there's no site and no API: then nobody is signed in
+// browser tests: /reading-thames/) there's no site and no API: then nobody is signed in
 // and nothing is gated (see `whoAmI`).
 
-export const SIGN_IN = '/signin?next=/games/kayak/';
+export const SIGN_IN = '/signin?next=/games/reading-thames/';
 
 export class ApiError extends Error {
   constructor(message, status) {

@@ -4,11 +4,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, pointAt, widthAt } from '../kayak/course.js';
-import { waterMap } from '../kayak/water.js';
-import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES } from '../kayak/world.js';
+import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
+import { waterMap } from '../reading-thames/water.js';
+import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES } from '../reading-thames/world.js';
 
-const data = async (id) => JSON.parse(await readFile(new URL(`../kayak/courses/${id}.json`, import.meta.url), 'utf8'));
+const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 
 // The world's triangles, as [[x, y, z] x 3, colour].
 let triangles;

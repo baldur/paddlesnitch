@@ -94,7 +94,7 @@ const CASES = [
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
-  await page.goto(`${base}/kayak/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
+  await page.goto(`${base}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {

@@ -67,7 +67,7 @@ describe('your paddler and boat', () => {
   })
 
   it("knows the same boats as the game", async () => {
-    const { BOATS } = await import('../../../../games/kayak/boats.js')
+    const { BOATS } = await import('../../../../games/reading-thames/boats.js')
     const { GAME_BOATS } = await import('@paddlesnitch/core/games')
     expect(BOATS.map((b: { id: string }) => b.id)).toEqual([...GAME_BOATS])
   })
