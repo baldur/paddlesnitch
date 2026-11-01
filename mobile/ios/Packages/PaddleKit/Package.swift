@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "Account", targets: ["Account"]),
         .library(name: "SampleServer", targets: ["SampleServer"]),
         .library(name: "Recorder", targets: ["Recorder"]),
+        .library(name: "PhoneUpload", targets: ["PhoneUpload"]),
         .executable(name: "contract-gen", targets: ["ContractGen"]),
     ],
     dependencies: [
@@ -35,6 +36,9 @@ let package = Package(
         // Recording on the phone: sensor events into the recorder core's phone
         // layer, its lines into the tracker's files.
         .target(name: "Recorder", dependencies: [.product(name: "RecorderCore", package: "RecorderCore")]),
+        // Uploading the phone's recordings as a tracker does (C3), and what
+        // Paddles says about them meanwhile.
+        .target(name: "PhoneUpload", dependencies: ["PaddleAPI", "Paddles"]),
         // Turns mobile/contract/ into Swift. The logic is a library so it
         // can be tested; the executable only reads and writes files.
         .target(name: "ContractGenKit"),
@@ -44,6 +48,7 @@ let package = Package(
         .testTarget(name: "PaddleAPITests", dependencies: ["PaddleAPI"]),
         .testTarget(name: "PaddlesTests", dependencies: ["Paddles", "PaddleAPI", "SampleServer"]),
         .testTarget(name: "RecorderTests", dependencies: ["Recorder"]),
+        .testTarget(name: "PhoneUploadTests", dependencies: ["PhoneUpload", "PaddleAPI"]),
         .testTarget(name: "AccountTests", dependencies: ["Account", "PaddleAPI", "SampleServer"]),
     ]
 )
