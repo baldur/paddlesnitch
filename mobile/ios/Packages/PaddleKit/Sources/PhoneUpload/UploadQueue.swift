@@ -291,7 +291,8 @@ public final class UploadQueue {
     }
 
     private func refreshLines() {
-        let all = WaitingRecording.all(in: folder)
+        // Not the recording still being written: it isn't waiting yet.
+        let all = WaitingRecording.all(in: folder).filter { !isOpen($0.track) }
         var lines: [Line] = []
         if let cannotAdd { lines.append(.cannotAdd(cannotAdd)) }
         let waiting = all.filter { !state.refused.contains($0.stem) }

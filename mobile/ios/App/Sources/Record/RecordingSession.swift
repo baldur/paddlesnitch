@@ -45,25 +45,29 @@ final class RecordingSession {
     }
 }
 
+/// "Recording · h:mm:ss" at the top of every screen while the record
+/// screen is hidden; a tap opens it again. Above the tabs, so it never
+/// covers a navigation bar.
+struct RecordingBar: View {
+    @Bindable var session: RecordingSession
+
+    var body: some View {
+        if session.isRecording, !session.showing, let started = session.model?.startedAt {
+            RecordingLine(startedAt: started) { session.showing = true }
+                .padding(.horizontal, 16)
+                .background(Palette.surface)
+        }
+    }
+}
+
 extension View {
-    /// "Recording · h:mm:ss" at the top of every screen while the record
-    /// screen is hidden, and the screen itself.
-    func recording(_ session: RecordingSession, starting: @escaping () -> Void) -> some View {
+    /// The record screen, presented from the root, not from the Record
+    /// button: a sign-out the app makes on its own takes the button away,
+    /// and would take the screen and its Stop with it.
+    func recordScreen(_ session: RecordingSession, starting: @escaping () -> Void) -> some View {
         @Bindable var session = session
-        return
-            self
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if session.isRecording, !session.showing, let started = session.model?.startedAt {
-                    RecordingLine(startedAt: started) { session.showing = true }
-                        .padding(.horizontal, 16)
-                        .background(Palette.surface)
-                }
-            }
-            // Presented from the root, not from the Record button: a sign-out
-            // the app makes on its own takes the button away, and would take
-            // the screen and its Stop with it.
-            .fullScreenCover(isPresented: $session.showing) {
-                if let model = session.model { RecordView(model: model, starting: starting) }
-            }
+        return fullScreenCover(isPresented: $session.showing) {
+            if let model = session.model { RecordView(model: model, starting: starting) }
+        }
     }
 }

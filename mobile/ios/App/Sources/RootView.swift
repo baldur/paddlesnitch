@@ -32,25 +32,30 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // The same list view throughout; it reloads when `sourceID` changes
-            // (samples, or this person's). Rebuilding its navigation stack
-            // under the closing sign-in sheet crashed UIKit on iOS 17.
-            PaddleListView(
-                source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
-                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
-                openTerms: { termsOpen = true }, adding: adding, options: account.options,
-                openFile: { url in Task { await open(url) } },
-                openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
-                uploads: uploads,
-                openReport: openReport
-            )
-            .tabItem { Label("Paddles", systemImage: "water.waves") }
-            .tag("paddles")
-            YouView(account: account, signIn: { signingIn = true })
-                .tabItem { Label("You", systemImage: "person.crop.circle") }
-                .tag("you")
+        // "Recording · h:mm:ss" above every screen, nav bars included.
+        VStack(spacing: 0) {
+            RecordingBar(session: recording)
+            TabView(selection: $selectedTab) {
+                // The same list view throughout; it reloads when `sourceID` changes
+                // (samples, or this person's). Rebuilding its navigation stack
+                // under the closing sign-in sheet crashed UIKit on iOS 17.
+                PaddleListView(
+                    source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
+                    needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
+                    openTerms: { termsOpen = true }, adding: adding, options: account.options,
+                    openFile: { url in Task { await open(url) } },
+                    openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
+                    uploads: uploads,
+                    openReport: openReport
+                )
+                .tabItem { Label("Paddles", systemImage: "water.waves") }
+                .tag("paddles")
+                YouView(account: account, signIn: { signingIn = true })
+                    .tabItem { Label("You", systemImage: "person.crop.circle") }
+                    .tag("you")
+            }
         }
+        .background(Palette.bg)
         // A GPS file opened in the app from Files, Mail or a share sheet.
         .onOpenURL { url in Task { await open(url) } }
         .onChange(of: account.user?.id) { _, id in
@@ -60,7 +65,7 @@ struct RootView: View {
             recording.accountChanged(to: id.map { account.recordings(for: $0) })
             uploadRecordings(of: id)
         }
-        .recording(recording) {
+        .recordScreen(recording) {
             // Start adds a phone removed on Devices again.
             if let uploads, uploads.state.removed { Task { await uploads.addAgain() } }
         }

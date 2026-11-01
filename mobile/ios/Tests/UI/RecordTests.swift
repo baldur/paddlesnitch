@@ -21,10 +21,12 @@ final class RecordTests: AppTestCase {
             ["Waiting for GPS", "GPS fix"].contains(gps) || gps.hasPrefix("GPS lost"), "agreed words: \(gps)")
         let time = element("record-time")
         let first = time.label
-        XCTAssertTrue(first.contains("0:0"), "the time since it started")
+        XCTAssertTrue(first.hasPrefix("Time, "), "the time since it started, spoken: \(first)")
         XCTAssertTrue(poll(timeout: 5) { time.label != first }, "the clock runs")
-        // The recorder core has no live values yet: "—", never a guess.
-        XCTAssertTrue(element("record-stroke-rate").label.contains("—"))
+        // The recorder core has no live values yet: "—" (spoken "not measured
+        // yet"), never a guess.
+        XCTAssertEqual(element("record-stroke-rate").label, "Stroke rate, not measured yet")
+        XCTAssertTrue(text(containing: "—").exists)
         // The simulator has no motion sensors: GPS only, and it says so.
         XCTAssertTrue(element("record-no-motion").exists)
         try audit()
@@ -56,6 +58,7 @@ final class RecordTests: AppTestCase {
         // At the top of every screen, not only Paddles.
         selectTab("You")
         XCTAssertTrue(line.appears(timeout: 5), "on You too")
+        XCTAssertFalse(element("upload-line").exists, "the running recording isn't waiting to upload")
         line.tap()
         XCTAssertTrue(element("record-recording").appears(timeout: 10), "the same recording")
         element("record-stop").press(forDuration: 2)

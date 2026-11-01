@@ -80,6 +80,8 @@ struct UploadEdgeTests {
                 "track_20261101_070211.csv", "track_20261101_070211_imu.csv",
             ])
         #expect(names(in: folder).contains("track_20261101_090000.csv"))
+        // Nor is it shown as waiting: it isn't yet.
+        #expect(queue.lines.isEmpty)
     }
 
     @Test func piecesThatKeepGoingMissingAreTriedAgainLater() async throws {

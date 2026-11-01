@@ -25,6 +25,8 @@ struct RecordingLine: View {
                         .accessibilityHidden(true)
                 }
                 .frame(minHeight: 44)
+                // The whole line, the gap included, opens it.
+                .contentShape(Rectangle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Recording, \(Spoken.duration(context.date.timeIntervalSince(startedAt)))")
             }
@@ -67,8 +69,9 @@ struct UploadLineView: View {
                             .font(.plexSans(.subheadline, weight: .semibold))
                             .foregroundStyle(Palette.muted)
                             .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .accessibilityLabel("Dismiss")
                     .accessibilityIdentifier("upload-line-close")
                 }
