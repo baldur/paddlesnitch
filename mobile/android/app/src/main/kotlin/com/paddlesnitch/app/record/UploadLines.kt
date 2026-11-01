@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,25 +61,31 @@ fun UploadLines(accountId: String, onReport: () -> Unit) {
 
 @Composable
 fun UploadLinesView(lines: List<UploadLine>, online: Boolean, onUploadNow: () -> Unit, onDismiss: (String) -> Unit, onReport: () -> Unit) {
-    // Always in the layout, so TalkBack hears a line that comes or changes.
-    Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Each line is its own live region, so TalkBack reads only the one that changed,
+    // never every waiting recording again when the network comes and goes.
+    // Lines and their buttons sit at Record's inset (RecordEntry is a TextButton).
+    Column(Modifier.fillMaxWidth().padding(horizontal = INSET), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (line in lines) when (line) {
-            is UploadLine.Waiting -> Text(listOfNotNull(day(line.at), if (online) "Uploading…" else "Waiting to upload").joinToString(" · "), color = PsColor.muted)
+            is UploadLine.Waiting -> Text(listOfNotNull(day(line.at), if (online) "Uploading…" else "Waiting to upload").joinToString(" · "), color = PsColor.muted, modifier = Live)
             is UploadLine.NoFix -> Column {
-                Text(listOfNotNull(day(line.at), NO_FIX).joinToString(" · "), color = PsColor.fg)
-                TextButton(onClick = { onDismiss(line.base) }, colors = textColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
+                Text(listOfNotNull(day(line.at), NO_FIX).joinToString(" · "), color = PsColor.fg, modifier = Live)
+                TextButton(onClick = { onDismiss(line.base) }, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
             }
             is UploadLine.Failed -> Column {
-                Text(listOfNotNull(day(line.at), UPLOAD_FAILED).joinToString(" · "), color = PsColor.red)
-                TextButton(onClick = onReport, colors = textColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Report an issue") }
+                Text(listOfNotNull(day(line.at), UPLOAD_FAILED).joinToString(" · "), color = PsColor.red, modifier = Live)
+                TextButton(onClick = onReport, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Report an issue") }
             }
             is UploadLine.PhoneOff -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(line.said ?: PHONE_REMOVED, color = PsColor.fg)
+                Text(line.said ?: PHONE_REMOVED, color = PsColor.fg, modifier = Live)
                 OutlinedButton(onClick = onUploadNow, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Upload now") }
             }
         }
     }
 }
+
+private val INSET = 12.dp   // a TextButton's own horizontal padding: Record's text starts there
+private val Flush = androidx.compose.foundation.layout.PaddingValues(0.dp)
+private val Live = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
 
 private fun day(at: String?) = at?.let { runCatching { fmtDayTime(it) }.getOrNull() }
 

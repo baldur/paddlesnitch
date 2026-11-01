@@ -77,7 +77,7 @@ import kotlin.math.roundToInt
 const val RECORD_LOCATION_REFUSED = "Couldn’t start recording without location. Allow location for paddlesnitch in the app’s settings."
 const val LOCATION_OFF = "Location is off on this phone. Turn it on to record."
 const val NO_MOTION_SENSORS = "No motion sensors on this phone, so no stroke rate"
-const val WRITE_FAILED = "Couldn’t save the rest of this recording. The phone may be full."
+const val WRITE_FAILED = "Couldn’t save the rest of this recording. What it saved so far will upload when you stop."
 private const val ASKED = "askedLocation"
 const val RECORD_FAILED = "Couldn’t start recording. Please try again."
 const val NOTIFICATIONS_OFF = "Notifications are off for paddlesnitch, so stop the recording here."

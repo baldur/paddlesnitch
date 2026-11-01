@@ -155,7 +155,7 @@ class PhoneUploader(
     private enum class Sent { Ok, NoData, Removed, TrackFirst, Refused, Retry }
 
     companion object {
-        const val PHONE_NOT_ADDED = "Couldn’t add this phone to your account."
+        const val PHONE_NOT_ADDED = "Couldn’t add this phone to your account. Tap Upload now to try again."
 
         /** The tracker's piece size (docs/features/device-uplink.md). */
         const val PIECE = 64 * 1024

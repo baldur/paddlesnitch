@@ -127,6 +127,7 @@ class RecordScreenTest {
         show(RecordingService.State.Recording(broken, MutableStateFlow(notReady), startedAt = 1_000L))
         compose.onNodeWithText(WRITE_FAILED).assertExists()
         compose.onNodeWithText("Recording").assertDoesNotExist()
+        golden("recording.write-failed")
     }
 
     @Test fun withoutMotionSensorsItRecordsAndSaysThereIsNoStrokeRate() {
@@ -162,7 +163,7 @@ class RecordScreenTest {
         show(RecordingService.State.Failed(locationRefused = true), onSettings = { settings++ })
         compose.onNodeWithText(RECORD_LOCATION_REFUSED).assertExists()
         compose.onNodeWithText("Start recording").assertDoesNotExist()
-        golden("failed")
+        golden("location-refused")
         compose.onNodeWithText("Open the app’s settings").performClick()
         assertEquals(1, settings)
     }
@@ -184,8 +185,17 @@ class RecordScreenTest {
         assertEquals(1, opened)
     }
 
+    @Test fun aFailedWriteAtLargeText() {
+        val broken = RecordingFiles(File.createTempFile("track_20261031_091407", ".csv"), File.createTempFile("i10", ".csv"))
+        broken.close()
+        broken.write(RecorderCore.TRACK, "1,2,3\n".toByteArray())
+        show(RecordingService.State.Recording(broken, MutableStateFlow(notReady), startedAt = 1_000L), fontScale = 2f)
+        golden("recording.write-failed.large-text")
+    }
+
     @Test fun anotherFailureDoesntBlameLocation() {
         show(RecordingService.State.Failed(locationRefused = false))
+        golden("start-failed")
         compose.onNodeWithText(RECORD_FAILED).assertExists()
         compose.onNodeWithText("Open the app’s settings").assertDoesNotExist()
     }
