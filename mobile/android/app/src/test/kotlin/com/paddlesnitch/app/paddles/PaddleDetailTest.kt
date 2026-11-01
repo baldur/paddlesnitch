@@ -18,9 +18,12 @@ class PaddleDetailTest {
     // #789: a phone's paddle is a device with phone: true, and says Phone, never Tracker.
     @Test
     fun aPhonesPaddleSaysPhone() {
-        val s = ApiJson.decodeFromString(AnalysisSession.serializer(), File("../../contract/fixtures/api/paddles.get.json").readText())
-        assertEquals("Phone · K1", PaddleDetail(s.copy(source = s.source.copy(phone = true))).eyebrow)
-        assertEquals("Tracker · K1", PaddleDetail(s.copy(source = s.source.copy(phone = false))).eyebrow)
+        // paddles.get.json's source with the server's phone field, read from JSON as the app reads it.
+        val json = File("../../contract/fixtures/api/paddles.get.json").readText()
+        fun with(phone: String) = PaddleDetail(ApiJson.decodeFromString(AnalysisSession.serializer(),
+            json.replaceFirst(Regex("\"source\"\\s*:\\s*\\{"), "\"source\": { \"phone\": $phone, "))).eyebrow
+        assertEquals("Phone · K1", with("true"))
+        assertEquals("Tracker · K1", with("false"))
     }
 
     @Test
