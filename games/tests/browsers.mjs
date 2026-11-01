@@ -325,8 +325,10 @@ async function play(c, page, errors) {
     // One hint at a time: a moment's note doesn't wipe an instruction, and a
     // second instruction waits for the first to finish.
     const hint = () => page.evaluate(() => document.getElementById('hint').textContent);
-    await page.waitForFunction(() => !document.getElementById('hint').classList.contains('show'), null, { timeout: 15_000 });
+    // (Cleared first, in the same frame: the race's own lessons can fill the
+    // slot for longer than a test should wait, on CI's slow software drawing.)
     await page.evaluate(() => {
+      window.kayak.show('', { small: true, now: true, hold: 0 });
       window.kayak.show('First instruction', { small: true, hold: 1.5 });
       window.kayak.show('Weak stroke', { small: true, hold: 0.5 });
       window.kayak.show('Second instruction', { small: true, hold: 1.2 });
