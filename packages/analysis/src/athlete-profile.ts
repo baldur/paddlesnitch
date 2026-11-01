@@ -9,7 +9,7 @@
 // profile is fed into every summary, so its mistakes repeat (#821).
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import { historyBits } from './history-stats'
-import { runInsighter, RETRY_IF_FIRST_UNDER_MS, type Run } from './llm'
+import { runConfigured, RETRY_IF_FIRST_UNDER_MS, type Run } from './llm'
 import { profileProblems, numbersNotInFacts, tidyDraft } from './voice'
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile, type SessionSummary } from './analysis-store'
 
@@ -22,7 +22,8 @@ export const PROFILE_SYSTEM = [
   'It is read before writing the note under each of their paddles.',
   'Plain British English, dry and exact. No praise words, no exclamation marks, no dashes as punctuation, no questions, no lists or markdown.',
   'Write 3 to 5 sentences, under 100 words: their usual paddles and distances, boat classes, home water if their notes name it,',
-  'what their own notes say they are working on, and how their pace has changed.',
+  'what their own notes say they are working on (in plain words, without technique terms like catch or rotation),',
+  'and how their pace has changed, by naming an earlier and a later pace from the paddles given.',
   'Use only what you are given. Use only numbers exactly as they appear (a distance may be rounded): never work out an average,',
   'total or difference that is not given. Pace is per 500 m, written like 2:31/500.',
   'You did not watch them paddle: never describe their technique, feel, effort or mood, and never compare them with other paddlers.',
@@ -56,8 +57,8 @@ function buildFromScratchPrompt(summaries: SessionSummary[]): string {
   return `${totalsLine(summaries)}\nHere are the paddler's saved paddles (newest first):\n${recent.map(summaryLine).join('\n')}\n\nWrite their profile.`
 }
 
-function mergePrompt(current: AthleteProfile, latest: SessionSummary, count: number): string {
-  return `Existing profile of the paddler:\n"${current.text}"\n\nThey now have ${count} saved paddles. Their latest paddle:\n${summaryLine(latest)}\n\nReturn the updated profile: keep what still holds, and add anything new (a new boat class, a change in pace, a note they left). Same length and style.`
+function mergePrompt(current: AthleteProfile, latest: SessionSummary, all: SessionSummary[]): string {
+  return `Existing profile of the paddler:\n"${current.text}"\n\n${totalsLine(all)} Their latest paddle:\n${summaryLine(latest)}\n\nReturn the updated profile: keep what still holds, and add anything new (a new boat class, a change in pace, a note they left). Same length and style.`
 }
 
 // Deterministic fallback: a plain profile from the numbers, so the feature
@@ -68,9 +69,9 @@ export function deterministicProfile(summaries: SessionSummary[]): string {
   const avgDist = avgDistanceKm(summaries)
   const classes = [...new Set(summaries.map(s => s.boatClass).filter(Boolean))] as string[]
   const withNotes = summaries.filter(s => s.note?.trim()).length
-  const bits = [`A paddler with ${summaries.length} logged paddles${avgDist != null ? `, typically around ${avgDist.toFixed(1)} km` : ''}.`]
+  const bits = [`A paddler with ${summaries.length} saved paddles${avgDist != null ? `, typically around ${avgDist.toFixed(1)} km` : ''}.`]
   if (classes.length) bits.push(`Boat${classes.length > 1 ? 's' : ''}: ${classes.join(', ')}.`)
-  if (withNotes) bits.push(`Keeps a diary: ${withNotes} of their paddles carry personal notes.`)
+  if (withNotes) bits.push(`Leaves notes: ${withNotes} of their paddles ${withNotes === 1 ? 'has one' : 'have one'}.`)
   return bits.join(' ')
 }
 
@@ -80,16 +81,17 @@ const sound = (p: AthleteProfile | null): p is AthleteProfile => !!p && !profile
 
 // One draft, checked. A failing draft goes back once with what was wrong, but
 // only if the first call was quick: the profile update runs after the
-// summary's call in the same request. Null = no draft worth saving.
-async function draftProfile(prompt: string, run: Run): Promise<string | null> {
+// summary's call in the same request. 'none' = the model gave nothing (no
+// backend, or the call failed); 'rejected' = it gave drafts that failed.
+async function draftProfile(prompt: string, run: Run): Promise<string | 'none' | 'rejected'> {
   const started = Date.now()
   const first = tidyDraft((await run(PROFILE_SYSTEM, prompt)) ?? '')
-  if (!first) return null
+  if (!first) return 'none'
   const problems = profileProblems(first, prompt)
   if (!problems.length) return first
   if (Date.now() - started > RETRY_IF_FIRST_UNDER_MS) {
     console.warn('[profile] draft broke the voice; no time to retry', { problems: problems.length })
-    return null
+    return 'rejected'
   }
   const unknown = numbersNotInFacts(first, prompt)
   const again = `${prompt}\n\nYour draft:\n${first}\n\nThe draft breaks the rules: ${problems.join('; ')}.`
@@ -98,16 +100,15 @@ async function draftProfile(prompt: string, run: Run): Promise<string | null> {
   const second = tidyDraft((await run(PROFILE_SYSTEM, again)) ?? '')
   if (second && !profileProblems(second, prompt).length) return second
   console.warn('[profile] draft broke the voice twice', { problems: problems.length })
-  return null
+  return 'rejected'
 }
-
-const runConfigured: Run = async (system, user) => (await runInsighter(system, user))?.text ?? null
 
 // Refresh the stored profile after a new paddle is saved. Decides skip (cold
 // start) / full re-distill (drift cadence, no profile yet, or one that fails
 // the check) / incremental merge. `allSummaries` includes the just-saved
-// paddle. With no good draft, the previous profile stays as it is, or the
-// deterministic one is saved if there is none worth keeping.
+// paddle. A rejected draft keeps the previous profile, or saves the
+// deterministic one if there is none worth keeping. With no draft at all, a
+// full build saves the deterministic one, so its counts stay current.
 // Best-effort: a failure is swallowed by the caller.
 export async function refreshAthleteProfile(userId: string, latest: SessionSummary, allSummaries: SessionSummary[], nowIso: string, run: Run = runConfigured): Promise<AthleteProfile | null> {
   if (allSummaries.length < MIN_PADDLES) return null
@@ -115,10 +116,11 @@ export async function refreshAthleteProfile(userId: string, latest: SessionSumma
   const existing = sound(stored) ? stored : null
   const needsFull = !existing || (allSummaries.length - existing.builtFromCount) >= REDISTILL_EVERY
 
-  const prompt = existing && !needsFull ? mergePrompt(existing, latest, allSummaries.length) : buildFromScratchPrompt(allSummaries)
+  const prompt = existing && !needsFull ? mergePrompt(existing, latest, allSummaries) : buildFromScratchPrompt(allSummaries)
   const draft = await draftProfile(prompt, run)
-  if (!draft && existing) return existing
-  const text = draft ?? deterministicProfile(allSummaries)
+  const good = draft !== 'none' && draft !== 'rejected'
+  if (!good && existing && (draft === 'rejected' || !needsFull)) return existing
+  const text = good ? draft : deterministicProfile(allSummaries)
   if (!text) return null
 
   const profile: AthleteProfile = {

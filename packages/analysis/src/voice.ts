@@ -205,10 +205,11 @@ export function profileProblems(text: string, facts: string): string[] {
   if (!t) return ['it is empty']
   out.push(...styleProblems(t))
   const us = Object.keys(US_SPELLINGS).filter(w => hasWord(t, w))
-  if (us.length) out.push(`it uses US spellings: write ${us.map(w => `"${US_SPELLINGS[w]}", not "${w}"`).join('; ')}`)
+  if (us.length) out.push(`it uses US spellings (write ${us.map(w => `"${US_SPELLINGS[w]}" not "${w}"`).join(', ')})`)
   const bad = impossibleTimes(t)
-  if (bad.length) out.push(`it has times that can't be (a minute has 60 seconds): ${bad.join(', ')}`)
-  if (words(t).length > MAX_PROFILE_WORDS || t.length > MAX_PROFILE_CHARS) out.push(`it is longer than ${MAX_PROFILE_WORDS} words`)
+  if (bad.length) out.push(`it has impossible times (seconds and minutes go up to 59): ${bad.join(', ')}`)
+  if (words(t).length > MAX_PROFILE_WORDS) out.push(`it is longer than ${MAX_PROFILE_WORDS} words`)
+  else if (t.length > MAX_PROFILE_CHARS) out.push(`it is longer than ${MAX_PROFILE_CHARS} characters`)
   const unknown = numbersNotInFacts(t, facts)
   if (unknown.length) out.push(`it uses numbers that are not in the paddles given: ${unknown.join(', ')}`)
   return out

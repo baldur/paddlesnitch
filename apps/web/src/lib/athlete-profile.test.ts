@@ -25,10 +25,10 @@ describe('deterministicProfile', () => {
       paddle({ distanceKm: 7, boatClass: 'K1' }),
       paddle({ distanceKm: 6, boatClass: '2X', note: 'tired' }),
     ])
-    expect(p).toContain('3 logged paddles')
+    expect(p).toContain('3 saved paddles')
     expect(p).toContain('K1')
     expect(p).toContain('2X')
-    expect(p).toContain('diary')          // 2 paddles carried notes
+    expect(p).toContain('Leaves notes: 2 of their paddles have one.')
   })
 
   it('passes the profile check itself, so a stored one is kept', () => {
@@ -47,16 +47,16 @@ describe('profileProblems (#821)', () => {
 
   it('rejects a time that cannot be ("2:60/500")', () => {
     expect(profileProblems('Cruises near 2:60/500.', `${FACTS} 2:60`)).toEqual([
-      "it has times that can't be (a minute has 60 seconds): 2:60",
+      "it has impossible times (seconds and minutes go up to 59): 2:60",
     ])
     expect(impossibleTimes('2:30/500 over 1:05:30, then 1:75:00')).toEqual(['1:75:00'])
   })
 
   it('rejects US spellings and names the British form', () => {
     expect(profileProblems('Paddles a K1, favoring the river centre over 5 km.', FACTS)).toEqual([
-      'it uses US spellings: write "favouring", not "favoring"',
+      'it uses US spellings (write "favouring" not "favoring")',
     ])
-    expect(profileProblems('Paddles a K1 over 5 kilometers.', FACTS)[0]).toMatch(/"kilometres", not "kilometers"/)
+    expect(profileProblems('Paddles a K1 over 5 kilometers.', FACTS)[0]).toMatch(/"kilometres" not "kilometers"/)
   })
 
   it('rejects a number not in the paddles given, but allows rounding', () => {
@@ -75,6 +75,15 @@ describe('profileProblems (#821)', () => {
 
   it('rejects a profile over the length cap', () => {
     expect(profileProblems(Array(121).fill('paddle').join(' '), FACTS)).toEqual(['it is longer than 120 words'])
+    expect(profileProblems(Array(100).fill('paddleboard').join(' '), FACTS)).toEqual(['it is longer than 900 characters'])
+  })
+
+  // On purpose: the profile is read before every summary, and a summary must
+  // not describe technique, so a note's technique words stay out of it too.
+  it('rejects technique words even when a note uses them', () => {
+    expect(profileProblems('Their notes say they are working on the catch.', `${FACTS} Note: "working on the catch"`)).toEqual([
+      'it describes things the numbers can\'t show: "catch"',
+    ])
   })
 })
 
@@ -143,8 +152,8 @@ describe('refreshAthleteProfile', () => {
     expect((await refreshAthleteProfile(USER, all[0], all, NOW, run))?.text).toBe(GOOD)
     const retry = run.mock.calls[1][1] as string
     expect(retry).toContain('Paddles a K1, favoring 12.5 km at 2:60/500.')
-    expect(retry).toMatch(/"favouring", not "favoring"/)
-    expect(retry).toMatch(/can't be.*2:60/)
+    expect(retry).toMatch(/"favouring" not "favoring"/)
+    expect(retry).toMatch(/impossible times.*2:60/)
     expect(retry).toMatch(/Leave out 12\.5, 2:60/)
     // A merge keeps the count of the last full build.
     expect(await getAthleteProfile(USER)).toEqual({ text: GOOD, updatedAt: NOW, builtFromCount: 3 })
@@ -169,6 +178,29 @@ describe('refreshAthleteProfile', () => {
     const saved = await refreshAthleteProfile(USER, all[0], all, NOW, run)
     expect(run.mock.calls[0][1]).toMatch(/^They have 4 saved paddles, 5\.0 km on average\./)   // a full build, not a merge
     expect(saved).toEqual({ text: deterministicProfile(all), updatedAt: NOW, builtFromCount: 4 })
+  })
+
+  it('checks a merge against the old profile, the latest paddle and the new totals', async () => {
+    await saveAthleteProfile(USER, { ...PREVIOUS, text: 'Paddles a K1, usually 7.5 km.' })
+    const all = [paddle({ distanceKm: 9 }), paddle(), paddle(), paddle()]   // 6.0 km on average
+    const keeps = 'Paddles a K1, usually 7.5 km, lately 9 km at 2:30/500. Now 6 km on average.'
+    const run = vi.fn().mockResolvedValue(keeps)
+    expect((await refreshAthleteProfile(USER, all[0], all, NOW, run))?.text).toBe(keeps)
+    expect(run.mock.calls[0][1]).toMatch(/^Existing profile/)
+    expect(run.mock.calls[0][1]).toContain('They have 4 saved paddles, 6.0 km on average.')
+
+    await saveAthleteProfile(USER, { ...PREVIOUS, text: 'Paddles a K1, usually 7.5 km.' })
+    const invents = vi.fn().mockResolvedValue('Paddles a K1, usually 6.8 km.')
+    expect((await refreshAthleteProfile(USER, all[0], all, NOW, invents))?.text).toBe('Paddles a K1, usually 7.5 km.')
+  })
+
+  it('with no model, a full build saves a fresh deterministic profile so its counts stay current', async () => {
+    const three = [paddle(), paddle(), paddle()]
+    await saveAthleteProfile(USER, { text: deterministicProfile(three), updatedAt: '2026-07-10T12:00:00Z', builtFromCount: 3 })
+    const thirteen = Array.from({ length: 13 }, () => paddle())
+    const saved = await refreshAthleteProfile(USER, thirteen[0], thirteen, NOW, vi.fn().mockResolvedValue(null))
+    expect(saved).toEqual({ text: deterministicProfile(thirteen), updatedAt: NOW, builtFromCount: 13 })
+    expect(saved?.text).toContain('13 saved paddles')
   })
 
   it('keeps the previous profile when the model gives nothing', async () => {
