@@ -4,7 +4,6 @@
 import { getJson } from '@/lib/storage'
 import { findUserBySub } from '@/lib/cognito'
 import { getUserGroupIds, getGroup, groupRoleOf } from '@/lib/groups'
-import { getStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { listSessions, getAthleteProfile } from '@paddlesnitch/analysis/analysis-store'
 import { exportUserDevices } from '@paddlesnitch/core/devices'
 import { exportBuddies } from '@paddlesnitch/core/buddies'
@@ -40,17 +39,19 @@ export async function buildAccountExport(user: AuthUser) {
   const paddles = await listSessions(user.id)
   const coachProfile = await getAthleteProfile(user.id)
 
-  // Account records under users/{id}/. Strava tokens are credentials, so only
-  // the fact of the connection and the athlete id are exported.
-  const strava = await getStravaTokens(user.id)
+  // Account records under users/{id}/. Strava was removed (2026-11), but an
+  // account may still hold the old link until the one-off clean-up runs: the
+  // tokens are credentials, so only the athlete id is exported.
+  const strava = await getJson<{ athleteId?: number }>(`users/${user.id}/strava.json`)
+  const stravaPrefs = await getJson(`users/${user.id}/strava-prefs.json`)
   const account = {
     profile: await getJson(`users/${user.id}/profile.json`),
     contact: await getJson(`users/${user.id}/contact.json`),
     termsAccepted: await getJson(`users/${user.id}/tos-consent.json`),
     // When the account last proved it owns its email (#702).
     emailProven: await getJson(`users/${user.id}/email-proven.json`),
-    strava: strava ? { connected: true, athleteId: strava.athleteId } : { connected: false },
-    stravaAutoImport: await getJson(`users/${user.id}/strava-prefs.json`),
+    ...(strava ? { strava: { connected: true, athleteId: strava.athleteId } } : {}),
+    ...(stravaPrefs ? { stravaAutoImport: stravaPrefs } : {}),
     // The kayak game's paddler and boat.
     gameKit: await getJson(`users/${user.id}/game-kit.json`),
     // Their times on the game's public leaderboards (#742).

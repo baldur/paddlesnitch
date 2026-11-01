@@ -26,6 +26,15 @@ describe("the header's user, from the server", () => {
     expect(JSON.stringify(who)).not.toContain('@')
   })
 
+  it('an account made with Strava says so (sign out asks first), still without the email', async () => {
+    const u = await makeUser('Strava Person', { email: `strava-${Date.now()}${Math.floor(Math.random() * 1e6)}@noreply.paddlesnitch.com` })
+    withCookies({ tt_id: u.idToken })
+    const who = await sessionUser()
+    expect(who).toMatchObject({ id: u.id, placeholderEmail: true })
+    expect(Object.keys(who ?? {}).sort()).toEqual(['displayName', 'id', 'placeholderEmail'])
+    expect(JSON.stringify(who)).not.toContain('@')
+  })
+
   it('no session cookies: signed out', async () => {
     withCookies({})
     expect(await sessionUser()).toBeNull()

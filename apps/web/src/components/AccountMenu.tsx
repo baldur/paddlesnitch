@@ -3,6 +3,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AccountNav, { type NavUser } from '@paddlesnitch/ui/AccountNav'
 import { useSessionUser } from '@/components/SessionUser'
+import { isSyntheticStravaEmail } from '@/lib/strava-account'
 
 // The account menu in the header on every page: the shared AccountNav, wired to
 // the signed-in user and the platform routes. (There used to be two of these,
@@ -14,6 +15,13 @@ const once = <K extends keyof typeof shared>(k: K, load: () => NonNullable<(type
   (shared[k] ??= load()) as NonNullable<(typeof shared)[K]>
 // A new page view asks again.
 export function resetAccountMenuCache() { shared = {} }
+
+// An account made with Strava (removed 2026-11) can't sign back in until we
+// move it to a real email, so signing out asks first. Same words as the apps.
+const SIGN_OUT_CONFIRM = {
+  text: 'You made this account with Strava, so you can’t sign back in until we move it to your email.',
+  emailHref: 'mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email',
+}
 
 export default function AccountMenu({ variant = 'menu' }: { variant?: 'menu' | 'tab' } = {}) {
   const pathname = usePathname() ?? '/'
@@ -35,6 +43,10 @@ export default function AccountMenu({ variant = 'menu' }: { variant?: 'menu' | '
     if (fromServer !== undefined) { waitingFor(fromServer); return }
     once('me', () => fetch('/att/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
+      // Only what the header needs: never keep the email.
+      .then((u: (NavUser & { email?: string }) | null) => u && {
+        id: u.id, displayName: u.displayName, ...(isSyntheticStravaEmail(u.email) ? { placeholderEmail: true as const } : {}),
+      })
       .catch(() => null))
       .then((u: NavUser | null) => { setUser(u); waitingFor(u) })
   }, [fromServer])
@@ -62,6 +74,7 @@ export default function AccountMenu({ variant = 'menu' }: { variant?: 'menu' | '
       // Back to where you were after signing in.
       signInHref={pathname === '/' ? '/signin' : `/signin?next=${encodeURIComponent(pathname)}`}
       onSignOut={onSignOut}
+      signOutConfirm={user?.placeholderEmail ? SIGN_OUT_CONFIRM : undefined}
       variant={variant}
     />
   )

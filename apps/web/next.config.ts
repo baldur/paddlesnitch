@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   },
   // Profile/account moved to platform-level routes (docs/features/profile-routes.md):
   // keep the old att URLs working via permanent redirects so existing links /
-  // bookmarks / the Strava app config don't break.
+  // bookmarks don't break.
   async redirects() {
     return [
       // (The tracker QR's uppercase /L/<code> is routed in src/proxy.ts: a rule

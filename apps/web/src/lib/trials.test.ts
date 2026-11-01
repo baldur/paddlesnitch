@@ -75,6 +75,16 @@ describe('loadTrialEntryTrack', () => {
     expect(track).not.toBeNull()
     expect(track!.length).toBe(3)
     expect(track![2].timestamp.toISOString()).toBe('2026-05-01T10:01:00.000Z')
+    expect(track![0]).toMatchObject({ lat: 51.5, lng: -0.9 })
+  })
+
+  it('a snapshot with more positions than times stops at the shorter one', async () => {
+    await putObject('trials/t4/entries/' + USER + '/e4/trace.json', JSON.stringify({
+      startDate: '2026-05-01T10:00:00Z',
+      latlng: [[51.5, -0.9], [51.501, -0.9], [51.502, -0.9]], time: [0, 30],
+    }))
+    const track = await loadTrialEntryTrack(USER, 't4', 'e4')
+    expect(track!.length).toBe(2)
   })
 
   it('returns null for another user\'s entry (userId is in the key)', async () => {

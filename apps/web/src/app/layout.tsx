@@ -4,7 +4,6 @@ import './globals.css'
 import Footer from '@/components/Footer'
 import CookieNotice from '@/components/CookieNotice'
 import FeedbackWidget from '@paddlesnitch/ui/FeedbackWidget'
-import AttContactBanner from '@/components/AttContactBanner'
 import Analytics from '@/components/Analytics'
 import TRPCProvider from '@/components/TRPCProvider'
 import { SessionUserProvider } from '@/components/SessionUser'
@@ -45,7 +44,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen flex flex-col bg-bg text-fg pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:pb-0">
         <TRPCProvider>
           <SessionUserProvider user={user}>
-          <AttContactBanner />
           {children}
           <Footer />
           <CookieNotice />

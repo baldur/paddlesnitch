@@ -29,7 +29,6 @@ function sourceFiles(dir: string): string[] {
 // for it. A new host fails the "unlisted" test until it is added here AND to
 // the privacy page.
 const SERVICES: Record<string, string> = {
-  'www.strava.com': 'Strava',
   'api.open-meteo.com': 'Open-Meteo',
   'archive-api.open-meteo.com': 'Open-Meteo',
   'environment.data.gov.uk': 'Environment Agency',
@@ -92,7 +91,11 @@ describe('privacy page names every outside service the code uses', () => {
     ...readdirSync(path.join(repo, 'mobile/ios/Packages')).map(p => path.join(repo, 'mobile/ios/Packages', p, 'Sources')),
   ].filter(d => { try { return statSync(d).isDirectory() } catch { return false } })
   for (const f of [...sourceFiles(path.join(repo, 'apps/web/src')), ...sourceFiles(path.join(repo, 'packages')), ...apps.flatMap(sourceFiles)]) {
-    for (const m of readFileSync(f, 'utf8').matchAll(/https:\/\/([a-z0-9.-]+\.[a-z]{2,})/g)) hosts.add(m[1])
+    for (const m of readFileSync(f, 'utf8').matchAll(/https:\/\/([a-z0-9.-]+\.[a-z]{2,})/g)) {
+      // The iOS test server still fakes Strava until the iOS Strava removal lands (then drop this).
+      if (m[1] === 'www.strava.com' && f.includes('/SampleServer/')) continue
+      hosts.add(m[1])
+    }
   }
 
   it('has no outside host missing from the list of known services', () => {

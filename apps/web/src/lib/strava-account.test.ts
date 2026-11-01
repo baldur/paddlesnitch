@@ -1,20 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  syntheticEmailFor,
-  isSyntheticStravaEmail,
-  athleteIdFromSyntheticEmail,
-} from './strava-account'
-
-describe('syntheticEmailFor', () => {
-  it('produces a stable address keyed off the athlete id', () => {
-    expect(syntheticEmailFor(5158589)).toBe('strava-5158589@noreply.paddlesnitch.com')
-  })
-
-  it('round-trips through athleteIdFromSyntheticEmail', () => {
-    const email = syntheticEmailFor(42)
-    expect(athleteIdFromSyntheticEmail(email)).toBe(42)
-  })
-})
+import { isSyntheticStravaEmail } from './strava-account'
 
 describe('isSyntheticStravaEmail', () => {
   it('recognises a synthesised address', () => {
@@ -41,16 +26,5 @@ describe('isSyntheticStravaEmail', () => {
     expect(isSyntheticStravaEmail(undefined)).toBe(false)
     expect(isSyntheticStravaEmail(null)).toBe(false)
     expect(isSyntheticStravaEmail('')).toBe(false)
-  })
-})
-
-describe('athleteIdFromSyntheticEmail', () => {
-  it('returns null for a real email', () => {
-    expect(athleteIdFromSyntheticEmail('alice@example.com')).toBeNull()
-  })
-
-  it('returns null for nullish input', () => {
-    expect(athleteIdFromSyntheticEmail(undefined)).toBeNull()
-    expect(athleteIdFromSyntheticEmail(null)).toBeNull()
   })
 })

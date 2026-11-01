@@ -15,7 +15,6 @@ import { APP_HEADER } from '@paddlesnitch/core/auth'
 import { withAction, outcomeOfStatus } from '@/lib/action'
 import { GET as trpcGet } from '@/app/api/trpc/[trpc]/route'
 import { createCaller } from '@paddlesnitch/api'
-import { importStravaActivity } from '@paddlesnitch/analysis/strava-import'
 
 const headers = (h: Record<string, string> = {}) => new Headers(h)
 
@@ -162,18 +161,8 @@ describe('actions from routes', () => {
     expect(src('paddles/api/analyse/route.ts')).toContain("export const POST = withAction('upload', post)")
     expect(src('api/devices/sessions/route.ts')).toContain("export const POST = withAction('device_sync', withDeviceAuth(handleSessionUpload), { platform: 'tracker' })")
     expect(src('api/account/devices/[deviceId]/sessions/route.ts')).toContain("export const POST = withAction('device_sync', post)")
-    const strava = src('att/api/auth/strava/callback/route.ts')
-    expect(strava).toContain("logAction('sign_in', 'ok'")
-    expect(strava).toContain("logAction('sign_in', expected ? 'rejected' : 'fail'")
-  })
-})
-
-describe('Strava import action', () => {
-  it('an account with no Strava connection is a skip, not a failure', async () => {
-    const outcome = await importStravaActivity('user-no-strava', 123, undefined, { platform: 'server' })
-    expect(outcome).toEqual({ status: 'skipped', reason: 'no_tokens' })
-    expect(ofKind('action')).toEqual([expect.objectContaining({
-      Action: 'strava_import', outcome: 'rejected', reason: 'no_tokens', platform: 'server', Failures: 0,
-    })])
+    const google = src('att/api/auth/google/callback/route.ts')
+    expect(google).toContain("logAction('sign_in', 'ok'")
+    expect(google).toContain("logAction('sign_in', key === 'google_failed' ? 'fail' : 'rejected'")
   })
 })

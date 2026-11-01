@@ -37,7 +37,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number; deviceId?: string; phone?: boolean } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; deviceId?: string; phone?: boolean } }
 
 // One paddle: the site header, the map (with only the colour scale, the replay
 // bar and section picking over it), then everything to read below it, and the
@@ -176,7 +176,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
     finally { setShareState('idle') }
   }
   // Download the branded share-card image (the OG image for this shared paddle)
-  // so the paddler can post it or add it as a photo to their Strava activity.
+  // so the paddler can post it wherever they like.
   const downloadImage = async () => {
     if (!shareUrl) return
     try {
@@ -492,17 +492,6 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
                     <button type="button" onClick={downloadImage} className={buttonClass('secondary', 'sm', 'flex-1')}>Download image</button>
                   </div>
                   <p className="text-sm text-muted">Posts of this link show a map and stats. Download image saves that picture.</p>
-                  {data.source?.type === 'strava' && (
-                    <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                      {data.source.stravaActivityId && (
-                        <a href={`https://www.strava.com/activities/${data.source.stravaActivityId}`} target="_blank" rel="noopener noreferrer"
-                          className={buttonClass('secondary', 'sm', 'text-strava')}>
-                          Open my Strava activity ↗
-                        </a>
-                      )}
-                      <p className="text-sm text-muted">Paste the link into your Strava description, and add the image as a photo.</p>
-                    </div>
-                  )}
                   <button type="button" onClick={stopSharing} disabled={shareState === 'working'} className={buttonClass('quiet', 'sm', 'self-start text-red hover:text-red')}>Stop sharing</button>
                 </>
               ) : (

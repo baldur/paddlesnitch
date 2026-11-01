@@ -11,7 +11,6 @@ import { trpc } from '@/lib/trpc'
 import PaddlesList from './PaddlesList'
 
 vi.mock('@/components/AppHeader', () => ({ default: () => <header /> }))
-vi.mock('@/components/strava/StravaHistoryImport', () => ({ StravaFirstImport: () => null }))
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href?: string }) => <a href={href}>{children}</a> }))
 
 let container: HTMLDivElement

@@ -4,13 +4,11 @@ import { EMAIL_DELIVERY } from '@/lib/email-delivery'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { safeNext } from '@paddlesnitch/core/url'
-import StravaButton from '@/components/strava/StravaButton'
 import GoogleButton from '@/components/GoogleButton'
-import { googleSignInOn, stravaOn } from '@/lib/sign-in-options'
+import { googleSignInOn } from '@/lib/sign-in-options'
 
-// Google and Strava are switched on per build (lib/sign-in-options.ts).
+// Google is switched on per build (lib/sign-in-options.ts).
 const GOOGLE_SIGNIN = googleSignInOn()
-const STRAVA = stravaOn()
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { termsAcceptPath } from '@/lib/terms-path'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
@@ -42,40 +40,27 @@ function AuthForm() {
   // so switching tabs or a wrong password doesn't clear it.
   const notice = searchParams.get('reason') === 'reauth_delete'
     ? 'For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back to Delete account.'
-    : searchParams.get('reason') === 'reauth_strava'
-      ? 'For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
-      : searchParams.get('reason') === 'reauth_google'
-        ? 'For your safety, connecting Google needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
-        : ''
+    : searchParams.get('reason') === 'reauth_google'
+      ? 'For your safety, connecting Google needs a recent sign-in. Sign in again and you’ll come straight back to Account.'
+      : ''
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   // ToS acceptance is mandatory on signup; the checkbox lives just above
   // the submit button. The version sent on POST is CURRENT_TOS_VERSION, so a
   // bump can't leave the form sending a stale one.
   const [tosAccepted, setTosAccepted] = useState(false)
-  // ?error= comes back from server-driven flows (Strava OAuth callback,
+  // ?error= comes back from server-driven flows (Google sign-in,
   // legacy magic-link). Map known keys to user-friendly messages once.
   const initialError = (() => {
     const e = searchParams.get('error')
-    if (e === 'magic_disabled') return STRAVA ? 'That sign-in link no longer works. Use your password, or sign in with Strava.' : 'That sign-in link no longer works. Use your password instead.'
-    if (e === 'strava_denied') return 'You cancelled the Strava sign-in.'
-    if (e === 'strava_state_mismatch') return 'Strava sign-in didn’t finish. Please try again.'
-    if (e === 'strava_exchange_failed') return 'Strava sign-in didn’t finish. Please try again.'
-    if (e === 'strava_profile_failed') return 'Couldn’t load your Strava profile. Please try again.'
-    // strava_no_email was retired — Strava never shares email with
-    // third-party apps, so we now synthesise a placeholder address at
-    // sign-in. See src/app/att/api/auth/strava/callback/route.ts.
-    if (e === 'strava_user_create_failed') return 'Couldn’t create an account from your Strava profile. Please sign up with your email instead.'
-    if (e === 'strava_signin_failed') return 'Strava sign-in didn’t finish. Please try again.'
+    if (e === 'magic_disabled') return 'That sign-in link no longer works. Use your password instead.'
     if (e === 'google_denied') return 'You cancelled the Google sign-in.'
     if (e === 'google_failed') return 'Couldn’t sign in with Google. Please try again.'
-    if (e === 'google_account_exists') return STRAVA ? 'You already have an account with this email. Sign in with your email or Strava instead.' : 'You already have an account with this email. Sign in with your email instead.'
+    if (e === 'google_account_exists') return 'You already have an account with this email. Sign in with your email instead.'
     if (e === 'google_no_email') return 'Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead.'
     if (e === 'google_not_configured') return 'Google sign-in isn’t available right now.'
     if (e === 'google_linked') return 'Google is now connected to your account. Sign in with Google again.'
     if (e === 'app_link_expired') return 'That link from the app has expired. Sign in here, or open it from the app again.'
-    if (e === 'strava_use_google') return 'Your account signs in with Google. Please sign in with Google instead.'
-    if (e === 'strava_not_configured') return 'Strava sign-in isn’t available right now.'
     return ''
   })()
   const [error, setError] = useState(initialError)
@@ -284,10 +269,6 @@ function AuthForm() {
     }
   }
 
-  // Sign in / sign up via Strava goes through a server-driven OAuth round
-  // trip; the button is a plain <a> rather than a form submit because the
-  // /init endpoint sets a CSRF state cookie and 302s to Strava.
-  const stravaHref = `/att/api/auth/strava/init?next=${encodeURIComponent(next)}`
   const googleHref = `/att/api/auth/google/init?next=${encodeURIComponent(next)}`
 
   const switchTab = (t: typeof tab) => {
@@ -534,25 +515,21 @@ function AuthForm() {
         )}
       </div>
 
-      {/* Google and Strava are the secondary ways in, below the email form. */}
-      {(GOOGLE_SIGNIN || STRAVA) && (
+      {/* Google is the secondary way in, below the email form. */}
+      {GOOGLE_SIGNIN && (
         <div className="flex flex-col items-center gap-3 border-t border-border pt-6">
-          <p className="text-sm text-muted">{otherWays(GOOGLE_SIGNIN, STRAVA)}</p>
-          {GOOGLE_SIGNIN && <GoogleButton href={googleHref} />}
-          {STRAVA && <StravaButton href={stravaHref} />}
-          {STRAVA && (
-            <p className="text-sm text-muted text-center">
-              Already have an account? Sign in first, then connect Strava in Account.
-            </p>
-          )}
+          <p className="text-sm text-muted">Or use your Google account</p>
+          <GoogleButton href={googleHref} />
         </div>
       )}
-      {/* Accounts made through Strava have no email or password to use instead. */}
-      {!STRAVA && (
+      {/* Accounts made with Sign in with Strava (removed 2026-11) have no email
+          or password to use instead; we move them to an email by hand. Email,
+          not Report an issue: reports are public, and people would write their
+          name and email in them. */}
+      {tab === 'signin' && !confirming && (
         <div className="flex flex-col items-center gap-3 border-t border-border pt-6 mt-6">
-          {/* Email, not Report an issue: reports are public, and people would write their name and email in them. */}
-          <p className="text-sm text-muted text-center">Signed up with Strava? Strava sign-in is off for now. Email us and we’ll help you sign in.</p>
-          <a href="mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava" className={buttonClass('secondary')}>Email us</a>
+          <p className="text-sm text-muted text-center">Made your account with Strava? Email us and we’ll move it to your email.</p>
+          <a href="mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email" className={buttonClass('secondary')}>Email us</a>
         </div>
       )}
     </Page>
@@ -565,9 +542,4 @@ export default function AuthPage() {
       <AuthForm />
     </Suspense>
   )
-}
-
-function otherWays(google: boolean, strava: boolean): string {
-  if (google && strava) return 'Or use your Google or Strava account'
-  return google ? 'Or use your Google account' : 'Or use your Strava account'
 }

@@ -38,7 +38,7 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution, alarms
     })
   const sum = (namespace: string, metricName: string, period: cdk.Duration, label: string, dimensionsMap?: Record<string, string>) =>
     new cloudwatch.Metric({ namespace, metricName, dimensionsMap, statistic: 'Sum', period, label })
-  const actionNames = ['sign_in', 'upload', 'analyse', 'device_sync', 'strava_import']
+  const actionNames = ['sign_in', 'upload', 'analyse', 'device_sync']
 
   // Logs Insights over the server Lambda's log group (where every EMF line is
   // written). Referenced by NAME so we don't create/adopt a LogGroup resource

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequestUser } from '@paddlesnitch/core/auth'
-import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
-import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
 import { parseTrace, parseFailureMessage } from '@paddlesnitch/timing/parse'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { analyseAndSave } from '@paddlesnitch/analysis/pipeline'
@@ -10,13 +8,14 @@ import { loadTrialEntryTrack, listUserTrialEntries } from '@paddlesnitch/analysi
 import { loadDeviceSessionTrack } from '@paddlesnitch/analysis/device-sessions'
 import { withAction } from '@/lib/action'
 
-// Analyse a paddle (file upload OR Strava activity), narrate it with the
-// history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated
-// (personal diary/history) — which also means the LLM endpoint isn't public.
+// Analyse a paddle (a file upload, a time-trial entry or a tracker recording),
+// narrate it with the history-aware LLM, and SAVE it to the signed-in user's
+// library. Auth-gated (personal diary/history) — which also means the LLM
+// endpoint isn't public.
 //
 // The whole body is wrapped so a throw anywhere on the path — a malformed
-// upload, a Strava API hiccup, a storage blip — becomes a clean, logged error
-// instead of a raw 500 with a stack. The steps that legitimately fail (weather,
+// upload, a storage blip — becomes a clean, logged error instead of a raw 500
+// with a stack. The steps that legitimately fail (weather,
 // flow, history, LLM) each degrade on their own so one of them never fails the
 // analysis.
 async function post(req: NextRequest) {
@@ -37,11 +36,10 @@ async function post(req: NextRequest) {
 async function analysePaddle(req: NextRequest, userId: string): Promise<NextResponse> {
   const form = await req.formData()
 
-  // ---- resolve the track from a file or a Strava activity ----
+  // ---- resolve the track from a file, a time-trial entry or a recording ----
   let track: TrackPoint[]
   let source: AnalysisSource
   const file = form.get('file')
-  const stravaId = Number(form.get('stravaActivityId'))
   const trialEntryId = form.get('trialEntryId')
   const trialId = form.get('trialId')
   const deviceSessionId = form.get('deviceSessionId')
@@ -66,24 +64,8 @@ async function analysePaddle(req: NextRequest, userId: string): Promise<NextResp
     }
     track = parsed.track
     source = { type: 'file', filename: file.name }
-  } else if (stravaId) {
-    const tokens = await getValidStravaTokens(userId)
-    if (!tokens) return NextResponse.json({ error: 'Connect Strava in your account first.' }, { status: 400 })
-    // A Strava API failure (rate limit, 5xx, network) is an expected, transient
-    // condition — surface it as a retryable message, not a 500.
-    let streams: Awaited<ReturnType<typeof getActivityStreams>>
-    try {
-      streams = await getActivityStreams(tokens.accessToken, stravaId)
-    } catch (err) {
-      console.error('[analyse] strava streams fetch failed', err)
-      return NextResponse.json({ error: 'Couldn’t reach Strava. Please try again.' }, { status: 502 })
-    }
-    if (!streams) return NextResponse.json({ error: 'That Strava activity has no GPS track.' }, { status: 422 })
-    track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
-    const st = form.get('sportType')
-    source = { type: 'strava', stravaActivityId: stravaId, sport: typeof st === 'string' && st ? st : undefined }
   } else {
-    return NextResponse.json({ error: 'Choose a file or a Strava activity.' }, { status: 400 })
+    return NextResponse.json({ error: 'Choose a file.' }, { status: 400 })
   }
   if (track.length < 2) return NextResponse.json({ error: 'That file has too few GPS points to analyse.' }, { status: 422 })
 

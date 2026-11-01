@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson } from '@/lib/storage'
 import { resolveEntry, setEntryNote } from '@/lib/entries'
-import { stravaActivityIdFromFilename } from '@/lib/leaderboard'
 import { canViewTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata } from '@/lib/types'
@@ -46,9 +45,6 @@ export async function GET(_: NextRequest, { params }: Params) {
       ...(entry.result.avgStrokeRate != null ? { avgStrokeRate: entry.result.avgStrokeRate } : {}),
       ...(entry.result.trackSegment ? { trackSegment: entry.result.trackSegment } : {}),
       ...(entry.conditions ? { conditions: entry.conditions } : {}),
-      ...(stravaActivityIdFromFilename(entry.filename) !== undefined
-        ? { stravaActivityId: stravaActivityIdFromFilename(entry.filename) }
-        : {}),
       // Note is private to the owner.
       ...(isOwner ? { note: entry.note ?? '' } : {}),
     },

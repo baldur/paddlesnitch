@@ -8,8 +8,7 @@ import { APP_GOOGLE_URL, isChallenge } from '@/lib/app-signin'
 // hosted sign-in with Google, a CSRF state and a PKCE challenge. The state, the
 // verifier and `next` wait in httpOnly cookies for the callback (10 minutes).
 //
-// A phone app sends ?challenge= instead (its own PKCE challenge, as for Strava
-// sign-in). Cognito gets the app's challenge, so the code Cognito hands back
+// A phone app sends ?challenge= instead (its own PKCE challenge). Cognito gets the app's challenge, so the code Cognito hands back
 // can only be swapped with the verifier the app kept (google/app-token).
 //
 // But anyone can make a challenge, and a link could start this in a browser

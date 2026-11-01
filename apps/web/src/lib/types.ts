@@ -2,8 +2,8 @@
 // package extraction). Re-exported here so existing `@/lib/types` imports across
 // the app resolve unchanged. See docs/features/platform-monorepo.md.
 export * from '@paddlesnitch/timing/types'
-// Platform identity + Strava plumbing types live in @paddlesnitch/core.
-export type { AuthUser, StravaActivitySummary, StravaTokens } from '@paddlesnitch/core/types'
+// Platform identity types live in @paddlesnitch/core.
+export type { AuthUser } from '@paddlesnitch/core/types'
 
 // Locally-referenced moved types (needed in the att-domain definitions below).
 import type { Line, CourseType, Split, EntryConditions } from '@paddlesnitch/timing/types'
@@ -100,17 +100,13 @@ export type LeaderboardEntry = {
   // it (#143/#148). Shown on the leaderboard's expanded row. Undefined when the
   // trace had no cadence/stroke-rate data (common for GPX exports).
   avgStrokeRate?: number
-  // Set only when the entry was imported from Strava — the source activity id,
-  // so the leaderboard can link "View on Strava" back to it (Strava brand
-  // guidelines, #107). Derived from the stored trace filename.
-  stravaActivityId?: number
   // Weather + river flow at this entry's finish time (#106). Best-effort; may
   // be absent (capture failed) or partial.
   conditions?: EntryConditions
 }
 
 // EntryConditions moved to @paddlesnitch/timing/types (re-exported at top of
-// this file). AuthUser / StravaTokens / StravaActivitySummary moved to
+// this file). AuthUser moved to
 // @paddlesnitch/core/types (re-exported at top of this file).
 
 // ---------------------------------------------------------------------------

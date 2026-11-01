@@ -207,53 +207,5 @@
   "paddles.writeSummary.json": {
     "call": "paddles.writeSummary",
     "schema": "AnalysisSession"
-  },
-  "sources.importStravaPaddle.json": {
-    "call": "sources.importStravaPaddle",
-    "schema": "StravaImport"
-  },
-  "sources.importStravaPaddle.skipped.json": {
-    "call": "sources.importStravaPaddle",
-    "schema": "StravaImport"
-  },
-  "sources.stravaHistory.json": {
-    "call": "sources.stravaHistory",
-    "schema": "StravaHistory"
-  },
-  "sources.stravaHistory.not-connected.json": {
-    "call": "sources.stravaHistory",
-    "schema": "StravaHistory"
-  },
-  "sources.stravaHistory.rate-limited.json": {
-    "call": "sources.stravaHistory",
-    "schema": "StravaHistory"
-  },
-  "sources.stravaHistoryDone.json": {
-    "call": "sources.stravaHistoryDone",
-    "schema": "Ok"
-  },
-  "strava.app-connect-finish.json": {
-    "call": "POST /att/api/strava/app-connect/finish",
-    "schema": "StravaStatus"
-  },
-  "strava.app-connect-finish.linked-elsewhere.json": {
-    "call": "POST /att/api/strava/app-connect/finish",
-    "schema": "ApiError"
-  },
-  "strava.app-connect.json": {
-    "call": "POST /att/api/strava/app-connect",
-    "schema": "WebPage"
-  },
-  "strava.auto-import.json": {
-    "call": "POST /att/api/strava/auto-import",
-    "schema": "StravaAutoImport"
-  },
-  "strava.status.json": {
-    "call": "GET /att/api/strava/status",
-    "schema": "StravaStatus"
-  },
-  "strava.status.not-connected.json": {
-    "call": "GET /att/api/strava/status",
-    "schema": "StravaStatus"
   }
 }

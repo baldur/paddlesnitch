@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
-import type { StravaActivitySummary } from '@paddlesnitch/core/types'
 import type { TrialEntrySummary } from '@paddlesnitch/analysis/trials'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
@@ -14,12 +13,8 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Segmented } from '@paddlesnitch/ui/Form'
 import { Card, Chevron, EmptyState, cardClass } from '@paddlesnitch/ui/Card'
 import LoadingState from '@/components/LoadingState'
-import { stravaOn } from '@/lib/sign-in-options'
 
-// Strava is switched off in some builds (lib/sign-in-options.ts).
-const STRAVA = stravaOn()
-
-// A row to pick (a Strava activity, a time-trial entry): tapping it adds it.
+// A row to pick (a time-trial entry): tapping it adds it.
 const PICK = `${cardClass} w-full text-left flex items-center gap-3 px-4 py-3 min-h-11 transition-colors hover:border-border-strong hover:bg-surface-2 disabled:opacity-50`
 type Result = ViewData & { id: string }
 
@@ -29,7 +24,7 @@ function Frame({ children }: { children: React.ReactNode }) {
     <main className="flex-1 flex flex-col">
       <AppHeader breadcrumb={<Link href="/paddles" className="tt-nav-link text-sm shrink-0">← Paddles</Link>} />
       <Page width="narrow">
-        <PageHeader title="Add a paddle" description={STRAVA ? 'Upload a GPS file, or pick one from Strava, a time trial or your tracker.' : 'Upload a GPS file, or pick one from a time trial or your tracker.'} />
+        <PageHeader title="Add a paddle" description="Upload a GPS file, or pick one from a time trial or your tracker." />
         <div className="flex flex-col gap-4">{children}</div>
       </Page>
     </main>
@@ -40,7 +35,7 @@ function fmtDist(m: number) { return m >= 1000 ? `${(m / 1000).toFixed(1)} km` :
 const fmtDate = fmtDayMonth
 
 export default function AddPaddlePage() {
-  const [tab, setTab] = useState<'file' | 'strava' | 'trials' | 'device'>('file')
+  const [tab, setTab] = useState<'file' | 'trials' | 'device'>('file')
   const [file, setFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
@@ -48,11 +43,6 @@ export default function AddPaddlePage() {
   const router = useRouter()
   const [res, setRes] = useState<Result | null>(null)
   const [dupId, setDupId] = useState<string | null>(null)
-  const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
-  const [stravaMsg, setStravaMsg] = useState('')
-  const [stravaPage, setStravaPage] = useState(1)
-  const [stravaMore, setStravaMore] = useState(false)
-  const [stravaLoadingMore, setStravaLoadingMore] = useState(false)
   const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
 
   // Signed-out is normal (the `me` procedure returns { user: null }); undefined
@@ -61,39 +51,12 @@ export default function AddPaddlePage() {
   const meQ = trpc.me.useQuery()
   const authed = meQ.isPending ? undefined : !!meQ.data?.user
 
-  const loadStrava = () => {
-    setActs(undefined); setStravaMsg(''); setStravaPage(1); setStravaMore(false)
-    utils.sources.strava.fetch({ page: 1 })
-      .then(d => {
-        if (!d.connected) { setStravaMsg('not_connected'); setActs([]); return }
-        setActs(d.activities); setStravaMore(d.hasMore)
-      })
-      .catch(() => { setActs([]); setStravaMsg('fetch_failed') })
-  }
-  // Fetch the next page and append (dedup by id — pages can overlap if the
-  // athlete logged a new activity mid-browse).
-  const loadMoreStrava = () => {
-    const next = stravaPage + 1
-    setStravaLoadingMore(true)
-    utils.sources.strava.fetch({ page: next })
-      .then(d => {
-        if (!d.connected) { setStravaMore(false); return }
-        setActs(prev => {
-          const seen = new Set((prev ?? []).map(a => a.id))
-          return [...(prev ?? []), ...d.activities.filter(a => !seen.has(a.id))]
-        })
-        setStravaPage(next); setStravaMore(d.hasMore)
-      })
-      .catch(() => setStravaMore(false))
-      .finally(() => setStravaLoadingMore(false))
-  }
   const loadTrials = () => {
     setTrials(undefined)
     utils.sources.trials.fetch().then(setTrials).catch(() => setTrials([]))
   }
-  const openTab = (t: 'file' | 'strava' | 'trials' | 'device') => {
+  const openTab = (t: 'file' | 'trials' | 'device') => {
     setTab(t)
-    if (t === 'strava' && acts === undefined) loadStrava()
     if (t === 'trials' && trials === undefined) loadTrials()
   }
 
@@ -119,7 +82,6 @@ export default function AddPaddlePage() {
     try { upload = await prepareTraceUpload(file) } catch (err) { setError(err instanceof Error ? err.message : TOO_BIG_MESSAGE); return }
     const fd = new FormData(); fd.append('file', upload); analyse(fd)
   }
-  const runStrava = (a: StravaActivitySummary) => { const fd = new FormData(); fd.append('stravaActivityId', String(a.id)); fd.append('sportType', a.sportType); analyse(fd) }
   const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
   const reset = () => { setRes(null); setFile(null); setError(''); setDupId(null) }
 
@@ -137,7 +99,7 @@ export default function AddPaddlePage() {
   return (
     <Frame>
       <Segmented label="Where the paddle comes from" value={tab} onChange={openTab}
-        options={[{ value: 'file', label: 'File' }, ...(STRAVA ? [{ value: 'strava' as const, label: 'Strava' }] : []), { value: 'trials', label: 'Trials' }, { value: 'device', label: 'Tracker' }]} />
+        options={[{ value: 'file', label: 'File' }, { value: 'trials', label: 'Trials' }, { value: 'device', label: 'Tracker' }]} />
 
       {dupId && (
         <Card className="flex flex-wrap items-center justify-between gap-3">
@@ -167,28 +129,6 @@ export default function AddPaddlePage() {
           <button type="button" disabled={!file || busy} onClick={runFile} className={buttonClass('primary', 'md', 'w-full')}>
             {busy ? 'Adding…' : 'Add paddle'}
           </button>
-        </div>
-      ) : tab === 'strava' ? (
-        <div className="flex flex-col gap-2">
-          {acts === undefined && <LoadingState label="Loading your Strava activities" className="py-8" />}
-          {stravaMsg === 'not_connected' && <EmptyState title="Strava isn't connected" body="Connect it in your account, then come back to pick a paddle."
-            action={<a href="/account" className={buttonClass('secondary')}>Go to Account</a>} />}
-          {acts && acts.length > 0 && acts.map(a => (
-            <button key={a.id} type="button" disabled={busy} onClick={() => runStrava(a)} className={PICK}>
-              <span className="flex-1 min-w-0">
-                <span className="block text-base text-fg truncate">{a.name}</span>
-                <span className="block text-sm text-muted tabular">{a.sportType} · {fmtDate(a.startDate)} · {fmtDist(a.distanceMetres)}</span>
-              </span>
-              <Chevron />
-            </button>
-          ))}
-          {acts && acts.length === 0 && !stravaMsg && <p className="text-base text-muted">No recent paddles on Strava.</p>}
-          {stravaMsg === 'fetch_failed' && <p className="text-base text-red">Couldn&apos;t load your Strava activities. Please try again.</p>}
-          {acts && acts.length > 0 && stravaMore && (
-            <button type="button" disabled={stravaLoadingMore} onClick={loadMoreStrava} className={buttonClass('quiet', 'md', 'w-full')}>
-              {stravaLoadingMore ? 'Loading…' : 'Load more'}
-            </button>
-          )}
         </div>
       ) : tab === 'trials' ? (
         <div className="flex flex-col gap-2">
