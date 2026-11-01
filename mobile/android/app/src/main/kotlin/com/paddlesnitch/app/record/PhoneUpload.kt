@@ -72,8 +72,9 @@ class PhoneUploader(
         return try {
             account.addPhone(installId()).deviceId.also { dir.mkdirs(); phoneFile(dir).writeText(it) }
         } catch (e: ApiFailure) {
-            // 409 (ten phones) and 400 say why in their own words; anything else is tried again later.
-            if (e.status in 400..499) { offFile(dir).writeText(if (e.generic) PHONE_NOT_ADDED else e.message.orEmpty()); changed(false) }
+            // 409 (ten phones) and 400 say why in their own words; anything else (a server
+            // without the call yet, 5xx, no network) is tried again later.
+            if (e.status == 400 || e.status == 409) { offFile(dir).writeText(if (e.generic) PHONE_NOT_ADDED else e.message.orEmpty()); changed(false) }
             null
         }
     }

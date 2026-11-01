@@ -144,6 +144,14 @@ class PhoneUploaderTest {
         assertEquals(listOf(UploadLine.Waiting("track_20261101_070211", "2026-11-01T07:02:11Z")), PhoneUploader.lines(dir, null))
     }
 
+    // A server from before C3 has no phone call (404): nothing to show, the files wait.
+    @Test fun anAnswerTheContractDoesntListForAddingIsTriedAgainLater() {
+        recording()
+        server.addFails = ApiFailure("not_found", 404)
+        assertFalse(run())
+        assertEquals(listOf(UploadLine.Waiting("track_20261101_070211", "2026-11-01T07:02:11Z")), PhoneUploader.lines(dir, null))
+    }
+
     @Test fun anyOtherRefusalKeepsTheFileStopsRetryingItAndSaysSo() {
         recording(); recording("track_20261101_090000")
         server.answer("track_20261101_070211.csv", UploadReply(413, "too_large"))
