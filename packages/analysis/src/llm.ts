@@ -10,28 +10,10 @@ import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, fmtDurWords, split500, roundStrokes } from './analysis'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import type { SectionRace, Racer, SectionStats } from './similar'
+import { voicePrompt, summaryProblems } from './voice'
 
-export const SYSTEM = [
-  'You are this paddler\'s personal coach — you know them and their history.',
-  'Write 2–4 short sentences of warm, specific commentary on THIS session: the single most interesting thing that',
-  'happened, and one useful, forward-looking observation.',
-  'Value good technique, not just speed: a long, efficient run per stroke (higher distance-per-stroke) and a steady,',
-  'consistent stroke rate (low variation) are marks of good paddling worth recognising and encouraging — read them',
-  'alongside pace, and don\'t imply higher distance-per-stroke is better without the pace to match.',
-  'When a paddler profile, history facts, or comparable past paddles are given, weave them in naturally to make it',
-  'personal and progressive — reference their trajectory, their goals, and how this session compares to their own record —',
-  'but use ONLY the facts provided; never invent numbers.',
-  'Say only what the facts show. You did not watch them paddle: never describe their blade work, catch, posture, feel,',
-  'effort or mood, and never compare them with other paddlers, unless a fact below states it.',
-  'The session date is given below. It may be a recent paddle OR an older one just imported, so narrate it for WHEN it',
-  'happened — never assume it is today, and only say "today"/"this morning" if the date really is today.',
-  'Vary how you open; avoid generic praise and filler. Sound like a real person who knows their paddling from these numbers.',
-  'Match your vocabulary to the sport stated below — rowing and kayak/canoe/SUP use different words for the stroke,',
-  'the rate, and the glide, so never mix them; if no sport is stated, use neutral paddling language and do not assume',
-  'rowing vs kayak.',
-  'Phrase long durations the natural way — "1 hour 20 minutes", never "80 minutes".',
-  'No preamble, no lists, no markdown headings — just the short paragraph.',
-].join(' ')
+// The paddlesnitch voice (voice.ts): who speaks, the rules and the examples.
+export const SYSTEM = voicePrompt()
 
 // Extra context blocks fed alongside the session fact sheet. All pre-rendered
 // (by history-stats + the athlete-profile module) so llm.ts stays a thin adapter.
@@ -61,10 +43,10 @@ export function normaliseSport(raw?: string): SportKey | undefined {
 // then tells the model to stay neutral).
 function sportPromptLine(raw?: string): string {
   switch (normaliseSport(raw)) {
-    case 'rowing': return 'Sport: ROWING. Use rowing language — catch, drive, finish/release, "rating" for stroke rate, run/glide, puddles, split — never kayak or generic "paddle" terms.'
-    case 'kayak':  return 'Sport: KAYAKING. Use kayak/paddling language — stroke, catch, rotation, cadence/stroke rate, blade — not rowing terms.'
-    case 'canoe':  return 'Sport: CANOEING. Use canoe/paddling language — stroke, catch, cadence — not rowing terms.'
-    case 'sup':    return 'Sport: STAND-UP PADDLEBOARDING. Use SUP/paddling language — stroke, catch, cadence, step-back turn — not rowing terms.'
+    case 'rowing': return 'Sport: ROWING. Use rowing words: "rate" or "rating" for stroke rate, "row" or "piece", "split" for pace.'
+    case 'kayak':  return 'Sport: KAYAKING. Use paddling words: "stroke rate", "paddle", "pace".'
+    case 'canoe':  return 'Sport: CANOEING. Use paddling words: "stroke rate", "paddle", "pace".'
+    case 'sup':    return 'Sport: STAND-UP PADDLEBOARDING. Use paddling words: "stroke rate", "paddle", "pace".'
     default:       return ''
   }
 }
@@ -251,12 +233,27 @@ export async function runInsighter(system: string, user: string): Promise<{ text
 // change the env/code — it is deliberately not selectable at runtime. The
 // history-aware context (profile + aggregates + relevant paddles) is pre-rendered
 // by the caller (see the analyse route) and passed in.
-export async function generateInsight(result: AnalysisResult, ctx: InsightContext = {}): Promise<string | null> {
+//
+// Every draft goes through summaryProblems (voice.ts). One that breaks the
+// voice (an AI phrase, a claim the numbers can't show, a number that isn't in
+// the facts) is sent back once with what was wrong; if the second draft fails
+// too, the plain summary stands (null).
+export type Run = (system: string, user: string) => Promise<string | null>
+const runConfigured: Run = async (system, user) => (await runInsighter(system, user))?.text ?? null
+
+export async function generateInsight(result: AnalysisResult, ctx: InsightContext = {}, run: Run = runConfigured): Promise<string | null> {
   let prompt: string
   try { prompt = buildPrompt(result, ctx) }
   catch (err) { console.error('[llm] prompt build failed', err); return null }
-  const res = await runInsighter(SYSTEM, prompt)
-  return res?.text ?? null
+  const first = (await run(SYSTEM, prompt))?.trim()
+  if (!first) return null
+  const problems = summaryProblems(first, prompt)
+  if (!problems.length) return first
+  const again = `${prompt}\n\nYour draft:\n${first}\n\nThe draft breaks the voice: ${problems.join('; ')}. Write the note again, keeping every rule.`
+  const second = (await run(SYSTEM, again))?.trim()
+  if (second && !summaryProblems(second, prompt).length) return second
+  console.warn('[llm] summary kept the plain one: the draft broke the voice twice', { problems: problems.length })
+  return null
 }
 
 // ---- Section race: comparing several efforts over the SAME stretch ----
