@@ -22,7 +22,9 @@
 // 'pending' signs nobody out (a delete that fails must never lock out a live
 // account). That check reads through a short per-process cache
 // (`erasedForSignIn`), so a server that read 'none' just before the delete
-// finished may still let the old token in for up to CACHE_MS.
+// finished may still let the old token in for up to CACHE_MS. A marker read
+// that fails throws, so the request fails rather than letting a deleted
+// account in (fail closed, on purpose; the result isn't cached).
 import { createHash } from 'crypto'
 import { getJson, putJson } from './storage'
 

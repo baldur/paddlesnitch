@@ -76,7 +76,9 @@ export async function getRequestUser(req: Request): Promise<AuthUser | null> {
 /**
  * getRequestUser without the deleted-account check. Only for the phone upload
  * calls, which answer a deleted account themselves (410, or 503 while the
- * delete runs: apps/web/src/lib/erased-answer.ts) so the app removes its files.
+ * delete runs: apps/web/src/lib/erased-answer.ts) so the app removes its files,
+ * and DELETE /api/account, so a repeat after a lost answer still succeeds.
+ * erased-sign-out.test.ts fails on any other caller.
  */
 export async function getRequestUserEvenIfErased(req: Request): Promise<AuthUser | null> {
   const m = /^Bearer\s+(.+)$/i.exec((req.headers.get('authorization') ?? '').trim())

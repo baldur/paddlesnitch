@@ -57,9 +57,16 @@ export async function GET(req: Request) {
 // password prompt, because accounts made through Strava have none.
 export async function DELETE(req: Request) {
   // Even a deleted account's token: asking again after the first answer was
-  // lost must succeed (it runs again; nothing is left to find).
+  // lost must succeed. It answers done without running again, so it never
+  // turns 'done' back into 'pending' (which would let the old tokens back in,
+  // #795) and never deletes by an email someone may have signed up with since.
   const user = await getRequestUserEvenIfErased(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (await isAccountErased(user.id)) {
+    const done = NextResponse.json({ ok: true }, { status: 200 })
+    clearAuthCookies(done.cookies)
+    return done
+  }
   if (!(await hasRecentSignIn(req, user.id))) {
     return NextResponse.json({ error: REAUTH_TEXT, reauth: true }, { status: 403 })
   }
@@ -67,8 +74,10 @@ export async function DELETE(req: Request) {
   // 0. First, so a phone still holding this account's token waits while the rest
   //    is deleted (C3: phones upload by themselves). Marked done only once the
   //    sign-in account is gone, so a delete that fails leaves the phone's files.
-  //    A repeat keeps 'done': 'pending' would let the old tokens back in (#795).
-  if (!(await isAccountErased(user.id))) await markAccountErasing(user.id)
+  //    While 'pending', the account's tokens still work (#795: a delete that
+  //    fails must not lock out a live account), so a write that lands after
+  //    its area was erased is left behind (accepted; see the end).
+  await markAccountErasing(user.id)
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)
@@ -186,8 +195,10 @@ export async function DELETE(req: Request) {
   // live races expire within a day). Last, after the 'done' marker: the ID
   // token in a game tab still open stays valid for up to 24 h, and only that
   // marker signs it out (#742, #795), so a time posted while the delete ran is
-  // caught here. A server that read the marker just before it landed may still
-  // take a time for up to a minute (@paddlesnitch/core/erased CACHE_MS).
+  // caught here. The same gap is open for every other write: while the marker
+  // is 'pending', and for up to a minute after 'done' on a server that cached
+  // the account as live (@paddlesnitch/core/erased CACHE_MS), the old token can
+  // still write after its area was erased, and only game times are swept again.
   await eraseGameTimes(user.id)
 
   // 8. Clear cookies on the response so the browser stops sending stale ones.

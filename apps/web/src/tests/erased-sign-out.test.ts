@@ -19,7 +19,10 @@ import { POST as analyse } from '@/app/paddles/api/analyse/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { getRequestUser, getAuthUser, bearerUser } from '@/lib/auth'
 import { markAccountErased, markAccountErasing, clearErasedCache, CACHE_MS } from '@paddlesnitch/core/erased'
-import { listKeys, getJson, putJson } from '@/lib/storage'
+import { listKeys, getJson, putJson, putObject } from '@/lib/storage'
+import { erasureState } from '@paddlesnitch/core/erased'
+import { readFile, readdir } from 'fs/promises'
+import { join, relative } from 'path'
 
 let dataDir: string
 beforeEach(async () => { dataDir = await makeDataDir(); clearErasedCache(); cookie(null) })
@@ -74,7 +77,7 @@ describe("a deleted account's token is signed out", () => {
 
   it('the website cookie left in another browser is signed out too', async () => {
     const u = await makeUser('Other browser')
-    await markAccountErased(u.id)
+    await markerAt(u, 'done')
     cookie(u.idToken)
     expect(await getAuthUser()).toBeNull()
     expect(await getRequestUser(new Request('http://x'))).toBeNull()
@@ -152,5 +155,54 @@ describe('the marker is read at most once a minute per account per server', () =
     expect((await ask())?.id).toBe(u.id)
     await markerAt(u, 'done')
     expect(await ask()).toBeNull()
+  })
+})
+
+describe('DELETE /api/account asked again', () => {
+  it('answers ok at once and keeps the done marker (never back to pending)', async () => {
+    const u = await makeUser('Asked twice')
+    await markerAt(u, 'done')
+    // Left by a write that slipped in: a repeat that ran again would delete it.
+    await putJson(`users/${u.id}/canary.json`, { x: 1 })
+    cookie(u.idToken)
+    const res = await deleteAccount(new Request('http://x', { method: 'DELETE' }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+    expect(await getJson(`users/${u.id}/canary.json`)).not.toBeNull()
+    expect(await erasureState(u.id)).toBe('done')
+    expect(await getRequestUser(new Request('http://x', { headers: headers(u.idToken) }))).toBeNull()
+  })
+})
+
+describe('a marker that cannot be read', () => {
+  it('fails the request rather than letting the account in (fail closed)', async () => {
+    const u = await makeUser('Unreadable')
+    await putObject(`auth/erased/${createHash('sha256').update(u.id).digest('hex')}.json`, 'not json')
+    await expect(getRequestUser(new Request('http://x', { headers: headers(u.idToken) }))).rejects.toThrow()
+  })
+})
+
+describe('only the phone calls and DELETE /api/account skip the check', () => {
+  it('nothing else calls getRequestUserEvenIfErased', async () => {
+    const root = join(__dirname, '../../../..')
+    const allowed = new Set([
+      'packages/core/src/auth.ts',
+      'apps/web/src/app/api/account/route.ts',
+      'apps/web/src/app/api/account/devices/phone/route.ts',
+      'apps/web/src/app/api/account/devices/[deviceId]/sessions/route.ts',
+    ])
+    const found: string[] = []
+    async function walk(dir: string) {
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        if (e.name === 'node_modules' || e.name.startsWith('.') || e.name === 'tests') continue
+        const p = join(dir, e.name)
+        if (e.isDirectory()) await walk(p)
+        else if (/\.(ts|tsx)$/.test(e.name) && (await readFile(p, 'utf8')).includes('getRequestUserEvenIfErased')) found.push(relative(root, p))
+      }
+    }
+    await walk(join(root, 'apps/web/src'))
+    await walk(join(root, 'packages'))
+    expect(found.filter(f => !allowed.has(f))).toEqual([])
+    expect(found.length).toBe(allowed.size)
   })
 })
