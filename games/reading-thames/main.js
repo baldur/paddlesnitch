@@ -527,14 +527,26 @@ function phoneReady() {
     speechSynthesis.speak(u);
   }
 }
+// Full screen on a phone, so the browser's address bar and buttons go: it
+// can only be asked for in answer to a tap, so every button on the walk and
+// in the menu asks. Android's browsers allow it; an iPhone doesn't for a page
+// (only for video), so there it does nothing: the game added to the Home
+// Screen opens without the browser instead (manifest.json). Races are
+// sideways, so once full screen a race also locks the screen sideways
+// (`sideways()`, from choose()); the walk unlocks it, since it works upright too.
+function fullScreen() {
+  if (!phone.matches || !document.fullscreenEnabled || document.fullscreenElement) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
+const sideways = (on) => {
+  if (!document.fullscreenElement) return;
+  if (on) screen.orientation?.lock?.('landscape')?.catch?.(() => {});
+  else screen.orientation?.unlock?.();
+};
 menu.querySelector('form').addEventListener('click', (e) => {
   if (!e.target.closest('button') || !phone.matches) return;
   phoneReady();
-  if (document.fullscreenEnabled && !document.fullscreenElement) {
-    document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-      .then(() => screen.orientation?.lock?.('landscape'))
-      .catch(() => {});
-  }
+  fullScreen();
 });
 // Leaving: out of full screen, then back to wherever you came from (the game
 // may be hosted where ../ isn't a games list), or else to ../.
@@ -603,6 +615,7 @@ async function choose(value, { race = false } = {}) {
   asRace = race;
   if (!next.outing) try { localStorage.setItem(LAST_KEY, value); } catch {}
   leaveClub();
+  sideways(true);
   if (renderer) useWorld();
   start();
 }
@@ -777,8 +790,8 @@ const back = () => {
   if (club?.hiring) return unhire(); // choosing a boat at the pier: back to the bridge's cards
   return club && PLACES[club.place].up && go(PLACES[club.place].up);
 };
-clubBack.addEventListener('click', back);
-clubStart.addEventListener('click', () => go(START));
+clubBack.addEventListener('click', () => { fullScreen(); back(); });
+clubStart.addEventListener('click', () => { fullScreen(); go(START); });
 addEventListener('keydown', (e) => {
   if (!club || live.open || state !== 'menu') return;
   // With a room's picker open, Esc goes back and Backspace does nothing (the
@@ -798,6 +811,7 @@ function enterClub() {
   let last = null;
   try { last = localStorage.getItem(PLACE_KEY); } catch {}
   const place = firstPlace({ last });
+  sideways(false);
   club = { shots, place, from: null, to: null, t: 1, length: 0, plan: null, spots: [] };
   try { club.plan = localStorage.getItem(LAST_KEY); } catch {}
   menu.classList.add('sheet');
@@ -945,7 +959,7 @@ function arrive(place) {
         row.className = 'friends';
         clubCards.prepend(row);
       }
-      b.addEventListener('click', () => { phoneReady(); spot.act(); });
+      b.addEventListener('click', () => { phoneReady(); fullScreen(); spot.act(); });
       row.append(b);
       return { ...spot, el: b };
     }
@@ -956,6 +970,7 @@ function arrive(place) {
     if (spot.title) b.title = b.ariaLabel = `${spot.title}, stability ${spot.label} of 9`;
     b.addEventListener('click', () => {
       phoneReady();
+      fullScreen();
       spot.act();
     });
     (spot.card ? clubCards : clubDoors).append(b);

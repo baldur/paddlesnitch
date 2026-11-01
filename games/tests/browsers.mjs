@@ -110,6 +110,16 @@ async function play(c, page, errors) {
   if (c.tryIt) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:format', 'interval'));
   // Racing friends: someone who's paddled before (a first visit's bridge leads with Try it now instead).
   if (c.friends) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:last', 'loop'));
+  // On a phone the walk's taps ask for full screen (Android's browsers allow it): count the asks, as
+  // a browser that allows it would see them, without really going full screen. (Not where the case
+  // strips full screen out: there the game must do without.)
+  if (c.touch && !c.strip) {
+    await page.addInitScript(() => {
+      window.fullScreenAsks = [];
+      Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true });
+      Element.prototype.requestFullscreen = function (o) { window.fullScreenAsks.push(o?.navigationUI ?? ''); return Promise.resolve(); };
+    });
+  }
   await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
@@ -212,6 +222,11 @@ async function play(c, page, errors) {
       await (c.touch ? spot.tap() : spot.click()).catch((e) => { throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]}`); });
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
+    }
+    // A tap on the walk asked for full screen, hiding the browser's bar.
+    if (c.touch && !c.strip) {
+      const asks = await page.evaluate(() => window.fullScreenAsks);
+      if (!asks.length || asks[0] !== 'hide') errors.push(`the walk's taps asked for full screen ${JSON.stringify(asks)} on a phone`);
     }
     // (Signed out, a closed race goes to sign in: say so, not a timeout.)
     if (c.tryIt && await page.waitForURL(/signin/, { timeout: 3000 }).then(() => true, () => false)) return void errors.push('Try it now sent a signed-out player to sign in');
