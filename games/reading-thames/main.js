@@ -51,10 +51,11 @@ const MODES = {
 for (const [key, m] of Object.entries(MODES)) m.key = key;
 const FORMATS = { mass: 'race', interval: 'time trial' };
 let format = 'mass';
+let asRace = false; // Try it now: this race is a race, whatever format is picked (not saved, not kept)
 try { if (FORMATS[localStorage.getItem(FORMAT_KEY)]) format = localStorage.getItem(FORMAT_KEY); } catch {}
 // Your best on a course, per format (the loop's time trial keeps the key it always had).
 const bestKey = (m, f) => (m.solo || f === 'interval' ? `snitchmedia:kayak:${m.key}` : `snitchmedia:kayak:${m.key}:race`);
-const formatOf = (m) => (m.head ? 'interval' : m.solo || liveRace ? 'mass' : format);
+const formatOf = (m) => (m.head ? 'interval' : m.solo || liveRace || asRace ? 'mass' : format);
 // Practice drills (drills.js), each on one of the courses above: starts, wash
 // hanging and the portage. Picked from the practice page of the menu.
 const DRILL_MODES = {
@@ -578,7 +579,7 @@ menu.addEventListener('close', () => {
   choose(menu.returnValue);
 });
 // Start a race, a drill or a live race by its menu value.
-async function choose(value) {
+async function choose(value, { race = false } = {}) {
   if (value === 'live') return openLive();
   const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value] ?? ROW_MODES[value];
   if (!next) return;
@@ -598,6 +599,7 @@ async function choose(value) {
     }
   }
   mode = next;
+  asRace = race;
   if (!next.outing) try { localStorage.setItem(LAST_KEY, value); } catch {}
   leaveClub();
   if (renderer) useWorld();
@@ -884,7 +886,7 @@ function arrive(place) {
   // Nothing paddled yet: straight into the open race (anyone can, signed in or
   // not), always a race, whatever format was last picked; it teaches as it goes.
   else if (place === 'path' && !hiring) {
-    spots.unshift({ card: { name: 'Try it now', line: `A race: ${MODES[OPEN_RACE].label}` }, act: () => { format = 'mass'; showFormat(); choose(OPEN_RACE); }, go: true });
+    spots.unshift({ card: { name: 'Try it now', line: `A race: ${MODES[OPEN_RACE].label}` }, act: () => choose(OPEN_RACE, { race: true }), go: true });
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
@@ -1352,7 +1354,7 @@ function showAccount() {
 async function submitResult(time) {
   els.ranked.textContent = '';
   if (!account.user) {
-    if (!account.offline && !mode.row) els.ranked.replaceChildren(link('Sign in', SIGN_IN), ' to put your times on the leaderboards.');
+    if (!account.offline && !mode.row) els.ranked.replaceChildren(link('Sign in', SIGN_IN), ' to put your time on the leaderboard.');
     return;
   }
   try {
@@ -2726,6 +2728,7 @@ if (HASH.has('debug')) {
     get mode() { return mode; },
     get format() { return formatOf(mode); },
     clubAt: (place) => arrive(place),
+    submitResult, // the finish's leaderboard line (tests check it signed out)
     show, // a message, as the race would show it (tests check where it lands)
   };
 }

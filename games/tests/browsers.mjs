@@ -203,11 +203,21 @@ async function play(c, page, errors) {
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
+    // (Signed out, a closed race goes to sign in: say so, not a timeout.)
+    if (c.tryIt && await page.waitForURL(/signin/, { timeout: 3000 }).then(() => true, () => false)) return void errors.push('Try it now sent a signed-out player to sign in');
     if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
     if (c.tryIt) {
       await page.waitForFunction(() => window.kayak.mode?.key === 'hasler79' && window.kayak.race?.racers.length > 1, null, { timeout: 60_000 }).catch(() => {});
       const got = await page.evaluate(() => ({ racers: window.kayak.race.racers.length, course: window.kayak.mode?.key, format: window.kayak.format }));
       if (!(got.racers > 1 && got.course === 'hasler79' && got.format === 'mass')) errors.push(`Try it now started ${JSON.stringify(got)}, expected the Hasler Div 7-9 race`);
+      const after = await page.evaluate(async () => {
+        await window.kayak.submitResult(100);
+        const ranked = document.getElementById('ranked');
+        return { saved: localStorage.getItem('snitchmedia:kayak:format'), menu: document.querySelector('#menu [data-format="interval"]').getAttribute('aria-pressed'), signIn: !!ranked.querySelector('a[href*="signin"]'), text: ranked.textContent };
+      });
+      // The player's own pick stands, saved and on the menu, for the next course they choose.
+      if (after.saved !== 'interval' || after.menu !== 'true') errors.push(`Try it now changed the picked format: ${JSON.stringify(after)}`);
+      if (!after.signIn) errors.push(`a signed-out finish said "${after.text}", expected a link to sign in`);
     }
     // The erg: both sides together for each stroke, and the monitor counts down the 500 m.
     if (c.erg) {
