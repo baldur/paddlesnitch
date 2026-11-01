@@ -29,6 +29,7 @@ import { putStravaTokens, putAthleteIndex, getUserIdByAthleteId } from '@/lib/st
 import { putGroup, getGroup, addUserToGroupIndex, putJoinRequest, putInvitation } from '@/lib/groups'
 import type { GroupMetadata } from '@/lib/types'
 import { GAME_COURSES } from '@paddlesnitch/core/games'
+import { sweepJobs } from '@/lib/jobs'
 
 let dataDir: string
 beforeEach(async () => {
@@ -66,7 +67,9 @@ function group(id: string, ownerId: string, adminUserIds: string[], memberUserId
   return { id, name: id, description: '', ownerId, adminUserIds, memberUserIds, createdAt: '2026-01-01T00:00:00Z' }
 }
 
+/** Every key that names `needle`, once the second pass (#814) has run and its job file is gone. */
 async function keysMentioning(needle: string): Promise<string[]> {
+  await sweepJobs(Date.now() + 5 * 60_000)
   const out: string[] = []
   for (const k of await listKeys('')) {
     if (k.includes(needle)) { out.push(k); continue }

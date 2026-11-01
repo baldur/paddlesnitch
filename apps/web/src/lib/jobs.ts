@@ -17,8 +17,8 @@
 // visible record of what's waiting or failed.
 //
 // Jobs must be safe to run twice: S3 can announce a file twice, and the sweep
-// can meet a job the announcement is still running. Both kinds here are
-// (paddles have fixed ids or are de-duplicated).
+// can meet a job the announcement is still running. Every kind here is
+// (paddles have fixed ids or are de-duplicated; erasure deletes what it finds).
 //
 // Local dev has no S3 events, so a new job runs in this process straight away;
 // tests run jobs themselves (runJob / sweepJobs).
@@ -27,6 +27,7 @@ import { getJson, putJson, listKeys, deleteObject } from '@/lib/storage'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { recordingReport } from '@/lib/recording-report'
 import { processStravaEvent, type StravaEvent } from '@/lib/strava-webhook'
+import { eraseAccountAgain, type EraseAgainPayload } from '@/lib/account-erasure'
 
 export const MAX_ATTEMPTS = 5
 /** A job announced by S3 is usually running already; the sweep leaves it this long. */
@@ -39,6 +40,7 @@ const SWEEP_BUDGET_MS = 20_000
 type Handlers = {
   'tracker-paddle': { userId: string; deviceId: string; deviceSessionId: string }
   'strava-event': StravaEvent
+  'erase-account-again': EraseAgainPayload
 }
 export type JobKind = keyof Handlers
 type Job<K extends JobKind = JobKind> = { kind: K; payload: Handlers[K]; createdAt: string; notBefore?: string }
@@ -53,9 +55,11 @@ const HANDLERS: { [K in JobKind]: (p: Handlers[K]) => Promise<void> } = {
     console.log(`[tracker-paddle] ${deviceId}/${deviceSessionId}: ${r.status}${'paddleId' in r ? ` ${r.paddleId}` : ` (${r.reason})`}`)
   },
   'strava-event': processStravaEvent,
+  // A deleted account's second pass, ~90 s after DELETE /api/account (#814).
+  'erase-account-again': eraseAccountAgain,
 }
 
-const KEY = /^jobs\/(tracker-paddle|strava-event)\/[\w-]{1,40}\.json$/
+const KEY = /^jobs\/(tracker-paddle|strava-event|erase-account-again)\/[\w-]{1,40}\.json$/
 const stateKey = (key: string) => key.replace(/^jobs\//, 'jobs-state/')
 const failedKey = (key: string) => key.replace(/^jobs\//, 'jobs-failed/')
 const kickHere = () => process.env.USE_LOCAL_STORAGE === 'true' && !process.env.VITEST
