@@ -139,12 +139,12 @@ struct UploadLineView: View {
         if filled {
             Button(action: run) { label }
                 .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+                .buttonBorderShape(.control)
                 .tint(Palette.primary)
         } else {
             Button(action: run) { label }
                 .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+                .buttonBorderShape(.control)
                 .tint(Palette.primaryText)
         }
     }

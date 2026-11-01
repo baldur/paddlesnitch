@@ -369,6 +369,7 @@ function finishDrill() {
 }
 
 function toMenu() {
+  sideways(false);
   endPlay('quit', { swims: race?.player.boat.capsizes ?? 0 });
   endLive();
   state = 'menu';
@@ -529,14 +530,55 @@ function phoneReady() {
     speechSynthesis.speak(u);
   }
 }
+// Full screen on a phone, so the browser's address bar and buttons go: it
+// can only be asked for in answer to a tap, so every button on the walk and
+// in the menu asks. Android's browsers allow it; an iPhone doesn't for a page
+// (only for video), so there it does nothing: the game added to the Home
+// Screen opens without the browser instead (manifest.json). Races are
+// sideways, so a race wants the screen locked sideways (`sideways()`, from
+// choose() and a live race's begin()) and the walk unlocks it, since the walk
+// is used upright. The lock can only be taken once full screen has begun,
+// which is after the tap that asked: so it's applied when full screen comes
+// (fullscreenchange), not only straight away. Leave full screen on the walk
+// (the back gesture) and the walk stops asking until you start something.
+let wantSideways = false;
+let leftFullScreen = false;
+function fullScreen({ play = false } = {}) {
+  if (play) leftFullScreen = false;
+  if (!phone.matches || !document.fullscreenEnabled || document.fullscreenElement || leftFullScreen) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
+function lockSideways() {
+  if (!document.fullscreenElement) return;
+  if (wantSideways) screen.orientation?.lock?.('landscape')?.catch?.(() => {});
+  else screen.orientation?.unlock?.();
+}
+const sideways = (on) => {
+  wantSideways = on;
+  lockSideways();
+};
+// Chrome's own install bar would sit over the walk's cards and Back: no bar
+// (the game can still be added from the browser's menu).
+addEventListener('beforeinstallprompt', (e) => e.preventDefault());
 menu.querySelector('form').addEventListener('click', (e) => {
   if (!e.target.closest('button') || !phone.matches) return;
   phoneReady();
-  if (document.fullscreenEnabled && !document.fullscreenElement) {
-    document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-      .then(() => screen.orientation?.lock?.('landscape'))
-      .catch(() => {});
-  }
+  fullScreen({ play: true });
+});
+// The pause and finish screens' buttons ask again (not Leave the game, which
+// leaves): out of full screen by the back gesture, Resume goes back into it.
+for (const dlg of [paused, finished]) {
+  dlg.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b || b.value === 'leave' || !phone.matches) return;
+    fullScreen({ play: true });
+  });
+}
+// A live race's dialog (often the first thing a friend's link shows) asks too.
+live.addEventListener('click', (e) => {
+  if (!e.target.closest('button') || !phone.matches) return;
+  phoneReady();
+  fullScreen({ play: true });
 });
 // Leaving: out of full screen, then back to wherever you came from (the game
 // may be hosted where ../ isn't a games list), or else to ../.
@@ -554,7 +596,9 @@ for (const link of document.querySelectorAll('a.leave')) {
 // The phone's back gesture first takes you out of full screen: pause there,
 // so the pause screen's Leave button is one tap away.
 document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) pause();
+  if (document.fullscreenElement) return lockSideways();
+  pause();
+  if (state === 'menu') leftFullScreen = true;
 });
 
 // Turned upright mid-race: pause, and the pause screen says to turn it back.
@@ -605,6 +649,7 @@ async function choose(value, { race = false } = {}) {
   asRace = race;
   if (!next.outing) try { localStorage.setItem(LAST_KEY, value); } catch {}
   leaveClub();
+  sideways(true);
   if (renderer) useWorld();
   start();
 }
@@ -779,8 +824,8 @@ const back = () => {
   if (club?.hiring) return unhire(); // choosing a boat at the pier: back to the bridge's cards
   return club && PLACES[club.place].up && go(PLACES[club.place].up);
 };
-clubBack.addEventListener('click', back);
-clubStart.addEventListener('click', () => go(START));
+clubBack.addEventListener('click', () => { fullScreen(); back(); });
+clubStart.addEventListener('click', () => { fullScreen(); go(START); });
 addEventListener('keydown', (e) => {
   if (!club || live.open || state !== 'menu') return;
   // With a room's picker open, Esc goes back and Backspace does nothing (the
@@ -800,6 +845,7 @@ function enterClub() {
   let last = null;
   try { last = localStorage.getItem(PLACE_KEY); } catch {}
   const place = firstPlace({ last });
+  sideways(false);
   club = { shots, place, from: null, to: null, t: 1, length: 0, plan: null, spots: [] };
   try { club.plan = localStorage.getItem(LAST_KEY); } catch {}
   menu.classList.add('sheet');
@@ -869,7 +915,7 @@ function arrive(place) {
   const hiring = place === 'path' && club.hiring;
   const spots = hiring
     ? [
-      ...Object.entries(HIRE_BOATS).map(([id, b]) => ({ card: { picture: clubSvg(id === 'launch' ? 'hire' : id), name: b.label, line: b.line }, act: () => { hireBoat = id; club.hiring = false; choose('hire'); } })),
+      ...Object.entries(HIRE_BOATS).map(([id, b]) => ({ card: { picture: clubSvg(id === 'launch' ? 'hire' : id), name: b.label, line: b.line }, act: () => { hireBoat = id; club.hiring = false; choose('hire'); }, play: true })),
       { card: { name: '\u2190 Back', line: 'To the clubs and outings' }, act: unhire },
     ]
     : place === 'path'
@@ -877,7 +923,7 @@ function arrive(place) {
       { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
       { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
-      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise') },
+      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true },
       { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => { club.hiring = true; arrive('path'); }, hire: true },
       { pin: 'canoe', at: shots.doors.path.club },
       { pin: 'rowing', at: shots.doors.path.rclub },
@@ -949,7 +995,7 @@ function arrive(place) {
         row.className = 'friends';
         clubCards.prepend(row);
       }
-      b.addEventListener('click', () => { phoneReady(); spot.act(); });
+      b.addEventListener('click', () => { phoneReady(); fullScreen({ play: true }); spot.act(); });
       row.append(b);
       return { ...spot, el: b };
     }
@@ -960,6 +1006,7 @@ function arrive(place) {
     if (spot.title) b.title = b.ariaLabel = `${spot.title}, stability ${spot.label} of 9`;
     b.addEventListener('click', () => {
       phoneReady();
+      fullScreen({ play: !!(spot.go || spot.play) });
       spot.act();
     });
     (spot.card ? clubCards : clubDoors).append(b);
@@ -1718,6 +1765,7 @@ async function begin(order, seed) {
   const m = MODES[lobby.course];
   if (!m.course) m.course = await loadCourse(m.file);
   lobby.racing();
+  sideways(true);
   clearInterval(lobbyTimer);
   liveRace = { room: { you: lobby.you, host: lobby.host }, order, seed };
   tracks.clear();

@@ -143,7 +143,9 @@ struct AccountView: View {
                 signInAgain: {
                     confirmingDelete = false
                     signInAgain(then: .delete)
-                })
+                }
+            )
+            .buttonBorderShape(.control)
         }
     }
 
