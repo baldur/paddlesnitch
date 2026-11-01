@@ -64,6 +64,25 @@ object Uploads {
     /** Bumps when a track reaches the server, so Paddles loads the list again. */
     val sent: StateFlow<Int> = _sent
 
+    private val _sending = MutableStateFlow<String?>(null)
+    /** The recording being sent now (its base): only that line says "Uploading…". */
+    val sending: StateFlow<String?> = _sending
+    internal fun sending(base: String?) { _sending.value = base }
+
+    private val _deleted = MutableStateFlow<String?>(null)
+    /** An account the server said was deleted (410): the app signs out (App.kt). */
+    val deleted: StateFlow<String?> = _deleted
+
+    /**
+     * 410 for [accountId]: its folder is gone; stop a recording still writing into it.
+     * Signing out is the caller's (its tokens) and App.kt's (the screen).
+     */
+    internal fun accountDeleted(context: Context, accountId: String) {
+        val running = RecordingService.state.value as? RecordingService.State.Recording
+        if (running != null && running.files.track.parentFile?.canonicalFile == dir(context, accountId).canonicalFile) RecordingService.stop(context)
+        _deleted.value = accountId
+    }
+
     internal fun bump(sentTrack: Boolean) { _changed.update { it + 1 }; if (sentTrack) _sent.update { it + 1 } }
 
     /** This account's folder of recordings. */
@@ -133,7 +152,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val account = inputData.getString(Uploads.ACCOUNT) ?: return Result.success()
         return uploadAs(account, KeystoreTokenStore(applicationContext), Uploads.dir(applicationContext, account),
             server = { tokens -> ApiPhoneAccount(Api(BuildConfig.API_BASE_URL, tokens, BuildConfig.VERSION_NAME)) },
-            installId = { Uploads.installId(applicationContext) })
+            installId = { Uploads.installId(applicationContext) },
+            accountDeleted = { Uploads.accountDeleted(applicationContext, account) })
     }
 }
 
@@ -148,10 +168,14 @@ internal suspend fun uploadAs(
     account: String, tokens: com.paddlesnitch.app.auth.TokenStore, dir: File,
     server: (com.paddlesnitch.app.auth.TokenStore) -> PhoneAccount, installId: () -> String,
     running: () -> File? = ::runningTrack,
+    accountDeleted: () -> Unit = {},
 ): androidx.work.ListenableWorker.Result {
     // Signed out, or someone else signed in: their recordings wait for their own sign-in.
     if (tokens.userId != account) return androidx.work.ListenableWorker.Result.success()
-    val uploader = PhoneUploader(dir, server(PinnedTokenStore(tokens, account)), installId, recording = running, changed = Uploads::bump)
+    val pinned = PinnedTokenStore(tokens, account)
+    val uploader = PhoneUploader(dir, server(pinned), installId, recording = running, changed = Uploads::bump, sending = Uploads::sending,
+        // Signed out here (only this account's tokens), then the app's screen follows (Uploads.deleted).
+        accountDeleted = { pinned.clear(); accountDeleted() })
     return try {
         if (uploader.run()) androidx.work.ListenableWorker.Result.success() else androidx.work.ListenableWorker.Result.retry()
     } catch (e: SignedOut) {

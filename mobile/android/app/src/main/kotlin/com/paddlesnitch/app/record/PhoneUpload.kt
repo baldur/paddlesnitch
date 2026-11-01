@@ -42,17 +42,23 @@ class PhoneUploader(
     private val recording: () -> File? = { null },
     /** Called each time a file leaves the phone or a line changes. */
     private val changed: (sentTrack: Boolean) -> Unit = {},
+    /** The recording being sent now (its base), or null between recordings. */
+    private val sending: (String?) -> Unit = {},
+    /** 410: the account is gone. Its folder is already deleted; sign out (README § Calls). */
+    private val accountDeleted: () -> Unit = {},
 ) {
     /** Uploads what's waiting. True when there's nothing more to do for now; false to try again later (backoff). */
     suspend fun run(): Boolean {
         if (offFile(dir).exists()) return true
         val waiting = waiting(dir, recording())
         if (waiting.isEmpty()) return true
-        val deviceId = deviceId() ?: return offFile(dir).exists()
+        val deviceId = try { deviceId() } catch (e: AccountGone) { return gone() } ?: return offFile(dir).exists()
         for (base in waiting) {
             // No network (Api's failure with no status): what's sent so far stays sent; the rest waits.
-            val sent = try { uploadOne(deviceId, base) } catch (e: ApiFailure) { Sent.Retry }
+            sending(base)
+            val sent = try { uploadOne(deviceId, base) } catch (e: ApiFailure) { Sent.Retry } finally { sending(null) }
             when (sent) {
+                Sent.Gone -> return gone()
                 Sent.Removed -> {
                     offFile(dir).writeText("")
                     phoneFile(dir).delete()
@@ -66,6 +72,16 @@ class PhoneUploader(
         return true
     }
 
+    /** The account was deleted: never upload its recordings, delete them, and sign out. */
+    private fun gone(): Boolean {
+        dir.deleteRecursively()
+        changed(false)
+        accountDeleted()
+        return true
+    }
+
+    private class AccountGone : Exception()
+
     /** The phone's id on the account, adding it if this sign-in hasn't yet; null when it couldn't be (see `phone-off`). */
     private suspend fun deviceId(): String? {
         // The id goes into the upload's address: only ever the server's own shape (isPhoneId).
@@ -77,6 +93,7 @@ class PhoneUploader(
             phoneFile(dir).writeText(id)
             id
         } catch (e: ApiFailure) {
+            if (e.status == 410) throw AccountGone()
             // 409 (ten phones) and 400 say why in their own words; anything else (a server
             // without the call yet, 5xx, no network) is tried again later.
             if (e.status == 400 || e.status == 409) { offFile(dir).writeText(if (e.generic) PHONE_NOT_ADDED else e.message.orEmpty()); changed(false) }
@@ -100,6 +117,7 @@ class PhoneUploader(
                 else -> return r
             }
         }
+        if (!dir.isDirectory) return Sent.Gone
         if (motion.exists()) {
             when (val r = send(deviceId, motion, "${base}_imu.csv")) {
                 Sent.Ok, Sent.NoData -> { motion.delete(); changed(false) }
@@ -128,6 +146,7 @@ class PhoneUploader(
                 r.code in 200..299 || r.code == 409 && r.error == "already_uploaded" -> return Sent.Ok
                 r.code == 422 && (r.error == "no_points" || r.error == "no_motion_rows") -> return Sent.NoData
                 r.code == 404 -> return Sent.Removed
+                r.code == 410 -> return Sent.Gone
                 r.code == 409 && r.error == "track_not_uploaded" -> return Sent.TrackFirst
                 // The pieces didn't make the file: once more from piece 1, then it's a dead end.
                 r.code == 422 && r.error == "sha256_mismatch" && !fresh -> fresh = true
@@ -157,7 +176,7 @@ class PhoneUploader(
         return UploadReply(500)
     }
 
-    private enum class Sent { Ok, NoData, Removed, TrackFirst, Refused, Retry }
+    private enum class Sent { Ok, NoData, Removed, Gone, TrackFirst, Refused, Retry }
 
     companion object {
         const val PHONE_NOT_ADDED = "Couldn’t add this phone to your account. Tap Upload now to try again."

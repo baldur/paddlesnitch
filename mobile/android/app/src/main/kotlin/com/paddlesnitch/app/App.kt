@@ -133,6 +133,10 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     // Phone recordings waiting for this account go up on every start and sign-in (C3).
     LaunchedEffect(signedIn) { if (signedIn) api.keptAccountId?.let { runCatching { com.paddlesnitch.app.record.Uploads.schedule(context, it) } } }
     fun signedOut() { com.paddlesnitch.app.record.RecordingService.forgetFinished(); signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
+    // The server said the account was deleted (410, on the website or elsewhere): its
+    // recordings are gone from the phone, and so is its sign-in.
+    val goneAccount by com.paddlesnitch.app.record.Uploads.deleted.collectAsState()
+    LaunchedEffect(goneAccount) { if (goneAccount != null && signedIn && !api.signedIn) signedOut() }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
     Scaffold(bottomBar = {

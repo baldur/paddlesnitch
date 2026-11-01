@@ -81,6 +81,31 @@ class UploadWorkerTest {
         assertTrue(File(dir, "track_20261101_070211.csv").exists())
     }
 
+    @Test fun aDeletedAccountSignsOutOnlyThatAccount() {
+        recording("track_20261101_070211")
+        val tokens = signedInAs("a")
+        var told = 0
+        val deleted = { _: com.paddlesnitch.app.auth.TokenStore -> object : PhoneAccount {
+            override suspend fun addPhone(installId: String): Phone = throw com.paddlesnitch.app.api.ApiFailure("Gone", 410)
+            override suspend fun upload(deviceId: String, filename: String, bytes: ByteArray, part: Int?, parts: Int?, sha256: String?) = UploadReply(201)
+            override suspend fun held(deviceId: String, filename: String) = emptyList<Int>()
+        } }
+        assertEquals(ListenableWorker.Result.success(), runBlocking { uploadAs("a", tokens, dir, deleted, { "install-id-0123456789" }, accountDeleted = { told++ }) })
+        assertEquals(null, tokens.refreshToken)
+        assertEquals(1, told)
+        assertFalse(dir.exists())
+    }
+
+    @Test fun aDeletedAccountStopsItsOwnRecordingOnly() {
+        val mine = Uploads.dir(app, "a").apply { mkdirs() }
+        RecordingService.set(RecordingService.State.Recording(RecordingFiles(File(mine, "t.csv"), File(mine, "t_i10.csv")), MutableStateFlow(null), 0L))
+        Uploads.accountDeleted(app, "b")
+        assertEquals(null, org.robolectric.Shadows.shadowOf(app).nextStartedService)
+        Uploads.accountDeleted(app, "a")
+        assertEquals(RecordingService.ACTION_STOP, org.robolectric.Shadows.shadowOf(app).nextStartedService?.action)
+        assertEquals("a", Uploads.deleted.value)
+    }
+
     @Test fun aServerErrorAsksForARetry() {
         recording("track_20261101_070211")
         val failing = { _: com.paddlesnitch.app.auth.TokenStore -> object : PhoneAccount {

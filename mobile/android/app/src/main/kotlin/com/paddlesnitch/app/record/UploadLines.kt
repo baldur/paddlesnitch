@@ -53,20 +53,21 @@ fun UploadLines(accountId: String, onReport: () -> Unit) {
         lines = withContext(Dispatchers.IO) { PhoneUploader.lines(Uploads.dir(context, accountId), running) }
     }
     val online = rememberOnline(context)
-    UploadLinesView(lines, online,
+    val sending by Uploads.sending.collectAsState()
+    UploadLinesView(lines, online, sending,
         onUploadNow = { Uploads.allowAddingAndSchedule(context, accountId) },
         onDismiss = { base -> PhoneUploader.dismiss(Uploads.dir(context, accountId), base); Uploads.bump(false) },
         onReport = onReport)
 }
 
 @Composable
-fun UploadLinesView(lines: List<UploadLine>, online: Boolean, onUploadNow: () -> Unit, onDismiss: (String) -> Unit, onReport: () -> Unit) {
+fun UploadLinesView(lines: List<UploadLine>, online: Boolean, sending: String?, onUploadNow: () -> Unit, onDismiss: (String) -> Unit, onReport: () -> Unit) {
     // Each line is its own live region, so TalkBack reads only the one that changed,
     // never every waiting recording again when the network comes and goes.
     // Lines and their buttons sit at Record's inset (RecordEntry is a TextButton).
     Column(Modifier.fillMaxWidth().padding(horizontal = INSET), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (line in lines) when (line) {
-            is UploadLine.Waiting -> Text(listOfNotNull(day(line.at), if (online) "Uploading…" else "Waiting to upload").joinToString(" · "), color = PsColor.muted, modifier = Live)
+            is UploadLine.Waiting -> Text(listOfNotNull(day(line.at), if (online && line.base == sending) "Uploading…" else "Waiting to upload").joinToString(" · "), color = PsColor.muted, modifier = Live)
             is UploadLine.NoFix -> Column {
                 Text(listOfNotNull(day(line.at), NO_FIX).joinToString(" · "), color = PsColor.fg, modifier = Live)
                 TextButton(onClick = { onDismiss(line.base) }, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }

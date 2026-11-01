@@ -40,24 +40,30 @@ class UploadLinesTest {
     private val dismissed = mutableListOf<String>()
     private var reports = 0
 
-    private fun show(lines: List<UploadLine>, online: Boolean = true, fontScale: Float = 1f) = compose.setContent {
+    private fun show(lines: List<UploadLine>, online: Boolean = true, fontScale: Float = 1f, sending: String? = null) = compose.setContent {
         val d = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
             PaddlesnitchTheme { Surface(color = PsColor.bg) {
-                UploadLinesView(lines, online, onUploadNow = { uploadNow++ }, onDismiss = { dismissed += it }, onReport = { reports++ })
+                UploadLinesView(lines, online, sending, onUploadNow = { uploadNow++ }, onDismiss = { dismissed += it }, onReport = { reports++ })
             } }
         }
     }
     private fun golden(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.record.UploadLinesTest.$name.png")
 
-    @Test fun eachWaitingRecordingSaysUploading() {
-        show(listOf(UploadLine.Waiting("a", at), UploadLine.Waiting("b", "2026-11-01T09:00:00Z")))
+    // Lead, 2026-11-01: "Uploading…" only for the one being sent; the rest wait.
+    @Test fun onlyTheRecordingBeingSentSaysUploading() {
+        show(listOf(UploadLine.Waiting("a", at), UploadLine.Waiting("b", "2026-11-01T09:00:00Z")), sending = "a")
         compose.onNodeWithText("1 Nov 2026, 07:02 · Uploading…").assertExists()
-        compose.onNodeWithText("1 Nov 2026, 09:00 · Uploading…").assertExists()
+        compose.onNodeWithText("1 Nov 2026, 09:00 · Waiting to upload").assertExists()
+    }
+
+    @Test fun betweenRetriesEveryRecordingIsWaiting() {
+        show(listOf(UploadLine.Waiting("a", at)), sending = null)
+        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload").assertExists()
     }
 
     @Test fun offlineItSaysWaitingToUpload() {
-        show(listOf(UploadLine.Waiting("a", at)), online = false)
+        show(listOf(UploadLine.Waiting("a", at)), online = false, sending = "a")
         compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload").assertExists()
     }
 
@@ -89,7 +95,7 @@ class UploadLinesTest {
     }
 
     @Test fun everyKindOfLine() {
-        show(listOf(UploadLine.Waiting("a", at), UploadLine.NoFix("b", at), UploadLine.Failed("c", at)))
+        show(listOf(UploadLine.Waiting("a", at), UploadLine.Waiting("d", at), UploadLine.NoFix("b", at), UploadLine.Failed("c", at)), sending = "a")
         golden("all")
     }
 

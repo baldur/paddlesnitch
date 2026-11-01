@@ -262,6 +262,14 @@ class RecordScreenTest {
         compose.onNodeWithContentDescription("Waiting for GPS").assertExists()
     }
 
+    // Lead, 2026-11-01: waiting for the first fix is muted; only a lost fix is red.
+    @Test fun onlyALostFixIsRed() {
+        assertEquals(false, gpsLost(null))
+        assertEquals(false, gpsLost(notReady))
+        assertEquals(false, gpsLost(fixed))
+        assertEquals(true, gpsLost(lost(0.4f)))
+    }
+
     @Test fun theStrokeRateIsTheCoresOrADash() {
         assertEquals("—", liveStrokeRate(null))
         assertEquals("—", liveStrokeRate(notReady))

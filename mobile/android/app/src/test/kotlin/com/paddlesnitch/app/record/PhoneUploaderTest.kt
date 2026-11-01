@@ -154,6 +154,43 @@ class PhoneUploaderTest {
         assertEquals(listOf("track_20261101_070211.csv"), server.sent)
     }
 
+    // 410 accountDeleted (README § Calls): delete the account's recordings and sign out, never upload them.
+    private var gone = 0
+    private fun goneUploader(account: PhoneAccount = server) = PhoneUploader(dir, account, { "install-id-0123456789" }, accountDeleted = { gone++ })
+
+    @Test fun aDeletedAccountWhenAddingThePhoneDeletesItsRecordingsAndSignsOut() {
+        recording(); recording("track_20261101_090000")
+        server.addFails = ApiFailure("Gone", 410)
+        assertTrue(runBlocking { goneUploader().run() })
+        assertEquals(emptyList<String>(), server.sent)
+        assertFalse(dir.exists())
+        assertEquals(1, gone)
+    }
+
+    @Test fun aDeletedAccountMidUploadStopsAndDeletesTheRest() {
+        recording(); recording("track_20261101_090000")
+        server.answer("track_20261101_070211.csv", UploadReply(410, "gone"))
+        assertTrue(runBlocking { goneUploader().run() })
+        assertEquals(listOf("track_20261101_070211.csv"), server.sent)
+        assertFalse(dir.exists())
+        assertEquals(1, gone)
+    }
+
+    @Test fun aDeletedAccountOnTheMotionFileToo() {
+        recording()
+        server.answer("track_20261101_070211_imu.csv", UploadReply(410, "gone"))
+        assertTrue(runBlocking { goneUploader().run() })
+        assertFalse(dir.exists())
+        assertEquals(1, gone)
+    }
+
+    @Test fun eachRecordingSaysWhenItsBeingSent() {
+        recording(); recording("track_20261101_090000")
+        val seen = mutableListOf<String?>()
+        runBlocking { PhoneUploader(dir, server, { "install-id-0123456789" }, sending = { seen += it }).run() }
+        assertEquals(listOf("track_20261101_070211", null, "track_20261101_090000", null), seen)
+    }
+
     @Test fun alreadyUploadedCountsAsSent() {
         recording()
         server.answer("track_20261101_070211.csv", UploadReply(409, "already_uploaded"))

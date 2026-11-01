@@ -110,13 +110,15 @@ fun gpsLine(live: RecorderCore.Live?): GpsLine {
  * not a live region, so the count never talks every second).
  */
 fun gpsAnnouncement(before: RecorderCore.Live?, now: RecorderCore.Live?): String? {
-    fun lost(l: RecorderCore.Live?) = l != null && !l.fix && !l.sinceFixS.isNaN()
     return when {
-        lost(now) && !lost(before) -> "GPS lost"
-        now?.fix == true && lost(before) -> "GPS back"
+        gpsLost(now) && !gpsLost(before) -> "GPS lost"
+        now?.fix == true && gpsLost(before) -> "GPS back"
         else -> null
     }
 }
+
+/** A fix the recording had and lost (not the wait for the first one): the only GPS state shown in red. */
+fun gpsLost(l: RecorderCore.Live?) = l != null && !l.fix && !l.sinceFixS.isNaN()
 
 /** The stroke rate as the core gives it: "—" until it has one (rc_phone_live is NaN until phase 2). */
 fun liveStrokeRate(live: RecorderCore.Live?): String = live?.spm?.takeIf { !it.isNaN() }?.roundToInt()?.toString() ?: "—"
@@ -257,7 +259,8 @@ private fun Recording(state: RecordingService.State.Recording, onStop: () -> Uni
         gpsAnnouncement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
         before = live
     }
-    Text(gps.shown, color = if (live?.fix == true) PsColor.muted else PsColor.red, fontSize = 18.sp,
+    // Red only once the fix is lost: waiting for the first one is how every paddle starts.
+    Text(gps.shown, color = if (gpsLost(live)) PsColor.red else PsColor.muted, fontSize = 18.sp,
         modifier = Modifier.clearAndSetSemantics { contentDescription = gps.spoken })
     val spm = liveStrokeRate(live)
     Tile("Stroke rate", spm, if (spm == "—") "Stroke rate, not measured yet" else "Stroke rate, $spm strokes per minute")

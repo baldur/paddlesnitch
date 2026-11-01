@@ -184,3 +184,8 @@ time and isn't obvious from the code.
 - The install id (`Uploads.installId`) is excluded from backup and device transfer in
   `data_extraction_rules.xml`, beside recordings: a copied id would make a new phone the old
   one on the account.
+- A 410 from either phone call means the account was deleted (on the website or elsewhere):
+  `PhoneUploader` deletes the account's folder and calls `accountDeleted`, `uploadAs` clears
+  only that account's tokens (`PinnedTokenStore`), stops a recording still writing into the
+  folder (`Uploads.accountDeleted`), and App.kt signs out on `Uploads.deleted`. The status alone
+  decides it; `accountDeleted: true` in the body is for people reading it.
