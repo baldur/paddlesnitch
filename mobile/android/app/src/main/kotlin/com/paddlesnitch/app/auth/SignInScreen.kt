@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.paddlesnitch.app.ui.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -24,7 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.paddlesnitch.app.ui.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,8 +80,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedButton
+import com.paddlesnitch.app.ui.OutlinedButton
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
 import com.paddlesnitch.app.api.SignInOptions
@@ -352,7 +351,7 @@ fun emailUs(context: android.content.Context): Boolean =
 @Composable
 private fun GoogleButton(enabled: Boolean, onClick: () -> Unit) {
     // Disabled, the whole button fades, so it still looks like Google's (the G can't be tinted).
-    OutlinedButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(6.dp),
+    OutlinedButton(onClick = onClick, enabled = enabled,
         border = BorderStroke(1.dp, Color(0xFF8E918F)),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF131314), contentColor = Color(0xFFE3E3E3),
             disabledContainerColor = Color(0xFF131314), disabledContentColor = Color(0xFFE3E3E3)),

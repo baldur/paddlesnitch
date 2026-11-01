@@ -32,6 +32,14 @@ time and isn't obvious from the code.
   filled buttons (lead, 2026-10-26).
 - Data is square: no rounded corners on charts, chart keys, tables or maps (design system).
   `SquareDataTest` draws the weekly bars and the speed colour key and checks their corner pixels.
+- Buttons have the control radius from the tokens (`PsRadius.control`, 6 dp), not M3's pill (#793).
+  M3's `Button`, `OutlinedButton` and `TextButton` take their pill from a fixed full-corner token,
+  never from the theme's `Shapes`, so setting `Shapes` changes nothing. Screens import
+  `com.paddlesnitch.app.ui.Button`/`OutlinedButton`/`TextButton` (`ui/Buttons.kt`: M3's parameters
+  without `shape`, always `ControlShape`). Text fields read the theme's `Shapes.extraSmall`, which
+  `PsShapes` sets to the same radius. `ButtonShapeTest` fails on an import of material3's buttons
+  (or `material3.*`), on any of the three drawn as a pill, and on a token's radius written as a
+  number: use `PsRadius.*`.
 - TalkBack reads a change inside a live region it already knows, not a node
   that has just appeared. Keep the live-region container in the layout even
   when it's empty (`AddPaddleCard(card = null)`).
