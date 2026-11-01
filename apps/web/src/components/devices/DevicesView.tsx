@@ -188,6 +188,8 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
                             a minute can tick over in between. */}
                         <span suppressHydrationWarning className={deviceIsQuiet(d.lastSeenAt) ? 'text-red' : 'text-fg'}>
                           {fmtAgo(d.lastSeenAt)}
+                          {/* In words too, not by colour alone (as the phone app says it). */}
+                          {deviceIsQuiet(d.lastSeenAt) && ' · quiet'}
                         </span>
                         {/* Reported by the tracker on the start after the crash. */}
                         {crashNote(d.lastCrash) && <span suppressHydrationWarning className="text-red"> · {crashNote(d.lastCrash)}</span>}

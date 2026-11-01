@@ -90,6 +90,23 @@ describe('DEVICES page', () => {
     expect(card('Everyone else')).toContain('up to date')
   })
 
+  // #721: red alone fails WCAG 1.4.1 -- the words say it too, as on the phone app.
+  it('says "quiet" in words for a tracker silent over 2 days, not by colour alone', async () => {
+    const day = 24 * 60 * 60 * 1000
+    await mount({
+      devices: [
+        { deviceId: 'AAAA0001', name: 'Silent', firmware: '0.9.0', lastSeenAt: new Date(Date.now() - 3 * day).toISOString() },
+        { deviceId: 'AAAA0002', name: 'Chatty', firmware: '0.9.0', lastSeenAt: new Date(Date.now() - 60_000).toISOString() },
+      ],
+      stableVersion: '0.9.0',
+      sessions: [],
+    })
+    const cardOf = (name: string) => [...container.querySelectorAll('a')].find(a => a.textContent?.includes(name))!
+    expect(cardOf('Silent').textContent).toContain('3d ago · quiet')
+    expect(cardOf('Silent').querySelector('.text-red')?.textContent).toContain('quiet')
+    expect(cardOf('Chatty').textContent).not.toContain('quiet')
+  })
+
   it('still shows a revoked tracker, because its uploads are still the user\'s', async () => {
     stubFetch({
       [DEVICES]: { devices: [] },
