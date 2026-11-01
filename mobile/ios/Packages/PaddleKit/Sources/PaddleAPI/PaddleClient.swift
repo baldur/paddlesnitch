@@ -33,6 +33,9 @@ public enum PaddleAPIError: Error, Equatable, Sendable {
     /// Right password, but the email's sign-up code was never entered: a new
     /// code has gone out (#702). `message` is a status to show, not an error.
     case codeNeeded(message: String)
+    /// 410 with `accountDeleted: true`: the account was deleted (on the
+    /// website, say). `message` is the server's words for the sign-in screen.
+    case accountDeleted(message: String)
 }
 
 /// Calls the server as mobile/contract/README.md describes: tRPC procedures
@@ -136,6 +139,10 @@ public struct PaddleClient: Sendable {
         }
         if let failure = try? decoder.decode(ApiError.self, from: data) {
             if failure.needsCode == true { throw PaddleAPIError.codeNeeded(message: failure.error) }
+            // Only with the flag: a bare 410 from a proxy isn't ours.
+            if status == 410 && failure.accountDeleted == true {
+                throw PaddleAPIError.accountDeleted(message: failure.error)
+            }
             throw PaddleAPIError.rejected(message: failure.error, status: status, session: failure.session)
         }
         throw PaddleAPIError.badResponse(status: status)

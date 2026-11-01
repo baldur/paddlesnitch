@@ -1,9 +1,9 @@
 import XCTest
 
-/// Recording on the phone (signed in; debug builds only until uploads
-/// arrive). The
-/// simulator has no accelerometer or gyroscope, so this records the track
-/// only; the sensors are proved in RecorderTests and on a real phone.
+/// Recording on the phone (signed in) and uploading it (C3). The simulator
+/// has no accelerometer or gyroscope, so this records the track only; the
+/// sensors are proved in RecorderTests and on a real phone, the uploads'
+/// order and pieces in PhoneUploadTests.
 final class RecordTests: AppTestCase {
 
     override func setUp() async throws {
@@ -13,7 +13,7 @@ final class RecordTests: AppTestCase {
         app.launch()
     }
 
-    func testARecordingIsSavedOnThePhone() throws {
+    func testARecordingGoesBackToPaddlesAndUploads() throws {
         try startRecording(allow: true)
         XCTAssertTrue(element("record-recording").appears(timeout: 10))
         let gps = element("record-gps").label
@@ -21,29 +21,120 @@ final class RecordTests: AppTestCase {
             ["Waiting for GPS", "GPS fix"].contains(gps) || gps.hasPrefix("GPS lost"), "agreed words: \(gps)")
         let time = element("record-time")
         let first = time.label
-        XCTAssertTrue(first.contains("0:0"), "the time since it started")
+        XCTAssertTrue(first.hasPrefix("Time, "), "the time since it started, spoken: \(first)")
         XCTAssertTrue(poll(timeout: 5) { time.label != first }, "the clock runs")
-        // The recorder core has no live values yet: "—", never a guess.
-        XCTAssertTrue(element("record-stroke-rate").label.contains("—"))
-        XCTAssertFalse(app.buttons["Close"].exists, "can't be closed while recording")
+        // The recorder core has no live values yet: "—" (spoken "not measured
+        // yet"), never a guess.
+        XCTAssertEqual(element("record-stroke-rate").label, "Stroke rate, not measured yet")
+        XCTAssertTrue(text(containing: "—").exists)
+        // The simulator has no motion sensors: GPS only, and it says so.
+        XCTAssertTrue(element("record-no-motion").exists)
         try audit()
 
         let stop = element("record-stop")
         stop.tap()
-        XCTAssertTrue(text(containing: "Keep your finger on it").appears(timeout: 5), "a tap doesn't stop it")
+        XCTAssertTrue(text(containing: "Keep holding to stop.").appears(timeout: 5), "a tap doesn't stop it")
         XCTAssertTrue(element("record-recording").exists)
-        stop.press(forDuration: 1.5)
+        stop.press(forDuration: 2)
 
-        XCTAssertTrue(text(containing: "Saved on this iPhone").appears(timeout: 10))
-        XCTAssertTrue(text(containing: "track_").exists, "named as the tracker names its files")
-        try audit()
-        app.buttons["record-done"].tap()
-        XCTAssertTrue(app.buttons["record"].appears(timeout: 5), "back on Paddles")
+        // Back to Paddles; the sample server takes it and makes a paddle.
+        XCTAssertTrue(app.buttons["record"].appears(timeout: 10), "back on Paddles")
+        XCTAssertFalse(element("recording-line").exists)
+        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        XCTAssertFalse(element("upload-line").exists)
+    }
+
+    /// Hide while recording hides the screen and keeps recording: every
+    /// screen says so at the top, and opens it again.
+    func testClosingTheScreenKeepsRecording() throws {
+        try startRecording(allow: true)
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        XCTAssertTrue(text(containing: "Recording carries on.").exists)
+        app.buttons["record-hide"].tap()
+        let line = element("recording-line")
+        XCTAssertTrue(line.appears(timeout: 10))
+        XCTAssertTrue(line.label.hasPrefix("Recording, "), line.label)
+        try auditPaddles()
+        // At the top of every screen, not only Paddles.
+        selectTab("You")
+        XCTAssertTrue(line.appears(timeout: 5), "on You too")
+        XCTAssertFalse(element("upload-line").exists, "the running recording isn't waiting to upload")
+        line.tap()
+        XCTAssertTrue(element("record-recording").appears(timeout: 10), "the same recording")
+        element("record-stop").press(forDuration: 2)
+        XCTAssertTrue(line.disappears(timeout: 10))
+    }
+
+    func testWhileTheServerIsDownTheRecordingWaits() throws {
+        try record(with: "-UploadsDown")
+        let line = element("upload-line")
+        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("Waiting to upload") }, line.label)
+        try auditPaddles()
+    }
+
+    func testATrackWithNoGPSFixSaysSoUntilClosed() throws {
+        try record(with: "-UploadsNoFix")
+        let line = element("upload-line")
+        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("No GPS fix") }, line.label)
+        app.buttons["upload-line-close"].tap()
+        XCTAssertTrue(line.disappears(timeout: 5))
+    }
+
+    func testARecordingTheServerWontTakeIsKeptWithReportAnIssue() throws {
+        try record(with: "-UploadsRefused")
+        let line = element("upload-line")
+        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("Couldn’t upload this recording") })
+        XCTAssertEqual(app.buttons["report-issue"].label, "Report an issue")
+        try auditPaddles()
+    }
+
+    /// The owner removed this phone on Devices: the recording stays until
+    /// Add phone again adds the phone again.
+    func testARemovedPhoneUploadsAfterAddPhoneAgain() throws {
+        try record(with: "-PhoneRemoved")
+        let line = element("upload-line")
+        XCTAssertTrue(
+            poll(timeout: 20) {
+                line.exists && line.label.contains("This phone was removed from your account. 1 recording is waiting.")
+            })
+        let addAgain = app.buttons["add-phone-again"]
+        XCTAssertEqual(addAgain.label, "Add phone again")
+        addAgain.tap()
+        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        XCTAssertFalse(line.exists)
+    }
+
+    /// The next Start adds a removed phone again too, and what was waiting
+    /// goes once that recording stops.
+    func testARemovedPhoneIsAddedAgainAtTheNextStart() throws {
+        try record(with: "-PhoneRemoved")
+        let line = element("upload-line")
+        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("This phone was removed") })
+        openRecord()
+        app.buttons["record-start"].tap()
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        element("record-stop").press(forDuration: 2)
+        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        XCTAssertFalse(text(containing: "This phone was removed").exists)
+    }
+
+    /// The account was deleted on the website (410 with accountDeleted): the
+    /// app signs out and the sign-in screen says why, in the server's words.
+    func testADeletedAccountSignsOutAndSaysWhy() {
+        app.terminate()
+        app.launchArguments += ["-AccountDeleted"]
+        app.launch()
+        signIn()
+        XCTAssertTrue(element("sample-notice").appears(timeout: 15), "signed out")
+        app.buttons["sample-notice-action"].tap()
+        XCTAssertTrue(
+            element("sign-in-account-deleted").appears(timeout: 10)
+                && text(containing: "This account was deleted").exists)
     }
 
     /// The app signs out on its own when the server refuses a refresh (a
     /// password reset elsewhere). The record screen and its Stop stay, and
-    /// the paddle is saved in the account it was started in.
+    /// the recording stays in the account it was started in.
     func testASignOutMidRecordingKeepsTheScreenAndItsStop() throws {
         app.terminate()
         app.launchArguments += ["-SignOutWhileRecording"]
@@ -51,9 +142,7 @@ final class RecordTests: AppTestCase {
         try startRecording(allow: true)
         XCTAssertTrue(element("record-recording").appears(timeout: 10))
         XCTAssertFalse(element("record-recording").disappears(timeout: 5), "still recording after the sign-out")
-        element("record-stop").press(forDuration: 1.5)
-        XCTAssertTrue(text(containing: "Saved on this iPhone").appears(timeout: 10))
-        app.buttons["record-done"].tap()
+        element("record-stop").press(forDuration: 2)
         XCTAssertTrue(element("sample-notice").appears(timeout: 10), "signed out behind it")
     }
 
@@ -68,6 +157,25 @@ final class RecordTests: AppTestCase {
     func testSignedOutThereIsNothingToRecordInto() {
         XCTAssertTrue(element("sample-notice").appears(timeout: 10))
         XCTAssertFalse(app.buttons["record"].exists)
+    }
+
+    /// The Paddles list with a line above the logbook: the "All paddles"
+    /// header sits half under the tab bar, which the audit calls clipped.
+    /// Clipping is LargeTextTests' job, on the whole screen.
+    private func auditPaddles() throws {
+        try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
+    }
+
+    /// Records a few seconds with the sample server answering uploads as
+    /// `argument` says, and stops.
+    private func record(with argument: String) throws {
+        app.terminate()
+        app.launchArguments += [argument]
+        app.launch()
+        try startRecording(allow: true)
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        element("record-stop").press(forDuration: 2)
+        XCTAssertTrue(app.buttons["record"].appears(timeout: 10), "back on Paddles")
     }
 
     private func startRecording(allow: Bool) throws {

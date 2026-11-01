@@ -103,7 +103,7 @@ struct RecordModelTests {
         let model = RecordModel(start: starter.start)
         model.record()
         starter.send?(RecordingStatus(couldNotSave: true))
-        #expect(model.problem == "Couldn't save any more of this recording. Stop to keep what's saved so far.")
+        #expect(model.problem == "Couldn’t save the rest of this recording. Stop to upload what’s saved.")
     }
 
     @Test func aFailedCloseStillEndsTheRecording() {

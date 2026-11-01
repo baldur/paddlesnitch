@@ -46,19 +46,28 @@ First entries (confirm against the docs during the spikes):
 The format and upload are fixed by the recording contract in
 [`mobile-apps.md`](mobile-apps.md). On iPhone:
 
-- **Built (#767), debug builds only until upload (C3, #761):** Record on
-  Paddles when signed in. The `Recorder` package hands Core Motion and Core
-  Location to the shared recorder core's phone layer
-  (`recorder-core/include/recorder_phone.h`) untouched, on one serial queue,
-  and writes its lines to `track_<stamp>.csv` and `_i10.csv`. The screen
-  shows elapsed time, stroke rate "—" until the core has it, the GPS state
-  and hold to stop. Recordings are kept per account
-  (`Documents/Recordings/<user id>`): deleted with the account, kept on
-  sign-out (the only copy until upload), and left out of backups, as on
-  Android (#761). A second recording in the same second is
-  `track_<stamp>_1`, the tracker's rule. Files are encrypted
-  while locked except while open (`completeUnlessOpen`). Not yet: upload,
-  crash recovery, the Live Activity.
+- **Built (#767; upload C3, #761):** Record on Paddles when signed in. The
+  `Recorder` package hands Core Motion and Core Location to the shared
+  recorder core's phone layer (`recorder-core/include/recorder_phone.h`)
+  untouched, on one serial queue, and writes its lines to `track_<stamp>.csv`
+  and `_i10.csv`. The screen shows elapsed time, stroke rate "—" until the
+  core has it (and why there's none on a phone without motion sensors), the
+  GPS state and hold to stop; Hide keeps recording, and every screen shows
+  "Recording · h:mm:ss" at the top. After Stop the `PhoneUpload` package adds the
+  phone to the account and uploads the track, then the motion file as
+  `_imu.csv`, as a tracker does (mobile/contract/README.md § Phone
+  recording); Paddles shows each recording waiting, a track with no GPS fix,
+  one the server won't take (with Report an issue), and a phone removed on
+  Devices (with Add phone again). A deleted account (410) has its recordings
+  deleted, never uploaded, and the app signs out; a busy server (503) is asked
+  again after `Retry-After`. Recordings are kept per account
+  (`Documents/Recordings/<user id>`) until the server has them: deleted with
+  the account, kept on sign-out, and left out of backups, as on Android
+  (#761). A second recording in the same second is `track_<stamp>_1`, the
+  tracker's rule. Files are encrypted while locked except while open
+  (`completeUnlessOpen`), so an upload while locked waits for the unlock.
+  Not yet: crash recovery, the Live Activity, uploading after the app was
+  closed (BGTaskScheduler).
 - Recording is **started on screen** and carries on with the screen off using
   the `location` background mode and a background activity session
   (`CLBackgroundActivitySession`, iOS 17). That needs only **"While Using"**
@@ -259,7 +268,7 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
 | **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Strava, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
 | **P1b. Native account** (C5) | Add a paddle from a file ✅ (the file picker, and GPS files opened from Files, Mail, AirDrop or a share sheet; a file opened while signed out is added after sign-in); accept new Terms ✅, download your data ✅, delete account ✅ (as the website: type DELETE, then "Delete for good"); the recent-sign-in check before delete ✅ (sign in again and come straight back; a Strava account with Strava), your details, public profile and handle, contact email for a Strava account ✅; Strava connect, auto-import and disconnect ✅ (Strava's page in `ASWebAuthenticationSession`, back on `com.paddlesnitch.app:/account/strava`; an old sign-in signs in again and comes straight back to connecting); forgot password ✅; Devices ✅ (your trackers, their recordings, removing one); then older Strava paddles (mobile-apps.md, the owner's 2026-10-25 note) | The Account pages leave the website | No |
-| **P2. Record** | Recorder ✅ (debug builds, #767) → upload as a phone device → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
+| **P2. Record** | Recorder ✅ (#767) → upload as a phone device ✅ (C3) → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |
 | **P5. App Store** | Developer Program enrolment, signed CI → TestFlight internal, then external with the tracker beta group; `apple-app-site-association` with the team ID; store listing, review, release | Real users | For sign-off |

@@ -246,6 +246,7 @@ public final class SignInForm {
         switch error {
         case PaddleAPIError.rejected(let message, _, _): message
         case PaddleAPIError.codeNeeded(let message): message
+        case PaddleAPIError.accountDeleted(let message): message
         case let strava as StravaSignInError: strava.message
         case let google as GoogleSignInError: google.message
         case is TokenStoreError: "Signed in, but this iPhone wouldn't keep you signed in. Try again."

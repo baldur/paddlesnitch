@@ -35,6 +35,14 @@ public final class RecordingFiles: RecordingSink {
         log = directory.appending(path: stem + ".log")
         trackHandle = try Self.create(track)
         motionHandle = try Self.create(motion)
+        Self.open.withLock { _ = $0.insert(track.standardizedFileURL.path) }
+    }
+
+    private static let open = OpenTracks()
+
+    /// Whether `track` is a recording still being written: never upload it.
+    public static func isOpen(_ track: URL) -> Bool {
+        open.withLock { $0.contains(track.standardizedFileURL.path) }
     }
 
     public func write(_ line: Data, to stream: RecordingStream) {
@@ -57,6 +65,7 @@ public final class RecordingFiles: RecordingSink {
     /// lines as Android writes them: a rising drop count means events were
     /// held too long or a sensor stopped; failed lines, that the phone was full.
     public func close(droppedLate: UInt32, droppedUnpaired: UInt32) throws {
+        defer { Self.open.withLock { _ = $0.remove(track.standardizedFileURL.path) } }
         try trackHandle.close()
         try motionHandle.close()
         let text =
@@ -112,5 +121,15 @@ public final class RecordingFiles: RecordingSink {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
         return try FileHandle(forWritingTo: url)
+    }
+}
+
+/// The tracks being written now, across recordings (iOS 17 has no Mutex).
+private final class OpenTracks: @unchecked Sendable {
+    private let lock = NSLock()
+    private var paths = Set<String>()
+
+    func withLock<T>(_ body: (inout Set<String>) -> T) -> T {
+        lock.withLock { body(&paths) }
     }
 }

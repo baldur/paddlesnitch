@@ -1,6 +1,8 @@
 import Account
 import DesignSystem
 import Paddles
+import PhoneUpload
+import Recorder
 import SwiftUI
 
 /// The bottom tab bar. The web's phone layout has Paddles, Trials, Plan and
@@ -12,6 +14,12 @@ struct RootView: View {
     @State private var termsOpen = false
     @State private var selectedTab = "paddles"
     @State private var adding: AddPaddleModel
+    /// The signed-in account's recordings from this phone, uploading.
+    @State private var uploads: UploadQueue?
+    @State private var network = NetworkWatch()
+    @State private var reportPage: URL?
+    @State private var recording = RecordingSession()
+    @Environment(\.scenePhase) private var scenePhase
 
     init(account: AccountModel, samples: SamplePaddles) {
         self.account = account
@@ -24,26 +32,55 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // The same list view throughout; it reloads when `sourceID` changes
-            // (samples, or this person's). Rebuilding its navigation stack
-            // under the closing sign-in sheet crashed UIKit on iOS 17.
-            PaddleListView(
-                source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
-                needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
-                openTerms: { termsOpen = true }, adding: adding, options: account.options,
-                openFile: { url in Task { await open(url) } }
-            )
-            .tabItem { Label("Paddles", systemImage: "water.waves") }
-            .tag("paddles")
-            YouView(account: account, signIn: { signingIn = true })
-                .tabItem { Label("You", systemImage: "person.crop.circle") }
-                .tag("you")
+        // "Recording · h:mm:ss" above every screen, nav bars included.
+        VStack(spacing: 0) {
+            RecordingBar(session: recording)
+            TabView(selection: $selectedTab) {
+                // The same list view throughout; it reloads when `sourceID` changes
+                // (samples, or this person's). Rebuilding its navigation stack
+                // under the closing sign-in sheet crashed UIKit on iOS 17.
+                PaddleListView(
+                    source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
+                    needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
+                    openTerms: { termsOpen = true }, adding: adding, options: account.options,
+                    openFile: { url in Task { await open(url) } },
+                    openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
+                    uploads: uploads,
+                    openReport: openReport
+                )
+                .tabItem { Label("Paddles", systemImage: "water.waves") }
+                .tag("paddles")
+                YouView(account: account, signIn: { signingIn = true })
+                    .tabItem { Label("You", systemImage: "person.crop.circle") }
+                    .tag("you")
+            }
         }
+        .background(Palette.bg)
         // A GPS file opened in the app from Files, Mail or a share sheet.
         .onOpenURL { url in Task { await open(url) } }
         .onChange(of: account.user?.id) { _, id in
             if id != nil { Task { await adding.signedIn() } }
+        }
+        .onChange(of: account.user?.id, initial: true) { _, id in
+            recording.accountChanged(to: id.map { account.recordings(for: $0) })
+            uploadRecordings(of: id)
+        }
+        .recordScreen(recording) {
+            // Start adds a phone removed on Devices again.
+            if let uploads, uploads.state.removed { Task { await uploads.addAgain() } }
+        }
+        // Nothing uploads while a recording runs.
+        .onChange(of: recording.isRecording, initial: true) { _, running in uploads?.recording = running }
+        .onChange(of: network.online, initial: true) { _, online in uploads?.online = online }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active: uploads?.kick()
+            case .background: uploads?.keepGoingInBackground()
+            default: break
+            }
+        }
+        .sheet(item: $reportPage) { url in
+            SafariView(url: url).ignoresSafeArea()
         }
         .task { await openLaunchFile() }
         .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in
@@ -93,6 +130,53 @@ struct RootView: View {
             }
             .preferredColorScheme(.dark)
         }
+    }
+
+    /// The website's issue form, signed in as this account. If it can't
+    /// open, the screen says so rather than doing nothing.
+    private func openReport() async -> Bool {
+        do {
+            reportPage = try await account.reportPage()
+            return true
+        } catch {
+            AccessibilityNotification.Announcement("Couldn’t open the issue form. Please try again.").post()
+            return false
+        }
+    }
+
+    /// Signed in: this account's recordings from this phone start uploading.
+    /// Signed out: they stop, and stay on the phone.
+    private func uploadRecordings(of userID: String?) {
+        uploads?.stop()
+        uploads = nil
+        guard let userID else { return }
+        // This account's token only: once another signs in, the old queue
+        // has none, so nothing of one account goes up with another's.
+        var client = account.client
+        let shared = account.client
+        client.idToken = { [weak account] refresh in
+            guard await account?.user?.id == userID else { return nil }
+            return try await shared.idToken(refresh)
+        }
+        let queue = UploadQueue(
+            folder: account.recordings(for: userID), client: client, installID: Self.installID(),
+            isOpen: { RecordingFiles.isOpen($0) })
+        queue.online = network.online
+        queue.recording = recording.isRecording
+        // 410: the account was deleted elsewhere; its recordings are gone.
+        queue.accountDeleted = { [account] message in Task { await account.signOut(because: message) } }
+        uploads = queue
+        queue.start()
+        // After every sign-in: the same phone for the same account and install.
+        Task { await queue.signedIn() }
+    }
+
+    /// This phone's install ID, in the Keychain (this device only), so a
+    /// phone restored from a backup is a new phone.
+    private static func installID() -> String {
+        let store = KeychainTokenStore(
+            service: "com.paddlesnitch.app.install-id" + (PaddlesnitchApp.usesSampleServer ? ".sample" : ""))
+        return InstallID.current(stored: { store.load() }, keep: { try? store.save($0) })
     }
 
     /// Adds the paddle in a GPS file, or keeps it until sign-in.

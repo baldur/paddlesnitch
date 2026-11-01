@@ -1,7 +1,7 @@
-import Charts
 import DesignSystem
 import PaddleAPI
 import Paddles
+import PhoneUpload
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -22,17 +22,24 @@ struct PaddleListView: View {
     /// when it's on.
     let options: SignInOptions
     let openFile: (URL) -> Void
+    /// Opens the record screen (RootView owns the recording).
+    let openRecord: () -> Void
+    /// This account's recordings from this phone, waiting to upload.
+    let uploads: UploadQueue?
+    /// The website's issue form, for a recording the server won't take:
+    /// false if it couldn't open.
+    let openReport: () async -> Bool
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var loadedID: String?
     @State private var choosingFile = false
     @State private var openedID: String?
-    @State private var recording: URL?
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
         openTerms: @escaping () -> Void, adding: AddPaddleModel, options: SignInOptions,
-        openFile: @escaping (URL) -> Void
+        openFile: @escaping (URL) -> Void, openRecord: @escaping () -> Void, uploads: UploadQueue?,
+        openReport: @escaping () async -> Bool
     ) {
         self.source = source
         self.sourceID = sourceID
@@ -43,6 +50,9 @@ struct PaddleListView: View {
         self.adding = adding
         self.options = options
         self.openFile = openFile
+        self.openRecord = openRecord
+        self.uploads = uploads
+        self.openReport = openReport
         _model = State(initialValue: PaddleListModel(source: source))
     }
 
@@ -65,9 +75,11 @@ struct PaddleListView: View {
                 }
                 .toolbar {
                     if !isSample {
-                        #if DEBUG  // until a recording can be uploaded (RecordButton)
-                            ToolbarItem(placement: .topBarLeading) { RecordButton(sourceID, $recording) }
-                        #endif
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Record") { openRecord() }
+                                .font(.plexSans(.body))
+                                .accessibilityIdentifier("record")
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Add paddle") { choosingFile = true }
                                 .font(.plexSans(.body))
@@ -77,7 +89,10 @@ struct PaddleListView: View {
                 }
                 .safeAreaInset(edge: .bottom) { addNotice }
         }
-        .recordScreen($recording)
+        .onChange(of: uploads?.lines.count ?? 0) { before, after in
+            // One went up: its paddle is in the list now.
+            if after < before { Task { await model.load() } }
+        }
         .fileImporter(isPresented: $choosingFile, allowedContentTypes: Self.fileTypes) { result in
             if case .success(let url) = result { openFile(url) }
         }
@@ -105,11 +120,15 @@ struct PaddleListView: View {
                 .font(.plexSans(.body))
                 .foregroundStyle(Palette.muted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .safeAreaInset(edge: .top) { pendingAbove }
         case .failed(let message):
+            // Offline is when this shows, and when "Waiting to upload" matters.
             MessageView(
                 title: "Couldn't load your paddles", message: message,
-                action: ("Try again", { Task { await model.load() } }))
-        case .loaded(let rows) where rows.isEmpty:
+                action: ("Try again", { Task { await model.load() } })
+            )
+            .safeAreaInset(edge: .top) { pendingAbove }
+        case .loaded(let rows) where rows.isEmpty && !hasPending:
             MessageView(
                 title: "No paddles yet",
                 message: options.noPaddlesYet)
@@ -120,16 +139,8 @@ struct PaddleListView: View {
 
     private func list(_ rows: [PaddleRow]) -> some View {
         List {
-            if isSample {
-                notice(
-                    "These are sample paddles. Sign in to see yours.", id: "sample-notice", action: "Sign in",
-                    run: signIn)
-            }
-            if needsTerms {
-                notice(
-                    TermsView.changed, id: "terms-notice",
-                    action: "Read the Terms", run: openTerms)
-            }
+            notices
+            if hasPending { pending }
             if let logbook = model.logbook {
                 Section {
                     LogbookView(logbook: logbook, inAll: model.inAll)
@@ -166,10 +177,13 @@ struct PaddleListView: View {
                     }
                 }
             } header: {
-                Text("All paddles")
-                    .font(.plexSans(.subheadline, weight: .medium))
-                    .foregroundStyle(Palette.muted)
-                    .textCase(nil)
+                // Not over no rows (a first recording still uploading).
+                if !rows.isEmpty {
+                    Text("All paddles")
+                        .font(.plexSans(.subheadline, weight: .medium))
+                        .foregroundStyle(Palette.muted)
+                        .textCase(nil)
+                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -178,6 +192,45 @@ struct PaddleListView: View {
 }
 
 extension PaddleListView {
+    /// Recordings waiting to upload, or what came of them.
+    fileprivate var hasPending: Bool { !(uploads?.lines.isEmpty ?? true) }
+
+    /// Samples, or Terms to accept.
+    @ViewBuilder fileprivate var notices: some View {
+        if isSample {
+            notice(
+                "These are sample paddles. Sign in to see yours.", id: "sample-notice", action: "Sign in",
+                run: signIn)
+        }
+        if needsTerms {
+            notice(TermsView.changed, id: "terms-notice", action: "Read the Terms", run: openTerms)
+        }
+    }
+
+    /// The recordings waiting to upload, and what came of them.
+    fileprivate var pending: some View {
+        Section {
+            if let uploads {
+                ForEach(uploads.lines) { line in
+                    UploadLineView(line: line, queue: uploads, openReport: openReport)
+                }
+            }
+        }
+    }
+
+    /// The same lines over a list that's loading or failed to load.
+    @ViewBuilder fileprivate var pendingAbove: some View {
+        if hasPending, let uploads {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(uploads.lines) { line in
+                    UploadLineView(line: line, queue: uploads, openReport: openReport)
+                }
+            }
+            .padding(16)
+            .background(Palette.surface)
+        }
+    }
+
     /// Adding a file: waiting for sign-in, adding, then what came of it.
     @ViewBuilder fileprivate var addNotice: some View {
         switch adding.state {
@@ -267,133 +320,6 @@ extension PaddleListView {
             }
             .padding(.vertical, 4)
             .listRowBackground(Palette.surface)
-        }
-    }
-}
-
-struct PaddleRowView: View {
-    let row: PaddleRow
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        // At accessibility text sizes the thumbnail goes above the words, so
-        // the words get the whole width.
-        let layout =
-            typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
-        layout {
-            if row.noGps {
-                NoGpsTag()
-            } else {
-                RouteThumb(route: row.route)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(heading)
-                    .font(.plexSans(.subheadline))
-                Text(row.headline)
-                    .font(.plexMono(.body, weight: .semibold))
-                    .foregroundStyle(Palette.fg)
-                Text(row.detail)
-                    .font(.plexMono(.subheadline))
-                    .foregroundStyle(Palette.muted)
-                if let note = row.note {
-                    Text(note)
-                        .font(.plexSans(.subheadline))
-                        .foregroundStyle(Palette.split)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.plexSans(.subheadline, weight: .semibold))
-                .foregroundStyle(Palette.muted)
-                .accessibilityHidden(true)
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// "Sun, 13 Sep 2026 · Tracker" in muted, then " · K1" in the split colour.
-    private var heading: AttributedString {
-        var text = AttributedString(row.heading)
-        text.foregroundColor = Palette.muted
-        if let boatClass = row.boatClass {
-            var boat = AttributedString(" · \(boatClass)")
-            boat.foregroundColor = Palette.split
-            text += boat
-        }
-        return text
-    }
-}
-
-/// In place of a route for a paddle without GPS: the web's `NoGpsTag`.
-/// At least the thumbnail's 64 pt, and bigger when the text is: a fixed box
-/// cut the words to "N…" at the largest text sizes.
-struct NoGpsTag: View {
-    var body: some View {
-        Text("NO GPS")
-            .font(.plexMono(.caption, weight: .medium))
-            .foregroundStyle(Palette.muted)
-            .multilineTextAlignment(.center)
-            .padding(6)
-            .frame(minWidth: 64, minHeight: 64)
-            .background(Palette.bg)
-            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.borderStrong))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.control))
-            .accessibilityLabel("No GPS")
-    }
-}
-
-/// The logbook card: this week, this month, the streak, and the last twelve
-/// weeks as bars.
-struct LogbookView: View {
-    let logbook: LogbookSummary
-    let inAll: String?
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    private var stats: [PaddleSummary.Stat] { [logbook.thisWeek, logbook.thisMonth, logbook.streak] }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Three stats side by side, or one under another from xxLarge text
-            // up, where three columns cut the labels short ("THIS MONTH").
-            if typeSize >= .xxLarge {
-                VStack(alignment: .leading, spacing: 12) { statViews }
-            } else {
-                HStack(alignment: .top, spacing: 12) { statViews }
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                Eyebrow("LAST 12 WEEKS")
-                if logbook.isQuiet {
-                    Text("No paddles in the last 12 weeks.")
-                        .font(.plexSans(.subheadline))
-                        .foregroundStyle(Palette.muted)
-                } else {
-                    Chart(logbook.weeks, id: \.start) { week in
-                        // The readable blue, not the button blue: bars need 3:1
-                        // against the card. This week is drawn in the text colour.
-                        BarMark(x: .value("Week", week.start), y: .value("Kilometres", week.km))
-                            .foregroundStyle(week.start == logbook.weeks.last?.start ? Palette.fg : Palette.primaryText)
-                    }
-                    .chartXAxis(.hidden)
-                    .chartYAxis(.hidden)
-                    .frame(height: 64)
-                    .accessibilityLabel("Kilometres a week for the last 12 weeks")
-                }
-            }
-            if let inAll {
-                Text(inAll)
-                    .font(.plexSans(.subheadline))
-                    .foregroundStyle(Palette.muted)
-            }
-        }
-        .padding(.vertical, 8)
-        .accessibilityIdentifier("logbook")
-    }
-
-    @ViewBuilder private var statViews: some View {
-        ForEach(stats, id: \.label) { stat in
-            StatView(label: stat.label.uppercased(), value: stat.value, sub: stat.sub)
         }
     }
 }
