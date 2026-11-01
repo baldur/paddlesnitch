@@ -1,11 +1,15 @@
 import XCTest
 
-/// #793: buttons are drawn with the control radius (6 pt, the token's
-/// `rounded-control`), not as pills. iOS 26 draws bordered buttons as
+/// #793: buttons are drawn with a small corner radius (the token's
+/// `rounded-control`, 6 pt), not as pills. iOS 26 draws bordered buttons as
 /// capsules unless the app says otherwise. Read from the pixels: 6 pt along
-/// the top edge, a 6 pt corner is already filled, where a 44 pt pill's
-/// corner (22 pt) is still background; 1 pt in from the corner is
-/// background either way, so the button isn't square either.
+/// the top edge is already the fill for any radius up to about 11 pt, where
+/// a pill's (half the button's height) is still background; 1 pt in from
+/// the corner is background, so it isn't square either. The exact radius
+/// is the token's (the PaddleKit `ButtonShapeTests`).
+///
+/// On iOS 17 the system's own shape is already a small rounded rectangle,
+/// so these can't fail there: the newest-iOS run is the one that counts.
 final class ButtonShapeTests: AppTestCase {
     func testAButtonOnPaddlesHasControlCorners() {
         let button = app.buttons["sample-notice-action"]
@@ -18,14 +22,25 @@ final class ButtonShapeTests: AppTestCase {
         app.buttons["sample-notice-action"].tap()
         let button = app.buttons["sign-in-submit"]
         XCTAssertTrue(button.appears(timeout: 10))
-        // Read once the sheet has stopped moving: mid-slide, the screenshot is
-        // of what's under the button's place.
+        // Read once the frame stops changing. Before this wait, one local
+        // run read the screenshot from the wrong place while the sheet
+        // was coming up; XCTest's own wait for an idle app didn't cover it.
         var last = CGRect.null
         XCTAssertTrue(
             poll(timeout: 5) {
                 defer { last = button.frame }
                 return button.frame == last
             }, "the sheet settles")
+        assertControlCorners(button)
+    }
+
+    /// The record screen is a full-screen cover, which also doesn't inherit
+    /// the window's setting.
+    func testAButtonOnTheRecordScreenHasControlCorners() {
+        signInAndWait()
+        openRecord()
+        let button = app.buttons["record-start"]
+        XCTAssertTrue(button.appears(timeout: 10))
         assertControlCorners(button)
     }
 
