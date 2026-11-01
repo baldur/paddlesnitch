@@ -67,6 +67,17 @@ describe('buildPrompt', () => {
     expect(buildPrompt(result(), { sport: 'Kayaking' })).toContain('Sport: KAYAKING')
   })
 
+  it('writes an old "fading" effort as "slowed" (the site never says faded)', () => {
+    const r = { ...result(), surges: [{ fromT: 60, durS: 120, avgSpeed: 3, avgSR: 60, srCv: 3, trend: 'fading' }] } as unknown as AnalysisResult
+    expect(buildPrompt(r)).toMatch(/pace 2:47\/500, 60 spm \(3% variation\), slowed\./)
+    expect(buildPrompt(r)).not.toContain('fading')
+  })
+
+  it('gives the total rest time, so the model never adds rests up itself', () => {
+    const p = buildPrompt({ ...result(), stops: [{ fromT: 600, durS: 90 }, { fromT: 1500, durS: 150 }] } as unknown as AnalysisResult)
+    expect(p).toContain('Rests: 2, 4 minutes in total (10:00 for 90s, 25:00 for 150s).')
+  })
+
   it('omits the sport line when the sport is unknown', () => {
     expect(buildPrompt(result(), { sport: 'Ride' })).not.toContain('Sport:')
     expect(buildPrompt(result())).not.toContain('Sport:')

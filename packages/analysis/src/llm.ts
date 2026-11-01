@@ -10,7 +10,7 @@ import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, fmtDurWords, split500, roundStrokes } from './analysis'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
 import type { SectionRace, Racer, SectionStats } from './similar'
-import { voicePrompt, summaryProblems } from './voice'
+import { voicePrompt, summaryProblems, numbersNotInFacts, tidyDraft } from './voice'
 
 // The paddlesnitch voice (voice.ts): who speaks, the rules and the examples.
 export const SYSTEM = voicePrompt()
@@ -91,17 +91,24 @@ export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string
     if (c?.flowM3s != null) bits.push(`river flow ${c.flowM3s.toFixed(1)} m³/s${c.flowStation ? ` (${c.flowStation})` : ''}`)
     L.push(`Conditions: ${bits.join('; ')}.`)
   }
-  if (r.stops.length) L.push(`Rests: ${r.stops.length} (${r.stops.map(s => `${fmtDur(s.fromT)} for ${Math.round(s.durS)}s`).join(', ')}).`)
+  if (r.stops.length) L.push(restsLine(r.stops))
   if (r.surges.length) {
     L.push(`Efforts (${r.surges.length}):`)
     r.surges.forEach((s: Segment, i) => {
-      L.push(`  ${i + 1}) at ${fmtDur(s.fromT)}, ${fmtDur(s.durS)}, pace ${split500(s.avgSpeed)}/500${s.avgSR != null ? `, ${Math.round(s.avgSR)} spm${s.srCv != null ? ` (${s.srCv.toFixed(0)}% variation)` : ''}` : ''}${s.trend ? `, ${s.trend}` : ''}.`)
+      L.push(`  ${i + 1}) at ${fmtDur(s.fromT)}, ${fmtDur(s.durS)}, pace ${split500(s.avgSpeed)}/500${s.avgSR != null ? `, ${Math.round(s.avgSR)} spm${s.srCv != null ? ` (${s.srCv.toFixed(0)}% variation)` : ''}` : ''}${s.trend ? `, ${s.trend === 'fading' ? 'slowed' : s.trend}` : ''}.`)
     })
   }
   const sets = r.sets.filter(s => s.count > 1)
   if (sets.length) L.push(`Sets detected: ${sets.map(s => `${s.count} × ~${fmtDur(s.avgDurS)} @ ${split500(s.avgSpeed)}/500`).join('; ')}.`)
   if (!r.surges.length) L.push('No distinct efforts — this was a steady paddle.')
   return withHistory(L.join('\n'), ctx)
+}
+
+// Rests with their total worked out here, so the model has no sum to do
+// (it added them up itself, and got it wrong, in the 2026-11-01 benchmark).
+function restsLine(stops: Segment[]): string {
+  const total = stops.reduce((t, s) => t + s.durS, 0)
+  return `Rests: ${stops.length}, ${fmtDurWords(total)} in total (${stops.map(s => `${fmtDur(s.fromT)} for ${Math.round(s.durS)}s`).join(', ')}).`
 }
 
 // A paddle without a map (#414): only what the motion data shows.
@@ -111,7 +118,7 @@ function motionFacts(r: AnalysisResult): string[] {
     'The GPS failed, so there is NO distance, speed, pace or route. Do not mention, guess or estimate any of them.',
   ]
   if (r.avgSR != null) L.push(`Stroke rate ~${Math.round(r.avgSR)} spm, about ${roundStrokes(r.noGps?.strokes ?? 0)} strokes.`)
-  if (r.stops.length) L.push(`Rests: ${r.stops.length} (${r.stops.map(s => `${fmtDur(s.fromT)} for ${Math.round(s.durS)}s`).join(', ')}).`)
+  if (r.stops.length) L.push(restsLine(r.stops))
   return L
 }
 
@@ -245,12 +252,15 @@ export async function generateInsight(result: AnalysisResult, ctx: InsightContex
   let prompt: string
   try { prompt = buildPrompt(result, ctx) }
   catch (err) { console.error('[llm] prompt build failed', err); return null }
-  const first = (await run(SYSTEM, prompt))?.trim()
+  const first = tidyDraft((await run(SYSTEM, prompt)) ?? '')
   if (!first) return null
   const problems = summaryProblems(first, prompt)
   if (!problems.length) return first
-  const again = `${prompt}\n\nYour draft:\n${first}\n\nThe draft breaks the voice: ${problems.join('; ')}. Write the note again, keeping every rule.`
-  const second = (await run(SYSTEM, again))?.trim()
+  const unknown = numbersNotInFacts(first, prompt)
+  const again = `${prompt}\n\nYour draft:\n${first}\n\nThe draft breaks the voice: ${problems.join('; ')}.`
+    + (unknown.length ? ` Leave out ${unknown.join(', ')}: do not replace them with other numbers you work out or choose; use a number from the facts or none.` : '')
+    + ' Write the note again, keeping every rule.'
+  const second = tidyDraft((await run(SYSTEM, again)) ?? '')
   if (second && !summaryProblems(second, prompt).length) return second
   console.warn('[llm] summary kept the plain one: the draft broke the voice twice', { problems: problems.length })
   return null

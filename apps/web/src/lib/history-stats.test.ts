@@ -88,6 +88,18 @@ describe('selectRelevantPaddles', () => {
     expect(renderRelevant(rel)).toContain('comparable past paddles')
   })
 
+  // A lower time per 500 m is faster; the model read "3:15 vs 3:25" backwards
+  // (2026-11-01), so the line says which way it went.
+  it('says whether this paddle was faster or slower than each past one', () => {
+    const past = (id: string, cruiseSpeed: number) => ({ summary: paddle({ id, cruiseSpeed }), reason: 'same spot' })
+    const out = renderRelevant([past('slow', 500 / 205), past('quick', 500 / 185), past('same', 500 / 195)], { cruiseSpeed: 500 / 195 })
+    expect(out).toContain('cruise 3:25/500')
+    expect(out).toMatch(/3:25\/500.*this paddle 10s\/500 faster/)
+    expect(out).toMatch(/3:05\/500.*this paddle 10s\/500 slower/)
+    expect(out).toContain('this paddle the same cruise pace')
+    expect(renderRelevant([past('slow', 500 / 205)])).not.toContain('this paddle')
+  })
+
   it('returns nothing when no paddle is relevant', () => {
     const prior = [paddle({ startLat: 40, startLng: 40, boatClass: '8+', distanceKm: 40 })]
     expect(selectRelevantPaddles(current, prior)).toEqual([])

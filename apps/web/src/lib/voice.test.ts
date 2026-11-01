@@ -2,7 +2,7 @@
 // the check that rejects AI-sounding or made-up drafts, and generateInsight's
 // one retry before the plain summary stands.
 import { describe, it, expect, vi } from 'vitest'
-import { summaryProblems, EXAMPLES, voicePrompt, VOICE } from '@paddlesnitch/analysis/voice'
+import { summaryProblems, EXAMPLES, voicePrompt, VOICE, tidyDraft, numbersNotInFacts } from '@paddlesnitch/analysis/voice'
 import { generateInsight, buildPrompt, SYSTEM } from '@paddlesnitch/analysis/llm'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 
@@ -49,9 +49,28 @@ describe('summaryProblems', () => {
     expect(summaryProblems(Array(71).fill('steady').join(' '), FACTS)).toEqual(['it is longer than 70 words'])
   })
 
+  it('allows a dash in a range of numbers ("2:46–2:49/500")', () => {
+    expect(summaryProblems('Efforts at 2:31–2:45/500.', FACTS)).toEqual([])
+  })
+
   it('matches whole words only ("catchment" and "feeling" differ from "catch"; "solidly" is not "solid")', () => {
     expect(summaryProblems('The river catchment was high.', FACTS)).toEqual([])
     expect(summaryProblems('A solidly steady paddle.', FACTS)).toEqual([])
+  })
+})
+
+describe('tidyDraft', () => {
+  it('turns a dash between words into a comma, and leaves a range of numbers', () => {
+    expect(tidyDraft(' Cruising at 2:45/500 — 2.9 m per stroke. ')).toBe('Cruising at 2:45/500, 2.9 m per stroke.')
+    expect(tidyDraft('Steady—64 spm.')).toBe('Steady, 64 spm.')
+    expect(tidyDraft('Steady - 64 spm, a well-paced row.')).toBe('Steady, 64 spm, a well-paced row.')
+    expect(tidyDraft('Efforts at 2:31–2:45/500.')).toBe('Efforts at 2:31–2:45/500.')
+  })
+})
+
+describe('numbersNotInFacts', () => {
+  it('lists each number the facts never gave, once', () => {
+    expect(numbersNotInFacts('Hold 2:31/500 for 45 seconds, then 45 more and 300 m.', FACTS)).toEqual(['45', '300'])
   })
 })
 
@@ -91,6 +110,18 @@ describe('generateInsight keeps to the voice', () => {
     expect(retry).toContain(buildPrompt(result()))
     expect(retry).toContain('Impressive work today!')
     expect(retry).toMatch(/"impressive".*exclamation mark/)
+  })
+
+  it('names the numbers to leave out when a draft invents some', async () => {
+    const run = vi.fn().mockResolvedValueOnce('A steady 4.2 km; next time hold 61 spm for 300 m.').mockResolvedValueOnce('A steady 4.2 km at 58 spm.')
+    expect(await generateInsight(result(), {}, run)).toBe('A steady 4.2 km at 58 spm.')
+    expect(run.mock.calls[1][1]).toMatch(/Leave out 61, 300: do not replace them/)
+  })
+
+  it('fixes a dash used as punctuation without a retry', async () => {
+    const run = vi.fn().mockResolvedValue('A steady 4.2 km — 58 spm throughout.')
+    expect(await generateInsight(result(), {}, run)).toBe('A steady 4.2 km, 58 spm throughout.')
+    expect(run).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the plain summary (null) when the second draft fails too', async () => {

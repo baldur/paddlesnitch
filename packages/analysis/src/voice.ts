@@ -18,7 +18,7 @@ export const VOICE = [
   'Shape: two or three sentences, under 60 words, as one short paragraph.',
   '1. Lead with the one thing worth knowing about this paddle, with its number.',
   '2. Put it in context: their own record, the conditions, or what the number means.',
-  '3. Optionally, one thing to try next time, tied to a number from the facts.',
+  'No advice or targets for next time: the note says what happened, not what to do.',
   'If nothing stands out, say it was a steady paddle and give the numbers that show it.',
   '',
   'Rules:',
@@ -26,6 +26,7 @@ export const VOICE = [
   '  posture, feel, effort, tiredness or mood, and never compare them with other paddlers.',
   '- Use only numbers exactly as they appear in the facts. Never add, subtract, multiply or convert them: if the facts',
   '  give no difference or total, do not state one.',
+  '- Vary how notes begin and end.',
   '- No praise words (great, nice, impressive, solid, excellent, strong work), no exclamation marks, no dashes as',
   '  punctuation, no "journey", no motivational closing line, no questions.',
   '- Say what changed, not why: "slowed", never "faded" or "tired".',
@@ -33,6 +34,7 @@ export const VOICE = [
   '- Rowing: say "rate" or "rating", and "row" or "piece". Kayak, canoe and SUP: say "stroke rate" and "paddle".',
   '- Durations the natural way: "1 hour 20 minutes", never "80 minutes". Pace is per 500 m, written like 2:31/500.',
   '- If profile, history or past paddles are given, use at most one of them, and only if it matters for this paddle.',
+  '- A lower time per 500 m is faster. When comparing with a past paddle, use the faster or slower the facts state.',
   '- No preamble, no lists, no markdown: just the paragraph.',
 ].join('\n')
 
@@ -55,8 +57,7 @@ export const EXAMPLES: { facts: string; summary: string }[] = [
       'Cruise pace was 4s/500 FASTER than their 90-day average.',
     ].join('\n'),
     summary: 'Four efforts, each quicker than the one before, the last at 2:22/500 even though it slowed towards the end. '
-      + 'Cruising pace was 4 seconds per 500 m quicker than your 90-day average. '
-      + 'Next time, try holding 66 spm for the whole of that last effort.',
+      + 'Cruising pace was 4 seconds per 500 m quicker than your 90-day average.',
   },
   {
     facts: [
@@ -69,8 +70,7 @@ export const EXAMPLES: { facts: string; summary: string }[] = [
       'No distinct efforts — this was a steady paddle.',
     ].join('\n'),
     summary: 'A steady 9.8 km at a rating of 20 and 2:38/500, with only 4% variation in the rate. '
-      + 'Into 18 km/h of wind, 8.4 m per stroke is the number to watch. '
-      + 'Keep the rate at 20 next time and see if that run per stroke grows.',
+      + 'Into 18 km/h of wind, that came from 8.4 m per stroke rather than a higher rate.',
   },
   {
     facts: [
@@ -82,7 +82,7 @@ export const EXAMPLES: { facts: string; summary: string }[] = [
       'First paddle back after 19 days off.',
     ].join('\n'),
     summary: 'First paddle in 19 days: 5.1 km at 3:42/500 and 44 strokes a minute, in one steady block. '
-      + 'A sensible way back in. Add one effort next time to see where the pace is.',
+      + 'A sensible way back in.',
   },
   {
     facts: [
@@ -123,7 +123,7 @@ export const BANNED_PHRASES = [
   'impressive', 'impressively', 'amazing', 'awesome', 'fantastic', 'incredible', 'remarkable', 'exceptional',
   'excellent', 'outstanding', 'stellar', 'solid', 'rock-solid', 'journey', 'testament', 'showcase', 'showcasing',
   'showcased', 'kudos', 'poise', 'gem', 'jewel', 'second nature', 'muscle memory', 'next level', 'dial in',
-  'dialled in', 'crushed', 'crushing', 'smashed', 'nailed', 'you\'ve got this', 'foundation', 'truly', 'clearly',
+  'dialled in', 'fade', 'fades', 'faded', 'fading', 'next time', 'crushed', 'crushing', 'smashed', 'nailed', 'you\'ve got this', 'foundation', 'truly', 'clearly',
   'it\'s clear', 'masterclass', 'standout', 'stand out', 'stood out',
 ]
 
@@ -169,12 +169,26 @@ export function summaryProblems(text: string, facts: string): string[] {
   const claims = UNSUPPORTED_CLAIMS.filter(p => hasWord(t, p))
   if (claims.length) out.push(`it describes things the numbers can't show: ${claims.map(c => `"${c}"`).join(', ')}`)
   if (t.includes('!')) out.push('it has an exclamation mark')
-  if (/[—–]|\s-\s/.test(t)) out.push('it uses a dash as punctuation')
+  if (/[—]|\s[–-]\s|[^\d:/][–]|[–][^\d]/.test(t)) out.push('it uses a dash as punctuation')
   if (t.includes('?')) out.push('it asks a question')
   if (/^\s*[-*#]|\n\s*[-*#]/.test(t)) out.push('it uses a list or heading')
   if (words(t).length > MAX_WORDS) out.push(`it is longer than ${MAX_WORDS} words`)
-  const factNums = numbersIn(facts)
-  const unknown = [...new Set(numbersIn(t).filter(n => !numberSupported(n, factNums)))]
+  const unknown = numbersNotInFacts(t, facts)
   if (unknown.length) out.push(`it uses numbers that are not in the facts: ${unknown.join(', ')}`)
   return out
+}
+
+/** The numbers a draft uses that the facts don't give. */
+export function numbersNotInFacts(text: string, facts: string): string[] {
+  const factNums = numbersIn(facts)
+  return [...new Set(numbersIn(text).filter(n => !numberSupported(n, factNums)))]
+}
+
+/**
+ * Mechanical fixes before the check, so a sound note isn't lost to
+ * punctuation: a dash between words becomes a comma. A dash in a range of
+ * numbers ("2:46–2:49/500") stays.
+ */
+export function tidyDraft(text: string): string {
+  return text.trim().replace(/\s+[—–-]\s+|\s*—\s*/g, ', ').replace(/,\s*,/g, ',')
 }

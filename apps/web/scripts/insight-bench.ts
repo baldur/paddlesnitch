@@ -84,7 +84,7 @@ async function main() {
       sport: session.source.type === 'strava' ? session.source.sport : undefined,
       profile: profile?.text,
       historyFacts: renderHistoryFacts(computeHistoryStats(facts, prior, asOf)),
-      relevant: renderRelevant(selectRelevantPaddles(facts, prior)),
+      relevant: renderRelevant(selectRelevantPaddles(facts, prior), facts),
     }
     const prompt = buildPrompt(r, ctx)
     const notes: Record<string, unknown> = {}

@@ -171,16 +171,30 @@ export function historyBits(h: SessionSummary): string[] {
     : [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
 }
 
-export function renderRelevant(list: RelevantPaddle[]): string {
+// With the current paddle given, each line says whether this paddle's cruise
+// was faster or slower, worked out here: models read "3:15 vs 3:25" backwards
+// (a lower time per 500 m is faster) in the 2026-11-01 benchmark.
+export function renderRelevant(list: RelevantPaddle[], current?: Pick<PaddleFacts, 'cruiseSpeed'>): string {
   if (!list.length) return ''
   const lines = list.map(({ summary: h, reason }) => {
     const bits = historyBits(h)
     if (h.avgSR != null) bits.push(`${Math.round(h.avgSR)}spm`)
+    const cmp = current && !isMotionOnly(h) ? paceVs(current.cruiseSpeed, h.cruiseSpeed) : ''
+    if (cmp) bits.push(cmp)
     let line = `  - ${bits.join(', ')}${reason ? ` (${reason})` : ''}.`
     if (h.note?.trim()) line += ` Note: "${h.note.trim().slice(0, 120)}"`
     return line
   })
   return `\nTheir most comparable past paddles:\n${lines.join('\n')}`
+}
+
+// "this paddle 10s/500 faster" / "slower" / "same cruise pace", or '' when
+// either speed is missing.
+function paceVs(now: number, then: number): string {
+  if (!(now > 0) || !(then > 0)) return ''
+  const d = Math.round(500 / then - 500 / now)
+  if (d === 0) return 'this paddle the same cruise pace'
+  return `this paddle ${Math.abs(d)}s/500 ${d > 0 ? 'faster' : 'slower'}`
 }
 
 // ---- Highlights on the paddle page ----
