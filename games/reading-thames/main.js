@@ -169,7 +169,7 @@ let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprint
 let stuck = { left: 2, for: 0, s: 0 }; // back-paddling tips still to give this race, and how long you've been getting nowhere (stuckHint)
 const TOUCH_HELP = document.getElementById('touchhelp').textContent;
 // On your own or in a time trial you wait for the horn (paddle early and you're called back).
-const afterHorn = (line) => (race.racers.length === 1 || race.format === 'interval' ? `After the horn: ${line[0].toLowerCase()}${line.slice(1)}` : line);
+const afterHorn = (line) => (race.racers.length === 1 || race.format === 'interval' || race.easy ? `After the horn: ${line[0].toLowerCase()}${line.slice(1)}` : line);
 // The same line on a keyboard or a pad: the rest is taught as it comes up (teach.js).
 const KEY_HELP = '\u2190 \u2192 (or LT, RT) to paddle, left then right \u00b7 Q E (or the left stick) to steer \u00b7 A D (or the right stick) to lean';
 const taught = (() => { try { return loadTaught(localStorage); } catch { return new Set(); } })();
@@ -196,6 +196,7 @@ function reset() {
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
     // A drill is about the one thing: no swans or other boats in the way.
     birds: !mode.drill, traffic: !mode.drill,
+    easy: asRace,
   });
   drill = mode.drill ? setupDrill(race, mode.drill) : null;
   // Practice also sharpens your feel for the beat.
@@ -886,7 +887,7 @@ function arrive(place) {
   // Nothing paddled yet: straight into the open race (anyone can, signed in or
   // not), always a race, whatever format was last picked; it teaches as it goes.
   else if (place === 'path' && !hiring) {
-    spots.unshift({ card: { name: 'Try it now', line: `A race: ${MODES[OPEN_RACE].label}` }, act: () => choose(OPEN_RACE, { race: true }), go: true });
+    spots.unshift({ card: { name: 'Try it now', line: `A 7.9 km race against ${MODES[OPEN_RACE].rivals.length} others` }, act: () => choose(OPEN_RACE, { race: true }), go: true });
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
@@ -1772,7 +1773,7 @@ function react({ events, splashes }) {
     }
     if (e === 'line-up') show(race.start.holds ? 'Come back up to the line' : race.racers.length > 1 ? 'Paddle up into a gap on the line' : 'Wait for the horn', { small: true, hold: 3 });
     if (e === 'nudge') show('Paddle up to the line and stop', { small: true, hold: 3 });
-    if (e === 'ready') show('Are you ready?', { small: true, hold: 1 });
+    if (e === 'ready') show('Are you ready?', { small: true, hold: 1, now: true }); // the horn's only warning with the sound off
     if (e === 'go') {
       state = 'racing';
       show('Go!', { hold: 0.6 });
@@ -2728,6 +2729,7 @@ if (HASH.has('debug')) {
     get mode() { return mode; },
     get format() { return formatOf(mode); },
     clubAt: (place) => arrive(place),
+    finish, // the finish dialog (tests check it fits a phone)
     submitResult, // the finish's leaderboard line (tests check it signed out)
     show, // a message, as the race would show it (tests check where it lands)
   };

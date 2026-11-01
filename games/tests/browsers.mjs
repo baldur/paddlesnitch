@@ -208,8 +208,8 @@ async function play(c, page, errors) {
     if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
     if (c.tryIt) {
       await page.waitForFunction(() => window.kayak.mode?.key === 'hasler79' && window.kayak.race?.racers.length > 1, null, { timeout: 60_000 }).catch(() => {});
-      const got = await page.evaluate(() => ({ racers: window.kayak.race.racers.length, course: window.kayak.mode?.key, format: window.kayak.format }));
-      if (!(got.racers > 1 && got.course === 'hasler79' && got.format === 'mass')) errors.push(`Try it now started ${JSON.stringify(got)}, expected the Hasler Div 7-9 race`);
+      const got = await page.evaluate(() => ({ racers: window.kayak.race.racers.length, course: window.kayak.mode?.key, format: window.kayak.format, easy: window.kayak.race.easy, help: document.getElementById('touchhelp').textContent }));
+      if (!(got.racers > 1 && got.course === 'hasler79' && got.format === 'mass' && got.easy && got.help.startsWith('After the horn'))) errors.push(`Try it now started ${JSON.stringify(got)}, expected the Hasler Div 7-9 race`);
       const after = await page.evaluate(async () => {
         await window.kayak.submitResult(100);
         const ranked = document.getElementById('ranked');
@@ -472,6 +472,23 @@ async function play(c, page, errors) {
       if (boat !== id) errors.push(`hired the ${boat}, picked ${id}`);
       if (closed?.props.course !== `hire-${id}`) errors.push(`analytics course ${closed?.props.course}, expected hire-${id}`);
     }
+  }
+  // The finish on a small phone, signed out (its extra line), with every
+  // button: all of them on screen without scrolling.
+  if (c.course === 'hasler79' && c.touch) {
+    await page.evaluate(() => {
+      const { race } = window.kayak;
+      race.player.finish = race.time + 400;
+      window.kayak.finish();
+    });
+    await page.waitForFunction(() => document.getElementById('finished').open, null, { timeout: 15_000 });
+    const cut = await page.evaluate(() => {
+      document.getElementById('ranked').textContent = 'Sign in to put your time on the leaderboard.';
+      const dialog = document.getElementById('finished');
+      for (const b of dialog.querySelectorAll('button')) b.hidden = false;
+      return [...dialog.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().bottom > Math.min(innerHeight, dialog.getBoundingClientRect().bottom)).map((b) => b.textContent);
+    });
+    if (cut.length) errors.push(`the finish on a phone hides ${cut.join(', ')} below the fold`);
   }
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
 }

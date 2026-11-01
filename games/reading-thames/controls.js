@@ -76,6 +76,10 @@ export class Controls {
     addEventListener('keyup', (e) => this.#held.delete(e.code));
     addEventListener('blur', () => this.#held.clear());
 
+    // A touch anywhere (the button that started the race, too) means touch play:
+    // balance help before the first tap on the water.
+    addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.#touching = true; });
+
     // Touch: tap the left or right half of the screen to stroke on that side,
     // swipe down for a back stroke; slide a finger that's down to steer.
     target.addEventListener('pointerdown', (e) => {

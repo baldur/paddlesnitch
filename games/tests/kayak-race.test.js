@@ -452,3 +452,21 @@ test("a boat in a pack heading for its place goes round a swan in its way now, t
   assert.equal(me.boat.capsizes, 0, 'into the swan');
   assert.ok(passed > 0.5 + 1, `passed at ${passed?.toFixed(2)}, the swan at 0.5`);
 });
+
+test("a first race (easy): you start in a gap on the line, strokes don't move you before the horn, and the horn comes", () => {
+  const race = createRace(raceRiver(), { rivals: DIVISION_9, seed: 5, easy: true });
+  const { player } = race;
+  const bow = (r) => r.loc.s + 3.3;
+  assert.ok(Math.abs(bow(player) - race.start.line) < 1.5, 'on the line');
+  assert.ok(race.gaps.some((g) => Math.abs(player.loc.lateral - g) < 0.5), 'in a gap');
+  const s0 = player.loc.s;
+  const calls = [];
+  // A newcomer paddling hard from the first second, as the controls line says.
+  for (let i = 0; i < 120 * 60 && !started(race); i++) {
+    const strokes = i % 40 === 0 ? [i % 80 === 0 ? 'left' : 'right'] : [];
+    const { events } = stepRace(race, DT, { strokes, rudder: 0, lean: balance(player.boat) });
+    calls.push(...events.filter((e) => ['hold', 'go'].includes(e)));
+    if (!started(race)) assert.ok(player.loc.s - s0 < 0.5, 'no further up before the horn');
+  }
+  assert.deepEqual(calls, ['go'], 'the horn, and never a jumped start');
+});
