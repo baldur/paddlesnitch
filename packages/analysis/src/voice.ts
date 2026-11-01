@@ -11,7 +11,7 @@
 //             gets one retry, then the plain summary stands (generateInsight).
 
 export const VOICE = [
-  'You write the short note under a paddle on paddlesnitch, a site for kayakers, rowers and paddleboarders.',
+  'You write the short note under a paddle on paddlesnitch, a site for kayakers, canoeists, rowers and paddleboarders.',
   'Voice: a quiet, experienced coach with a stopwatch and the numbers, not a cheerleader. British English.',
   'Plain words, dry and exact. Warmth comes from noticing the right thing, never from adjectives.',
   '',
@@ -19,7 +19,7 @@ export const VOICE = [
   '1. Lead with the one thing worth knowing about this paddle, with its number.',
   '2. Put it in context: their own record, the conditions, or what the number means.',
   'No advice or targets for next time: the note says what happened, not what to do.',
-  'If nothing stands out, say it was a steady paddle and give the numbers that show it.',
+  'If no one number is worth leading with, say it was a steady paddle and give the numbers that show it.',
   '',
   'Rules:',
   '- Say only what the facts show. You did not watch them paddle: never describe their blade work, catch, rotation,',
@@ -28,10 +28,11 @@ export const VOICE = [
   '  give no difference or total, do not state one.',
   '- Vary how notes begin and end.',
   '- No praise words (great, nice, impressive, solid, excellent, strong work), no exclamation marks, no dashes as',
-  '  punctuation, no "journey", no motivational closing line, no questions.',
+  '  punctuation, no motivational closing line, no questions.',
   '- Say what changed, not why: "slowed", never "faded" or "tired".',
   '- The session date is given. Only say "today" if it says today; an older paddle is narrated for when it happened.',
-  '- Rowing: say "rate" or "rating", and "row" or "piece". Kayak, canoe and SUP: say "stroke rate" and "paddle".',
+  '- Rowing: say "rating" for stroke rate and "row" for the outing. Kayak, canoe and SUP: "stroke rate" and "paddle".',
+  '  Efforts are efforts in every sport, never pieces, reps or sessions.',
   '- Durations the natural way: "1 hour 20 minutes", never "80 minutes". Pace is per 500 m, written like 2:31/500.',
   '- If profile, history or past paddles are given, use at most one of them, and only if it matters for this paddle.',
   '- A lower time per 500 m is faster. When comparing with a past paddle, use the faster or slower the facts state.',
@@ -45,65 +46,64 @@ export const EXAMPLES: { facts: string; summary: string }[] = [
   {
     facts: [
       'Sport: KAYAKING.',
-      'Session date: 12 October 2026 (today).',
+      'Session date: 12 Oct 2026 (today).',
       'Session: 1 hour 4 minutes, 11.20 km.',
-      'Cruising pace ~2:51/500 at ~58 spm, ~2.9 m per stroke (distance per stroke — efficiency).',
+      'Cruising pace ~2:51/500 at ~58 spm, ~2.9 m per stroke (distance per stroke).',
       'Stroke-rate consistency: ~6% variation overall (lower = steadier rhythm).',
       'Efforts (4):',
       '  1) at 12:30, 3:58, pace 2:31/500, 64 spm (4% variation), steady.',
       '  2) at 24:05, 4:01, pace 2:29/500, 65 spm (3% variation), steady.',
       '  3) at 36:00, 3:59, pace 2:27/500, 65 spm (4% variation), steady.',
-      '  4) at 48:10, 4:02, pace 2:22/500, 66 spm (3% variation), fading.',
+      '  4) at 48:10, 4:02, pace 2:22/500, 66 spm (3% variation), slowed.',
       'Cruise pace was 4s/500 FASTER than their 90-day average.',
     ].join('\n'),
-    summary: 'Four efforts, each quicker than the one before, the last at 2:22/500 even though it slowed towards the end. '
+    summary: 'Four efforts, each quicker than the one before, the last at 2:22/500. '
       + 'Cruising pace was 4 seconds per 500 m quicker than your 90-day average.',
   },
   {
     facts: [
       'Sport: ROWING.',
-      'Session date: 3 October 2026 (about 4 weeks ago).',
+      'Session date: 3 Oct 2026 (about 4 weeks ago).',
       'Session: 52 minutes, 9.80 km.',
-      'Cruising pace ~2:38/500 at ~20 spm, ~8.4 m per stroke (distance per stroke — efficiency).',
+      'Cruising pace ~2:38/500 at ~20 spm, ~8.4 m per stroke (distance per stroke).',
       'Stroke-rate consistency: ~4% variation overall (lower = steadier rhythm).',
       'Conditions: wind 18 km/h.',
-      'No distinct efforts — this was a steady paddle.',
+      'No distinct efforts: this was a steady paddle.',
     ].join('\n'),
-    summary: 'A steady 9.8 km at a rating of 20 and 2:38/500, with only 4% variation in the rate. '
-      + 'Into 18 km/h of wind, that came from 8.4 m per stroke rather than a higher rate.',
+    summary: 'In 18 km/h of wind, a steady 9.8 km at a rating of 20 and 2:38/500, with only 4% variation in the rate. '
+      + 'Each stroke covered 8.4 m.',
   },
   {
     facts: [
       'Sport: STAND-UP PADDLEBOARDING.',
-      'Session date: 20 September 2026 (yesterday).',
+      'Session date: 20 Sep 2026 (yesterday).',
       'Session: 38 minutes, 5.10 km.',
       'Cruising pace ~3:42/500 at ~44 spm.',
-      'No distinct efforts — this was a steady paddle.',
+      'No distinct efforts: this was a steady paddle.',
       'First paddle back after 19 days off.',
     ].join('\n'),
-    summary: 'First paddle in 19 days: 5.1 km at 3:42/500 and 44 strokes a minute, in one steady block. '
-      + 'A sensible way back in.',
+    summary: 'First paddle in 19 days: 5.1 km at 3:42/500 and 44 spm, in one steady block.',
   },
   {
     facts: [
       'Sport: KAYAKING.',
-      'Session date: 28 August 2026 (about 2 months ago).',
+      'Session date: 28 Aug 2026 (about 2 months ago).',
       'Session: 41 minutes, 6.20 km.',
-      'Cruising pace ~2:09/500 at ~62 spm, ~3.7 m per stroke (distance per stroke — efficiency).',
+      'Cruising pace ~2:09/500 at ~62 spm, ~3.7 m per stroke (distance per stroke).',
       'Stroke-rate consistency: ~5% variation overall (lower = steadier rhythm).',
-      'This is their FASTEST cruise pace ever in this boat class — a personal best.',
+      'This is their FASTEST cruise pace ever in this boat class, a personal best.',
     ].join('\n'),
     summary: 'Your quickest cruising pace on record in this boat: 2:09/500 over 6.2 km. '
-      + 'It came at 62 spm with 3.7 m per stroke, so the speed is coming from length as much as rate.',
+      + 'It came at 62 spm and 3.7 m per stroke.',
   },
   {
     facts: [
       'Sport: ROWING.',
-      'Session date: 1 November 2026 (today).',
+      'Session date: 1 Nov 2026 (today).',
       "Session: about 1 hour 35 minutes paddling, from the boat's motion sensor.",
       'The GPS failed, so there is NO distance, speed, pace or route. Do not mention, guess or estimate any of them.',
       'Stroke rate ~24 spm, about 2,300 strokes.',
-      'Rests: 2 (31:10 for 95s, 1:02:40 for 120s).',
+      'Rests: 2, 4 minutes in total (31:10 for 95s, 62:40 for 120s).',
     ].join('\n'),
     summary: 'The GPS dropped out, so there is no distance or pace for this one. '
       + 'The motion sensor counted about 2,300 strokes at a rating of 24 over 1 hour 35 minutes, with 2 rests.',
@@ -116,23 +116,8 @@ export function voicePrompt(): string {
   return `${VOICE}\n\nExamples of the voice (the facts for your paddle come after):\n\n${ex}`
 }
 
-// Words and phrases that make it sound like a generic AI coach. Matched as
-// whole words, case-insensitively.
-export const BANNED_PHRASES = [
-  'great job', 'great work', 'nice work', 'nice job', 'well done', 'good job', 'keep it up', 'keep up the',
-  'impressive', 'impressively', 'amazing', 'awesome', 'fantastic', 'incredible', 'remarkable', 'exceptional',
-  'excellent', 'outstanding', 'stellar', 'solid', 'rock-solid', 'journey', 'testament', 'showcase', 'showcasing',
-  'showcased', 'kudos', 'poise', 'gem', 'jewel', 'second nature', 'muscle memory', 'next level', 'dial in',
-  'dialled in', 'fade', 'fades', 'faded', 'fading', 'next time', 'crushed', 'crushing', 'smashed', 'nailed', 'you\'ve got this', 'foundation', 'truly', 'clearly',
-  'it\'s clear', 'masterclass', 'standout', 'stand out', 'stood out',
-]
-
-// Claims about how they paddled or felt, which the numbers can't show.
-export const UNSUPPORTED_CLAIMS = [
-  'blade', 'blades', 'catch', 'rotation', 'posture', 'technique', 'felt', 'feel', 'feeling', 'fatigue', 'tired',
-  'tiring', 'effortless', 'relaxed', 'crisp', 'smooth', 'smoothly', 'clean', 'confident', 'confidence', 'focused',
-  'determined', 'enjoyed', 'fun',
-]
+import { BANNED_PHRASES, UNSUPPORTED_CLAIMS } from './voice-lists'
+export { BANNED_PHRASES, UNSUPPORTED_CLAIMS }
 
 const MAX_WORDS = 70
 
@@ -144,8 +129,15 @@ const hasWord = (text: string, phrase: string) =>
 // same number at the summary's precision ("9.8" for "9.80"). Times compare as
 // written ("2:31"). Thousands separators are ignored. 1 to 3 are free (counts
 // like "2 rests" read naturally either way).
+// Spelled-out counts ("seven efforts") are checked like digits.
+const NUMBER_WORDS: Record<string, number> = {
+  four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+  fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
+}
 function numbersIn(s: string): string[] {
-  return (s.replace(/(\d),(\d{3})/g, '$1$2').match(/\d+(?::\d{2})+|\d+(?:\.\d+)?/g) ?? [])
+  const digits = s.replace(/(\d),(\d{3})/g, '$1$2').match(/\d+(?::\d{2})+|\d+(?:\.\d+)?/g) ?? []
+  const words = (s.toLowerCase().match(/\b[a-z]+\b/g) ?? []).filter(w => w in NUMBER_WORDS).map(w => String(NUMBER_WORDS[w]))
+  return [...digits, ...words]
 }
 function numberSupported(n: string, facts: string[]): boolean {
   if (n.includes(':')) return facts.includes(n)
@@ -156,6 +148,10 @@ function numberSupported(n: string, facts: string[]): boolean {
 }
 
 /**
+ * A guard, not a guarantee: a small number can match a different fact by
+ * coincidence ("6 seconds" against "6% variation"), and 1 to 3 always pass.
+ * It reliably stops invented times, paces, distances and larger counts.
+ *
  * What's wrong with a draft summary, in words the model can act on (empty =
  * fine). `facts` is the prompt the model was given: any number the draft uses
  * must be in it.
@@ -190,5 +186,7 @@ export function numbersNotInFacts(text: string, facts: string): string[] {
  * numbers ("2:46–2:49/500") stays.
  */
 export function tidyDraft(text: string): string {
-  return text.trim().replace(/\s+[—–-]\s+|\s*—\s*/g, ', ').replace(/,\s*,/g, ',')
+  return text.trim()
+    .replace(/(\d)\s*[–-]\s*(\d)/g, '$1–$2')             // a hyphen or en dash between numbers is a range: 2:31–2:45
+    .replace(/\s+[—–-]\s+|\s*—\s*/g, ', ').replace(/,\s*,/g, ',')
 }

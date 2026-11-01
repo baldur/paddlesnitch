@@ -3,7 +3,7 @@
 // one retry before the plain summary stands.
 import { describe, it, expect, vi } from 'vitest'
 import { summaryProblems, EXAMPLES, voicePrompt, VOICE, tidyDraft, numbersNotInFacts } from '@paddlesnitch/analysis/voice'
-import { generateInsight, buildPrompt, SYSTEM } from '@paddlesnitch/analysis/llm'
+import { generateInsight, buildPrompt, SYSTEM, RETRY_IF_FIRST_UNDER_MS } from '@paddlesnitch/analysis/llm'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 
 const FACTS = [
@@ -41,6 +41,11 @@ describe('summaryProblems', () => {
     expect(summaryProblems('You held 70 spm.', FACTS)).toEqual(['it uses numbers that are not in the facts: 70'])
   })
 
+  it('checks spelled-out counts too ("seven efforts" when there was one)', () => {
+    expect(summaryProblems('Seven efforts at 2:31/500.', FACTS)).toEqual(['it uses numbers that are not in the facts: 7'])
+    expect(summaryProblems('Two rests and one effort at 2:31/500.', FACTS)).toEqual([])
+  })
+
   it('rejects exclamation marks, dashes as punctuation, questions, lists and long notes', () => {
     expect(summaryProblems('A steady paddle!', FACTS)).toEqual(['it has an exclamation mark'])
     expect(summaryProblems('A steady paddle — 64 spm.', FACTS)).toEqual(['it uses a dash as punctuation'])
@@ -65,6 +70,8 @@ describe('tidyDraft', () => {
     expect(tidyDraft('Steady—64 spm.')).toBe('Steady, 64 spm.')
     expect(tidyDraft('Steady - 64 spm, a well-paced row.')).toBe('Steady, 64 spm, a well-paced row.')
     expect(tidyDraft('Efforts at 2:31–2:45/500.')).toBe('Efforts at 2:31–2:45/500.')
+    expect(tidyDraft('Efforts at 2:31 - 2:45/500.')).toBe('Efforts at 2:31–2:45/500.')   // a spaced range stays a range
+    expect(tidyDraft('Paces 2:31 — 2:45.')).toBe('Paces 2:31, 2:45.')                  // an em dash is punctuation
   })
 })
 
@@ -77,6 +84,17 @@ describe('numbersNotInFacts', () => {
 describe('the voice and its examples', () => {
   it.each(EXAMPLES.map((e, i) => [i + 1, e] as const))('example %i passes its own check', (_, e) => {
     expect(summaryProblems(e.summary, e.facts)).toEqual([])
+  })
+
+  // The examples' facts must look like what buildPrompt writes, or a model
+  // copying them writes formats the check rejects (an hour as 1:02:40).
+  it('examples use the fact formats real paddles get', () => {
+    for (const e of EXAMPLES) {
+      expect(e.facts).not.toMatch(/\d:\d{2}:\d{2}/)
+      expect(e.facts).not.toMatch(/fading|—/)
+      expect(e.facts).not.toMatch(/\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) /)
+      for (const line of e.facts.split('\n').filter(l => l.startsWith('Rests:'))) expect(line).toMatch(/^Rests: \d+, .+ in total \(/)
+    }
   })
 
   it('is the system prompt, examples included', () => {
@@ -116,6 +134,29 @@ describe('generateInsight keeps to the voice', () => {
     const run = vi.fn().mockResolvedValueOnce('A steady 4.2 km; next time hold 61 spm for 300 m.').mockResolvedValueOnce('A steady 4.2 km at 58 spm.')
     expect(await generateInsight(result(), {}, run)).toBe('A steady 4.2 km at 58 spm.')
     expect(run.mock.calls[1][1]).toMatch(/Leave out 61, 300: do not replace them/)
+  })
+
+  it('keeps the plain summary when the retry repeats the invented number', async () => {
+    const run = vi.fn().mockResolvedValueOnce('A steady 4.2 km at 61 spm.').mockResolvedValueOnce('A steady 4.2 km, again at 61 spm.')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await generateInsight(result(), {}, run)).toBeNull()
+    warn.mockRestore()
+  })
+
+  it('skips the retry when the first draft was slow, so the request stays inside the server limit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const run = vi.fn().mockImplementation(async () => { vi.setSystemTime(Date.now() + RETRY_IF_FIRST_UNDER_MS + 1); return 'Great job!' })
+      expect(await generateInsight(result(), {}, run)).toBeNull()
+      expect(run).toHaveBeenCalledTimes(1)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('a paddle without a map: a draft that invents a distance falls back', async () => {
+    const motion = { ...result(), distanceKm: 0, cruiseSpeed: 0, noGps: { reason: { kind: 'gps_lost', lostAfterS: 30, recordedS: 1800 }, strokes: 1700 } } as unknown as AnalysisResult
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await generateInsight(motion, {}, vi.fn().mockResolvedValue('About 4.8 km at 58 spm.'))).toBeNull()
+    warn.mockRestore()
   })
 
   it('fixes a dash used as punctuation without a retry', async () => {

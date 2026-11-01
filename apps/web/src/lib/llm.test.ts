@@ -52,7 +52,7 @@ describe('buildPrompt', () => {
 
   it('surfaces distance-per-stroke efficiency + overall consistency for the coach to value', () => {
     const p = buildPrompt({ ...result(), srCv: 8 })
-    expect(p).toContain('distance per stroke — efficiency')
+    expect(p).toContain('(distance per stroke)')
     expect(p).toContain('Stroke-rate consistency')
     expect(p).toContain('8% variation')
   })

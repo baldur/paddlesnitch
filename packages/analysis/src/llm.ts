@@ -9,6 +9,7 @@
 import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, fmtDurWords, split500, roundStrokes } from './analysis'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
+import { fmtDay } from '@paddlesnitch/core/format'
 import type { SectionRace, Racer, SectionStats } from './similar'
 import { voicePrompt, summaryProblems, numbersNotInFacts, tidyDraft } from './voice'
 
@@ -43,7 +44,7 @@ export function normaliseSport(raw?: string): SportKey | undefined {
 // then tells the model to stay neutral).
 function sportPromptLine(raw?: string): string {
   switch (normaliseSport(raw)) {
-    case 'rowing': return 'Sport: ROWING. Use rowing words: "rate" or "rating" for stroke rate, "row" or "piece", "split" for pace.'
+    case 'rowing': return 'Sport: ROWING. Use rowing words: "rating" for stroke rate, "row" for the outing. Efforts are efforts; pace is written like 2:31/500.'
     case 'kayak':  return 'Sport: KAYAKING. Use paddling words: "stroke rate", "paddle", "pace".'
     case 'canoe':  return 'Sport: CANOEING. Use paddling words: "stroke rate", "paddle", "pace".'
     case 'sup':    return 'Sport: STAND-UP PADDLEBOARDING. Use paddling words: "stroke rate", "paddle", "pace".'
@@ -56,7 +57,7 @@ function sportPromptLine(raw?: string): string {
 export function describePaddleDate(paddledAt: string, asOf: string): string {
   const d = new Date(paddledAt), ref = new Date(asOf)
   if (isNaN(d.getTime()) || isNaN(ref.getTime())) return ''
-  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const date = fmtDay(paddledAt)
   const days = Math.floor((ref.getTime() - d.getTime()) / 86_400_000)
   let rel: string
   if (days <= 0) rel = 'today'
@@ -78,11 +79,11 @@ export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string
     if (label) L.push(`Session date: ${label}.`)
   }
   if (isMotionOnly(r)) return withHistory([...L, ...motionFacts(r)].join('\n'), ctx)
-  L.push(`Session: ${fmtDurWords(r.durationS)}, ${r.distanceKm.toFixed(2)} km.`)
+  L.push(`Session: ${minutesWords(r.durationS)}, ${r.distanceKm.toFixed(2)} km.`)
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
   // the SUP×2 normalisation — a small model misreads it as "the athlete doubled
   // their rate". Present the final numbers only.
-  L.push(`Cruising pace ~${split500(r.cruiseSpeed)}/500${r.avgSR != null ? ` at ~${Math.round(r.avgSR)} spm` : ''}${r.avgDps != null ? `, ~${r.avgDps.toFixed(1)} m per stroke (distance per stroke — efficiency)` : ''}.`)
+  L.push(`Cruising pace ~${split500(r.cruiseSpeed)}/500${r.avgSR != null ? ` at ~${Math.round(r.avgSR)} spm` : ''}${r.avgDps != null ? `, ~${r.avgDps.toFixed(1)} m per stroke (distance per stroke)` : ''}.`)
   if (r.srCv != null) L.push(`Stroke-rate consistency: ~${Math.round(r.srCv)}% variation overall (lower = steadier rhythm).`)
   const c = r.conditions
   if (c?.windKmh != null || c?.flowM3s != null) {
@@ -95,26 +96,33 @@ export function buildPrompt(r: AnalysisResult, ctx: InsightContext = {}): string
   if (r.surges.length) {
     L.push(`Efforts (${r.surges.length}):`)
     r.surges.forEach((s: Segment, i) => {
-      L.push(`  ${i + 1}) at ${fmtDur(s.fromT)}, ${fmtDur(s.durS)}, pace ${split500(s.avgSpeed)}/500${s.avgSR != null ? `, ${Math.round(s.avgSR)} spm${s.srCv != null ? ` (${s.srCv.toFixed(0)}% variation)` : ''}` : ''}${s.trend ? `, ${s.trend === 'fading' ? 'slowed' : s.trend}` : ''}.`)
+      L.push(`  ${i + 1}) at ${fmtDur(s.fromT)}, ${fmtDur(s.durS)}, pace ${split500(s.avgSpeed)}/500${s.avgSR != null ? `, ${Math.round(s.avgSR)} spm${s.srCv != null ? ` (${s.srCv.toFixed(0)}% variation)` : ''}` : ''}${s.trend ? `, ${/^fad/i.test(s.trend) ? 'slowed' : s.trend}` : ''}.`)
     })
   }
   const sets = r.sets.filter(s => s.count > 1)
   if (sets.length) L.push(`Sets detected: ${sets.map(s => `${s.count} × ~${fmtDur(s.avgDurS)} @ ${split500(s.avgSpeed)}/500`).join('; ')}.`)
-  if (!r.surges.length) L.push('No distinct efforts — this was a steady paddle.')
+  if (!r.surges.length) L.push('No distinct efforts: this was a steady paddle.')
   return withHistory(L.join('\n'), ctx)
+}
+
+// Durations to the minute ("1 hour 8 minutes"): the card asks for natural
+// durations and the number check would otherwise hold the model to the second.
+// Under a minute stays in seconds.
+function minutesWords(s: number): string {
+  return s < 60 ? fmtDurWords(s) : fmtDurWords(Math.round(s / 60) * 60)
 }
 
 // Rests with their total worked out here, so the model has no sum to do
 // (it added them up itself, and got it wrong, in the 2026-11-01 benchmark).
 function restsLine(stops: Segment[]): string {
   const total = stops.reduce((t, s) => t + s.durS, 0)
-  return `Rests: ${stops.length}, ${fmtDurWords(total)} in total (${stops.map(s => `${fmtDur(s.fromT)} for ${Math.round(s.durS)}s`).join(', ')}).`
+  return `Rests: ${stops.length}, ${minutesWords(total)} in total (${stops.map(s => `${fmtDur(s.fromT)} for ${Math.round(s.durS)}s`).join(', ')}).`
 }
 
 // A paddle without a map (#414): only what the motion data shows.
 function motionFacts(r: AnalysisResult): string[] {
   const L = [
-    `Session: about ${fmtDurWords(r.durationS)} paddling, from the boat's motion sensor.`,
+    `Session: about ${minutesWords(r.durationS)} paddling, from the boat's motion sensor.`,
     'The GPS failed, so there is NO distance, speed, pace or route. Do not mention, guess or estimate any of them.',
   ]
   if (r.avgSR != null) L.push(`Stroke rate ~${Math.round(r.avgSR)} spm, about ${roundStrokes(r.noGps?.strokes ?? 0)} strokes.`)
@@ -246,16 +254,22 @@ export async function runInsighter(system: string, user: string): Promise<{ text
 // the facts) is sent back once with what was wrong; if the second draft fails
 // too, the plain summary stands (null).
 export type Run = (system: string, user: string) => Promise<string | null>
+export const RETRY_IF_FIRST_UNDER_MS = 4000
 const runConfigured: Run = async (system, user) => (await runInsighter(system, user))?.text ?? null
 
 export async function generateInsight(result: AnalysisResult, ctx: InsightContext = {}, run: Run = runConfigured): Promise<string | null> {
   let prompt: string
   try { prompt = buildPrompt(result, ctx) }
   catch (err) { console.error('[llm] prompt build failed', err); return null }
+  const started = Date.now()
   const first = tidyDraft((await run(SYSTEM, prompt)) ?? '')
   if (!first) return null
   const problems = summaryProblems(first, prompt)
   if (!problems.length) return first
+  // Retry only when the first draft came back quickly. Each call may take up to
+  // LLM_TIMEOUT_MS and the profile update after it makes another, so a slow
+  // first call plus a retry could run past the server's 30 s limit.
+  if (Date.now() - started > RETRY_IF_FIRST_UNDER_MS) return null
   const unknown = numbersNotInFacts(first, prompt)
   const again = `${prompt}\n\nYour draft:\n${first}\n\nThe draft breaks the voice: ${problems.join('; ')}.`
     + (unknown.length ? ` Leave out ${unknown.join(', ')}: do not replace them with other numbers you work out or choose; use a number from the facts or none.` : '')

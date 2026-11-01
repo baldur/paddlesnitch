@@ -10,6 +10,7 @@ import { split500 } from './analysis'
 import type { SessionSummary } from './analysis-store'
 import type { BoatClass } from '@paddlesnitch/core/types'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
+import { fmtDay } from '@paddlesnitch/core/format'
 
 // The minimal shape both a saved SessionSummary and the current (unsaved) paddle
 // satisfy. SessionSummary is assignable to this.
@@ -116,7 +117,7 @@ export function renderHistoryFacts(s: HistoryStats): string {
   else if (s.cruiseRank != null && s.cruiseRank <= 3 && s.priorCount >= 3) L.push(`One of their quickest paddles — ${ordinal(s.cruiseRank)} fastest cruise pace on record.`)
   if (s.vs90dPaceDeltaSec != null && Math.abs(s.vs90dPaceDeltaSec) >= 2) {
     const faster = s.vs90dPaceDeltaSec < 0
-    L.push(`Cruise pace was ${Math.abs(s.vs90dPaceDeltaSec).toFixed(0)}s/500 ${faster ? 'FASTER' : 'slower'} than their 90-day average.`)
+    L.push(`Cruise pace was ${paceGap(s.vs90dPaceDeltaSec)} ${faster ? 'FASTER' : 'slower'} than their 90-day average.`)
   }
   if (s.paceTrend === 'improving') L.push('Their cruise pace has been trending FASTER over recent paddles.')
   else if (s.paceTrend === 'slipping') L.push('Their cruise pace has drifted slightly slower over recent paddles.')
@@ -165,7 +166,7 @@ export function selectRelevantPaddles(current: PaddleFacts, prior: SessionSummar
  * never handed a 0 km to talk about.
  */
 export function historyBits(h: SessionSummary): string[] {
-  const d = h.paddledAt?.slice(0, 10) ?? '?'
+  const d = h.paddledAt ? fmtDay(h.paddledAt) : '?'
   return isMotionOnly(h)
     ? [`${d}: ${Math.round(h.durationS / 60)} min paddling (no GPS, so no distance or pace)`]
     : [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
@@ -192,9 +193,19 @@ export function renderRelevant(list: RelevantPaddle[], current?: Pick<PaddleFact
 // either speed is missing.
 function paceVs(now: number, then: number): string {
   if (!(now > 0) || !(then > 0)) return ''
-  const d = Math.round(500 / then - 500 / now)
+  // From the paces as printed beside it, so "3:25" and "3:16" read "9s/500".
+  const shown = (speed: number) => { const [m, s] = split500(speed).split(':').map(Number); return m * 60 + s }
+  const d = shown(then) - shown(now)
+  if (Number.isNaN(d)) return ''           // too slow to show as a pace ('—')
   if (d === 0) return 'this paddle the same cruise pace'
-  return `this paddle ${Math.abs(d)}s/500 ${d > 0 ? 'faster' : 'slower'}`
+  return `this paddle ${paceGap(d)} ${d > 0 ? 'faster' : 'slower'}`
+}
+
+// A gap in pace, as the site writes pace: "9s/500", or "5:25/500" from a
+// minute up ("325 seconds per 500 m" read badly in the 2026-11-01 benchmark).
+function paceGap(sec: number): string {
+  const s = Math.round(Math.abs(sec))
+  return s < 60 ? `${s}s/500` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}/500`
 }
 
 // ---- Highlights on the paddle page ----

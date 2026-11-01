@@ -9,7 +9,7 @@
 // The data is a copy of ONE account's own analysis/<userId>/ folder (the owner
 // benchmarks on their own paddles). Nothing is written back anywhere: the copy
 // goes into a temporary local store, and the results into --out.
-import { mkdtempSync, cpSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
+import { mkdtempSync, cpSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs'
 import { execFileSync } from 'child_process'
 import os from 'os'
 import path from 'path'
@@ -21,6 +21,12 @@ const arg = (name: string, dflt?: string) => {
 const DATA = arg('data'), OUT = arg('out'), USER = arg('user') ?? ''
 if (!DATA || !USER || !OUT) { console.error('usage: --data <dir> --user <id> --out <dir> [--n 20] [--only a,b]'); process.exit(1) }
 const N = Number(arg('n', '20'))
+// The results hold the account's diary notes and profile: never inside the repo
+// (one `git add -A` from a public repository). And the id must be an id.
+const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+const outAbs = path.resolve(OUT!)
+if (outAbs === repoRoot || outAbs.startsWith(repoRoot + path.sep)) { console.error('--out must be outside the repository'); process.exit(1) }
+if (!/^[A-Za-z0-9_-]+$/.test(USER)) { console.error('--user must be a user id'); process.exit(1) }
 
 // A throwaway local store holding the copy, so the site's own functions read it.
 const store = mkdtempSync(path.join(os.tmpdir(), 'insight-bench-'))
@@ -39,13 +45,10 @@ const CANDIDATES: Candidate[] = [
 const only = arg('only')?.split(',')
 const candidates = CANDIDATES.filter(c => !only || only.includes(c.id))
 
-// The prompt live on main before the voice, so "live" really is today's site.
-function oldSystem(): string {
-  const src = execFileSync('git', ['show', 'origin/main:packages/analysis/src/llm.ts'], { encoding: 'utf8' })
-  const m = src.match(/const SYSTEM = (\[[\s\S]*?\]\.join\(' '\))/)
-  if (!m) throw new Error('could not find the old SYSTEM on origin/main')
-  return eval(m[1]) as string
-}
+// The instructions live before the voice (2026-11-01), frozen here so "live"
+// means the old site after this ships too.
+const OLD_SYSTEM = "You are this paddler's personal coach \u2014 you know them and their history. Write 2\u20134 short sentences of warm, specific commentary on THIS session: the single most interesting thing that happened, and one useful, forward-looking observation. Value good technique, not just speed: a long, efficient run per stroke (higher distance-per-stroke) and a steady, consistent stroke rate (low variation) are marks of good paddling worth recognising and encouraging \u2014 read them alongside pace, and don't imply higher distance-per-stroke is better without the pace to match. When a paddler profile, history facts, or comparable past paddles are given, weave them in naturally to make it personal and progressive \u2014 reference their trajectory, their goals, and how this session compares to their own record \u2014 but use ONLY the facts provided; never invent numbers. The session date is given below. It may be a recent paddle OR an older one just imported, so narrate it for WHEN it happened \u2014 never assume it is today, and only say \"today\"/\"this morning\" if the date really is today. Vary how you open; avoid generic praise and filler. Sound like a real person who has watched them paddle before. Match your vocabulary to the sport stated below \u2014 rowing and kayak/canoe/SUP use different words for the stroke, the rate, and the glide, so never mix them; if no sport is stated, use neutral paddling language and do not assume rowing vs kayak. Phrase long durations the natural way \u2014 \"1 hour 20 minutes\", never \"80 minutes\". No preamble, no lists, no markdown headings \u2014 just the short paragraph."
+const oldSystem = () => OLD_SYSTEM
 
 async function main() {
   const { listSessionSummaries, getSession, getAthleteProfile } = await import('@paddlesnitch/analysis/analysis-store')
@@ -135,4 +138,6 @@ function page(results: { candidates: Candidate[]; rows: unknown[] }): string {
   return readFileSync(path.join(__dirname, 'insight-bench.html'), 'utf8').replace('/*DATA*/null', data)
 }
 
-main().catch(err => { console.error(err); process.exit(1) })
+main()
+  .catch(err => { console.error(err); process.exitCode = 1 })
+  .finally(() => rmSync(store, { recursive: true, force: true }))   // the account copy never outlives the run
