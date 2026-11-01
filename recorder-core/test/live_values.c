@@ -134,5 +134,20 @@ int main(void)
           "phone, late ticks: the screen's time since the fix is what the written rows say");
     check(fabsf(phone.since_fix_s - 3.08f) < 0.0005f, "phone, late ticks: 3.08 s between the two moved rows");
 
+    /* The trace on a phone with no gyroscope: nothing ever arrives, so it's
+       starting until 7 s after the first tick, on the ticks' clock. */
+    static rc_trace tr;
+    rc_phone_config none = { discard, 0, RC_PHONE_ANDROID, 0, 0 };
+    rc_phone_init(&g_phone, &none);
+    rc_phone_trace(&g_phone, &tr);
+    check(tr.status == RC_TRACE_STARTING && tr.n == 0, "trace before any tick: starting");
+    rc_phone_tick(&g_phone, 50000000000LL, 0);
+    rc_phone_tick(&g_phone, 56999000000LL, 0);
+    rc_phone_trace(&g_phone, &tr);
+    check(tr.status == RC_TRACE_STARTING, "no gyroscope, 6.999 s after the first tick: starting");
+    rc_phone_tick(&g_phone, 57000000000LL, 0);
+    rc_phone_trace(&g_phone, &tr);
+    check(tr.status == RC_TRACE_NO_SAMPLES && tr.n == 0, "no gyroscope, 7 s after the first tick: no_samples");
+
     return g_fails ? 1 : 0;
 }

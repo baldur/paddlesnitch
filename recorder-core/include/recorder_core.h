@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 /* The core's version, logged with every recording (phase 4: core_ver). */
-#define RC_VERSION "0.5.0"
+#define RC_VERSION "0.6.0"
 
 /* ---- Output streams ---------------------------------------------------- */
 
@@ -149,6 +149,44 @@ typedef struct {
                               latest row: 0 while there's a fix, NAN before
                               the first                                        */
 } rc_live_values;
+
+/* ---- Live motion trace ----------------------------------------------------
+ *
+ * What a recording screen draws to show the motion sensors are working
+ * (rc_phone_trace in recorder_phone.h). It's the signal stroke rate is
+ * counted from, so the trace and the rate always agree: the stroke stream's
+ * own samples (the RC_MOTION lines as written, at most one per 80 ms, so
+ * ~12.5 Hz), the last 10 s back from the newest, on the gyroscope axis with
+ * the most variance over those 10 s, about its mean. That is the rule each
+ * stroke window uses to pick its axis, in the same function. The app draws
+ * what it gets: no thresholds, no maths.
+ *
+ * Drawing: x is ago_ms (0 at the right edge, 10,000 at the left); y is
+ * dps / scale_dps, from -1 to 1. Samples come ~80 ms apart, more where the
+ * sensors paused; a phone's arrive in its batches (up to a few seconds), so
+ * the trace moves on in steps, not smoothly.
+ */
+typedef enum {
+    RC_TRACE_STARTING   = 0, /* no sample yet, under 7 s into the recording    */
+    RC_TRACE_NO_SAMPLES = 1, /* none for 7 s: the sensors stopped (or never
+                                started). n is 0                               */
+    RC_TRACE_STILL      = 2, /* samples arriving, under 1 deg/s rms: the
+                                device is lying still                          */
+    RC_TRACE_MOTION     = 3  /* the sensors see movement                       */
+} rc_trace_status;
+
+#define RC_TRACE_MAX 128     /* 10 s at one sample per 80 ms is at most 125    */
+
+typedef struct {
+    rc_trace_status status;
+    int      axis;           /* 0, 1, 2: the device's gyroscope x, y, z; -1
+                                when n is 0                                    */
+    float    scale_dps;      /* draw dps in +-scale_dps: the biggest |dps|,
+                                at least 5, so a still device draws flat       */
+    uint32_t n;              /* samples, oldest first                          */
+    uint32_t ago_ms[RC_TRACE_MAX]; /* before the newest; ago_ms[n - 1] is 0    */
+    float    dps[RC_TRACE_MAX];    /* deg/s about the mean                     */
+} rc_trace;
 
 /* ---- Stroke rate ----------------------------------------------------------
  *
