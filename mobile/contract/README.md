@@ -227,7 +227,7 @@ they are the website's.
 | Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
 | `paddles.get` fails or finds nothing | Title "We can't find this paddle", button Back to Paddles |
 | Loading | "Loading" |
-| Call failed, or 404 | "Couldn’t read the tracker’s recording. Please try again." with pull-to-refresh or a Try again button (the website has neither: it is reloaded) |
+| Call failed, or 404 | "Couldn’t read this recording. Please try again." with pull-to-refresh or a Try again button (the website has neither: it is reloaded) |
 | `attitude` null, or `attitude.available` false | "No boat motion for this recording." (as the box's title) then `noMotionCopy` (format.json: no `attitude`, or an empty `reason` = the motion file hasn't arrived; a `reason` = it couldn't be measured). Never show `reason` itself: it is the engine's English, for engineers |
 | `attitude.available` | The tiles, the three charts and the two notes below, in that order |
 
@@ -279,7 +279,7 @@ panel, title and caption stay, as on the website.
 **Notes** under the charts, one card (`surface`, `border`, control radius),
 small `muted` text with the lead-in in `fg`:
 - "**Reading this.** Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly."
-- "**What this can't tell you.** We can't tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." and, when `axisConfident` is false, " Roll and pitch were hard to tell apart in this recording."
+- "**What this can't tell you.** We can't tell port from starboard, and a tracker or phone mounted slightly crooked looks like a steady lean." and, when `axisConfident` is false, " Roll and pitch were hard to tell apart in this recording."
 
 Never call the sides left and right (`sideADeg`/`sideBDeg`): the tracker can't tell which is which.
 
@@ -337,6 +337,15 @@ holds from a broken upload, so send only the rest. Fixtures:
   sent: the server keeps nothing, so delete it and its motion file.
 
 ### The phone on the account
+
+- A phone's paddle has `sourceType` `device`, like a tracker's. The card
+  (`paddles.list`), each `sameOuting` entry and the paddle's `source`
+  (`paddles.get`, `writeSummary`, a buddy's paddle, a share link) carry
+  `phone: true` for a phone: label it **Phone** (list: "· Phone"; same outing:
+  "Also recorded by the phone"; the paddle's own label: Phone), never Tracker.
+  When a tracker and a phone recorded one outing, the tracker's card leads.
+  Example: `fixtures/api/paddles.list.with-phone.json`. The website says the
+  same (#789).
 
 - Add the phone (`POST …/phone`) before the first upload and keep `deviceId`
   with the account's recordings. Ask again after every sign-in: it's the same
@@ -564,7 +573,7 @@ even), 22.5° on the compass.
 | `paddleKm` | `{distanceKm, noGps?}` | `4.25 km`; `—` for a paddle without a map |
 | `compassPoint` | degrees the wind blows from | one of N, NE … NW |
 | `noPaddleMessage` | `{reason, hasMotion}` | why a recording has no route (`reason` is a `NoPaddleReason`) |
-| `noMotionCopy` | the answer's `attitude` (null, or one with `available: false`) | why a tracker paddle has no boat motion |
+| `noMotionCopy` | the answer's `attitude` (null, or one with `available: false`) | why a tracker or phone paddle has no boat motion |
 | `fmtEvenness` | `symmetry.imbalancePct` | the Evenness tile: its size, rounded, with % |
 | `axisTicks` | a chart's ±bound, degrees | the y-axis ticks: every multiple of the step (2°, 3° past 6°, 5° past 12°) within the bound |
 

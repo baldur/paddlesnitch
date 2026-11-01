@@ -21,7 +21,25 @@ export type PaddleCard = {
   noGps?: true                // a paddle without a map (#414): draw no route
   // The same outing recorded by another source, shown once under this card
   // (see groupSameOuting). Set only by paddles.list.
-  sameOuting?: { id: string; sourceType: string }[]
+  sameOuting?: { id: string; sourceType: string; phone?: true }[]
+  phone?: true                // a 'device' paddle recorded on a phone with the app (C3), not a tracker
+}
+
+/** A phone on the account (C3): `P` and 16 hex digits. Pure, so browser code
+ *  can use it; same rule as isPhoneId in core/devices (phone-recording.test.ts
+ *  checks). */
+export const isPhoneDeviceId = (deviceId: unknown): boolean => typeof deviceId === 'string' && /^P[0-9A-F]{16}$/.test(deviceId)
+
+/** A 'device' paddle from a phone rather than a tracker: both are devices on
+ *  the account and share the source shape, so the device ID tells them apart.
+ *  Views for others and the apps get `phone: true` instead (no device ID). */
+export const isPhonePaddle = (source: { type?: string; deviceId?: string; phone?: boolean } | undefined): boolean =>
+  source?.phone === true || (source?.type === 'device' && isPhoneDeviceId(source.deviceId))
+
+/** The paddle's source with `phone: true` added for a phone, so a reader
+ *  without the device ID (a buddy, a share link, the apps) can say Phone. */
+export function markPhone<S extends { type?: string; deviceId?: string; phone?: true }>(source: S): S {
+  return isPhonePaddle(source) ? { ...source, phone: true as const } : source
 }
 
 // ≤24 evenly-spaced [lat,lng] points, rounded to ~1 m, for a list thumbnail.
@@ -63,18 +81,6 @@ export function paddleTotals(paddles: { distanceKm: number; durationS: number; p
     if (p.paddledAt && (since === null || p.paddledAt < since)) since = p.paddledAt
   }
   return { count: paddles.length, totalKm, totalS, since }
-}
-
-// The " · SOURCE" tag after a paddle's date. One wording for every list and
-// view (it was an inline switch copied into four files). A plain file upload
-// needs no tag.
-export function sourceLabel(type: string | undefined): string {
-  switch (type) {
-    case 'strava': return ' · STRAVA'
-    case 'trial': return ' · TIME TRIAL'
-    case 'device': return ' · TRACKER'
-    default: return ''
-  }
 }
 
 // ---- The logbook on /paddles (site review, 2026-10) ----
@@ -149,8 +155,9 @@ export function paddleLogbook(paddles: Dated[], now: Date): Logbook {
  * the same time are the same outing. The tracker's copy leads (it has the
  * boat motion), then Strava, then the rest; the list stays newest first.
  */
-export function groupSameOuting<T extends Dated & { source: { type: string } }>(paddles: T[]): { lead: T; others: T[] }[] {
-  const rank = (t: string) => ['device', 'strava', 'trial', 'file'].indexOf(t)
+export function groupSameOuting<T extends Dated & { source: { type: string; deviceId?: string; phone?: boolean } }>(paddles: T[]): { lead: T; others: T[] }[] {
+  // A tracker, fixed in the boat, leads over a phone (#789).
+  const rank = (s: T['source']) => ['device', 'strava', 'trial', 'file'].indexOf(s.type) * 2 + (isPhonePaddle(s) ? 1 : 0)
   const start = (p: T) => Date.parse(p.paddledAt)
   const overlaps = (a: T, b: T) => {
     // A paddle without a map stands alone: grouping offers the two to compare.
@@ -165,7 +172,7 @@ export function groupSameOuting<T extends Dated & { source: { type: string } }>(
     if (g) g.push(p); else groups.push([p])
   }
   return groups.map(g => {
-    const sorted = [...g].sort((a, b) => rank(a.source.type) - rank(b.source.type))
+    const sorted = [...g].sort((a, b) => rank(a.source) - rank(b.source))
     return { lead: sorted[0], others: sorted.slice(1) }
   })
 }

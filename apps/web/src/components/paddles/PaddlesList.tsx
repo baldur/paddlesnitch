@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
-import { paddleLogbook, groupSameOuting, paddleTotals, isMotionOnly, paddleKm } from '@paddlesnitch/core/paddles'
+import { paddleLogbook, groupSameOuting, paddleTotals, isMotionOnly, paddleKm, isPhonePaddle } from '@paddlesnitch/core/paddles'
 import { fmtWeekday, fmtMonth } from '@paddlesnitch/core/format'
 import { Page, PageHeader, Section, Eyebrow } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
@@ -63,7 +63,7 @@ function RowBody({ s, end }: { s: Summary; end?: ReactNode }) {
       {isMotionOnly(s) ? <NoGpsTag size={64} /> : <RouteThumb route={s.route} size={64} />}
       <div className="flex-1 min-w-0">
         <p className="text-sm text-muted truncate">
-          {fmtDate(s.paddledAt)}{s.source.type !== 'file' && SOURCE[s.source.type] ? ` · ${SOURCE[s.source.type]}` : ''}
+          {fmtDate(s.paddledAt)}{isPhonePaddle(s.source) ? ' · Phone' : s.source.type !== 'file' && SOURCE[s.source.type] ? ` · ${SOURCE[s.source.type]}` : ''}
           {s.boatClass ? <span className="text-split"> · {s.boatClass}</span> : ''}
         </p>
         <p className="text-lg font-semibold tabular text-fg">{paddleKm(s)} · {fmtClock(s.durationS)}</p>
@@ -200,7 +200,7 @@ export default function PaddlesList() {
                   {!comparing && others.map(o => (
                     <Link key={o.id} href={`/paddles/compare?a=${s.id}&b=${o.id}`}
                       className="flex items-center justify-between gap-3 border-t border-border px-3 min-h-11 text-sm text-muted hover:text-fg">
-                      <span>Also recorded by {ALSO[o.source.type] ?? 'a file'}</span>
+                      <span>Also recorded by {isPhonePaddle(o.source) ? 'the phone' : ALSO[o.source.type] ?? 'a file'}</span>
                       <span className="text-primary-text">Compare →</span>
                     </Link>
                   ))}

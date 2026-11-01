@@ -36,6 +36,29 @@ async function mount(sessions: object[]) {
   })
 }
 
+// A phone's recording is a device paddle like a tracker's (C3); it says Phone (#789).
+describe('Paddles list, where a paddle came from', () => {
+  it('says Phone for a phone paddle and Tracker for a tracker paddle', async () => {
+    await mount([
+      summary('p', '2026-10-11T07:00:00Z', { source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }),
+      summary('t', '2026-10-04T07:00:00Z', { source: { type: 'device', deviceId: 'A1B2C3D4' } }),
+    ])
+    const row = (id: string) => container.querySelector(`a[href="/paddles/${id}"]`)!.textContent
+    expect(row('p')).toContain('· Phone')
+    expect(row('p')).not.toContain('Tracker')
+    expect(row('t')).toContain('· Tracker')
+  })
+
+  it('says the phone recorded the same outing too', async () => {
+    const at = '2026-10-11T07:00:00Z'
+    await mount([
+      summary('t', at, { source: { type: 'device', deviceId: 'A1B2C3D4' } }),
+      summary('p', at, { source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }),
+    ])
+    expect(container.textContent).toContain('Also recorded by the phone')
+  })
+})
+
 describe('Paddles list, a paddle without a map', () => {
   it('shows NO GPS instead of the route, "—" for distance, no pace, and no compare tick box', async () => {
     await mount([

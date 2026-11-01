@@ -237,7 +237,7 @@ Maps: dark tiles (Esri World Dark Gray); Trials course maps default to dark with
 
 Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed; add to its list when you retire a word.
 
-1. **One name per thing:** Trials (URL `/att`), Paddles, Plan (`/plan`), Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
+1. **One name per thing:** Trials (URL `/att`), Paddles, Plan (`/plan`), Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker or a phone), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
 2. **Buttons:** 1–3 sentence-case words that say what happens (Save, Add paddle, Remove tracker). Loading = same verb + "…". No emoji.
 3. **Headings, tabs, menus, links:** sentence case. **Uppercase only** for short mono labels over data (`<Eyebrow>`: DISTANCE, PACE /500, column heads). Helper text on its own muted line below, sentence case. See [`design-system.md`](docs/features/design-system.md).
 4. **Errors:** "Couldn't …" + what to do ("Please try again." only when retrying helps). Never codes, vendor names (Cognito, JWT, S3), "token", "state", "endpoint", raw enums.

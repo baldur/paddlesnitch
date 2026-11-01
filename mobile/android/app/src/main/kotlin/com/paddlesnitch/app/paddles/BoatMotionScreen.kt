@@ -73,7 +73,7 @@ import kotlin.math.roundToLong
 // (mobile/contract/README.md § Boat motion). Every number comes from the
 // server; this file only lays them out and draws them.
 
-const val MOTION_FAILED = "Couldn’t read the tracker’s recording. Please try again."
+const val MOTION_FAILED = "Couldn’t read this recording. Please try again."
 
 /** Whether a paddle can show boat motion: it came from one of your trackers. */
 fun hasBoatMotion(s: AnalysisSession) =
@@ -186,7 +186,7 @@ private fun Motion(a: BoatMotion, avgSR: Double?) {
         "Distribution of boat lean, with the mirrored distribution overlaid to show evenness", 3.9f, h != null && h.bins.isNotEmpty()) { t -> histogram(h!!, t) }
     Column(Modifier.box().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Lead("Reading this.", " Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly.")
-        Lead("What this can't tell you.", " We can't tell port from starboard, and a tracker mounted slightly crooked looks like a steady lean." +
+        Lead("What this can't tell you.", " We can't tell port from starboard, and a tracker or phone mounted slightly crooked looks like a steady lean." +
             if (!a.axisConfident) " Roll and pitch were hard to tell apart in this recording." else "")
     }
 }

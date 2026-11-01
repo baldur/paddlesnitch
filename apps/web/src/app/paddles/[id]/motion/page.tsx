@@ -63,7 +63,7 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
                 </>} />
             )}
             {fromTracker && rec === null && <LoadingState label="Loading" />}
-            {fromTracker && rec === 'error' && <p className="text-base text-red" role="alert">Couldn’t read the tracker’s recording. Please try again.</p>}
+            {fromTracker && rec === 'error' && <p className="text-base text-red" role="alert">Couldn’t read this recording. Please try again.</p>}
             {fromTracker && rec && rec !== 'error' && (
               <>
                 <BoatMotion attitude={rec.attitude} strokeRate={q.data.result.avgSR} />

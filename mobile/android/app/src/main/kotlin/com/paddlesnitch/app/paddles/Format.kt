@@ -129,8 +129,8 @@ fun fmtEvenness(imbalancePct: Double): String = "${toFixed(kotlin.math.abs(imbal
  * but couldn't be measured; none means it hasn't arrived. Never show the reason.
  */
 fun noMotionCopy(attitude: com.paddlesnitch.app.api.BoatMotion?): String =
-    if (!attitude?.reason.isNullOrEmpty()) "We couldn’t measure boat motion in this recording. The tracker may not have been fixed firmly in the boat."
-    else "Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. Older recordings have no motion data."
+    if (!attitude?.reason.isNullOrEmpty()) "We couldn’t measure boat motion in this recording. The tracker or phone may not have been fixed firmly in the boat."
+    else "Motion data uploads after the GPS track. If this recording is recent, it may still be uploading. Older recordings have no motion data."
 
 /** A boat-motion chart's y-axis ticks: every multiple of the step within ±maxDeg (the website's axisTicks). */
 fun axisTicks(maxDeg: Double): List<Int> {

@@ -19,7 +19,7 @@ const JARGON = /derivable|firmware|sidecar|\bHz\b|accelerometer|cadence|column/i
 
 describe('strokeRateCopy', () => {
   it('shows the measured rate when the motion data gave one', () => {
-    expect(strokeRateCopy(report(), cadence(true))).toEqual({ spm: 58, text: 'Measured from the tracker’s motion data.' })
+    expect(strokeRateCopy(report(), cadence(true))).toEqual({ spm: 58, text: 'Measured from the motion data.' })
   })
   it('says motion data comes later when it has not arrived yet', () => {
     expect(strokeRateCopy(report(), null).text).toMatch(/uploads after the GPS track/)
@@ -54,7 +54,7 @@ describe('gpsCopy', () => {
 
 describe('noMotionCopy', () => {
   it('tells apart "not uploaded yet" from "uploaded but unreadable"', () => {
-    expect(noMotionCopy(null)).toMatch(/sync the tracker again/)
+    expect(noMotionCopy(null)).toMatch(/it may still be uploading/)
     expect(noMotionCopy({ available: false, reason: 'No usable gravity reference' } as AttitudeReport)).toMatch(/fixed firmly/)
     expect(noMotionCopy(null)).not.toMatch(JARGON)
   })

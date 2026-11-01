@@ -11,16 +11,16 @@ import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 export type StrokeRateCopy = { spm: number | null; text: string }
 
 export function strokeRateCopy(report: DeviceDataReport, cadence: CadenceReport | null): StrokeRateCopy {
-  if (cadence?.available) return { spm: cadence.medianStrokesPerMin, text: 'Measured from the tracker’s motion data.' }
+  if (cadence?.available) return { spm: cadence.medianStrokesPerMin, text: 'Measured from the motion data.' }
   if (report.strokeRate.available) return { spm: null, text: 'Stroke rate came from the file.' }
   if (cadence && !cadence.available && cadence.code === 'not_moving') {
     return { spm: null, text: 'The GPS never saw the boat moving for 90 seconds without a break, so there’s no stroke rate.' }
   }
   if (cadence && !cadence.available) {
-    return { spm: null, text: 'The motion data arrived, but we couldn’t find a steady stroke in it. The tracker may not have been fixed in the boat.' }
+    return { spm: null, text: 'The motion data arrived, but we couldn’t find a steady stroke in it. The tracker or phone may not have been fixed in the boat.' }
   }
   if (report.hasImu) {
-    return { spm: null, text: 'Stroke rate comes from the tracker’s motion data, which uploads after the GPS track. If this recording is recent, sync the tracker again.' }
+    return { spm: null, text: 'Stroke rate comes from the motion data, which uploads after the GPS track. If this recording is recent, it may still be uploading.' }
   }
   return { spm: null, text: 'No stroke rate: this recording has no motion data.' }
 }
@@ -49,6 +49,6 @@ export function noMotionCopy(attitude: AttitudeReport | null): string {
   // the tracker recorded motion). Don't tell someone this morning's paddle
   // "never will" have it.
   return attitude?.reason
-    ? 'We couldn’t measure boat motion in this recording. The tracker may not have been fixed firmly in the boat.'
-    : 'Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. Older recordings have no motion data.'
+    ? 'We couldn’t measure boat motion in this recording. The tracker or phone may not have been fixed firmly in the boat.'
+    : 'Motion data uploads after the GPS track. If this recording is recent, it may still be uploading. Older recordings have no motion data.'
 }

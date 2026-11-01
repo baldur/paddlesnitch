@@ -40,6 +40,10 @@
     },
     "deviceName": {
       "type": "string"
+    },
+    "phone": {
+      "type": "boolean",
+      "const": true
     }
   },
   "required": [

@@ -316,21 +316,21 @@
   "noMotionCopy": [
     {
       "in": null,
-      "out": "Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. Older recordings have no motion data."
+      "out": "Motion data uploads after the GPS track. If this recording is recent, it may still be uploading. Older recordings have no motion data."
     },
     {
       "in": {
         "available": false,
         "reason": ""
       },
-      "out": "Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. Older recordings have no motion data."
+      "out": "Motion data uploads after the GPS track. If this recording is recent, it may still be uploading. Older recordings have no motion data."
     },
     {
       "in": {
         "available": false,
         "reason": "Motion file has too few samples to describe attitude."
       },
-      "out": "We couldn’t measure boat motion in this recording. The tracker may not have been fixed firmly in the boat."
+      "out": "We couldn’t measure boat motion in this recording. The tracker or phone may not have been fixed firmly in the boat."
     }
   ],
   "fmtEvenness": [

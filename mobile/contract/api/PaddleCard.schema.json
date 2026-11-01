@@ -70,6 +70,10 @@
           },
           "sourceType": {
             "type": "string"
+          },
+          "phone": {
+            "type": "boolean",
+            "const": true
           }
         },
         "required": [
@@ -77,6 +81,10 @@
           "sourceType"
         ]
       }
+    },
+    "phone": {
+      "type": "boolean",
+      "const": true
     }
   },
   "required": [

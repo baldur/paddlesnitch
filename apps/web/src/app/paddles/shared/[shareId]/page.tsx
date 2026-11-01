@@ -28,5 +28,5 @@ export default function SharedPaddlePage({ params }: { params: Promise<{ shareId
   )
 
   const session = q.data
-  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type } }} initialBoatClass={session.boatClass} initialSeat={session.seat} readOnly />
+  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type, phone: session.source.phone } }} initialBoatClass={session.boatClass} initialSeat={session.seat} readOnly />
 }

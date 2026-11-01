@@ -3,6 +3,7 @@
 // than eyeballed in the browser.
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { fmtDay as coreFmtDay, fmtDayTime } from '@paddlesnitch/core/format'
+import { isPhoneDeviceId } from '@paddlesnitch/core/paddles'
 
 export const fmtDate = (iso?: string) => (iso ? fmtDayTime(iso) : '—')
 export const fmtDay = (iso?: string) => (iso ? coreFmtDay(iso) : 'never')
@@ -13,10 +14,9 @@ export const fmtDur = (s?: number | null) => {
   return m ? `${m}m ${sec}s` : `${sec}s`
 }
 
-/** A phone on the account (C3): `P` and 16 hex digits. Kept here, not imported
- *  from core/devices, because this file goes into browser bundles. Same rule as
- *  isPhoneId there (phone-recording.test.ts checks). */
-export const isPhoneDeviceId = (deviceId: string) => /^P[0-9A-F]{16}$/.test(deviceId)
+/** A phone on the account (C3). From core/paddles (pure), not core/devices,
+ *  because this file goes into browser bundles. */
+export { isPhoneDeviceId }
 
 /** What the client needs about a linked tracker. Deliberately NOT `DeviceRecord`:
  *  that type carries `tokenHash`, which has no business in a browser bundle. */

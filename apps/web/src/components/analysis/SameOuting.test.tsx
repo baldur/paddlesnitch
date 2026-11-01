@@ -35,6 +35,15 @@ describe('comparing the same outing from two sources', () => {
     expect(container.querySelector('svg[aria-label="Stroke rate from each"]')).not.toBeNull()
   })
 
+  it('names a phone recording Phone (#789)', async () => {
+    cmp.data = { same: true, gap: { samples: 60, medianM: 6, worstM: 14, agreement: 1 }, strokeRate: [] }
+    container = document.createElement('div'); document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => { root.render(<SameOuting a={{ ...A, source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }} b={B} />) })
+    expect(container.textContent).toContain('Phone')
+    expect(container.textContent).not.toContain('Tracker')
+  })
+
   it('shows nothing for two different outings (the normal comparison stands)', async () => {
     cmp.data = { same: false }
     await mount()

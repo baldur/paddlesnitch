@@ -3,6 +3,7 @@ import { trpc } from '@/lib/trpc'
 import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { Stat, cardClass } from '@paddlesnitch/ui/Card'
 import type { AnalysisPoint } from '@paddlesnitch/analysis/analysis'
+import { isPhonePaddle } from '@paddlesnitch/core/paddles'
 
 // One outing recorded by two sources, side by side (docs/features/one-paddle.md,
 // phase 4): both tracks over each other, how far apart the two put the paddler
@@ -17,7 +18,8 @@ const GRID = 'var(--color-border, #1e293b)'
 const MUTED = 'var(--color-muted, #94a3b8)'
 
 /** What a paddle's source is called on this page. */
-export function sourceName(type?: string): string {
+export function sourceName(type?: string, phone?: boolean): string {
+  if (phone) return 'Phone'
   switch (type) {
     case 'device': return 'Tracker'
     case 'strava': return 'Strava'
@@ -27,13 +29,13 @@ export function sourceName(type?: string): string {
 }
 
 export default function SameOuting({ a, b }: {
-  a: { id: string; source: { type: string }; result: { points: AnalysisPoint[] } }
-  b: { id: string; source: { type: string }; result: { points: AnalysisPoint[] } }
+  a: { id: string; source: { type: string; deviceId?: string; phone?: boolean }; result: { points: AnalysisPoint[] } }
+  b: { id: string; source: { type: string; deviceId?: string; phone?: boolean }; result: { points: AnalysisPoint[] } }
 }) {
   const q = trpc.paddles.compareOuting.useQuery({ a: a.id, b: b.id }, { retry: false })
   if (!q.data?.same) return null
   const { gap, strokeRate } = q.data
-  const nameA = sourceName(a.source.type), nameB = sourceName(b.source.type)
+  const nameA = sourceName(a.source.type, isPhonePaddle(a.source)), nameB = sourceName(b.source.type, isPhonePaddle(b.source))
 
   return (
     <section className="mt-6 flex flex-col gap-3" aria-label="Same outing">
