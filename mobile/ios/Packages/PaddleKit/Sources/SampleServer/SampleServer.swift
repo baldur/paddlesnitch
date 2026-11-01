@@ -190,7 +190,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         case "/api/trpc/me":
             return (200, trpc(try fixture(signedIn ? "me.signed-in" : "me.signed-out")))
         case "/api/trpc/paddles.list":
-            return signedIn ? (200, trpc(try fixture("paddles.list"))) : Self.unauthorized
+            return signedIn ? (200, trpc(try paddlesList())) : Self.unauthorized
         case "/api/trpc/paddles.get":
             guard signedIn else { return Self.unauthorized }
             let id = try input(ById.self, from: request).id

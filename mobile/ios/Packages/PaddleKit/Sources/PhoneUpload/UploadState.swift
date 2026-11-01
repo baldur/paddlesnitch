@@ -13,8 +13,20 @@ public struct UploadState: Codable, Equatable, Sendable {
     /// Tracks with no GPS fix at all: the server kept nothing, and the line
     /// says so until dismissed.
     public var noFix: [String] = []
+    /// Files that already had one sha256 mismatch: a second is a dead end,
+    /// in this pass or a later one.
+    public var mismatched: [String] = []
 
     public init() {}
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        deviceID = try values.decodeIfPresent(String.self, forKey: .deviceID)
+        removed = try values.decodeIfPresent(Bool.self, forKey: .removed) ?? false
+        refused = try values.decodeIfPresent([String].self, forKey: .refused) ?? []
+        noFix = try values.decodeIfPresent([String].self, forKey: .noFix) ?? []
+        mismatched = try values.decodeIfPresent([String].self, forKey: .mismatched) ?? []
+    }
 
     static func file(in folder: URL) -> URL { folder.appending(path: "uploads.json") }
 
@@ -23,9 +35,17 @@ public struct UploadState: Codable, Equatable, Sendable {
         return (try? JSONDecoder().decode(UploadState.self, from: data)) ?? UploadState()
     }
 
+    /// Only into a folder that's there: never brings back one deleted with
+    /// its account. Out of backups like the recordings, and readable by a
+    /// background upload once the phone has been unlocked.
     func save(to folder: URL) throws {
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try JSONEncoder().encode(self).write(to: Self.file(in: folder), options: .atomic)
+        guard FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)) else { return }
+        var excluded = folder
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try excluded.setResourceValues(values)
+        try JSONEncoder().encode(self).write(
+            to: Self.file(in: folder), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }
 

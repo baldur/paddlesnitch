@@ -2,6 +2,7 @@ import Account
 import DesignSystem
 import Paddles
 import PhoneUpload
+import Recorder
 import SwiftUI
 
 /// The bottom tab bar. The web's phone layout has Paddles, Trials, Plan and
@@ -38,7 +39,9 @@ struct RootView: View {
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
                 needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
                 openTerms: { termsOpen = true }, adding: adding, options: account.options,
-                openFile: { url in Task { await open(url) } }, uploads: uploads,
+                openFile: { url in Task { await open(url) } },
+                recordings: account.user.map { account.recordings(for: $0.id) },
+                uploads: uploads,
                 openReport: { Task { reportPage = try? await account.reportPage() } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
@@ -120,8 +123,17 @@ struct RootView: View {
         uploads?.stop()
         uploads = nil
         guard let userID else { return }
+        // This account's token only: once another signs in, the old queue
+        // has none, so nothing of one account goes up with another's.
+        var client = account.client
+        let shared = account.client
+        client.idToken = { [weak account] refresh in
+            guard await account?.user?.id == userID else { return nil }
+            return try await shared.idToken(refresh)
+        }
         let queue = UploadQueue(
-            folder: AccountModel.recordings(for: userID), client: account.client, installID: InstallID.current())
+            folder: account.recordings(for: userID), client: client, installID: InstallID.current(),
+            isOpen: { RecordingFiles.isOpen($0) })
         queue.online = network.online
         uploads = queue
         queue.start()

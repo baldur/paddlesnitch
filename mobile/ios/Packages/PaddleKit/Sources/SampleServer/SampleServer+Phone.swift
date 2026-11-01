@@ -31,6 +31,19 @@ extension SampleServer {
     /// The files the server took, in order.
     public var uploadedRecordings: [String] { lock.withLock { _uploadedRecordings } }
 
+    /// The samples, and a paddle at the top once the phone's track went up,
+    /// as the server makes one from it.
+    func paddlesList() throws -> Data {
+        let data = try fixture("paddles.list")
+        guard uploadedRecordings.contains(where: { !$0.hasSuffix("_imu.csv") }) else { return data }
+        var list = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: data)
+        if var phone = list.cards.first {
+            phone.id = "pdl-phone"
+            list.cards.insert(phone, at: 0)
+        }
+        return try JSONEncoder.paddlesnitch.encode(list)
+    }
+
     func phone(path: String, request: URLRequest) throws -> (Int, Data) {
         guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
             return (401, try fixture("account.error"))
