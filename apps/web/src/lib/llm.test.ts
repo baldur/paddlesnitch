@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { withTimeout, buildPrompt, describePaddleDate, normaliseSport, textFromConverse, textFromOllama } from '@paddlesnitch/analysis/llm'
+import { SYSTEM, withTimeout, buildPrompt, describePaddleDate, normaliseSport, textFromConverse, textFromOllama } from '@paddlesnitch/analysis/llm'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 
 // Guards the "analysis failed, but works on retry" symptom (#171): a slow/hanging
@@ -30,6 +30,17 @@ function result(): AnalysisResult {
     insight: '',
   }
 }
+
+// The model writes only what the numbers show (2026-11-01: Qwen3 Next, in a
+// side-by-side invented "every blade entry crisp" and beating other paddlers).
+describe('the summary instructions', () => {
+  it('forbid describing technique, feel or other paddlers the facts do not state', () => {
+    expect(SYSTEM).toMatch(/Say only what the facts show/)
+    expect(SYSTEM).toMatch(/never describe their blade work, catch, posture, feel/)
+    expect(SYSTEM).toMatch(/never compare them with other paddlers/)
+    expect(SYSTEM).not.toMatch(/watched them paddle before/)
+  })
+})
 
 describe('buildPrompt', () => {
   it('frames the session duration in hours + minutes, not raw minutes (issue #170)', () => {
