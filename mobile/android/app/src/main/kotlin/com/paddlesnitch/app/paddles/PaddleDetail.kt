@@ -32,7 +32,7 @@ data class EffortRow(val number: Int, val at: String, val lasted: String, val pa
 class PaddleDetail(s: AnalysisSession, summaryFailed: Boolean = false) {
     private val r = s.result
     val title: String = fmtWeekday(s.paddledAt)
-    val eyebrow: String? = listOfNotNull(sourceLabel(s.source.type.wire), s.boatClass?.wire?.ifEmpty { "?" }).joinToString(" · ").ifEmpty { null }
+    val eyebrow: String? = listOfNotNull(sourceLabel(s.source.type.wire, s.source.phone), s.boatClass?.wire?.ifEmpty { "?" }).joinToString(" · ").ifEmpty { null }
     val motionOnly = r.noGps != null
     val stats: List<Stat> = (if (motionOnly) motionStats(r) else gpsStats(r)) + conditions(r.conditions)
     val noGpsMessage: String? = r.noGps?.let { noPaddleMessage(it.reason, true) }

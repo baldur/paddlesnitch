@@ -15,6 +15,13 @@ class PaddleDetailTest {
     private fun fixture(name: String) =
         PaddleDetail(ApiJson.decodeFromString(AnalysisSession.serializer(), File("../../contract/fixtures/api/$name").readText()))
 
+    // #789: a phone's paddle is a device with phone: true, and says Phone, never Tracker.
+    @Test
+    fun aPhonesPaddleSaysPhone() {
+        assertEquals("Phone · K1", fixture("paddles.get.with-phone.json").eyebrow)
+        assertEquals("Tracker · K1", fixture("paddles.get.json").eyebrow)
+    }
+
     @Test
     fun aPaddleWithARouteShowsWhatTheWebsiteShows() {
         val d = fixture("paddles.get.json")

@@ -96,6 +96,17 @@ actor ScriptedSource: PaddlesSource {
         #expect(river.alsoRecordedBy == ["Also recorded by Strava"])
     }
 
+    /// #789: a phone's paddle says Phone, never Tracker, on its card and in
+    /// another card's same outing.
+    @Test func aPhonesPaddleSaysPhone() throws {
+        let data = try Data(contentsOf: fixtures.appending(path: "paddles.list.with-phone.json"))
+        let rows = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: data).cards.map(PaddleRow.init)
+        #expect(rows[0].heading.hasSuffix(" · Phone"))
+        #expect(rows[0].alsoRecordedBy == ["Also recorded by Strava"])
+        #expect(rows[1].heading.hasSuffix(" · Tracker"))
+        #expect(rows[1].alsoRecordedBy == ["Also recorded by the phone"])
+    }
+
     @Test func aPaddleWithoutGPSShowsNoRouteEvenIfItHasAStretch() async throws {
         let model = PaddleListModel(source: ScriptedSource())
         await model.load()
@@ -173,6 +184,19 @@ actor ScriptedSource: PaddlesSource {
         #expect(!river.route.isEmpty)
         #expect(river.note == "Headwind on the way back.")
         #expect(river.coachSummary != nil)
+    }
+
+    /// `source.phone` from JSON, so a wrong key fails here. Until the contract
+    /// has `paddles.get.with-phone.json` (#804), the sample gets the key.
+    @Test func aPhonesPaddleSaysPhone() throws {
+        let data = try Data(contentsOf: fixtures.appending(path: "paddles.get.json"))
+        var json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var source = try #require(json["source"] as? [String: Any])
+        source["phone"] = true
+        json["source"] = source
+        let paddle = try JSONDecoder.paddlesnitch.decode(
+            AnalysisSession.self, from: try JSONSerialization.data(withJSONObject: json))
+        #expect(PaddleSummary(paddle).eyebrow == "Phone · K1")
     }
 
     @Test func aMotionOnlyPaddleExplainsItself() async throws {

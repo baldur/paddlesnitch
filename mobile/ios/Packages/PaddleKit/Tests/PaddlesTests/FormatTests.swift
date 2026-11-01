@@ -52,6 +52,8 @@ import Testing
         #expect(Format.source("trial") == "Time trial")
         #expect(Format.source("file") == nil)
         #expect(Format.source("carrier-pigeon") == nil)
+        #expect(Format.source("device", phone: true) == "Phone")
+        #expect(Format.source("device", phone: false) == "Tracker")
     }
 
     /// C's "%.1f" rounds an exact tie to even; JavaScript's toFixed rounds up.
@@ -73,6 +75,7 @@ import Testing
         #expect(Format.alsoRecordedBy("strava") == "Strava")
         #expect(Format.alsoRecordedBy("trial") == "a time trial")
         #expect(Format.alsoRecordedBy("device") == "the tracker")
+        #expect(Format.alsoRecordedBy("device", phone: true) == "the phone")
         #expect(Format.alsoRecordedBy("file") == "a file")
         #expect(Format.alsoRecordedBy("carrier-pigeon") == "a file")
     }
