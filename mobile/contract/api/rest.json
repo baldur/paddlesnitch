@@ -252,6 +252,29 @@
       404
     ]
   },
+  "POST /api/account/devices/phone": {
+    "auth": "user",
+    "input": "PhoneAdd",
+    "output": "Phone",
+    "errors": [
+      400,
+      401,
+      409
+    ]
+  },
+  "POST /api/account/devices/{deviceId}/sessions": {
+    "auth": "user",
+    "input": null,
+    "output": "Uploaded",
+    "errors": [
+      400,
+      401,
+      404,
+      409,
+      413,
+      422
+    ]
+  },
   "GET /api/account/devices/sessions": {
     "auth": "user",
     "input": null,

@@ -263,7 +263,7 @@ platform tell the other when the contract or fixture formats change.
 |---|---|---|
 | **C1. Contract pipeline** ✅ | Schemas for `me`, `paddles.list` (cards with note / no-GPS / same outing, totals, logbook — all worked out on the server), `paddles.get`; `pnpm mobile:contract`; freshness + drift checks; tokens → JSON | Both apps' first screens |
 | **C2. Sign-in** (Bearer on REST ✅) | `getRequestUser`, token-returning sign-in, Strava one-time code, app-link files | Both apps' sign-in |
-| **C3. Recording + sync** | Phone devices on the relay route; CSV + Bluetooth + receipt fixtures from the existing web code and firmware | Both apps' recording and tracker phases |
+| **C3. Recording + sync** (server + contract ✅, apps next) | Phone devices on the relay route (`POST /api/account/devices/phone`, then the owner's upload route; mobile/contract/README.md § Phone recording); CSV + Bluetooth + receipt fixtures from the existing web code and firmware | Both apps' recording and tracker phases |
 | **C4. Signed-in website pages** | One-time code → cookies | Both apps' link-outs |
 | **C5. Native account** | In the contract (schemas + fixtures), as a Bearer call: accept Terms (`/api/account/tos`), details and handle (`profile`, `handle`, `contact`), trackers and their recordings, remove (`/api/account/devices…`), export (`/api/account/export`), delete account, forgot password (request code, set new password), Strava connect / disconnect for a signed-in account (the sign-in one-time-code shape), Strava history + import (`stravaHistory`, `importStravaPaddle`) | Both apps' Account screens and adding from Strava |
 

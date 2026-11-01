@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { redeemToken, isDeviceId } from '@/lib/devices'
+import { redeemToken, isTrackerId } from '@/lib/devices'
 import { limitTokenPoll } from '@/lib/device-limits'
 
 // POST /api/devices/token — UNAUTHENTICATED, polled by the device every ~5s with
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   // malformed id cannot spend a real device's allowance. A bad id still answers
   // `pending` rather than a distinct error — the endpoint deliberately never
   // reveals whether a device exists.
-  if (!isDeviceId(deviceId)) return NextResponse.json({ status: 'pending' }, { status: 202 })
+  if (!isTrackerId(deviceId)) return NextResponse.json({ status: 'pending' }, { status: 202 })
 
   const limit = await limitTokenPoll(deviceId)
   if (limit.limited) return limit.response

@@ -1,6 +1,6 @@
 import { listUserDevices, listUserDeviceSessions, getDeviceHealth, getLastCrash } from '@/lib/devices'
 import { getChannelVersion, getBetaDeviceIds, versionForDevice } from '@/lib/firmware'
-import { trackerSummaries } from '@/lib/device-view'
+import { trackerSummaries, isPhoneDeviceId } from '@/lib/device-view'
 
 // The signed-in user's trackers as DEVICES shows them: GET /api/account/devices
 // answers with this, and the page puts it in its first HTML.
@@ -17,6 +17,10 @@ export async function deviceList(userId: string) {
 async function trackersOf(userId: string) {
   const beta = await getBetaDeviceIds().catch(() => new Set<string>())
   const devices = await Promise.all((await listUserDevices(userId)).map(async d => {
+    // A phone has no firmware, health reports or crashes.
+    if (isPhoneDeviceId(d.deviceId)) {
+      return { deviceId: d.deviceId, name: d.name, model: d.model, firmware: d.firmware, linkedAt: d.linkedAt, lastSeenAt: d.lastSeenAt, targetVersion: null }
+    }
     // What this tracker should run: a beta tracker may be ahead of stable.
     const target = await versionForDevice(d.deviceId).catch(() => null)
     // The last start-up or heartbeat report, reduced to what the page shows.

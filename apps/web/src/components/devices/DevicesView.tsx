@@ -11,7 +11,7 @@ import { PREFILLED_FRESH_MS } from '@/lib/fresh'
 import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Badge, Chevron, EmptyState, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
-import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, crashNote } from '@/lib/device-view'
+import { type DeviceSummary, type DeviceView, deviceSummaries, deviceIsBehind, deviceIsQuiet, fmtAgo, fmtDist, crashNote, isPhoneDeviceId } from '@/lib/device-view'
 
 // DEVICES: your trackers, one card each (the tracker is the unit; its
 // recordings live one level down at /devices/<deviceId>), and the box to add a
@@ -83,6 +83,10 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
       .catch(() => setLoadFailed(true))
   }
   useEffect(() => { if (!initial) load() }, [initial])
+  // Phones that record with the app (C3) get their own list: no firmware, and
+  // silence between paddles is normal for them.
+  const trackerRows = rows?.filter(r => !isPhoneDeviceId(r.deviceId))
+  const phoneRows = rows?.filter(r => isPhoneDeviceId(r.deviceId)) ?? []
 
   return (
     <main className="flex-1 flex flex-col">
@@ -93,7 +97,7 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
           description={<>Your paddlesnitch trackers and what each one has recorded. Setting one up? <Link href="/guide" className="tt-link">Follow the guide</Link>.</>}
         />
 
-        {rows !== undefined && <GettingStarted rows={rows} hasTrackerPaddle={hasTrackerPaddle} />}
+        {trackerRows !== undefined && <GettingStarted rows={trackerRows} hasTrackerPaddle={hasTrackerPaddle} />}
 
         <AddTrackerForm onAdded={load} />
 
@@ -102,9 +106,9 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
             <p className="text-base text-red" role="alert">
               Couldn&apos;t load your trackers. <button type="button" onClick={load} className="underline min-h-11">Try again</button>.
             </p>
-          ) : rows === undefined ? (
+          ) : trackerRows === undefined ? (
             <p className="text-base text-muted">Loading…</p>
-          ) : rows.length === 0 ? (
+          ) : trackerRows.length === 0 ? (
             <EmptyState
               title="No trackers yet"
               body="A paddlesnitch tracker records your paddle and uploads it over WiFi by itself. Add one with the code on its screen."
@@ -112,7 +116,7 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
             />
           ) : (
             <div className="flex flex-col gap-2">
-              {rows.map(d => (
+              {trackerRows.map(d => (
                 <Link
                   key={d.deviceId}
                   href={`/devices/${d.deviceId}`}
@@ -163,13 +167,45 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
               ))}
             </div>
           )}
-          {!!rows?.length && (
+          {!!trackerRows?.length && (
             <p className="text-sm text-muted">
               Each tracker&apos;s paddles appear in <Link href="/paddles" className="tt-link">Paddles</Link> by
               themselves. To remove a tracker, open it.
             </p>
           )}
         </Section>
+
+        {phoneRows.length > 0 && (
+          <Section title="Your phones">
+            <div className="flex flex-col gap-2">
+              {phoneRows.map(d => (
+                <Link
+                  key={d.deviceId}
+                  href={`/devices/${d.deviceId}`}
+                  className={`${cardLinkClass} px-4 py-3 flex items-center justify-between gap-4`}
+                >
+                  <span className="min-w-0 flex flex-col gap-1">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="text-base font-medium text-fg truncate">{d.name}</span>
+                      {!d.linked && <Badge>removed</Badge>}
+                    </span>
+                    <span className="block text-sm text-muted tabular">
+                      {d.sessions === 0
+                        ? 'no recordings yet'
+                        : `${d.sessions} recording${d.sessions === 1 ? '' : 's'}${d.totalDistanceM > 0 ? ` · ${fmtDist(d.totalDistanceM)}` : ''}`}
+                      {d.latestAt ? ` · latest ${fmtDay(d.latestAt)}` : ''}
+                    </span>
+                    <span className="block text-xs text-muted tabular opacity-70">{d.deviceId}</span>
+                  </span>
+                  <Chevron />
+                </Link>
+              ))}
+            </div>
+            <p className="text-sm text-muted">
+              Phones you record on with the paddlesnitch app. To remove one, open it.
+            </p>
+          </Section>
+        )}
 
         <section className="flex flex-col gap-3" aria-label="Bluetooth">
           <h2 className="text-lg font-semibold text-fg">Bluetooth</h2>

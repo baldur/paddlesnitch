@@ -5,8 +5,10 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 
 // Remove (unlink) a tracker from the account, from its own page. Asks once
 // before doing it. The tracker is signed out and stops uploading until it is
-// added again; the recordings it already uploaded stay the user's.
-export default function RemoveTrackerButton({ deviceId }: { deviceId: string }) {
+// added again; the recordings it already uploaded stay the user's. A phone
+// (C3) works the same way: the app adds it again when its owner next records.
+export default function RemoveTrackerButton({ deviceId, phone = false }: { deviceId: string; phone?: boolean }) {
+  const thing = phone ? 'phone' : 'tracker'
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -21,7 +23,7 @@ export default function RemoveTrackerButton({ deviceId }: { deviceId: string }) 
       if (!r.ok) throw new Error()
       router.push('/devices')
     } catch {
-      setErr('Couldn’t remove the tracker. Please try again.')
+      setErr(`Couldn’t remove the ${thing}. Please try again.`)
       setBusy(false)
     }
   }
@@ -29,14 +31,16 @@ export default function RemoveTrackerButton({ deviceId }: { deviceId: string }) 
   if (!confirming) {
     return (
       <button type="button" onClick={() => setConfirming(true)} className={buttonClass('danger', 'md', 'self-start')}>
-        Remove tracker
+        Remove {thing}
       </button>
     )
   }
   return (
     <div className="rounded-control border border-red/50 bg-red/5 p-4 flex flex-col gap-3">
       <p className="text-base text-fg">
-        Remove this tracker? It stops uploading until you add it again. Its recordings stay yours.
+        {phone
+          ? 'Remove this phone? It stops uploading until you record on it with the app again. Its recordings stay yours.'
+          : 'Remove this tracker? It stops uploading until you add it again. Its recordings stay yours.'}
       </p>
       {err && <p role="alert" className="text-sm text-red">{err}</p>}
       <div className="flex flex-wrap gap-2">

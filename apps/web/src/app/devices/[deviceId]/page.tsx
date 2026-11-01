@@ -10,7 +10,7 @@ import RemoveTrackerButton from '@/components/devices/RemoveTrackerButton'
 import TechnicalDetails, { Stat } from '@/components/devices/TechnicalDetails'
 import { strokeRateCopy, gpsCopy } from '@/lib/tracker-copy'
 import type { DeviceSessionMeta } from '@/lib/devices'
-import { type DeviceView, fmtDate, fmtDay, fmtDist, fmtDur } from '@/lib/device-view'
+import { type DeviceView, fmtDate, fmtDay, fmtDist, fmtDur, isPhoneDeviceId } from '@/lib/device-view'
 import { trpc } from '@/lib/trpc'
 import type { DeviceDataReport } from '@paddlesnitch/timing/device'
 import type { CadenceReport } from '@paddlesnitch/timing/cadence'
@@ -116,7 +116,9 @@ export default function DeviceDetailPage() {
     } catch { setReports(r => ({ ...r, [key]: 'error' })) }
   }
 
-  const title = device?.name ?? `Tracker ${deviceId}`
+  // A phone that records with the app (C3): no firmware, Bluetooth or WiFi.
+  const phone = isPhoneDeviceId(deviceId)
+  const title = device?.name ?? (phone ? 'Phone' : `Tracker ${deviceId}`)
 
   return (
     <main className="flex-1 flex flex-col">
@@ -124,7 +126,7 @@ export default function DeviceDetailPage() {
       <Page>
         <PageHeader
           title={title}
-          description="Everything this tracker has recorded. Each paddle opens in Paddles; a recording where the boat barely moved (a test at home) stays here."
+          description={`Everything this ${phone ? 'phone' : 'tracker'} has recorded. Each paddle opens in Paddles; a recording where the boat barely moved (a test at home) stays here.`}
         />
         <div className="flex flex-col gap-3 -mt-4">
           <p className="text-sm text-muted tabular">
@@ -133,13 +135,19 @@ export default function DeviceDetailPage() {
             {device?.firmware ? ` · firmware ${device.firmware}` : ''}
             {device ? ` · last seen ${fmtDay(device.lastSeenAt)}` : ''}
           </p>
-          {device === null && (
+          {device === null && phone && (
+            <p className={`${cardClass} text-base text-muted p-4`}>
+              This phone is no longer on your account, but its recordings are still yours.
+              It&apos;s added again when you next record on it with the app.
+            </p>
+          )}
+          {device === null && !phone && (
             <p className={`${cardClass} text-base text-muted p-4`}>
               This tracker is no longer on your account, but its recordings are still yours.{' '}
               <Link href="/devices#add" className="tt-link">Add it again</Link> to get new ones.
             </p>
           )}
-          {device && (
+          {device && !phone && (
             <p className="text-sm text-muted">
               Away from WiFi? <Link href="/devices/bluetooth" className="tt-link">Sync over Bluetooth</Link>.
             </p>
@@ -150,11 +158,15 @@ export default function DeviceDetailPage() {
           {sessions === undefined ? (
             <p className="text-base text-muted">Loading…</p>
           ) : sessions.length === 0 ? (
-            <EmptyState
-              title="No recordings yet"
-              body="The tracker uploads them by itself when it's switched on in range of your WiFi."
-              action={<Link href="/guide/upload" className={buttonClass('secondary')}>How uploading works</Link>}
-            />
+            phone ? (
+              <EmptyState title="No recordings yet" body="The app uploads each recording after you stop it." />
+            ) : (
+              <EmptyState
+                title="No recordings yet"
+                body="The tracker uploads them by itself when it's switched on in range of your WiFi."
+                action={<Link href="/guide/upload" className={buttonClass('secondary')}>How uploading works</Link>}
+              />
+            )
           ) : (
             <div className="flex flex-col gap-2">
               {sessions.map(s => paddleOf[s.sessionId] ? (
@@ -195,7 +207,7 @@ export default function DeviceDetailPage() {
 
         {device && (
           <div className="border-t border-border pt-6">
-            <RemoveTrackerButton deviceId={deviceId} />
+            <RemoveTrackerButton deviceId={deviceId} phone={phone} />
           </div>
         )}
       </Page>

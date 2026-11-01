@@ -255,7 +255,7 @@ export const Tracker = named('Tracker', z.object({
   }).optional(),
   lastCrash: z.object({ at: timestamp(), task: z.string() }).optional(),
 }))
-/** One tracker card, worked out by the server (the website shows the same): removed trackers that still have recordings come too (`linked` false). Already in display order. `quiet` = not heard from for over 2 days; `crash` only within 7 days. */
+/** One tracker card, worked out by the server (the website shows the same): removed trackers that still have recordings come too (`linked` false). Already in display order. `quiet` = not heard from for over 2 days (never for a phone); `crash` only within 7 days. `kind` phone: a phone recording with the app (firmwareState always unknown); always sent, optional only so older app builds still decode (absent = tracker). */
 export const TrackerSummary = named('TrackerSummary', z.object({
   deviceId: z.string(),
   name: z.string(),
@@ -267,9 +267,26 @@ export const TrackerSummary = named('TrackerSummary', z.object({
   firmwareState: z.enum(['up_to_date', 'update_pending', 'unknown']),
   quiet: z.boolean(),
   crash: z.object({ at: timestamp(), task: z.string() }).optional(),
+  // Last, so the apps' positional constructors keep working.
+  kind: z.enum(['tracker', 'phone']).optional(),
 }))
 export const TrackerList = named('TrackerList', z.object({ devices: z.array(Tracker), stableVersion: z.string().nullable(), summaries: z.array(TrackerSummary) }))
 const TrackerId = named('TrackerId', z.object({ deviceId: z.string() }))
+// Phone recording (C3): the app adds its phone, then uploads like a tracker.
+/** `installId`: random, made once per install and kept (16–64 of A–Z a–z 0–9 _ -). */
+const PhoneAdd = named('PhoneAdd', z.object({ installId: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
+/** The phone on the account. Upload its recordings to /api/account/devices/{deviceId}/sessions. */
+export const Phone = named('Phone', z.object({ deviceId: z.string(), name: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
+/** A file the server has taken: a track (`points`…) or its motion file (`motionRows`). 202 answers carry `part`/`parts`/`have` instead. */
+export const Uploaded = named('Uploaded', z.object({
+  sessionId: z.string(),
+  points: z.int().optional(),
+  startedAt: timestamp().optional(),
+  endedAt: timestamp().optional(),
+  distanceMetres: z.number().optional(),
+  motionRows: z.int().optional(),
+  bytes: z.int().optional(),
+}))
 /** A recording a tracker uploaded (it also becomes a paddle in Paddles). `motion` once its motion file is in. */
 export const Recording = named('Recording', z.object({
   sessionId: z.string(),
@@ -358,8 +375,9 @@ const StravaConnectFinish = named('StravaConnectFinish', z.object({ code: z.stri
 export const StravaAutoImport = named('StravaAutoImport', z.object({ autoImport: z.boolean() }))
 
 /**
- * `input: null` is a multipart upload (`file`) on POST and nothing on GET or
- * DELETE; a GET's input goes in the query string. `auth: 'user'` needs
+ * `input: null` is a multipart upload (`file`) on POST (except a phone's
+ * recording upload, whose body is the file itself: README § Phone recording)
+ * and nothing on GET or DELETE; a GET's input goes in the query string. `auth: 'user'` needs
  * `Authorization: Bearer <ID token>`. See mobile/contract/README.md.
  */
 type Rest = { auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodType; errors: number[] }
@@ -399,6 +417,8 @@ export const restRoutes = {
   'DELETE /api/account/contact': { auth: 'user', input: null, output: Ok, errors: [401] },
   'GET /api/account/devices': { auth: 'user', input: null, output: TrackerList, errors: [401] },
   'DELETE /api/account/devices': { auth: 'user', input: TrackerId, output: Ok, errors: [401, 404] },
+  'POST /api/account/devices/phone': { auth: 'user', input: PhoneAdd, output: Phone, errors: [400, 401, 409] },
+  'POST /api/account/devices/{deviceId}/sessions': { auth: 'user', input: null, output: Uploaded, errors: [400, 401, 404, 409, 413, 422] },
   'GET /api/account/devices/sessions': { auth: 'user', input: null, output: RecordingList, errors: [401] },
   'GET /api/account/devices/sessions/{sessionId}': { auth: 'user', input: RecordingOf, output: RecordingMotion, errors: [401, 404] },
   'GET /att/api/strava/status': { auth: 'user', input: null, output: StravaStatus, errors: [401] },

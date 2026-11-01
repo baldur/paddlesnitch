@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestUser } from '@/lib/auth'
-import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts } from '@/lib/devices'
+import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts, isPhone } from '@/lib/devices'
 import { handleSessionUpload } from '@/lib/session-upload'
 import { reportedFirmware, reportedModel } from '@/lib/device-route'
 import { withAction } from '@/lib/action'
@@ -12,19 +12,28 @@ import { withAction } from '@/lib/action'
 // is the tracker's own (lib/session-upload.ts): same pieces, compression,
 // duplicate checks. The answer carries a receipt the tracker checks before it
 // marks the recording sent.
+//
+// A phone's own recordings come here too (C3): the app adds the phone to the
+// account (POST /api/account/devices/phone) and uploads as its owner. A phone
+// has no tracker token, so its answers carry no receipt.
 async function post(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { deviceId } = await params
   const device = await getUserDevice(user.id, deviceId)
-  // 404, not 403: don't reveal whether someone else's tracker exists.
-  if (!device?.tokenHash) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  // 404, not 403: don't reveal whether someone else's tracker exists. A
+  // removed phone is 404 too: the app adds itself again only when its owner
+  // next records.
+  const phone = !!device && isPhone(device)
+  if (!device || (!phone && !device.tokenHash)) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
   // The page passes on what the tracker said it runs (its About record), so a
-  // tracker that only ever syncs by phone still shows as seen and current.
-  await touchDevice(deviceId, { firmware: reportedFirmware(req), model: reportedModel(req) })
+  // tracker that only ever syncs by phone still shows as seen and current. A
+  // phone is only marked seen: its model was set when it was added.
+  await touchDevice(deviceId, phone ? {} : { firmware: reportedFirmware(req), model: reportedModel(req) })
 
   const res = await handleSessionUpload(req, { deviceId, userId: user.id })
+  if (phone) return res
   // Accepted (201) or already here (409 already_uploaded): either way the
   // tracker may mark it sent, so both carry the receipt.
   if (res.status !== 201 && res.status !== 409) return res

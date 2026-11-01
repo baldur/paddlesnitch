@@ -84,8 +84,20 @@ function randomCode(): string {
   return out
 }
 
-export function isDeviceId(v: unknown): v is string {
+/** A tracker's ID: 8 upper-case hex digits, from its chip. */
+export function isTrackerId(v: unknown): v is string {
   return typeof v === 'string' && /^[0-9A-F]{8}$/.test(v)
+}
+
+/** A phone's ID: `P` and 11 upper-case hex digits, made by addPhone. */
+export function isPhoneId(v: unknown): v is string {
+  return typeof v === 'string' && /^P[0-9A-F]{11}$/.test(v)
+}
+
+/** Any device on an account: a tracker or a phone. Tracker-only paths (claims,
+ *  tokens, keys) check isTrackerId instead. */
+export function isDeviceId(v: unknown): v is string {
+  return isTrackerId(v) || isPhoneId(v)
 }
 
 // Start a claim. Returns the code (shown on the OLED) + the secret (held only by
@@ -197,7 +209,7 @@ export async function checkDeviceProof(deviceId: string, message: string, proof:
 
 /** Enrol (or, by cable, re-enrol) a tracker's public key. */
 export async function enrolDeviceKey(deviceId: string, publicKey: string, via: DeviceIdentity['via']): Promise<boolean> {
-  if (!isDeviceId(deviceId) || !p256PublicKey(publicKey)) return false
+  if (!isTrackerId(deviceId) || !p256PublicKey(publicKey)) return false
   await putJson(identityKey(deviceId), { publicKey, enrolledAt: nowIso(), via } satisfies DeviceIdentity)
   return true
 }
@@ -228,7 +240,7 @@ export async function redeemToken(deviceId: string, claimSecret: string, proof?:
   // point of keying claims by deviceId: the device polls this every 5 seconds
   // for up to five minutes, and it used to be a full listing plus a read per
   // claim on each of those polls.
-  if (!isDeviceId(deviceId)) return { status: 'pending' }
+  if (!isTrackerId(deviceId)) return { status: 'pending' }
   const key = claimKey(deviceId)
   const c = await getJson<DeviceClaim>(key)
   // Every miss below returns `pending`, identical to "the user has not typed the
@@ -292,7 +304,7 @@ export async function linkByTokenHash(
   userId: string,
   d: { deviceId: string; tokenHash: string; model: string; firmware: string; name?: string; signature?: unknown },
 ): Promise<{ deviceId: string; model: string } | { error: 'bad_request' | 'owned_elsewhere' | 'token_in_use' | 'not_enrolled' | 'bad_proof' }> {
-  if (!isDeviceId(d.deviceId) || !/^[0-9a-f]{64}$/.test(d.tokenHash)) return { error: 'bad_request' }
+  if (!isTrackerId(d.deviceId) || !/^[0-9a-f]{64}$/.test(d.tokenHash)) return { error: 'bad_request' }
   const proven = await checkDeviceProof(d.deviceId, linkProofMessage(d.deviceId, d.tokenHash), d.signature)
   if (proven !== 'ok') return { error: proven }
   const existing = await getJson<DeviceRecord>(deviceKey(d.deviceId))
@@ -435,6 +447,52 @@ export async function revokeDevice(userId: string, deviceId: string): Promise<bo
   await deleteObject(deviceKey(deviceId))
   await deleteObject(userTrackerKey(userId, deviceId))
   return true
+}
+
+// ── Phones (C3, docs/features/mobile-apps.md) ────────────────────────────────
+// A phone that records is a device on its owner's account, so its recordings
+// take the tracker's path: same storage, same paddle, same export and erasure.
+// It has no claim code and no tracker token: the signed-in app adds it and
+// uploads as its owner (POST /api/account/devices/[deviceId]/sessions).
+
+export const PHONE_MODELS = ['phone-android', 'phone-ios'] as const
+export type PhoneModel = typeof PHONE_MODELS[number]
+export const isPhoneModel = (v: unknown): v is PhoneModel => (PHONE_MODELS as readonly unknown[]).includes(v)
+export const isPhone = (d: { deviceId: string }) => isPhoneId(d.deviceId)
+const PHONE_NAMES: Record<PhoneModel, string> = { 'phone-android': 'Android phone', 'phone-ios': 'iPhone' }
+/** The most phones one account may have. Each reinstall of the app is a new phone. */
+export const MAX_PHONES = 10
+
+/** The phone's ID: from the account and the app's install ID, so adding the
+ *  same install again finds the same phone, and the same install signed in to
+ *  another account is a different phone. */
+export function phoneDeviceId(userId: string, installId: string): string {
+  return 'P' + sha256(`ps-phone:v1|${userId}|${installId}`).slice(0, 11).toUpperCase()
+}
+
+/**
+ * Add this phone to the account, or return it if it's already there. A phone
+ * removed from Devices comes back with the same ID (and its recordings) when
+ * the app adds it again.
+ */
+export async function addPhone(
+  userId: string, d: { installId: unknown; model: unknown },
+): Promise<{ deviceId: string; name: string; model: PhoneModel } | { error: 'bad_request' | 'too_many' }> {
+  if (typeof d.installId !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(d.installId) || !isPhoneModel(d.model)) return { error: 'bad_request' }
+  const model = d.model
+  const deviceId = phoneDeviceId(userId, d.installId)
+  const existing = await getJson<DeviceRecord>(deviceKey(deviceId))
+  if (existing && existing.userId === userId) {
+    await putJson(userTrackerKey(userId, deviceId), {})
+    return { deviceId, name: existing.name, model }
+  }
+  if ((await listUserDevices(userId)).filter(isPhone).length >= MAX_PHONES) return { error: 'too_many' }
+  const ts = nowIso()
+  await putJson(deviceKey(deviceId), {
+    deviceId, userId, name: PHONE_NAMES[model], model, firmware: '', linkedAt: ts, lastSeenAt: ts, tokenHash: '',
+  } satisfies DeviceRecord)
+  await putJson(userTrackerKey(userId, deviceId), {})
+  return { deviceId, name: PHONE_NAMES[model], model }
 }
 
 // ── Device sessions (uploads) ────────────────────────────────────────────────
