@@ -26,7 +26,10 @@ final class EmailCodeStepTests: AppTestCase {
         // keyboard away to see the buttons under it.
         typeWhenFocused("123456", into: app.textFields["code-field"])
         dismissKeyboard()
-        XCTAssertFalse(scrollToElement(app.buttons["send-new-code"]).isEnabled, "30 seconds before another")
+        // There, not when it's allowed: a slow CI runner was past the 30
+        // seconds by now (#833). The 30 seconds are EmailCodeTests' (a clock
+        // the test sets).
+        XCTAssertTrue(scrollToElement(app.buttons["send-new-code"]).exists, "Send a new code")
         tapWhenClear(app.buttons["sign-in-submit"])
         XCTAssertTrue(signedIn(), "signed in")
     }

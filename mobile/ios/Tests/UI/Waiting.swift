@@ -55,6 +55,33 @@ extension XCUIElement {
 }
 
 extension AppTestCase {
+    func dismissKeyboard() {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+        let done = app.buttons["keyboard-done"].firstMatch
+        // The code step's Done comes a moment after its keyboard; without
+        // a wait, the drag tried instead left that keyboard up.
+        let doneComing = app.textFields["code-field"].exists
+        for _ in 0..<3 {
+            // Tapped where it was: Done goes with the keyboard, and a tap on
+            // a button that went between the look and the tap fails the test
+            // ("no matches found … keyboard-done", CI on #834).
+            var place: CGRect?
+            if poll(
+                timeout: doneComing ? 2 : 0,
+                {
+                    place = done.frameIfThere; return place != nil
+                }), let place
+            {
+                app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: place.midX, dy: place.midY)).tap()
+            } else {
+                swipe(up: false)
+            }
+            if keyboard.disappears(timeout: 3) { return }
+        }
+        XCTFail("the keyboard went away")
+    }
+
     /// Signed in from the sign-in sheet: the sheet has gone (it stays up when
     /// sign-in fails), and so has the samples notice. Both, not the notice
     /// alone: the check now looks at once, and a sheet might hide the notice.

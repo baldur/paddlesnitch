@@ -113,20 +113,6 @@ class AppTestCase: XCTestCase {
         XCTFail("\(target) stayed covered", file: file, line: line)
     }
 
-    func dismissKeyboard() {
-        let keyboard = app.keyboards.firstMatch
-        guard keyboard.exists else { return }
-        let done = app.buttons["keyboard-done"].firstMatch
-        // The code step's Done comes a moment after its keyboard; without
-        // a wait, the drag tried instead left that keyboard up.
-        let doneComing = app.textFields["code-field"].exists
-        for _ in 0..<3 {
-            if done.becomesHittable(timeout: doneComing ? 2 : 0) { done.tap() } else { swipe(up: false) }
-            if keyboard.disappears(timeout: 3) { return }
-        }
-        XCTFail("the keyboard went away")
-    }
-
     func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier].firstMatch
     }
