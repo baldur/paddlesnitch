@@ -30,6 +30,8 @@ time and isn't obvious from the code.
   fields, checkboxes and switches do the same with `fieldColors()`, `checkboxColors()`
   and `switchColors()` (`ui/Fields.kt`). The theme's `primary` stays #0369a1 for
   filled buttons (lead, 2026-10-26).
+- Data is square: no rounded corners on charts, chart keys, tables or maps (design system).
+  `SquareDataTest` draws the weekly bars and the speed colour key and checks their corner pixels.
 - Buttons have the control radius from the tokens (`PsRadius.control`, 6 dp), not M3's pill (#793).
   M3's `Button`, `OutlinedButton` and `TextButton` take their pill from a fixed full-corner token,
   never from the theme's `Shapes`, so setting `Shapes` changes nothing. Screens import
