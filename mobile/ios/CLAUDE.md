@@ -184,3 +184,7 @@ isn't obvious from the code.
 - An audit of the Paddles list with lines above the logbook reports "All
   paddles" clipped (the header half under the tab bar): those audits skip
   `.textClipped`; LargeTextTests checks clipping on the whole screen.
+- A hand-run `xcodebuild test` takes `-derivedDataPath .build/DerivedData`
+  (the Makefile's `DERIVED`, gitignored), never `build/DerivedData`: that one
+  isn't ignored, `git add -A` takes thousands of files, and GitHub refuses
+  the push. Stage paths by name.
