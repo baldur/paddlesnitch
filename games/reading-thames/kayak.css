@@ -90,8 +90,6 @@ header button {
   background: rgb(0 0 0 / 0.35);
   border: 1px solid rgb(255 255 255 / 0.35);
 }
-/* The controls help runs across it for the first seconds of a race. */
-#hud.helping #near { visibility: hidden; }
 #near .water { fill: rgb(120 190 230 / 0.55); }
 #near line { stroke-width: 2; }
 #near .start { stroke: #4ade80; }
@@ -145,6 +143,13 @@ header button {
 #balance line { stroke: #fff; stroke-width: 5; stroke-linecap: round; }
 #balance circle { fill: #fff; }
 #needle { transform-origin: 100px 100px; }
+/* About to go in: the red ends thicken and the gauge pulses, so the warning isn't colour alone. */
+#balance.tipping .danger { stroke-width: 11; }
+#balance.tipping line { stroke: #ff5a3c; stroke-width: 7; } /* plain to see over a white bow */
+#balance.tipping circle { fill: #ff5a3c; }
+#balance.tipping { animation: tipping 0.35s ease-in-out infinite alternate; }
+@keyframes tipping { to { scale: 1.12; } }
+@media (prefers-reduced-motion: reduce) { #balance.tipping { animation: none; } }
 
 .meters { justify-self: end; display: grid; gap: 0.35rem; font-size: 0.8rem; width: clamp(100px, 20vw, 180px); }
 .meters .bar { height: 10px; border-radius: 5px; background: rgb(0 0 0 / 0.35); overflow: hidden; }
@@ -156,9 +161,11 @@ header button {
 
 #hud.solo #pos { display: none; }
 
+/* Under the clock, one slot each so they never overlap: the place's name, then
+   the wash, then the turn cue. */
 #wash {
   position: absolute;
-  top: 6.4rem;
+  top: 8rem;
   left: 50%;
   translate: -50% 0;
   margin: 0;
@@ -187,16 +194,36 @@ header button {
 }
 #place.on { opacity: 1; }
 
-#assisted {
+/* Low in the middle, above the gauges and clear of the boats ahead: hints, the
+   phone's controls help, a drill's numbers. Stacked, so they never overlap, and
+   narrow enough to miss the eight-behind arrow at either side. */
+.lane-low {
   position: absolute;
-  inset: auto 0 9.5rem;
-  margin: 0;
+  bottom: 9.5rem;
+  left: 50%;
+  translate: -50% 0;
+  width: min(36rem, max(60vw, 100vw - 340px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font);
   text-align: center;
-  font-size: 0.75rem;
-  opacity: 0.8;
-  display: none;
 }
-#hud.assisted #assisted { display: block; }
+.lane-low p { margin: 0; }
+#assisted { font-size: 0.75rem; opacity: 0.8; display: none; }
+#hud.assisted:not(.helping) #assisted { display: block; } /* after the controls help */
+#hint {
+  padding: 0.35rem 0.8rem;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.45);
+  font-size: clamp(1rem, 2.6vw, 1.35rem);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+#hint:empty { display: none; }
+#hint.show { opacity: 1; transition: none; }
 
 .rotate-hint { display: none; color: var(--accent); font-weight: 700; }
 @media (orientation: portrait) and (pointer: coarse) {
@@ -205,7 +232,7 @@ header button {
 
 /* Fingers need bigger targets than a mouse. */
 @media (pointer: coarse) {
-  header button, header a { min-height: 40px; display: inline-flex; align-items: center; }
+  header button, header a { min-height: 44px; display: inline-flex; align-items: center; }
   header button { padding-inline: 1rem; }
 }
 
@@ -214,16 +241,18 @@ header button {
   header { padding: 0.35rem 16px; }
   header h1 { font-size: 1rem; }
   header button { padding: 0.3rem 0.7rem; font-size: 0.85rem; }
-  .hud-top { top: 2.6rem; font-size: 1.1rem; }
-  #map { top: 2.4rem; width: 150px; }
+  .hud-top { top: 2.6rem; font-size: 1.1rem; gap: 0.9rem; }
+  #map { top: 3.6rem; width: 150px; } /* below Pause and Sound */
   #map.tall { width: auto; height: 28vh; }
-  #near { top: 2.6rem; width: 100px; }
-  #wash { top: 4.6rem; }
+  #near { top: 3.6rem; width: 90px; }
+  #wash { top: 6rem; }
   .hud-bottom { inset: auto 16px 8px; }
   #balance { width: 110px; }
   .readout b { font-size: 1.2rem; }
-  #assisted { bottom: 5.5rem; }
-  #touchhelp { top: 3.9rem; font-size: 0.75rem; }
+  .lane-low { bottom: 5.3rem; gap: 0.25rem; width: max(50vw, 100vw - 320px); }
+  #hud.helping .lane-low { width: calc(100vw - 160px); } /* the first seconds: over the decorative tap marks, not the boats */
+  #touchhelp { font-size: 0.72rem; padding-block: 0.15rem; }
+  #hint { font-size: 0.95rem; padding-block: 0.2rem; }
   .cue { width: 48px; height: 48px; }
 }
 
@@ -249,12 +278,9 @@ header button {
 .rudder span { position: absolute; top: -3px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #fff; }
 
 #touchhelp {
-  position: absolute;
-  top: 6.2rem;
-  inset-inline: 16px;
-  margin: 0;
-  text-align: center;
-  font-family: var(--font);
+  padding: 0.3rem 0.7rem;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.35);
   font-size: 0.85rem;
   display: none;
 }
@@ -278,22 +304,31 @@ header button {
 #standings { columns: 2; column-gap: 2rem; padding-left: 1.5rem; font-family: var(--mono); font-size: 0.9rem; }
 #standings .you { font-weight: 700; color: var(--accent); }
 
+/* Above the horizon, so not over the boats ahead; while it shows, the place,
+   wash and turn cue under the clock make way. */
 #flash {
   position: absolute;
-  top: 38%;
+  top: 30%;
   left: 50%;
   translate: -50% -50%;
   margin: 0;
   font-family: var(--font);
-  font-size: clamp(2rem, 9vw, 5rem);
+  width: max-content;
+  max-width: max(50vw, 100vw - 480px); /* between the maps, whatever the font's width */
+  font-size: clamp(1.8rem, 7vw, 4.5rem);
   font-weight: 800;
+  line-height: 1.1;
   text-align: center;
-  white-space: nowrap;
+  text-wrap: balance;
   opacity: 0;
   transition: opacity 0.25s;
 }
 #flash.show { opacity: 1; transition: none; }
-#flash.small { font-size: clamp(1.1rem, 4vw, 1.8rem); }
+#hud.flashing :is(#place, #wash, #cue) { visibility: hidden; }
+@media (max-height: 500px) {
+  #flash { font-size: 1.6rem; max-width: max(40vw, 100vw - 348px); } /* between the maps (150 and 90 px, 16 px in, a gap) */
+  #flash.big { font-size: 3rem; } /* a count, Go! */
+}
 
 body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); }
 
@@ -308,7 +343,7 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 #menu .me { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.8rem; align-items: center; margin-bottom: 0.6rem; }
 #menu .me p { margin: 0 0 0.4rem; }
 #menu .edits { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-#menu .edits button { padding: 0.35rem 0.75rem; font-size: 0.9rem; }
+#menu .edits button { min-height: 44px; padding: 0.35rem 0.75rem; font-size: 0.9rem; }
 #paddlePic { width: 100%; height: auto; margin-bottom: 0.6rem; }
 #boardlist { display: grid; gap: 0.8rem; }
 #boardlist h4 { margin: 0 0 0.2rem; }
@@ -375,7 +410,7 @@ summary { cursor: pointer; }
 #menu .account { font-size: 0.9rem; }
 /* A race or a time trial: one choice for every course (practice is on your own). */
 #menu .format { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-#menu .format button { flex: 1; }
+#menu .format button { flex: 1; min-height: 44px; }
 #menu .format button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 #menu .format button[aria-pressed="true"] small { color: inherit; }
 #livePlayers .you { font-weight: 700; }
@@ -391,7 +426,7 @@ summary { cursor: pointer; }
 /* Coming up to a turn or a split: which way, under the clock. */
 #cue {
   position: absolute;
-  top: 8.2rem; /* under the place name */
+  top: 9.9rem; /* under the wash */
   left: 50%;
   translate: -50% 0;
   margin: 0;
@@ -410,24 +445,19 @@ summary { cursor: pointer; }
 }
 #cue.on { opacity: 1; }
 #cue b { font-size: 2.2rem; line-height: 1; color: #fde047; }
-/* A practice drill's numbers, low in the middle. */
+/* A practice drill's numbers, in the low lane. */
 #drill {
-  position: absolute;
-  bottom: 6.5rem;
-  left: 50%;
-  translate: -50% 0;
-  margin: 0;
   padding: 0.45rem 0.9rem;
   border-radius: 10px;
   background: rgb(0 0 0 / 0.5);
-  font-family: var(--font);
-  font-weight: 700;
   font-size: 1.05rem;
+  font-family: var(--mono);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: pre;
-  max-width: calc(100vw - 32px);
+  text-align: left;
 }
-@media (max-height: 500px) { #drill { bottom: 5.2rem; font-size: 0.85rem; } }
+@media (max-height: 500px) { #drill { font-size: 0.85rem; } }
 /* A gate missed: go back. Stays until you have. */
 #missed {
   position: absolute;
@@ -444,9 +474,9 @@ summary { cursor: pointer; }
   max-width: calc(100vw - 32px);
 }
 @media (max-height: 500px) {
-  #place { top: 3.6rem; }
-  /* Between the two maps, under the place name. */
-  #cue { top: 5.3rem; font-size: 0.82rem; padding: 0.3rem 0.7rem; max-width: calc(100vw - 2 * 180px); }
+  #place { top: 4.35rem; } /* under the clock */
+  /* Between the two maps, under the wash. */
+  #cue { top: 7.75rem; font-size: 0.82rem; padding: 0.3rem 0.7rem; max-width: calc(100vw - 2 * 180px); }
   #cue b { font-size: 1.4rem; }
 }
 
@@ -461,6 +491,7 @@ summary { cursor: pointer; }
 #clubDoors .spot:hover, #clubDoors .spot:focus-visible { background: rgba(10, 18, 18, 0.85); border-color: #f2c230; outline: none; }
 #clubDoors .spot.go { background: #d6452b; border-color: #d6452b; font-size: 1.05rem; }
 #clubDoors .spot.small { min-width: 34px; min-height: 34px; padding: 0.25rem; font-size: 0.85rem; }
+#clubDoors .spot.small::after { content: ""; position: absolute; inset: -5px; } /* 44 px to tap, though it looks smaller */
 #clubDoors .spot.on { border: 2px solid #f2c230; color: #f2c230; }
 /* The bridge: the clubs as cards along the bottom, pins over their buildings. */
 #clubCards { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; width: max-content; max-width: calc(100vw - 32px); }
@@ -521,6 +552,7 @@ summary { cursor: pointer; }
   background: rgba(10, 18, 18, 0.6); color: #fff; font: 0.9rem/1.2 system-ui, sans-serif; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: auto; }
 #outingBar button { min-height: 44px; padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
 #outingBar span { opacity: 0.85; }
+#outingBar[hidden] { display: none; }
 
 /* Rowing (scull.js): the stroke coach's numbers on its screen at your feet, a Look button on phones; no rudder. */
 #coach { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.1rem 0.6rem; padding: 0.4rem 0.6rem; border-radius: 6px;
@@ -556,9 +588,13 @@ summary { cursor: pointer; }
 #coach[hidden], #ergMon[hidden] { display: none; }
 /* The rowing club's changing room: no sleeves or buoyancy aid with an all-in-one. */
 #menu.rowing .kayak-only { display: none; }
-/* Rowing: messages above the coach, and the place name out of the way of the phone help. */
+/* Rowing: messages above the coach. The coach sits where the low lane is, so
+   it waits out the controls help's first seconds (it reads 0 then anyway). */
 #hud.rowing #flash { top: 20%; }
-#hud.rowing.helping #place { display: none; }
+#hud.rowing.helping #coach { visibility: hidden; }
+@media (max-height: 500px) {
+  #hud.rowing #flash { top: 30%; } /* below the clock */
+}
 
 /* Choosing a boat to hire: each card keeps its line (how the boats differ), wrapping, whatever the screen. */
 #clubCards.choice .card small { display: block; white-space: normal; max-width: 11rem; }

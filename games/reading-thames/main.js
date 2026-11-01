@@ -108,7 +108,7 @@ const paused = document.getElementById('paused');
 const finished = document.getElementById('finished');
 const flash = document.getElementById('flash');
 const live = document.getElementById('live');
-const els = Object.fromEntries(['touchhelp', 'account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'hairColour', 'hatColour', 'aid', 'aidColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
+const els = Object.fromEntries(['touchhelp', 'account', 'boards', 'boardlist', 'ranked', 'liveSetup', 'liveMakeTab', 'liveJoinTab', 'liveMake', 'liveJoinBox', 'liveCourse', 'liveCreate', 'liveCode', 'liveJoin', 'liveLobby', 'liveCodeShow', 'liveCourseShow', 'liveCopy', 'livePlayers', 'liveNote', 'liveStart', 'liveError', 'paddlerPic', 'skinTones', 'hairColour', 'hatColour', 'aid', 'aidColour', 'topColour', 'boatPic', 'sectionPic', 'paddlePic', 'glassesColour', 'deckColour', 'hullColour', 'shaftColour', 'bladeColour', 'stripeColour', 'boatList', 'youPic', 'youBoat', 'behind', 'cue', 'cueArrow', 'cueText', 'missed', 'map', 'near', 'clock', 'togo', 'pos', 'wash', 'place', 'speed', 'rate', 'stamina', 'flow', 'rhythm', 'needle', 'balance', 'hint', 'rudder', 'best', 'result', 'details', 'standings', 'nogpu', 'drill']
   .map((id) => [id, document.getElementById(id)]));
 
 const controls = new Controls(canvas);
@@ -1576,15 +1576,30 @@ function endLive() {
 
 // --- feedback ----------------------------------------------------------------
 
+// Big and short in the middle (Go!, a count, why you went in); hints small in
+// the low lane, clear of the boats ahead.
 let flashTimer = 0;
-function show(text, { small = false, hold = 0.8 } = {}) {
-  flash.textContent = text;
-  flash.classList.toggle('small', small);
-  flash.classList.add('show');
-  flashTimer = hold;
+let hintTimer = 0;
+let waiting = null; // a hint that came while a longer one was up: { text, hold }
+function show(text, { small = false, hold = 0.8, now = false } = {}) {
+  // One hint at a time: a shorter one doesn't wipe a longer one still up. A
+  // moment's note ("Weak stroke") is dropped; an instruction waits its turn;
+  // `now` (why you went in, a boat bearing down) goes straight up.
+  if (small && !now && hintTimer > hold) {
+    if (hold >= 1) waiting = { text, hold };
+    return;
+  }
+  const el = small ? els.hint : flash;
+  el.textContent = text;
+  el.classList.add('show');
+  if (small) hintTimer = hold;
+  else flashTimer = hold;
+  if (!small) hud.classList.add('flashing');
+  if (!small) flash.classList.toggle('big', text.length <= 4); // a count, Go!: bigger on a phone
 }
 
 const sounds = {
+  creak: () => tone({ freq: 220, to: 180, duration: 0.12, type: 'triangle', gain: 0.05 }),
   stroke: () => {
     noise({ freq: 700 + Math.random() * 300, to: 300, q: 0.8, duration: 0.25, gain: 0.1 });
     tone({ freq: 85, to: 60, duration: 0.06, type: 'sine', gain: 0.06 });
@@ -1660,8 +1675,11 @@ function react({ events, splashes }) {
     if (e === 'swan') hitSwan = race.time;
     if (e.startsWith('hit-')) hitBoat = { kind: e.slice(4), time: race.time };
     if (e === 'capsize') {
-      const why = race.time - hitSwan < 0.5 ? 'You hit a swan!' : race.time - hitBoat.time < 0.5 ? HIT[hitBoat.kind] : 'Capsized!';
-      show(why, { hold: race.player.boat.hull.swimTime - 0.5 });
+      const hold = race.player.boat.hull.swimTime - 0.5;
+      const why = race.time - hitSwan < 0.5 ? 'You hit a swan!' : race.time - hitBoat.time < 0.5 ? HIT[hitBoat.kind] : null;
+      show(why ?? 'You lost your balance!', { hold });
+      // Gone in on your own: what keeps you up next time.
+      if (!why && !controls.assist) show(`Keep the needle in the middle: ${phone.matches ? 'turn the phone to lean' : 'lean with A and D (or the right stick)'}`, { small: true, hold, now: true });
       controls.rumble(1, 400);
     }
     if (e === 'line') {
@@ -1704,7 +1722,7 @@ function react({ events, splashes }) {
     if (e.startsWith('behind-')) {
       const side = e.slice(7);
       say(`Kayak! Eight coming through on your ${side}!`);
-      show(`An eight is coming up behind you, on your ${side}: move ${side === 'left' ? 'right' : 'left'}`, { small: true, hold: 4 });
+      show(`An eight is coming up behind you, on your ${side}: move ${side === 'left' ? 'right' : 'left'}`, { small: true, hold: 4, now: true });
       els.behind.className = `on ${side}`;
       clearTimeout(behindTimer);
       behindTimer = setTimeout(() => { els.behind.className = ''; }, 6000);
@@ -2318,9 +2336,23 @@ function showTilt(dt) {
 function updateHud(dt) {
   showTilt(dt);
   if (state === 'racing') engines(dt);
+  if (hintTimer > 0) {
+    hintTimer -= dt;
+    if (hintTimer <= 0) {
+      els.hint.classList.remove('show');
+      if (waiting) {
+        const { text, hold } = waiting;
+        waiting = null;
+        show(text, { small: true, hold });
+      }
+    }
+  }
   if (flashTimer > 0) {
     flashTimer -= dt;
-    if (flashTimer <= 0) flash.classList.remove('show');
+    if (flashTimer <= 0) {
+      flash.classList.remove('show');
+      hud.classList.remove('flashing');
+    }
   }
   const { boat, loc } = race.player;
   document.body.classList.toggle('capsized', boat.swim > 0);
@@ -2355,7 +2387,17 @@ function updateHud(dt) {
   els.rudder.style.transform = `translateX(${(controls.rudder * 39).toFixed(1)}px)`;
   const angle = Math.max(-1.1, Math.min(1.1, boat.roll / (boat.hull.scull ? boat.hull.crabAt : BOAT.capsize))) * 90;
   els.needle.style.transform = `rotate(${angle.toFixed(1)}deg)`;
+  // In the red (past 50°): pulse, and a creak and a buzz past 65°.
+  const tipping = !race.outing && boat.swim <= 0 && Math.abs(angle) > 50;
+  els.balance.classList.toggle('tipping', tipping);
+  creakWait -= dt;
+  if (tipping && Math.abs(angle) > 65 && creakWait <= 0) {
+    sounds.creak();
+    controls.rumble(0.4, 80);
+    creakWait = 0.5;
+  }
 }
+let creakWait = 0;
 
 // The course map: its shape once per race, then a dot per boat each frame (an
 // arrow for you, pointing where you're heading). And the close-up beside it:
@@ -2621,6 +2663,7 @@ if (HASH.has('debug')) {
     get liveries() { return liveries; },
     get club() { return club; },
     clubAt: (place) => arrive(place),
+    show, // a message, as the race would show it (tests check where it lands)
   };
 }
 
