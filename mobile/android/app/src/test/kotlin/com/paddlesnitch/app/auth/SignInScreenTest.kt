@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.performTextInput
@@ -40,12 +41,6 @@ import org.robolectric.Shadows
 class SignInScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val api = Api("http://localhost/", MemoryTokenStore(), "0.1.0")
-    private val strava = StravaSignIn(api, object : VerifierStore {
-        var v: String? = null
-        override fun put(verifier: String) { v = verifier }
-        override fun take() = v.also { v = null }
-    })
-
     private val googleVerifiers = object : VerifierStore {
         var v: String? = null
         override fun put(verifier: String) { v = verifier }
@@ -56,30 +51,24 @@ class SignInScreenTest {
     private var forgot: String? = null
     private fun show(reauth: Reauth, email: String?, options: SignInOptions? = SignInOptions(google = false, strava = true), googleReturn: Uri? = null, fontScale: Float = 1f) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) { PaddlesnitchTheme { androidx.compose.material3.Surface(color = com.paddlesnitch.app.ui.PsColor.bg) {
-            SignInScreen(api, strava, null, onReturnHandled = {}, google = google, googleReturn = googleReturn, onGoogleReturnHandled = {},
+            SignInScreen(api, google = google, googleReturn = googleReturn, onGoogleReturnHandled = {},
                 onSignedIn = {}, onCancel = {},
-                prefillEmail = email, notice = reauth.notice, startStrava = reauth.signingInAgain && reauth.strava, onForgot = { forgot = it },
+                prefillEmail = email, notice = reauth.notice, onForgot = { forgot = it },
                 loadOptions = { options ?: throw ApiFailure("x", 500, generic = true) })
         } } }
     }
     private fun waitFor(text: String) = compose.waitUntil { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
 
     @Test fun theEmailIsFilledInAndTheReasonShown() {
-        val reauth = Reauth().start("u-1", strava = false)
+        val reauth = Reauth().start("u-1")
         show(reauth, "pat@example.com")
         compose.onNodeWithText(reauth.notice!!).assertIsDisplayed()
         compose.onNode(hasSetTextAction() and hasText("pat@example.com")).assertExists()
     }
 
-    @Test fun aStravaAccountGoesStraightToStravaOnce() {
-        show(Reauth().start("u-1", strava = true), null)
-        compose.waitForIdle()
-        val shadow = Shadows.shadowOf(compose.activity)
-        assertTrue(shadow.nextStartedActivity.data.toString().startsWith("http://localhost/att/api/auth/strava/init"))
-    }
-
-    @Test fun anOrdinarySignInDoesNotOpenStrava() {
-        show(Reauth(), null)
+    // The default options say strava: true (an older server): nothing opens by itself.
+    @Test fun signingInAgainOpensNothingByItself() {
+        show(Reauth().start("u-1"), null)
         compose.waitForIdle()
         assertNull(Shadows.shadowOf(compose.activity).nextStartedActivity)
     }
@@ -91,49 +80,56 @@ class SignInScreenTest {
         assertEquals("pat@example.com", forgot)
     }
 
-    // Google and Strava as the server says (README § Google, "When strava is false").
-    @Test fun googleOnStravaOffShowsGoogleAndAWayOutForStravaAccounts() {
+    // Google as the server says (README § Google). Strava is gone; an account made with it has
+    // no password, so the line to email us is always there (lead, 2026-11-01).
+    @Test fun googleAndAWayInForAccountsMadeWithStrava() {
         show(Reauth(), null, SignInOptions(google = true, strava = false))
         waitFor("Sign in with Google")
         compose.onNodeWithText("Or use your Google account").assertExists()
-        compose.onNodeWithContentDescription("Connect with Strava").assertDoesNotExist()
-        compose.onNodeWithText("Signed up with Strava? Strava sign-in is off for now. Email us and we’ll help you sign in.").assertExists()
+        compose.onNodeWithText("Made your account with Strava? Email us and we’ll move it to your email.").assertExists()
         compose.onRoot().captureRoboImage()
         // Email, not the public issue form.
         compose.onNodeWithText("Email us").performScrollTo().performClick()
         val sent = Shadows.shadowOf(compose.activity).nextStartedActivity
         assertEquals(android.content.Intent.ACTION_SENDTO, sent.action)
-        assertEquals("mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava", sent.data.toString())
+        assertEquals("mailto:privacy@paddlesnitch.com?subject=Moving%20my%20account%20from%20Strava", sent.data.toString())
     }
 
-    @Test fun stravaOffAtTheLargestText() {
+    @Test fun atTheLargestText() {
         show(Reauth(), null, SignInOptions(google = true, strava = false), fontScale = 2f)
         waitFor("Email us")
         compose.onNodeWithText("Email us").performScrollTo()
         compose.onRoot().captureRoboImage()
     }
 
-    @Test fun bothOnShowsBoth() {
+    // An older server's strava: true changes nothing: no Strava, and the line stays.
+    @Test fun stravaFromTheServerIsIgnored() {
         show(Reauth(), null, SignInOptions(google = true, strava = true))
-        waitFor("Or use your Google or Strava account")
-        compose.onNodeWithContentDescription("Connect with Strava").assertExists()
-        compose.onNodeWithText("Email us").assertDoesNotExist()
+        waitFor("Or use your Google account")
+        compose.onAllNodes(hasText("Strava", substring = true)).assertCountEquals(1)   // only the email-us line
+        compose.onNodeWithText("Email us").assertExists()
+    }
+
+    @Test fun creatingAnAccountShowsTheLineToo() {
+        show(Reauth(), null, SignInOptions(google = false, strava = false))
+        compose.onNodeWithText("Create account").performClick()
+        compose.onNodeWithText(MADE_WITH_STRAVA).assertExists()
     }
 
     @Test fun whenOptionsFailItSaysSoAndCanAskAgain() {
         var answer: SignInOptions? = null
         compose.setContent {
             PaddlesnitchTheme {
-                SignInScreen(api, strava, null, onReturnHandled = {}, google = google, googleReturn = null, onGoogleReturnHandled = {},
+                SignInScreen(api, google = google, googleReturn = null, onGoogleReturnHandled = {},
                     onSignedIn = {}, onCancel = {}, loadOptions = { answer ?: throw ApiFailure("x", 500, generic = true) })
             }
         }
         waitFor("Couldn’t load the other ways to sign in.")
         compose.onNodeWithText("Sign in with Google").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Connect with Strava").assertDoesNotExist()
-        answer = SignInOptions(google = false, strava = false)
+        compose.onNodeWithText("Email us").assertExists() // the way in for an account made with Strava, options or not
+        answer = SignInOptions(google = true, strava = false)
         compose.onNodeWithText("Try again").performScrollTo().performClick()
-        waitFor("Email us") // the way out for an account made with Strava
+        waitFor("Sign in with Google")
         compose.onNodeWithText("Couldn’t load the other ways to sign in.").assertDoesNotExist()
     }
 

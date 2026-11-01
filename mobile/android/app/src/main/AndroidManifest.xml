@@ -55,7 +55,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Strava sign-in comes back here from the Custom Tab (auth/StravaSignIn.kt).
+            <!-- Sign in with Google comes back here from the Custom Tab (auth/GoogleSignIn.kt).
                  singleTask brings this activity back and closes the tab. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

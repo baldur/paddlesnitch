@@ -26,17 +26,14 @@ The release build as it is today:
 
 Not in this release:
 
-- **Strava:** hidden in release (`STRAVA_IN_APP` in `app/build.gradle.kts`).
-  The app reads Strava as off whatever the server says, as when the server
-  switches it off. Sign-in has no Strava button. An account that signed up
-  with Strava gets "Email us". An account already connected sees Strava as
-  Paused, with Disconnect. Bringing Strava back is an app release, and the
-  data safety form changes with it (see Later releases). The APK on
-  paddlesnitch.com/android is the same release build, so it hides Strava
-  too. `checkReleaseStrava` fails any release build that shows Strava.
+- **Strava:** removed from paddlesnitch for good (owner, 2026-11-01). The app
+  has no Strava sign-in, connect or import. Paddles brought in from Strava
+  earlier still show, labelled Strava. Sign-in always shows "Made your account
+  with Strava? Email us and we’ll move it to your email.", because those
+  accounts have no password.
 
 Owner decisions (2026-10-31): keep tracker setup and test it first; hide
-Strava. 2026-11-01: phone recording is in (C3).
+Strava. 2026-11-01: phone recording is in (C3); Strava is removed for good.
 
 - [ ] **Owner:** run `TRACKER-TESTING.md` with a real tracker on a release
       build, before the closed test starts. If it fails, `android` fixes it or
@@ -187,15 +184,15 @@ All of these must be done before the closed test can start.
   has it, and `/privacy` says so.
 - **WiFi name and password** for a tracker go from the phone to the tracker
   over Bluetooth, never to our server. Nothing to declare.
-- **Strava** is hidden in this release, so the app brings nothing in from
-  it. Paddles brought in from Strava on the website show in the app like any
-  other paddle, and the rows above cover them.
+- **Strava** is gone, so the app brings nothing in from it. Paddles brought
+  in from Strava earlier show in the app like any other paddle, and the rows
+  above cover them.
 
 ## Closed test starts (owner)
 
 - [ ] **Owner + android:** check the release on the owner's phone from the
       internal track. Install from Play, sign in, open a paddle and add a
-      paddle. Record a short paddle on the phone and check it becomes a paddle. Sign-in and Account show no way to connect Strava. Then open a
+      paddle. Record a short paddle on the phone and check it becomes a paddle. Sign-in and Account show no way to sign in with or connect Strava. Then open a
       `paddlesnitch.com/paddles/<id>` link. It should open the app (this needs
       the fingerprint from the Play app signing step).
 - [ ] **Owner:** in Play Console, create the closed testing track, add the
@@ -215,12 +212,5 @@ All of these must be done before the closed test can start.
   interactions**: collected, not shared, required, for Analytics and App
   functionality. Today they are "not collected" only because the Android app
   sends neither yet.
-- **Strava back in the app:** set `STRAVA_IN_APP` to true for release, and
-  change `checkReleaseStrava` (`app/build.gradle.kts`) with it.
-  - Location and Fitness info gain "imported from Strava" as a source; Name
-    can come from Strava.
-  - Strava is read-only: the server reads the user's Strava paddles and sends
-    Strava nothing back, so there's still nothing to declare as shared.
-  - The store listing can mention Strava only once the server has it on.
 - **Automatic tracker sync** (a `connectedDevice` foreground service): its own
   declaration and video.

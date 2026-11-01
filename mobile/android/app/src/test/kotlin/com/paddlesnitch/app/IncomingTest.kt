@@ -29,23 +29,17 @@ class IncomingTest {
         assertNull(incoming(view, "http://paddlesnitch.com/paddles/Xy3", null)) // App Links are https only
     }
 
-    @Test fun stravaSignInComesBack() {
-        val back = "com.paddlesnitch.app:/signin/strava?code=abc"
-        assertEquals(Incoming.StravaReturn(back), incoming(view, back, null))
-    }
-
-    @Test fun connectingStravaComesBackApartFromSigningIn() {
-        val back = "com.paddlesnitch.app:/account/strava?code=abc"
-        assertEquals(Incoming.StravaConnectReturn(back), incoming(view, back, null))
-        assertEquals(Incoming.StravaConnectReturn("com.paddlesnitch.app:/account/strava?strava=denied"), incoming(view, "com.paddlesnitch.app:/account/strava?strava=denied", null))
-        assertEquals(Incoming.StravaReturn("com.paddlesnitch.app:/account/stravax?code=1"), incoming(view, "com.paddlesnitch.app:/account/stravax?code=1", null)) // that exact path only
+    // Strava is gone: its old return addresses (a tab left open, a crafted link) do nothing.
+    @Test fun stravaReturnsAreIgnored() {
+        assertNull(incoming(view, "com.paddlesnitch.app:/signin/strava?code=abc", null))
+        assertNull(incoming(view, "com.paddlesnitch.app:/account/strava?code=abc", null))
     }
 
     @Test fun signingInWithGoogleComesBackOnItsOwnPath() {
         val back = "com.paddlesnitch.app:/signin/google?code=abc"
         assertEquals(Incoming.GoogleReturn(back), incoming(view, back, null))
         assertEquals(Incoming.GoogleReturn("com.paddlesnitch.app:/signin/google?error=google_denied"), incoming(view, "com.paddlesnitch.app:/signin/google?error=google_denied", null))
-        assertEquals(Incoming.StravaReturn("com.paddlesnitch.app:/signin/googlex?code=1"), incoming(view, "com.paddlesnitch.app:/signin/googlex?code=1", null)) // that exact path only
+        assertNull(incoming(view, "com.paddlesnitch.app:/signin/googlex?code=1", null)) // that exact path only
     }
 
     @Test fun aFileOpenedOrSharedFromAnotherAppIsAdded() {

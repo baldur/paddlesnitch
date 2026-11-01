@@ -3,12 +3,11 @@ package com.paddlesnitch.app
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // Signing in again to delete the account (Reauth.kt), each path App.kt takes.
 class ReauthTest {
-    private val asked = Reauth().start("u-1", strava = false)
+    private val asked = Reauth().start("u-1")
 
     @Test fun nobodySigningInAgainHasNoNoticeAndNothingToResume() {
         assertNull(Reauth().notice)
@@ -31,17 +30,6 @@ class ReauthTest {
         assertEquals(Reauth(), asked.signedIn("u-1").cleared())
     }
 
-    @Test fun theNoticeSaysWhyAndPointsStravaAccountsAtStrava() {
+    @Test fun theNoticeSaysWhy() =
         assertEquals("For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back to Delete account.", asked.notice)
-        assertTrue(Reauth().start("u-1", strava = true).notice!!.contains("Sign in with Strava below"))
-    }
-
-    @Test fun connectingStravaComesBackToAccountWithItsOwnReason() {
-        val strava = Reauth().start("u-1", strava = false, then = Reauth.After.ConnectStrava)
-        assertEquals("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back to Account.", strava.notice)
-        assertEquals(Reauth.After.ConnectStrava, strava.signedIn("u-1").resume)
-        assertNull(strava.signedIn("someone-else").resume)
-        assertEquals("For your safety, connecting Strava needs a recent sign-in. Sign in with Strava below and you’ll come straight back to Account.",
-            Reauth().start("u-1", strava = true, then = Reauth.After.ConnectStrava).notice)
-    }
 }
