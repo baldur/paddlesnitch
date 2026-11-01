@@ -494,7 +494,8 @@ out nothing.
   as a fault.)
 - **Tests:** the core's fixtures `trace_phone_flat` and `trace_phone_paddle` (golden
   `trace.csv`, format in `recorder-core/fixtures/README.md`). Each app's fixture
-  runner takes the `trace_phone_` prefix and handles the `trace` line. Screenshot
+  runner takes the `trace_phone_` prefix, compares `trace.csv`, and fails if it
+  finds no `trace_phone_` case (a count of all cases would pass without them). Screenshot
   tests draw each status from a fixture, plus one at the largest text size and one
   on the smallest phone each app supports (iPhone SE; Android font scale 2.0).
 
