@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { MeshBuilder } from '../reading-thames/meshes.js';
+import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
 import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
-import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRROR, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
+import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -54,7 +54,7 @@ test("the rowing club's shots: from its land side, the landing stage at its wate
   assert.equal(shots.scullLabels.length, 3);
 });
 
-test("the canoe club's erg room: a door from the club, under it, the kayak erg between you and the mirror", async () => {
+test("the canoe club's erg room: a door from the club, under it, three kayak ergs, each in front of its own mirror", async () => {
   assert.ok(PLACES.club.doors.includes('kerg'));
   assert.equal(PLACES.kerg.up, 'club');
   const course = await loop();
@@ -69,8 +69,48 @@ test("the canoe club's erg room: a door from the club, under it, the kayak erg b
   const toErg = shots.kerg[2] - eye[2];
   assert.ok(Math.sign(look[2] - eye[2]) === Math.sign(toMirror), 'facing the mirror');
   assert.ok(Math.abs(toErg) > 1 && Math.abs(toErg) < Math.abs(toMirror), `the erg ${toErg} m, the mirror ${toMirror} m`);
-  // The erg's middle is in front of the mirror, which is wider than you on it.
-  assert.ok(Math.abs(shots.kerg[0] - at[0]) < MIRROR.x1 && MIRROR.x1 - MIRROR.x0 > 2);
+  // Three ergs side by side, yours the middle one, each with a small mirror
+  // in front of it (room x is the world's turned round: inRoom).
+  assert.equal(shots.kergs.length, 3);
+  assert.deepEqual(shots.kergs[MY_KERG], shots.kerg);
+  shots.kergs.forEach((p, i) => {
+    const { x0, x1, y0, y1 } = MIRRORS[i];
+    assert.ok(Math.abs(at[0] - p[0] - (x0 + x1) / 2) < 1e-9 && x1 - x0 < 1 && y1 - y0 < 1.2, `erg ${i}`);
+    if (i) assert.ok(KAYAK_ERGS[i] - KAYAK_ERGS[i - 1] > x1 - x0 + 0.5, 'room between the ergs');
+  });
+  // You see yourself in your mirror: the line from the eye to your head's
+  // reflection crosses the mirror's plane inside your mirror, and passes over
+  // your real head on the way.
+  const head = [shots.kerg[0], at[1] + KAYAK_ERG_SIZE.seat[1] + 0.8, shots.kerg[2] - KAYAK_ERG_SIZE.seat[2]]; // (room z turned round too)
+  const seenHead = [head[0], head[1], 2 * shots.mirrorZ - head[2]];
+  const along = (k) => eye.map((v, i) => v + (seenHead[i] - v) * k);
+  const onGlass = along((shots.mirrorZ - eye[2]) / (seenHead[2] - eye[2]));
+  const mine = MIRRORS[MY_KERG];
+  const [gx, gy] = [at[0] - onGlass[0], onGlass[1] - at[1]];
+  assert.ok(gx > mine.x0 + 0.05 && gx < mine.x1 - 0.05 && gy > mine.y0 + 0.05 && gy < mine.y1 - 0.05, `your head's reflection at ${gx.toFixed(2)}, ${gy.toFixed(2)}`);
+  const overHead = along((head[2] - eye[2]) / (seenHead[2] - eye[2]));
+  assert.ok(overHead[1] > head[1] + 0.12, `the sight line passes ${(overHead[1] - head[1]).toFixed(2)} m over your head`);
+  assert.ok(KERG_Z < 0, 'the ergs are on the mirrors\' side of the room');
+  // The far wall has an opening at each mirror: nothing in the wall's plane
+  // covers a mirror's middle (or you'd see block wall, not yourself).
+  const real = new MeshBuilder();
+  ergRoom(real, at, false);
+  const v = real.build().vertices;
+  const inWall = [];
+  for (let i = 0; i < v.length; i += 27) {
+    const tri = [0, 1, 2].map((k) => v.slice(i + k * 9, i + k * 9 + 3));
+    if (tri.every(([, , z]) => z >= shots.mirrorZ - 1e-6 && z <= shots.mirrorZ + 0.2 + 1e-6)) inWall.push(tri);
+  }
+  assert.ok(inWall.length > 20, 'the far wall is built');
+  const covers = ([a, b, c], [px, py]) => {
+    const s = (p, q, r) => (p[0] - r[0]) * (q[1] - r[1]) - (q[0] - r[0]) * (p[1] - r[1]);
+    const [d1, d2, d3] = [s([px, py], a, b), s([px, py], b, c), s([px, py], c, a)];
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  };
+  for (const { x0, x1, y0, y1 } of MIRRORS) {
+    const middle = [at[0] - (x0 + x1) / 2, at[1] + (y0 + y1) / 2];
+    assert.ok(!inWall.some((t) => covers(t, middle)), `the wall covers the mirror at ${(x0 + x1) / 2}`);
+  }
   // The room behind the mirror is behind it, the far side from you, and no
   // deeper than the room; the real room is on your side (bar the wall's thickness).
   const zs = (mirrored) => {
@@ -173,7 +213,7 @@ test('inside, you stand in a closed room under the ground, so the sky and river 
 test('the rooms under both clubs, with the mural, are a small mesh with no NaN', async () => {
   const { vertices, count } = clubMesh(clubShots(await loop()));
   assert.ok(vertices.every(Number.isFinite));
-  assert.ok(count / 3 < 3500, `${count / 3} triangles`); // (the kayak erg's room is built twice: once behind its mirror)
+  assert.ok(count / 3 < 5000, `${count / 3} triangles`); // (the kayak erg room, with its racks of kayaks, is built twice: once behind its mirrors)
 });
 
 test('the swan on the bridge sits facing you, stands, waddles off one way or the other, turns round, comes back and sits, with no jumps', () => {

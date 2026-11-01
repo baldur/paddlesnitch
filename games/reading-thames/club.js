@@ -56,7 +56,7 @@ export const ROOMS = {
   changing: { at: 0, width: 10, depth: 8, height: 3.4 },
   boathouse: { at: 1, width: 13, depth: 10, height: 3.6 },
   clubhouse: { at: 2, width: 10, depth: 8, height: 3.4 },
-  kerg: { at: 3, width: 7, depth: 6, height: 3.2 },
+  kerg: { at: 3, width: 7, depth: 6, height: 3 },
   // Under the rowing club.
   rchanging: { at: 0, width: 10, depth: 8, height: 3.4, club: 'rowing' },
   rboathouse: { at: 1, width: 14, depth: 10, height: 3.6, club: 'rowing' },
@@ -69,11 +69,15 @@ export const SCULL_RACK = [0.55, 1.25, 1.95];
 // yours is the middle of the front row. Room coordinates (see inRoom).
 export const ERGS = [-3.2, -0.6, 2, 4.6].flatMap((x) => [[x, -2.2], [x, 0.2]]);
 export const MY_ERG = 3; // [-0.6, 0.2]
-// The canoe club's erg room: one kayak erg facing a mirror on the far wall
-// (room coordinates). The mirror is a window onto the room built again behind
-// it, turned inside out (main.js draws you there too, reflected).
-export const KERG_Z = -0.4; // the erg's middle, from the room's centre (the mirror's side is -z)
-export const MIRROR = { x0: -1.6, x1: 1.6, y0: 0.3, y1: 2.5 };
+// The canoe club's erg room, as in its boathouse: three kayak ergs side by
+// side (yours the middle one), each facing a small mirror hung on strings in
+// front of the kayak racks on the far wall (room coordinates). The mirrors are
+// windows onto the room built again behind them, turned inside out (main.js
+// draws the ergs and you there too, reflected).
+export const KERG_Z = -1.3; // the ergs' middles, from the room's centre (the mirrors' side is -z)
+export const KAYAK_ERGS = [-1.45, 0, 1.45]; // each erg's x; yours is the middle one
+export const MY_KERG = 1;
+export const MIRRORS = KAYAK_ERGS.map((x) => ({ x0: x - 0.4, x1: x + 0.4, y0: 0.7, y1: 1.75 }));
 // The reflection in the mirror, as a matrix (column-major): world z turned
 // about the mirror's plane at `z`.
 export const mirrorMatrix = (z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 2 * z, 1];
@@ -171,8 +175,8 @@ export function clubShots(course) {
       changing: { eye: p('changing', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('changing', -1.2 + 1.85, HIPS + 0.3, 0.4) },
       boathouse: room('boathouse', 1.5),
       clubhouse: room('clubhouse', 1.5),
-      // Behind you on the erg and to the right, looking past you into the mirror: your back, and you facing you.
-      kerg: { eye: p('kerg', 1.1, 1.75, KERG_Z + 1.9), look: p('kerg', -0.2, 1.0, -kd / 2) },
+      // Behind you on the erg and a little to the right, looking over you into your mirror: your back, and you facing you.
+      kerg: { eye: p('kerg', 0.85, 1.8, KERG_Z + 2.2), look: p('kerg', -0.15, 1.05, -kd / 2) },
       rclub: { eye: rEntrance, look: at(r.x, r.z, 2.6) },
       rpontoon: { eye: [stage[0], 1.6, stage[2]], look: [canoeSide[0], 0.6, canoeSide[2]] },
       rchanging: { eye: p('rchanging', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('rchanging', -1.2 + 1.85, HIPS + 0.3, 0.4) },
@@ -186,7 +190,7 @@ export function clubShots(course) {
       changing: { club: out('changing') },
       boathouse: { club: out('boathouse') },
       clubhouse: { club: out('clubhouse') },
-      kerg: { club: p('kerg', 2.55, 2.35, -kd / 2 + 0.1) }, // its door is beside the mirror
+      kerg: { club: p('kerg', 2.75, 2.35, -kd / 2 + 0.1) }, // its glass doors are beside the mirrors
       pontoon: { club: add(c.edge, c.toWater, -8).map((v, i) => (i === 1 ? 1.5 : v)) },
       path: { club: at(c.x, c.z, c.height + 3), rclub: at(r.x, r.z, r.height + 3) },
       rclub: { rchanging: rDoor(-12), rboathouse: rDoor(-4), rclubhouse: rDoor(4), erg: rDoor(12), rpontoon: at(...add([r.x, 0, r.z], r.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([r.x, 0, r.z], r.toWater, -(r.toEdge + PATH.back - 2)), r.along, -10).filter((_, i) => i !== 1), 1.4) },
@@ -204,9 +208,10 @@ export function clubShots(course) {
     boards: { plan: p('clubhouse', -2.3, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1), leaders: p('clubhouse', 2.2, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1) },
     changingStand: stand,
     changeLabel: p('changing', -1.2 + 0.75, HIPS + 0.15, 0.4),
-    // The kayak erg (its frame faces the mirror), its label, and the mirror's plane (world z).
+    // The kayak ergs (their frames face the mirrors), yours, its label, and the mirrors' plane (world z).
+    kergs: KAYAK_ERGS.map((x) => p('kerg', x, 0, KERG_Z)),
     kerg: p('kerg', 0, 0, KERG_Z),
-    kergLabel: p('kerg', -1.1, 1.3, KERG_Z),
+    kergLabel: p('kerg', -1.1, 1.55, KERG_Z),
     mirrorZ: p('kerg', 0, 0, -kd / 2)[2],
     swan,
     roomAt,
@@ -255,6 +260,8 @@ const C = {
   white: [0.95, 0.95, 0.93], board: [0.12, 0.2, 0.18], frame: [0.4, 0.3, 0.2], glass: [0.7, 0.82, 0.86], gold: [0.92, 0.74, 0.2],
   red: [0.86, 0.1, 0.08], post: [0.9, 0.9, 0.88], floor: [0.5, 0.38, 0.27],
   maroon: [0.48, 0.12, 0.18], blade: [0.48, 0.12, 0.18], rubber: [0.18, 0.18, 0.2],
+  block: [0.7, 0.7, 0.68], concrete: [0.56, 0.56, 0.54], brick: [0.62, 0.32, 0.24], strap: [0.1, 0.1, 0.11],
+  light: [1, 1, 0.97], plastic: [0.93, 0.93, 0.91], towel: [0.58, 0.66, 0.38], exit: [0.1, 0.62, 0.3], string: [0.85, 0.85, 0.82],
 };
 
 // A box in a room, corners in the room's own coordinates (see inRoom).
@@ -278,52 +285,115 @@ function shell(m, o, size, floor) {
   rbox(m, o, [x1 - 0.05, 0, z0 + 1.3], [x1, 2.1, z0 + 2.3], C.dark);
 }
 
-// The canoe club's erg room, or (`mirrored`) its reflection behind the mirror:
-// the same room with z turned about the mirror's plane. The far wall, with the
-// mirror's opening in it, is built once, on the real side. A rubber mat under
-// the erg, a K1 on brackets on the wall behind you and a noticeboard, so the
-// mirror shows something of the room.
+// The canoe club's erg room, or (`mirrored`) its reflection behind the
+// mirrors: the same room with z turned about the mirrors' plane. As in the
+// club's boathouse: block walls, a concrete floor, kayaks racked along the
+// walls, white rowing boats hung upside down under the ceiling, a brick
+// pillar, a garden chair and a towel left on an erg. The far wall, with the
+// mirrors' openings and the glass doors in it, is built once, on the real side.
 export function ergRoom(m, o, mirrored) {
   const { width: w, depth: d, height: h } = ROOMS.kerg;
   const zm = -d / 2;
   const f = (z) => (mirrored ? 2 * zm - z : z);
   // (The reflected room a shade darker, as a mirror gives back a little less light.)
-  const box = ([x0, y0, z0], [x1, y1, z1], color) => rbox(m, o, [x0, y0, Math.min(f(z0), f(z1))], [x1, y1, Math.max(f(z0), f(z1))], mirrored ? color.map((v) => v * 0.86) : color);
+  const shade = (color) => (mirrored ? color.map((v) => v * 0.86) : color);
+  const box = ([x0, y0, z0], [x1, y1, z1], color) => rbox(m, o, [x0, y0, Math.min(f(z0), f(z1))], [x1, y1, Math.max(f(z0), f(z1))], shade(color));
+  const at = (x, y, z) => inRoom(o, x, y, f(z));
+  // A kayak on a rack, upside down: pointed at both ends, its hull a long
+  // diamond that rounds over to the keel on top; along x from `a` to `b` with
+  // its middle at z `across`, or (`alongZ`) along z at x `across`.
+  const kayak = (a, b, y, across, color, alongZ = false, half = 0.23) => {
+    const pt = (u, v, yy) => (alongZ ? at(v, yy, u) : at(u, yy, v));
+    const mid = (a + b) / 2;
+    const ring = (yy, k, end) => [pt(a + end, across, yy), pt(mid, across - half * k, yy), pt(b - end, across, yy), pt(mid, across + half * k, yy)];
+    m.prism(ring(y, 0.85, 0.1), ring(y + 0.1, 1, 0), shade(color));
+    m.prism(ring(y + 0.1, 1, 0), ring(y + 0.24, 0.45, 0.3), shade(color.map((v) => v * 0.9)));
+  };
   const [x0, x1, z0, z1] = [-w / 2, w / 2, zm, d / 2];
-  box([x0 - 0.2, -0.2, z0], [x1 + 0.2, 0, z1 + 0.2], C.tile);
+  box([x0 - 0.2, -0.2, z0], [x1 + 0.2, 0, z1 + 0.2], C.concrete);
   box([x0 - 0.2, h, z0], [x1 + 0.2, h + 0.2, z1 + 0.2], C.white);
-  box([x0 - 0.2, 0, z0], [x0, h, z1 + 0.2], C.wall);
-  box([x1, 0, z0], [x1 + 0.2, h, z1 + 0.2], C.wall);
-  box([x0, 0, z1], [x1, h, z1 + 0.2], C.wall);
-  box([2.1, 0, z0], [3.0, 2.1, z0 + 0.05], C.dark); // the way out, beside the mirror
-  box([-0.9, 0, KERG_Z - 1.6], [0.9, 0.012, KERG_Z + 1.3], C.rubber);
-  // The K1 on the wall behind you, and the noticeboard beside it.
+  box([x0 - 0.2, 0, z0], [x0, h, z1 + 0.2], C.block);
+  box([x1, 0, z0], [x1 + 0.2, h, z1 + 0.2], C.block);
+  box([x0, 0, z1], [x1, h, z1 + 0.2], C.block);
+  // Kayaks racked along the far wall above the mirrors, on arms out of the
+  // wall, through a brick pillar (the ergs' fronts come up under the mirrors).
+  const K = KAYAK_COLOURS;
+  kayak(-3.5, 1.7, 1.98, z0 + 0.27, K.blue);
+  kayak(-3.3, 1.9, 2.38, z0 + 0.27, K.white);
+  for (const x of [-3.1, -0.75, 1.35]) for (const y of [1.94, 2.34]) box([x - 0.02, y - 0.03, z0], [x + 0.02, y, z0 + 0.5], C.rack);
+  box([-2.75, 0, z0], [-2.35, h, z0 + 0.4], C.brick);
+  // More along the left-hand wall, four high.
+  [[0.35, K.red], [0.85, K.yellow], [1.35, K.white], [1.85, K.light]].forEach(([y, color], i) => {
+    kayak(z0 + 0.1 + (i % 2) * 0.4, z0 + 5.3 + (i % 2) * 0.4, y, x0 + 0.27, color, true);
+    for (const z of [z0 + 1.2, z0 + 3.9]) box([x0, y - 0.03, z - 0.02], [x0 + 0.5, y, z + 0.02], C.rack);
+  });
+  // Rowing boats hung under the ceiling on straps, pointed at both ends.
+  for (const [z, x] of [[z0 + 1.2, -0.6], [z0 + 2.1, 0.4]]) {
+    kayak(x0 + 0.3, x1 - 0.3, h - 0.5, z, C.white, false, 0.2);
+    for (const sx of [x - 1.6, x + 1.6]) box([sx - 0.03, h - 0.28, z - 0.21], [sx + 0.03, h, z + 0.21], C.strap);
+  }
+  // Two strip lights, a garden chair by the left-hand erg, a towel on the right-hand one's seat.
+  for (const z of [z0 + 2, z0 + 4.4]) box([-0.6, h - 0.06, z - 0.06], [0.6, h, z + 0.06], C.light);
+  const [cx, cz] = [-2.35, KERG_Z + 0.4];
+  box([cx - 0.25, 0.4, cz - 0.25], [cx + 0.25, 0.45, cz + 0.22], C.plastic);
+  box([cx - 0.25, 0.45, cz + 0.17], [cx + 0.25, 0.95, cz + 0.22], C.plastic);
+  for (const [lx, lz] of [[-0.22, -0.22], [0.19, -0.22], [-0.22, 0.17], [0.19, 0.17]]) box([cx + lx, 0, cz + lz], [cx + lx + 0.03, 0.4, cz + lz + 0.03], C.plastic);
+  const tx = KAYAK_ERGS[2];
+  box([tx - 0.19, 0.6, KERG_Z - 0.1], [tx + 0.19, 0.64, KERG_Z + 0.26], C.towel);
+  box([tx + 0.16, 0.3, KERG_Z - 0.08], [tx + 0.2, 0.64, KERG_Z + 0.22], C.towel);
+  // Behind you: a K1 on brackets, a noticeboard, a stack of chairs.
   box([-2.6, 1.55, z1 - 0.32], [2.6, 1.75, z1 - 0.02], C.locker);
   for (const x of [-1.6, 1.6]) box([x - 0.04, 1.4, z1 - 0.35], [x + 0.04, 1.55, z1], C.rack);
   box([-2.9, 0.8, z1 - 0.04], [-1.3, 1.3, z1], C.board);
+  box([2.2, 0, z1 - 0.7], [2.8, 1.3, z1 - 0.15], C.plastic);
   if (mirrored) return;
-  const { x0: a, x1: b, y0: lo, y1: hi } = MIRROR;
-  box([x0, 0, z0 - 0.2], [a, h, z0], C.wall);
-  box([b, 0, z0 - 0.2], [x1, h, z0], C.wall);
-  box([a, 0, z0 - 0.2], [b, lo, z0], C.wall);
-  box([a, hi, z0 - 0.2], [b, h, z0], C.wall);
-  // The mirror's frame, light aluminium, and two faint streaks across the
-  // glass, so it reads as a mirror rather than a hatch into a second room.
-  const t = 0.09;
-  const frame = [0.8, 0.82, 0.85];
-  box([a - t, lo - t, z0], [b + t, lo, z0 + 0.03], frame);
-  box([a - t, hi, z0], [b + t, hi + t, z0 + 0.03], frame);
-  box([a - t, lo, z0], [a, hi, z0 + 0.03], frame);
-  box([b, lo, z0], [b + t, hi, z0 + 0.03], frame);
-  const sheen = [0.78, 0.84, 0.88];
-  const glass = (u, v) => inRoom(o, u, v, z0 + 0.004);
-  for (const [u, w] of [[a + 0.15, 0.16], [a + 0.42, 0.06]]) {
-    const rise = 1.1; // the streak's lean: across this much for its height
-    const [p0, p1, p2, p3] = [glass(u, lo), glass(u + w, lo), glass(u + w + rise, hi), glass(u + rise, hi)];
-    m.triFacing(p0, p1, p2, sheen, [0, 0, -1]);
-    m.triFacing(p0, p2, p3, sheen, [0, 0, -1]);
+  // The far wall, with an opening for each mirror and the glass doors.
+  const cuts = MIRRORS.map(({ x0: a, x1: b }) => [a, b]);
+  let x = x0;
+  for (const [a, b] of [...cuts, [DOORS.x0, DOORS.x1]]) {
+    box([x, 0, z0 - 0.2], [a, h, z0], C.block);
+    x = b;
+  }
+  box([x, 0, z0 - 0.2], [x1, h, z0], C.block);
+  for (const { x0: a, x1: b, y0: lo, y1: hi } of MIRRORS) {
+    box([a, 0, z0 - 0.2], [b, lo, z0], C.block);
+    box([a, hi, z0 - 0.2], [b, h, z0], C.block);
+  }
+  box([DOORS.x0, 2.2, z0 - 0.2], [DOORS.x1, h, z0], C.block);
+  // The doors: white frames round two dark panes, a fire exit sign over them, a clock.
+  const { x0: da, x1: db } = DOORS;
+  const dm = (da + db) / 2;
+  box([da, 0, z0 - 0.06], [db, 2.2, z0 - 0.04], C.glass);
+  for (const [a, b] of [[da, da + 0.07], [dm - 0.035, dm + 0.035], [db - 0.07, db]]) box([a, 0, z0 - 0.04], [b, 2.2, z0 + 0.02], C.white);
+  box([da, 2.13, z0 - 0.04], [db, 2.2, z0 + 0.02], C.white);
+  box([da, 0.95, z0 - 0.04], [db, 1.02, z0 + 0.02], C.white);
+  box([dm - 0.2, 2.32, z0], [dm + 0.2, 2.46, z0 + 0.02], C.exit);
+  box([1.85, 2.45, z0], [2.1, 2.7, z0 + 0.03], C.white);
+  box([1.96, 2.56, z0 + 0.03], [1.99, 2.67, z0 + 0.035], C.board);
+  // Each mirror: a white frame, two strings up to the ceiling, and two faint
+  // streaks across the glass, so it reads as a mirror rather than a hatch.
+  const t = 0.035;
+  const sheen = shade([0.8, 0.85, 0.88]);
+  for (const { x0: a, x1: b, y0: lo, y1: hi } of MIRRORS) {
+    box([a - t, lo - t, z0], [b + t, lo, z0 + 0.03], C.white);
+    box([a - t, hi, z0], [b + t, hi + t, z0 + 0.03], C.white);
+    box([a - t, lo, z0], [a, hi, z0 + 0.03], C.white);
+    box([b, lo, z0], [b + t, hi, z0 + 0.03], C.white);
+    for (const sx of [a + 0.05, b - 0.05]) box([sx - 0.005, hi + t, z0 + 0.012], [sx + 0.005, h, z0 + 0.022], C.string);
+    const glass = (u, v) => inRoom(o, u, v, z0 + 0.004);
+    for (const [u, sw] of [[a + 0.03, 0.04], [a + 0.1, 0.02]]) {
+      const rise = 0.1; // the streak's lean: across this much for its height
+      const [p0, p1, p2, p3] = [glass(u, lo), glass(u + sw, lo), glass(u + sw + rise, hi), glass(u + rise, hi)];
+      m.triFacing(p0, p1, p2, sheen, [0, 0, -1]);
+      m.triFacing(p0, p2, p3, sheen, [0, 0, -1]);
+    }
   }
 }
+const DOORS = { x0: 2.15, x1: 3.35 }; // the erg room's glass doors, in the far wall
+const KAYAK_COLOURS = {
+  teal: [0.2, 0.62, 0.6], blue: [0.16, 0.36, 0.72], white: [0.92, 0.92, 0.9], red: [0.8, 0.16, 0.14],
+  yellow: [0.93, 0.74, 0.16], light: [0.32, 0.7, 0.86],
+};
 
 // The rooms under both clubs. Your paddler, boats, paddles and the ergs are
 // placed in them by main.js.
