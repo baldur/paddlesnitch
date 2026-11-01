@@ -14,6 +14,7 @@ import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
 import { eraseUserDevices } from '@paddlesnitch/core/devices'
+import { markAccountErased } from '@paddlesnitch/core/erased'
 import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
@@ -60,6 +61,10 @@ export async function DELETE(req: Request) {
   if (!(await hasRecentSignIn(req, user.id))) {
     return NextResponse.json({ error: REAUTH_TEXT, reauth: true }, { status: 403 })
   }
+
+  // 0. First, so a phone still holding this account's token stops writing while
+  //    (and after) the rest is deleted (C3: phones upload by themselves).
+  await markAccountErased(user.id)
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)

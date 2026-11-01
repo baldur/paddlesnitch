@@ -17,6 +17,7 @@ vi.mock('@paddlesnitch/core/strava', async (importOriginal) => ({
 import { cookies } from 'next/headers'
 import { GET as exportData } from '@/app/api/account/export/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
+import { isAccountErased } from '@paddlesnitch/core/erased'
 import { listKeys, getJson, putJson } from '@/lib/storage'
 import {
   saveSession, shareSession, getSharedSession, saveAthleteProfile, type AnalysisSession,
@@ -76,6 +77,13 @@ async function keysMentioning(needle: string): Promise<string[]> {
 }
 
 describe('DELETE /api/account removes every kind of personal data', () => {
+  it('marks the account deleted first, so a phone holding its token stops uploading (C3)', async () => {
+    const me = await makeUser('Phone Leaver')
+    signInAs(me.idToken)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
+    expect(await isAccountErased(me.id)).toBe(true)
+  })
+
   it('deletes paddles, the coach profile, and share links (a shared link stops working)', async () => {
     const me = await makeUser('Me')
     await saveSession(paddle(me.id, 'p1'))

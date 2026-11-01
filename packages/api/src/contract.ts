@@ -156,6 +156,8 @@ export const ApiError = named('ApiError', z.object({
   reauth: z.literal(true).optional(),
   // POST /att/api/auth/login (403): the password is right but the email was never confirmed; a new code has gone to it. Ask for the code, then POST signup/confirm.
   needsCode: z.literal(true).optional(),
+  // 410 from the phone calls: the account was deleted (on the website). Delete its recordings on the phone and sign out.
+  accountDeleted: z.literal(true).optional(),
 }))
 
 const Login = named('Login', z.object({ email: z.string(), password: z.string() }))
@@ -423,8 +425,8 @@ export const restRoutes = {
   'DELETE /api/account/contact': { auth: 'user', input: null, output: Ok, errors: [401] },
   'GET /api/account/devices': { auth: 'user', input: null, output: TrackerList, errors: [401] },
   'DELETE /api/account/devices': { auth: 'user', input: TrackerId, output: Ok, errors: [401, 404] },
-  'POST /api/account/devices/phone': { auth: 'user', input: PhoneAdd, output: Phone, errors: [400, 401, 409] },
-  'POST /api/account/devices/{deviceId}/sessions': { auth: 'user', input: null, output: Uploaded, errors: [400, 401, 404, 409, 413, 422] },
+  'POST /api/account/devices/phone': { auth: 'user', input: PhoneAdd, output: Phone, errors: [400, 401, 409, 410] },
+  'POST /api/account/devices/{deviceId}/sessions': { auth: 'user', input: null, output: Uploaded, errors: [400, 401, 404, 409, 410, 413, 422] },
   'GET /api/account/devices/{deviceId}/sessions': { auth: 'user', input: HeldPartsFor, output: HeldParts, errors: [401, 404] },
   'GET /api/account/devices/sessions': { auth: 'user', input: null, output: RecordingList, errors: [401] },
   'GET /api/account/devices/sessions/{sessionId}': { auth: 'user', input: RecordingOf, output: RecordingMotion, errors: [401, 404] },

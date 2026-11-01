@@ -259,7 +259,8 @@
     "errors": [
       400,
       401,
-      409
+      409,
+      410
     ]
   },
   "POST /api/account/devices/{deviceId}/sessions": {
@@ -271,6 +272,7 @@
       401,
       404,
       409,
+      410,
       413,
       422
     ]
