@@ -192,6 +192,10 @@
     "schema": "AnalysisSession",
     "fits": false
   },
+  "paddles.get.with-phone.json": {
+    "call": "paddles.get",
+    "schema": "AnalysisSession"
+  },
   "paddles.list.json": {
     "call": "paddles.list",
     "schema": "PaddleList"
