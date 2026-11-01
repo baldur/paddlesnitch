@@ -76,8 +76,10 @@ const ROW_MODES = {
 };
 for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: true });
 // Your scull and its colour are in the kit (kit.js), so they follow you on the account.
-// Anyone can paddle practice and the drills, and row; the kayak races, the leaderboard and live races need an account.
-const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
+// Anyone can paddle practice, the drills and one race (Hasler Div 7-9: Try it now), and row;
+// the other kayak races, the leaderboard and live races need an account.
+const OPEN_RACE = 'hasler79';
+const OPEN = new Set(['practice', OPEN_RACE, ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 // The walk to the club (club.js) is what opens (owner 2026-10-31). #menu opens
@@ -879,10 +881,10 @@ function arrive(place) {
   if (place === 'path' && !hiring && label(club.plan)) {
     spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
-  // Nothing paddled yet: straight onto the water, a short paddle on your own
-  // that teaches as it goes (anyone can, signed in or not; races need an account).
+  // Nothing paddled yet: straight into the open race (anyone can, signed in or
+  // not), always a race, whatever format was last picked; it teaches as it goes.
   else if (place === 'path' && !hiring) {
-    spots.unshift({ card: { name: 'Try it now', line: 'A 1 km paddle on your own' }, act: () => choose('practice'), go: true });
+    spots.unshift({ card: { name: 'Try it now', line: `A race: ${MODES[OPEN_RACE].label}` }, act: () => { format = 'mass'; showFormat(); choose(OPEN_RACE); }, go: true });
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
@@ -1342,14 +1344,17 @@ function showAccount() {
   if (account.user) {
     els.account.textContent = `Signed in as ${account.user.displayName || account.user.email}: your race times go on the leaderboards.`;
   } else {
-    els.account.replaceChildren(link('Sign in', SIGN_IN), ' to race the courses, race friends and get on the leaderboards. Practice is open to everyone.');
+    els.account.replaceChildren(link('Sign in', SIGN_IN), ` to race the other courses, race friends and get on the leaderboards. ${MODES[OPEN_RACE].label} and practice are open to everyone.`);
   }
 }
 
 // A finished race's time goes on the course's leaderboard (signed in only).
 async function submitResult(time) {
   els.ranked.textContent = '';
-  if (!account.user) return;
+  if (!account.user) {
+    if (!account.offline && !mode.row) els.ranked.replaceChildren(link('Sign in', SIGN_IN), ' to put your times on the leaderboards.');
+    return;
+  }
   try {
     const { best, rank } = await call('games.submit', { course: mode.key, time, hull: boardHull(kit, !!mode.row) }, { mutation: true });
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
@@ -2718,6 +2723,8 @@ if (HASH.has('debug')) {
     get lobby() { return lobby; },
     get liveries() { return liveries; },
     get club() { return club; },
+    get mode() { return mode; },
+    get format() { return formatOf(mode); },
     clubAt: (place) => arrive(place),
     show, // a message, as the race would show it (tests check where it lands)
   };

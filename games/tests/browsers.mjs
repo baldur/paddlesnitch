@@ -82,7 +82,8 @@ const CASES = [
   { name: 'webkit, desktop, portage drill', engine: webkit, ctx: desktop, course: 'drill-portage' },
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
-  { name: 'webkit, desktop, try it now from the bridge', engine: webkit, ctx: desktop, club: true, tryIt: true },
+  // Signed out, a time trial picked last time: Try it now is still a race, the open one.
+  { name: 'webkit, desktop, try it now from the bridge, signed out', engine: webkit, ctx: desktop, club: true, tryIt: true, site: true, signedOut: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
   { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
@@ -102,8 +103,9 @@ const CASES = [
 async function play(c, page, errors) {
   // A case with the site: under /games/, signed in as a stand-in player (the game only asks who's signed in).
   if (c.site) {
-    await page.route('**/api/trpc/**', (r) => r.fulfill({ json: { result: { data: r.request().url().includes('/api/trpc/me') ? { user: { id: 'test', displayName: 'Pat R.' } } : null } } }));
+    await page.route('**/api/trpc/**', (r) => r.fulfill({ json: { result: { data: r.request().url().includes('/api/trpc/me') ? { user: c.signedOut ? null : { id: 'test', displayName: 'Pat R.' } } : null } } }));
   }
+  if (c.tryIt) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:format', 'interval'));
   // Racing friends: someone who's paddled before (a first visit's bridge leads with Try it now instead).
   if (c.friends) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:last', 'loop'));
   await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
@@ -202,7 +204,11 @@ async function play(c, page, errors) {
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
     if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
-    if (c.tryIt && (await page.evaluate(() => window.kayak.race?.racers.length)) !== 1) errors.push('Try it now started something other than a paddle on your own');
+    if (c.tryIt) {
+      await page.waitForFunction(() => window.kayak.mode?.key === 'hasler79' && window.kayak.race?.racers.length > 1, null, { timeout: 60_000 }).catch(() => {});
+      const got = await page.evaluate(() => ({ racers: window.kayak.race.racers.length, course: window.kayak.mode?.key, format: window.kayak.format }));
+      if (!(got.racers > 1 && got.course === 'hasler79' && got.format === 'mass')) errors.push(`Try it now started ${JSON.stringify(got)}, expected the Hasler Div 7-9 race`);
+    }
     // The erg: both sides together for each stroke, and the monitor counts down the 500 m.
     if (c.erg) {
       for (let i = 0; i < 6; i++) {
