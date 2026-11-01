@@ -2,7 +2,7 @@ import XCTest
 
 /// An image's pixels, read in points.
 struct Pixels {
-    struct RGB: CustomStringConvertible {
+    struct RGB: CustomStringConvertible, Equatable {
         let r: Int, g: Int, b: Int
         func near(_ other: RGB, within: Int = 60) -> Bool {
             abs(r - other.r) + abs(g - other.g) + abs(b - other.b) < within

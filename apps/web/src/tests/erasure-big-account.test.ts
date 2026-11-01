@@ -29,6 +29,8 @@ vi.mock('@paddlesnitch/core/storage', async (orig) => {
 import { cookies } from 'next/headers'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { listKeys } from '@/lib/storage'
+import { sweepJobs } from '@/lib/jobs'
+import { ERASE_AGAIN_AFTER_MS } from '@/lib/account-erasure'
 import { saveSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
 import { storeDeviceSession, createClaim, linkClaim, redeemToken } from '@paddlesnitch/core/devices'
 
@@ -67,5 +69,21 @@ describe('deleting a well-used account', () => {
     expect((await listKeys('devices/ABCD1234/sessions/'))).toEqual([])
     // One call at a time this was ~800 calls: 8+ s here, 30 s+ against S3.
     expect(took, `${slow.calls} storage calls in ${took} ms`).toBeLessThan(2000)
+
+    // The second pass (#814) meets the same account again: the old token kept
+    // writing while the delete ran. It must be as flat in time.
+    for (let i = 0; i < 150; i++) await saveSession(paddle(me.id, `late${i}`))
+    for (let i = 0; i < 60; i++) {
+      await storeDeviceSession({ deviceId: 'ABCD1234', userId: me.id, filename: `late_${String(i).padStart(4, '0')}.csv`, startedAt: '2026-09-01T09:00:00Z', endedAt: '2026-09-01T10:00:00Z', distanceMetres: 1000, points: 10 }, 'lat,lon,timestamp\n')
+    }
+    slow.ms = 10
+    slow.calls = 0
+    const t1 = Date.now()
+    expect((await sweepJobs(Date.now() + ERASE_AGAIN_AFTER_MS + 1_000)).done).toBe(1)
+    const again = Date.now() - t1
+    slow.ms = 0
+    expect(await listKeys(`analysis/${me.id}/`)).toEqual([])
+    expect((await listKeys('devices/ABCD1234/sessions/'))).toEqual([])
+    expect(again, `${slow.calls} storage calls in ${again} ms`).toBeLessThan(2000)
   }, 60_000)
 })
