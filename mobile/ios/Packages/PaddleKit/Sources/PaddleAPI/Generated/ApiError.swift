@@ -5,12 +5,20 @@
 import Foundation
 
 public struct ApiError: Codable, Hashable, Sendable {
+    public var accountDeleted: Bool?
     public var error: String
     public var needsCode: Bool?
     public var reauth: Bool?
     public var session: String?
 
-    public init(error: String, needsCode: Bool? = nil, reauth: Bool? = nil, session: String? = nil) {
+    public init(
+        accountDeleted: Bool? = nil,
+        error: String,
+        needsCode: Bool? = nil,
+        reauth: Bool? = nil,
+        session: String? = nil
+    ) {
+        self.accountDeleted = accountDeleted
         self.error = error
         self.needsCode = needsCode
         self.reauth = reauth

@@ -22,7 +22,8 @@ import { POST as tokenRoute } from '@/app/api/devices/token/route'
 import { POST as linkBluetooth } from '@/app/api/account/devices/link-bluetooth/route'
 import { GET as stagedParts } from '@/app/api/account/devices/[deviceId]/sessions/route'
 import { createHash } from 'crypto'
-import { Uploaded } from '@paddlesnitch/api/contract'
+import { Uploaded, ApiError } from '@paddlesnitch/api/contract'
+import { markAccountErased, isAccountErased } from '@paddlesnitch/core/erased'
 import { publishFirmware, promoteFirmware } from '@/lib/firmware'
 import { deflateSync } from 'zlib'
 import { TEST_DEVICE_PUBKEY, linkProof } from './device-proof'
@@ -351,5 +352,25 @@ describe('the phone fixtures match the real answers', () => {
 
     await revokeDevice(u.id, phone.deviceId)
     expect(await (await send(u.idToken, phone.deviceId, 'track_20261101_110000.csv', TRACK)).json()).toEqual(await fixture('account.phone-upload.not-found.json'))
+  })
+})
+
+describe('a deleted account', () => {
+  it("answers 410 on both phone calls while its token still works, and writes nothing", async () => {
+    const u = await makeUser('Deleted')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await markAccountErased(u.id)
+    const added = await add(u.idToken)
+    expect(added.status).toBe(410)
+    expect(ApiError.parse(await added.json())).toMatchObject({ accountDeleted: true })
+    const up = await send(u.idToken, deviceId, NAME, TRACK)
+    expect(up.status).toBe(410)
+    expect(await listUserDeviceSessions(u.id)).toEqual([])
+  })
+
+  it('forgets the mark after two days, when every token has expired', async () => {
+    const u = await makeUser('Long gone')
+    await putJson(`auth/erased/${createHash('sha256').update(u.id).digest('hex')}.json`, { at: new Date(Date.now() - 3 * 24 * 3600_000).toISOString() })
+    expect(await isAccountErased(u.id)).toBe(false)
   })
 })
