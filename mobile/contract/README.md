@@ -446,6 +446,41 @@ has a GPS fix", `since_fix_s` "0 while there's a fix, NAN before the first"):
 | `fix` = 0, 1–59 s | GPS lost 40 s ago | GPS lost 40 seconds ago | nothing |
 | `fix` = 0, 60 s or more | GPS lost 2 min ago (whole minutes, rounded down) | GPS lost 2 minutes ago | nothing |
 
+### Motion line (live trace)
+
+Under the stroke rate, above the GPS line: a small live trace of the motion the
+recorder is writing, so the paddler can see the sensors work (owner, 2026-11-01).
+From `rc_phone_trace` (recorder-core 0.6.0, `recorder_phone.h`), called after
+each tick. The core decides everything; the app draws what it returns and works
+out nothing.
+
+- **The trace:** full width, 48 dp/pt tall, a single line in primary text blue
+  (`text-primary-text`), no axes, numbers, grid or fill. x is `ago_ms`: newest at
+  the right edge, 10 s across. y is `dps / scale_dps` (−1 to 1, 0 in the middle).
+  Join the samples as they are: no smoothing and no animation between ticks. It
+  moves on in steps as the phone's sensor batches arrive (0.5–2 s); that's
+  expected.
+- **The status line,** muted, under the trace, by `status`:
+
+| `status` | Trace | Shown |
+|---|---|---|
+| `RC_TRACE_STARTING` | none | Motion sensor: starting |
+| `RC_TRACE_MOTION` | drawn | Motion sensor: working |
+| `RC_TRACE_STILL` | drawn | Motion sensor: not moving |
+| `RC_TRACE_NO_SAMPLES` | none | Motion sensor stopped. No stroke rate from here on. (red) |
+
+- `STILL` can come back after `MOTION` (the phone put down during a rest), so
+  its words fit either way.
+- **Accessibility:** the trace is hidden from screen readers. The status line is
+  read as it is; only "Motion sensor stopped…" is announced, once, like "GPS lost".
+  It isn't a live region otherwise.
+- **No motion sensors on the phone** (known before Start): no trace and no motion
+  line; the existing "No motion sensors on this phone, so no stroke rate" stays.
+- **Tests:** the core's fixtures `trace_phone_flat` and `trace_phone_paddle` (golden
+  `trace.csv`, format in `recorder-core/fixtures/README.md`). Each app's fixture
+  runner takes the `trace_phone_` prefix and handles the `trace` line, and a
+  screenshot test draws each status from a fixture.
+
 The line is not a live region.
 
 ### Altitude
