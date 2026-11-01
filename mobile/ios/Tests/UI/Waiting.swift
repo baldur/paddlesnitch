@@ -32,11 +32,20 @@ extension XCUIElement {
         var last = CGRect.null
         return poll(timeout: timeout) {
             // The keyboard first: while it's down that's one look, not three.
-            guard keyboard.exists, exists, value(forKey: "hasKeyboardFocus") as? Bool ?? false else { return false }
-            let frame = keyboard.frame
+            guard let frame = keyboard.frameIfThere, exists, value(forKey: "hasKeyboardFocus") as? Bool ?? false
+            else { return false }
             defer { last = frame }
             return frame == last
         }
+    }
+
+    /// Its frame, or nil if it isn't there. Reading `frame` straight after
+    /// `exists` fails the test when it goes in between ("Failed to get
+    /// matching snapshot: No matches found … Keyboard", CI on #808 and #810):
+    /// the keyboard comes and goes with "Save Password?" and Done. A snapshot
+    /// read throws instead, which is nil here.
+    var frameIfThere: CGRect? {
+        try? snapshot().frame
     }
 
     /// Whether a tap would land on it, waiting up to `timeout`.

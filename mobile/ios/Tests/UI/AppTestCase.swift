@@ -148,7 +148,7 @@ class AppTestCase: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         if tabBar.exists && tabBar.isHittable { bottom = min(bottom, tabBar.frame.minY) }
         // The keyboard covers what's under it too.
-        if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY) }
+        if let keyboard = app.keyboards.firstMatch.frameIfThere { bottom = min(bottom, keyboard.minY) }
         let paddlesTab = tab("Paddles")
         if paddlesTab.exists && paddlesTab.isHittable { bottom = min(bottom, paddlesTab.frame.minY - 8) }
         return CGRect(x: window.minX, y: top, width: window.width, height: max(0, bottom - top))
