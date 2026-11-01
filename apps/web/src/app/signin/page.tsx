@@ -529,7 +529,7 @@ function AuthForm() {
       {tab === 'signin' && !confirming && (
         <div className="flex flex-col items-center gap-3 border-t border-border pt-6 mt-6">
           <p className="text-sm text-muted text-center">Made your account with Strava? Email us and we’ll move it to your email.</p>
-          <a href="mailto:privacy@paddlesnitch.com" className={buttonClass('secondary')}>Email us</a>
+          <a href="mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email" className={buttonClass('secondary')}>Email us</a>
         </div>
       )}
     </Page>

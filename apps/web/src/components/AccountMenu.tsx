@@ -20,7 +20,7 @@ export function resetAccountMenuCache() { shared = {} }
 // move it to a real email, so signing out asks first. Same words as the apps.
 const SIGN_OUT_CONFIRM = {
   text: 'You made this account with Strava, so you can’t sign back in until we move it to your email.',
-  emailHref: 'mailto:privacy@paddlesnitch.com',
+  emailHref: 'mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email',
 }
 
 export default function AccountMenu({ variant = 'menu' }: { variant?: 'menu' | 'tab' } = {}) {

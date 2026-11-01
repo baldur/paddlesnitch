@@ -73,7 +73,7 @@ describe('the account menu', () => {
       await mount({ id: 'u1', displayName: 'Sam', placeholderEmail: true })
       await openAndSignOut()
       expect(container.textContent).toContain('You made this account with Strava, so you can’t sign back in until we move it to your email.')
-      expect(container.querySelector('a[href="mailto:privacy@paddlesnitch.com"]')?.textContent).toBe('Email us')
+      expect(container.querySelector('a[href="mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email"]')?.textContent).toBe('Email us')
       expect(signedOut()).toBe(false)
       const cancel = [...container.querySelectorAll('button')].find(b => b.textContent === 'Cancel')!
       await act(async () => { cancel.click() })

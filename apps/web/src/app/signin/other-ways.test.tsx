@@ -54,7 +54,7 @@ describe('other ways in', () => {
     for (const google of [true, false]) {
       const c = await mountWith({ google })
       expect(c.textContent).toContain('Made your account with Strava? Email us and we’ll move it to your email.')
-      const link = c.querySelector('a[href="mailto:privacy@paddlesnitch.com"]')
+      const link = c.querySelector('a[href="mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email"]')
       expect(link?.textContent).toBe('Email us')
       expect(c.textContent).not.toContain('Strava sign-in is off')
       await act(async () => { root.unmount() }); container.remove()
