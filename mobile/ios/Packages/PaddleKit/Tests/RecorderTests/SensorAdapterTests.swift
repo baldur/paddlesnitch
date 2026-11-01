@@ -205,6 +205,14 @@ struct GPSLineTests {
         }
     }
 
+    /// The contract: only "GPS lost…" is red; a fix isn't green.
+    @Test func onlyALostFixIsAWarning() {
+        #expect(!GPSLine(live(false, nil)).isWarning)
+        #expect(!GPSLine(live(true, 0)).isWarning)
+        #expect(GPSLine(live(false, 0)).isWarning)
+        #expect(GPSLine(live(false, 90)).isWarning)
+    }
+
     @Test func announcedOnlyOnAChange() {
         #expect(GPSLine.announcement(before: live(false, nil), now: live(true, 0)) == nil, "the first fix")
         #expect(GPSLine.announcement(before: live(true, 0), now: live(false, 0)) == "GPS lost")

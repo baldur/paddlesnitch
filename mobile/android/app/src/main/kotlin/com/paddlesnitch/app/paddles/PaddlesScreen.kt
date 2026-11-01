@@ -132,7 +132,7 @@ private fun Logbook(list: PaddleList) {
 
 /** Kilometres per week as bars, this week on the right and highlighted; an empty week is just baseline. */
 @Composable
-private fun WeeksChart(weeks: List<Double>) {
+internal fun WeeksChart(weeks: List<Double>) {
     val top = max(1.0, weeks.max())
     Row(
         Modifier.fillMaxWidth().height(48.dp)
@@ -144,7 +144,7 @@ private fun WeeksChart(weeks: List<Double>) {
             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
                 if (km > 0) Box(
                     Modifier.fillMaxWidth().fillMaxHeight(max(0.08f, (km / top).toFloat()))
-                        .background(if (i == weeks.lastIndex) PsColor.primaryText else PsColor.primary, RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)),
+                        .background(if (i == weeks.lastIndex) PsColor.primaryText else PsColor.primary),   // data is square (design system)
                 )
             }
         }
