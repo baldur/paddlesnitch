@@ -35,6 +35,10 @@
     "call": "GET /api/account/devices",
     "schema": "TrackerList"
   },
+  "account.devices.with-phone.json": {
+    "call": "GET /api/account/devices",
+    "schema": "TrackerList"
+  },
   "account.error.json": {
     "call": null,
     "schema": "ApiError"
@@ -50,6 +54,46 @@
   "account.handle-check.taken.json": {
     "call": "GET /api/account/handle",
     "schema": "HandleAvailability"
+  },
+  "account.phone-upload.already-uploaded.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
+  "account.phone-upload.held.json": {
+    "call": "GET /api/account/devices/{deviceId}/sessions",
+    "schema": "HeldParts"
+  },
+  "account.phone-upload.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "Uploaded"
+  },
+  "account.phone-upload.motion.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "Uploaded"
+  },
+  "account.phone-upload.no-points.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
+  "account.phone-upload.not-found.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
+  "account.phone-upload.piece.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "Uploaded"
+  },
+  "account.phone-upload.track-not-uploaded.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
+  "account.phone.json": {
+    "call": "POST /api/account/devices/phone",
+    "schema": "Phone"
+  },
+  "account.phone.too-many.json": {
+    "call": "POST /api/account/devices/phone",
+    "schema": "ApiError"
   },
   "account.profile.json": {
     "call": "GET /api/account/profile",

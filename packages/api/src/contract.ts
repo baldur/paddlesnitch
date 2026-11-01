@@ -278,6 +278,9 @@ const PhoneAdd = named('PhoneAdd', z.object({ installId: z.string(), model: z.en
 /** The phone on the account. Upload its recordings to /api/account/devices/{deviceId}/sessions. */
 export const Phone = named('Phone', z.object({ deviceId: z.string(), name: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
 /** 201: a file the server has taken, a track (`points`…) or its motion file (`motionRows`). 202: one piece taken (`part`, `parts`, `have`: the pieces held), no `sessionId`. */
+/** The pieces of a file the server holds from an upload that broke off: send only the rest. Empty once the file is put together, or never started. */
+export const HeldParts = named('HeldParts', z.object({ parts: z.array(z.int()) }))
+const HeldPartsFor = named('HeldPartsFor', z.object({ filename: z.string() }))
 export const Uploaded = named('Uploaded', z.object({
   sessionId: z.string().optional(),
   part: z.int().optional(),
@@ -422,6 +425,7 @@ export const restRoutes = {
   'DELETE /api/account/devices': { auth: 'user', input: TrackerId, output: Ok, errors: [401, 404] },
   'POST /api/account/devices/phone': { auth: 'user', input: PhoneAdd, output: Phone, errors: [400, 401, 409] },
   'POST /api/account/devices/{deviceId}/sessions': { auth: 'user', input: null, output: Uploaded, errors: [400, 401, 404, 409, 413, 422] },
+  'GET /api/account/devices/{deviceId}/sessions': { auth: 'user', input: HeldPartsFor, output: HeldParts, errors: [401, 404] },
   'GET /api/account/devices/sessions': { auth: 'user', input: null, output: RecordingList, errors: [401] },
   'GET /api/account/devices/sessions/{sessionId}': { auth: 'user', input: RecordingOf, output: RecordingMotion, errors: [401, 404] },
   'GET /att/api/strava/status': { auth: 'user', input: null, output: StravaStatus, errors: [401] },

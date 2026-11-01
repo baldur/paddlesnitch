@@ -37,14 +37,14 @@ import { POST as claim } from '@/app/api/devices/claim/route'
 import { POST as token } from '@/app/api/devices/token/route'
 import { POST as upload } from '@/app/api/devices/sessions/route'
 import { POST as addPhone } from '@/app/api/account/devices/phone/route'
-import { POST as phoneUpload } from '@/app/api/account/devices/[deviceId]/sessions/route'
+import { POST as phoneUpload, GET as heldParts } from '@/app/api/account/devices/[deviceId]/sessions/route'
 import type { deviceList } from '@/lib/device-list'
 import { saveSession } from '@paddlesnitch/analysis/analysis-store'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { provedPoll } from './device-proof'
 import {
   restRoutes, ApiError, Ok, TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact, AccountStatus,
-  TrackerList, RecordingList, RecordingMotion, Phone, Uploaded,
+  TrackerList, RecordingList, RecordingMotion, Phone, Uploaded, HeldParts,
 } from '@paddlesnitch/api/contract'
 
 let dataDir: string
@@ -393,7 +393,7 @@ describe('trackers in the apps', () => {
 })
 
 // Phone recording (C3, README § Phone recording): add the phone, upload a track.
-const phoneRoutes = ['POST /api/account/devices/phone', 'POST /api/account/devices/{deviceId}/sessions']
+const phoneRoutes = ['POST /api/account/devices/phone', 'POST /api/account/devices/{deviceId}/sessions', 'GET /api/account/devices/{deviceId}/sessions']
 describe('a phone that records', () => {
   const add = (t?: string) => addPhone(req('POST', '/api/account/devices/phone', t, { installId: 'install-0123456789abcdef', model: 'phone-ios' }))
   it('adds the phone and uploads as the contract says', async () => {
@@ -402,6 +402,7 @@ describe('a phone that records', () => {
       method: 'POST', body: CSV, headers: { 'x-paddlesnitch-app': 'ios/0.1.0', authorization: `Bearer ${pat.idToken}`, 'content-type': 'text/csv' },
     })
     await fits(Uploaded, await phoneUpload(up, { params: Promise.resolve({ deviceId: phone.deviceId }) }), 201)
+    await fits(HeldParts, await heldParts(req('GET', `/api/account/devices/${phone.deviceId}/sessions?filename=track_20260905_090000.csv`, pat.idToken), { params: Promise.resolve({ deviceId: phone.deviceId }) }))
     const list = await fits(TrackerList, await listTrackers(req('GET', '/api/account/devices', pat.idToken)))
     expect(list.summaries[0].kind).toBe('phone')
   })

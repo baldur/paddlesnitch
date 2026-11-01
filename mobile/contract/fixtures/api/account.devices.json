@@ -46,7 +46,8 @@
       "distanceMetres": 84210,
       "latestAt": "2026-10-24T16:05:00.000Z",
       "firmwareState": "up_to_date",
-      "quiet": false
+      "quiet": false,
+      "kind": "tracker"
     },
     {
       "deviceId": "C0FFEE02",
@@ -61,7 +62,8 @@
       "crash": {
         "at": "2026-10-20T18:43:58.000Z",
         "task": "uplink"
-      }
+      },
+      "kind": "tracker"
     },
     {
       "deviceId": "BADC0DE9",
@@ -72,7 +74,8 @@
       "distanceMetres": 9800,
       "latestAt": "2026-07-14T09:12:00.000Z",
       "firmwareState": "unknown",
-      "quiet": false
+      "quiet": false,
+      "kind": "tracker"
     }
   ]
 }

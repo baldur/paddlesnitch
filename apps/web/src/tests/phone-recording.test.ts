@@ -311,3 +311,45 @@ describe('a phone upload, the rest of the contract', () => {
     expect(devices[0]).not.toHaveProperty('health')
   })
 })
+
+// The contract's fixtures (mobile/contract/fixtures/api) are written by hand; the
+// apps test against them. Each must carry exactly the fields the real answer does.
+describe('the phone fixtures match the real answers', () => {
+  const fixture = async (name: string) => JSON.parse(await (await import('fs/promises')).readFile(
+    (await import('path')).join(__dirname, '../../../../mobile/contract/fixtures/api', name), 'utf8'))
+  const keys = (o: object) => Object.keys(o).sort()
+
+  it('add, upload a track and its motion, repeats, order, no fix, removed, held pieces', async () => {
+    const u = await makeUser('Fixtures')
+    const added = await add(u.idToken)
+    const phone = await added.json()
+    expect(keys(phone)).toEqual(keys(await fixture('account.phone.json')))
+
+    const track = await (await send(u.idToken, phone.deviceId, NAME, TRACK)).json()
+    expect(keys(track)).toEqual(keys(await fixture('account.phone-upload.json')))
+    const motion = await (await send(u.idToken, phone.deviceId, NAME.replace('.csv', '_imu.csv'), MOTION)).json()
+    expect(keys(motion)).toEqual(keys(await fixture('account.phone-upload.motion.json')))
+    const again = await (await send(u.idToken, phone.deviceId, NAME, TRACK)).json()
+    expect(again).toEqual({ ...await fixture('account.phone-upload.already-uploaded.json'), sessionId: track.sessionId })
+    const early = await (await send(u.idToken, phone.deviceId, 'track_20261101_070211_imu.csv', MOTION)).json()
+    expect(early).toEqual(await fixture('account.phone-upload.track-not-uploaded.json'))
+    const noFix = await (await send(u.idToken, phone.deviceId, 'track_20261101_090000.csv', 'timestamp,lat,lon,tx_seq\n,,,1\n')).json()
+    expect(noFix).toEqual(await fixture('account.phone-upload.no-points.json'))
+    const piece = await (await upload(new NextRequest(`http://x/api/account/devices/${phone.deviceId}/sessions?filename=track_20261101_100000.csv&part=1&parts=4`, {
+      method: 'POST', body: 'timestamp,lat,lon\n', headers: { authorization: `Bearer ${u.idToken}`, 'content-type': 'text/csv' },
+    }), params(phone.deviceId))).json()
+    expect(keys(piece)).toEqual(keys(await fixture('account.phone-upload.piece.json')))
+    const held = await (await stagedParts(new NextRequest(`http://x/api/account/devices/${phone.deviceId}/sessions?filename=track_20261101_100000.csv`, { headers: { authorization: `Bearer ${u.idToken}` } }), params(phone.deviceId))).json()
+    expect(keys(held)).toEqual(keys(await fixture('account.phone-upload.held.json')))
+
+    const { summaries } = await deviceList(u.id)
+    const fx = (await fixture('account.devices.with-phone.json')).summaries.find((s: { kind: string }) => s.kind === 'phone')
+    expect(keys(summaries[0])).toEqual(keys(fx))
+
+    for (let i = 0; i < MAX_PHONES; i++) await addPhone(u.id, { installId: `install-number-${String(i).padStart(4, '0')}`, model: 'phone-ios' })
+    expect(await (await add(u.idToken, { installId: 'install-one-too-many', model: 'phone-ios' })).json()).toEqual(await fixture('account.phone.too-many.json'))
+
+    await revokeDevice(u.id, phone.deviceId)
+    expect(await (await send(u.idToken, phone.deviceId, 'track_20261101_110000.csv', TRACK)).json()).toEqual(await fixture('account.phone-upload.not-found.json'))
+  })
+})

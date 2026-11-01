@@ -305,8 +305,9 @@ The upload body is the file's bytes (not multipart). Send files of 64 KB or
 more in 64 KB pieces (`&part=N&parts=M&sha256=<hex of the whole file>`, as the
 tracker does), optionally zlib-compressed per piece with `&enc=zlib` and
 `Content-Type: application/octet-stream`. `GET` on the same address with
-`?filename=` answers `{parts: […]}`: the pieces the server already holds from a
-broken upload, so send only the rest.
+`?filename=` answers `HeldParts` `{parts: […]}`: the pieces the server already
+holds from a broken upload, so send only the rest. Fixtures:
+`account.phone*.json`, `account.phone-upload*.json`, `account.devices.with-phone.json`.
 
 ### Files and names
 

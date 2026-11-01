@@ -275,6 +275,15 @@
       422
     ]
   },
+  "GET /api/account/devices/{deviceId}/sessions": {
+    "auth": "user",
+    "input": "HeldPartsFor",
+    "output": "HeldParts",
+    "errors": [
+      401,
+      404
+    ]
+  },
   "GET /api/account/devices/sessions": {
     "auth": "user",
     "input": null,
