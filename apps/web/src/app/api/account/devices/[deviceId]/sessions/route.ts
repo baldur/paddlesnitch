@@ -4,7 +4,7 @@ import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts, isPhone }
 import { handleSessionUpload } from '@/lib/session-upload'
 import { reportedFirmware, reportedModel } from '@/lib/device-route'
 import { withAction } from '@/lib/action'
-import { isAccountErased } from '@paddlesnitch/core/erased'
+import { erasedAnswer } from '@/lib/erased-answer'
 
 // POST /api/account/devices/[deviceId]/sessions — AUTHENTICATED (browser).
 // The owner's browser relaying a recording it read off the tracker over
@@ -20,9 +20,9 @@ import { isAccountErased } from '@paddlesnitch/core/erased'
 async function post(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // A deleted account's token can live on for a day: answer 410 so the app
-  // deletes that account's recordings instead of uploading them (C3).
-  if (await isAccountErased(user.id)) return NextResponse.json({ error: 'This account was deleted.', accountDeleted: true }, { status: 410 })
+  // An account being deleted, or deleted with its token still valid (C3).
+  const erased = await erasedAnswer(user.id)
+  if (erased) return erased
   const { deviceId } = await params
   const device = await getUserDevice(user.id, deviceId)
   // 404, not 403: don't reveal whether someone else's tracker exists. A

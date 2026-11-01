@@ -41,9 +41,9 @@ public enum Endpoints {
     public static let postAccountContact = Endpoint<ContactEmail, Contact>(
         method: "POST", path: "/api/account/contact", auth: .user, errorStatuses: [400, 401])
     public static let accountDevicesPhone = Endpoint<PhoneAdd, Phone>(
-        method: "POST", path: "/api/account/devices/phone", auth: .user, errorStatuses: [400, 401, 409, 410])
+        method: "POST", path: "/api/account/devices/phone", auth: .user, errorStatuses: [400, 401, 409, 410, 503])
     public static let postAccountDevicesByDeviceIdSessions = Endpoint<NoInput, Uploaded>(
-        method: "POST", path: "/api/account/devices/{deviceId}/sessions", auth: .user, errorStatuses: [400, 401, 404, 409, 410, 413, 422])
+        method: "POST", path: "/api/account/devices/{deviceId}/sessions", auth: .user, errorStatuses: [400, 401, 404, 409, 410, 413, 422, 503])
     public static let accountExport = Endpoint<NoInput, DownloadLink>(
         method: "POST", path: "/api/account/export", auth: .user, errorStatuses: [401])
     public static let postAccountTos = Endpoint<TosAccept, TosAccepted>(
