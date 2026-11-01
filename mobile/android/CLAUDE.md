@@ -32,6 +32,8 @@ time and isn't obvious from the code.
   filled buttons (lead, 2026-10-26).
 - Data is square: no rounded corners on charts, chart keys, tables or maps (design system).
   `SquareDataTest` draws the weekly bars and the speed colour key and checks their corner pixels.
+  Tables (splits, efforts) sit on the ground with a border above each row, like the website's,
+  never in a filled box (#826, `SquareTablesTest`).
 - Buttons have the control radius from the tokens (`PsRadius.control`, 6 dp), not M3's pill (#793).
   M3's `Button`, `OutlinedButton` and `TextButton` take their pill from a fixed full-corner token,
   never from the theme's `Shapes`, so setting `Shapes` changes nothing. Screens import
