@@ -18,7 +18,7 @@ const arg = (name: string, dflt?: string) => {
   const i = process.argv.indexOf(`--${name}`)
   return i > 0 ? process.argv[i + 1] : dflt
 }
-const DATA = arg('data'), USER = arg('user'), OUT = arg('out')
+const DATA = arg('data'), OUT = arg('out'), USER = arg('user') ?? ''
 if (!DATA || !USER || !OUT) { console.error('usage: --data <dir> --user <id> --out <dir> [--n 20] [--only a,b]'); process.exit(1) }
 const N = Number(arg('n', '20'))
 

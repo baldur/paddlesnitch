@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SYSTEM, withTimeout, buildPrompt, describePaddleDate, normaliseSport, textFromConverse, textFromOllama } from '@paddlesnitch/analysis/llm'
+import { withTimeout, buildPrompt, describePaddleDate, normaliseSport, textFromConverse, textFromOllama } from '@paddlesnitch/analysis/llm'
 import type { AnalysisResult } from '@paddlesnitch/analysis/analysis'
 
 // Guards the "analysis failed, but works on retry" symptom (#171): a slow/hanging
