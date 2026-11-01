@@ -210,6 +210,10 @@ ESP32-S3. Confirm once on the bench build.
    - **0.5.0:** a recording whose GPS never saw the boat moving at >= 4 km/h
      for 90 s gets the reason `not_moving` and says so on its page (owner,
      2026-10-31), instead of suggesting the tracker was loose.
+   - **0.6.0:** a live motion trace for the phones' recording screen
+     (`rc_phone_trace`, owner 2026-11-01), so the paddler sees the sensors
+     working: the last 10 s of the signal stroke rate is counted from, and a
+     status the core decides (starting, no samples, still, motion).
 3. **Boat motion** (roll, pitch, evenness) the same way; `attitude.ts` goes.
    Then movement-gated distance, the last motion maths left in
    `packages/timing`.
