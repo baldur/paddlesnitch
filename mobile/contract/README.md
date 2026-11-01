@@ -344,9 +344,10 @@ holds from a broken upload, so send only the rest. Fixtures:
 - A 404 on upload means the owner removed the phone on Devices. Stop uploading
   and keep the files. Add the phone again only when the owner next starts a
   recording, then upload what's waiting. Never add it again in the background.
-- A 404 also shows on Paddles, where recordings waiting to upload show: "This phone
-  was removed from your account" with an **Upload now** button that adds the phone
-  again and uploads what's waiting.
+- A 404 also shows on Paddles, where recordings waiting to upload show, as one
+  line with the count: "This phone was removed from your account. 2 recordings
+  are waiting." with an **Add phone again** button that adds the phone and uploads
+  what's waiting.
 - `GET /api/account/devices` lists phones too, with `kind: "phone"` (no firmware,
   never `quiet`). **Both apps leave phones out of their trackers screens** (filter
   on `kind` before the app first calls `…/phone`): phones are listed and removed
@@ -360,6 +361,10 @@ holds from a broken upload, so send only the rest. Fixtures:
   copy); deleting the account in the app deletes it.
 - Out of cloud and device backup. iPhone: encrypted while the phone is locked,
   except while a file is open.
+- Every line on Paddles about recordings is a full sentence with a full stop.
+- The install ID stays out of device backup where the platform allows (iOS:
+  Keychain, this device only; Android: excluded from backup), so a phone restored
+  from a backup is a new phone.
 - Upload on any network, in the background when the platform allows, retrying
   with backoff. Never upload while the recording is still running.
 
@@ -382,13 +387,15 @@ holds from a broken upload, so send only the rest. Fixtures:
 
 Both apps, laid out the same (design-usability, #767):
 
-- Record on Paddles (signed in). The recording screen has a Close (hide) control
-  while it records: it hides the screen and keeps recording. Paddles then shows
-  "Recording · h:mm:ss", and tapping that line opens the screen again.
+- Record on Paddles (signed in). The recording screen has a **Hide** button while
+  it records, with "Recording carries on." muted under it: it hides the screen and
+  keeps recording. Every screen then shows "Recording · h:mm:ss" at the top, and
+  tapping that line opens the recording screen again.
 - Big elapsed time, then stroke rate ("—" until live values arrive; never a
   number the app works out itself), then the GPS line below. A problem (a failed
   write) shows in place of the "Recording" heading.
-- Stop: hold for 1.5 s, the button filling as it goes, with a haptic; a tap says
+- Stop: a filled red button; hold for 1.5 s, a lighter fill sweeping across it as
+  you hold, with a haptic; a tap says
   "Keep holding to stop." Stop in the Android notification needs an unlock
   (`setAuthenticationRequired`). Hold to stop is pinned to the bottom.
 - Hold to stop has a named accessibility action, "Stop recording" (VoiceOver
@@ -411,8 +418,8 @@ Both apps, laid out the same (design-usability, #767):
 - A failed write, in place of the heading: "Couldn’t save the rest of this
   recording. Stop to upload what’s saved."
 - Adding the phone failed with no words from the server: on Paddles, in the line
-  of the recordings waiting, which then has Upload now: "Couldn’t add this phone
-  to your account. Tap Upload now to try again."
+  of the recordings waiting, which then has Add phone again: "Couldn’t add this
+  phone to your account. Tap Add phone again to try again."
 - "Waiting for GPS" is muted; only "GPS lost…" is red.
 
 GPS line, from `rc_phone_live` ("The GPS state (fix, since_fix_s) is the latest
