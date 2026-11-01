@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
-import { paddleTotals, paddleLogbook, groupSameOuting, isPhonePaddle } from '@paddlesnitch/core/paddles'
+import { paddleTotals, paddleLogbook, groupSameOuting, isPhonePaddle, markPhone } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
@@ -34,7 +34,8 @@ export function othersView(session: AnalysisSession) {
   return {
     id: session.id,
     paddledAt: session.paddledAt,
-    source: { type: session.source.type },
+    // Never the device ID: only whether it was a phone.
+    source: { type: session.source.type, ...(isPhonePaddle(session.source) ? { phone: true as const } : {}) },
     result: { ...session.result, insight: plainInsight(session.result), insightModel: undefined },
     boatClass: session.boatClass,
     seat: session.seat,
@@ -48,7 +49,7 @@ export const paddlesRouter = router({
   // and logbook count every recording, as the website's list does.
   list: protectedProcedure.query(async ({ ctx }) => {
     const cards = await listPaddleCards(ctx.user.id)
-    const grouped = groupSameOuting(cards.map(c => ({ ...c, source: { type: c.sourceType } })))
+    const grouped = groupSameOuting(cards.map(c => ({ ...c, source: { type: c.sourceType, phone: c.phone } })))
       .map(({ lead: { source: _, ...lead }, others }) =>
         others.length ? { ...lead, sameOuting: others.map(o => ({ id: o.id, sourceType: o.sourceType, ...(o.phone ? { phone: true as const } : {}) })) } : lead)
     return { cards: grouped, totals: paddleTotals(cards), logbook: paddleLogbook(cards, new Date()) }
@@ -106,7 +107,7 @@ export const paddlesRouter = router({
   get: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
     const session = await getSession(ctx.user.id, input.id)
     if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
-    return session
+    return { ...session, source: markPhone(session.source) }
   }),
 
   // Write the AI summary of a paddle that was saved without one so it could
@@ -115,7 +116,7 @@ export const paddlesRouter = router({
   writeSummary: protectedProcedure.input(byId).mutation(async ({ ctx, input }) => {
     const session = await writePendingSummary(ctx.user.id, input.id)
     if (!session) throw new TRPCError({ code: 'NOT_FOUND' })
-    return session
+    return { ...session, source: markPhone(session.source) }
   }),
 
   delete: protectedProcedure.input(byId).mutation(async ({ ctx, input }) => {

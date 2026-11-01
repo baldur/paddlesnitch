@@ -24,6 +24,8 @@ export type AnalysisSource = {
   deviceId?: string
   deviceSessionId?: string
   deviceName?: string
+  // A phone's paddle (#789): added on the way out by markPhone, never stored.
+  phone?: true
 }
 
 export type AnalysisSession = {

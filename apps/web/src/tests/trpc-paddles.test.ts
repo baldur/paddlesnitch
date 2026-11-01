@@ -85,15 +85,15 @@ describe('paddles.list', () => {
     })
     await outing('phone', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's1' }, '2026-09-01T10:00:00.000Z')
     await outing('watch', { type: 'strava' }, '2026-09-01T10:00:30.000Z')
+    // The phone's copy is the newer one, and still the tracker leads (it is fixed in the boat).
     await outing('tracker', { type: 'device', deviceId: 'A1B2C3D4', deviceSessionId: 's2' }, '2026-09-08T10:00:00.000Z')
     await outing('phone2', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's3' }, '2026-09-08T10:00:10.000Z')
     const { cards } = await createCaller({ user: USER }).paddles.list()
     const card = (id: string) => cards.find(c => c.id === id)
     expect(card('phone')).toMatchObject({ sourceType: 'device', phone: true, sameOuting: [{ id: 'watch', sourceType: 'strava' }] })
-    // A tracker and a phone on one outing: either may lead; only the phone is marked.
-    const lead = card('tracker') ?? card('phone2')!
-    const shown = [{ id: lead.id, phone: lead.phone }, ...lead.sameOuting!.map(o => ({ id: o.id, phone: o.phone }))]
-    expect(shown.sort((a, b) => a.id.localeCompare(b.id))).toEqual([{ id: 'phone2', phone: true }, { id: 'tracker', phone: undefined }])
+    expect(card('phone2')).toBeUndefined()
+    expect(card('tracker')?.phone).toBeUndefined()
+    expect(card('tracker')?.sameOuting).toEqual([{ id: 'phone2', sourceType: 'device', phone: true }])
   })
 
   it('works out the logbook the website shows: last 12 weeks, streak, this month and last', async () => {
@@ -228,10 +228,10 @@ describe('paddles.byRecording', () => {
 
 describe('the same outing from two sources (paddles.sameOuting, paddles.compareOuting)', () => {
   // One boat heading north from 09:00 at 2.2 m/s, recorded from `at`.
-  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number } = {}) => {
+  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number; deviceId?: string } = {}) => {
     const since = (Date.parse(at) - Date.parse('2026-10-06T09:00:00Z')) / 1000
     return writeSession(dir, id, {
-      id, userId: USER.id, paddledAt: at, source: { type },
+      id, userId: USER.id, paddledAt: at, source: { type, ...(opts.deviceId ? { deviceId: opts.deviceId } : {}) },
       result: {
         durationS: seconds - 1, distanceKm: seconds * 2.2 / 1000, cruiseSpeed: 2.2, avgSR: opts.sr ?? null,
         surges: [], stops: [], sets: [],
@@ -254,6 +254,12 @@ describe('the same outing from two sources (paddles.sameOuting, paddles.compareO
     expect(cmp.gap?.medianM).toBe(0)
     expect(cmp.strokeRate[0]).toMatchObject({ a: 56, b: 28 })
     expect((await caller.paddles.compareOuting({ a: 't-rec1', b: 'nextday' })).same).toBe(false)
+  })
+
+  it('marks a phone recording of the same outing, so the page says the phone (#789)', async () => {
+    await outing('t-rec1', '2026-10-06T09:00:00Z', 1200, 'device', { deviceId: 'A1B2C3D4' })
+    await outing('p-rec1', '2026-10-06T09:00:30Z', 1100, 'device', { deviceId: 'P0123456789ABCDEF' })
+    expect(await createCaller({ user: USER }).paddles.sameOuting({ id: 't-rec1' })).toEqual([{ id: 'p-rec1', sourceType: 'device', paddledAt: '2026-10-06T09:00:30Z', phone: true }])
   })
 
   it("can't look at someone else's paddle", async () => {

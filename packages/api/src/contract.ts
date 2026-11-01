@@ -112,6 +112,7 @@ const AnalysisSource = named('AnalysisSource', z.object({
   deviceId: z.string().optional(),
   deviceSessionId: z.string().optional(),
   deviceName: z.string().optional(),
+  phone: z.literal(true).optional(),
 }))
 export const AnalysisSession = named('AnalysisSession', z.object({
   id: z.string(),

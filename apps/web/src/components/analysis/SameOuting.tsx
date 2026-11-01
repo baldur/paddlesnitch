@@ -29,8 +29,8 @@ export function sourceName(type?: string, phone?: boolean): string {
 }
 
 export default function SameOuting({ a, b }: {
-  a: { id: string; source: { type: string; deviceId?: string }; result: { points: AnalysisPoint[] } }
-  b: { id: string; source: { type: string; deviceId?: string }; result: { points: AnalysisPoint[] } }
+  a: { id: string; source: { type: string; deviceId?: string; phone?: boolean }; result: { points: AnalysisPoint[] } }
+  b: { id: string; source: { type: string; deviceId?: string; phone?: boolean }; result: { points: AnalysisPoint[] } }
 }) {
   const q = trpc.paddles.compareOuting.useQuery({ a: a.id, b: b.id }, { retry: false })
   if (!q.data?.same) return null

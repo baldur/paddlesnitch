@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sourceLabel, isPhonePaddle, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
+import { isPhonePaddle, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
 
 // A phone's paddle (C3) has the tracker's source shape; only the device ID differs (#789).
 describe('isPhonePaddle', () => {
@@ -9,18 +9,15 @@ describe('isPhonePaddle', () => {
     expect(isPhonePaddle({ type: 'device' })).toBe(false)
     expect(isPhonePaddle({ type: 'file', deviceId: 'P0123456789ABCDEF' })).toBe(false)
     expect(isPhonePaddle(undefined)).toBe(false)
+    expect(isPhonePaddle({ type: 'device', phone: true })).toBe(true)   // what others and the apps get
   })
-})
 
-describe('sourceLabel', () => {
-  it.each([
-    ['strava', ' · STRAVA'],
-    ['trial', ' · TIME TRIAL'],
-    ['device', ' · TRACKER'],
-    ['file', ''],
-    [undefined, ''],
-  ])('%s → %j', (type, expected) => {
-    expect(sourceLabel(type)).toBe(expected)
+  it('a tracker leads a same outing over a phone, whichever is newer', () => {
+    const at = '2026-10-01T07:00:00Z'
+    const p = (id: string, deviceId: string) => ({ id, paddledAt: at, distanceKm: 5, durationS: 3600, source: { type: 'device', deviceId } })
+    const [g] = groupSameOuting([p('phone', 'P0123456789ABCDEF'), p('tracker', 'A1B2C3D4')])
+    expect(g.lead.id).toBe('tracker')
+    expect(g.others.map(o => o.id)).toEqual(['phone'])
   })
 })
 

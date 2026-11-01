@@ -28,7 +28,7 @@ export default function BuddyPaddlePage({ params }: { params: Promise<{ userId: 
   const { name, paddle } = q.data
   return (
     <AnalysisView
-      data={{ ...paddle.result, paddledAt: paddle.paddledAt, source: { type: paddle.source.type } }}
+      data={{ ...paddle.result, paddledAt: paddle.paddledAt, source: { type: paddle.source.type, phone: paddle.source.phone } }}
       initialBoatClass={paddle.boatClass} initialSeat={paddle.seat}
       readOnly buddy={{ name, href: `/buddies/${userId}`, userId, paddleId }}
     />

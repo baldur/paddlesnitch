@@ -196,6 +196,10 @@
     "call": "paddles.list",
     "schema": "PaddleList"
   },
+  "paddles.list.with-phone.json": {
+    "call": "paddles.list",
+    "schema": "PaddleList"
+  },
   "paddles.writeSummary.json": {
     "call": "paddles.writeSummary",
     "schema": "AnalysisSession"

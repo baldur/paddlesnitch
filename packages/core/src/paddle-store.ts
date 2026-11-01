@@ -11,7 +11,7 @@ import { isBoatClass } from './types'
 type StoredSession = {
   id: string
   paddledAt: string
-  source?: { type?: string }
+  source?: { type?: string; deviceId?: string }
   boatClass?: unknown
   note?: string
   result?: {

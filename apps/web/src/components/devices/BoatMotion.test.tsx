@@ -48,6 +48,6 @@ describe('boat motion', () => {
 
   it("says the motion file hasn't arrived when there is none", async () => {
     const r = fixture('.no-motion')
-    expect(await render(<BoatMotion attitude={r.attitude} strokeRate={null} />)).toContain('If this recording is recent, sync the tracker again.')
+    expect(await render(<BoatMotion attitude={r.attitude} strokeRate={null} />)).toContain('If this recording is recent, it may still be uploading.')
   })
 })

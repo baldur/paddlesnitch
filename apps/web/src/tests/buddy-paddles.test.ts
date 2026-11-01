@@ -101,3 +101,27 @@ describe("a buddy's paddles", () => {
     expect((await as(ann).paddles.get({ id: 'p1' })).note).toBe(NOTE)
   })
 })
+
+// A phone's paddle (C3) says Phone to its owner, a buddy and a share link (#789):
+// they get `phone: true`, never the phone's ID.
+describe('a paddle recorded on a phone', () => {
+  const fromPhone = (userId: string, id: string) =>
+    ({ ...paddle(userId, id, '2026-10-05T07:00:00Z'), source: { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's1' } }) as AnalysisSession
+
+  it('is marked phone everywhere, with no device ID for anyone but the owner', async () => {
+    await saveSession(fromPhone(ann.id, 'ph'))
+    const owner = as(ann)
+    expect((await owner.paddles.list()).cards.find(c => c.id === 'ph')).toMatchObject({ sourceType: 'device', phone: true })
+    expect((await owner.paddles.get({ id: 'ph' })).source).toMatchObject({ type: 'device', phone: true })
+    expect((await as(bob).buddies.paddles({ userId: ann.id })).paddles.find(p => p.id === 'ph')?.source).toEqual({ type: 'device', phone: true })
+    expect((await as(bob).buddies.paddle({ userId: ann.id, id: 'ph' })).paddle.source).toEqual({ type: 'device', phone: true })
+    const link = await shareSession(ann.id, 'ph')
+    expect((await createCaller({ user: null }).paddles.shared({ shareId: link!.shareId })).source).toEqual({ type: 'device', phone: true })
+  })
+
+  it('a tracker paddle is not marked', async () => {
+    await saveSession({ ...fromPhone(ann.id, 'tr'), source: { type: 'device', deviceId: 'A1B2C3D4', deviceSessionId: 's2' } } as AnalysisSession)
+    expect((await as(ann).paddles.list()).cards.find(c => c.id === 'tr')?.phone).toBeUndefined()
+    expect((await as(bob).buddies.paddle({ userId: ann.id, id: 'tr' })).paddle.source).toEqual({ type: 'device' })
+  })
+})

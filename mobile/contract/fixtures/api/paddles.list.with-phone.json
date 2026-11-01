@@ -1,0 +1,117 @@
+{
+  "cards": [
+    {
+      "id": "pdl-phone",
+      "paddledAt": "2026-10-31T07:00:00.000Z",
+      "distanceKm": 5.2,
+      "durationS": 2400,
+      "cruiseSpeed": 2.4,
+      "avgSR": 58,
+      "sourceType": "device",
+      "route": [
+        [
+          51.456,
+          -0.969
+        ],
+        [
+          51.4565,
+          -0.9685
+        ]
+      ],
+      "phone": true,
+      "sameOuting": [
+        {
+          "id": "pdl-strava",
+          "sourceType": "strava"
+        }
+      ]
+    },
+    {
+      "id": "pdl-tracker",
+      "paddledAt": "2026-10-24T07:00:00.000Z",
+      "distanceKm": 5.2,
+      "durationS": 2400,
+      "cruiseSpeed": 2.4,
+      "avgSR": 58,
+      "sourceType": "device",
+      "route": [
+        [
+          51.456,
+          -0.969
+        ],
+        [
+          51.4565,
+          -0.9685
+        ]
+      ],
+      "sameOuting": [
+        {
+          "id": "pdl-phone2",
+          "sourceType": "device",
+          "phone": true
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "count": 4,
+    "totalKm": 1.4491605885857413,
+    "totalS": 556,
+    "since": "2026-09-01T07:30:00.000Z"
+  },
+  "logbook": {
+    "weeks": [
+      {
+        "week": "2026-08-03",
+        "km": 0
+      },
+      {
+        "week": "2026-08-10",
+        "km": 0
+      },
+      {
+        "week": "2026-08-17",
+        "km": 0
+      },
+      {
+        "week": "2026-08-24",
+        "km": 0
+      },
+      {
+        "week": "2026-08-31",
+        "km": 1.4
+      },
+      {
+        "week": "2026-09-07",
+        "km": 0
+      },
+      {
+        "week": "2026-09-14",
+        "km": 0
+      },
+      {
+        "week": "2026-09-21",
+        "km": 0
+      },
+      {
+        "week": "2026-09-28",
+        "km": 0
+      },
+      {
+        "week": "2026-10-05",
+        "km": 0
+      },
+      {
+        "week": "2026-10-12",
+        "km": 0
+      },
+      {
+        "week": "2026-10-19",
+        "km": 0
+      }
+    ],
+    "streakWeeks": 0,
+    "thisMonthKm": 0,
+    "lastMonthKm": 1.4
+  }
+}

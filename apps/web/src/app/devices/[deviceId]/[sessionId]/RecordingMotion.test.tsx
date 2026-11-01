@@ -42,6 +42,6 @@ describe("a tracker recording's boat motion", () => {
   it("shows a failed read as an error, not as motion that hasn't arrived", async () => {
     const text = await mount(new Response(JSON.stringify({ error: 'not_found' }), { status: 404 }))
     expect(text).toContain('Couldn’t read this recording. Please try again.')
-    expect(text).not.toContain('sync the tracker again')
+    expect(text).not.toContain('it may still be uploading')
   })
 })

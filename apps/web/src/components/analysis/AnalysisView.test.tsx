@@ -147,6 +147,12 @@ describe('AnalysisView ALSO RECORDED BY', () => {
     expect(link?.textContent).toBe('Also recorded by the phone →')
   })
 
+  it('labels Phone from the mark a buddy or a share link gets (no device ID) (#789)', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device', phone: true } }} readOnly />)
+    expect(container.textContent).toContain('Phone')
+    expect(container.textContent).not.toContain('Tracker')
+  })
+
   it('labels a phone paddle Phone over the date (#789)', async () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }} sessionId="t-rec1" />)
     expect(container.textContent).toContain('Phone')

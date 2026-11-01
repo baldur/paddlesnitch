@@ -11,6 +11,7 @@ public struct AnalysisSource: Codable, Hashable, Sendable {
     public var deviceSessionId: String?
     public var entryId: String?
     public var filename: String?
+    public var phone: Bool?
     public var sport: String?
     public var stravaActivityId: Int?
     public var trialId: String?
@@ -23,6 +24,7 @@ public struct AnalysisSource: Codable, Hashable, Sendable {
         deviceSessionId: String? = nil,
         entryId: String? = nil,
         filename: String? = nil,
+        phone: Bool? = nil,
         sport: String? = nil,
         stravaActivityId: Int? = nil,
         trialId: String? = nil,
@@ -34,6 +36,7 @@ public struct AnalysisSource: Codable, Hashable, Sendable {
         self.deviceSessionId = deviceSessionId
         self.entryId = entryId
         self.filename = filename
+        self.phone = phone
         self.sport = sport
         self.stravaActivityId = stravaActivityId
         self.trialId = trialId

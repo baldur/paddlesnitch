@@ -73,7 +73,7 @@ export default function BoatMotion({ attitude, strokeRate }: { attitude: Attitud
             </p>
             <p>
               <span className="text-fg">What this can&apos;t tell you.</span> We can&apos;t tell port
-              from starboard, and a tracker mounted slightly crooked looks like a steady lean.
+              from starboard, and a tracker or phone mounted slightly crooked looks like a steady lean.
               {!attitude.axisConfident && ' Roll and pitch were hard to tell apart in this recording.'}
             </p>
           </div>

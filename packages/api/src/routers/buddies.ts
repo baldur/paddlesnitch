@@ -9,6 +9,7 @@ import {
   cancelRequest, removeBuddy, getInviteToken, rotateInvite, acceptInvite, inviteOwner, areBuddies,
   getBuddySharing, setBuddySharing, canViewPaddle,
 } from '@paddlesnitch/core/buddies'
+import { isPhonePaddle } from '@paddlesnitch/core/paddles'
 import { listSessionSummaries, getSession } from '@paddlesnitch/analysis/analysis-store'
 import { othersView } from './paddles'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
@@ -78,7 +79,7 @@ export const buddiesRouter = router({
     return {
       name: await nameOf(input.userId),
       paddles: summaries.filter(s => !s.hiddenFromBuddies).map(s => ({
-        id: s.id, paddledAt: s.paddledAt, source: { type: s.source.type },
+        id: s.id, paddledAt: s.paddledAt, source: { type: s.source.type, ...(isPhonePaddle(s.source) ? { phone: true as const } : {}) },
         durationS: s.durationS, distanceKm: s.distanceKm, cruiseSpeed: s.cruiseSpeed, avgSR: s.avgSR,
         boatClass: s.boatClass, route: s.route, ...(s.noGps ? { noGps: true as const } : {}),
       })),

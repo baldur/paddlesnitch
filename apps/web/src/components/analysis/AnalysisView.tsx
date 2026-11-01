@@ -37,7 +37,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number; deviceId?: string } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number; deviceId?: string; phone?: boolean } }
 
 // One paddle: the site header, the map (with only the colour scale, the replay
 // bar and section picking over it), then everything to read below it, and the
