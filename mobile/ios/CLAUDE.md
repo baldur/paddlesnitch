@@ -167,3 +167,20 @@ isn't obvious from the code.
   The same goes for iOS's own alerts: a location answer tapped while the
   alert grows in misses, so use `answerLocation(_:)` (RecordTests.swift),
   which taps until the alert has gone.
+- Phone uploads (C3): a queue per signed-in account (RootView). Its
+  client's token is that account's only (nil once another signs in), and a
+  stopped queue writes nothing: otherwise an old queue's in-flight pieces
+  go out with the next account's token and a 404 marks the old account's
+  phone "removed". Never upload a track still being written: the queue
+  skips `RecordingFiles.isOpen` tracks, not only while its `recording`
+  flag is set (a queue made mid-recording hasn't heard yet).
+- UI tests and the simulator keep the app's files between tests: a
+  refused recording from one test showed in the next. Sample-server
+  launches use their own recordings folder (`SampleRecordings`), emptied at
+  launch; the real Documents/Recordings is never touched.
+- `disappears(timeout:)` is true for an element that never appeared: to
+  prove an upload, wait for its result (the sample server lists a
+  `pdl-phone` paddle once the track went up), not for the line to go.
+- An audit of the Paddles list with lines above the logbook reports "All
+  paddles" clipped (the header half under the tab bar): those audits skip
+  `.textClipped`; LargeTextTests checks clipping on the whole screen.
