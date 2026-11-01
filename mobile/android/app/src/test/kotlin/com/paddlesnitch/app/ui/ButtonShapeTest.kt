@@ -48,27 +48,50 @@ class ButtonShapeTest {
         assertEquals(control.toFloat(), o.roundRect.topLeftCornerRadius.x)
     }
 
-    // Drawn: 3 dp in from each corner is inside a 6 dp arc but outside M3's pill.
-    @Test fun aFilledButtonFillsItsCorners() {
-        compose.setContent {
-            PaddlesnitchTheme {
-                Box(Modifier.background(Color.Black).padding(8.dp)) {
-                    Button(onClick = {}, modifier = Modifier.testTag("b"), colors = ButtonDefaults.buttonColors(containerColor = Color.White), elevation = null) { Text("Save") }
-                }
-            }
-        }
+    // Text fields read the theme's extraSmall: the same control radius as the buttons.
+    @Test fun fieldsHaveTheControlRadiusToo() {
+        var shape: androidx.compose.ui.graphics.Shape? = null
+        compose.setContent { PaddlesnitchTheme { shape = androidx.compose.material3.OutlinedTextFieldDefaults.shape } }
+        compose.waitForIdle()
+        assertEquals(RoundedCornerShape(control.dp), shape)
+    }
+
+    // Drawn: 3 dp in from each corner is inside a 6 dp arc but outside M3's pill. Each kind
+    // is filled white here so its corners show.
+    private fun cornersAreFilled(button: @androidx.compose.runtime.Composable () -> Unit) {
+        compose.setContent { PaddlesnitchTheme { Box(Modifier.background(Color.Black).padding(8.dp)) { button() } } }
         val px = compose.onNodeWithTag("b").captureToImage().toPixelMap()
-        val d = compose.activity.resources.displayMetrics.density
-        val inset = (3 * d).toInt()
+        val inset = (3 * compose.activity.resources.displayMetrics.density).toInt()
         // M3 adds no space around a button whose minimum size it already meets, so the image is the button.
         listOf(inset to inset, px.width - 1 - inset to inset, inset to px.height - 1 - inset, px.width - 1 - inset to px.height - 1 - inset).forEach { (x, y) ->
             assertNotEquals("corner at $x,$y is background", Color.Black, px[x, y])
         }
     }
+    private val tag = Modifier.testTag("b")
+
+    @Test fun aFilledButtonFillsItsCorners() = cornersAreFilled {
+        Button(onClick = {}, modifier = tag, colors = ButtonDefaults.buttonColors(containerColor = Color.White), elevation = null) { Text("Save") }
+    }
+    @Test fun anOutlinedButtonFillsItsCorners() = cornersAreFilled {
+        OutlinedButton(onClick = {}, modifier = tag, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text("Save") }
+    }
+    @Test fun aTextButtonFillsItsCorners() = cornersAreFilled {
+        TextButton(onClick = {}, modifier = tag, colors = ButtonDefaults.textButtonColors(containerColor = Color.White)) { Text("Save") }
+    }
+
+    // A token's radius is never written as a number: PsRadius.control or .sheet instead.
+    @Test fun noScreenWritesATokenRadiusAsANumber() {
+        val radii = JSONObject(File("../../contract/tokens/tokens.json").readText()).getJSONObject("radius").let { r -> r.keys().asSequence().map { r.getInt(it) }.toSet() }
+        val literal = Regex("""RoundedCornerShape\((\d+)\.dp\)""")
+        val found = File("src/main/kotlin").walk().filter { it.extension == "kt" }.flatMap { f ->
+            f.readLines().mapIndexedNotNull { i, l -> if (literal.findAll(l).any { it.groupValues[1].toInt() in radii }) "${f.name}:${i + 1}" else null }
+        }.toList()
+        assertEquals(emptyList<String>(), found)
+    }
 
     // M3's buttons take their pill from a fixed token, not the theme, so screens use ui/Buttons.kt's.
     @Test fun noScreenUsesMaterialsButtons() {
-        val m3 = Regex("""androidx\.compose\.material3\.(Button|OutlinedButton|TextButton|FilledTonalButton|ElevatedButton)\b(?!Defaults|Colors|Elevation)""")
+        val m3 = Regex("""androidx\.compose\.material3\.((Button|OutlinedButton|TextButton|FilledTonalButton|ElevatedButton)\b(?!Defaults|Colors|Elevation)|\*)""")
         val found = File("src/main/kotlin").walk().filter { it.extension == "kt" && it.name != "Buttons.kt" }
             .flatMap { f -> f.readLines().mapIndexedNotNull { i, l -> if (m3.containsMatchIn(l)) "${f.name}:${i + 1}" else null } }.toList()
         assertEquals(emptyList<String>(), found)
