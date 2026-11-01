@@ -38,14 +38,21 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _handle: String? = "river-pat"
     var _contact: String?
     var _placeholderEmail = false
-    var _stravaConnected = false
-    var _stravaAutoImport = true
-    var _stravaNotConfigured = false
-    var _options: SignInOptions? = SignInOptions(google: true, strava: true)
-    var _optionsLater: SignInOptions?
-    var _stravaLinkedElsewhere = false
-    var _failsStrava = false
-    /// Signed in through Strava: the sign-in email is a placeholder.
+    var _failsContact = false
+    var _signInExpiresOnDelete = false
+    /// The recent sign-in runs out between the check and the delete: the
+    /// check says recent, the delete answers 403.
+    public var signInExpiresOnDelete: Bool {
+        get { lock.withLock { _signInExpiresOnDelete } }
+        set { lock.withLock { _signInExpiresOnDelete = newValue } }
+    }
+    /// `GET /api/account/contact` fails, as when the server is down.
+    public var failsContact: Bool {
+        get { lock.withLock { _failsContact } }
+        set { lock.withLock { _failsContact = newValue } }
+    }
+    var _options: SignInOptions? = SignInOptions(google: true, strava: false)
+    /// An account made with Strava: the sign-in email is a placeholder.
     public var placeholderEmail: Bool {
         get { lock.withLock { _placeholderEmail } }
         set { lock.withLock { _placeholderEmail = newValue } }
@@ -131,9 +138,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         if path == "/api/account" || path.hasPrefix("/api/account/") {
             return try accountRoutes(path: path, request: request)
         }
-        if path.hasPrefix("/att/api/strava/") {
-            return try strava(path: path, request: request)
-        }
         if path == Self.exportPath {
             return (200, Data(#"{"account":{"email":"pat@example.com"},"paddles":[]}"#.utf8))
         }
@@ -157,19 +161,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
                 _signInIsRecent = true
             }
             return (200, try signIn(login.email == Self.needsTermsEmail ? "auth.login.needs-terms" : "auth.login"))
-        case "/att/api/auth/strava/app-token":
-            // A code from `stravaBrowser` carries its challenge, so this checks
-            // the verifier the way the server does.
-            let swap = try JSONDecoder().decode(StravaAppToken.self, from: body)
-            guard swap.code == "sample." + Self.challenge(swap.verifier) else {
-                return (401, Data(#"{"error":"That sign-in has expired. Please try again."}"#.utf8))
-            }
-            lock.withLock {
-                _placeholderEmail = true
-                // A Strava sign-in is a real one: recent, as the server counts it.
-                _signInIsRecent = true
-            }
-            return (200, try signIn("auth.login"))
         case "/att/api/auth/refresh":
             let token = try JSONDecoder().decode(RefreshToken.self, from: body).refreshToken
             let refused = lock.withLock { _refusesRefresh || revoked.contains(token) }
@@ -241,15 +232,6 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         }
         if name.contains("duplicate") { return (200, Data(#"{"id":"pdl-river","duplicate":true}"#.utf8)) }
         return (200, Data(#"{"id":"pdl-river"}"#.utf8))
-    }
-
-    /// Strava sign-in without Strava: answers the start page's link at once
-    /// with a code the app-token route takes for that challenge.
-    public static func stravaBrowser(_ start: URL) -> URL {
-        let challenge =
-            URLComponents(url: start, resolvingAgainstBaseURL: false)?.queryItems?
-            .first { $0.name == "challenge" }?.value ?? ""
-        return URL(string: "com.paddlesnitch.app:/signin/strava?code=sample.\(challenge)") ?? start
     }
 
     static func challenge(_ verifier: String) -> String {

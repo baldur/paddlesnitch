@@ -6,14 +6,12 @@ import SwiftUI
 
 /// Sign in or create an account: the same fields, checks and words as the
 /// Android app and the website's /signin: password sign-in, sign-up, and
-/// Google and Strava when the server offers them.
+/// Google when the server offers it.
 struct SignInView: View {
     let account: AccountModel
     @State private var form = SignInForm()
     @State private var web: URL?
     @State private var forgotPassword = false
-    /// Strava starts by itself once, for a Strava account signing in again.
-    @State private var startedStrava = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @FocusState private var focus: Field?
@@ -56,7 +54,7 @@ struct SignInView: View {
             }
         }
         .preferredColorScheme(.dark)
-        // Said out loud: a Google or Strava refusal shows above the form,
+        // Said out loud: a Google refusal shows above the form,
         // out of sight from the buttons below it.
         .onChange(of: form.error) { _, error in
             if let error { AccessibilityNotification.Announcement(error).post() }
@@ -73,30 +71,11 @@ struct SignInView: View {
             async let options: Void = account.loadOptions()
             try? await Task.sleep(for: .milliseconds(600))
             await options
-            // A Strava account signing in again: straight to Strava, once
-            // the server has said Strava is on.
-            guard account.signInAgainWithStrava && account.options.strava && !startedStrava && !form.busy else {
-                return
-            }
-            startedStrava = true
-            signInWithStrava()
         }
     }
 
     private var formStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if account.signInAgainWithStrava {
-                // Its sign-in email is a placeholder: the password form
-                // can't work, so say why; Strava starts by itself.
-                Text(
-                    account.afterSignIn == .connectStrava
-                        ? "Sign in with Strava again, then connect it."
-                        : "Sign in with Strava again to delete your account."
-                )
-                .font(.plexSans(.body))
-                .foregroundStyle(Palette.fg)
-                .accessibilityIdentifier("sign-in-again-strava")
-            }
             Picker("Sign in or create an account", selection: $form.mode) {
                 Text("Sign in").tag(SignInForm.Mode.signIn)
                 Text("Create account").tag(SignInForm.Mode.createAccount)
@@ -168,9 +147,8 @@ struct SignInView: View {
                     .frame(minHeight: 44)
             }
             OtherWaysIn(
-                options: account.options, stravaSaidOff: account.stravaSaidOff, failed: account.optionsFailed,
-                busy: form.busy,
-                google: signInWithGoogle, strava: signInWithStrava,
+                options: account.options, signingIn: form.mode == .signIn, failed: account.optionsFailed,
+                busy: form.busy, google: signInWithGoogle,
                 tryAgain: { Task { await account.loadOptions() } })
         }
     }
@@ -210,13 +188,6 @@ struct SignInView: View {
 }
 
 extension SignInView {
-    private func signInWithStrava() {
-        focus = nil
-        Task {
-            if await form.signInWithStrava(to: account, browser: openStrava) { dismiss() }
-        }
-    }
-
     private func signInWithGoogle() {
         focus = nil
         Task {
@@ -226,10 +197,6 @@ extension SignInView {
 
     private func openGoogle(_ start: URL) async throws -> URL {
         try await SignInBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.googleBrowser)
-    }
-
-    private func openStrava(_ start: URL) async throws -> URL {
-        try await SignInBrowser.open(start, with: webAuthenticationSession, sample: SampleServer.stravaBrowser)
     }
 }
 

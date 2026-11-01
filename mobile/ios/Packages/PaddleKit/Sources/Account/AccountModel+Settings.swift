@@ -87,7 +87,7 @@ extension AccountModel {
         case needsRecentSignIn
     }
 
-    /// Whether the last real sign-in (password, code, Strava) was in the last
+    /// Whether the last real sign-in (password, code, Google) was in the last
     /// 10 minutes: deleting needs one. A silent refresh doesn't count.
     public func recentSignIn() async throws -> Bool {
         try await client.send(Endpoints.getAccount, NoInput()).recentSignIn
@@ -95,20 +95,18 @@ extension AccountModel {
 
     /// What needs a sign-in from the last 10 minutes (a 403 reauth).
     public enum AfterSignIn: Equatable, Sendable {
-        case delete, connectStrava
+        case delete
     }
 
-    /// "Sign in again" before deleting or connecting Strava: signs out, and
-    /// remembers to come straight back. A Strava account (its sign-in email
-    /// is a placeholder) signs in again with Strava; any other with its email
-    /// filled in (mobile/contract/README.md, Account).
-    public func signOutToSignInAgain(then next: AfterSignIn, withStrava: Bool = false) async {
+    /// "Sign in again" before deleting: signs out, and remembers to come
+    /// straight back, with the email filled in (mobile/contract/README.md,
+    /// Account).
+    public func signOutToSignInAgain(then next: AfterSignIn) async {
         let email = user?.email
         let id = user?.id
         await signOut()
         signInAgainUserId = id
-        signInAgainEmail = withStrava ? nil : email
-        signInAgainWithStrava = withStrava
+        signInAgainEmail = email
         afterSignIn = next
     }
 
@@ -126,7 +124,6 @@ extension AccountModel {
         afterSignIn = nil
         signInAgainUserId = nil
         signInAgainEmail = nil
-        signInAgainWithStrava = false
     }
 
     /// Erases the account. The refresh token goes with the request so it

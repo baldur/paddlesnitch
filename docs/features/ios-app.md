@@ -115,30 +115,34 @@ The protocol is fixed by the tracker sync contract and its fixtures. On iPhone:
 - Server side is in [`mobile-apps.md`](mobile-apps.md) (C2).
 - The refresh token lives in the **Keychain** (this device only, after first
   unlock). The app refreshes the ID token itself.
-- Strava sign-in runs in `ASWebAuthenticationSession` (shared with Safari,
-  so someone signed in to Strava there needn't sign in again). It comes back
-  on the app's own scheme, `com.paddlesnitch.app:/signin/strava?code=`, and the
-  app swaps the one-time code and its PKCE verifier for tokens
-  (`mobile/contract/README.md`, "Strava"; `Account/StravaSignIn.swift`). The
+- Google sign-in runs in `ASWebAuthenticationSession` (shared with Safari)
+  (`Account/GoogleSignIn.swift`): its page first asks for one tap on "Sign in
+  with Google", and it comes back on `com.paddlesnitch.app:/signin/google`,
+  where the app swaps the one-time code and its PKCE verifier for tokens. The
   session catches the callback itself, so there's no URL type to register and
-  no universal link, and it works with a free Apple ID.
-- Google sign-in works the same way (`Account/GoogleSignIn.swift`): its page
-  first asks for one tap on "Sign in with Google", and it comes back on
-  `com.paddlesnitch.app:/signin/google`. The sign-in screen, Account and the
-  app's start ask `GET /att/api/auth/options` which ways in are on; until it
-  answers only email is offered, a failed first ask says so with Try again,
-  and a later failure keeps the last answer. With Strava off: no Strava
-  button, connect, auto-import or Strava wording; sign-in offers "Email us"
-  (privacy@, not a public issue report); a connected account sees Strava
-  "Paused"; a Strava-made account can't disconnect its only way in, and
-  before deleting it reports an issue signed in (`/account?report=1` through
-  web-code) instead of signing in again.
+  no universal link, and it works with a free Apple ID. The sign-in screen
+  asks `GET /att/api/auth/options` whether Google is on; until it answers only
+  email is offered, a failed first ask says so with Try again, and a later
+  failure keeps the last answer.
+- **Strava is gone** (owner, 2026-11-01): no Strava sign-in, connect,
+  auto-import or import, and the app calls no Strava route
+  (`NoStravaCallsTests`). Old paddles still say Strava. `SignInOptions.strava`
+  is decoded but ignored. An account made with Strava (`placeholderEmail` from
+  `GET /api/account/contact`) has no way to sign in again: the Sign in tab
+  always says "Made your account with Strava? Email us and we’ll move it to
+  your email." with Email us (privacy@); signing out asks first (Email us,
+  Sign out anyway, Cancel); deleting offers Email us with the Support ID
+  instead of signing in again (`Account/MadeWithStrava.swift`). Unknown is
+  never "no": until the server has answered, Sign out and a delete that needs
+  a fresh sign-in say "Couldn’t check your account. Please try again." and
+  offer neither. With no mail app, Email us shows the address (and the
+  Support ID for deleting) as text.
 - The same file also declares `webcredentials`, so iOS offers saved
   paddlesnitch.com passwords and suggests strong ones at sign-up.
 - Website link-outs open in `SFSafariViewController`, signed in through the
   shared one-time-code proposal (C4).
 - **Sign in with Apple** may be required by App Review guideline 4.8 because
-  of Strava sign-in. That's shared open question 3 in
+  of Google sign-in. That's shared open question 3 in
   [`mobile-apps.md`](mobile-apps.md); if needed it arrives through C2.
 
 ## Code and project
@@ -194,7 +198,7 @@ Android's sideload-first plan). Until there are testers:
 - The **simulator** needs no Apple account. CI builds and runs every test on
   simulators without one.
 - On the owner's own iPhone, Xcode installs with a **free Apple ID** ("personal
-  team"). Builds expire after 7 days and can't use universal links (Strava
+  team"). Builds expire after 7 days and can't use universal links (Google
   sign-in doesn't need one), but background GPS and Bluetooth
   work, which is all S1, S2 and P3 need.
 - The paid membership below starts at **P5**, when other people should test.
@@ -268,8 +272,8 @@ Mirrors Android's so the two apps meet at the same contract phases.
 | **S1. Recording spike** | Throwaway: 2 h screen-off in a drybag; While Using + background session; sidecar → `deriveCadence` | The iPhone can be a tracker; whether stroke rate is possible | **Yes** |
 | **S2. Tracker spike** | AccessorySetupKit pairing (iOS 18) / scan (iOS 17) + one background sync from the real tracker, with receipt | Sync with nothing pressed works on iPhone | **Yes** |
 | **S3. API spike** | Generated models + client for two procedures over C1 ✅ (`PaddleAPI`); token sign-in over C2 | The contract and sign-in shape | No |
-| **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Strava, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
-| **P1b. Native account** (C5) | Add a paddle from a file ✅ (the file picker, and GPS files opened from Files, Mail, AirDrop or a share sheet; a file opened while signed out is added after sign-in); accept new Terms ✅, download your data ✅, delete account ✅ (as the website: type DELETE, then "Delete for good"); the recent-sign-in check before delete ✅ (sign in again and come straight back; a Strava account with Strava), your details, public profile and handle, contact email for a Strava account ✅; Strava connect, auto-import and disconnect ✅ (Strava's page in `ASWebAuthenticationSession`, back on `com.paddlesnitch.app:/account/strava`; an old sign-in signs in again and comes straight back to connecting); forgot password ✅; Devices ✅ (your trackers, their recordings, removing one); then older Strava paddles (mobile-apps.md, the owner's 2026-10-25 note) | The Account pages leave the website | No |
+| **P1. Read** ✅ | Paddles list + one paddle (MapKit; speed legend, efforts and rests, and 500 m splits as on Android; a paddle saved without its summary writes it on opening), You tab with link-outs, IBM Plex bundled, sign-in (password + create account, Keychain, refresh), the needs-Terms notice | Daily-use value; shell and theme | No |
+| **P1b. Native account** (C5) | Add a paddle from a file ✅ (the file picker, and GPS files opened from Files, Mail, AirDrop or a share sheet; a file opened while signed out is added after sign-in); accept new Terms ✅, download your data ✅, delete account ✅ (as the website: type DELETE, then "Delete for good"); the recent-sign-in check before delete ✅ (sign in again and come straight back; an account made with Strava emails us instead), your details, public profile and handle, contact email for an account made with Strava ✅; forgot password ✅; Devices ✅ (your trackers, their recordings, removing one). Strava connect and import were built, then removed with Strava (2026-11-01) | The Account pages leave the website | No |
 | **P2. Record** | Recorder ✅ (#767) → upload as a phone device ✅ (C3) → appears in Paddles; Live Activity; the "This iPhone" screen, arriving with the first feature it describes | The phone as a tracker | For sign-off |
 | **P3. Tracker** | Pair, setup, manual then automatic sync, tracker settings | The boathouse problem solved | **Yes** |
 | **P4. Trials and sections** | Open trials, leaderboards, submit an entry; race a section, compare, buddies | Native for the core of the site | No |

@@ -42,7 +42,7 @@ struct RootView: View {
                 PaddleListView(
                     source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
                     needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
-                    openTerms: { termsOpen = true }, adding: adding, options: account.options,
+                    openTerms: { termsOpen = true }, adding: adding,
                     openFile: { url in Task { await open(url) } },
                     openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
                     uploads: uploads,
@@ -86,8 +86,6 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in
             if PaddlesnitchApp.usesSampleServer { Task { await account.signOut() } }
         }
-        // Google and Strava, for the screens that offer them.
-        .task { await account.loadOptions() }
         .tint(Palette.primaryText)
         .preferredColorScheme(.dark)
         .sheet(

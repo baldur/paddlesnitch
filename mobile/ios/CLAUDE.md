@@ -188,6 +188,18 @@ isn't obvious from the code.
   (the Makefile's `DERIVED`, gitignored), never `build/DerivedData`: that one
   isn't ignored, `git add -A` takes thousands of files, and GitHub refuses
   the push. Stage paths by name.
+- Strava is gone (2026-11-01). The generated Swift still has its endpoints
+  until the contract drops them; `NoStravaCallsTests` fails if any code
+  outside `Generated/` names one. Old paddles keep the Strava label, and
+  `SignInOptions.strava` is decoded but never read.
+- On iOS 26 a `confirmationDialog` shows as a popover with no Cancel button
+  (tap outside closes it). When Cancel must show, use `.alert` (the sign-out
+  question for an account made with Strava).
+- "Made with Strava" is `Bool?` (`AccountModel.madeWithStrava`): nil is
+  unknown, never no. Anything that could lock such an account out (Sign
+  out, Sign in again to delete) asks `askMadeWithStrava()` first and waits
+  on nil. Every mailto goes through `openURL(_:completion:)` with a text
+  fallback (`MadeWithStrava.noMailApp`): the simulator has no Mail.
 - Buttons take `.buttonBorderShape(.control)` (the token radius; iOS 26
   draws bordered buttons as pills). It's set on the window, but a sheet or
   full-screen cover doesn't inherit it: put it on each new one with app
