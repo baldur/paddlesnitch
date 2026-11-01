@@ -1580,7 +1580,15 @@ function endLive() {
 // the low lane, clear of the boats ahead.
 let flashTimer = 0;
 let hintTimer = 0;
-function show(text, { small = false, hold = 0.8 } = {}) {
+let waiting = null; // a hint that came while a longer one was up: { text, hold }
+function show(text, { small = false, hold = 0.8, now = false } = {}) {
+  // One hint at a time: a shorter one doesn't wipe a longer one still up. A
+  // moment's note ("Weak stroke") is dropped; an instruction waits its turn;
+  // `now` (why you went in, a boat bearing down) goes straight up.
+  if (small && !now && hintTimer > hold) {
+    if (hold >= 1) waiting = { text, hold };
+    return;
+  }
   const el = small ? els.hint : flash;
   el.textContent = text;
   el.classList.add('show');
@@ -1671,7 +1679,7 @@ function react({ events, splashes }) {
       const why = race.time - hitSwan < 0.5 ? 'You hit a swan!' : race.time - hitBoat.time < 0.5 ? HIT[hitBoat.kind] : null;
       show(why ?? 'You lost your balance!', { hold });
       // Gone in on your own: what keeps you up next time.
-      if (!why && !controls.assist) show(`Keep the needle in the middle: ${phone.matches ? 'turn the phone to lean' : 'lean with A and D'}`, { small: true, hold });
+      if (!why && !controls.assist) show(`Keep the needle in the middle: ${phone.matches ? 'turn the phone to lean' : 'lean with A and D (or the right stick)'}`, { small: true, hold, now: true });
       controls.rumble(1, 400);
     }
     if (e === 'line') {
@@ -1714,7 +1722,7 @@ function react({ events, splashes }) {
     if (e.startsWith('behind-')) {
       const side = e.slice(7);
       say(`Kayak! Eight coming through on your ${side}!`);
-      show(`An eight is coming up behind you, on your ${side}: move ${side === 'left' ? 'right' : 'left'}`, { small: true, hold: 4 });
+      show(`An eight is coming up behind you, on your ${side}: move ${side === 'left' ? 'right' : 'left'}`, { small: true, hold: 4, now: true });
       els.behind.className = `on ${side}`;
       clearTimeout(behindTimer);
       behindTimer = setTimeout(() => { els.behind.className = ''; }, 6000);
@@ -2330,7 +2338,14 @@ function updateHud(dt) {
   if (state === 'racing') engines(dt);
   if (hintTimer > 0) {
     hintTimer -= dt;
-    if (hintTimer <= 0) els.hint.classList.remove('show');
+    if (hintTimer <= 0) {
+      els.hint.classList.remove('show');
+      if (waiting) {
+        const { text, hold } = waiting;
+        waiting = null;
+        show(text, { small: true, hold });
+      }
+    }
   }
   if (flashTimer > 0) {
     flashTimer -= dt;

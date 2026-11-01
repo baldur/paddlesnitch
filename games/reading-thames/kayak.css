@@ -145,9 +145,11 @@ header button {
 #needle { transform-origin: 100px 100px; }
 /* About to go in: the red ends thicken and the gauge pulses, so the warning isn't colour alone. */
 #balance.tipping .danger { stroke-width: 11; }
+#balance.tipping line { stroke: #ff5a3c; stroke-width: 7; } /* plain to see over a white bow */
+#balance.tipping circle { fill: #ff5a3c; }
 #balance.tipping { animation: tipping 0.35s ease-in-out infinite alternate; }
 @keyframes tipping { to { scale: 1.12; } }
-@media (prefers-reduced-motion: reduce) { #balance.tipping { animation: none; } #balance.tipping .arc { stroke: #fff; } }
+@media (prefers-reduced-motion: reduce) { #balance.tipping { animation: none; } }
 
 .meters { justify-self: end; display: grid; gap: 0.35rem; font-size: 0.8rem; width: clamp(100px, 20vw, 180px); }
 .meters .bar { height: 10px; border-radius: 5px; background: rgb(0 0 0 / 0.35); overflow: hidden; }
@@ -217,7 +219,6 @@ header button {
   background: rgb(0 0 0 / 0.45);
   font-size: clamp(1rem, 2.6vw, 1.35rem);
   font-weight: 700;
-  text-wrap: balance;
   opacity: 0;
   transition: opacity 0.25s;
 }
@@ -243,12 +244,13 @@ header button {
   .hud-top { top: 2.6rem; font-size: 1.1rem; }
   #map { top: 3.6rem; width: 150px; } /* below Pause and Sound */
   #map.tall { width: auto; height: 28vh; }
-  #near { top: 3.6rem; width: 100px; }
+  #near { top: 3.6rem; width: 90px; }
   #wash { top: 6rem; }
   .hud-bottom { inset: auto 16px 8px; }
   #balance { width: 110px; }
   .readout b { font-size: 1.2rem; }
   .lane-low { bottom: 5.3rem; gap: 0.25rem; width: max(50vw, 100vw - 320px); }
+  #hud.helping .lane-low { width: calc(100vw - 160px); } /* the first seconds: over the decorative tap marks, not the boats */
   #touchhelp { font-size: 0.72rem; padding-block: 0.15rem; }
   #hint { font-size: 0.95rem; padding-block: 0.2rem; }
   .cue { width: 48px; height: 48px; }
@@ -448,9 +450,9 @@ summary { cursor: pointer; }
   padding: 0.45rem 0.9rem;
   border-radius: 10px;
   background: rgb(0 0 0 / 0.5);
-  font-family: var(--font);
-  font-weight: 700;
   font-size: 1.05rem;
+  font-family: var(--mono);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: pre;
   text-align: left;
@@ -586,8 +588,13 @@ summary { cursor: pointer; }
 #coach[hidden], #ergMon[hidden] { display: none; }
 /* The rowing club's changing room: no sleeves or buoyancy aid with an all-in-one. */
 #menu.rowing .kayak-only { display: none; }
-/* Rowing: messages above the coach. */
+/* Rowing: messages above the coach. The coach sits where the low lane is, so
+   it waits out the controls help's first seconds (it reads 0 then anyway). */
 #hud.rowing #flash { top: 20%; }
+#hud.rowing.helping #coach { visibility: hidden; }
+@media (max-height: 500px) {
+  #hud.rowing #flash { top: 30%; } /* below the clock */
+}
 
 /* Choosing a boat to hire: each card keeps its line (how the boats differ), wrapping, whatever the screen. */
 #clubCards.choice .card small { display: block; white-space: normal; max-width: 11rem; }

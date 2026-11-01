@@ -314,6 +314,17 @@ async function play(c, page, errors) {
       return out;
     });
     errors.push(...clash);
+    // One hint at a time: a moment's note doesn't wipe an instruction, and a
+    // second instruction waits for the first to finish.
+    const hint = () => page.evaluate(() => document.getElementById('hint').textContent);
+    await page.waitForFunction(() => !document.getElementById('hint').classList.contains('show'), null, { timeout: 15_000 });
+    await page.evaluate(() => {
+      window.kayak.show('First instruction', { small: true, hold: 1.5 });
+      window.kayak.show('Weak stroke', { small: true, hold: 0.5 });
+      window.kayak.show('Second instruction', { small: true, hold: 1.2 });
+    });
+    if ((await hint()) !== 'First instruction') errors.push(`a later hint wiped the first: "${await hint()}"`);
+    await page.waitForFunction(() => document.getElementById('hint').textContent === 'Second instruction', null, { timeout: 10_000 }).catch(async () => errors.push(`the waiting hint never showed: "${await hint()}"`));
     // Tipping over: the gauge warns in the red; then going in on your own says
     // so, and what keeps you up.
     await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));
@@ -334,6 +345,22 @@ async function play(c, page, errors) {
     const scull = await page.evaluate(() => !!window.kayak.boat.hull.scull);
     if (!scull) errors.push('pushed off in something other than a scull');
     if (await page.locator('#coach').isHidden()) errors.push("the stroke coach isn't showing");
+    // The controls help at the start (a phone's) clear of the coach, and of the clock and the big message.
+    if (c.touch) {
+      const over = await page.evaluate(() => {
+        const $ = (id) => document.getElementById(id);
+        $('hud').classList.add('helping');
+        window.kayak.show('Go!', { hold: 2 });
+        const r = (el) => el.getBoundingClientRect();
+        const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        const [help, coach, clock, flash] = [r($('touchhelp')), r($('coach')), r(document.querySelector('.hud-top')), r($('flash'))];
+        const coachShown = getComputedStyle($('coach')).visibility !== 'hidden';
+        const out = [coachShown && hit(help, coach) && 'the help under the coach', hit(help, clock) && 'the help on the clock', hit(flash, clock) && 'Go! on the clock', hit(flash, help) && 'Go! on the help'].filter(Boolean);
+        $('hud').classList.remove('helping');
+        return out;
+      });
+      errors.push(...over.map((o) => `rowing: ${o}`));
+    }
     const lookIs = async (side, what) => {
       await page.waitForTimeout(800);
       const look = await page.evaluate(() => window.kayak.look);
