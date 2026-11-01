@@ -34,3 +34,10 @@ export function athleteIdFromSyntheticEmail(email: string | undefined | null): n
   const match = email.match(/^strava-(\d+)@noreply\.paddlesnitch\.com$/i)
   return match ? Number(match[1]) : null
 }
+
+// Account → Strava → Disconnect (#712). Strava switched off: an account made
+// through Strava keeps its link, its only way back in once Strava returns.
+export function stravaDisconnectRules(email: string | undefined | null, stravaOn: boolean): { canDisconnect: boolean; stravaOnly: boolean } {
+  const stravaOnly = isSyntheticStravaEmail(email)
+  return { canDisconnect: stravaOn || !stravaOnly, stravaOnly }
+}

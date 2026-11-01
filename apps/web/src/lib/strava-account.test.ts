@@ -3,6 +3,7 @@ import {
   syntheticEmailFor,
   isSyntheticStravaEmail,
   athleteIdFromSyntheticEmail,
+  stravaDisconnectRules,
 } from './strava-account'
 
 describe('syntheticEmailFor', () => {
@@ -52,5 +53,18 @@ describe('athleteIdFromSyntheticEmail', () => {
   it('returns null for nullish input', () => {
     expect(athleteIdFromSyntheticEmail(undefined)).toBeNull()
     expect(athleteIdFromSyntheticEmail(null)).toBeNull()
+  })
+})
+
+// #712: what Account → Strava offers, by kind of account.
+describe('stravaDisconnectRules', () => {
+  const made = syntheticEmailFor(42)
+  it('an account made with Sign in with Strava is told so, and keeps its only way in while Strava is off', () => {
+    expect(stravaDisconnectRules(made, true)).toEqual({ canDisconnect: true, stravaOnly: true })
+    expect(stravaDisconnectRules(made, false)).toEqual({ canDisconnect: false, stravaOnly: true })
+  })
+  it('an email account can always disconnect', () => {
+    expect(stravaDisconnectRules('alice@example.com', true)).toEqual({ canDisconnect: true, stravaOnly: false })
+    expect(stravaDisconnectRules('alice@example.com', false)).toEqual({ canDisconnect: true, stravaOnly: false })
   })
 })

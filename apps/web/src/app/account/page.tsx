@@ -9,7 +9,7 @@ import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import StravaConnection from '@/components/strava/StravaConnection'
 import { StravaFirstImport, StravaMoreImport } from '@/components/strava/StravaHistoryImport'
 import LoadingState from '@/components/LoadingState'
-import { isSyntheticStravaEmail } from '@/lib/strava-account'
+import { isSyntheticStravaEmail, stravaDisconnectRules } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
@@ -522,11 +522,9 @@ function AccountPageInner() {
 
               {strava && strava.connected && (
                 <>
-                  {/* Disconnect asks first (#712).
-                      Strava off: an account made through Strava keeps its link, its only way back in once Strava returns. */}
+                  {/* Disconnect asks first (#712). */}
                   <StravaConnection
-                    canDisconnect={STRAVA || !isSyntheticStravaEmail(user.email)}
-                    stravaOnly={isSyntheticStravaEmail(user.email)}
+                    {...stravaDisconnectRules(user.email, STRAVA)}
                     disconnecting={working === 'strava'}
                     onDisconnect={disconnectStrava}
                   >
