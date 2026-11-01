@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
-import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
+import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRROR, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -51,6 +51,29 @@ test("the rowing club's shots: from its land side, the landing stage at its wate
   assert.ok(ROOMS.rboathouse.width > 8.2 + 1);
   assert.equal(shots.sculls.length, 3);
   assert.equal(shots.scullLabels.length, 3);
+});
+
+test("the canoe club's erg room: a door from the club, under it, the kayak erg between you and the mirror", async () => {
+  assert.ok(PLACES.club.doors.includes('kerg'));
+  assert.equal(PLACES.kerg.up, 'club');
+  const course = await loop();
+  const shots = clubShots(course);
+  const c = course.scenery.buildings.find((b) => b.style === 'canoe-club');
+  const [cx, cz] = c.shape.reduce((a, p) => [a[0] + p[0] / c.shape.length, a[1] + p[1] / c.shape.length], [0, 0]);
+  const at = shots.roomAt('kerg');
+  assert.ok(at[1] < -50 && Math.hypot(at[0] - cx, at[2] - cz) < 200, 'under the canoe club');
+  const { eye, look } = shots.places.kerg;
+  // Looking at the mirror's wall, over the erg: you see your back, and the mirror beyond.
+  const toMirror = shots.mirrorZ - eye[2];
+  const toErg = shots.kerg[2] - eye[2];
+  assert.ok(Math.sign(look[2] - eye[2]) === Math.sign(toMirror), 'facing the mirror');
+  assert.ok(Math.abs(toErg) > 1 && Math.abs(toErg) < Math.abs(toMirror), `the erg ${toErg} m, the mirror ${toMirror} m`);
+  // The erg's middle is in front of the mirror, which is wider than you on it.
+  assert.ok(Math.abs(shots.kerg[0] - at[0]) < MIRROR.x1 && MIRROR.x1 - MIRROR.x0 > 2);
+  // The room behind the mirror stays clear of the other rooms (each 40 m along).
+  assert.ok(ROOMS.kerg.depth * 2 < 40 && ROOMS.kerg.width < 40);
+  // The button to start is in the room, in view.
+  assert.ok(Math.hypot(shots.kergLabel[0] - shots.kerg[0], shots.kergLabel[2] - shots.kerg[2]) < 2);
 });
 
 test('Back always leads to the bridge: from every place, one level up at a time, through a door that place has', () => {
@@ -132,7 +155,7 @@ test('inside, you stand in a closed room under the ground, so the sky and river 
 test('the rooms under both clubs, with the mural, are a small mesh with no NaN', async () => {
   const { vertices, count } = clubMesh(clubShots(await loop()));
   assert.ok(vertices.every(Number.isFinite));
-  assert.ok(count / 3 < 3000, `${count / 3} triangles`);
+  assert.ok(count / 3 < 3500, `${count / 3} triangles`); // (the kayak erg's room is built twice: once behind its mirror)
 });
 
 test('the swan on the bridge sits facing you, stands, waddles off one way or the other, turns round, comes back and sits, with no jumps', () => {
