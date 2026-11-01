@@ -114,10 +114,25 @@ async function play(c, page, errors) {
   // a browser that allows it would see them, without really going full screen. (Not where the case
   // strips full screen out: there the game must do without.)
   if (c.touch && !c.strip) {
+    // Full screen arrives a moment after the tap, as on a phone, and the sideways locks are counted.
     await page.addInitScript(() => {
       window.fullScreenAsks = [];
+      window.screenLocks = [];
+      let shown = null;
       Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true });
-      Element.prototype.requestFullscreen = function (o) { window.fullScreenAsks.push(o?.navigationUI ?? ''); return Promise.resolve(); };
+      Object.defineProperty(Document.prototype, 'fullscreenElement', { get: () => shown, configurable: true });
+      Element.prototype.requestFullscreen = function (o) {
+        window.fullScreenAsks.push(o?.navigationUI ?? '');
+        setTimeout(() => { shown = document.documentElement; document.dispatchEvent(new Event('fullscreenchange')); }, 300);
+        return Promise.resolve();
+      };
+      // The back gesture on Android: out of full screen.
+      window.leaveFullScreen = () => { shown = null; document.dispatchEvent(new Event('fullscreenchange')); };
+      // (On the prototype: WebKit hands out a new screen.orientation after the page loads.)
+      if (window.ScreenOrientation) {
+        ScreenOrientation.prototype.lock = (o) => { window.screenLocks.push(o); return Promise.resolve(); };
+        ScreenOrientation.prototype.unlock = () => window.screenLocks.push('unlock');
+      }
     });
   }
   await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
@@ -288,6 +303,12 @@ async function play(c, page, errors) {
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   if (!c.club) await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
+  // On a phone the race is locked sideways once full screen comes, even when the tap that asked
+  // for full screen also started the race (a first visit's Try it now).
+  if (c.touch && !c.strip && !c.erg) {
+    const locked = await page.waitForFunction(() => window.screenLocks?.at(-1) === 'landscape', null, { timeout: 5000 }).then(() => true, () => false);
+    if (!locked) errors.push(`a race on a phone wasn't locked sideways: ${JSON.stringify(await page.evaluate(() => window.screenLocks))}`);
+  }
   // At the start the controls are on screen in a line: the phone's on a phone, the keys
   // on a keyboard (where the tap-here L and R aren't shown). Not in a scull on a keyboard, nor on an outing.
   if (!c.row && !c.outing) {
@@ -521,6 +542,26 @@ async function play(c, page, errors) {
       return [...dialog.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().bottom > Math.min(innerHeight, dialog.getBoundingClientRect().bottom)).map((b) => b.textContent);
     });
     if (cut.length) errors.push(`the finish on a phone hides ${cut.join(', ')} below the fold`);
+  }
+  // Out of full screen mid-race (the back gesture): it pauses; Quit to menu asks for full screen
+  // again and goes back to the walk, which unlocks the screen; and having left full screen on
+  // purpose on the walk, walking about doesn't ask again.
+  if (c.club && c.touch && !c.strip && !c.outing && !c.row && !c.erg && !c.tryIt) {
+    await page.evaluate(() => window.leaveFullScreen());
+    if (!(await page.waitForFunction(() => document.getElementById('paused').open, null, { timeout: 10_000 }).then(() => true, () => false))) errors.push("leaving full screen mid-race didn't pause");
+    else {
+      await page.locator('#paused button[value="menu"]').tap();
+      await page.waitForFunction(() => window.kayak.club?.place && !window.kayak.club.to, null, { timeout: 60_000 });
+      await page.waitForTimeout(500);
+      const before = await page.evaluate(() => ({ lock: window.screenLocks.at(-1), asks: window.fullScreenAsks.length }));
+      if (before.lock !== 'unlock') errors.push(`back on the walk the screen stayed ${before.lock}`);
+      await page.evaluate(() => window.leaveFullScreen());
+      if (await page.evaluate(() => document.getElementById('paused').open)) errors.push('leaving full screen on the walk opened the pause screen');
+      await page.locator('#clubBack').tap(); // Back: walking about, not starting anything
+      await page.waitForTimeout(500);
+      const asks = await page.evaluate(() => window.fullScreenAsks.length);
+      if (asks !== before.asks) errors.push('after leaving full screen on purpose, a tap on the walk asked again');
+    }
   }
   return `${backend}, ${speed.toFixed(1)} m/s, ${Math.round(ms)} ms ${backend === 'webgpu' ? 'GPU time' : 'frames'}`;
 }

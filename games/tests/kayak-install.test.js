@@ -15,7 +15,12 @@ test('the manifest opens the game full screen, from its own folder, with icons o
   assert.ok(m.name && m.short_name.length <= 15, 'a short name fits under a home-screen icon');
   // Relative, so it works served on its own (pnpm games) as well as under /games/.
   for (const key of ['start_url', 'scope', 'id']) assert.equal(m[key], './', key);
-  assert.ok(m.icons.some((i) => i.sizes === '192x192') && m.icons.some((i) => i.sizes === '512x512'), 'Android needs 192 and 512');
+  for (const purpose of ['any', 'maskable']) {
+    const sizes = m.icons.filter((i) => i.purpose === purpose).map((i) => i.sizes);
+    assert.ok(sizes.includes('192x192') && sizes.includes('512x512'), `Android needs 192 and 512 (${purpose})`);
+  }
+  // (Not both purposes on one icon: a maskable one is cropped to a circle, so it needs its own padding.)
+  assert.ok(m.icons.every((i) => !i.purpose.includes(' ')));
   for (const icon of m.icons) {
     assert.ok(!icon.src.startsWith('/') && !icon.src.includes('//'), `${icon.src} is relative`);
     assert.deepEqual(pngSize(await readFile(file(icon.src))), icon.sizes.split('x').map(Number), icon.src);
