@@ -9,6 +9,10 @@ struct YouView: View {
     let account: AccountModel
     let signIn: () -> Void
     @State private var confirmingSignOut = false
+    /// Made with Strava: an alert, so Cancel shows (iOS 26 draws a dialog as
+    /// a popover without one).
+    @State private var warningSignOut = false
+    @Environment(\.openURL) private var openURL
 
     struct WebPage: Identifiable {
         let title: String
@@ -50,10 +54,12 @@ struct YouView: View {
                             Text("Devices").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
-                        Button("Sign out", role: .destructive) { confirmingSignOut = true }
-                            .font(.plexSans(.body))
-                            .foregroundStyle(Palette.red)
-                            .listRowBackground(Palette.surface)
+                        Button("Sign out", role: .destructive) {
+                            if account.madeWithStrava { warningSignOut = true } else { confirmingSignOut = true }
+                        }
+                        .font(.plexSans(.body))
+                        .foregroundStyle(Palette.red)
+                        .listRowBackground(Palette.surface)
                     } else {
                         if account.accountDeleted {
                             Text("Your account and everything in it are deleted.")
@@ -98,7 +104,7 @@ struct YouView: View {
                 }
             }
             .onChange(of: account.user?.id) { _, id in
-                // Signed in again to delete or connect Strava: straight back
+                // Signed in again to delete: straight back
                 // to the account.
                 if id != nil && account.afterSignIn != nil { path = NavigationPath([Route.account]) }
             }
@@ -112,6 +118,18 @@ struct YouView: View {
                 Button("Sign out", role: .destructive) { Task { await account.signOut() } }
                     .accessibilityIdentifier("confirm-sign-out")
             }
+            // It can't sign back in until we move it to an email (lead).
+            .alert("Sign out of paddlesnitch?", isPresented: $warningSignOut) {
+                Button("Email us") { openURL(SignInHelp.emailUs) }
+                    .accessibilityIdentifier("sign-out-email-us")
+                Button("Sign out anyway", role: .destructive) { Task { await account.signOut() } }
+                    .accessibilityIdentifier("confirm-sign-out")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(MadeWithStrava.signOutWarning)
+            }
+            // Whether this account was made with Strava, for signing out.
+            .task(id: account.user?.id) { await account.checkMadeWithStrava() }
         }
     }
 

@@ -211,23 +211,9 @@ public final class SignInForm {
         nextCodeAt = now().addingTimeInterval(30)
     }
 
-    /// Signs in with Strava. True once signed in; closing the sign-in page
+    /// Signs in with Google. True once signed in; closing the sign-in page
     /// (`CancellationError`) leaves no error.
     @discardableResult
-    public func signInWithStrava(to account: AccountModel, browser: (URL) async throws -> URL) async -> Bool {
-        busy = true
-        error = nil
-        defer { busy = false }
-        do {
-            try await account.signInWithStrava(browser: browser)
-            return true
-        } catch is CancellationError {
-        } catch {
-            self.error = Self.message(for: error)
-        }
-        return false
-    }
-
     public func signInWithGoogle(to account: AccountModel, browser: (URL) async throws -> URL) async -> Bool {
         busy = true
         error = nil
@@ -247,7 +233,6 @@ public final class SignInForm {
         case PaddleAPIError.rejected(let message, _, _): message
         case PaddleAPIError.codeNeeded(let message): message
         case PaddleAPIError.accountDeleted(let message): message
-        case let strava as StravaSignInError: strava.message
         case let google as GoogleSignInError: google.message
         case is TokenStoreError: "Signed in, but this iPhone wouldn't keep you signed in. Try again."
         case is URLError: "Couldn't reach paddlesnitch. Check your connection and try again."

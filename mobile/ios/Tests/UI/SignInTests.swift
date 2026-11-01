@@ -7,19 +7,6 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
     }
 
-    func testSigningInWithStravaShowsYourPaddles() {
-        let notice = app.buttons["sample-notice-action"]
-        XCTAssertTrue(notice.appears(timeout: 10))
-        notice.tap()
-        let strava = app.buttons["strava-sign-in"]
-        XCTAssertTrue(strava.appears(timeout: 10))
-        XCTAssertEqual(strava.label, "Connect with Strava")
-        if !strava.isHittable { app.swipeUp() }
-        strava.tap()
-        XCTAssertTrue(signedIn(), "still showing the samples")
-        XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
-    }
-
     func testAWrongPasswordShowsTheServersWords() {
         signIn(password: "wrong")
         XCTAssertTrue(text(containing: "That email and password don’t match.").appears(timeout: 10))
@@ -44,10 +31,46 @@ final class SignInTests: AppTestCase {
         app.buttons["Sign out"].firstMatch.tap()
         let confirm = app.buttons["confirm-sign-out"].firstMatch
         XCTAssertTrue(confirm.appears(timeout: 10), "asks before signing out")
+        XCTAssertEqual(confirm.label, "Sign out")
+        XCTAssertFalse(app.buttons["sign-out-email-us"].exists, "an account with a password")
+        XCTAssertFalse(text(containing: "can’t sign back in").exists)
         confirm.tap()
         XCTAssertTrue(app.buttons["Sign in"].appears(timeout: 10))
         selectTab("Paddles")
         XCTAssertTrue(element("sample-notice").appears(timeout: 10))
+    }
+
+    /// Made with Strava, which has gone: signing out would lock it out, so
+    /// it asks first, offering Email us (lead, 2026-11-01).
+    func testAnAccountMadeWithStravaIsWarnedBeforeSigningOut() {
+        signInAndWait()
+        app.terminate()
+        app.launchArguments = ["-SampleServer", "-PlaceholderEmail"]
+        app.launch()
+        selectTab("You")
+        app.buttons["Sign out"].firstMatch.tap()
+        XCTAssertTrue(
+            text(
+                containing:
+                    "You made this account with Strava, so you can’t sign back in until we move it to your email."
+            )
+            .appears(timeout: 10))
+        XCTAssertTrue(app.buttons["sign-out-email-us"].exists)
+        XCTAssertTrue(app.buttons["Cancel"].exists)
+        let anyway = app.buttons["confirm-sign-out"].firstMatch
+        XCTAssertEqual(anyway.label, "Sign out anyway")
+        anyway.tap()
+        XCTAssertTrue(app.buttons["Sign in"].appears(timeout: 10))
+    }
+
+    /// The line for an account made with Strava is on Sign in only.
+    func testCreateAccountHasNoLineForAStravaAccount() {
+        app.buttons["sample-notice-action"].tap()
+        XCTAssertTrue(scrollTo("made-with-strava").exists, "on Sign in")
+        scrollToElement(app.buttons["Create account"].firstMatch).tap()
+        XCTAssertTrue(app.textFields["Display name"].appears(timeout: 10))
+        XCTAssertFalse(element("made-with-strava").exists)
+        XCTAssertFalse(app.buttons["email-us"].exists)
     }
 
     func testAnAccountWithChangedTermsIsToldSo() {

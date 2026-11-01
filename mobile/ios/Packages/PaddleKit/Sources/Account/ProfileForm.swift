@@ -74,6 +74,7 @@ public final class ProfileForm {
             let contact = try await account.client.send(Endpoints.getAccountContact, NoInput())
             show(profile)
             needsContactEmail = contact.placeholderEmail == true
+            account.noteMadeWithStrava(needsContactEmail)
             contactSaved = contact.contact?.email
             contactInput = contactSaved ?? ""
             loadFailure = nil

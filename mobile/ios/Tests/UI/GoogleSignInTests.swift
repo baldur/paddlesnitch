@@ -1,8 +1,8 @@
 import XCTest
 
-/// Sign in with Google, and the screens with Strava switched off
-/// (mobile/contract/README.md, Signing in → "Google", "When strava is
-/// false"), against the sample server.
+/// Sign in with Google, and the screens without Strava, which has gone
+/// (mobile/contract/README.md, Signing in → "Google"), against the sample
+/// server.
 final class GoogleSignInTests: AppTestCase {
     func testSigningInWithGoogleShowsYourPaddles() {
         openSignIn()
@@ -13,109 +13,84 @@ final class GoogleSignInTests: AppTestCase {
         XCTAssertTrue(scrollTo("paddle-pdl-river").exists)
     }
 
-    func testWithStravaOffSignInOffersGoogleAndHelpNotStrava() {
-        relaunch(["-StravaOff"])
+    /// Google, then always the line for an account made with Strava, with
+    /// Email us; never a Strava button.
+    func testSignInOffersGoogleAndTheLineForAStravaAccount() {
         openSignIn()
+        signInHasNoStrava()
+    }
+
+    /// An older server that still says Strava is on changes nothing.
+    func testAServerThatSaysStravaIsOnChangesNothing() {
+        relaunch(["-OptionsSayStrava"])
+        openSignIn()
+        signInHasNoStrava()
+    }
+
+    private func signInHasNoStrava() {
         XCTAssertTrue(scrollToElement(app.buttons["google-sign-in"]).exists)
         XCTAssertTrue(text(containing: "Or use your Google account").exists)
         XCTAssertFalse(app.buttons["strava-sign-in"].exists, "no Strava sign-in")
-        XCTAssertTrue(text(containing: "Signed up with Strava? Strava sign-in is off for now. Email us").exists)
+        XCTAssertTrue(
+            scrollTo("made-with-strava").label
+                == "Made your account with Strava? Email us and we’ll move it to your email.")
         XCTAssertTrue(scrollToElement(app.buttons["email-us"]).exists)
     }
 
-    func testWithStravaOffAConnectedAccountShowsStravaPaused() {
-        relaunch(["-StravaOff", "-StravaConnected"])
+    func testAccountHasNoStrava() {
         signInAndWait()
         openAccount()
-        let row = scrollTo("strava-connected")
-        XCTAssertTrue(row.appears(timeout: 10))
-        XCTAssertTrue(row.label.contains("Paused"))
-        XCTAssertTrue(text(containing: "Strava isn’t available right now.").exists)
-        XCTAssertTrue(scrollToElement(app.buttons["Disconnect"]).exists)
-        XCTAssertFalse(app.switches["strava-auto-import"].exists, "no auto-import")
-    }
-
-    func testWithStravaOffAnAccountNotConnectedHasNoStrava() {
-        relaunch(["-StravaOff"])
-        signInAndWait()
-        openAccount()
-        noStravaSection()
-    }
-
-    /// Strava between Public profile and Your data: on screen with Your
-    /// data, and given time to come.
-    private func noStravaSection() {
         XCTAssertTrue(scrollToElement(app.buttons["Download my data"]).exists)
         XCTAssertFalse(element("strava-connect").appears(timeout: 3), "no Connect")
         XCTAssertFalse(element("strava-connected").exists)
     }
 
-    /// Account asks again: Strava went off after the app's first ask.
-    func testAccountAsksWhichWaysInAreOn() {
-        signInAndWait()
-        app.terminate()
-        app.launchArguments = ["-SampleServer", "-StravaOffLater"]
-        app.launch()
-        openAccount()
-        noStravaSection()
-    }
-
-    /// The sign-in sheet asks again: Strava went off after the app's first ask.
-    func testSignInAsksWhichWaysInAreOn() {
-        relaunch(["-StravaOffLater"])
-        openSignIn()
-        XCTAssertTrue(scrollToElement(app.buttons["email-us"]).appears(timeout: 10))
-        XCTAssertFalse(app.buttons["strava-sign-in"].exists)
-    }
-
-    /// Unknown isn't off: the email form, "Couldn't load the other ways to
-    /// sign in." with Try again, and no word about Strava being off.
+    /// "Couldn't load the other ways to sign in." with Try again, and the
+    /// line for a Strava account still there.
     func testWhenAskingFailsSignInSaysSoAndCanTryAgain() {
         relaunch(["-OptionsFail"])
         openSignIn()
         XCTAssertTrue(scrollTo("ways-in-failed").appears(timeout: 10))
         XCTAssertFalse(app.buttons["google-sign-in"].exists)
-        XCTAssertFalse(app.buttons["strava-sign-in"].exists)
-        XCTAssertFalse(app.buttons["email-us"].exists, "doesn't say Strava is off")
         XCTAssertTrue(scrollToElement(app.buttons["ways-in-try-again"]).exists)
+        XCTAssertTrue(scrollToElement(app.buttons["email-us"]).exists, "a Strava account can still ask")
     }
 
-    /// An email account can still sign in again with Strava off.
-    func testWithStravaOffAnEmailAccountSignsInAgainToDelete() {
+    func testAnEmailAccountSignsInAgainToDelete() {
         signInAndWait()
         app.terminate()
-        app.launchArguments = ["-SampleServer", "-StravaOff", "-StaleSignIn"]
+        app.launchArguments = ["-SampleServer", "-StaleSignIn"]
         app.launch()
         openAccount()
         scrollToElement(app.buttons["Delete my account"]).tap()
         XCTAssertTrue(element("delete-needs-sign-in").appears(timeout: 10))
         XCTAssertTrue(app.buttons["Sign in again"].exists)
-        XCTAssertFalse(app.buttons["Report an issue"].exists)
+        XCTAssertFalse(app.buttons["delete-email-us"].exists)
+        XCTAssertFalse(text(containing: "An account made with Strava").exists)
     }
 
-    /// Made through Strava, with Strava off: no way back in to sign in again
-    /// with, so deleting asks for help instead, and Strava can't be
-    /// disconnected (it's the account's only way in).
-    func testWithStravaOffAStravaAccountIsOfferedHelpToDelete() {
+    /// Made with Strava (its sign-in email is a placeholder): no way back in
+    /// to sign in again with, so deleting offers Email us instead, with the
+    /// Support ID (lead, 2026-11-01).
+    func testAnAccountMadeWithStravaIsOfferedHelpToDelete() {
         signInAndWait()
         // Signed in a while ago (stale), kept across the relaunch.
         app.terminate()
-        app.launchArguments = ["-SampleServer", "-StravaOff", "-StravaConnected", "-StaleSignIn", "-StravaAccount"]
+        app.launchArguments = ["-SampleServer", "-StaleSignIn", "-PlaceholderEmail"]
         app.launch()
         openAccount()
-        XCTAssertTrue(scrollTo("strava-connected").appears(timeout: 10))
-        XCTAssertFalse(scrollToElement(app.buttons["Disconnect"]).exists, "its only way in")
         scrollToElement(app.buttons["Delete my account"]).tap()
-        XCTAssertTrue(element("delete-needs-sign-in").appears(timeout: 10))
-        XCTAssertTrue(text(containing: "leave out your name and email: reports are public.").exists)
+        let words = element("delete-needs-sign-in")
+        XCTAssertTrue(words.appears(timeout: 10))
+        XCTAssertEqual(
+            words.label, "An account made with Strava can’t sign in again here. Email us and we’ll delete it.")
+        XCTAssertTrue(app.buttons["delete-email-us"].exists)
+        XCTAssertEqual(app.buttons["delete-email-us"].label, "Email us")
         XCTAssertFalse(app.buttons["Sign in again"].exists)
-        // Signed in through a one-time link, so it's filed as this account.
-        app.buttons["Report an issue"].tap()
-        XCTAssertFalse(element("delete-error").appears(timeout: 3), "the signed-in link came")
+        XCTAssertFalse(app.buttons["Report an issue"].exists)
     }
 
-    func testTheSignInSheetWithStravaOffPassesTheAccessibilityAudit() throws {
-        relaunch(["-StravaOff"])
+    func testTheSignInSheetPassesTheAccessibilityAudit() throws {
         openSignIn()
         XCTAssertTrue(app.buttons["google-sign-in"].appears(timeout: 10))
         try audit()

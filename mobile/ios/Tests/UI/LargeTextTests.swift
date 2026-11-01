@@ -83,13 +83,13 @@ final class LargeTextTests: AppTestCase {
         ])
     }
 
-    /// A Strava account's contact email block is the tallest row there is.
-    func testAStravaAccountAtTheLargestTextSize() throws {
-        let notice = app.buttons["sample-notice-action"]
-        XCTAssertTrue(notice.appears(timeout: 10))
-        notice.tap()
-        scrollToElement(app.buttons["strava-sign-in"]).tap()
-        XCTAssertTrue(signedIn(), "signed in")
+    /// An account made with Strava: its contact email block is the tallest
+    /// row there is.
+    func testAnAccountMadeWithStravaAtTheLargestTextSize() throws {
+        signInAndWait()
+        app.terminate()
+        app.launchArguments = ["-SampleServer", "-PlaceholderEmail"] + launchArguments
+        app.launch()
         openAccount()
         XCTAssertTrue(app.textFields["contact-email"].appears(timeout: 10))
         try checkScreen(at: [
@@ -127,26 +127,13 @@ final class LargeTextTests: AppTestCase {
         ])
     }
 
-    /// Strava off: Google, the Strava help line and Email us.
-    func testSignInWithStravaOffAtTheLargestTextSize() throws {
-        app.terminate()
-        app.launchArguments = ["-SampleServer", "-ResetAccount", "-StravaOff"] + launchArguments
-        app.launch()
+    /// Sign in: Google, the line for a Strava account and Email us.
+    func testTheOtherWaysInAtTheLargestTextSize() throws {
         app.buttons["sample-notice-action"].tap()
         XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
         // Element by element: each check resizes the text and the sheet
         // jumps back to the top, so swiping from the top never got there.
         try checkScreen(at: [app.buttons["sign-in-submit"], app.buttons["google-sign-in"], app.buttons["email-us"]])
-    }
-
-    /// Strava off on a connected account: "Paused" and Disconnect.
-    func testStravaPausedAtTheLargestTextSize() throws {
-        app.terminate()
-        app.launchArguments = ["-SampleServer", "-ResetAccount", "-StravaOff", "-StravaConnected"] + launchArguments
-        app.launch()
-        signInAndWait()
-        openAccount()
-        try checkScreen(at: [element("strava-connected"), app.buttons["Disconnect"]])
     }
 
     /// Ready, recording, then Paddles with the recording waiting to upload

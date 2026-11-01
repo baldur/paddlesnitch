@@ -16,40 +16,33 @@ import Testing
 
     @Test func theCodeComesBackOnTheAppsScheme() throws {
         let callback = try #require(URL(string: "com.paddlesnitch.app:/signin/google?code=xyz"))
-        #expect(try GoogleSignIn.code(from: callback, stravaOn: false) == "xyz")
+        #expect(try GoogleSignIn.code(from: callback) == "xyz")
     }
 
     @Test(arguments: [
+        ("google_account_exists", "You already have an account with this email. Sign in with your email instead."),
         (
-            "google_account_exists", false,
-            "You already have an account with this email. Sign in with your email instead."
-        ),
-        (
-            "google_account_exists", true,
-            "You already have an account with this email. Sign in with your email or Strava instead."
-        ),
-        (
-            "google_no_email", false,
+            "google_no_email",
             "Couldn’t sign in with Google, because Google didn’t share a confirmed email address. "
                 + "Please sign up with your email instead."
         ),
-        ("google_denied", false, "You cancelled the Google sign-in."),
-        ("google_failed", false, "Couldn’t sign in with Google. Please try again."),
-        ("google_not_configured", false, "Google sign-in isn’t available right now."),
-        ("something_new", false, "Couldn’t sign in with Google. Please try again."),
+        ("google_denied", "You cancelled the Google sign-in."),
+        ("google_failed", "Couldn’t sign in with Google. Please try again."),
+        ("google_not_configured", "Google sign-in isn’t available right now."),
+        ("something_new", "Couldn’t sign in with Google. Please try again."),
     ])
-    func aRefusalSaysWhyInTheContractsWords(key: String, stravaOn: Bool, message: String) throws {
+    func aRefusalSaysWhyInTheContractsWords(key: String, message: String) throws {
         let callback = try #require(URL(string: "com.paddlesnitch.app:/signin/google?error=\(key)"))
-        #expect(throws: GoogleSignInError(key: key, stravaOn: stravaOn)) {
-            try GoogleSignIn.code(from: callback, stravaOn: stravaOn)
+        #expect(throws: GoogleSignInError(key: key)) {
+            try GoogleSignIn.code(from: callback)
         }
-        #expect(GoogleSignInError(key: key, stravaOn: stravaOn).message == message)
+        #expect(GoogleSignInError(key: key).message == message)
     }
 
     @Test func noCodeAtAllDidNotFinish() throws {
         let callback = try #require(URL(string: "com.paddlesnitch.app:/signin/google"))
-        #expect(throws: GoogleSignInError(key: "", stravaOn: false)) {
-            try GoogleSignIn.code(from: callback, stravaOn: false)
+        #expect(throws: GoogleSignInError(key: "")) {
+            try GoogleSignIn.code(from: callback)
         }
     }
 }
@@ -103,7 +96,9 @@ import Testing
         #expect(form.error == nil)
     }
 
-    @Test func theAccountExistsWordsFollowTheOptions() async {
+    /// Strava has gone: an older server that still says `strava: true`
+    /// changes nothing, and the words never offer Strava.
+    @Test func stravaInTheOptionsIsIgnored() async {
         let account = account()
         server.options = SignInOptions(google: true, strava: true)
         await account.loadOptions()
@@ -111,14 +106,8 @@ import Testing
         _ = await form.signInWithGoogle(to: account) { _ in
             URL(string: "com.paddlesnitch.app:/signin/google?error=google_account_exists") ?? URL(filePath: "/")
         }
-        #expect(form.error?.hasSuffix("with your email or Strava instead.") == true)
-        #expect(!account.stravaSaidOff)
-        server.options = SignInOptions(google: true, strava: false)
-        await account.loadOptions()
-        _ = await form.signInWithGoogle(to: account) { _ in
-            URL(string: "com.paddlesnitch.app:/signin/google?error=google_account_exists") ?? URL(filePath: "/")
-        }
         #expect(form.error == "You already have an account with this email. Sign in with your email instead.")
+        #expect(!server.requests.contains { $0.url?.path().lowercased().contains("strava") == true })
     }
 
     @Test func optionsAreEmailOnlyUntilAnsweredAndAFailedAskKeepsTheLastAnswer() async {
@@ -126,23 +115,16 @@ import Testing
         server.options = nil
         await account.loadOptions()
         #expect(account.options == .emailOnly, "never answered: email only")
-        #expect(!account.stravaSaidOff, "unknown isn't off: don't say Strava is off")
         server.options = SignInOptions(google: true, strava: false)
         await account.loadOptions()
         #expect(account.options == SignInOptions(google: true, strava: false))
-        #expect(account.stravaSaidOff)
         server.options = nil
         await account.loadOptions()
         #expect(account.options == SignInOptions(google: true, strava: false), "kept")
-        server.options = SignInOptions(google: true, strava: true)
-        await account.loadOptions()
-        #expect(!account.stravaSaidOff)
     }
 
-    @Test func theEmptyListMentionsStravaOnlyWhenItsOn() {
-        #expect(SignInOptions(google: true, strava: true).noPaddlesYet.contains("Strava"))
-        #expect(!SignInOptions(google: true, strava: false).noPaddlesYet.contains("Strava"))
-        #expect(!SignInOptions.emailOnly.noPaddlesYet.contains("Strava"))
+    @Test func theStravaLineIsTheDecidedWords() {
+        #expect(SignInHelp.madeWithStrava == "Made your account with Strava? Email us and we’ll move it to your email.")
     }
 
     @Test func emailUsGoesToPrivacyWithTheSubject() {

@@ -9,8 +9,9 @@ struct DeleteAccountView: View {
     let account: AccountModel
     let deleted: () -> Void
     /// Sign out and sign in again, then come straight back here.
-    /// Made through Strava, and Strava is off: there's no way back in to
-    /// sign in again with, so it offers Report an issue instead.
+    /// Made with Strava, which has gone (its sign-in email is a placeholder):
+    /// there's no way back in to sign in again with, so it offers Email us
+    /// instead, with the Support ID.
     var cantSignInAgain = false
     let signInAgain: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -18,19 +19,14 @@ struct DeleteAccountView: View {
     @State private var confirmText = ""
     @State private var deleting = false
     @State private var failure: String?
-    /// The website's issue form, signed in as this account.
-    @State private var reportPage: URL?
-    @State private var openingReport = false
+    @Environment(\.openURL) private var openURL
 
     enum Step {
         case checking, needsSignIn, ready
     }
 
-    /// mobile/contract/README.md, Account: the words for this step.
-    /// The contract's words: the report is public, and filed signed in.
     static let cantSignInAgainWords =
-        "Strava sign-in is off for now, so you can’t sign in again here. Report an issue asking us to delete your "
-        + "account. We’ll know it’s yours, so leave out your name and email: reports are public."
+        "An account made with Strava can’t sign in again here. Email us and we’ll delete it."
     static let needsSignIn =
         "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
 
@@ -57,18 +53,15 @@ struct DeleteAccountView: View {
                             .foregroundStyle(Palette.fg)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("delete-needs-sign-in")
-                        Button(action: cantSignInAgain ? { Task { await openReport() } } : signInAgain) {
-                            Text(
-                                cantSignInAgain
-                                    ? (openingReport ? "Report an issue…" : "Report an issue") : "Sign in again"
-                            )
-                            .font(.plexSans(.body, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                        Button(action: cantSignInAgain ? emailUs : signInAgain) {
+                            Text(cantSignInAgain ? "Email us" : "Sign in again")
+                                .font(.plexSans(.body, weight: .semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(Palette.primary)
-                        .disabled(openingReport)
-                        .accessibilityHint(cantSignInAgain ? "Opens paddlesnitch.com" : "")
+                        .accessibilityHint(cantSignInAgain ? "Opens Mail" : "")
+                        .accessibilityIdentifier(cantSignInAgain ? "delete-email-us" : "delete-sign-in-again")
                     case .ready:
                         confirm
                     }
@@ -88,9 +81,6 @@ struct DeleteAccountView: View {
                 }
             }
             .task { await check() }
-        }
-        .sheet(item: $reportPage) { url in
-            SafariView(url: url).ignoresSafeArea()
         }
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled(deleting)
@@ -160,15 +150,9 @@ struct DeleteAccountView: View {
 
     /// Signed in through a one-time link, so the report is filed as this
     /// account.
-    private func openReport() async {
-        openingReport = true
-        failure = nil
-        defer { openingReport = false }
-        do {
-            reportPage = try await account.reportPage()
-        } catch {
-            failure = AccountView.failure("Couldn’t open the issue form.", error)
-            AccessibilityNotification.Announcement(failure ?? "").post()
-        }
+    /// Mail to us with the Support ID the Account screen shows.
+    private func emailUs() {
+        guard let id = account.user?.id else { return }
+        openURL(MadeWithStrava.deleteEmail(supportID: id))
     }
 }

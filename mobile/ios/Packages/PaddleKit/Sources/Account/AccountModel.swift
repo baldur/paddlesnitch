@@ -22,8 +22,7 @@ public final class AccountModel {
     public internal(set) var state: State = .signedOut
     /// The account was just deleted here: the signed-out You tab says so.
     public internal(set) var accountDeleted = false
-    /// Signed out to sign in again before deleting or connecting Strava:
-    /// come straight back to it.
+    /// Signed out to sign in again before deleting: come straight back to it.
     public internal(set) var afterSignIn: AfterSignIn?
     /// Who signed out to sign in again: only they come straight back.
     public internal(set) var signInAgainUserId: String?
@@ -37,18 +36,16 @@ public final class AccountModel {
     /// The ways in the server offers besides email: none until asked, and
     /// none if asking fails (mobile/contract/README.md, Signing in).
     public internal(set) var options = SignInOptions.emailOnly
-    /// The server said Strava is off (not just unknown): only then is it
-    /// right to say so.
-    public internal(set) var stravaSaidOff = false
     /// The ask failed and nothing was known before: say so, with Try again.
     public internal(set) var optionsFailed = false
-    /// The email to sign in again with (none for a Strava account).
+    /// The email to sign in again with.
     public internal(set) var signInAgainEmail: String?
     /// Why the app signed out by itself, for the sign-in screen: the
     /// server's words when the account was deleted elsewhere (410).
     public internal(set) var signedOutBecause: String?
-    /// Signing in again goes straight to Strava sign-in.
-    public internal(set) var signInAgainWithStrava = false
+    /// Who the server last said made their account with Strava (its
+    /// sign-in email is a placeholder): `madeWithStrava` is for them only.
+    var madeWithStravaUserId: String?
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
     public private(set) var client: PaddleClient
     public var user: User? {
@@ -110,17 +107,6 @@ public final class AccountModel {
             acceptedTosVersion: agreedToTerms ? Constants.tosVersion : nil, code: code, email: email, password: password
         )
         try await accept(try await anonymous.send(Endpoints.authSignupConfirm, confirm))
-    }
-
-    /// Strava sign-in. `browser` opens the page and answers the link it came
-    /// back on (ASWebAuthenticationSession in the app). The verifier never
-    /// leaves this call, so a code caught by another app is useless.
-    public func signInWithStrava(browser: (URL) async throws -> URL) async throws {
-        let verifier = Pkce.verifier()
-        let start = StravaSignIn.startURL(baseURL: anonymous.baseURL, challenge: Pkce.challenge(verifier))
-        let code = try StravaSignIn.code(from: try await browser(start))
-        try await accept(
-            try await anonymous.send(Endpoints.authStravaAppToken, StravaAppToken(code: code, verifier: verifier)))
     }
 
     public func requestPasswordReset(_ request: ResetRequest) async throws {

@@ -3,64 +3,44 @@ import DesignSystem
 import PaddleAPI
 import SwiftUI
 
-/// Below the email form, as the website's /signin: Google and Strava when the
-/// server offers them (`GET /att/api/auth/options`); with Strava off, an
-/// email for someone who signed up with Strava (not a public issue report:
-/// they'd put their name and email in it); and if asking failed, Try again.
+/// Below the email form, as the website's /signin: Google when the server
+/// offers it (`GET /att/api/auth/options`); on the Sign in tab, always, an
+/// email for someone who made their account with Strava, which has gone (not
+/// a public issue report: they'd put their name and email in it); and if
+/// asking failed, Try again.
 struct OtherWaysIn: View {
     let options: SignInOptions
-    /// The server said Strava is off, so say so (not when it's unknown).
-    let stravaSaidOff: Bool
+    /// The Sign in tab: the line for an account made with Strava shows.
+    let signingIn: Bool
     /// Asking failed and nothing was known before.
     let failed: Bool
     let busy: Bool
     let google: () -> Void
-    let strava: () -> Void
     let tryAgain: () -> Void
     @Environment(\.openURL) private var openURL
 
-    static let stravaOff =
-        "Signed up with Strava? Strava sign-in is off for now. Email us and we’ll help you sign in."
-
     var body: some View {
         VStack(spacing: 12) {
-            if options.google || options.strava {
+            if options.google {
                 Divider().overlay(Palette.border)
-                Text(
-                    options.google && options.strava
-                        ? "Or use your Google or Strava account"
-                        : options.google ? "Or use your Google account" : "Or use your Strava account"
-                )
-                .font(.plexSans(.body))
-                .foregroundStyle(Palette.muted)
-                .multilineTextAlignment(.center)
-                if options.google { GoogleButton(action: google).disabled(busy) }
-                if options.strava { stravaButton }
-            }
-            if stravaSaidOff {
-                Divider().overlay(Palette.border).padding(.top, options.google ? 12 : 0)
-                muted(Self.stravaOff)
-                bordered("Email us", id: "email-us", hint: "Opens Mail") { openURL(SignInHelp.emailUs) }
+                Text("Or use your Google account")
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center)
+                GoogleButton(action: google).disabled(busy)
             }
             if failed {
                 Divider().overlay(Palette.border)
                 muted("Couldn’t load the other ways to sign in.").accessibilityIdentifier("ways-in-failed")
                 bordered("Try again", id: "ways-in-try-again", hint: nil, action: tryAgain).disabled(busy)
             }
+            if signingIn {
+                Divider().overlay(Palette.border).padding(.top, options.google ? 12 : 0)
+                muted(SignInHelp.madeWithStrava).accessibilityIdentifier("made-with-strava")
+                bordered("Email us", id: "email-us", hint: "Opens Mail") { openURL(SignInHelp.emailUs) }
+            }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// Strava's own button, unaltered (their brand guidelines).
-    @ViewBuilder private var stravaButton: some View {
-        Button(action: strava) {
-            Image("ConnectWithStrava").resizable().scaledToFit().frame(height: 48)
-        }
-        .buttonStyle(.plain)
-        .disabled(busy)
-        .accessibilityLabel("Connect with Strava")
-        .accessibilityIdentifier("strava-sign-in")
-        muted("Already have an account? Sign in first, then connect Strava in Account.")
     }
 
     private func bordered(_ title: String, id: String, hint: String?, action: @escaping () -> Void) -> some View {
@@ -85,8 +65,8 @@ struct OtherWaysIn: View {
 
 /// Google's sign-in button in their dark style, as the website's: the
 /// four-colour "G" unaltered, "Sign in with Google", fill #131314, border
-/// #8E918F, text #E3E3E3. Their colours, not our tokens, as Strava's button
-/// keeps Strava's (developers.google.com/identity/branding-guidelines).
+/// #8E918F, text #E3E3E3. Their colours, not our tokens
+/// (developers.google.com/identity/branding-guidelines).
 struct GoogleButton: View {
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
