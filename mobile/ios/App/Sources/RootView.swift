@@ -42,7 +42,7 @@ struct RootView: View {
                 openFile: { url in Task { await open(url) } },
                 recordings: account.user.map { account.recordings(for: $0.id) },
                 uploads: uploads,
-                openReport: { Task { reportPage = try? await account.reportPage() } }
+                openReport: openReport
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
             .tag("paddles")
@@ -117,6 +117,18 @@ struct RootView: View {
         }
     }
 
+    /// The website's issue form, signed in as this account. If it can't
+    /// open, the screen says so rather than doing nothing.
+    private func openReport() async -> Bool {
+        do {
+            reportPage = try await account.reportPage()
+            return true
+        } catch {
+            AccessibilityNotification.Announcement("Couldn’t open the issue form. Please try again.").post()
+            return false
+        }
+    }
+
     /// Signed in: this account's recordings from this phone start uploading.
     /// Signed out: they stop, and stay on the phone.
     private func uploadRecordings(of userID: String?) {
@@ -135,6 +147,8 @@ struct RootView: View {
             folder: account.recordings(for: userID), client: client, installID: InstallID.current(),
             isOpen: { RecordingFiles.isOpen($0) })
         queue.online = network.online
+        // 410: the account was deleted elsewhere; its recordings are gone.
+        queue.accountDeleted = { [account] in Task { await account.signOut() } }
         uploads = queue
         queue.start()
         // After every sign-in: the same phone for the same account and install.

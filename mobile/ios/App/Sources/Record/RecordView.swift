@@ -101,6 +101,12 @@ struct RecordView: View {
                     .foregroundStyle(Palette.fg)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("record-precise-off")
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                .font(.plexSans(.body, weight: .semibold))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("record-precise-settings")
             }
             BigButton(title: "Start", identifier: "record-start") {
                 Task {
@@ -124,18 +130,22 @@ struct RecordView: View {
             Text("Recording")
                 .font(.plexSans(.title3, weight: .semibold))
                 .foregroundStyle(Palette.fg)
+                .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("record-recording")
             if let started = model.startedAt {
                 TimelineView(.periodic(from: started, by: 1)) { context in
+                    let elapsed = context.date.timeIntervalSince(started)
                     VStack(alignment: .leading, spacing: 2) {
                         Eyebrow("TIME")
-                        Text(Format.clock(context.date.timeIntervalSince(started)))
-                            .font(.plexMono(.largeTitle, weight: .semibold))
+                        // Big enough to read on a deck mount at arm's length.
+                        Text(Format.clock(elapsed))
+                            .font(.plexMono(size: 80, relativeTo: .largeTitle, weight: .semibold))
                             .foregroundStyle(Palette.fg)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.5)
+                            .minimumScaleFactor(0.4)
                     }
-                    .accessibilityElement(children: .combine)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Time, \(Spoken.duration(elapsed))")
                     .accessibilityIdentifier("record-time")
                 }
             }
@@ -146,6 +156,10 @@ struct RecordView: View {
             StatView(
                 label: "STROKE RATE",
                 value: model.status.live.strokeRate.map { Format.strokeRate(Double($0)) } ?? "—", sub: nil
+            )
+            .accessibilityLabel(
+                model.status.live.strokeRate.map { "Stroke rate, \(Int($0.rounded())) strokes per minute" }
+                    ?? "Stroke rate, not measured yet"
             )
             .accessibilityIdentifier("record-stroke-rate")
             if !PhoneRecording.hasMotionSensors {
@@ -211,7 +225,7 @@ private struct BigButton: View {
 /// Stops only when held for 1.5 s, so a bump in a drybag doesn't end a
 /// paddle. A fill sweeps across while it's held; a tap says to keep holding;
 /// VoiceOver hears "Hold to stop" and has a "Stop recording" action that
-/// stops at once. The one filled danger control: the web's
+/// stops at once (the contract's words). The one filled danger control: the web's
 /// are outlined, but this one has to be found by feel.
 private struct HoldToStopButton: View {
     let stop: () -> Void
@@ -221,6 +235,12 @@ private struct HoldToStopButton: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            // Above the button and always there, so a tap never moves it.
+            Text("Keep holding to stop.")
+                .font(.plexSans(.subheadline))
+                .foregroundStyle(Palette.muted)
+                .opacity(hint ? 1 : 0)
+                .accessibilityHidden(!hint)
             Text("Hold to stop")
                 .font(.plexSans(.title3, weight: .semibold))
                 .foregroundStyle(Palette.bg)
@@ -245,17 +265,15 @@ private struct HoldToStopButton: View {
                 }
                 .sensoryFeedback(.success, trigger: stopped)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Stop")
-                .accessibilityHint("Hold to stop")
+                .accessibilityLabel("Hold to stop")
                 .accessibilityAddTraits(.isButton)
-                .accessibilityAction { hint = true }
+                .accessibilityAction {
+                    hint = true
+                    AccessibilityNotification.Announcement("Keep holding to stop, or use the Stop recording action.")
+                        .post()
+                }
                 .accessibilityAction(named: "Stop recording") { finish() }
                 .accessibilityIdentifier("record-stop")
-            if hint {
-                Text("Keep holding to stop.")
-                    .font(.plexSans(.subheadline))
-                    .foregroundStyle(Palette.muted)
-            }
         }
     }
 

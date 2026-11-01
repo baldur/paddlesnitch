@@ -38,7 +38,7 @@ struct UploadEdgeTests {
         #expect(await queue.pass() == UploadQueue.idle)
         #expect(names(in: folder).contains("track_20261101_070211.csv"))
         #expect(queue.state.refused.isEmpty)
-        #expect(queue.lines.map(\.text) == ["Uploading…"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
     }
 
     @Test func noNetworkMidFileWaitsAndKeepsTheFiles() async throws {
@@ -181,6 +181,30 @@ struct UploadEdgeTests {
         #expect(names(in: folder).contains("track_20261101_090000.csv"))
         queue.recording = false
         #expect(try await gone(folder))
+    }
+
+    /// 410: the account was deleted (on the website). Its recordings must
+    /// never upload: the folder goes, the queue stops, and the app signs out.
+    @Test(arguments: ["upload", "phone", "held"])
+    func aDeletedAccountsRecordingsAreDeletedNotUploaded(_ answeredBy: String) async throws {
+        let folder = try folder()
+        try record(in: folder, trackBytes: answeredBy == "held" ? 64 * 1024 + 1 : 300)
+        let gone = (410, Data(#"{"error":"This account was deleted.","accountDeleted":true}"#.utf8))
+        switch answeredBy {
+        case "phone": server.phoneAnswer = gone
+        case "held": server.heldAnswer = gone
+        default: server.answers["*"] = [gone]
+        }
+        let queue = queue(folder)
+        var signedOut = false
+        queue.accountDeleted = { signedOut = true }
+        await queue.pass()
+        #expect(signedOut)
+        #expect(!FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)))
+        #expect(server.files.isEmpty)
+        #expect(queue.lines.isEmpty)
+        await queue.pass()
+        #expect(!FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)))
     }
 
     private func gone(_ folder: URL) async throws -> Bool {

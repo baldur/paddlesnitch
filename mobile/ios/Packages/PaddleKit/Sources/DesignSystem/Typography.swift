@@ -50,4 +50,12 @@ extension Font {
     public static func plexMono(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
         .custom(FontFamily.mono, size: Typography.baseSize(style), relativeTo: style).weight(weight).monospacedDigit()
     }
+
+    /// Plex Mono at a size of its own (the record screen's clock), still
+    /// growing and shrinking with Dynamic Type as `style` does.
+    public static func plexMono(size: CGFloat, relativeTo style: Font.TextStyle, weight: Font.Weight = .regular)
+        -> Font
+    {
+        .custom(FontFamily.mono, size: size, relativeTo: style).weight(weight).monospacedDigit()
+    }
 }
