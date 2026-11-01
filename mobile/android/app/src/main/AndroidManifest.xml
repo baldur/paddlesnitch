@@ -3,6 +3,19 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Recording a paddle on the phone (record/RecordingService.kt, C3). A foreground
+         service of type location, started while the app is on screen, keeps GPS
+         going with the screen off with "while using the app" location only: no
+         background location. The wake lock keeps the sensors' batches coming. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+
     <!-- The tracker (docs/features/android-app.md, "Pairing and syncing the
          tracker"). CompanionDeviceManager does the finding, so no scan and no
          location permission: Android 12+ ask only to connect; 10-11 need the
@@ -80,6 +93,10 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

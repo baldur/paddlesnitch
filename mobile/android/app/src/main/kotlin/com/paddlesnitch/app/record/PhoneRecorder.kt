@@ -56,6 +56,10 @@ class PhoneRecorder(
     /** The core's live values after each tick; null when not recording. */
     val live: StateFlow<RecorderCore.Live?> = _live
 
+    /** Whether this recording has motion (both sensors delivering); false records GPS only. */
+    @Volatile var motion = false
+        private set
+
     /** The files being written, once started. */
     @Volatile var current: RecordingFiles? = null
         private set
@@ -117,6 +121,7 @@ class PhoneRecorder(
                 sensors.registerListener(sensorListener, accel, SAMPLE_US, MAX_LATENCY_US, handler) &&
                 sensors.registerListener(sensorListener, gyro, SAMPLE_US, MAX_LATENCY_US, handler)
             if (!motion) sensors.unregisterListener(sensorListener)
+            this.motion = motion
             val f = RecordingFiles.create(dir, now())
             files = f
             core = RecorderCore(has = RecorderCore.HAS_BATT_MV, motion = motion, lines = f::write)

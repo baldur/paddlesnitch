@@ -1,0 +1,144 @@
+package com.paddlesnitch.app.record
+
+import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
+import androidx.test.core.app.ApplicationProvider
+import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
+import com.github.takahirom.roborazzi.captureRoboImage
+import com.paddlesnitch.app.ui.PaddlesnitchTheme
+import com.paddlesnitch.app.ui.PsColor
+import java.util.TimeZone
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+// Paddles' lines for recordings that aren't paddles yet (README § After Stop), in the contract's words.
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+class UploadLinesTest {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Before fun utc() { TimeZone.setDefault(TimeZone.getTimeZone("UTC")) }
+
+    private val at = "2026-11-01T07:02:11Z"
+    private var uploadNow = 0
+    private val dismissed = mutableListOf<String>()
+    private var reports = 0
+
+    private fun show(lines: List<UploadLine>, online: Boolean = true, fontScale: Float = 1f, sending: String? = null) = compose.setContent {
+        val d = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
+            PaddlesnitchTheme { Surface(color = PsColor.bg) {
+                UploadLinesView(lines, online, sending, onUploadNow = { uploadNow++ }, onDismiss = { dismissed += it }, onReport = { reports++ })
+            } }
+        }
+    }
+    private fun golden(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.record.UploadLinesTest.$name.png")
+
+    // Lead, 2026-11-01: "Uploading…" only for the one being sent; the rest wait.
+    @Test fun onlyTheRecordingBeingSentSaysUploading() {
+        show(listOf(UploadLine.Waiting("a", at), UploadLine.Waiting("b", "2026-11-01T09:00:00Z")), sending = "a")
+        compose.onNodeWithText("1 Nov 2026, 07:02 · Uploading…").assertExists()
+        compose.onNodeWithText("1 Nov 2026, 09:00 · Waiting to upload.").assertExists()
+    }
+
+    @Test fun betweenRetriesEveryRecordingIsWaiting() {
+        show(listOf(UploadLine.Waiting("a", at)), sending = null)
+        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload.").assertExists()
+    }
+
+    @Test fun offlineItSaysWaitingToUpload() {
+        show(listOf(UploadLine.Waiting("a", at)), online = false, sending = "a")
+        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload.").assertExists()
+    }
+
+    @Test fun noFixSaysSoUntilDismissed() {
+        show(listOf(UploadLine.NoFix("track_a", at)))
+        compose.onNodeWithText("1 Nov 2026, 07:02 · $NO_FIX").assertExists()
+        compose.onNodeWithText("Dismiss").performClick()
+        assertEquals(listOf("track_a"), dismissed)
+    }
+
+    @Test fun aRefusedRecordingIsKeptAndCanBeReportedOrDismissed() {
+        show(listOf(UploadLine.Failed("a", at)))
+        compose.onNodeWithText("1 Nov 2026, 07:02 · $UPLOAD_FAILED").assertExists()
+        compose.onNodeWithText("Report an issue").performClick()
+        assertEquals(1, reports)
+        compose.onNodeWithText("Dismiss").performClick()
+        assertEquals(listOf("a"), dismissed)
+    }
+
+    @Test fun dismissingARefusedRecordingHidesTheLineAndKeepsTheFiles() {
+        val dir = java.nio.file.Files.createTempDirectory("acct").toFile()
+        java.io.File(dir, "track_20261101_070211.csv").writeText("x")
+        java.io.File(dir, "track_20261101_070211.failed").writeText("")
+        assertEquals(1, PhoneUploader.lines(dir, null).size)
+        PhoneUploader.dismiss(dir, "track_20261101_070211")
+        assertEquals(emptyList<UploadLine>(), PhoneUploader.lines(dir, null))
+        assertEquals(true, java.io.File(dir, "track_20261101_070211.csv").exists())
+        assertEquals(emptyList<String>(), PhoneUploader.waiting(dir, null))   // and never retried
+        dir.deleteRecursively()
+    }
+
+    // Every line about recordings is a sentence with a full stop (README § Where recordings live).
+    @Test fun everyLineEndsAsASentence() {
+        listOf(NO_FIX, UPLOAD_FAILED, PHONE_REMOVED, waitingCount(1), waitingCount(2), PhoneUploader.PHONE_NOT_ADDED).forEach {
+            assertEquals(it, true, it.endsWith("."))
+        }
+        assertEquals("1 recording is waiting.", waitingCount(1))
+        assertEquals("2 recordings are waiting.", waitingCount(2))
+    }
+
+    @Test fun aRemovedPhoneIsOneLineWithTheCountAndAddPhoneAgain() {
+        show(listOf(UploadLine.PhoneOff(null, 2)))
+        compose.onNodeWithText("This phone was removed from your account. 2 recordings are waiting.").assertExists()
+        compose.onNodeWithText("Add phone again").performClick()
+        assertEquals(1, uploadNow)
+    }
+
+    @Test fun aPhoneTheServerWouldntAddSaysWhyInItsWords() {
+        show(listOf(UploadLine.PhoneOff("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.", 1)))
+        compose.onNodeWithText("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again. 1 recording is waiting.").assertExists()
+        compose.onNodeWithText(PHONE_REMOVED).assertDoesNotExist()
+    }
+
+    @Test fun everyKindOfLine() {
+        show(listOf(UploadLine.Waiting("a", at), UploadLine.Waiting("d", at), UploadLine.NoFix("b", at), UploadLine.Failed("c", at)), sending = "a")
+        golden("all")
+    }
+
+    @Test fun everyKindOfLineAtLargeText() {
+        show(listOf(UploadLine.PhoneOff(null, 2), UploadLine.NoFix("b", at), UploadLine.Failed("c", at)), fontScale = 2f)
+        golden("all.large-text")
+    }
+
+    // Made once per install, in the contract's alphabet, and never the hardware's id.
+    @Test fun theInstallIdIsRandomAndKept() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val id = Uploads.installId(app)
+        assertEquals(true, id.matches(Regex("[A-Za-z0-9_-]{16,64}")))
+        assertEquals(id, Uploads.installId(app))
+        app.getSharedPreferences("phone", 0).edit().clear().commit()
+        assertNotEquals(id, Uploads.installId(app))
+    }
+
+    @Test fun theInstallIdStaysOutOfBackupsAndTransfers() {
+        val rules = java.io.File("src/main/res/xml/data_extraction_rules.xml").readText()
+        assertEquals(2, Regex("""<exclude domain="sharedpref" path="phone.xml" />""").findAll(rules).count())
+    }
+}

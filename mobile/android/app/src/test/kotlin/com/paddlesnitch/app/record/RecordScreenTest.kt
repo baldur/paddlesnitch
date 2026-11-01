@@ -49,12 +49,20 @@ class RecordScreenTest {
     private val now = { 1_000L + 3_903_000L }
 
     private fun show(state: RecordingService.State, fontScale: Float = 1f, onStart: () -> Unit = {}, onStop: () -> Unit = {},
-                     onSettings: () -> Unit = {}, notificationsOn: Boolean = true) = compose.setContent {
+                     onSettings: () -> Unit = {}, notificationsOn: Boolean = true, location: LocationReady = LocationReady.Ready,
+                     onLocationSettings: () -> Unit = {}) = compose.setContent {
         val d = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-            PaddlesnitchTheme { Surface(color = PsColor.bg) { RecordScreen(state, onStart, onStop, onSettings = onSettings, notificationsOn = notificationsOn, now = now) } }
+            PaddlesnitchTheme { Surface(color = PsColor.bg) {
+                RecordScreen(state, onStart, onStop, location = location, onSettings = onSettings, onLocationSettings = onLocationSettings,
+                    notificationsOn = notificationsOn, now = now)
+            } }
         }
     }
+
+    /** TalkBack's named action on Hold to stop (README § Recording screen). */
+    private fun stopRecordingAction() = compose.onNodeWithContentDescription("Hold to stop").fetchSemanticsNode()
+        .config[SemanticsActions.CustomActions].single { it.label == "Stop recording" }
 
     private fun golden(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.record.RecordScreenTest.$name.png")
 
@@ -100,11 +108,38 @@ class RecordScreenTest {
         assertEquals(1, stops)
     }
 
-    @Test fun talkBackStopsItWithALongPressAction() {
+    @Test fun talkBackStopsItWithANamedStopRecordingAction() {
         var stops = 0
         show(recording, onStop = { stops++ })
-        compose.onNodeWithContentDescription("Hold to stop").performSemanticsAction(SemanticsActions.OnLongClick)
+        stopRecordingAction().action()
         assertEquals(1, stops)
+    }
+
+    @Test fun whileRecordingTheHeadingSaysRecording() {
+        show(recording)
+        compose.onNodeWithText("Recording").assertExists()
+    }
+
+    @Test fun aFailedWriteShowsInPlaceOfTheHeading() {
+        val broken = RecordingFiles(File.createTempFile("track_20261031_091407", ".csv"), File.createTempFile("i10", ".csv"))
+        broken.close()
+        broken.write(RecorderCore.TRACK, "1,2,3\n".toByteArray())   // after close: the write fails, as on a full phone
+        show(RecordingService.State.Recording(broken, MutableStateFlow(notReady), startedAt = 1_000L))
+        compose.onNodeWithText(WRITE_FAILED).assertExists()
+        compose.onNodeWithText("Recording").assertDoesNotExist()
+        golden("recording.write-failed")
+    }
+
+    @Test fun withoutMotionSensorsItRecordsAndSaysThereIsNoStrokeRate() {
+        show(recording.copy(motion = false))
+        compose.onNodeWithText(NO_MOTION_SENSORS).assertExists()
+        compose.onNodeWithContentDescription("Hold to stop").assertExists()
+        golden("recording.no-motion")
+    }
+
+    @Test fun withMotionSensorsTheresNoSuchLine() {
+        show(recording)
+        compose.onNodeWithText(NO_MOTION_SENSORS).assertDoesNotExist()
     }
 
     @Test fun withNotificationsOffItSaysStopHere() {
@@ -117,31 +152,52 @@ class RecordScreenTest {
         golden("recording.large-text")
     }
 
-    @Test fun afterStoppingItSaysHowLong() {
-        show(RecordingService.State.Stopped(files, elapsedMs = 3_903_000L))
-        compose.onNodeWithText("Recording saved on this phone (1:05:03).").assertExists()
-        golden("stopped")
-    }
-
     @Test fun whileStartingTheButtonWaits() {
         var started = 0
         show(RecordingService.State.Starting, onStart = { started++ })
         compose.onNodeWithText("Start recording…").assertIsNotEnabled()
     }
 
-    @Test fun withoutLocationItSaysSoAndOpensSettings() {
+    @Test fun refusingLocationAtStartSaysSoInPlaceOfStart() {
         var settings = 0
         show(RecordingService.State.Failed(locationRefused = true), onSettings = { settings++ })
         compose.onNodeWithText(RECORD_LOCATION_REFUSED).assertExists()
-        golden("failed")
-        compose.onNodeWithText("Open the app’s settings").performClick()
+        compose.onNodeWithText("Start recording").assertDoesNotExist()
+        golden("location-refused")
+        compose.onNodeWithText("Open Settings").performClick()
         assertEquals(1, settings)
+    }
+
+    @Test fun beforeStartWithLocationRefusedItSaysSoInPlaceOfStart() {
+        show(RecordingService.State.Idle, location = LocationReady.Refused)
+        compose.onNodeWithText(RECORD_LOCATION_REFUSED).assertExists()
+        compose.onNodeWithText("Open Settings").assertExists()
+        compose.onNodeWithText("Start recording").assertDoesNotExist()
+    }
+
+    @Test fun withLocationOffItSaysSoAndOpensLocationSettings() {
+        var opened = 0
+        show(RecordingService.State.Idle, location = LocationReady.Off, onLocationSettings = { opened++ })
+        compose.onNodeWithText(LOCATION_OFF).assertExists()
+        compose.onNodeWithText("Start recording").assertDoesNotExist()
+        golden("location-off")
+        compose.onNodeWithText("Open location settings").performClick()
+        assertEquals(1, opened)
+    }
+
+    @Test fun aFailedWriteAtLargeText() {
+        val broken = RecordingFiles(File.createTempFile("track_20261031_091407", ".csv"), File.createTempFile("i10", ".csv"))
+        broken.close()
+        broken.write(RecorderCore.TRACK, "1,2,3\n".toByteArray())
+        show(RecordingService.State.Recording(broken, MutableStateFlow(notReady), startedAt = 1_000L), fontScale = 2f)
+        golden("recording.write-failed.large-text")
     }
 
     @Test fun anotherFailureDoesntBlameLocation() {
         show(RecordingService.State.Failed(locationRefused = false))
+        golden("start-failed")
         compose.onNodeWithText(RECORD_FAILED).assertExists()
-        compose.onNodeWithText("Open the app’s settings").assertDoesNotExist()
+        compose.onNodeWithText("Open Settings").assertDoesNotExist()
     }
 
     @Test fun paddlesSaysARecordingIsRunning() {
@@ -156,13 +212,15 @@ class RecordScreenTest {
         compose.onNodeWithText("Record a paddle").assertExists()
     }
 
-    // Release builds don't record yet (no upload until C3): recording's permissions and
-    // service are in the debug manifest only. (MapLibre's own manifest still adds location.)
-    @Test fun recordingIsDeclaredForDebugBuildsOnly() {
+    // C3: recording ships in release, so the app declares its own location and the
+    // location service in the main manifest, and no overlay removes them from release.
+    @Test fun recordingIsDeclaredForEveryBuild() {
         val main = File("src/main/AndroidManifest.xml").readText()
-        listOf("ACCESS_FINE_LOCATION", "FOREGROUND_SERVICE_LOCATION", "RecordingService").forEach {
-            assertEquals("$it in the main manifest", false, main.contains(it))
+        listOf("ACCESS_FINE_LOCATION", "FOREGROUND_SERVICE_LOCATION", "RecordingService", "foregroundServiceType=\"location\"").forEach {
+            assertEquals("$it in the main manifest", true, main.contains(it))
         }
+        assertEquals("no release overlay", false, File("src/release/AndroidManifest.xml").exists())
+        assertEquals("nothing for recording in the debug manifest", false, File("src/debug/AndroidManifest.xml").readText().contains("LOCATION"))
     }
 
     private fun lost(s: Float) = notReady.copy(fix = false, sinceFixS = s)
@@ -204,6 +262,14 @@ class RecordScreenTest {
         compose.onNodeWithContentDescription("Waiting for GPS").assertExists()
     }
 
+    // Lead, 2026-11-01: waiting for the first fix is muted; only a lost fix is red.
+    @Test fun onlyALostFixIsRed() {
+        assertEquals(false, gpsLost(null))
+        assertEquals(false, gpsLost(notReady))
+        assertEquals(false, gpsLost(fixed))
+        assertEquals(true, gpsLost(lost(0.4f)))
+    }
+
     @Test fun theStrokeRateIsTheCoresOrADash() {
         assertEquals("—", liveStrokeRate(null))
         assertEquals("—", liveStrokeRate(notReady))
@@ -213,11 +279,12 @@ class RecordScreenTest {
     // A refused token refresh signs out by itself (#702), mid-paddle as easily as not.
     private var signedIn by mutableStateOf(true)
 
-    private fun showApp(canRecord: Boolean = true) = compose.setContent {
+    private fun showApp() = compose.setContent {
         PaddlesnitchTheme {
             Surface(color = PsColor.bg) {
-                WithRecording(signedIn = signedIn, canRecord = canRecord, record = { Record(accountId = { "u-77" }) }) { entry ->
+                WithRecording(signedIn = signedIn, record = { Record(accountId = { "u-77" }) }) { entry, bar ->
                     Column {
+                        bar?.invoke()
                         Text(if (signedIn) "Your paddles" else "Sample paddles")
                         entry?.invoke()
                     }
@@ -236,7 +303,7 @@ class RecordScreenTest {
         signedIn = false
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Hold to stop").assertExists()
-        compose.onNodeWithContentDescription("Hold to stop").performSemanticsAction(SemanticsActions.OnLongClick)
+        stopRecordingAction().action()
         val app = compose.activity.application
         assertEquals(RecordingService.ACTION_STOP, org.robolectric.Shadows.shadowOf(app).nextStartedService?.action)
     }
@@ -256,10 +323,41 @@ class RecordScreenTest {
         compose.onNodeWithText("Record a paddle").assertDoesNotExist()
     }
 
-    @Test fun releaseBuildsNeverOfferRecord() {
+    @Test fun hideHidesTheScreenAndTheLineAtTheTopLeadsBackToTheRecording() {
         RecordingService.set(recording)
-        showApp(canRecord = false)
+        showApp()
+        compose.onNodeWithText("Recording ·", substring = true).performClick()
+        compose.onNodeWithText("Recording carries on.").assertExists()
+        compose.onNodeWithText("Hide").performClick()
+        compose.onNodeWithText("Your paddles").assertExists()
+        assertEquals("still recording", recording, RecordingService.state.value)
+        compose.onNodeWithText("Recording ·", substring = true).performClick()
+        compose.onNodeWithContentDescription("Hold to stop").assertExists()
+    }
+
+    @Test fun whileRecordingTheLineIsAtTheTopNotInPaddles() {
+        RecordingService.set(recording)
+        showApp()
         compose.onNodeWithText("Record a paddle").assertDoesNotExist()
+        assertEquals(1, compose.onAllNodes(androidx.compose.ui.test.hasText("Recording ·", substring = true)).fetchSemanticsNodes().size)
+    }
+
+    @Test fun withNothingRecordingThereIsNoLineAtTheTopAndCloseGoesBack() {
+        showApp()
         compose.onNodeWithText("Recording ·", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Record a paddle").performClick()
+        compose.onNodeWithText("Hide").assertDoesNotExist()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Your paddles").assertExists()
+    }
+
+    @Test fun stoppingGoesBackToPaddles() {
+        RecordingService.set(recording)
+        showApp()
+        compose.onNodeWithText("Recording ·", substring = true).performClick()
+        RecordingService.set(RecordingService.State.Stopped(files, elapsedMs = 3_903_000L))
+        compose.waitForIdle()
+        compose.onNodeWithText("Your paddles").assertExists()
+        compose.onNodeWithText("Record a paddle").assertExists()
     }
 }

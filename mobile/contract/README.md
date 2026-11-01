@@ -411,8 +411,10 @@ Both apps, laid out the same (design-usability, #767):
 - Location off on the phone: "Location is off on this phone. Turn it on to record."
   with the button "Open location settings" (Android) or "Open Settings" (iPhone,
   which can only open the app's own page).
-- No location permission (or not all the time): "Recording needs your location
-  all the time. Allow it in Settings." with the button "Open Settings".
+- No location permission: iPhone (needs Always): "Recording needs your location
+  all the time. Allow it in Settings."; Android (While using the app, with the
+  foreground service; never asks for background location): "Recording needs your
+  location. Allow it in Settings." Both with the button "Open Settings".
 - Above Start: "Records your route and boat motion. Each recording uploads after
   you stop it."
 - A failed write, in place of the heading: "Couldn’t save the rest of this
