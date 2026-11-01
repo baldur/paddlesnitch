@@ -2,12 +2,17 @@
 // The header's user comes from the server with the page (#411): who, without
 // the email, and "can't tell" (so the header asks) rather than a wrong
 // "signed out" when a session cookie couldn't be confirmed.
-import { describe, it, expect, vi } from 'vitest'
-import { makeUser } from './helpers'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { makeUser, makeDataDir, cleanDataDir } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import { cookies } from 'next/headers'
 import { sessionUser } from '@/lib/session-user'
+
+// Every sign-in check reads the deleted-account marker (#795).
+let dataDir: string
+beforeEach(async () => { dataDir = await makeDataDir() })
+afterEach(async () => { await cleanDataDir(dataDir) })
 
 function withCookies(c: Record<string, string>) {
   vi.mocked(cookies).mockResolvedValue({

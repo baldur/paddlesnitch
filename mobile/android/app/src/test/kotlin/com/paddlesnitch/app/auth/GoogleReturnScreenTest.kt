@@ -14,7 +14,6 @@ import com.paddlesnitch.app.api.SignInOptions
 import com.paddlesnitch.app.ui.PaddlesnitchTheme
 import com.paddlesnitch.app.ui.PsColor
 import java.io.File
-import kotlinx.coroutines.CompletableDeferred
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -45,7 +44,7 @@ class GoogleReturnScreenTest {
 
     private fun show(back: String, options: suspend () -> SignInOptions = { SignInOptions(google = true, strava = false) }) = compose.setContent {
         PaddlesnitchTheme { Surface(color = PsColor.bg) {
-            SignInScreen(api, StravaSignIn(api, verifiers), null, onReturnHandled = {}, google = GoogleSignIn(api, verifiers),
+            SignInScreen(api, google = GoogleSignIn(api, verifiers),
                 googleReturn = Uri.parse(back), onGoogleReturnHandled = { handled++ }, onSignedIn = { signedIn += it }, onCancel = {},
                 loadOptions = options)
         } }
@@ -69,13 +68,10 @@ class GoogleReturnScreenTest {
         compose.onNodeWithTag("signin-error").onChildren().assertCountEquals(0)
     }
 
-    @Test fun theErrorWaitsForTheStravaSwitchBeforeChoosingItsWords() {
-        // The app was killed while the browser was open: the return is there before the options.
+    // Strava is gone: an older server's strava: true never brings it back into the words.
+    @Test fun theErrorNeverOffersStrava() {
         verifiers.put("v-1")
-        val options = CompletableDeferred<SignInOptions>()
-        show("com.paddlesnitch.app:/signin/google?error=google_account_exists", { options.await() })
-        compose.waitForIdle()
-        options.complete(SignInOptions(google = true, strava = true))
-        waitFor("You already have an account with this email. Sign in with your email or Strava instead.")
+        show("com.paddlesnitch.app:/signin/google?error=google_account_exists", { SignInOptions(google = true, strava = true) })
+        waitFor("You already have an account with this email. Sign in with your email instead.")
     }
 }

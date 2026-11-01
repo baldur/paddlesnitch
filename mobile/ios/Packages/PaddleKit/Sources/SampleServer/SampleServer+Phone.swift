@@ -50,15 +50,6 @@ extension SampleServer {
         return try JSONEncoder.paddlesnitch.encode(list)
     }
 
-    /// The phone's paddle, opened from the list: the sample paddle, from the
-    /// phone (`source.phone`, #789).
-    func phonePaddle() throws -> Data {
-        var paddle = try JSONDecoder.paddlesnitch.decode(AnalysisSession.self, from: try fixture("paddles.get"))
-        paddle.id = "pdl-phone"
-        paddle.source.phone = true
-        return try JSONEncoder.paddlesnitch.encode(paddle)
-    }
-
     func phone(path: String, request: URLRequest) throws -> (Int, Data) {
         guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
             return (401, try fixture("account.error"))

@@ -192,12 +192,12 @@ struct RecordView: View {
     }
 
     /// Not a live region: VoiceOver hears a change once (RecordModel).
-    /// "Waiting for GPS" muted; only "GPS lost…" red.
+    /// Muted ("Waiting for GPS", "GPS fix"); only "GPS lost…" red.
     private var gpsLine: some View {
         let gps = GPSLine(model.status.live)
         return Text(gps.text)
             .font(.plexSans(.body))
-            .foregroundStyle(gps.state == .fix ? Palette.green : gps.state == .lost ? Palette.red : Palette.muted)
+            .foregroundStyle(gps.isWarning ? Palette.red : Palette.muted)
             .accessibilityLabel(gps.label)
             .accessibilityIdentifier("record-gps")
     }

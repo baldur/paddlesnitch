@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // The app is always dark, so the status bar's icons are always light.
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-        // Only a fresh start: after a rotation it's already dealt with (and a Strava code is spent).
+        // Only a fresh start: after a rotation it's already dealt with (and a sign-in code is spent).
         if (savedInstanceState == null) incoming.value = read(intent)
         setContent { PaddlesnitchTheme { App(incoming) } }
     }

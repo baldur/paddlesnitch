@@ -235,7 +235,7 @@ Maps: dark tiles (Esri World Dark Gray); Trials course maps default to dark with
 
 ### Writing for the site
 
-Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed; add to its list when you retire a word.
+Plain words, one name per thing. `apps/web/src/lib/copy-style.test.ts` fails on phrases we removed, on the site and in both apps' strings (Kotlin, Swift, `strings.xml`); add to its list when you retire a word.
 
 1. **One name per thing:** Trials (URL `/att`), Paddles, Plan (`/plan`), Devices, Profile, Account — never "Settings", "My …", "Analyse" (as a place), "library", "ATT/ATTS". A paddle, a tracker (not "device" in prose), a recording (from a tracker or a phone), an effort, a rest, a section, stroke rate (not cadence), add/remove (not link/pair/revoke).
 2. **Buttons:** 1–3 sentence-case words that say what happens (Save, Add paddle, Remove tracker). Loading = same verb + "…". No emoji.

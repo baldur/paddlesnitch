@@ -161,7 +161,7 @@ async function narrate(
       ...ctx,
       profile: profile?.text,
       historyFacts: renderHistoryFacts(computeHistoryStats(currentFacts, prior, now)),
-      relevant: renderRelevant(selectRelevantPaddles(currentFacts, prior)),
+      relevant: renderRelevant(selectRelevantPaddles(currentFacts, prior), currentFacts),
     }
   } catch (err) { console.error('[analyse] memory context failed', err) }
 

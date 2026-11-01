@@ -1,6 +1,7 @@
 package com.paddlesnitch.app.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
@@ -20,7 +21,13 @@ private val scheme = darkColorScheme(
     error = PsColor.red,
 )
 
+/**
+ * Text fields (and M3's other small controls) read extraSmall: the tokens' control radius,
+ * as the website's inputs (#793). Buttons ignore Shapes; they get ControlShape in Buttons.kt.
+ */
+val PsShapes = Shapes(extraSmall = ControlShape)
+
 @Composable
 fun PaddlesnitchTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = plexTypography(), content = content)
+    MaterialTheme(colorScheme = scheme, shapes = PsShapes, typography = plexTypography(), content = content)
 }

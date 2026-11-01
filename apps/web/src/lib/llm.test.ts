@@ -52,7 +52,7 @@ describe('buildPrompt', () => {
 
   it('surfaces distance-per-stroke efficiency + overall consistency for the coach to value', () => {
     const p = buildPrompt({ ...result(), srCv: 8 })
-    expect(p).toContain('distance per stroke — efficiency')
+    expect(p).toContain('(distance per stroke)')
     expect(p).toContain('Stroke-rate consistency')
     expect(p).toContain('8% variation')
   })
@@ -65,6 +65,17 @@ describe('buildPrompt', () => {
 
   it('steers kayak vocabulary', () => {
     expect(buildPrompt(result(), { sport: 'Kayaking' })).toContain('Sport: KAYAKING')
+  })
+
+  it('writes an old "fading" effort as "slowed" (the site never says faded)', () => {
+    const r = { ...result(), surges: [{ fromT: 60, durS: 120, avgSpeed: 3, avgSR: 60, srCv: 3, trend: 'fading' }] } as unknown as AnalysisResult
+    expect(buildPrompt(r)).toMatch(/pace 2:47\/500, 60 spm \(3% variation\), slowed\./)
+    expect(buildPrompt(r)).not.toContain('fading')
+  })
+
+  it('gives the total rest time, so the model never adds rests up itself', () => {
+    const p = buildPrompt({ ...result(), stops: [{ fromT: 600, durS: 90 }, { fromT: 1500, durS: 150 }] } as unknown as AnalysisResult)
+    expect(p).toContain('Rests: 2, 4 minutes in total (10:00 for 90s, 25:00 for 150s).')
   })
 
   it('omits the sport line when the sport is unknown', () => {
