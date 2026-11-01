@@ -156,6 +156,49 @@ int main(void)
     rcs_trace(&st, 1000 + 7000, 1000, &tr);
     check(tr.status == RC_TRACE_NO_SAMPLES, "no sample yet, 7 s in: no_samples");
 
+    /* Moving, then laid down: still once the last 10 s are, though the
+       ring still holds the moving samples (and back again). */
+    rcs_init(&st);
+    uint32_t ms = 0;
+    for (; ms < 10000; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 3.0f : -3.0f, 0.0f);
+    for (; ms < 20080; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 0.1f : -0.1f, 0.0f);
+    rcs_trace(&st, ms - 80, 0, &tr);
+    check(st.ring_n > tr.n && tr.status == RC_TRACE_STILL, "moving, then 10 s laid down: still (the older motion isn't counted)");
+    for (uint32_t end = ms + 400; ms < end; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 30.0f : -30.0f, 0.0f);
+    rcs_trace(&st, ms - 80, 0, &tr);
+    check(tr.status == RC_TRACE_MOTION, "picked up again: motion within half a second");
+
+    /* Exactly 1 deg/s rms (+-1 over an even count) is motion: still is under it. */
+    rcs_init(&st);
+    for (ms = 0; ms < 124 * 80; ms += 80) rcs_sample(&st, &cfg, ms, (ms / 80) % 2 ? 1.0f : -1.0f, 0.0f, 0.0f);
+    rcs_trace(&st, ms - 80, 0, &tr);
+    check(tr.n == 124 && tr.status == RC_TRACE_MOTION, "exactly 1 deg/s rms: motion");
+
+    /* One sample alone: still. */
+    rcs_init(&st);
+    rcs_sample(&st, &cfg, 0, 0.0f, 50.0f, 0.0f);
+    rcs_trace(&st, 0, 0, &tr);
+    check(tr.n == 1 && tr.status == RC_TRACE_STILL && tr.dps[0] == 0.0f, "one sample: still, drawn at 0");
+
+    /* The 7 s count from the newest sample, not the start: samples 0-1 s, a
+       late start at 2 s, nothing since; at 8 s it's 7 s without one. */
+    rcs_init(&st);
+    for (ms = 0; ms <= 1000; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, 0.0f, 0.0f);
+    rcs_trace(&st, 960 + 6999, 2000, &tr);
+    check(tr.status == RC_TRACE_STILL, "6.999 s after the newest sample, a later start: still");
+    rcs_trace(&st, 960 + 7000, 2000, &tr);
+    check(tr.status == RC_TRACE_NO_SAMPLES, "7 s after the newest sample, though 5.96 s after a later start: no_samples");
+
+    /* RC_TRACE_MAX: the gate makes 125 the most, but if samples ever came
+       closer, the newest 128 are kept, never more. */
+    rcs_init(&st);
+    for (uint32_t i = 0; i < 200; i++) {
+        st.ring[i].ms = i * 50u; st.ring[i].gx = 0.0f; st.ring[i].gy = i % 2 ? 2.0f : -2.0f; st.ring[i].gz = 0.0f;
+    }
+    st.ring_head = 0; st.ring_n = 200;
+    rcs_trace(&st, 199u * 50u, 0, &tr);
+    check(tr.n == RC_TRACE_MAX && tr.ago_ms[RC_TRACE_MAX - 1] == 0 && tr.ago_ms[0] == 127u * 50u, "never more than 128, the newest kept");
+
     /* Across the 2^32 ms wrap. */
     rcs_init(&st);
     uint32_t w0 = 0xFFFFFFFFu - 5000u;

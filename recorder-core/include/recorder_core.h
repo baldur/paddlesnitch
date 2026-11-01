@@ -168,10 +168,12 @@ typedef struct {
  */
 typedef enum {
     RC_TRACE_STARTING   = 0, /* no sample yet, under 7 s into the recording    */
-    RC_TRACE_NO_SAMPLES = 1, /* none for 7 s: the sensors stopped (or never
-                                started). n is 0                               */
-    RC_TRACE_STILL      = 2, /* samples arriving, under 1 deg/s rms: the
-                                device is lying still                          */
+    RC_TRACE_NO_SAMPLES = 1, /* none for 7 s (since the newest sample, or
+                                the start): the sensors stopped, or never
+                                started. n is 0                                */
+    RC_TRACE_STILL      = 2, /* samples arriving, under 1 deg/s rms over the
+                                10 s drawn: the device is lying still (one
+                                sample alone reads still)                      */
     RC_TRACE_MOTION     = 3  /* the sensors see movement                       */
 } rc_trace_status;
 

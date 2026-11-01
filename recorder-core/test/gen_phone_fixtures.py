@@ -283,7 +283,7 @@ def trace_after_ticks(t0, ks, tick_ns, ev):
     for k in ks:
         ev.append((t0 + k * 1_000_000_000 + tick_ns, 2, "trace"))
 
-# Flat: lying on a table, ~0.2 deg/s of sensor noise, then both sensors stop.
+# Flat: lying on a table, ~0.13 deg/s rms of sensor noise, then both stop.
 t0 = 5_000_000_000_000
 ev = motion(t0, 20, 50, 25, 40_000_000,
             lambda i, s: (0.004 * noise(i, 4), 0.004 * noise(i, 5), 0.004 * noise(i, 6)),
@@ -292,9 +292,9 @@ ticks(t0, 30, 500_000_000, ev)
 trace_after_ticks(t0, (3, 12, 20, 26, 28, 30), 500_000_000, ev)
 write("trace_phone_flat",
       "# Live trace, a phone lying flat: starting before any sample; still while\n"
-      "# the gyroscope reads only noise (~0.2 deg/s rms), drawn on the 5 deg/s\n"
-      "# floor; both sensors stop at 20 s: still, the last 10 s held, until 7 s\n"
-      "# without a sample (26.5 s), then no_samples with nothing to draw.\n"
+      "# the gyroscope reads only noise (~0.13 deg/s rms), drawn on the 5 deg/s\n"
+      "# floor; both sensors stop at 20 s: still at 26.5 s (6.5 s without a\n"
+      "# sample, the last 10 s held), no_samples at 28.5 s, nothing to draw.\n"
       "phone,android,,1\ntrace\n",
       ev, "finish\nexpect,dropped_late,0,dropped_unpaired,1\n")
 

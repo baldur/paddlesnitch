@@ -589,10 +589,10 @@ void rcs_trace(const rc_stroke *s, uint32_t now_ms, uint32_t start_ms, rc_trace 
     out->n = 0;
     out->axis = -1;
     out->scale_dps = SCALE_FLOOR_DPS;
-    /* The last sign of life: the newest sample, or the recording's start. */
+    /* The last sign of life: the newest sample; before any, the recording's
+       start (a sample before the first tick still counts from itself). */
     uint32_t newest = s->ring_n ? held(s, s->ring_n - 1)->ms : start_ms;
-    uint32_t last = s->ring_n && after(newest, start_ms) ? newest : start_ms;
-    if (after(now_ms, last) && now_ms - last >= NO_SAMPLES_MS) { out->status = RC_TRACE_NO_SAMPLES; return; }
+    if (after(now_ms, newest) && now_ms - newest >= NO_SAMPLES_MS) { out->status = RC_TRACE_NO_SAMPLES; return; }
     if (!s->ring_n) { out->status = RC_TRACE_STARTING; return; }
 
     /* The ring always holds the last 10 s: the series windows (15 s every
@@ -615,5 +615,6 @@ void rcs_trace(const rc_stroke *s, uint32_t now_ms, uint32_t start_ms, rc_trace 
     out->n = n;
     out->axis = a;
     if (peak > out->scale_dps) out->scale_dps = peak;
+    /* One sample has no spread: still, whatever the device is doing. */
     out->status = sqrtf(ss / (float)n) < STILL_DPS ? RC_TRACE_STILL : RC_TRACE_MOTION;
 }

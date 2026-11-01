@@ -1,7 +1,7 @@
 # Live trace, a phone lying flat: starting before any sample; still while
-# the gyroscope reads only noise (~0.2 deg/s rms), drawn on the 5 deg/s
-# floor; both sensors stop at 20 s: still, the last 10 s held, until 7 s
-# without a sample (26.5 s), then no_samples with nothing to draw.
+# the gyroscope reads only noise (~0.13 deg/s rms), drawn on the 5 deg/s
+# floor; both sensors stop at 20 s: still at 26.5 s (6.5 s without a
+# sample, the last 10 s held), no_samples at 28.5 s, nothing to draw.
 phone,android,,1
 trace
 accel,5000000000000,-0.124381134,-0.185500711,9.716207248

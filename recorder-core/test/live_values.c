@@ -149,5 +149,27 @@ int main(void)
     rc_phone_trace(&g_phone, &tr);
     check(tr.status == RC_TRACE_NO_SAMPLES && tr.n == 0, "no gyroscope, 7 s after the first tick: no_samples");
 
+    /* Samples before any tick count from themselves, on a phone up for
+       about 35 days (its ms clock past 2^31, so a 0 "now" would read as 7 s
+       and more after them). Then ticks, then the sensors stop. */
+    rc_phone_config both = { discard, 0, RC_PHONE_ANDROID, 0, 1 };
+    rc_phone_init(&g_phone, &both);
+    const int64_t T0 = 3000000000LL * 1000000LL;      /* 3e9 ms */
+    for (int i = 0; i < 100; i++) {
+        int64_t t = T0 + (int64_t)i * 20000000LL;    /* 50 Hz, 2 s */
+        double w = (i / 5) % 2 ? 0.5 : -0.5;         /* rad/s, swinging */
+        rc_phone_gyro(&g_phone, t, 0.0, w, 0.0);
+        rc_phone_accel(&g_phone, t + 1000000LL, 0.0, 0.0, 9.80665);
+    }
+    rc_phone_trace(&g_phone, &tr);
+    check(tr.status == RC_TRACE_MOTION && tr.n > 0 && tr.axis == 1, "samples before the first tick, clock past 2^31 ms: motion");
+    rc_phone_tick(&g_phone, T0 + 2000000000LL, 0);
+    rc_phone_tick(&g_phone, T0 + 8900000000LL, 0);
+    rc_phone_trace(&g_phone, &tr);
+    check(tr.status == RC_TRACE_MOTION, "6.9 s after the last sample, by the ticks: still drawn");
+    rc_phone_tick(&g_phone, T0 + 9100000000LL, 0);
+    rc_phone_trace(&g_phone, &tr);
+    check(tr.status == RC_TRACE_NO_SAMPLES, "7.1 s after the last sample: no_samples");
+
     return g_fails ? 1 : 0;
 }
