@@ -188,3 +188,11 @@ isn't obvious from the code.
   (the Makefile's `DERIVED`, gitignored), never `build/DerivedData`: that one
   isn't ignored, `git add -A` takes thousands of files, and GitHub refuses
   the push. Stage paths by name.
+- Buttons take `.buttonBorderShape(.control)` (the token radius; iOS 26
+  draws bordered buttons as pills). It's set on the window, but a sheet or
+  full-screen cover doesn't inherit it: put it on each new one with app
+  buttons. `ButtonShapeTests` (UI) reads a real button's corner pixels;
+  `ButtonBorderShape.path` outside a button is a plain rectangle, so a
+  unit test can't check the shape.
+  System chrome keeps the system's shape on purpose (design-usability,
+  #793): navigation-bar buttons (Cancel, Close) and the segmented picker.
