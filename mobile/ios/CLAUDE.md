@@ -188,3 +188,9 @@ isn't obvious from the code.
   (the Makefile's `DERIVED`, gitignored), never `build/DerivedData`: that one
   isn't ignored, `git add -A` takes thousands of files, and GitHub refuses
   the push. Stage paths by name.
+- Read a frame of something that comes and goes (the keyboard) with
+  `frameIfThere`, never `exists` then `.frame`: it can go in between and
+  XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
+  "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
+  unless it repeats, then reset the simulator before the CI run, never a
+  retry (lead).
