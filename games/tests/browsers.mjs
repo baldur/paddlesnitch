@@ -273,6 +273,62 @@ async function play(c, page, errors) {
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
+  // A race's busiest moments: none of its messages on top of another, none under
+  // Pause and Sound or off the screen, and no hidden bar showing. First the start
+  // (the controls help, a hint and a big message), then mid-race (the place, the
+  // wash and a turn cue under the clock, a hint and the balance-assist note).
+  if (c.course && !c.course.startsWith('drill-')) {
+    const clash = await page.evaluate(() => {
+      const $ = (id) => document.getElementById(id);
+      const box = (el) => {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return cs.display === 'none' || cs.visibility === 'hidden' || !r.width ? null : r;
+      };
+      const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const out = [];
+      const check = (when) => {
+        const named = { clock: document.querySelector('.hud-top'), place: $('place'), wash: $('wash'), cue: $('cue'), hint: $('hint'), help: $('touchhelp'), assist: $('assisted'), flash: $('flash'), map: $('map') };
+        const boxes = Object.entries(named).map(([n, el]) => [n, box(el)]).filter(([n, b]) => b && (n !== 'flash' || $('flash').classList.contains('show')));
+        boxes.forEach(([n, a], i) => boxes.slice(i + 1).forEach(([m, b]) => { if (hit(a, b)) out.push(`${when}: ${n} overlaps ${m}`); }));
+        for (const b of document.querySelectorAll('header button')) if (named.map && hit(named.map.getBoundingClientRect(), b.getBoundingClientRect())) out.push(`${when}: the map is under ${b.textContent}`);
+        for (const n of ['flash', 'hint']) {
+          const r = $(n).getBoundingClientRect();
+          if (r.left < 0 || r.right > innerWidth) out.push(`${when}: ${n} runs off the screen (${Math.round(r.left)} to ${Math.round(r.right)})`);
+        }
+      };
+      window.kayak.show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 5 });
+      window.kayak.show("You hit a sculler's oars!", { hold: 5 });
+      $('place').textContent = 'Caversham Bridge';
+      $('cueText').textContent = "Round Fry's Island, keeping it on your right";
+      for (const id of ['place', 'wash', 'cue']) $(id).classList.add('on');
+      $('hud').classList.add('helping');
+      check('at the start');
+      $('hud').classList.remove('helping', 'flashing');
+      $('flash').classList.remove('show');
+      $('hud').classList.add('assisted');
+      check('mid-race');
+      $('hud').classList.remove('assisted');
+      if (box($('outingBar'))) out.push('the hidden outing bar shows');
+      if (matchMedia('(pointer: coarse)').matches) for (const b of document.querySelectorAll('header button')) if (b.getBoundingClientRect().height < 44) out.push(`${b.textContent} is under 44 px`);
+      return out;
+    });
+    errors.push(...clash);
+    // Tipping over: the gauge warns in the red; then going in on your own says
+    // so, and what keeps you up.
+    await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));
+    await page.waitForTimeout(100);
+    if (!(await page.evaluate(() => document.getElementById('balance').classList.contains('tipping')))) errors.push("the balance gauge didn't warn in the red");
+    await page.evaluate(() => {
+      const { boat } = window.kayak;
+      boat.hull = { ...boat.hull, capsize: 0.3 };
+      Object.assign(boat, { roll: 0.5, rollRate: 1 });
+    });
+    await page.waitForFunction(() => document.getElementById('flash').classList.contains('show'), null, { timeout: 10_000 }).catch(() => {});
+    const fell = await page.evaluate(() => ({ flash: document.getElementById('flash').textContent, hint: document.getElementById('hint').textContent, assist: document.getElementById('hud').classList.contains('assisted') }));
+    // (With the balance assist on, there's no lean to tell you about.)
+    if (fell.flash !== 'You lost your balance!' || (!fell.assist && !/lean/.test(fell.hint))) errors.push(`going in said ${JSON.stringify(fell)}`);
+  }
   // Rowing really is rowing: a scull, the coach on its screen, gone while you look round.
   if (c.row) {
     const scull = await page.evaluate(() => !!window.kayak.boat.hull.scull);
