@@ -24,6 +24,8 @@ public enum Endpoints {
         method: "GET", path: "/api/account/devices/sessions", auth: .user, errorStatuses: [401])
     public static let getAccountDevicesSessionsBySessionId = Endpoint<RecordingOf, RecordingMotion>(
         method: "GET", path: "/api/account/devices/sessions/{sessionId}", auth: .user, errorStatuses: [401, 404])
+    public static let getAccountDevicesByDeviceIdSessions = Endpoint<HeldPartsFor, HeldParts>(
+        method: "GET", path: "/api/account/devices/{deviceId}/sessions", auth: .user, errorStatuses: [401, 404])
     public static let getAccountHandle = Endpoint<HandleCheck, HandleAvailability>(
         method: "GET", path: "/api/account/handle", auth: .user, errorStatuses: [401])
     public static let getAccountProfile = Endpoint<NoInput, ProfileSettings>(
@@ -38,6 +40,10 @@ public enum Endpoints {
         method: "PATCH", path: "/api/account/profile", auth: .user, errorStatuses: [400, 401])
     public static let postAccountContact = Endpoint<ContactEmail, Contact>(
         method: "POST", path: "/api/account/contact", auth: .user, errorStatuses: [400, 401])
+    public static let accountDevicesPhone = Endpoint<PhoneAdd, Phone>(
+        method: "POST", path: "/api/account/devices/phone", auth: .user, errorStatuses: [400, 401, 409])
+    public static let postAccountDevicesByDeviceIdSessions = Endpoint<NoInput, Uploaded>(
+        method: "POST", path: "/api/account/devices/{deviceId}/sessions", auth: .user, errorStatuses: [400, 401, 404, 409, 413, 422])
     public static let accountExport = Endpoint<NoInput, DownloadLink>(
         method: "POST", path: "/api/account/export", auth: .user, errorStatuses: [401])
     public static let postAccountTos = Endpoint<TosAccept, TosAccepted>(
@@ -93,6 +99,7 @@ public enum Endpoints {
         case "GET /api/account/devices": try decoder.decode(TrackerList.self, from: data)
         case "GET /api/account/devices/sessions": try decoder.decode(RecordingList.self, from: data)
         case "GET /api/account/devices/sessions/{sessionId}": try decoder.decode(RecordingMotion.self, from: data)
+        case "GET /api/account/devices/{deviceId}/sessions": try decoder.decode(HeldParts.self, from: data)
         case "GET /api/account/handle": try decoder.decode(HandleAvailability.self, from: data)
         case "GET /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "GET /api/account/tos": try decoder.decode(TosStatus.self, from: data)
@@ -100,6 +107,8 @@ public enum Endpoints {
         case "GET /att/api/strava/status": try decoder.decode(StravaStatus.self, from: data)
         case "PATCH /api/account/profile": try decoder.decode(ProfileSettings.self, from: data)
         case "POST /api/account/contact": try decoder.decode(Contact.self, from: data)
+        case "POST /api/account/devices/phone": try decoder.decode(Phone.self, from: data)
+        case "POST /api/account/devices/{deviceId}/sessions": try decoder.decode(Uploaded.self, from: data)
         case "POST /api/account/export": try decoder.decode(DownloadLink.self, from: data)
         case "POST /api/account/tos": try decoder.decode(TosAccepted.self, from: data)
         case "POST /att/api/auth/google/app-token": try decoder.decode(SignIn.self, from: data)

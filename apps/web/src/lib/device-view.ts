@@ -13,6 +13,11 @@ export const fmtDur = (s?: number | null) => {
   return m ? `${m}m ${sec}s` : `${sec}s`
 }
 
+/** A phone on the account (C3): `P` and 16 hex digits. Kept here, not imported
+ *  from core/devices, because this file goes into browser bundles. Same rule as
+ *  isPhoneId there (phone-recording.test.ts checks). */
+export const isPhoneDeviceId = (deviceId: string) => /^P[0-9A-F]{16}$/.test(deviceId)
+
 /** What the client needs about a linked tracker. Deliberately NOT `DeviceRecord`:
  *  that type carries `tokenHash`, which has no business in a browser bundle. */
 export type DeviceView = {
@@ -96,7 +101,7 @@ export function deviceSummaries(devices: DeviceView[], sessions: DeviceSessionMe
   for (const s of sessions) {
     let row = byId.get(s.deviceId)
     if (!row) {
-      row = { deviceId: s.deviceId, name: `Tracker ${s.deviceId}`, linked: false, sessions: 0, motionSessions: 0, totalDistanceM: 0 }
+      row = { deviceId: s.deviceId, name: isPhoneDeviceId(s.deviceId) ? 'Phone' : `Tracker ${s.deviceId}`, linked: false, sessions: 0, motionSessions: 0, totalDistanceM: 0 }
       byId.set(s.deviceId, row)
     }
     row.sessions++
@@ -117,6 +122,8 @@ export function deviceSummaries(devices: DeviceView[], sessions: DeviceSessionMe
  *  every number and judgement made here, so web and apps say the same. */
 export type TrackerSummary = {
   deviceId: string; name: string; linked: boolean
+  /** A paddlesnitch tracker, or a phone recording with the app. */
+  kind: 'tracker' | 'phone'
   recordings: number; motionRecordings: number; distanceMetres: number
   latestAt?: string
   firmwareState: 'up_to_date' | 'update_pending' | 'unknown'
@@ -132,15 +139,17 @@ export function trackerSummaries(
   devices: DeviceView[], sessions: DeviceSessionMeta[], stableVersion: string | null, now: number = Date.now(),
 ): TrackerSummary[] {
   return deviceSummaries(devices, sessions).map(d => {
-    const behind = deviceIsBehind(d.firmware, d.targetVersion ?? stableVersion)
+    const phone = isPhoneDeviceId(d.deviceId)
+    const behind = phone ? null : deviceIsBehind(d.firmware, d.targetVersion ?? stableVersion)
     const crash = crashNote(d.lastCrash, now) ? d.lastCrash : undefined
     return {
-      deviceId: d.deviceId, name: d.name, linked: d.linked,
+      deviceId: d.deviceId, name: d.name, linked: d.linked, kind: phone ? 'phone' as const : 'tracker' as const,
       recordings: d.sessions, motionRecordings: d.motionSessions, distanceMetres: Math.round(d.totalDistanceM),
       ...(d.latestAt ? { latestAt: d.latestAt } : {}),
       firmwareState: behind === null ? 'unknown' : behind ? 'update_pending' : 'up_to_date',
-      // A removed tracker isn't expected to call in, so it's never "quiet".
-      quiet: d.linked && deviceIsQuiet(d.lastSeenAt, now),
+      // A removed tracker isn't expected to call in, so it's never "quiet". A
+      // phone only calls in after a paddle, so silence says nothing.
+      quiet: !phone && d.linked && deviceIsQuiet(d.lastSeenAt, now),
       ...(crash ? { crash: { at: crash.at, task: crash.task } } : {}),
     }
   })

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "Phone.schema.json",
+  "type": "object",
+  "properties": {
+    "deviceId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string",
+      "enum": [
+        "phone-android",
+        "phone-ios"
+      ]
+    }
+  },
+  "required": [
+    "deviceId",
+    "name",
+    "model"
+  ]
+}

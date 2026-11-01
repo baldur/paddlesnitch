@@ -36,13 +36,15 @@ import { POST as link } from '@/app/api/account/devices/link/route'
 import { POST as claim } from '@/app/api/devices/claim/route'
 import { POST as token } from '@/app/api/devices/token/route'
 import { POST as upload } from '@/app/api/devices/sessions/route'
+import { POST as addPhone } from '@/app/api/account/devices/phone/route'
+import { POST as phoneUpload, GET as heldParts } from '@/app/api/account/devices/[deviceId]/sessions/route'
 import type { deviceList } from '@/lib/device-list'
 import { saveSession } from '@paddlesnitch/analysis/analysis-store'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import { provedPoll } from './device-proof'
 import {
   restRoutes, ApiError, Ok, TosStatus, TosAccepted, DownloadLink, ProfileSettings, HandleAvailability, Contact, AccountStatus,
-  TrackerList, RecordingList, RecordingMotion,
+  TrackerList, RecordingList, RecordingMotion, Phone, Uploaded, HeldParts,
 } from '@paddlesnitch/api/contract'
 
 let dataDir: string
@@ -96,7 +98,7 @@ const calls = (): Call[] => [
 
 describe('the account routes the apps call', () => {
   it('every account route in rest.json is tested here', () => {
-    const tested = new Set([...calls().map(([r]) => r), ...trackerRoutes, 'DELETE /api/account', 'GET /api/account'])
+    const tested = new Set([...calls().map(([r]) => r), ...trackerRoutes, ...phoneRoutes, 'DELETE /api/account', 'GET /api/account'])
     for (const route of Object.keys(restRoutes).filter(r => r.includes('/api/account'))) expect(tested.has(route as never), route).toBe(true)
   })
 
@@ -387,5 +389,31 @@ describe('trackers in the apps', () => {
     for (const call of tracker) await fits(ApiError, await call(), 401)
     jar({ tt_id: pat.idToken })
     for (const call of tracker) expect((await call('not-a-jwt')).status).toBe(401)
+  })
+})
+
+// Phone recording (C3, README § Phone recording): add the phone, upload a track.
+const phoneRoutes = ['POST /api/account/devices/phone', 'POST /api/account/devices/{deviceId}/sessions', 'GET /api/account/devices/{deviceId}/sessions']
+describe('a phone that records', () => {
+  const add = (t?: string) => addPhone(req('POST', '/api/account/devices/phone', t, { installId: 'install-0123456789abcdef', model: 'phone-ios' }))
+  it('adds the phone and uploads as the contract says', async () => {
+    const phone = await fits(Phone, await add(pat.idToken), 201)
+    const up = new NextRequest(`http://x/api/account/devices/${phone.deviceId}/sessions?filename=track_20260905_090000.csv`, {
+      method: 'POST', body: CSV, headers: { 'x-paddlesnitch-app': 'ios/0.1.0', authorization: `Bearer ${pat.idToken}`, 'content-type': 'text/csv' },
+    })
+    await fits(Uploaded, await phoneUpload(up, { params: Promise.resolve({ deviceId: phone.deviceId }) }), 201)
+    await fits(HeldParts, await heldParts(req('GET', `/api/account/devices/${phone.deviceId}/sessions?filename=track_20260905_090000.csv`, pat.idToken), { params: Promise.resolve({ deviceId: phone.deviceId }) }))
+    const list = await fits(TrackerList, await listTrackers(req('GET', '/api/account/devices', pat.idToken)))
+    expect(list.summaries[0].kind).toBe('phone')
+  })
+  it('refuses a caller with no sign-in (401, an ApiError)', async () => {
+    const res = await add()
+    expect(res.status).toBe(401)
+    expect(ApiError.safeParse(await res.json()).success).toBe(true)
+  })
+  it('a refusal is an ApiError with words to show', async () => {
+    const res = await addPhone(req('POST', '/api/account/devices/phone', pat.idToken, { installId: 'x', model: 'phone-ios' }))
+    expect(res.status).toBe(400)
+    expect(ApiError.parse(await res.json()).error).toMatch(/^Couldn't add this phone/)
   })
 })

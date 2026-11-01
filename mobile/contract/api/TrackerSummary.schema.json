@@ -59,6 +59,13 @@
         "at",
         "task"
       ]
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "tracker",
+        "phone"
+      ]
     }
   },
   "required": [

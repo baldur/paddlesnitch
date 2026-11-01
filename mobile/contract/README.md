@@ -199,6 +199,8 @@ golden answers are `fixtures/api/account.*.json`.
 | `DELETE /api/account/contact` | | `{ok: true}` |
 | `GET /api/account/devices` | | `{devices: Tracker[], stableVersion, summaries: TrackerSummary[]}`: each tracker, the version it should run (`targetVersion`; `beta: true` may be ahead of stable), its last report (`health`) and last crash. **Show the cards from `summaries`**: already in order, removed trackers that still have recordings included (`linked: false`), with the counts, `firmwareState`, `quiet` (over 2 days silent) and `crash` (last 7 days) worked out by the server, the same rules the website uses. Don't recompute them |
 | `DELETE /api/account/devices` | `{deviceId}` | `{ok: true}`: removed; it stops syncing and can be added again. Its recordings and paddles stay. 404 if it isn't this person's |
+| `POST /api/account/devices/phone` | `{installId, model}` | `Phone`: this phone added to the account. See **Phone recording** below |
+| `POST /api/account/devices/{deviceId}/sessions?filename=` | the file | `Uploaded`: a phone's recording. See **Phone recording** below |
 | `GET /api/account/devices/sessions` | | `{sessions: Recording[]}`: every recording the person's trackers uploaded, newest upload first (an old paddle synced late comes first), including removed trackers'. A recording with usable GPS also becomes a paddle in `paddles.list`; a desk test or one with no fix doesn't. Each also carries the owner's `userId`. `paddleId` on each recording that became a paddle (open it with `paddles.get`); none = too short or no track |
 | `GET /api/account/devices/sessions/{sessionId}?deviceId=` | | `RecordingMotion`: a tracker paddle's boat motion. See **Boat motion** below. 404 if it isn't this person's recording |
 
@@ -283,6 +285,145 @@ Never call the sides left and right (`sideADeg`/`sideBDeg`): the tracker can't t
 
 Your name and sign-in email come from `me`. Adding a tracker and syncing it
 are in `fixtures/tracker/README.md`. Forgot password is under Signing in; Strava has its own section below.
+
+## Phone recording
+
+A phone records a paddle through the recorder core, then uploads it like a
+tracker (C3, #761). The server makes the paddle the tracker's way, so it gets
+stroke rate and boat motion with no app maths. Owner's decisions, 2026-11-01:
+the phone is a device on the account, listed on Devices; the phone deletes its
+copy once the server has it; uploads go on any network.
+
+### Calls
+
+| Call | Send | Answer |
+|---|---|---|
+| `POST /api/account/devices/phone` | `{installId, model}` | 201 `Phone` `{deviceId, name, model}`. `installId`: random, made once per install and kept with the app's own settings (16–64 of `A–Z a–z 0–9 _ -`), never the platform's advertising or hardware ID. `model`: `phone-android` or `phone-ios`. The same install and account always get the same `deviceId`. 409: the account has 10 phones (show `error`). 400: show `error` |
+| `POST /api/account/devices/{deviceId}/sessions?filename=` | the file itself | The tracker's upload, as the signed-in owner: same pieces, compression and answers (`docs/features/device-uplink.md`). 201 `Uploaded`. 409 `already_uploaded`: the server has it already, so treat it as sent. 404: this phone isn't on the account (removed on Devices). Phones get no `receipt`. The rest are below the table |
+
+Every other answer to an upload:
+
+| Answer | Meaning | The app |
+|---|---|---|
+| 422 `no_points` (track) | no GPS fix at all; the server keeps nothing | counts as sent: delete the track and its motion file |
+| 422 `no_motion_rows` (motion file) | nothing in it; the server keeps nothing | counts as sent: delete it |
+| 409 `track_not_uploaded` (motion file) | its track isn't there yet | send the track, then this again |
+| 409 `parts_missing` (`missing: […]`) | pieces lost on the way | send the missing pieces, then the last again |
+| 422 `sha256_mismatch` | the pieces don't make the file | send the whole file again from piece 1, once; a second mismatch is as below |
+| 5xx, timeout, no network | not our answer | retry later, with backoff |
+| any other 4xx (`bad_filename`, `too_large`, `bad_encoding`, a second `sha256_mismatch`) | the server will never take it | keep the file, stop retrying it, show "Couldn't upload this recording. It's kept on this phone." |
+
+The upload body is the file's bytes (not multipart). Send files of 64 KB or
+more in 64 KB pieces (`&part=N&parts=M&sha256=<hex of the whole file>`, as the
+tracker does), optionally zlib-compressed per piece with `&enc=zlib` and
+`Content-Type: application/octet-stream`. `GET` on the same address with
+`?filename=` answers `HeldParts` `{parts: […]}`: the pieces the server already
+holds from a broken upload, so send only the rest. Fixtures:
+`account.phone*.json`, `account.phone-upload*.json`, `account.devices.with-phone.json`.
+
+### Files and names
+
+- The core writes `track_<stamp>.csv` and `track_<stamp>_i10.csv` (and a raw
+  `_imu.csv` the phone keeps only while debugging). Upload the track first, then
+  the `_i10.csv` **under the name `track_<stamp>_imu.csv`**, as the tracker does
+  (`firmware/src/naming.cpp`). The server takes a motion file only after its
+  track (409 `track_not_uploaded` otherwise).
+- A second recording in the same second is `track_<stamp>_1` (the tracker's rule).
+- Delete the phone's copy of a file once the server answered 201 or 409
+  `already_uploaded` for it, and the recording's folder once both files are gone.
+- A track the server refuses with 422 `no_points` (no GPS fix at all) counts as
+  sent: the server keeps nothing, so delete it and its motion file.
+
+### The phone on the account
+
+- Add the phone (`POST …/phone`) before the first upload and keep `deviceId`
+  with the account's recordings. Ask again after every sign-in: it's the same
+  phone for the same account and install.
+- A 404 on upload means the owner removed the phone on Devices. Stop uploading
+  and keep the files. Add the phone again only when the owner next starts a
+  recording, then upload what's waiting. Never add it again in the background.
+- A 404 also shows on Paddles, where recordings waiting to upload show: "This phone
+  was removed from your account" with an **Upload now** button that adds the phone
+  again and uploads what's waiting.
+- `GET /api/account/devices` lists phones too, with `kind: "phone"` (no firmware,
+  never `quiet`). **Both apps leave phones out of their trackers screens** (filter
+  on `kind` before the app first calls `…/phone`): phones are listed and removed
+  on the website's Devices page. Removing one keeps its recordings and paddles, as
+  for a tracker.
+
+### Where recordings live
+
+- In a folder per account (`recordings/<user id>/`), so one person's tracks never
+  upload to another account. Signing out keeps the folder (it may be the only
+  copy); deleting the account in the app deletes it.
+- Out of cloud and device backup. iPhone: encrypted while the phone is locked,
+  except while a file is open.
+- Upload on any network, in the background when the platform allows, retrying
+  with backoff. Never upload while the recording is still running.
+
+### After Stop
+
+- Back to Paddles. Each recording waiting to upload shows there in one line
+  ("Uploading…", or "Waiting to upload" while offline) until the server has it;
+  then the paddle appears in the list as any other (`paddles.list`).
+- A track the server refuses with 422 `no_points`: one line in the same place,
+  "No GPS fix, so this didn't become a paddle", until dismissed.
+- Any other 4xx: "Couldn't upload this recording. It's kept on this phone." in the
+  same place, with Report an issue. The app never retries that file by itself.
+
+### Recording screen
+
+Both apps, laid out the same (design-usability, #767):
+
+- Record on Paddles (signed in). The recording screen has a Close (hide) control
+  while it records: it hides the screen and keeps recording. Paddles then shows
+  "Recording · h:mm:ss", and tapping that line opens the screen again.
+- Big elapsed time, then stroke rate ("—" until live values arrive; never a
+  number the app works out itself), then the GPS line below. A problem (a failed
+  write) shows in place of the "Recording" heading.
+- Stop: hold for 1.5 s, the button filling as it goes, with a haptic; a tap says
+  "Keep holding to stop." Stop in the Android notification needs an unlock
+  (`setAuthenticationRequired`). Hold to stop is pinned to the bottom.
+- Hold to stop has a named accessibility action, "Stop recording" (VoiceOver
+  custom action; Android `customActions`), which stops at once. Screen readers
+  hear "Hold to stop" as the hint, not the fill.
+- Start doesn't wait for a GPS fix: the GPS line says "Waiting for GPS".
+- Before Start, without location permission (or with location services off):
+  say so in place of Record, with a button to the setting. Recording needs
+  location all the time (Android: foreground service of type `location`;
+  iPhone: Always, or While using with background location).
+- No motion sensors: record anyway (GPS only), with "No motion sensors on this
+  phone, so no stroke rate" under the stroke rate.
+
+GPS line, from `rc_phone_live` ("The GPS state (fix, since_fix_s) is the latest
+tick's, not the latest row written"; `rc_live_values.fix` is "1: the latest row
+has a GPS fix", `since_fix_s` "0 while there's a fix, NAN before the first"):
+
+| State | Shown | Accessibility label | Announced once |
+|---|---|---|---|
+| `since_fix_s` NaN | Waiting for GPS | Waiting for GPS | nothing |
+| `fix` = 1 | GPS fix | GPS fix | "GPS back" (only after a loss) |
+| `fix` = 0, under 1 s | GPS lost | GPS lost | "GPS lost" |
+| `fix` = 0, 1–59 s | GPS lost 40 s ago | GPS lost 40 seconds ago | nothing |
+| `fix` = 0, 60 s or more | GPS lost 2 min ago (whole minutes, rounded down) | GPS lost 2 minutes ago | nothing |
+
+The line is not a live region.
+
+### Altitude
+
+Height above sea level, as the tracker (`recorder_phone.h`, `alt_m`: "above
+MEAN SEA LEVEL, as the tracker's receiver gives it"). Android:
+`getMslAltitudeMeters()` when `hasMslAltitude()` (API 34+), otherwise not valid,
+never `getAltitude()`. iPhone: `CLLocation.altitude` when `verticalAccuracy > 0`.
+
+### Release
+
+Each app's C3 PR removes the debug switch and makes these changes; it merges only
+after the owner has recorded a real paddle on that platform's phone with the PR's
+build. Android then declares its own location permissions and a foreground
+service of type `location`, deletes the release manifest's location removal,
+updates `releasePermissions` and Play's data safety form. iPhone: the background
+location reason, for App Review.
 
 ## Strava, signed in
 

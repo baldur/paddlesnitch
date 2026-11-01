@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "PhoneAdd.schema.json",
+  "type": "object",
+  "properties": {
+    "installId": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string",
+      "enum": [
+        "phone-android",
+        "phone-ios"
+      ]
+    }
+  },
+  "required": [
+    "installId",
+    "model"
+  ]
+}

@@ -153,3 +153,38 @@ describe('DEVICES page', () => {
     expect(container.textContent).not.toContain('No trackers yet')
   })
 })
+
+describe('phones on DEVICES (C3)', () => {
+  const PHONE_A = 'P0123456789ABCDEF', PHONE_B = 'PFEDCBA9876543210'
+  const phone = (deviceId: string, linkedAt: string) => ({ deviceId, name: 'iPhone', model: 'phone-ios', firmware: '', linkedAt, lastSeenAt: linkedAt })
+
+  it('lists phones apart from trackers, newest first, with no firmware or seen line', async () => {
+    stubFetch({
+      [DEVICES]: { devices: [
+        { deviceId: '5A43CA48', name: 'My tracker', model: 'm', firmware: '0.9.0', lastSeenAt: '2026-09-18T09:00:00Z' },
+        phone(PHONE_A, '2026-10-01T07:00:00Z'), phone(PHONE_B, '2026-11-01T07:00:00Z'),
+      ] },
+      [SESSIONS]: { sessions: [{ sessionId: 's', deviceId: PHONE_A, userId: 'u', filename: 'track_1.csv', uploadedAt: '2026-10-02T07:00:00Z', points: 3, distanceMetres: 2000, motion: { uploadedAt: '2026-10-02T07:00:00Z', bytes: 1, rows: 1 } }] },
+    })
+    await mount()
+    const sections = [...container.querySelectorAll('section')]
+    const trackers = sections.find(s => s.textContent?.startsWith('Your trackers'))!
+    const phones = sections.find(s => s.textContent?.startsWith('Your phones'))!
+    expect(trackers.textContent).toContain('My tracker')
+    expect(trackers.textContent).not.toContain('iPhone')
+    expect(phones.textContent).not.toContain('firmware')
+    expect(phones.textContent).not.toContain('seen')
+    expect(phones.textContent).toContain('1 with boat motion')
+    const hrefs = [...phones.querySelectorAll('a')].map(a => a.getAttribute('href'))
+    expect(hrefs).toEqual([`/devices/${PHONE_B}`, `/devices/${PHONE_A}`])
+    expect(phones.textContent).toContain('added 1 Nov 2026')
+  })
+
+  it('someone with only phones sees them first, without the tracker checklist', async () => {
+    stubFetch({ [DEVICES]: { devices: [phone(PHONE_A, '2026-11-01T07:00:00Z')] }, [SESSIONS]: { sessions: [] } })
+    await mount()
+    const text = container.textContent ?? ''
+    expect(text).not.toContain('Getting started')
+    expect(text.indexOf('Your phones')).toBeLessThan(text.indexOf('Your trackers'))
+  })
+})

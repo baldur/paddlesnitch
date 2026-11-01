@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClaim, isDeviceId } from '@/lib/devices'
+import { createClaim, isTrackerId } from '@/lib/devices'
 import { limitClaim } from '@/lib/device-limits'
 
 // POST /api/devices/claim — UNAUTHENTICATED. Called by the device to start a
@@ -15,7 +15,7 @@ import { limitClaim } from '@/lib/device-limits'
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   const deviceId = typeof body?.deviceId === 'string' ? body.deviceId.toUpperCase() : ''
-  if (!isDeviceId(deviceId)) return NextResponse.json({ error: 'bad_device_id' }, { status: 400 })
+  if (!isTrackerId(deviceId)) return NextResponse.json({ error: 'bad_device_id' }, { status: 400 })
 
   const limit = await limitClaim(req, deviceId)
   if (limit.limited) return limit.response

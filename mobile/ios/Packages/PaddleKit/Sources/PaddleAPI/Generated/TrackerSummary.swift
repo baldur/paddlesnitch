@@ -9,6 +9,7 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
     public var deviceId: String
     public var distanceMetres: Int
     public var firmwareState: FirmwareState
+    public var kind: Kind?
     public var latestAt: Date?
     public var linked: Bool
     public var motionRecordings: Int
@@ -21,6 +22,7 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
         deviceId: String,
         distanceMetres: Int,
         firmwareState: FirmwareState,
+        kind: Kind? = nil,
         latestAt: Date? = nil,
         linked: Bool,
         motionRecordings: Int,
@@ -32,6 +34,7 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
         self.deviceId = deviceId
         self.distanceMetres = distanceMetres
         self.firmwareState = firmwareState
+        self.kind = kind
         self.latestAt = latestAt
         self.linked = linked
         self.motionRecordings = motionRecordings
@@ -75,6 +78,41 @@ public struct TrackerSummary: Codable, Hashable, Sendable {
             case .updatePending: "update_pending"
             case .unknown: "unknown"
             case .unrecognised(let rawValue): rawValue
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
+    }
+
+    public enum Kind: Codable, Hashable, Sendable {
+        case tracker
+        case phone
+        /// A value this version of the app doesn't know yet.
+        case unknown(String)
+
+        /// Every value this version of the app knows.
+        public static let known: [Kind] = [.tracker, .phone]
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "tracker": self = .tracker
+            case "phone": self = .phone
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .tracker: "tracker"
+            case .phone: "phone"
+            case .unknown(let rawValue): rawValue
             }
         }
 
