@@ -11,7 +11,17 @@
 - **L2** `src/lib/athlete-profile.ts` — `refreshAthleteProfile` (cold-start skip < 3 paddles; full re-distill every 10 or when no profile; else incremental merge) + `deterministicProfile` fallback. Stored via `AthleteProfile` at `analysis/{userId}/profile.json` (`getAthleteProfile`/`saveAthleteProfile` in the store).
 - **llm.ts** — revised coach-persona `SYSTEM`; `buildPrompt` takes an `InsightContext` (profile + historyFacts + relevant); shared `runInsighter` used by both `generateInsight` and the profile builder (one place picks backend/model).
 - **Route** `api/analyse/route.ts` — computes L1/L3 from prior paddles + loads the profile → feeds `generateInsight`; after save, best-effort `refreshAthleteProfile` folds the new paddle in for next time (awaited in-request for Lambda reliability).
-- **Model bump** — `BedrockInsighter` already uses model-agnostic Converse, so it's a one-line `LLM_MODEL` change in `infra/lib/att-stack.ts` (documented there with the Haiku/Nova `eu.` inference-profile ids). **Left as Mixtral** until Bedrock model-access is enabled + the id confirmed.
+- **Model bump** — `BedrockInsighter` already uses model-agnostic Converse, so it's a one-line `LLM_MODEL` change in `infra/lib/att-stack.ts`. **Done 2026-11-01: Qwen3 Next 80B** (see "The paddlesnitch voice" below).
+
+## The paddlesnitch voice (2026-11-01)
+
+The summaries read like any AI coach ("Impressive work today!… Keep up the great work!") and invented things the numbers can't show ("your blade work is finding rhythm"). Owner: "build our own paddle voice", on Qwen3 Next 80B.
+
+- **Model:** `qwen.qwen3-next-80b-a3b`, on demand in eu-west-1 (the numbers stay in Ireland; no Marketplace agreement, unlike Claude on Bedrock, which this account hasn't accepted). About $0.15 / $1.20 per million tokens, so about $0.50 per 1,000 summaries; 3 s typical. Also runs on a laptop (`ollama pull qwen3-next:80b-a3b-instruct-q4_K_M` (the instruct build Bedrock serves; the default tag is the thinking build, which rambles and times out)) for free prompt work.
+- **Voice** (`packages/analysis/src/voice.ts`): `VOICE` (a quiet coach with a stopwatch: lead with the one thing worth knowing and its number, then context; no advice or targets, no praise words, nothing about technique or feel, only numbers from the facts) plus five `EXAMPLES`. `SYSTEM` in llm.ts is `voicePrompt()`.
+- **The check** (`summaryProblems`): banned phrases, claims the numbers can't show, `!`, dashes, questions, lists, over 70 words, and any number not in the facts (rounding allowed). `tidyDraft` turns a dash into a comma first. `generateInsight` sends a failing draft back once, naming the numbers to drop; a second failure keeps the plain summary.
+- **Facts worked out in code**, because the model got the maths wrong: total rest time (`restsLine`), and whether this paddle was faster or slower than each past one (`renderRelevant(list, current)`). Old "fading" efforts are written "slowed".
+- **Benchmark** (`apps/web/scripts/insight-bench.ts`): runs one account's own paddles (a copy of its `analysis/<userId>/` folder) through each candidate and writes `results.json` and a blind ranking page (`rank.html`). On the owner's 20 paddles: today's Mixtral failed the check 20/20; the voice on Qwen passed 20/20 with no plain-summary fallbacks and 3 retries, and the owner preferred it on all 20.
 
 ## Why
 

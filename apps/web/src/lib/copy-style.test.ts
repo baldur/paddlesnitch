@@ -12,12 +12,16 @@ import path from 'path'
 const repo = path.resolve(__dirname, '../../../..')
 const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src']
 
+// Lists of words to keep OUT of what users read: the AI summary's banned
+// phrases (voice-lists.ts) name "journey" and the like so the check can reject them.
+const NOT_COPY = ['packages/analysis/src/voice-lists.ts']
+
 function files(dir: string): string[] {
   const out: string[] = []
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name)
     if (statSync(full).isDirectory()) out.push(...files(full))
-    else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name)) out.push(full)
+    else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name) && !NOT_COPY.includes(path.relative(repo, full))) out.push(full)
   }
   return out
 }
