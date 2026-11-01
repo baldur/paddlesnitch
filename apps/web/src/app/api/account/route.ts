@@ -2,24 +2,13 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getRequestUser, getRequestUserEvenIfErased, clearAuthCookies } from '@/lib/auth'
 import { hasRecentSignIn } from '@/lib/app-signin'
-import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
-import { unindexEntries } from '@/lib/entries'
+import { deleteObject } from '@/lib/storage'
 import { deleteUserBySub, disconnectGoogle, findUserBySub, revoke } from '@/lib/cognito'
-import { rebuildLeaderboard } from '@/lib/leaderboard'
-import { removeUserFromAllGroups } from '@/lib/groups'
-import { eraseFeedbackContactsForUser } from '@/lib/feedback-contacts'
 import { eraseBetaApplication } from '@/lib/beta-signups'
 import { linkNoteKey } from '@/lib/google-link'
-import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
-import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
-import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
-import { eraseUserDevices } from '@paddlesnitch/core/devices'
+import { eraseAccountData, ERASE_AGAIN_AFTER_MS } from '@/lib/account-erasure'
+import { enqueueJob } from '@/lib/jobs'
 import { markAccountErasing, markAccountErased, isAccountErased } from '@paddlesnitch/core/erased'
-import { eraseDerived } from '@paddlesnitch/core/derived'
-import { listTrials, listCourses } from '@/lib/catalogue'
-import { eraseBuddies } from '@paddlesnitch/core/buddies'
-import { erasePlanDemand, erasePlanShares } from '@paddlesnitch/waterways/plan-store'
-import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 import { eraseGameTimes } from '@paddlesnitch/core/games'
 
 const REAUTH_TEXT = 'For your safety, deleting your account needs a recent sign-in. Please sign in again.'
@@ -50,7 +39,8 @@ export async function GET(req: Request) {
 //   - a beta tester application made with their account email
 //   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
-// leaderboards get rebuilt so the public view stays consistent.
+// leaderboards get rebuilt so the public view stays consistent. The data part
+// is lib/account-erasure.ts, which a job runs again ~2.5 min later (#814).
 //
 // Deleting needs a real sign-in from the last 10 minutes (owner, 2026-10-25):
 // a stolen or left-open session must not be able to erase everything. Not a
@@ -75,107 +65,33 @@ export async function DELETE(req: Request) {
   //    is deleted (C3: phones upload by themselves). Marked done only once the
   //    sign-in account is gone, so a delete that fails leaves the phone's files.
   //    While 'pending', the account's tokens still work (#795: a delete that
-  //    fails must not lock out a live account), so a write that lands after
-  //    its area was erased is left behind (accepted; see the end).
+  //    fails must not lock out a live account), so a write can land after its
+  //    area was erased; the second pass below catches it.
   await markAccountErasing(user.id)
 
-  // 1. Courses they created (deleted after step 5 if nothing still uses them).
-  const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)
+  // 0a. The second pass (#814), written before anything is deleted so a delete
+  //     cut off after 'done' still gets it. It runs once the last write the
+  //     old token can start (on a server that cached 'none' for up to a minute,
+  //     @paddlesnitch/core/erased) has run out its 30 s, plus a margin, and only
+  //     if the marker says 'done' by then: a delete that fails leaves
+  //     'pending', and the job does nothing to a live account. It holds only
+  //     the account ID.
+  await enqueueJob('erase-account-again', { userId: user.id },
+    { notBefore: new Date(Date.now() + ERASE_AGAIN_AFTER_MS) })
 
-  // 2. Trials they created that can go whole: no group owns them, and no one
-  //    else has an entry in them. Everything else just loses this user's
-  //    entries in step 4.
-  const trials = await listTrials()
-  const ownedTrialIds = new Set<string>()
-  await Promise.all(trials.map(async t => {
-    if (t.adminUserId !== user.id || t.groupId) return
-    const entrants = new Set((await listKeys(`trials/${t.id}/entries/`)).map(k => k.split('/')[3]))
-    entrants.delete(user.id)
-    if (entrants.size === 0) ownedTrialIds.add(t.id)
-  }))
-
-  // 3. Find every other trial that holds this user's entries — we will remove
-  //    those entries and rebuild the leaderboard.
-  const trialsWithUserEntries = new Set<string>()
-  const allTrialIds = trials.map(t => t.id)
-
-  // 4. Delete every key whose path indicates ownership by this user.
-  //    Iterating per trial keeps the listing scoped and cheap. All trials are
-  //    listed at once and the keys deleted in batches: one call at a time, a
-  //    well-used account ran past the server's 30 s limit and stopped halfway
-  //    (tests/erasure-big-account.test.ts).
-  const trialKeysToDelete: string[] = []
-  await Promise.all(allTrialIds.map(async trialId => {
-    if (ownedTrialIds.has(trialId)) {
-      // Whole trial goes — metadata, leaderboard, all entries by anyone.
-      trialKeysToDelete.push(...await listKeys(`trials/${trialId}/`))
-      return
-    }
-    // Not owned by this user — surgically remove only their own data: their
-    // entries AND any failed-upload diagnostics they left here. Only entries
-    // affect the leaderboard, so only those trigger a rebuild.
-    const [userEntryKeys, userFailedKeys] = await Promise.all([
-      listKeys(`trials/${trialId}/entries/${user.id}/`),
-      listKeys(`trials/${trialId}/failed-uploads/${user.id}/`),
-    ])
-    trialKeysToDelete.push(...userEntryKeys, ...userFailedKeys)
-    if (userEntryKeys.length > 0) trialsWithUserEntries.add(trialId)
-  }))
-  await deleteObjects(trialKeysToDelete)
-  await unindexEntries(trialKeysToDelete)
-
-  // 5. Rebuild leaderboards for trials we trimmed (not the ones we wiped).
-  await Promise.all([...trialsWithUserEntries].map(trialId => rebuildLeaderboard(trialId)))
-
-  // 6. Delete the courses they created that no group owns and no remaining
-  //    trial runs on (a kept trial keeps its course).
-  const keptTrialCourses = new Set(
-    trials.filter(t => !ownedTrialIds.has(t.id)).map(t => t.courseId),
-  )
-  await deleteObjects(createdCourses.filter(c => !keptTrialCourses.has(c.id)).map(c => `courses/${c.id}/metadata.json`))
-
-  // 6a. Paddles, trackers, groups, Strava. These live outside users/{userId}/,
-  //     so the prefix wipe below never reached them (GDPR gap until 2026-09).
-  //     Strava goes before the users/ wipe because the tokens live there.
-  await eraseUserAnalysis(user.id)
-  await eraseUserDevices(user.id)
-  // Everything worked out from their data (docs/features/performance.md).
-  await eraseDerived(user.id)
-  // Prepared "Download my data" files (a lifecycle rule also drops them daily).
-  await deletePrefix(`exports/${user.id}/`)
-  // Both sides of every buddy friendship, requests to and from them, their invite link.
-  await eraseBuddies(user.id)
-  // Shared plan links (the plans themselves live under users/{id}/plans/).
-  await erasePlanShares(user.id)
-  // Which locks their plans pass (kept for ranking the gaps; plans/demand/).
-  await erasePlanDemand(user.id)
-  // Portage details they added (public copies and flags; their own copies live under users/{id}/portages/).
-  await erasePortages(user.id)
-  await removeUserFromAllGroups(user.id)
-  await eraseFeedbackContactsForUser(user.id)
+  // 1–6. Everything keyed by the account ID. A Strava sign-in account may have
+  //      no tokens left, but its synthetic email still names the athlete.
+  const synthetic = /^strava-(\d+)@noreply\.paddlesnitch\.com$/.exec(user.email)
+  await eraseAccountData(user.id, { athleteIds: synthetic ? [Number(synthetic[1])] : [] })
   // Keyed by email: only an address the account has proved is theirs (#713).
+  // Not in the second pass: the form is open to anyone, so by then a record
+  // under this email may be someone else's.
   if (user.emailVerified) await eraseBetaApplication(user.email)
   // A Connect Google note left in the last 10 minutes (lib/google-link.ts).
+  // Not in the second pass either: a note left meanwhile runs out in 10
+  // minutes, names an account that can no longer sign in, and a lifecycle
+  // rule removes it.
   await deleteObject(linkNoteKey(user.email))
-  const strava = await getStravaTokens(user.id)
-  if (strava) await revokeStrava(strava.accessToken)
-  // A Strava sign-in account may have no tokens left, but its synthetic email
-  // still names the athlete.
-  const athleteIds = new Set<number>()
-  if (strava?.athleteId) athleteIds.add(strava.athleteId)
-  const synthetic = /^strava-(\d+)@noreply\.paddlesnitch\.com$/.exec(user.email)
-  if (synthetic) athleteIds.add(Number(synthetic[1]))
-  for (const id of athleteIds) {
-    if ((await getUserIdByAthleteId(id)) === user.id) await deleteAthleteIndex(id)
-  }
-
-  // 6b. Release a claimed vanity handle (the usernames/{slug} index lives
-  //     outside users/, so it needs an explicit delete), then wipe the whole
-  //     users/{userId}/ prefix — profile, contact, groups index, strava tokens,
-  //     tos-consent. Previously these survived erasure (GDPR gap).
-  const profile = await getJson<{ handle?: string }>(`users/${user.id}/profile.json`)
-  if (profile?.handle) await deleteObject(`usernames/${profile.handle}.json`)
-  await deletePrefix(`users/${user.id}/`)
 
   // 7. Revoke any active refresh token then delete the Cognito user.
   //    Order matters: if Cognito delete fails we want their session still revoked.
@@ -195,10 +111,8 @@ export async function DELETE(req: Request) {
   // live races expire within a day). Last, after the 'done' marker: the ID
   // token in a game tab still open stays valid for up to 24 h, and only that
   // marker signs it out (#742, #795), so a time posted while the delete ran is
-  // caught here. The same gap is open for every other write: while the marker
-  // is 'pending', and for up to a minute after 'done' on a server that cached
-  // the account as live (@paddlesnitch/core/erased CACHE_MS), the old token can
-  // still write after its area was erased, and only game times are swept again.
+  // caught here. Writes in the other areas, and a time posted on a server that
+  // still had the account cached as live, wait for the second pass (0a).
   await eraseGameTimes(user.id)
 
   // 8. Clear cookies on the response so the browser stops sending stale ones.

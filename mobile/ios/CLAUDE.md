@@ -208,3 +208,9 @@ isn't obvious from the code.
   unit test can't check the shape.
   System chrome keeps the system's shape on purpose (design-usability,
   #793): navigation-bar buttons (Cancel, Close) and the segmented picker.
+- Read a frame of something that comes and goes (the keyboard) with
+  `frameIfThere`, never `exists` then `.frame`: it can go in between and
+  XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
+  "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
+  unless it repeats, then reset the simulator before the CI run, never a
+  retry (lead).

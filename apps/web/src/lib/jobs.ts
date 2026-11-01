@@ -17,8 +17,8 @@
 // visible record of what's waiting or failed.
 //
 // Jobs must be safe to run twice: S3 can announce a file twice, and the sweep
-// can meet a job the announcement is still running. Both kinds here are
-// (paddles have fixed ids or are de-duplicated).
+// can meet a job the announcement is still running. Every kind here is
+// (paddles have fixed ids or are de-duplicated; erasure deletes what it finds).
 //
 // Local dev has no S3 events, so a new job runs in this process straight away;
 // tests run jobs themselves (runJob / sweepJobs).
@@ -27,6 +27,7 @@ import { getJson, putJson, listKeys, deleteObject } from '@/lib/storage'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { recordingReport } from '@/lib/recording-report'
 import { processStravaEvent, type StravaEvent } from '@/lib/strava-webhook'
+import { eraseAccountAgain, type EraseAgainPayload } from '@/lib/account-erasure'
 
 export const MAX_ATTEMPTS = 5
 /** A job announced by S3 is usually running already; the sweep leaves it this long. */
@@ -39,6 +40,7 @@ const SWEEP_BUDGET_MS = 20_000
 type Handlers = {
   'tracker-paddle': { userId: string; deviceId: string; deviceSessionId: string }
   'strava-event': StravaEvent
+  'erase-account-again': EraseAgainPayload
 }
 export type JobKind = keyof Handlers
 type Job<K extends JobKind = JobKind> = { kind: K; payload: Handlers[K]; createdAt: string; notBefore?: string }
@@ -53,9 +55,11 @@ const HANDLERS: { [K in JobKind]: (p: Handlers[K]) => Promise<void> } = {
     console.log(`[tracker-paddle] ${deviceId}/${deviceSessionId}: ${r.status}${'paddleId' in r ? ` ${r.paddleId}` : ` (${r.reason})`}`)
   },
   'strava-event': processStravaEvent,
+  // A deleted account's second pass, ~90 s after DELETE /api/account (#814).
+  'erase-account-again': eraseAccountAgain,
 }
 
-const KEY = /^jobs\/(tracker-paddle|strava-event)\/[\w-]{1,40}\.json$/
+const KEY = /^jobs\/(tracker-paddle|strava-event|erase-account-again)\/[\w-]{1,40}\.json$/
 const stateKey = (key: string) => key.replace(/^jobs\//, 'jobs-state/')
 const failedKey = (key: string) => key.replace(/^jobs\//, 'jobs-failed/')
 const kickHere = () => process.env.USE_LOCAL_STORAGE === 'true' && !process.env.VITEST
@@ -110,14 +114,25 @@ export async function runJob(key: string, now = Date.now()): Promise<RunOutcome>
 /** Runs every job that's due and not just announced, oldest first, within the time budget. */
 export async function sweepJobs(now = Date.now()): Promise<Record<RunOutcome, number>> {
   const counts: Record<RunOutcome, number> = { done: 0, gone: 0, not_due: 0, busy: 0, retry: 0, failed: 0, bad_key: 0 }
-  const keys = (await listKeys('jobs/')).filter(k => KEY.test(k)).sort()   // keys start with the time: oldest first
+  // File names start with the time: oldest first, whatever the kind.
+  const name = (k: string) => k.slice(k.lastIndexOf('/') + 1)
+  const keys = (await listKeys('jobs/')).filter(k => KEY.test(k)).sort((a, b) => (name(a) < name(b) ? -1 : name(a) > name(b) ? 1 : 0))
   const started = Date.now()
+  let ran = 0
   for (const key of keys) {
     if (Date.now() - started > SWEEP_BUDGET_MS) break
     const job = await getJson<Job>(key)
     if (!job) continue
     if (now - Date.parse(job.createdAt) < FRESH_MS && !job.notBefore) continue
-    counts[await runJob(key, now)]++
+    // A big account's erasure can take most of the 30 s a request has, so it
+    // runs alone: first in a sweep, and the sweep ends after it. Cut off part
+    // way, it would never reach jobs-failed/ and no alarm would fire.
+    const alone = job.kind === 'erase-account-again'
+    if (alone && ran > 0) break
+    const outcome = await runJob(key, now)
+    counts[outcome]++
+    if (outcome !== 'not_due' && outcome !== 'busy' && outcome !== 'gone') ran++
+    if (alone && ran > 0) break
   }
   return counts
 }
