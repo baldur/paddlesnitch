@@ -2,7 +2,7 @@
 // each side in turn; a 500 m piece, sprints spend stamina.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KAYAK_ERG, createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle } from '../reading-thames/kayak-erg.js';
+import { KAYAK_ERG, createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from '../reading-thames/kayak-erg.js';
 
 const DT = 1 / 60;
 // A 500 m at a steady `rate` (strokes a minute, both sides counted).
@@ -94,4 +94,39 @@ test("the paddler's stroke for drawing: the last side and when", () => {
   assert.equal(ergPaddle(erg).side, null);
   stepKayakErg(erg, DT, { strokes: ['right'] });
   assert.deepEqual(ergPaddle(erg), { at: 0, side: 'right' });
+});
+
+test('the result: the time, a new best (only if quicker) or the old one', () => {
+  assert.deepEqual(kayakErgResult(134.3, null), { text: '500 m in 2:14.3.', record: true });
+  assert.deepEqual(kayakErgResult(130.05, 134.3), { text: '500 m in 2:10.1, a new best!', record: true });
+  assert.deepEqual(kayakErgResult(140, 134.3), { text: '500 m in 2:20.0. Your best: 2:14.3.', record: false });
+});
+
+test('the finish is timed where the 500 m was crossed, not at the end of the step', () => {
+  const erg = createKayakErg({ piece: 10 });
+  stepKayakErg(erg, 0.01, { strokes: ['left'] });
+  erg.power = 2.8 * 125; // 5 m/s, held: the strokes put in just that, and keep coming
+  erg.stroke = erg.power / (erg.rate / 60);
+  for (let i = 0; i < 4 && erg.done === null; i++) {
+    erg.last = erg.time;
+    stepKayakErg(erg, 0.7, {});
+  }
+  assert.ok(erg.done !== null && Math.abs(erg.done - 2.01) < 0.05, `${erg.done}`);
+});
+
+test('mashing at 180 a minute pulls no harder than 120 while the bar lasts', () => {
+  const at = (rate) => {
+    const erg = createKayakErg();
+    let next = 0;
+    let n = 0;
+    for (let t = 0; t < 3; t += DT) {
+      const strokes = t >= next ? ((next += 60 / rate), [n++ % 2 ? 'right' : 'left']) : [];
+      stepKayakErg(erg, DT, { strokes });
+    }
+    return erg;
+  };
+  const fast = at(180);
+  const capped = at(120);
+  assert.ok(fast.stamina > 0 && fast.rate >= 175, `still sprinting: ${fast.rate} a minute, ${fast.stamina} left`);
+  assert.ok(fast.metres <= capped.metres * 1.02, `180: ${fast.metres} m, 120: ${capped.metres} m`);
 });

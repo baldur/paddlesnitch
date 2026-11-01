@@ -108,3 +108,12 @@ export function kayakErgNumbers(erg) {
 // For drawing the paddler: the side of the last stroke and when it was, as a
 // boat's paddle is kept (`{ at, side }` on the erg's own clock).
 export const ergPaddle = (erg) => ({ at: erg.started ? erg.last : -Infinity, side: erg.side });
+
+// What you're told at the end: the time, and a new best or the old one.
+export function kayakErgResult(done, best) {
+  const record = !best || done < best;
+  const parts = [`500 m in ${clock(done)}${record && best ? ', a new best!' : '.'}`];
+  if (!record) parts.push(`Your best: ${clock(best)}.`);
+  return { text: parts.join(' '), record };
+}
+const clock = (t) => `${Math.floor(t / 60)}:${(t - Math.floor(t / 60) * 60).toFixed(1).padStart(4, '0')}`;

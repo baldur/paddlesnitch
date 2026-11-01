@@ -101,6 +101,7 @@ const CASES = [
   // The canoe club's kayak erg, in front of its mirror: paddled like the boat, a side at a time.
   { name: 'webkit, desktop, the kayak erg', engine: webkit, ctx: desktop, club: true, kerg: true },
   { name: 'iphone safari, the kayak erg', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, kerg: true },
+  { name: 'iphone safari upright, the kayak erg', engine: webkit, ctx: devices['iPhone 15'], touch: true, club: true, kerg: true },
 ];
 
 // Plays one case in a fresh page. Returns a line describing what it saw;
@@ -174,7 +175,7 @@ async function play(c, page, errors) {
     // picker once blocked every button in the room).
     // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
     const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
-      : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ['Paddle a 500 m', null]]
+      : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     // Try it now says what it is, in full, even on a phone.
@@ -238,24 +239,48 @@ async function play(c, page, errors) {
     // alternating is never called a weak stroke.
     if (c.kerg) {
       const { width, height } = page.viewportSize();
-      for (let i = 0; i < 12; i++) {
-        if (c.touch) await page.touchscreen.tap(width * (i % 2 ? 0.8 : 0.2), height * 0.6);
-        else await page.keyboard.press(i % 2 ? 'ArrowRight' : 'ArrowLeft');
-        await page.waitForTimeout(700);
-      }
-      const got = await page.evaluate(() => {
+      const tap = (side) => (c.touch ? page.touchscreen.tap(width * (side === 'right' ? 0.8 : 0.2), height * 0.6) : page.keyboard.press(side === 'right' ? 'ArrowRight' : 'ArrowLeft'));
+      const look = () => page.evaluate(() => {
         const box = (el) => { const r = el.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; };
         const mon = document.getElementById('ergMon');
-        const others = [...['clubPlace', 'pause', 'sound', 'clubBack', 'clubStart'].map((id) => document.getElementById(id)), document.querySelector('header h1'), ...document.querySelectorAll('#clubDoors button')].filter((el) => el && el.offsetParent && !el.hidden);
+        const others = [...['clubPlace', 'pause', 'sound', 'clubBack', 'clubStart', 'clubNote'].map((id) => document.getElementById(id)), document.querySelector('header h1'), ...document.querySelectorAll('#clubDoors button')].filter((el) => el && el.offsetParent && !el.hidden);
         const hit = others.filter((el) => { const a = box(mon); const b = box(el); return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }).map((el) => el.id || el.textContent.trim());
         const m = box(mon);
         return { text: mon.textContent, hidden: mon.hidden, hit, off: m.l < 0 || m.r > innerWidth || m.t < 0, note: document.getElementById('clubNote').textContent, place: window.kayak.club.place };
       });
+      // On a keyboard the first stroke starts the piece (focus is on Paddle a 500 m).
+      const focused = await page.evaluate(() => document.activeElement?.textContent);
+      if (!c.touch) await tap('left');
+      await page.waitForTimeout(700);
+      const started = { ...(await look()), focused, focus: focused === 'Paddle a 500 m', nav: await page.locator('#clubBack').isVisible() };
+      for (let i = 1; i < 12; i++) {
+        await tap(i % 2 ? 'right' : 'left');
+        await page.waitForTimeout(700);
+      }
+      const got = await look();
+      if (!c.touch && !started.focus) errors.push(`arriving in the kayak erg room focused "${started.focused}", not Paddle a 500 m`);
+      if (started.hit.length) errors.push(`just after the start, the kayak erg's numbers overlap ${started.hit.join(', ')}`);
+      if (started.nav) errors.push('Back and Start over stayed up under the left thumb while paddling');
       const left = Number(/(\d+)m to go/.exec(got.text)?.[1]);
       if (got.hidden || !(left < 500)) errors.push(`the kayak erg's numbers say ${got.text}`);
       if (got.hit.length || got.off) errors.push(`the kayak erg's numbers overlap ${got.hit.join(', ') || 'the screen edge'}`);
       if (/weak/i.test(got.note)) errors.push(`left, right on the kayak erg was called "${got.note}"`);
       if (got.place !== 'kerg') errors.push(`paddling the erg left the room for ${got.place}`);
+      // The same side twice: told so, and that note clear of the numbers too.
+      await tap('left');
+      await page.waitForTimeout(700);
+      await tap('left');
+      await page.waitForTimeout(500);
+      const weak = await look();
+      if (!/weak/i.test(weak.note)) errors.push(`two strokes on one side said "${weak.note}"`);
+      if (weak.hit.length) errors.push(`with a note up, the kayak erg's numbers overlap ${weak.hit.join(', ')}`);
+      // Esc mid-piece: the numbers go, and the play is counted as quit.
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => window.kayak.club?.place === 'club' && !window.kayak.club.to, null, { timeout: 60_000 });
+      const left2 = await page.evaluate(() => { window.gameMetrics.send(); return { mon: document.getElementById('ergMon').hidden, plays: window.gameMetrics.sent.flatMap((b) => b.events).filter((e) => e.event === 'game_play' && e.props.course === 'kayak-erg').map((e) => e.props) }; });
+      if (!left2.mon) errors.push('the kayak erg\'s numbers stayed up outside the room');
+      // (One play: the piece you left, not a restart as well.)
+      if (left2.plays.length !== 1 || left2.plays[0].end !== 'quit') errors.push(`leaving the kayak erg sent ${JSON.stringify(left2.plays)}, expected one kayak-erg play that ended 'quit'`);
       return `the kayak erg: ${got.text.replace(/\s+/g, ' ').slice(0, 60)}`;
     }
     // The erg: both sides together for each stroke, and the monitor counts down the 500 m.

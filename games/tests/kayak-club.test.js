@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
+import { MeshBuilder } from '../reading-thames/meshes.js';
 import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
-import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRROR, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
+import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRROR, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -70,8 +71,25 @@ test("the canoe club's erg room: a door from the club, under it, the kayak erg b
   assert.ok(Math.abs(toErg) > 1 && Math.abs(toErg) < Math.abs(toMirror), `the erg ${toErg} m, the mirror ${toMirror} m`);
   // The erg's middle is in front of the mirror, which is wider than you on it.
   assert.ok(Math.abs(shots.kerg[0] - at[0]) < MIRROR.x1 && MIRROR.x1 - MIRROR.x0 > 2);
-  // The room behind the mirror stays clear of the other rooms (each 40 m along).
-  assert.ok(ROOMS.kerg.depth * 2 < 40 && ROOMS.kerg.width < 40);
+  // The room behind the mirror is behind it, the far side from you, and no
+  // deeper than the room; the real room is on your side (bar the wall's thickness).
+  const zs = (mirrored) => {
+    const m = new MeshBuilder();
+    ergRoom(m, at, mirrored);
+    const { vertices } = m.build();
+    return vertices.filter((_, i) => i % 9 === 2);
+  };
+  const away = Math.sign(shots.mirrorZ - eye[2]);
+  const behind = zs(true).map((z) => (z - shots.mirrorZ) * away);
+  assert.ok(Math.min(...behind) > -1e-6 && Math.max(...behind) < ROOMS.kerg.depth + 0.3, `behind the mirror: ${Math.min(...behind)}..${Math.max(...behind)} m`);
+  const inside = zs(false).map((z) => (z - shots.mirrorZ) * away);
+  assert.ok(Math.max(...inside) <= 0.2 + 1e-6, `the room reaches ${Math.max(...inside)} m past the mirror`);
+  // The reflection: the erg, as far behind the mirror as it is in front.
+  const R = mirrorMatrix(shots.mirrorZ);
+  const [x, y, z] = shots.kerg;
+  const seen = [R[0] * x + R[12], R[5] * y + R[13], R[10] * z + R[14]];
+  assert.ok(Math.abs(seen[2] - shots.mirrorZ + (z - shots.mirrorZ)) < 1e-9 && seen[0] === x && seen[1] === y);
+  assert.ok((seen[2] - shots.mirrorZ) * away > 0, 'the reflected erg is behind the mirror');
   // The button to start is in the room, in view.
   assert.ok(Math.hypot(shots.kergLabel[0] - shots.kerg[0], shots.kergLabel[2] - shots.kerg[2]) < 2);
 });

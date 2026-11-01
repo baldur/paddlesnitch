@@ -5,10 +5,10 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG } from './club.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, mirrorMatrix } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
-import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle } from './kayak-erg.js';
+import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from './kayak-erg.js';
 import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, moveOldScull, boardHull, isScullHull, scullHullName } from './kit.js';
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
@@ -917,8 +917,8 @@ function arrive(place) {
     spots.push({ label: 'Honours board', at: shots.honours, act: honours });
   }
   // (Hidden while you row, where a tap would start again; then "Row again".)
-  if (place === 'erg') spots.push({ label: 'Row a 500 m', at: shots.ergLabel, act: startErg, go: true, hideWhile: () => ergRun && ergRun.erg.done === null, erg: true });
-  if (place === 'kerg') spots.push({ label: 'Paddle a 500 m', at: shots.kergLabel, act: startKerg, go: true, hideWhile: () => kergRun && kergRun.erg.done === null, kerg: true });
+  if (place === 'erg') spots.push({ label: 'Row a 500 m', at: shots.ergLabel, act: startErg, go: true, hideWhile: () => ergRun && (ergRun.erg.done === null || clock() - ergRun.doneAt < AGAIN), erg: true });
+  if (place === 'kerg') spots.push({ label: 'Paddle a 500 m', at: shots.kergLabel, act: startKerg, go: true, hideWhile: () => kergRun && (kergRun.erg.done === null || clock() - kergRun.doneAt < AGAIN), kerg: true });
   if (place === 'changing') spots.push({ label: 'Change', at: shots.changeLabel, act: () => sheet('paddler') });
   if (place === 'boathouse') {
     BOATS.forEach((b, i) => spots.push({ label: String(b.stability), at: shots.rackLabels[i], act: () => pickBoat(b.id), small: true, on: kit.boat === b.id, title: b.name }));
@@ -973,18 +973,20 @@ function arrive(place) {
   // Phones held upright: races are sideways.
   if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
   // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
-  if (!menu.open) (club.spots.find((x) => (club.backToHire ? x.hire : x.act && !x.friend)) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  // (In an erg room, the piece first: Enter or A on arrival starts it rather than leaving.)
+  if (!menu.open) (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
   club.backToHire = false;
   // On an upright phone the row sits above Back, not on it.
   clubEl.classList.toggle('backable', !!PLACES[place].up);
   if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
-  if (place === 'kerg') note(kergBest() ? `Your best 500 m: ${formatTime(kergBest())}` : 'Paddle as on the water: left, right, left, right');
+  if (place === 'kerg') note(kergBest() ? `Your best 500 m: ${formatTime(kergBest())}` : 'Press left, then right, in turn, to start: arrows, thumbs or triggers');
   if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Press both arrows, thumbs or triggers together for each stroke');
 }
 // The erg room: a 500 m on your erg, the rower on the next one keeping a
 // steady 2:08. Both sides together for a stroke; the monitor shows how it's going.
 let ergRun = null; // { erg, play }
 const ergMon = document.getElementById('ergMon');
+const clubPlaceEl = document.getElementById('clubPlace');
 const ergBest = () => { try { return Number(localStorage.getItem(ERG_BEST)) || null; } catch { return null; } };
 function startErg() {
   closeSheet();
@@ -1015,6 +1017,7 @@ function stepErgRun(dt) {
       tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
       track(playEvent(ergRun.play, { end: 'finished', now: clock() }));
       ergRun.play = null;
+      ergRun.doneAt = clock();
     }
   }
   const m = monitor(erg);
@@ -1024,17 +1027,33 @@ function stepErgRun(dt) {
 // The canoe club's erg room: a 500 m on the kayak erg, watching yourself in
 // the mirror. Paddled like the boat; the numbers sit at the top (the machine
 // has no screen).
-let kergRun = null; // { erg, play }
+let kergRun = null; // { erg, play, at, doneAt, noteUntil }
+// Seconds after a finish before "Paddle again" (or "Row again") shows, or a
+// stroke starts another: it comes back under the left thumb, still tapping.
+const AGAIN = 2.5;
 const kergBest = () => { try { return Number(localStorage.getItem(KERG_BEST)) || null; } catch { return null; } };
-function startKerg() {
+// `first`: the stroke that started it, if a stroke did (it counts).
+function startKerg(first = []) {
+  // (A tap on the button is a touch stroke too: one start, not two.)
+  if (kergRun && kergRun.erg.done === null && clock() - kergRun.at < 1) return;
   closeSheet();
   endKerg('restart');
   controls.clear();
-  kergRun = { erg: createKayakErg(), play: beginPlay({ key: 'kayak-erg', solo: true }, { from: visit.from, now: clock() }) };
+  kergRun = { erg: createKayakErg(), play: beginPlay({ key: 'kayak-erg', solo: true }, { from: visit.from, now: clock() }), at: clock() };
   visit.plays++;
   ergMon.hidden = false;
   ergMon.classList.add('kayak');
-  note('Paddle! Left, right, left, right. Quicker than 90 a minute is a sprint.');
+  // While you paddle, the ways out are Esc and B: Back and Start over sit under the left thumb.
+  clubEl.classList.add('kerging', 'kerg');
+  note('Paddle! Quicker than 90 a minute is a sprint: it pulls harder but empties the sprint bar.');
+  stepKayakErg(kergRun.erg, 0, { strokes: first });
+}
+// In the room, waiting: the first stroke starts a piece.
+function kergWaiting() {
+  if (!club || club.place !== 'kerg' || club.to || menu.open) return;
+  if (kergRun && (kergRun.erg.done === null || clock() - kergRun.doneAt < AGAIN)) return;
+  const sides = controls.take().strokes.filter((x) => x === 'left' || x === 'right');
+  if (sides.length) startKerg(sides.slice(0, 1));
 }
 function endKerg(end = 'quit') {
   if (!kergRun) return;
@@ -1042,23 +1061,29 @@ function endKerg(end = 'quit') {
   kergRun = null;
   ergMon.hidden = true;
   ergMon.classList.remove('kayak');
+  clubEl.classList.remove('kerging', 'kerg');
 }
 function stepKergRun(dt) {
   const { erg } = kergRun;
   const { strokes } = controls.take();
+  if (erg.done !== null) return kergWaiting(); // the result stays up; then a stroke goes again
   for (const e of stepKayakErg(erg, dt, { strokes: strokes.filter((x) => !x.startsWith('back-')) })) {
     if (e === 'stroke' || e === 'weak') noise({ freq: e === 'weak' ? 180 : 260, to: 110, q: 0.6, duration: 0.45, gain: e === 'weak' ? 0.04 : 0.07 }); // the flywheel's whirr
-    if (e === 'weak') note('Weak stroke: change sides each time');
+    if (e === 'weak') {
+      note('Weak stroke: change sides each time');
+      kergRun.noteUntil = erg.time + 2;
+    }
     if (e === 'done') {
-      const best = kergBest();
-      const record = !best || erg.done < best;
+      const { text, record } = kayakErgResult(erg.done, kergBest());
       if (record) try { localStorage.setItem(KERG_BEST, String(erg.done)); } catch {}
-      note(`500 m in ${formatTime(erg.done)}${record && best ? ': a new best!' : '.'}${record ? '' : ` Your best: ${formatTime(best)}.`}`);
+      note(text);
       const again = club.spots.find((x) => x.kerg);
       if (again) again.el.textContent = 'Paddle again';
       tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
       track(playEvent(kergRun.play, { end: 'finished', now: clock() }));
       kergRun.play = null;
+      kergRun.doneAt = clock();
+      clubEl.classList.remove('kerging');
     }
   }
   // Once you're going, the note makes way for the mirror.
@@ -1066,8 +1091,12 @@ function stepKergRun(dt) {
     kergRun.going = true;
     clubNote.hidden = true;
   }
+  if (kergRun.noteUntil && erg.time > kergRun.noteUntil && erg.done === null) {
+    kergRun.noteUntil = 0;
+    clubNote.hidden = true;
+  }
   const m = kayakErgNumbers(erg);
-  ergMon.innerHTML = `<b>${formatTime(m.time)}</b><span>${m.pace ? formatTime(m.pace) : '-:--'}<small>/500</small></span><span>${m.rate || '--'}<small>spm</small></span><b>${m.left}<small>m to go</small></b><span class="other">Sprint left: ${Math.round(m.stamina * 100)}%</span>`;
+  ergMon.innerHTML = `<b>${formatTime(m.time)}</b><span>${m.pace ? formatTime(m.pace) : '-:--'}<small>/500</small></span><span>${m.rate || '--'}<small>spm</small></span><b>${m.left}<small>m to go</small></b><span class="other">Sprint bar: ${Math.round(m.stamina * 100)}%</span>`;
 }
 
 // The rowing club's boathouse: take a scull, or paint yours.
@@ -1173,8 +1202,14 @@ function placeDoors() {
   }
   for (const p of placed) p.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
   // The kayak erg has no screen: its numbers at the top, in the middle.
-  // (On a phone held sideways, bottom right: the top is the header's, and the mirror's in the middle.)
-  if (kergRun) ergMon.style.transform = h < 500 ? `translate(${w - 16 - ergMon.offsetWidth}px, ${h - 16 - ergMon.offsetHeight}px)` : `translate(${w / 2}px, 12px) translate(-50%, 0)`;
+  // (On a phone held sideways, bottom right: the top is the header's, and the
+  // mirror's in the middle. Upright, under the place's name: the top is too
+  // narrow to share with the header, and Back and the note are at the bottom.)
+  if (kergRun) {
+    const under = clubPlaceEl.getBoundingClientRect().bottom + 8;
+    ergMon.style.transform = h < 500 ? `translate(${w - 16 - ergMon.offsetWidth}px, ${h - 16 - ergMon.offsetHeight}px)`
+      : w < 700 ? `translate(${w / 2}px, ${under}px) translate(-50%, 0)` : `translate(${w / 2}px, 12px) translate(-50%, 0)`;
+  }
   // The erg's numbers, beside its monitor (above it, on a phone held sideways).
   else if (ergRun && ergMonAt) {
     const [x, y, z] = ergMonAt;
@@ -1423,8 +1458,7 @@ function placeKayakErg(l) {
   // The cords: from each pulley to its end of the shaft.
   const cords = [-1, 1].map((side) => limb(erg, [side * K.pulleys[0], K.pulleys[1], K.pulleys[2]], apply(multiply(translation(0, K.seat[1], 0), shaftAt), [side * K.shaft, 0, 0])));
   // The mirror: z turned about its plane.
-  const zm = shots.mirrorZ;
-  const R = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 2 * zm, 1];
+  const R = mirrorMatrix(shots.mirrorZ);
   const both = (list) => [...list, ...list.map((m) => multiply(R, m))];
   renderer.place(g.erg, both([erg]));
   renderer.place(g.shaft, both([shaft]));
@@ -2757,6 +2791,7 @@ function frame(now) {
   if (club) stepClub(dt);
   if (ergRun) stepErgRun(dt);
   if (kergRun) stepKergRun(dt);
+  else kergWaiting();
   render(now / 1000);
   requestAnimationFrame(frame);
 }

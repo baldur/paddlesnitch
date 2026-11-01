@@ -74,6 +74,9 @@ export const MY_ERG = 3; // [-0.6, 0.2]
 // it, turned inside out (main.js draws you there too, reflected).
 export const KERG_Z = -0.4; // the erg's middle, from the room's centre (the mirror's side is -z)
 export const MIRROR = { x0: -1.6, x1: 1.6, y0: 0.3, y1: 2.5 };
+// The reflection in the mirror, as a matrix (column-major): world z turned
+// about the mirror's plane at `z`.
+export const mirrorMatrix = (z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 2 * z, 1];
 
 const add = (a, b, k = 1) => a.map((v, i) => v + b[i] * k);
 const centre = (shape) => shape.reduce((a, p) => [a[0] + p[0] / shape.length, a[1] + p[1] / shape.length], [0, 0]);
@@ -280,11 +283,12 @@ function shell(m, o, size, floor) {
 // mirror's opening in it, is built once, on the real side. A rubber mat under
 // the erg, a K1 on brackets on the wall behind you and a noticeboard, so the
 // mirror shows something of the room.
-function ergRoom(m, o, mirrored) {
+export function ergRoom(m, o, mirrored) {
   const { width: w, depth: d, height: h } = ROOMS.kerg;
   const zm = -d / 2;
   const f = (z) => (mirrored ? 2 * zm - z : z);
-  const box = ([x0, y0, z0], [x1, y1, z1], color) => rbox(m, o, [x0, y0, Math.min(f(z0), f(z1))], [x1, y1, Math.max(f(z0), f(z1))], color);
+  // (The reflected room a shade darker, as a mirror gives back a little less light.)
+  const box = ([x0, y0, z0], [x1, y1, z1], color) => rbox(m, o, [x0, y0, Math.min(f(z0), f(z1))], [x1, y1, Math.max(f(z0), f(z1))], mirrored ? color.map((v) => v * 0.86) : color);
   const [x0, x1, z0, z1] = [-w / 2, w / 2, zm, d / 2];
   box([x0 - 0.2, -0.2, z0], [x1 + 0.2, 0, z1 + 0.2], C.tile);
   box([x0 - 0.2, h, z0], [x1 + 0.2, h + 0.2, z1 + 0.2], C.white);
@@ -303,12 +307,22 @@ function ergRoom(m, o, mirrored) {
   box([b, 0, z0 - 0.2], [x1, h, z0], C.wall);
   box([a, 0, z0 - 0.2], [b, lo, z0], C.wall);
   box([a, hi, z0 - 0.2], [b, h, z0], C.wall);
-  // The mirror's thin frame.
-  const t = 0.05;
-  box([a - t, lo - t, z0], [b + t, lo, z0 + 0.02], C.rack);
-  box([a - t, hi, z0], [b + t, hi + t, z0 + 0.02], C.rack);
-  box([a - t, lo, z0], [a, hi, z0 + 0.02], C.rack);
-  box([b, lo, z0], [b + t, hi, z0 + 0.02], C.rack);
+  // The mirror's frame, light aluminium, and two faint streaks across the
+  // glass, so it reads as a mirror rather than a hatch into a second room.
+  const t = 0.09;
+  const frame = [0.8, 0.82, 0.85];
+  box([a - t, lo - t, z0], [b + t, lo, z0 + 0.03], frame);
+  box([a - t, hi, z0], [b + t, hi + t, z0 + 0.03], frame);
+  box([a - t, lo, z0], [a, hi, z0 + 0.03], frame);
+  box([b, lo, z0], [b + t, hi, z0 + 0.03], frame);
+  const sheen = [0.78, 0.84, 0.88];
+  const glass = (u, v) => inRoom(o, u, v, z0 + 0.004);
+  for (const [u, w] of [[a + 0.15, 0.16], [a + 0.42, 0.06]]) {
+    const rise = 1.1; // the streak's lean: across this much for its height
+    const [p0, p1, p2, p3] = [glass(u, lo), glass(u + w, lo), glass(u + w + rise, hi), glass(u + rise, hi)];
+    m.triFacing(p0, p1, p2, sheen, [0, 0, -1]);
+    m.triFacing(p0, p2, p3, sheen, [0, 0, -1]);
+  }
 }
 
 // The rooms under both clubs. Your paddler, boats, paddles and the ergs are
