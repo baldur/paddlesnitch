@@ -53,6 +53,24 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(corner.near(bar), "the corner is the bar's colour: \(corner) vs \(bar)")
     }
 
+    /// #826: the efforts are rows with rules, no box, as the website's table.
+    /// Down the list's right edge the pixels are the page's background, bar
+    /// the 1 px rules; a box (the card colour, close to the page's, so the
+    /// check is tight) would fill that edge. The splits are drawn the same
+    /// way, but no sample paddle is long enough to show them.
+    func testEffortsHaveNoBox() {
+        open("pdl-river")
+        let list = scrollTo("efforts")
+        XCTAssertTrue(list.exists)
+        let shot = list.screenshot().image
+        guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
+        let page = Pixels.RGB(r: 0x0b, g: 0x12, b: 0x20)  // Palette.bg
+        let x = shot.size.width - 1
+        let column = stride(from: 1, to: shot.size.height - 1, by: 1).map { pixels.at(x: x, y: $0) }
+        let onPage = column.filter { $0.near(page, within: 8) }.count
+        XCTAssertGreaterThan(onPage * 10, column.count * 9, "\(onPage) of \(column.count) on the page")
+    }
+
     func testAPaddleWithoutGPSSaysWhyThereIsNoMap() {
         open("pdl-motion")
         XCTAssertTrue(text(containing: "The GPS lost the sky").appears(timeout: 10))

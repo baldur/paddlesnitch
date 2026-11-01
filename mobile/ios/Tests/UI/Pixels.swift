@@ -4,7 +4,9 @@ import XCTest
 struct Pixels {
     struct RGB: CustomStringConvertible {
         let r: Int, g: Int, b: Int
-        func near(_ other: RGB) -> Bool { abs(r - other.r) + abs(g - other.g) + abs(b - other.b) < 60 }
+        func near(_ other: RGB, within: Int = 60) -> Bool {
+            abs(r - other.r) + abs(g - other.g) + abs(b - other.b) < within
+        }
         var description: String { "(\(r), \(g), \(b))" }
     }
 
