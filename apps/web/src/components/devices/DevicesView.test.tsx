@@ -107,6 +107,12 @@ describe('DEVICES page', () => {
     expect(cardOf('Chatty').textContent).not.toContain('quiet')
   })
 
+  // As the apps say it: a tracker that never called in is quiet too.
+  it('says "never · quiet" for a tracker that has never called in', async () => {
+    await mount({ devices: [{ deviceId: 'AAAA0003', name: 'New', firmware: '0.9.0' }], stableVersion: '0.9.0', sessions: [] })
+    expect(container.textContent).toContain('seen never · quiet')
+  })
+
   it('still shows a revoked tracker, because its uploads are still the user\'s', async () => {
     stubFetch({
       [DEVICES]: { devices: [] },
