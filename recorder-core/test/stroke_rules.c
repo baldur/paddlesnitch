@@ -106,5 +106,105 @@ int main(void)
     g_buf[g_len] = 0;
     check(strstr(g_buf, "session,moving,0,no_rhythm,") != 0, "a long run, then a short one: the long one counts (no_rhythm)");
 
+    /* The live trace (rcs_trace). */
+    static rc_trace tr;
+    /* The ring always holds the last 10 s: 100 s at one sample per 80 ms,
+       and after the first 10 s every trace has all 125. */
+    rcs_init(&st);
+    int short_traces = 0;
+    for (uint32_t ms = 0; ms <= 100000; ms += 80) {
+        rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 3.0f : -3.0f, 0.0f);
+        rcs_trace(&st, ms, 0, &tr);
+        if (ms >= 9920 && (tr.n != 125 || tr.ago_ms[0] != 9920 || tr.ago_ms[124] != 0)) short_traces++;
+    }
+    check(short_traces == 0, "every trace after the first 10 s has 125 samples, 9.92 s back to 0");
+
+    /* Its axis is the one the stroke windows pick, about the same mean. */
+    rcs_init(&st);
+    for (uint32_t ms = 0; ms < 10000; ms += 80) {
+        float ph = (float)ms / 1000.0f * 6.2831853f;
+        rcs_sample(&st, &cfg, ms, 2.0f * sinf(ph), 1.0f + 0.5f * sinf(ph), 7.0f + 9.0f * sinf(0.5f * ph));
+    }
+    float mean, ss;
+    int ax = pick_axis(&st, 0, st.ring_n, &mean, &ss);
+    rcs_trace(&st, 9920, 0, &tr);
+    int same = tr.axis == ax && ax == 2 && tr.n == st.ring_n;
+    for (uint32_t i = 0; same && i < tr.n; i++) same = tr.dps[i] == held(&st, i)->gz - mean;
+    check(same, "the trace is the stroke windows' axis (z here), each sample less its mean");
+    check(tr.status == RC_TRACE_MOTION && tr.scale_dps > 8.9f && tr.scale_dps < 9.1f, "moving: scaled to its biggest swing (9 deg/s)");
+
+    /* Still below 1 deg/s rms: +-1.01 is moving, +-0.99 is still. */
+    for (int k = 0; k < 2; k++) {
+        float amp = k ? 0.99f : 1.01f;
+        rcs_init(&st);
+        for (uint32_t ms = 0; ms < 10000; ms += 80) rcs_sample(&st, &cfg, ms, (ms / 80) % 2 ? amp : -amp, 0.0f, 0.0f);
+        rcs_trace(&st, 9920, 0, &tr);
+        if (k) check(tr.status == RC_TRACE_STILL && tr.scale_dps == 5.0f, "0.99 deg/s rms: still, drawn on the 5 deg/s floor");
+        else   check(tr.status == RC_TRACE_MOTION, "1.01 deg/s rms: motion");
+    }
+
+    /* No sample for 7 s: no_samples, nothing to draw; 6.999 s: the last 10 s. */
+    rcs_trace(&st, 9920 + 6999, 0, &tr);
+    check(tr.status == RC_TRACE_STILL && tr.n == 125, "6.999 s since the newest sample: still drawn");
+    rcs_trace(&st, 9920 + 7000, 0, &tr);
+    check(tr.status == RC_TRACE_NO_SAMPLES && tr.n == 0 && tr.axis == -1, "7 s since the newest sample: no_samples, nothing to draw");
+
+    /* None yet: starting for 7 s from the start, then no_samples. */
+    rcs_init(&st);
+    rcs_trace(&st, 1000 + 6999, 1000, &tr);
+    check(tr.status == RC_TRACE_STARTING && tr.n == 0, "no sample yet, 6.999 s in: starting");
+    rcs_trace(&st, 1000 + 7000, 1000, &tr);
+    check(tr.status == RC_TRACE_NO_SAMPLES, "no sample yet, 7 s in: no_samples");
+
+    /* Moving, then laid down: still once the last 10 s are, though the
+       ring still holds the moving samples (and back again). */
+    rcs_init(&st);
+    uint32_t ms = 0;
+    for (; ms < 10000; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 3.0f : -3.0f, 0.0f);
+    for (; ms < 20080; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 0.1f : -0.1f, 0.0f);
+    rcs_trace(&st, ms - 80, 0, &tr);
+    check(st.ring_n > tr.n && tr.status == RC_TRACE_STILL, "moving, then 10 s laid down: still (the older motion isn't counted)");
+    for (uint32_t end = ms + 400; ms < end; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, (ms / 80) % 2 ? 30.0f : -30.0f, 0.0f);
+    rcs_trace(&st, ms - 80, 0, &tr);
+    check(tr.status == RC_TRACE_MOTION, "picked up again: motion within half a second");
+
+    /* Exactly 1 deg/s rms (+-1 over an even count) is motion: still is under it. */
+    rcs_init(&st);
+    for (ms = 0; ms < 124 * 80; ms += 80) rcs_sample(&st, &cfg, ms, (ms / 80) % 2 ? 1.0f : -1.0f, 0.0f, 0.0f);
+    rcs_trace(&st, ms - 80, 0, &tr);
+    check(tr.n == 124 && tr.status == RC_TRACE_MOTION, "exactly 1 deg/s rms: motion");
+
+    /* One sample alone: still. */
+    rcs_init(&st);
+    rcs_sample(&st, &cfg, 0, 0.0f, 50.0f, 0.0f);
+    rcs_trace(&st, 0, 0, &tr);
+    check(tr.n == 1 && tr.status == RC_TRACE_STILL && tr.dps[0] == 0.0f, "one sample: still, drawn at 0");
+
+    /* The 7 s count from the newest sample, not the start: samples 0-1 s, a
+       late start at 2 s, nothing since; at 8 s it's 7 s without one. */
+    rcs_init(&st);
+    for (ms = 0; ms <= 1000; ms += 80) rcs_sample(&st, &cfg, ms, 0.0f, 0.0f, 0.0f);
+    rcs_trace(&st, 960 + 6999, 2000, &tr);
+    check(tr.status == RC_TRACE_STILL, "6.999 s after the newest sample, a later start: still");
+    rcs_trace(&st, 960 + 7000, 2000, &tr);
+    check(tr.status == RC_TRACE_NO_SAMPLES, "7 s after the newest sample, though 5.96 s after a later start: no_samples");
+
+    /* RC_TRACE_MAX: the gate makes 125 the most, but if samples ever came
+       closer, the newest 128 are kept, never more. */
+    rcs_init(&st);
+    for (uint32_t i = 0; i < 200; i++) {
+        st.ring[i].ms = i * 50u; st.ring[i].gx = 0.0f; st.ring[i].gy = i % 2 ? 2.0f : -2.0f; st.ring[i].gz = 0.0f;
+    }
+    st.ring_head = 0; st.ring_n = 200;
+    rcs_trace(&st, 199u * 50u, 0, &tr);
+    check(tr.n == RC_TRACE_MAX && tr.ago_ms[RC_TRACE_MAX - 1] == 0 && tr.ago_ms[0] == 127u * 50u, "never more than 128, the newest kept");
+
+    /* Across the 2^32 ms wrap. */
+    rcs_init(&st);
+    uint32_t w0 = 0xFFFFFFFFu - 5000u;
+    for (uint32_t i = 0; i < 200; i++) rcs_sample(&st, &cfg, w0 + i * 80u, 0.0f, i % 2 ? 3.0f : -3.0f, 0.0f);
+    rcs_trace(&st, w0 + 199u * 80u, w0, &tr);
+    check(tr.status == RC_TRACE_MOTION && tr.n == 125 && tr.ago_ms[0] == 9920, "the trace across the clock wrap");
+
     return g_fails ? 1 : 0;
 }

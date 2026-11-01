@@ -15,6 +15,7 @@
     "./athlete-profile": "./src/athlete-profile.ts",
     "./history-stats": "./src/history-stats.ts",
     "./llm": "./src/llm.ts",
+    "./voice": "./src/voice.ts",
     "./share-card": "./src/share-card.ts",
     "./similar": "./src/similar.ts",
     "./trials": "./src/trials.ts",

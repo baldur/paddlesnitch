@@ -534,9 +534,12 @@ export class AttStack extends cdk.Stack {
         // insight backend (packages/analysis/src/llm.ts) runs here. Bedrock region
         // + model; NODE_ENV=production hard-pins the Bedrock backend. To bump the
         // narration model, see docs/features/personable-insights.md (the grant
-        // below already covers inference-profile/*).
+        // below already covers foundation-model/* and inference-profile/*).
+        // Qwen3 Next 80B (2026-11-01, owner's pick after a side-by-side with
+        // Mixtral, Nova 2 Lite and gpt-oss-120b): on demand in eu-west-1, so the
+        // paddle's numbers stay in Ireland; no Marketplace agreement needed.
         BEDROCK_REGION: 'eu-west-1',
-        LLM_MODEL: 'mistral.mixtral-8x7b-instruct-v0:1',
+        LLM_MODEL: 'qwen.qwen3-next-80b-a3b',
         // Platform administrators (Cognito `sub`s, comma-separated) — the only
         // people who may read cross-account operational data such as one
         // device's firmware history. Deliberately a deploy-time allowlist and

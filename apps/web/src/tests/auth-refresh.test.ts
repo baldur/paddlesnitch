@@ -3,12 +3,17 @@
 // expired or is missing, getAuthUser() swaps the refresh token (tt_refresh,
 // 30 d) for a new one, silently. It had no test ("manual smoke only"); if it
 // broke, everyone would be signed out daily.
-import { describe, it, expect, vi } from 'vitest'
-import { makeUser } from './helpers'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { makeUser, makeDataDir, cleanDataDir } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import { cookies } from 'next/headers'
 import { getAuthUser } from '@paddlesnitch/core/auth'
+
+// Every sign-in check reads the deleted-account marker (#795).
+let dataDir: string
+beforeEach(async () => { dataDir = await makeDataDir() })
+afterEach(async () => { await cleanDataDir(dataDir) })
 
 function jar(values: Record<string, string>, opts: { readOnly?: boolean } = {}) {
   const set = vi.fn((name: string, value: string) => {

@@ -161,8 +161,8 @@ describe('in the history the AI and the coach profile read', () => {
   const motion = sum('m', { distanceKm: 0, cruiseSpeed: 0, durationS: 1440, noGps: true })
 
   it('a past paddle without a map is its time paddling, never 0 km or a pace', () => {
-    expect(historyBits(motion)).toEqual(['2026-10-01: 24 min paddling (no GPS, so no distance or pace)'])
-    expect(historyBits(sum('a'))).toEqual(['2026-10-01: 6.0km', 'cruise 2:47/500'])
+    expect(historyBits(motion)).toEqual(['1 Oct 2026: 24 min paddling (no GPS, so no distance or pace)'])
+    expect(historyBits(sum('a'))).toEqual(['1 Oct 2026: 6.0km', 'cruise 2:47/500'])
     expect(renderRelevant([{ summary: motion, reason: 'K1' }])).not.toMatch(/0\.0km|\/500/)
   })
 

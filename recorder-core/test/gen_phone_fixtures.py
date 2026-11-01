@@ -252,3 +252,70 @@ lines = [
 ]
 os.makedirs(f"{out}/phone_track_only", exist_ok=True)
 open(f"{out}/phone_track_only/phone.csv", "w").write("".join(lines))
+
+# The live trace (rc_phone_trace). Not phone_* (the apps' runners take every
+# phone_* case, and know `trace` only once they bind the call): trace_phone_*.
+def noise(i, k):
+    """Deterministic noise in [-1, 1)."""
+    v = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+    return 2 * (v - math.floor(v)) - 1
+
+def motion(t0, secs, hz, batch, latency_ns, gyro_fn, stop_ns=None):
+    """Android accel + gyro at hz, gyro_fn(i, t_s) -> rad/s; batches of `batch`."""
+    ev, seq = [], 0
+    step = 1_000_000_000 // hz
+    for kind, off in (("accel", 0), ("gyro", 2_000_000)):
+        for i in range(secs * hz):
+            t = t0 + i * step + off
+            if stop_ns is not None and t >= stop_ns:
+                break
+            if kind == "accel":
+                x, y, z = (0.02 * noise(i, 1) * 9.80665, 0.02 * noise(i, 2) * 9.80665,
+                           (1.0 + 0.02 * noise(i, 3)) * 9.80665)
+            else:
+                x, y, z = gyro_fn(i, (t - t0) / 1e9)
+            deliver = t0 + ((i // batch) + 1) * batch * step + off + latency_ns
+            ev.append((deliver, seq, f"{kind},{t},{fmt(x)},{fmt(y)},{fmt(z)}"))
+            seq += 1
+    return ev
+
+def trace_after_ticks(t0, ks, tick_ns, ev):
+    for k in ks:
+        ev.append((t0 + k * 1_000_000_000 + tick_ns, 2, "trace"))
+
+# Flat: lying on a table, ~0.13 deg/s rms of sensor noise, then both stop.
+t0 = 5_000_000_000_000
+ev = motion(t0, 20, 50, 25, 40_000_000,
+            lambda i, s: (0.004 * noise(i, 4), 0.004 * noise(i, 5), 0.004 * noise(i, 6)),
+            stop_ns=t0 + 20_000_000_000)
+ticks(t0, 30, 500_000_000, ev)
+trace_after_ticks(t0, (3, 12, 20, 26, 28, 30), 500_000_000, ev)
+write("trace_phone_flat",
+      "# Live trace, a phone lying flat: starting before any sample; still while\n"
+      "# the gyroscope reads only noise (~0.13 deg/s rms), drawn on the 5 deg/s\n"
+      "# floor; both sensors stop at 20 s: still at 26.5 s (6.5 s without a\n"
+      "# sample, the last 10 s held), no_samples at 28.5 s, nothing to draw.\n"
+      "phone,android,,1\ntrace\n",
+      ev, "finish\nexpect,dropped_late,0,dropped_unpaired,1\n")
+
+# Paddling: alternating strokes at 60 spm, so the boat rolls once a cycle of
+# two strokes (0.5 Hz) on the phone's y axis, with yaw at the stroke rate on
+# x; moving at 8 km/h. The trace is y, and the same samples read 60 spm.
+t0 = 6_000_000_000_000
+def paddle(i, s):
+    return (0.25 * math.sin(2 * math.pi * 1.0 * s + 0.4) + 0.004 * noise(i, 4),
+            0.6 * math.sin(2 * math.pi * 0.5 * s) + 0.004 * noise(i, 5),
+            0.1 * math.sin(2 * math.pi * 1.0 * s) + 0.004 * noise(i, 6))
+ev = motion(t0, 65, 50, 25, 40_000_000, paddle)
+utc0 = utc(2026, 11, 1, 8, 0, 0)
+for k in range(66):
+    t = t0 + k * 1_000_000_000 + 200_000_000
+    ev.append((t, 0, f"location,{t},{utc0 + k * 1000},{51.46 + k * 0.00002:.7f},-0.9700000,38.0,2.22,0.0"))
+ticks(t0, 65, 500_000_000, ev)
+trace_after_ticks(t0, (5, 64), 500_000_000, ev)
+write("trace_phone_paddle",
+      "# Live trace while paddling: 60 spm alternating, the roll (0.5 Hz) on y the\n"
+      "# biggest, yaw at the stroke rate on x; 8 km/h. The trace is y, scaled to\n"
+      "# its peak (~34 deg/s), and the same samples give 60 spm.\n"
+      "phone,android,,1\n",
+      ev, "finish\nexpect,dropped_late,0,dropped_unpaired,1\nexpect_session,all,57,63\n")

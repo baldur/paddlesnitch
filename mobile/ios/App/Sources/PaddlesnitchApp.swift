@@ -20,6 +20,7 @@ struct PaddlesnitchApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(account: account, samples: samples)
+                .buttonBorderShape(.control)
         }
     }
 

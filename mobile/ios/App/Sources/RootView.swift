@@ -95,7 +95,7 @@ struct RootView: View {
                 // Closed without signing in again: don't jump back later.
                 if account.user == nil && account.afterSignIn != nil { account.resumed() }
             },
-            content: { SignInView(account: account) }
+            content: { SignInView(account: account).buttonBorderShape(.control) }
         )
         // Up from opening until it has finished closing, not just asked to.
         // onDismiss says when; in case it never comes (a sheet closed while
@@ -127,6 +127,7 @@ struct RootView: View {
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { termsOpen = false } } }
             }
             .preferredColorScheme(.dark)
+            .buttonBorderShape(.control)
         }
     }
 

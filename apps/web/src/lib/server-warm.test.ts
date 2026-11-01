@@ -24,3 +24,13 @@ describe('server warm + Graviton', () => {
     expect(rule).toContain('retryAttempts: 0')
   })
 })
+
+// The paddle summary model (docs/features/personable-insights.md): Qwen3 Next
+// 80B on demand in eu-west-1 since 2026-11-01. On-demand, not a cross-region
+// profile, so the privacy page's "Bedrock in Ireland" stays true.
+describe('paddle summary model', () => {
+  it('is Qwen3 Next 80B, served in eu-west-1', () => {
+    expect(serverFn).toContain("LLM_MODEL: 'qwen.qwen3-next-80b-a3b'")
+    expect(serverFn).toContain("BEDROCK_REGION: 'eu-west-1'")
+  })
+})
