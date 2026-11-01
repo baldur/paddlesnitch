@@ -242,7 +242,8 @@ internal fun Efforts(d: PaddleDetail) {
 
 @Composable
 internal fun Splits(rows: List<SplitRow>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The same gap under the heading as Efforts (the website's gap-3).
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("500 m splits")
         // Data is square: no box, a border above each row, as the website's tables (#826).
         Column(Modifier.fillMaxWidth()) {
