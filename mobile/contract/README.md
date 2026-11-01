@@ -446,6 +446,8 @@ has a GPS fix", `since_fix_s` "0 while there's a fix, NAN before the first"):
 | `fix` = 0, 1–59 s | GPS lost 40 s ago | GPS lost 40 seconds ago | nothing |
 | `fix` = 0, 60 s or more | GPS lost 2 min ago (whole minutes, rounded down) | GPS lost 2 minutes ago | nothing |
 
+The line is not a live region.
+
 ### Motion line (live trace)
 
 Under the stroke rate, above the GPS line: a small live trace of the motion the
@@ -464,29 +466,27 @@ out nothing.
 
 | `status` | Trace | Shown |
 |---|---|---|
-| `RC_TRACE_STARTING` | none | Motion sensor: starting |
-| `RC_TRACE_MOTION` | drawn | Motion sensor: working |
-| `RC_TRACE_STILL` | drawn | Motion sensor: not moving |
-| `RC_TRACE_NO_SAMPLES` | none | Motion sensor stopped. No stroke rate while it's stopped. (red) |
+| `RC_TRACE_STARTING` | none | Starting motion sensor |
+| `RC_TRACE_MOTION` | drawn | Motion sensor working |
+| `RC_TRACE_STILL` | drawn | Motion sensor working, phone still |
+| `RC_TRACE_NO_SAMPLES` | none | Couldn’t read the motion sensor. Stroke rate pauses until it’s back. (red) |
 
 - `STILL` can come back after `MOTION` (the phone put down during a rest), so
   its words fit either way. `NO_SAMPLES` can clear too (Android may pause
   sensor delivery and resume), and stroke rate carries on from the new samples.
 - **Accessibility:** the trace is hidden from screen readers. The status line is
   read as it is. Like the GPS line, two changes are announced once each time they
-  happen: "Motion sensor stopped" on entering `NO_SAMPLES`, and "Motion sensor
-  back" on leaving it. It isn't a live region otherwise.
+  happen: "Couldn’t read the motion sensor. Stroke rate pauses until it’s back."
+  on entering `NO_SAMPLES`, and "Motion sensor back" on leaving it. It isn't a live region otherwise.
 - **No motion sensors on the phone** (the app knows before Start and passes no
   motion to the core): don't call `rc_phone_trace` and show no trace or motion
   line; the existing "No motion sensors on this phone, so no stroke rate" stays.
   (The core would report `STARTING`, then `NO_SAMPLES`, which would wrongly read
-  "stopped".)
+  as a fault.)
 - **Tests:** the core's fixtures `trace_phone_flat` and `trace_phone_paddle` (golden
   `trace.csv`, format in `recorder-core/fixtures/README.md`). Each app's fixture
   runner takes the `trace_phone_` prefix and handles the `trace` line, and a
   screenshot test draws each status from a fixture.
-
-The line is not a live region.
 
 ### Altitude
 
