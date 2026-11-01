@@ -299,7 +299,7 @@ copy once the server has it; uploads go on any network.
 | Call | Send | Answer |
 |---|---|---|
 | `POST /api/account/devices/phone` | `{installId, model}` | 201 `Phone` `{deviceId, name, model}`. `installId`: random, made once per install and kept with the app's own settings (16–64 of `A–Z a–z 0–9 _ -`), never the platform's advertising or hardware ID. `model`: `phone-android` or `phone-ios`. The same install and account always get the same `deviceId`. 409: the account has 10 phones (show `error`). 400: show `error` |
-| `POST /api/account/devices/{deviceId}/sessions?filename=` | the file itself | The tracker's upload, as the signed-in owner: same pieces, compression and answers (`docs/features/device-uplink.md`). 201 `Uploaded`. 409 `already_uploaded`: the server has it already, so treat it as sent. 404: this phone isn't on the account (removed on Devices). Any other 4xx: the file will never be taken; keep it, stop retrying it and show "Couldn't upload this recording." Phones get no `receipt` |
+| `POST /api/account/devices/{deviceId}/sessions?filename=` | the file itself | The tracker's upload, as the signed-in owner: same pieces, compression and answers (`docs/features/device-uplink.md`). 201 `Uploaded`. 409 `already_uploaded`: the server has it already, so treat it as sent. 404: this phone isn't on the account (removed on Devices). Any other 4xx: the file will never be taken; keep it, stop retrying it and show "Couldn't upload this recording. It's kept on this phone." Phones get no `receipt` |
 
 The upload body is the file's bytes (not multipart). Send files of 64 KB or
 more in 64 KB pieces (`&part=N&parts=M&sha256=<hex of the whole file>`, as the
@@ -318,8 +318,8 @@ broken upload, so send only the rest.
 - A second recording in the same second is `track_<stamp>_1` (the tracker's rule).
 - Delete the phone's copy of a file once the server answered 201 or 409
   `already_uploaded` for it, and the recording's folder once both files are gone.
-- A track the server refuses with 422 `no_points` (no GPS fix at all) is still
-  uploaded: delete it and don't send its motion file.
+- A track the server refuses with 422 `no_points` (no GPS fix at all) counts as
+  sent: the server keeps nothing, so delete it and its motion file.
 
 ### The phone on the account
 
@@ -329,8 +329,14 @@ broken upload, so send only the rest.
 - A 404 on upload means the owner removed the phone on Devices. Stop uploading
   and keep the files. Add the phone again only when the owner next starts a
   recording, then upload what's waiting. Never add it again in the background.
-- Devices lists phones as cards with `kind: "phone"` (no firmware, never
-  `quiet`). Removing one keeps its recordings and paddles, as for a tracker.
+- A 404 also shows on Paddles, where recordings waiting to upload show: "This phone
+  was removed from your account" with an **Upload now** button that adds the phone
+  again and uploads what's waiting.
+- `GET /api/account/devices` lists phones too, with `kind: "phone"` (no firmware,
+  never `quiet`). **Handle `kind` before the app first calls `…/phone`**: show
+  phones apart from trackers (or leave them out of the trackers screen), never as
+  a tracker card with "Remove tracker". Removing one keeps its recordings and
+  paddles, as for a tracker.
 
 ### Where recordings live
 
@@ -341,6 +347,16 @@ broken upload, so send only the rest.
   except while a file is open.
 - Upload on any network, in the background when the platform allows, retrying
   with backoff. Never upload while the recording is still running.
+
+### After Stop
+
+- Back to Paddles. Each recording waiting to upload shows there in one line
+  ("Uploading…", or "Waiting to upload" while offline) until the server has it;
+  then the paddle appears in the list as any other (`paddles.list`).
+- A track the server refuses with 422 `no_points`: one line in the same place,
+  "No GPS fix, so this didn't become a paddle", until dismissed.
+- Any other 4xx: "Couldn't upload this recording. It's kept on this phone." in the
+  same place, with Report an issue. The app never retries that file by itself.
 
 ### Recording screen
 
@@ -354,6 +370,16 @@ Both apps, laid out the same (design-usability, #767):
 - Stop: hold for 1.5 s, the button filling as it goes, with a haptic; a tap says
   "Keep holding to stop." Stop in the Android notification needs an unlock
   (`setAuthenticationRequired`). Hold to stop is pinned to the bottom.
+- Hold to stop has a named accessibility action, "Stop recording" (VoiceOver
+  custom action; Android `customActions`), which stops at once. Screen readers
+  hear "Hold to stop" as the hint, not the fill.
+- Start doesn't wait for a GPS fix: the GPS line says "Waiting for GPS".
+- Before Start, without location permission (or with location services off):
+  say so in place of Record, with a button to the setting. Recording needs
+  location all the time (Android: foreground service of type `location`;
+  iPhone: Always, or While using with background location).
+- No motion sensors: record anyway (GPS only), with "No motion sensors on this
+  phone, so no stroke rate" under the stroke rate.
 
 GPS line, from `rc_phone_live` ("The GPS state (fix, since_fix_s) is the latest
 tick's, not the latest row written"; `rc_live_values.fix` is "1: the latest row

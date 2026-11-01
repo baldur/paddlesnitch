@@ -18,10 +18,18 @@ import { POST as addPhoneRoute } from '@/app/api/account/devices/phone/route'
 import { POST as upload } from '@/app/api/account/devices/[deviceId]/sessions/route'
 import { DELETE as removeDevice } from '@/app/api/account/devices/route'
 import { POST as claim } from '@/app/api/devices/claim/route'
-import { isPhoneId, isTrackerId, isDeviceId, phoneDeviceId, listUserDevices, listUserDeviceSessions, MAX_PHONES, addPhone, exportUserDevices, eraseUserDevices } from '@/lib/devices'
+import { POST as tokenRoute } from '@/app/api/devices/token/route'
+import { POST as linkBluetooth } from '@/app/api/account/devices/link-bluetooth/route'
+import { GET as stagedParts } from '@/app/api/account/devices/[deviceId]/sessions/route'
+import { createHash } from 'crypto'
+import { Uploaded } from '@paddlesnitch/api/contract'
+import { publishFirmware, promoteFirmware } from '@/lib/firmware'
+import { deflateSync } from 'zlib'
+import { TEST_DEVICE_PUBKEY, linkProof } from './device-proof'
+import { isPhoneId, isTrackerId, isDeviceId, phoneDeviceId, listUserDevices, listUserDeviceSessions, MAX_PHONES, addPhone, exportUserDevices, eraseUserDevices, redeemToken, enrolDeviceKey, linkByTokenHash, revokeDevice, getUserDevice } from '@/lib/devices'
 import { isPhoneDeviceId, trackerSummaries } from '@/lib/device-view'
 import { deviceList } from '@/lib/device-list'
-import { listKeys } from '@/lib/storage'
+import { listKeys, putJson, getJson } from '@/lib/storage'
 import { runJob } from '@/lib/jobs'
 import { trackerPaddleId } from '@paddlesnitch/analysis/tracker-paddle'
 import { getSession } from '@paddlesnitch/analysis/analysis-store'
@@ -94,6 +102,19 @@ describe('adding a phone to the account', () => {
     expect((await res.json()).error).toMatch(/Remove one on Devices/)
   })
 
+  it("never takes over another account's phone record, even on a matching ID", async () => {
+    const victim = await makeUser('Victim'), attacker = await makeUser('Attacker')
+    // As if the attacker had found an install ID whose ID lands on the victim's phone:
+    // the record at that ID belongs to the victim.
+    const deviceId = phoneDeviceId(attacker.id, INSTALL)
+    const record = { deviceId, userId: victim.id, name: 'iPhone', model: 'phone-ios', firmware: '', linkedAt: '2026-11-01T07:00:00Z', lastSeenAt: '2026-11-01T07:00:00Z', tokenHash: '' }
+    await putJson(`devices/${deviceId}/metadata.json`, record)
+    const res = await add(attacker.idToken)
+    expect(res.status).toBe(400)
+    expect(await getJson(`devices/${deviceId}/metadata.json`)).toEqual(record)
+    expect(await listUserDevices(attacker.id)).toEqual([])
+  })
+
   it('never lets a phone ID start a tracker claim', async () => {
     const u = await makeUser('Claimer')
     const id = phoneDeviceId(u.id, INSTALL)
@@ -104,7 +125,7 @@ describe('adding a phone to the account', () => {
   })
 
   it('the browser-safe phone test agrees with the server one', () => {
-    for (const id of ['P0123456789A', 'PABCDEF01234', '435AC17C', 'P0123456789a', 'P0123456789', 'Q0123456789A', 'P0123456789AB']) {
+    for (const id of ['P0123456789ABCDEF', 'PABCDEF0123456789', '435AC17C', 'P0123456789abcdef', 'P0123456789ABCDE', 'Q0123456789ABCDEF', 'P0123456789ABCDEF0', 'P0123456789A']) {
       expect(isPhoneDeviceId(id)).toBe(isPhoneId(id))
     }
   })
@@ -177,7 +198,7 @@ describe('a phone on Devices', () => {
   })
 
   it('a removed phone with recordings is called Phone', () => {
-    const [card] = trackerSummaries([], [{ sessionId: 's', deviceId: 'P0123456789A', userId: 'u', filename: NAME, uploadedAt: '2026-11-01T07:00:00Z', points: 3 }], null)
+    const [card] = trackerSummaries([], [{ sessionId: 's', deviceId: 'P0123456789ABCDEF', userId: 'u', filename: NAME, uploadedAt: '2026-11-01T07:00:00Z', points: 3 }], null)
     expect(card).toMatchObject({ name: 'Phone', kind: 'phone', linked: false })
   })
 })
@@ -198,5 +219,95 @@ describe('personal data', () => {
     await eraseUserDevices(u.id)
     expect(await listKeys(`devices/${deviceId}/`)).toEqual([])
     expect(await listUserDevices(u.id)).toEqual([])
+  })
+})
+
+describe('a phone ID never reaches a tracker-only path', () => {
+  it('claim, token, key enrolment and linking by token all refuse it', async () => {
+    const u = await makeUser('Prober')
+    const id = phoneDeviceId(u.id, INSTALL)
+    const hash = createHash('sha256').update('token').digest('hex')
+    const json = (body: object) => new Request('http://x', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
+    expect((await tokenRoute(json({ deviceId: id, claimSecret: 's' }))).status).toBe(202)
+    expect(await redeemToken(id, 's')).toEqual({ status: 'pending' })
+    expect(await enrolDeviceKey(id, TEST_DEVICE_PUBKEY, 'cable')).toBe(false)
+    expect(await linkByTokenHash(u.id, { deviceId: id, tokenHash: hash, model: 'm', firmware: 'f', signature: await linkProof(id, hash) })).toEqual({ error: 'bad_request' })
+    const req2 = new NextRequest('http://x/api/account/devices/link-bluetooth', { method: 'POST', body: JSON.stringify({ deviceId: id, tokenHash: hash, model: 'm', firmware: 'f' }), headers: { authorization: `Bearer ${u.idToken}`, 'content-type': 'application/json' } })
+    expect((await linkBluetooth(req2)).status).toBe(400)
+    expect(await getUserDevice(u.id, id)).toBeNull()
+  })
+})
+
+describe('the phone limit', () => {
+  const fill = async (userId: string) => { for (let i = 0; i < MAX_PHONES; i++) await addPhone(userId, { installId: `install-number-${String(i).padStart(4, '0')}`, model: 'phone-ios' }) }
+  it('a full account can still add a phone it already has', async () => {
+    const u = await makeUser('Full')
+    await fill(u.id)
+    expect(await addPhone(u.id, { installId: 'install-number-0003', model: 'phone-ios' })).not.toHaveProperty('error')
+  })
+  it('removing one makes room', async () => {
+    const u = await makeUser('Tidy')
+    await fill(u.id)
+    await revokeDevice(u.id, phoneDeviceId(u.id, 'install-number-0000'))
+    expect((await add(u.idToken)).status).toBe(201)
+  })
+})
+
+describe('a phone upload, the rest of the contract', () => {
+  it("doesn't let headers change the phone's model or firmware", async () => {
+    const u = await makeUser('Headers')
+    const { deviceId } = await (await add(u.idToken)).json()
+    const r = new NextRequest(`http://x/api/account/devices/${deviceId}/sessions?filename=${NAME}`, {
+      method: 'POST', body: TRACK,
+      headers: { authorization: `Bearer ${u.idToken}`, 'content-type': 'text/csv', 'x-device-model': 'lilygo', 'x-device-firmware': '9.9.9', 'x-paddlesnitch-app': 'ios/0.1.0' },
+    })
+    expect((await upload(r, params(deviceId))).status).toBe(201)
+    expect(await getUserDevice(u.id, deviceId)).toMatchObject({ model: 'phone-android', firmware: '' })
+  })
+
+  it('takes compressed 64 KB pieces, says which it holds, and puts the file together', async () => {
+    const u = await makeUser('Chunks')
+    const { deviceId } = await (await add(u.idToken)).json()
+    const whole = Buffer.from(trackCsv(3600, 9, { startMs: 400_000 }))
+    const piece = 64 * 1024
+    const pieces = Math.ceil(whole.length / piece)
+    expect(pieces).toBeGreaterThan(1)
+    const sha = createHash('sha256').update(whole).digest('hex')
+    const send1 = (n: number) => upload(new NextRequest(`http://x/api/account/devices/${deviceId}/sessions?filename=${NAME}&part=${n}&parts=${pieces}&sha256=${sha}&enc=zlib`, {
+      method: 'POST', body: deflateSync(whole.subarray((n - 1) * piece, n * piece)),
+      headers: { authorization: `Bearer ${u.idToken}`, 'content-type': 'application/octet-stream' },
+    }), params(deviceId))
+    const first = await send1(1)
+    expect(first.status).toBe(202)
+    expect(Uploaded.safeParse(await first.json()).error?.issues).toBeUndefined()
+    const held = await stagedParts(new NextRequest(`http://x/api/account/devices/${deviceId}/sessions?filename=${NAME}`, { headers: { authorization: `Bearer ${u.idToken}` } }), params(deviceId))
+    expect((await held.json()).parts).toEqual([1])
+    let last: Response | undefined
+    for (let n = 2; n <= pieces; n++) last = await send1(n)
+    expect(last!.status).toBe(201)
+    expect(await listUserDeviceSessions(u.id)).toHaveLength(1)
+  })
+
+  it('refuses a motion file before its track (409 track_not_uploaded) and a track with no fix (422 no_points)', async () => {
+    const u = await makeUser('Order')
+    const { deviceId } = await (await add(u.idToken)).json()
+    const early = await send(u.idToken, deviceId, NAME.replace('.csv', '_imu.csv'), MOTION)
+    expect(early.status).toBe(409)
+    expect((await early.json()).error).toBe('track_not_uploaded')
+    const noFix = await send(u.idToken, deviceId, 'track_20261101_090000.csv', 'timestamp,lat,lon,tx_seq\n,,,1\n,,,2\n')
+    expect(noFix.status).toBe(422)
+    expect((await noFix.json()).error).toBe('no_points')
+  })
+
+  it("a phone's Tracker entry has no target version, even with a stable release", async () => {
+    const u = await makeUser('Versions')
+    await add(u.idToken)
+    await publishFirmware('0.10.0', Buffer.from('a fake image'), { notes: 'n' })
+    expect(await promoteFirmware('stable', '0.10.0')).toBe('ok')
+    const { devices, stableVersion } = await deviceList(u.id)
+    expect(stableVersion).toBe('0.10.0')
+    expect(devices[0].targetVersion).toBeNull()
+    expect(devices[0]).not.toHaveProperty('beta')
+    expect(devices[0]).not.toHaveProperty('health')
   })
 })

@@ -6,6 +6,21 @@
     "sessionId": {
       "type": "string"
     },
+    "part": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "parts": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "have": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
     "points": {
       "type": "integer",
       "minimum": -9007199254740991,
@@ -34,8 +49,5 @@
       "minimum": -9007199254740991,
       "maximum": 9007199254740991
     }
-  },
-  "required": [
-    "sessionId"
-  ]
+  }
 }

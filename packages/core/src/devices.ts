@@ -89,9 +89,10 @@ export function isTrackerId(v: unknown): v is string {
   return typeof v === 'string' && /^[0-9A-F]{8}$/.test(v)
 }
 
-/** A phone's ID: `P` and 11 upper-case hex digits, made by addPhone. */
+/** A phone's ID: `P` and 16 upper-case hex digits (64 bits, so nobody can
+ *  search for an install ID that lands on someone else's), made by addPhone. */
 export function isPhoneId(v: unknown): v is string {
-  return typeof v === 'string' && /^P[0-9A-F]{11}$/.test(v)
+  return typeof v === 'string' && /^P[0-9A-F]{16}$/.test(v)
 }
 
 /** Any device on an account: a tracker or a phone. Tracker-only paths (claims,
@@ -467,7 +468,7 @@ export const MAX_PHONES = 10
  *  same install again finds the same phone, and the same install signed in to
  *  another account is a different phone. */
 export function phoneDeviceId(userId: string, installId: string): string {
-  return 'P' + sha256(`ps-phone:v1|${userId}|${installId}`).slice(0, 11).toUpperCase()
+  return 'P' + sha256(`ps-phone:v1|${userId}|${installId}`).slice(0, 16).toUpperCase()
 }
 
 /**
@@ -486,6 +487,9 @@ export async function addPhone(
     await putJson(userTrackerKey(userId, deviceId), {})
     return { deviceId, name: existing.name, model }
   }
+  // Someone else's device: never overwrite it. Can't happen without a 64-bit
+  // hash collision, and must not then hand over their upload index.
+  if (existing) return { error: 'bad_request' }
   if ((await listUserDevices(userId)).filter(isPhone).length >= MAX_PHONES) return { error: 'too_many' }
   const ts = nowIso()
   await putJson(deviceKey(deviceId), {

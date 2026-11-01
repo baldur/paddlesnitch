@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const r = await addPhone(user.id, { installId: body?.installId, model: body?.model })
   if ('error' in r) {
     return r.error === 'too_many'
-      ? NextResponse.json({ error: 'This account has 10 phones already. Remove one on Devices, then try again.' }, { status: 409 })
+      ? NextResponse.json({ error: "Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again." }, { status: 409 })
       : NextResponse.json({ error: "Couldn't add this phone. Please update the app." }, { status: 400 })
   }
   return NextResponse.json(r, { status: 201 })

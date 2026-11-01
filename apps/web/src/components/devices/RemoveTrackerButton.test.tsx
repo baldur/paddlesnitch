@@ -17,11 +17,11 @@ afterEach(async () => {
   push.mockClear()
 })
 
-async function mount() {
+async function mount(phone = false) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root.render(<RemoveTrackerButton deviceId="5A43CA48" />) })
+  await act(async () => { root.render(<RemoveTrackerButton deviceId={phone ? 'P0123456789ABCDEF' : '5A43CA48'} phone={phone} />) })
 }
 const button = (label: string) => [...container.querySelectorAll('button')].find(b => b.textContent === label)!
 
@@ -57,5 +57,17 @@ describe('RemoveTrackerButton', () => {
     await act(async () => { button('Remove').click() })
     expect(container.querySelector('[role=alert]')!.textContent).toMatch(/Couldn’t remove/)
     expect(push).not.toHaveBeenCalled()
+  })
+})
+
+describe('RemoveTrackerButton for a phone', () => {
+  it('says phone, and that the app brings it back until signed out', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false } as Response)))
+    await mount(true)
+    await act(async () => { button('Remove phone').click() })
+    expect(container.textContent).toContain('It comes back if you record on it with the app again')
+    expect(container.textContent).toContain('sign out of the app on that phone')
+    await act(async () => { button('Remove').click() })
+    expect(container.textContent).toContain('Couldn’t remove the phone. Please try again.')
   })
 })

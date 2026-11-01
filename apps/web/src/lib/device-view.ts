@@ -13,10 +13,10 @@ export const fmtDur = (s?: number | null) => {
   return m ? `${m}m ${sec}s` : `${sec}s`
 }
 
-/** A phone on the account (C3): `P` and 11 hex digits. Kept here, not imported
+/** A phone on the account (C3): `P` and 16 hex digits. Kept here, not imported
  *  from core/devices, because this file goes into browser bundles. Same rule as
- *  isPhoneId there (device-view.test.ts checks). */
-export const isPhoneDeviceId = (deviceId: string) => /^P[0-9A-F]{11}$/.test(deviceId)
+ *  isPhoneId there (phone-recording.test.ts checks). */
+export const isPhoneDeviceId = (deviceId: string) => /^P[0-9A-F]{16}$/.test(deviceId)
 
 /** What the client needs about a linked tracker. Deliberately NOT `DeviceRecord`:
  *  that type carries `tokenHash`, which has no business in a browser bundle. */

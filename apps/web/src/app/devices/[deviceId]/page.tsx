@@ -131,14 +131,16 @@ export default function DeviceDetailPage() {
         <div className="flex flex-col gap-3 -mt-4">
           <p className="text-sm text-muted tabular">
             {deviceId}
-            {device?.model ? ` · ${device.model}` : ''}
+            {/* A phone's name already says what it is, and it only calls in after a paddle. */}
+            {!phone && device?.model ? ` · ${device.model}` : ''}
             {device?.firmware ? ` · firmware ${device.firmware}` : ''}
-            {device ? ` · last seen ${fmtDay(device.lastSeenAt)}` : ''}
+            {phone && device ? ` · added ${fmtDay(device.linkedAt)}` : ''}
+            {!phone && device ? ` · last seen ${fmtDay(device.lastSeenAt)}` : ''}
           </p>
           {device === null && phone && (
             <p className={`${cardClass} text-base text-muted p-4`}>
               This phone is no longer on your account, but its recordings are still yours.
-              It&apos;s added again when you next record on it with the app.
+              Record on that phone with the app to add it again.
             </p>
           )}
           {device === null && !phone && (

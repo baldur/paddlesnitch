@@ -8,24 +8,33 @@ public struct Uploaded: Codable, Hashable, Sendable {
     public var bytes: Int?
     public var distanceMetres: Double?
     public var endedAt: Date?
+    public var have: Int?
     public var motionRows: Int?
+    public var part: Int?
+    public var parts: Int?
     public var points: Int?
-    public var sessionId: String
+    public var sessionId: String?
     public var startedAt: Date?
 
     public init(
         bytes: Int? = nil,
         distanceMetres: Double? = nil,
         endedAt: Date? = nil,
+        have: Int? = nil,
         motionRows: Int? = nil,
+        part: Int? = nil,
+        parts: Int? = nil,
         points: Int? = nil,
-        sessionId: String,
+        sessionId: String? = nil,
         startedAt: Date? = nil
     ) {
         self.bytes = bytes
         self.distanceMetres = distanceMetres
         self.endedAt = endedAt
+        self.have = have
         self.motionRows = motionRows
+        self.part = part
+        self.parts = parts
         self.points = points
         self.sessionId = sessionId
         self.startedAt = startedAt

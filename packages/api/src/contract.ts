@@ -277,9 +277,12 @@ const TrackerId = named('TrackerId', z.object({ deviceId: z.string() }))
 const PhoneAdd = named('PhoneAdd', z.object({ installId: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
 /** The phone on the account. Upload its recordings to /api/account/devices/{deviceId}/sessions. */
 export const Phone = named('Phone', z.object({ deviceId: z.string(), name: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
-/** A file the server has taken: a track (`points`…) or its motion file (`motionRows`). 202 answers carry `part`/`parts`/`have` instead. */
+/** 201: a file the server has taken, a track (`points`…) or its motion file (`motionRows`). 202: one piece taken (`part`, `parts`, `have`: the pieces held), no `sessionId`. */
 export const Uploaded = named('Uploaded', z.object({
-  sessionId: z.string(),
+  sessionId: z.string().optional(),
+  part: z.int().optional(),
+  parts: z.int().optional(),
+  have: z.int().optional(),
   points: z.int().optional(),
   startedAt: timestamp().optional(),
   endedAt: timestamp().optional(),

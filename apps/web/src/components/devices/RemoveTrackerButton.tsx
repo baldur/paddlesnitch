@@ -39,7 +39,7 @@ export default function RemoveTrackerButton({ deviceId, phone = false }: { devic
     <div className="rounded-control border border-red/50 bg-red/5 p-4 flex flex-col gap-3">
       <p className="text-base text-fg">
         {phone
-          ? 'Remove this phone? It stops uploading until you record on it with the app again. Its recordings stay yours.'
+          ? 'Remove this phone? It comes back if you record on it with the app again. To stop that, sign out of the app on that phone. Its recordings stay yours.'
           : 'Remove this tracker? It stops uploading until you add it again. Its recordings stay yours.'}
       </p>
       {err && <p role="alert" className="text-sm text-red">{err}</p>}
