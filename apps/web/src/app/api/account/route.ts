@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { getRequestUser, clearAuthCookies } from '@/lib/auth'
+import { getRequestUser, getRequestUserEvenIfErased, clearAuthCookies } from '@/lib/auth'
 import { hasRecentSignIn } from '@/lib/app-signin'
 import { getJson, listKeys, deleteObject, deleteObjects, deletePrefix } from '@/lib/storage'
 import { unindexEntries } from '@/lib/entries'
@@ -14,7 +14,7 @@ import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
 import { eraseUserDevices } from '@paddlesnitch/core/devices'
-import { markAccountErasing, markAccountErased } from '@paddlesnitch/core/erased'
+import { markAccountErasing, markAccountErased, isAccountErased } from '@paddlesnitch/core/erased'
 import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
@@ -56,7 +56,9 @@ export async function GET(req: Request) {
 // a stolen or left-open session must not be able to erase everything. Not a
 // password prompt, because accounts made through Strava have none.
 export async function DELETE(req: Request) {
-  const user = await getRequestUser(req)
+  // Even a deleted account's token: asking again after the first answer was
+  // lost must succeed (it runs again; nothing is left to find).
+  const user = await getRequestUserEvenIfErased(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!(await hasRecentSignIn(req, user.id))) {
     return NextResponse.json({ error: REAUTH_TEXT, reauth: true }, { status: 403 })
@@ -65,7 +67,8 @@ export async function DELETE(req: Request) {
   // 0. First, so a phone still holding this account's token waits while the rest
   //    is deleted (C3: phones upload by themselves). Marked done only once the
   //    sign-in account is gone, so a delete that fails leaves the phone's files.
-  await markAccountErasing(user.id)
+  //    A repeat keeps 'done': 'pending' would let the old tokens back in (#795).
+  if (!(await isAccountErased(user.id))) await markAccountErasing(user.id)
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)
@@ -180,8 +183,11 @@ export async function DELETE(req: Request) {
   await deleteUserBySub(user.id)
   await markAccountErased(user.id)
   // Their times on the game's public leaderboards (games/kayak/leaderboard/;
-  // live races expire within a day). After the sign-in is gone, so a game tab
-  // still open can't post a time back in between (#742).
+  // live races expire within a day). Last, after the 'done' marker: the ID
+  // token in a game tab still open stays valid for up to 24 h, and only that
+  // marker signs it out (#742, #795), so a time posted while the delete ran is
+  // caught here. A server that read the marker just before it landed may still
+  // take a time for up to a minute (@paddlesnitch/core/erased CACHE_MS).
   await eraseGameTimes(user.id)
 
   // 8. Clear cookies on the response so the browser stops sending stale ones.

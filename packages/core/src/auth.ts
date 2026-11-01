@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { refresh, verifyIdToken, idTokenSignIn, type SignInClaims } from './cognito'
 import { resolveDeviceToken, type DeviceAuth } from './devices'
+import { erasedForSignIn } from './erased'
 
 // Authenticate a HARDWARE device from its `Authorization: Bearer <deviceToken>`
 // header, or null. Deliberately SEPARATE from getAuthUser(): a device token must
@@ -66,10 +67,27 @@ export function clearAuthCookies(jar: CookieJar) {
 // (docs/features/mobile-apps.md), the website the tt_id cookie. A Bearer header
 // that isn't a valid ID token (expired, or a tracker's device token) is null:
 // it never falls back to a cookie, and a device token never signs in a person.
+// A deleted account's token is still a valid JWT for up to 24 h, so an account
+// whose delete has finished counts as signed out (#795, @paddlesnitch/core/erased).
 export async function getRequestUser(req: Request): Promise<AuthUser | null> {
+  return notErased(await getRequestUserEvenIfErased(req))
+}
+
+/**
+ * getRequestUser without the deleted-account check. Only for the phone upload
+ * calls, which answer a deleted account themselves (410, or 503 while the
+ * delete runs: apps/web/src/lib/erased-answer.ts) so the app removes its files.
+ */
+export async function getRequestUserEvenIfErased(req: Request): Promise<AuthUser | null> {
   const m = /^Bearer\s+(.+)$/i.exec((req.headers.get('authorization') ?? '').trim())
   if (m) return verifyIdToken(m[1].trim())
-  return getAuthUser()
+  return signedInFromCookies()
+}
+
+/** Null for an account whose delete has finished; the user otherwise. */
+async function notErased(user: AuthUser | null): Promise<AuthUser | null> {
+  if (!user) return null
+  return (await erasedForSignIn(user.id)) ? null : user
 }
 
 // The sign-in behind this request, from the same token getRequestUser reads:
@@ -85,14 +103,19 @@ export async function requestSignIn(req: Request): Promise<SignInClaims | null> 
 /** The Bearer token's person only: never the website cookie. */
 export async function bearerUser(req: Request): Promise<AuthUser | null> {
   const m = /^Bearer\s+(.+)$/i.exec((req.headers.get('authorization') ?? '').trim())
-  return m ? verifyIdToken(m[1].trim()) : null
+  return m ? notErased(await verifyIdToken(m[1].trim())) : null
 }
 
 // Returns the authenticated user from the ID-token cookie, or null.
 // If the ID token is expired but the refresh token is valid, transparently refreshes
 // (when called from a mutable context — Route Handlers and Server Actions).
 // Server Components have read-only cookies; expired tokens there return null.
+// A deleted account is signed out (see getRequestUser).
 export async function getAuthUser(): Promise<AuthUser | null> {
+  return notErased(await signedInFromCookies())
+}
+
+async function signedInFromCookies(): Promise<AuthUser | null> {
   const cookieStore = await cookies()
   const idToken = cookieStore.get(ID_COOKIE)?.value
   if (idToken) {
