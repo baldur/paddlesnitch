@@ -260,7 +260,8 @@
       400,
       401,
       409,
-      410
+      410,
+      503
     ]
   },
   "POST /api/account/devices/{deviceId}/sessions": {
@@ -274,7 +275,8 @@
       409,
       410,
       413,
-      422
+      422,
+      503
     ]
   },
   "GET /api/account/devices/{deviceId}/sessions": {

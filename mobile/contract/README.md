@@ -310,8 +310,9 @@ Every other answer to an upload:
 | 409 `track_not_uploaded` (motion file) | its track isn't there yet | send the track, then this again |
 | 409 `parts_missing` (`missing: […]`) | pieces lost on the way | send the missing pieces, then the last again |
 | 422 `sha256_mismatch` | the pieces don't make the file | send the whole file again from piece 1, once; a second mismatch is as below |
-| 410 `accountDeleted` (either phone call) | the account was deleted, on the website or elsewhere | delete that account's recordings folder on the phone and sign out; never upload them |
-| 5xx, timeout, no network | not our answer | retry later, with backoff |
+| 410 with `accountDeleted: true` in the body (either phone call) | the account was deleted, on the website or elsewhere (a 410 without it is not ours: retry later) | delete that account's recordings folder on the phone and sign out; never upload them; show the server's `error` on the sign-in screen |
+| 503 (either phone call) | the account is being deleted, or the server is busy | keep the files; retry later (`Retry-After`) |
+| other 5xx, timeout, no network | not our answer | retry later, with backoff |
 | any other 4xx (`bad_filename`, `too_large`, `bad_encoding`, a second `sha256_mismatch`) | the server will never take it | keep the file, stop retrying it, show "Couldn’t upload this recording. It’s kept on this phone." |
 
 The upload body is the file's bytes (not multipart). Send files of 64 KB or
@@ -320,7 +321,7 @@ tracker does), optionally zlib-compressed per piece with `&enc=zlib` and
 `Content-Type: application/octet-stream`. `GET` on the same address with
 `?filename=` answers `HeldParts` `{parts: […]}`: the pieces the server already
 holds from a broken upload, so send only the rest. Fixtures:
-`account.phone*.json`, `account.phone-upload*.json`, `account.devices.with-phone.json`.
+`account.phone*.json`, `account.phone-upload*.json` (each `*.account-deleted.json` is the 410, `account.phone-upload.erasing.json` the 503), `account.devices.with-phone.json`.
 
 ### Files and names
 
@@ -368,9 +369,12 @@ holds from a broken upload, so send only the rest. Fixtures:
   its start before it ("1 Nov 2026, 07:02 · "): "Uploading…" only for the one being
   sent, "Waiting to upload" for the rest (and while offline or between retries),
   until the server has it; then the paddle appears in the list as any other
-  (`paddles.list`). A finished note has "Dismiss".
+  (`paddles.list`). The no-GPS line and the couldn’t-upload line each have a
+  Dismiss button. Dates take the website's `fmtDayTime` form: day, short month,
+  year, 24-hour time, in the phone's time zone ("1 Nov 2026, 07:02"), never the
+  system's short date.
 - A track the server refuses with 422 `no_points`: one line in the same place,
-  "No GPS fix, so this didn’t become a paddle", until dismissed.
+  "No GPS fix, so this didn’t become a paddle.", until dismissed.
 - Any other 4xx: "Couldn’t upload this recording. It’s kept on this phone." in the
   same place, with Report an issue. The app never retries that file by itself.
 
@@ -398,12 +402,16 @@ Both apps, laid out the same (design-usability, #767):
 - No motion sensors: record anyway (GPS only), with "No motion sensors on this
   phone, so no stroke rate" under the stroke rate.
 - Location off on the phone: "Location is off on this phone. Turn it on to record."
-  with the button "Open location settings".
+  with the button "Open location settings" (Android) or "Open Settings" (iPhone,
+  which can only open the app's own page).
+- No location permission (or not all the time): "Recording needs your location
+  all the time. Allow it in Settings." with the button "Open Settings".
 - Above Start: "Records your route and boat motion. Each recording uploads after
   you stop it."
 - A failed write, in place of the heading: "Couldn’t save the rest of this
-  recording. What it saved so far will upload when you stop."
-- Adding the phone failed with no words from the server: "Couldn’t add this phone
+  recording. Stop to upload what’s saved."
+- Adding the phone failed with no words from the server: on Paddles, in the line
+  of the recordings waiting, which then has Upload now: "Couldn’t add this phone
   to your account. Tap Upload now to try again."
 - "Waiting for GPS" is muted; only "GPS lost…" is red.
 

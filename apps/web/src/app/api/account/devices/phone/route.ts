@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestUser } from '@/lib/auth'
 import { addPhone } from '@/lib/devices'
-import { isAccountErased } from '@paddlesnitch/core/erased'
+import { erasedAnswer } from '@/lib/erased-answer'
 
 // POST /api/account/devices/phone — AUTHENTICATED (the apps' Bearer token).
 // { installId, model: 'phone-android' | 'phone-ios' } → { deviceId, name, model }.
@@ -11,9 +11,9 @@ import { isAccountErased } from '@paddlesnitch/core/erased'
 export async function POST(req: Request) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // A deleted account's token can live on for a day: answer 410 so the app
-  // deletes that account's recordings instead of uploading them (C3).
-  if (await isAccountErased(user.id)) return NextResponse.json({ error: 'This account was deleted.', accountDeleted: true }, { status: 410 })
+  // An account being deleted, or deleted with its token still valid (C3).
+  const erased = await erasedAnswer(user.id)
+  if (erased) return erased
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
   const r = await addPhone(user.id, { installId: body?.installId, model: body?.model })
   if ('error' in r) {
