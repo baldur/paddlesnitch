@@ -83,6 +83,7 @@ const CASES = [
   { name: 'webkit, desktop, portage drill', engine: webkit, ctx: desktop, course: 'drill-portage' },
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
+  { name: 'iphone se, the walk to the club', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true },
   // Signed out, a time trial picked last time: Try it now is still a race, the open one.
   { name: 'webkit, desktop, try it now from the bridge, signed out', engine: webkit, ctx: desktop, club: true, tryIt: true, site: true, signedOut: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
@@ -173,9 +174,10 @@ async function play(c, page, errors) {
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     // Try it now says what it is, in full, even on a phone.
+    // (A first visit to the bridge always has it: wait for it, don't skip.)
     const tryLine = page.locator('#clubCards .card.go small');
-    if (await tryLine.count()) {
-      await tryLine.first().waitFor({ state: 'visible', timeout: 30_000 });
+    if (!c.friends && !c.outing && !c.row) {
+      await tryLine.first().waitFor({ state: 'visible', timeout: 60_000 });
       const cut = await tryLine.first().evaluate((el) => el.scrollWidth > el.clientWidth + 1 && el.textContent);
       if (cut) errors.push(`Try it now's line is cut off: "${cut}"`);
     }
@@ -207,7 +209,7 @@ async function play(c, page, errors) {
       }
       const spot = label.startsWith('#') ? page.locator(label) : page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
-      await (c.touch ? spot.tap() : spot.click());
+      await (c.touch ? spot.tap() : spot.click()).catch((e) => { throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]}`); });
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
@@ -341,8 +343,8 @@ async function play(c, page, errors) {
       const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
       const out = [];
       const check = (when) => {
-        const named = { clock: document.querySelector('.hud-top'), place: $('place'), wash: $('wash'), cue: $('cue'), hint: $('hint'), help: $('touchhelp'), assist: $('assisted'), drill: $('drill'), flash: $('flash'), map: $('map'), near: $('near'), gauges: document.querySelector('.hud-bottom') };
-        const boxes = Object.entries(named).map(([n, el]) => [n, box(el)]).filter(([n, b]) => b && (n !== 'flash' || $('flash').classList.contains('show')));
+        const named = { clock: document.querySelector('.hud-top'), place: $('place'), wash: $('wash'), cue: $('cue'), hint: $('hint'), help: $('touchhelp'), assist: $('assisted'), drill: $('drill'), flash: $('flash'), map: $('map'), near: $('near'), gauges: document.querySelector('.hud-bottom'), behind: $('behind') };
+        const boxes = Object.entries(named).map(([n, el]) => [n, box(el)]).filter(([n, b]) => b && (n !== 'flash' || $('flash').classList.contains('show')) && (n !== 'behind' || $('behind').classList.contains('on')));
         boxes.forEach(([n, a], i) => boxes.slice(i + 1).forEach(([m, b]) => { if (hit(a, b)) out.push(`${when}: ${n} overlaps ${m} (${[a, b].map((r) => `${Math.round(r.top)} to ${Math.round(r.bottom)} down`).join(', ')})`); }));
         for (const b of document.querySelectorAll('header button')) if (named.map && hit(named.map.getBoundingClientRect(), b.getBoundingClientRect())) out.push(`${when}: the map is under ${b.textContent}`);
         for (const n of ['flash', 'hint', 'drill']) {
@@ -361,6 +363,13 @@ async function play(c, page, errors) {
       $('flash').classList.remove('show');
       $('hud').classList.add('assisted');
       check('mid-race');
+      // An eight coming up behind: its arrow, on either side, clear of the hint that says so.
+      window.kayak.show('An eight is coming up behind you, on your left: move right', { small: true, hold: 5, now: true });
+      for (const side of ['left', 'right']) {
+        $('behind').className = `on ${side}`;
+        check(`an eight on the ${side}`);
+      }
+      $('behind').className = '';
       $('hud').classList.remove('assisted');
       if (box($('outingBar'))) out.push('the hidden outing bar shows');
       if (matchMedia('(pointer: coarse)').matches) for (const b of document.querySelectorAll('header button')) if (b.getBoundingClientRect().height < 44) out.push(`${b.textContent} is under 44 px`);

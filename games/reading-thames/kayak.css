@@ -107,7 +107,7 @@ header button {
    pointing up the way it's going. */
 #behind {
   position: absolute;
-  bottom: 7rem;
+  bottom: 9rem; /* above the gauges */
   margin: 0;
   padding: 0.4rem 0.7rem;
   border-radius: 8px;
@@ -124,6 +124,8 @@ header button {
 #behind.right { right: 16px; }
 @keyframes behind { to { translate: 0 -8px; } }
 @media (prefers-reduced-motion: reduce) { #behind.on { animation: none; } }
+/* A phone's gauges are lower; smaller, so it stays clear of the hint lane in any font. */
+@media (max-height: 500px) { #behind { bottom: 7rem; font-size: 0.8rem; padding: 0.3rem 0.5rem; } }
 
 .hud-bottom {
   position: absolute;
@@ -540,6 +542,11 @@ summary { cursor: pointer; }
 @media (orientation: portrait) and (max-width: 600px) {
   #menu.sheet { inset: auto 16px calc(max(16px, env(safe-area-inset-bottom)) + 64px) 16px; width: auto; max-height: 52dvh; }
 }
+/* The narrowest phone on its side (iPhone SE): a narrower sheet, so the room's
+   Change and Start over stay clear of it on the left. */
+@media (orientation: landscape) and (max-width: 600px) {
+  #menu.sheet { width: calc(100vw - 280px); }
+}
 /* Finish from anywhere in a long step: its buttons stay at the bottom of the sheet. */
 #menu.sheet .step-buttons { position: sticky; bottom: -1px; margin-bottom: 0; padding-block: 0.5rem; background: var(--bg); }
 /* The walk's labels and cards wait for the scene. */
@@ -618,11 +625,16 @@ summary { cursor: pointer; }
   #map { width: 112px; }
   #near { width: 72px; }
   #flash { font-size: 1.3rem; max-width: calc(100vw - 2 * 136px); }
-  #cue { width: max-content; font-size: 0.75rem; padding-block: 0.15rem; max-width: calc(100vw - 2 * 96px); } /* below the map, between the close-up and the edge */
+  #cue { top: 7.45rem; width: max-content; font-size: 0.75rem; padding-block: 0.15rem; max-width: calc(100vw - 2 * 96px); } /* below the map, between the close-up and the edge */
   #cue b { font-size: 1.1rem; }
-  /* Full width, below the close-up (it ends 130 px down), so over only the
-     decorative tap marks; above the gauges, which stand taller once racing. */
-  .lane-low, #hud.helping .lane-low { width: calc(100vw - 32px); bottom: 6.9rem; }
-  #touchhelp { font-size: 0.66rem; }
+  /* Above the gauges, which stand taller once racing; mid-race clear of the
+     eight-behind arrows at the sides (hints wrap), and in the first seconds
+     between the tap marks, below the close-up (it ends 130 px down). */
+  .lane-low { width: calc(100vw - 2 * 152px); bottom: 6.5rem; gap: 0.2rem; }
+  #hint { line-height: 1.15; }
+  /* The slots under the clock a little closer, to leave the lane its room. */
+  #place { font-size: 0.9rem; }
+  #wash { top: 5.8rem; padding-block: 0.15rem; }
+  #hud.helping .lane-low { width: calc(100vw - 2 * 92px); } /* clear of the close-up and the tap marks */
   #hint { font-size: 0.82rem; }
 }
