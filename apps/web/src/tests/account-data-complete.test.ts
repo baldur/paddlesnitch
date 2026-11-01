@@ -67,16 +67,23 @@ function group(id: string, ownerId: string, adminUserIds: string[], memberUserId
   return { id, name: id, description: '', ownerId, adminUserIds, memberUserIds, createdAt: '2026-01-01T00:00:00Z' }
 }
 
-/** Every key that names `needle`, once the second pass (#814) has run and its job file is gone. */
+/**
+ * Every key that names `needle`: after the first pass on its own (apart from
+ * the second pass's job, #814), then again once that job has run and gone.
+ */
 async function keysMentioning(needle: string): Promise<string[]> {
-  await sweepJobs(Date.now() + 5 * 60_000)
-  const out: string[] = []
-  for (const k of await listKeys('')) {
-    if (k.includes(needle)) { out.push(k); continue }
-    const v = await getJson<unknown>(k).catch(() => null)
-    if (v && JSON.stringify(v).includes(needle)) out.push(k)
+  const scan = async () => {
+    const out: string[] = []
+    for (const k of await listKeys('')) {
+      if (k.includes(needle)) { out.push(k); continue }
+      const v = await getJson<unknown>(k).catch(() => null)
+      if (v && JSON.stringify(v).includes(needle)) out.push(k)
+    }
+    return out
   }
-  return out
+  const first = (await scan()).filter(k => !k.startsWith('jobs/erase-account-again/'))
+  await sweepJobs(Date.now() + 10 * 60_000)
+  return [...first, ...await scan()]
 }
 
 describe('DELETE /api/account removes every kind of personal data', () => {

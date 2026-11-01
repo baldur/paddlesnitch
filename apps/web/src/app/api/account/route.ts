@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 //   - everything under users/{userId}/
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent. The data part
-// is lib/account-erasure.ts, which a job runs again ~90 s later (#814).
+// is lib/account-erasure.ts, which a job runs again ~2.5 min later (#814).
 //
 // Deleting needs a real sign-in from the last 10 minutes (owner, 2026-10-25):
 // a stolen or left-open session must not be able to erase everything. Not a
@@ -70,12 +70,13 @@ export async function DELETE(req: Request) {
   await markAccountErasing(user.id)
 
   // 0a. The second pass (#814), written before anything is deleted so a delete
-  //     cut off after 'done' still gets it. It runs once the request limit
-  //     (30 s) and the sign-in cache (60 s, @paddlesnitch/core/erased) have
-  //     both passed, and only if the marker says 'done' by then: a delete that
-  //     fails leaves 'pending', and the job does nothing to a live account.
-  //     It holds the ID and the hashed key of the Connect Google note, no email.
-  await enqueueJob('erase-account-again', { userId: user.id, linkNoteKey: linkNoteKey(user.email) },
+  //     cut off after 'done' still gets it. It runs once the last write the
+  //     old token can start (on a server that cached 'none' for up to a minute,
+  //     @paddlesnitch/core/erased) has run out its 30 s, plus a margin, and only
+  //     if the marker says 'done' by then: a delete that fails leaves
+  //     'pending', and the job does nothing to a live account. It holds only
+  //     the account ID.
+  await enqueueJob('erase-account-again', { userId: user.id },
     { notBefore: new Date(Date.now() + ERASE_AGAIN_AFTER_MS) })
 
   // 1–6. Everything keyed by the account ID. A Strava sign-in account may have
@@ -87,6 +88,9 @@ export async function DELETE(req: Request) {
   // under this email may be someone else's.
   if (user.emailVerified) await eraseBetaApplication(user.email)
   // A Connect Google note left in the last 10 minutes (lib/google-link.ts).
+  // Not in the second pass either: a note left meanwhile runs out in 10
+  // minutes, names an account that can no longer sign in, and a lifecycle
+  // rule removes it.
   await deleteObject(linkNoteKey(user.email))
 
   // 7. Revoke any active refresh token then delete the Cognito user.

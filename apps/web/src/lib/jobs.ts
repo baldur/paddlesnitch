@@ -114,14 +114,25 @@ export async function runJob(key: string, now = Date.now()): Promise<RunOutcome>
 /** Runs every job that's due and not just announced, oldest first, within the time budget. */
 export async function sweepJobs(now = Date.now()): Promise<Record<RunOutcome, number>> {
   const counts: Record<RunOutcome, number> = { done: 0, gone: 0, not_due: 0, busy: 0, retry: 0, failed: 0, bad_key: 0 }
-  const keys = (await listKeys('jobs/')).filter(k => KEY.test(k)).sort()   // keys start with the time: oldest first
+  // File names start with the time: oldest first, whatever the kind.
+  const name = (k: string) => k.slice(k.lastIndexOf('/') + 1)
+  const keys = (await listKeys('jobs/')).filter(k => KEY.test(k)).sort((a, b) => (name(a) < name(b) ? -1 : name(a) > name(b) ? 1 : 0))
   const started = Date.now()
+  let ran = 0
   for (const key of keys) {
     if (Date.now() - started > SWEEP_BUDGET_MS) break
     const job = await getJson<Job>(key)
     if (!job) continue
     if (now - Date.parse(job.createdAt) < FRESH_MS && !job.notBefore) continue
-    counts[await runJob(key, now)]++
+    // A big account's erasure can take most of the 30 s a request has, so it
+    // runs alone: first in a sweep, and the sweep ends after it. Cut off part
+    // way, it would never reach jobs-failed/ and no alarm would fire.
+    const alone = job.kind === 'erase-account-again'
+    if (alone && ran > 0) break
+    const outcome = await runJob(key, now)
+    counts[outcome]++
+    if (outcome !== 'not_due' && outcome !== 'busy' && outcome !== 'gone') ran++
+    if (alone && ran > 0) break
   }
   return counts
 }

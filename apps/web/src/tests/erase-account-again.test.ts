@@ -25,7 +25,7 @@ import { POST as analyse } from '@/app/paddles/api/analyse/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { runJob, sweepJobs, enqueueJob } from '@/lib/jobs'
 import { eraseAccountAgain, ERASE_AGAIN_AFTER_MS } from '@/lib/account-erasure'
-import { linkNoteKey, leaveLinkNote } from '@/lib/google-link'
+import { linkNoteKey } from '@/lib/google-link'
 import { claimHandle } from '@/lib/profile'
 import { markAccountErasing, markAccountErased, clearErasedCache, CACHE_MS, erasureState } from '@paddlesnitch/core/erased'
 import { listKeys, getJson, getObject, putObject, putJson, deleteObject } from '@/lib/storage'
@@ -73,19 +73,21 @@ const leftOf = async (id: string) => [
 ]
 
 describe('DELETE /api/account leaves the second pass', () => {
-  it('one job, not due until the request limit and the sign-in cache have both passed, holding no email', async () => {
+  it('one job, not due until the request limit and the sign-in cache have both passed, holding only the account ID', async () => {
     const u = await makeUser('Leaver')
     const before = Date.now()
     await deleteAs(u)
     const keys = await jobKeys()
     expect(keys).toHaveLength(1)
     const job = await getJson<{ payload: unknown; notBefore: string }>(keys[0])
-    expect(job!.payload).toEqual({ userId: u.id, linkNoteKey: linkNoteKey(u.email) })
+    expect(job!.payload).toEqual({ userId: u.id })
     expect(Date.parse(job!.notBefore) - before).toBeGreaterThanOrEqual(ERASE_AGAIN_AFTER_MS)
-    expect(ERASE_AGAIN_AFTER_MS).toBeGreaterThanOrEqual(30_000 + CACHE_MS)
-    const raw = await getObject(keys[0])
-    expect(raw!.toString()).not.toContain(u.email)
-    expect(raw!.toString()).not.toContain(u.email.split('@')[0])
+    // A write let in at the end of another server's cached minute still runs its 30 s.
+    expect(ERASE_AGAIN_AFTER_MS).toBeGreaterThan(CACHE_MS + 30_000)
+    const raw = (await getObject(keys[0]))!.toString()
+    expect(raw).not.toContain(u.email)
+    expect(raw).not.toContain(u.email.split('@')[0])
+    expect(raw).not.toContain(linkNoteKey(u.email).split('/').pop()!.replace('.json', ''))
     // Not before it's due, then once: the file goes when it's done.
     expect(await runJob(keys[0], Date.now() + 30_000)).toBe('not_due')
     expect(await runJob(keys[0], Date.now() + ERASE_AGAIN_AFTER_MS + 1_000)).toBe('done')
@@ -113,6 +115,7 @@ describe("the second pass catches the old token's writes in the window", () => {
     }
     await deleteAs(u)
     // The first pass ends with game times, so those are already gone; the rest waits.
+    expect(await onLeaderboard(u.id)).toBe(false)
     expect((await listKeys(`analysis/${u.id}/`)).length).toBeGreaterThan(0)
     expect(await getJson(`users/${u.id}/profile.json`)).not.toBeNull()
 
@@ -135,28 +138,6 @@ describe("the second pass catches the old token's writes in the window", () => {
 
     await sweepJobs(Date.now() + ERASE_AGAIN_AFTER_MS + 1_000)
     expect(await leftOf(u.id)).toEqual([])
-  })
-
-  it('a Connect Google note naming them goes; one naming someone else stays', async () => {
-    const u = await makeUser('Linker')
-    const other = await makeUser('New owner of the address')
-    await deleteAs(u)
-    await leaveLinkNote(u.email, u.id)
-    await eraseAccountAgain({ userId: u.id, linkNoteKey: linkNoteKey(u.email) })
-    expect(await getJson(linkNoteKey(u.email))).toBeNull()
-
-    await leaveLinkNote(u.email, other.id)
-    await eraseAccountAgain({ userId: u.id, linkNoteKey: linkNoteKey(u.email) })
-    expect(await getJson(linkNoteKey(u.email))).toEqual(expect.objectContaining({ userId: other.id }))
-  })
-
-  it('never deletes a key that is not a Connect Google note, whatever the payload says', async () => {
-    const u = await makeUser('Odd payload')
-    const other = await makeUser('Bystander')
-    await deleteAs(u)
-    await putJson(`users/${other.id}/note.json`, { userId: u.id })
-    await eraseAccountAgain({ userId: u.id, linkNoteKey: `users/${other.id}/note.json` })
-    expect(await getJson(`users/${other.id}/note.json`)).not.toBeNull()
   })
 
   it("leaves a handle someone else claimed since, even if the old token's profile still names it", async () => {
@@ -183,7 +164,7 @@ describe('the second pass never touches a live account', () => {
     const before = await leftOf(u.id)
     expect(before.length).toBeGreaterThan(2)
 
-    const key = await enqueueJob('erase-account-again', { userId: u.id, linkNoteKey: linkNoteKey(u.email) })
+    const key = await enqueueJob('erase-account-again', { userId: u.id })
     expect(await runJob(key)).toBe('done')
     expect(await leftOf(u.id)).toEqual(before)
     expect(await listKeys('jobs/')).toEqual([])
@@ -211,7 +192,7 @@ describe('the second pass never touches a live account', () => {
     const u = await makeUser('Long gone')
     await putJson(`users/${u.id}/profile.json`, { public: true })
     await putJson(`auth/erased/${createHash('sha256').update(u.id).digest('hex')}.json`, { state: 'done', at: new Date(Date.now() - 49 * 3600_000).toISOString() })
-    await eraseAccountAgain({ userId: u.id, linkNoteKey: linkNoteKey(u.email) })
+    await eraseAccountAgain({ userId: u.id })
     expect(await getJson(`users/${u.id}/profile.json`)).not.toBeNull()
   })
 })
@@ -226,7 +207,7 @@ describe('safe to run twice', () => {
     during.hook = async () => { expect((await addPaddle(u.idToken)).status).toBe(200) }
     await deleteAs(u)
     const [key] = await jobKeys()
-    const job = await getJson<{ payload: { userId: string; linkNoteKey: string } }>(key)
+    const job = await getJson<{ payload: { userId: string } }>(key)
 
     expect(await runJob(key, Date.now() + ERASE_AGAIN_AFTER_MS + 1_000)).toBe('done')
     await eraseAccountAgain(job!.payload)   // the second run, after the file went

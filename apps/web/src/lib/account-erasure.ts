@@ -1,5 +1,5 @@
 // Account erasure (GDPR Art. 17): everything keyed by the account ID. Run by
-// DELETE /api/account, and again ~90 s later by the `erase-account-again` job
+// DELETE /api/account, and again ~2.5 min later by the `erase-account-again` job
 // (#814) to catch a write the old token made after its area was erased: while
 // the erasure marker is 'pending', or up to a minute after 'done' on a server
 // that cached the account as live (@paddlesnitch/core/erased CACHE_MS).
@@ -27,7 +27,7 @@ import { eraseBuddies } from '@paddlesnitch/core/buddies'
 import { erasePlanDemand, erasePlanShares } from '@paddlesnitch/waterways/plan-store'
 import { erasePortages } from '@paddlesnitch/waterways/portage-store'
 import { eraseGameTimes } from '@paddlesnitch/core/games'
-import { erasureState } from '@paddlesnitch/core/erased'
+import { erasureState, CACHE_MS } from '@paddlesnitch/core/erased'
 
 /**
  * Deletes everything stored under or about this account ID. `athleteIds`:
@@ -130,14 +130,22 @@ export async function eraseAccountData(userId: string, { athleteIds = [] }: { at
   await deletePrefix(`users/${userId}/`)
 }
 
-/** How long after DELETE the second pass runs: past the 30 s request limit and the 60 s cache. */
-export const ERASE_AGAIN_AFTER_MS = 90_000
+/** A server request is cut off after this. */
+const REQUEST_LIMIT_MS = 30_000
+/**
+ * How long after DELETE starts the second pass may run. The last write the old
+ * token can make starts on a server that read 'none' just before the delete
+ * began and kept it for CACHE_MS, and runs up to the request limit; then a
+ * minute's margin.
+ */
+export const ERASE_AGAIN_AFTER_MS = CACHE_MS + REQUEST_LIMIT_MS + 60_000
 
 /**
- * The `erase-account-again` job's payload: the ID, and the key of the Connect
- * Google note (a hash of the email; the email itself is not kept).
+ * The `erase-account-again` job's payload: the account ID only. The email-keyed
+ * records are not swept again: the beta form is open to anyone, and a Connect
+ * Google note runs out in 10 minutes and a lifecycle rule removes it.
  */
-export type EraseAgainPayload = { userId: string; linkNoteKey: string }
+export type EraseAgainPayload = { userId: string }
 
 /**
  * The second pass (#814). Runs only once the delete finished ('done'): a
@@ -145,11 +153,8 @@ export type EraseAgainPayload = { userId: string; linkNoteKey: string }
  * account (or one deleted over two days ago), so it does nothing. Safe to run
  * twice.
  */
-export async function eraseAccountAgain({ userId, linkNoteKey }: EraseAgainPayload): Promise<void> {
+export async function eraseAccountAgain({ userId }: EraseAgainPayload): Promise<void> {
   if ((await erasureState(userId)) !== 'done') return
   await eraseAccountData(userId)
-  // A Connect Google note left while the delete ran, if it still names them.
-  if (/^auth\/google-links\/[0-9a-f]{64}\.json$/.test(linkNoteKey) &&
-      (await getJson<{ userId?: string }>(linkNoteKey))?.userId === userId) await deleteObject(linkNoteKey)
   await eraseGameTimes(userId)
 }
