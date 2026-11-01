@@ -297,7 +297,7 @@ fun SignInScreen(
 
 internal const val NO_BROWSER_REPORT = "Couldn’t open the issue form. Turn on or install a web browser, then try again."
 internal const val NO_EMAIL_APP = "Couldn’t open an email app. Please email privacy@paddlesnitch.com."
-internal const val EMAIL_US = "mailto:privacy@paddlesnitch.com?subject=Moving%20my%20account%20from%20Strava"
+internal const val EMAIL_US = "mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email"
 /** Strava is gone for good: an account made with it has no other way in until we move it (lead, 2026-11-01). */
 internal const val MADE_WITH_STRAVA = "Made your account with Strava? Email us and we’ll move it to your email."
 

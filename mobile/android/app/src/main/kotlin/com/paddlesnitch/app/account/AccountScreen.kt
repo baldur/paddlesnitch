@@ -229,7 +229,7 @@ private fun Details(api: AccountApi, user: AuthUser, contact: Contact?, load: Lo
     }
     OutlinedTextField(email, { email = it }, colors = fieldColors(), label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("you@example.com") },
-        supportingText = { Text("You made this account with Strava, which didn’t share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
+        supportingText = { Text("We don’t have an email for this account. Add one so we can move your account to it and tell you about changes to our Terms.") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(colors = outlinedColors(), enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {

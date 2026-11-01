@@ -192,6 +192,7 @@ class AccountScreensTest {
         val api = FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", madeWithStrava = true)
         account(api)
         waitFor("Contact email")
+        compose.onNodeWithText("We don’t have an email for this account. Add one so we can move your account to it and tell you about changes to our Terms.").assertExists() // the website's words
         compose.onNode(hasSetTextAction() and hasText("Contact email")).performTextInput("pat@example.com")
         compose.onNodeWithTag("contact-save").performClick()
         compose.waitUntil { "contact pat@example.com" in api.calls }
@@ -307,7 +308,7 @@ class AccountScreensTest {
         compose.onNodeWithText("Sign out").performScrollTo().performClick()
         waitFor(SIGN_OUT_STRAVA)
         compose.onNodeWithText("Email us").performScrollTo().performClick()
-        assertEquals("mailto:privacy@paddlesnitch.com?subject=Moving%20my%20account%20from%20Strava", Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString())
+        assertEquals("mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email", Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString())
         assertEquals(emptyList<String>(), did)
         compose.onNodeWithText("Sign out anyway").performScrollTo().performClick()
         assertEquals(listOf("sign out"), did)

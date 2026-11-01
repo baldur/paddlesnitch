@@ -92,7 +92,7 @@ class SignInScreenTest {
         compose.onNodeWithText("Email us").performScrollTo().performClick()
         val sent = Shadows.shadowOf(compose.activity).nextStartedActivity
         assertEquals(android.content.Intent.ACTION_SENDTO, sent.action)
-        assertEquals("mailto:privacy@paddlesnitch.com?subject=Moving%20my%20account%20from%20Strava", sent.data.toString())
+        assertEquals("mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email", sent.data.toString())
     }
 
     @Test fun atTheLargestText() {
