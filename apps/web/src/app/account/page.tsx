@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import StravaButton from '@/components/strava/StravaButton'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
-import { StravaFirstImport, StravaMoreImport } from '@/components/strava/StravaHistoryImport'
+import { StravaImports } from '@/components/strava/StravaHistoryImport'
 import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
@@ -556,9 +556,8 @@ function AccountPageInner() {
                       onChange={e => toggleAutoImport(e.target.checked)}
                     />
                   </label>
-                  {/* Older paddles (#415): the last month by itself, then further back on request. */}
-                  <StravaFirstImport />
-                  <StravaMoreImport />
+                  {/* Older paddles (#415): the last month by itself, then further back on request, never both at once (#716). */}
+                  <StravaImports />
                   {/* Attribution: this row shows the athlete's Strava profile name. */}
                   <PoweredByStrava />
                   </>)}

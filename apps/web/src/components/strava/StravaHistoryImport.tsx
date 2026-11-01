@@ -54,25 +54,33 @@ function useImporter() {
 }
 
 function Status({ p, what }: { p: Progress; what: string }) {
-  if (p.stopped === 'daily_limit') return <>Strava&apos;s limit for today is used up, so we stopped after {p.done} of {p.total}. What came in stays; try again tomorrow for the rest.</>
-  if (p.stopped === 'error') return <>Couldn&apos;t bring in all your Strava paddles ({p.done} of {p.total}). Please try again later.</>
+  // Stopped before anything was listed: no counts to give (#716, as the app says it).
+  if (p.total === 0 && p.stopped === 'daily_limit') return <>Strava’s limit for today is used up. Please try again tomorrow.</>
+  if (p.total === 0 && p.stopped === 'error') return <>Couldn’t bring in your Strava paddles. Please try again later.</>
+  if (p.stopped === 'daily_limit') return <>Strava’s limit for today is used up, so we stopped after {p.done} of {p.total}. What came in stays; try again tomorrow for the rest.</>
+  if (p.stopped === 'error') return <>Couldn’t bring in all your Strava paddles ({p.done} of {p.total}). Please try again later.</>
   if (p.done >= p.total) return <>{p.added ? `Added ${p.added} paddle${p.added === 1 ? '' : 's'} from Strava.` : 'Your Strava paddles were already here.'}</>
   if (p.waitUntil) return <>Strava asks us to slow down. Carrying on at {clock(p.waitUntil)} ({p.done} of {p.total} so far). Keep this page open.</>
   return <>Bringing in {what} from Strava: {p.done} of {p.total}.</>
 }
 
 /** By itself, once: about the last month of Strava paddles. Renders nothing when there's nothing to do. */
-export function StravaFirstImport() {
+export function StravaFirstImport({ onRunning }: { onRunning?: (running: boolean) => void } = {}) {
   const q = trpc.sources.stravaHistory.useQuery({ since: 'first' }, { retry: false, staleTime: Infinity })
   const doneMark = trpc.sources.stravaHistoryDone.useMutation()
   const { progress, run } = useImporter()
   const started = useRef(false)
+  const [importing, setImporting] = useState(false)
   const data = q.data
+  // Running from the moment it asks Strava until every paddle was tried.
+  const running = q.isPending || importing
+  useEffect(() => { onRunning?.(running) }, [running]) // eslint-disable-line react-hooks/exhaustive-deps -- tell the parent when it changes
 
   useEffect(() => {
     if (!data || data.status !== 'ok' || data.firstImportDone || started.current) return
     started.current = true
-    void run(data.toImport).then(all => { if (all) doneMark.mutate() })
+    setImporting(true)
+    void run(data.toImport).then(all => { if (all) doneMark.mutate() }).finally(() => setImporting(false))
   }, [data]) // eslint-disable-line react-hooks/exhaustive-deps -- once, when the list arrives
 
   if (!data || data.status !== 'ok' || data.firstImportDone || data.toImport.length === 0) return null
@@ -84,8 +92,17 @@ export function StravaFirstImport() {
   )
 }
 
-/** Bring in older paddles: as far back as the paddler picks. */
-export function StravaMoreImport() {
+/** The first month, then Older paddles: one import at a time against Strava's limit (#716). */
+export function StravaImports() {
+  const [firstRunning, setFirstRunning] = useState(false)
+  return (<>
+    <StravaFirstImport onRunning={setFirstRunning} />
+    <StravaMoreImport waiting={firstRunning} />
+  </>)
+}
+
+/** Bring in older paddles: as far back as the paddler picks. `waiting`: the first month is still coming in. */
+export function StravaMoreImport({ waiting = false }: { waiting?: boolean } = {}) {
   const utils = trpc.useUtils()
   const { progress, setProgress, run } = useImporter()
   const [span, setSpan] = useState<Span>('year')
@@ -107,13 +124,13 @@ export function StravaMoreImport() {
       <span className="text-base font-medium text-fg">Older paddles</span>
       <span className="text-sm text-muted">Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.</span>
       <div className="flex gap-2 items-center flex-wrap">
-        <select value={span} onChange={e => setSpan(e.target.value as Span)} disabled={busy} aria-label="How far back"
+        <select value={span} onChange={e => setSpan(e.target.value as Span)} disabled={busy || waiting} aria-label="How far back"
           className={`${selectClass} sm:max-w-xs`}>
           <option value="months3">Last 3 months</option>
           <option value="year">Last year</option>
           <option value="all">Everything</option>
         </select>
-        <button type="button" onClick={start} disabled={busy} className={buttonClass('secondary')}>
+        <button type="button" onClick={start} disabled={busy || waiting} className={buttonClass('secondary')}>
           {busy ? 'Bringing in…' : 'Bring in older paddles'}
         </button>
       </div>
