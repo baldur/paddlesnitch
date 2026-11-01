@@ -73,6 +73,7 @@ const CASES = [
   // and the job has 30 (the Chromium cases above already play the full river).
   { name: 'webkit, desktop, Hasler Div 7-9 race', engine: webkit, ctx: desktop, course: 'hasler79', format: 'mass' },
   { name: 'iphone safari, Hasler Div 1-6 race', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'hasler16', format: 'mass' },
+  { name: 'small iphone, Hasler Div 7-9 race', engine: webkit, ctx: landscape('iPhone 13 Mini'), touch: true, course: 'hasler79', format: 'mass' },
   { name: 'chrome GPU, desktop, Hasler Div 7-9 race', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'hasler79', format: 'mass', expect: 'webgpu' },
   // A time trial, with interval starts.
   { name: 'webkit, desktop, Time Trial Loop time trial', engine: webkit, ctx: desktop, course: 'loop', format: 'interval' },
@@ -218,6 +219,11 @@ async function play(c, page, errors) {
     const next = page.locator('#menu .step:not([hidden]) .step-buttons .next');
     await (c.touch ? next.tap() : next.click());
   }
+  // The menu's buttons are big enough to tap.
+  if (!c.club) {
+    const small = await page.evaluate(() => [...document.querySelectorAll('#menu .edits button, #menu .format button')].filter((b) => b.getBoundingClientRect().height < 44).map((b) => b.textContent.trim().split('\n')[0]));
+    if (small.length) errors.push(`menu buttons under 44 px: ${small.join(', ')}`);
+  }
   if (c.format) {
     const format = page.locator(`#menu [data-format="${c.format}"]`);
     await (c.touch ? format.tap() : format.click());
@@ -277,7 +283,7 @@ async function play(c, page, errors) {
   // Pause and Sound or off the screen, and no hidden bar showing. First the start
   // (the controls help, a hint and a big message), then mid-race (the place, the
   // wash and a turn cue under the clock, a hint and the balance-assist note).
-  if (c.course && !c.course.startsWith('drill-')) {
+  if (c.course) {
     const clash = await page.evaluate(() => {
       const $ = (id) => document.getElementById(id);
       const box = (el) => {
@@ -288,13 +294,13 @@ async function play(c, page, errors) {
       const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
       const out = [];
       const check = (when) => {
-        const named = { clock: document.querySelector('.hud-top'), place: $('place'), wash: $('wash'), cue: $('cue'), hint: $('hint'), help: $('touchhelp'), assist: $('assisted'), flash: $('flash'), map: $('map') };
+        const named = { clock: document.querySelector('.hud-top'), place: $('place'), wash: $('wash'), cue: $('cue'), hint: $('hint'), help: $('touchhelp'), assist: $('assisted'), drill: $('drill'), flash: $('flash'), map: $('map'), near: $('near'), gauges: document.querySelector('.hud-bottom') };
         const boxes = Object.entries(named).map(([n, el]) => [n, box(el)]).filter(([n, b]) => b && (n !== 'flash' || $('flash').classList.contains('show')));
         boxes.forEach(([n, a], i) => boxes.slice(i + 1).forEach(([m, b]) => { if (hit(a, b)) out.push(`${when}: ${n} overlaps ${m}`); }));
         for (const b of document.querySelectorAll('header button')) if (named.map && hit(named.map.getBoundingClientRect(), b.getBoundingClientRect())) out.push(`${when}: the map is under ${b.textContent}`);
-        for (const n of ['flash', 'hint']) {
+        for (const n of ['flash', 'hint', 'drill']) {
           const r = $(n).getBoundingClientRect();
-          if (r.left < 0 || r.right > innerWidth) out.push(`${when}: ${n} runs off the screen (${Math.round(r.left)} to ${Math.round(r.right)})`);
+          if (r.width && (r.left < 0 || r.right > innerWidth)) out.push(`${when}: ${n} runs off the screen (${Math.round(r.left)} to ${Math.round(r.right)})`);
         }
       };
       window.kayak.show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 5 });
@@ -314,6 +320,8 @@ async function play(c, page, errors) {
       return out;
     });
     errors.push(...clash);
+  }
+  if (c.course && !c.course.startsWith('drill-')) {
     // One hint at a time: a moment's note doesn't wipe an instruction, and a
     // second instruction waits for the first to finish.
     const hint = () => page.evaluate(() => document.getElementById('hint').textContent);
@@ -328,8 +336,7 @@ async function play(c, page, errors) {
     // Tipping over: the gauge warns in the red; then going in on your own says
     // so, and what keeps you up.
     await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));
-    await page.waitForTimeout(100);
-    if (!(await page.evaluate(() => document.getElementById('balance').classList.contains('tipping')))) errors.push("the balance gauge didn't warn in the red");
+    await page.waitForFunction(() => document.getElementById('balance').classList.contains('tipping'), null, { timeout: 5_000 }).catch(() => errors.push("the balance gauge didn't warn in the red"));
     await page.evaluate(() => {
       const { boat } = window.kayak;
       boat.hull = { ...boat.hull, capsize: 0.3 };
@@ -338,7 +345,7 @@ async function play(c, page, errors) {
     await page.waitForFunction(() => document.getElementById('flash').classList.contains('show'), null, { timeout: 10_000 }).catch(() => {});
     const fell = await page.evaluate(() => ({ flash: document.getElementById('flash').textContent, hint: document.getElementById('hint').textContent, assist: document.getElementById('hud').classList.contains('assisted') }));
     // (With the balance assist on, there's no lean to tell you about.)
-    if (fell.flash !== 'You lost your balance!' || (!fell.assist && !/lean/.test(fell.hint))) errors.push(`going in said ${JSON.stringify(fell)}`);
+    if (fell.flash !== 'You lost your balance!' || (!fell.assist && !(c.touch ? /turn the phone/ : /A and D/).test(fell.hint))) errors.push(`going in said ${JSON.stringify(fell)}`);
   }
   // Rowing really is rowing: a scull, the coach on its screen, gone while you look round.
   if (c.row) {

@@ -1595,7 +1595,7 @@ function show(text, { small = false, hold = 0.8, now = false } = {}) {
   if (small) hintTimer = hold;
   else flashTimer = hold;
   if (!small) hud.classList.add('flashing');
-  flash.classList.toggle('big', !small && text.length <= 4); // a count, Go!: bigger on a phone
+  if (!small) flash.classList.toggle('big', text.length <= 4); // a count, Go!: bigger on a phone
 }
 
 const sounds = {
