@@ -32,11 +32,20 @@ extension XCUIElement {
         var last = CGRect.null
         return poll(timeout: timeout) {
             // The keyboard first: while it's down that's one look, not three.
-            guard keyboard.exists, exists, value(forKey: "hasKeyboardFocus") as? Bool ?? false else { return false }
-            let frame = keyboard.frame
+            guard let frame = keyboard.frameIfThere, exists, value(forKey: "hasKeyboardFocus") as? Bool ?? false
+            else { return false }
             defer { last = frame }
             return frame == last
         }
+    }
+
+    /// Its frame, or nil if it isn't there. Reading `frame` straight after
+    /// `exists` fails the test when it goes in between ("Failed to get
+    /// matching snapshot: No matches found … Keyboard", CI on #808 and #810):
+    /// the keyboard comes and goes with "Save Password?" and Done. A snapshot
+    /// read throws instead, which is nil here.
+    var frameIfThere: CGRect? {
+        try? snapshot().frame
     }
 
     /// Whether a tap would land on it, waiting up to `timeout`.
@@ -46,6 +55,33 @@ extension XCUIElement {
 }
 
 extension AppTestCase {
+    func dismissKeyboard() {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+        let done = app.buttons["keyboard-done"].firstMatch
+        // The code step's Done comes a moment after its keyboard; without
+        // a wait, the drag tried instead left that keyboard up.
+        let doneComing = app.textFields["code-field"].exists
+        for _ in 0..<3 {
+            // Tapped where it was: Done goes with the keyboard, and a tap on
+            // a button that went between the look and the tap fails the test
+            // ("no matches found … keyboard-done", CI on #834).
+            var place: CGRect?
+            if poll(
+                timeout: doneComing ? 2 : 0,
+                {
+                    place = done.frameIfThere; return place != nil
+                }), let place
+            {
+                app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: place.midX, dy: place.midY)).tap()
+            } else {
+                swipe(up: false)
+            }
+            if keyboard.disappears(timeout: 3) { return }
+        }
+        XCTFail("the keyboard went away")
+    }
+
     /// Signed in from the sign-in sheet: the sheet has gone (it stays up when
     /// sign-in fails), and so has the samples notice. Both, not the notice
     /// alone: the check now looks at once, and a sheet might hide the notice.

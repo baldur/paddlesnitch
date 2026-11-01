@@ -22,15 +22,6 @@ final class ButtonShapeTests: AppTestCase {
         app.buttons["sample-notice-action"].tap()
         let button = app.buttons["sign-in-submit"]
         XCTAssertTrue(button.appears(timeout: 10))
-        // Read once the frame stops changing. Before this wait, one local
-        // run read the screenshot from the wrong place while the sheet
-        // was coming up; XCTest's own wait for an idle app didn't cover it.
-        var last = CGRect.null
-        XCTAssertTrue(
-            poll(timeout: 5) {
-                defer { last = button.frame }
-                return button.frame == last
-            }, "the sheet settles")
         assertControlCorners(button)
     }
 
@@ -44,12 +35,24 @@ final class ButtonShapeTests: AppTestCase {
         assertControlCorners(button)
     }
 
+    /// Read once two screenshots in a row agree: a sheet or the record
+    /// screen still sliding up showed the page behind the button (iOS 17 on
+    /// CI, #834), and the button's frame doesn't change while it slides.
     private func assertControlCorners(_ button: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        let shot = button.screenshot().image
-        guard let pixels = Pixels(shot) else { return XCTFail("no pixels", file: file, line: line) }
-        let fill = pixels.at(x: shot.size.width / 2, y: 3)
-        let edge = pixels.at(x: 6, y: 1.5)
-        let corner = pixels.at(x: 1, y: 1)
+        var last: [Pixels.RGB]?
+        var reading: [Pixels.RGB] = []
+        let settled = poll(timeout: 10) {
+            let shot = button.screenshot().image
+            guard let pixels = Pixels(shot) else { return false }
+            // The fill, 6 pt along the top edge, and 1 pt in from the corner.
+            reading = [
+                pixels.at(x: shot.size.width / 2, y: 3), pixels.at(x: 6, y: 1.5), pixels.at(x: 1, y: 1),
+            ]
+            defer { last = reading }
+            return reading == last
+        }
+        XCTAssertTrue(settled, "the screen settles", file: file, line: line)
+        let (fill, edge, corner) = (reading[0], reading[1], reading[2])
         XCTAssertTrue(edge.near(fill), "6 pt along the top is the fill: \(edge) vs \(fill)", file: file, line: line)
         XCTAssertFalse(corner.near(fill), "the corner is cut: \(corner) vs \(fill)", file: file, line: line)
     }
@@ -57,7 +60,7 @@ final class ButtonShapeTests: AppTestCase {
 
 /// An image's pixels, read in points.
 private struct Pixels {
-    struct RGB: CustomStringConvertible {
+    struct RGB: CustomStringConvertible, Equatable {
         let r: Int, g: Int, b: Int
         func near(_ other: RGB) -> Bool { abs(r - other.r) + abs(g - other.g) + abs(b - other.b) < 60 }
         var description: String { "(\(r), \(g), \(b))" }

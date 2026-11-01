@@ -23,3 +23,15 @@ export const UNSUPPORTED_CLAIMS = [
   'unchanged',
 ]
 
+
+// Common US spellings the athlete profile must not use (profileProblems), with
+// the British form to ask for instead. Short on purpose: the words a paddler's
+// profile is likely to need. "meter" is British for an instrument (a power
+// meter), but a profile won't mean that. No -ize forms: British English allows them.
+export const US_SPELLINGS: Record<string, string> = {
+  favor: 'favour', favors: 'favours', favored: 'favoured', favoring: 'favouring', favorite: 'favourite', favorites: 'favourites',
+  color: 'colour', colors: 'colours', center: 'centre', centers: 'centres', centered: 'centred',
+  meter: 'metre', meters: 'metres', kilometer: 'kilometre', kilometers: 'kilometres',
+  behavior: 'behaviour', behaviors: 'behaviours', practicing: 'practising', gray: 'grey', colored: 'coloured',
+  favorable: 'favourable', traveled: 'travelled', traveling: 'travelling', harbor: 'harbour', liter: 'litre',
+}

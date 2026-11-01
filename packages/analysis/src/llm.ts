@@ -255,7 +255,7 @@ export async function runInsighter(system: string, user: string): Promise<{ text
 // too, the plain summary stands (null).
 export type Run = (system: string, user: string) => Promise<string | null>
 export const RETRY_IF_FIRST_UNDER_MS = 4000
-const runConfigured: Run = async (system, user) => (await runInsighter(system, user))?.text ?? null
+export const runConfigured: Run = async (system, user) => (await runInsighter(system, user))?.text ?? null
 
 export async function generateInsight(result: AnalysisResult, ctx: InsightContext = {}, run: Run = runConfigured): Promise<string | null> {
   let prompt: string
