@@ -182,7 +182,7 @@ struct RecordView: View {
                 Text("Hide").font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44).padding(.horizontal, 8)
             }
             .buttonStyle(.bordered)
-            .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+            .buttonBorderShape(.control)
             .tint(Palette.primaryText)
             .accessibilityIdentifier("record-hide")
             Text("Recording carries on.")
