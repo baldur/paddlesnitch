@@ -358,6 +358,35 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
   })
 })
 
+// Strava was removed (2026-11): its activity links and ids are refused.
+describe('entering a trial from Strava', () => {
+  const enter = (trialId: string, body: object) => upload(new NextRequest(`http://x/att/api/trials/${trialId}/upload`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ boatClass: 'K1', crew: [{ name: 'Soloist', seat: 1 }], ...body }),
+  }), { params: Promise.resolve({ trialId }) })
+
+  it('a Strava activity link is not a file link', async () => {
+    const user = await makeUser()
+    const trial = await makeTrial((await makeCourse(user.id)).id, user.id, 'open')
+    mockAuth(user.idToken)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const res = await enter(trial.id, { url: 'https://www.strava.com/activities/123' })
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({ reason: 'BAD_LINK', error: 'Use a direct link to a .gpx file.' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
+
+  it('a Strava activity id alone is no entry', async () => {
+    const user = await makeUser()
+    const trial = await makeTrial((await makeCourse(user.id)).id, user.id, 'open')
+    mockAuth(user.idToken)
+    const res = await enter(trial.id, { stravaActivityId: 123 })
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('Choose a file, a link or a tracker recording.')
+  })
+})
+
 // Tracker owners had no way into a trial: no file to upload, nothing on
 // Strava. They can now enter one of their own tracker recordings.
 describe('entering a trial with a tracker recording', () => {

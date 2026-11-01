@@ -15,9 +15,9 @@ let root: Root
 afterEach(async () => { if (root) await act(async () => { root.unmount() }); container?.remove(); vi.unstubAllGlobals() })
 
 const calls = () => vi.mocked(fetch).mock.calls.map(c => String(c[0]))
-async function mount(user: { id: string; displayName: string; placeholderEmail?: true } | null | undefined, both = false) {
+async function mount(user: { id: string; displayName: string; placeholderEmail?: true } | null | undefined, both = false, meEmail = 'asked@example.com') {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(
-    url.includes('/auth/me') ? { id: 'u9', displayName: 'Asked' } : { result: { data: 0 } },
+    url.includes('/auth/me') ? { id: 'u9', displayName: 'Asked', email: meEmail } : { result: { data: 0 } },
   ))))
   container = document.createElement('div'); document.body.appendChild(container)
   root = createRoot(container)
@@ -90,6 +90,43 @@ describe('the account menu', () => {
       const anyway = [...container.querySelectorAll('button')].find(b => b.textContent === 'Sign out anyway')!
       await act(async () => { anyway.click() })
       expect(signedOut()).toBe(true)
+    })
+
+    it('when the menu had to ask who it is, a placeholder email from the answer is enough to ask first', async () => {
+      await mount(undefined, false, 'strava-1@noreply.paddlesnitch.com')
+      await openAndSignOut()
+      expect(container.textContent).toContain('You made this account with Strava')
+      expect(signedOut()).toBe(false)
+      // The email itself is never shown.
+      expect(container.textContent).not.toContain('noreply')
+    })
+
+    it('in the phone\'s You tab too', async () => {
+      container = document.createElement('div'); document.body.appendChild(container)
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ result: { data: 0 } }))))
+      root = createRoot(container)
+      await act(async () => { root.render(<SessionUserProvider user={{ id: 'u1', displayName: 'Sam', placeholderEmail: true }}><AccountMenu variant="tab" /></SessionUserProvider>) })
+      await openAndSignOut()
+      expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('You made this account with Strava')
+      expect(container.querySelector('[role="menu"]')).toBeNull()
+    })
+
+    it('closing and opening the menu again shows the menu, not the question', async () => {
+      await mount({ id: 'u1', displayName: 'Sam', placeholderEmail: true })
+      await openAndSignOut()
+      const toggle = container.querySelector('button[aria-haspopup="menu"]') as HTMLButtonElement
+      await act(async () => { toggle.click() })
+      await act(async () => { toggle.click() })
+      expect(container.querySelector('[role="menu"]')).not.toBeNull()
+      expect(container.textContent).not.toContain('You made this account with Strava')
+    })
+
+    it('Escape in the question goes back to the menu', async () => {
+      await mount({ id: 'u1', displayName: 'Sam', placeholderEmail: true })
+      await openAndSignOut()
+      await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+      expect(container.querySelector('[role="menu"]')).not.toBeNull()
+      expect(signedOut()).toBe(false)
     })
 
     it('any other account signs out at once', async () => {

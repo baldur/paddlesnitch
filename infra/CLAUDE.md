@@ -46,8 +46,11 @@ aws sso login --profile paddlesnitch
 
 Strava was removed from the platform on 2026-11-01 (the "Remove Strava" PR). The
 server no longer reads the Strava SSM parameters and has no IAM grant for them.
-**Once, after that PR is deployed**, the owner runs the shutdown script, then
-deletes what is left by hand:
+**Once, before that PR is merged** (Strava has been off since 2026-10-26, so
+no new tokens appear; after the deploy, deleting an account no longer ends its
+Strava access, and the privacy page says access has ended), the owner runs the
+shutdown script from the PR's branch, then deletes what is left by hand after
+the deploy:
 
 ```bash
 # 1. Dry run: counts only, no calls to Strava, nothing deleted.
@@ -55,19 +58,20 @@ cd apps/web && DATA_BUCKET=paddlesnitch-data-prod AWS_PROFILE=paddlesnitch AWS_R
   npx tsx scripts/strava-shutdown.ts
 # 2. For real: deletes the webhook subscription, deauthorizes every stored
 #    token at Strava (refreshing expired ones), deletes users/*/strava.json,
-#    users/*/strava-prefs.json and strava-athletes/*. Never paddles. Prints
-#    counts only. A token that fails (not "already revoked") is kept: run again.
+#    users/*/strava-prefs.json, strava-athletes/* and jobs*/strava-event/*.
+#    Never paddles. Prints counts only. A token that fails (not "already
+#    revoked") is kept, with any refreshed token saved: run again.
 cd apps/web && DATA_BUCKET=paddlesnitch-data-prod AWS_PROFILE=paddlesnitch AWS_REGION=eu-west-1 \
   npx tsx scripts/strava-shutdown.ts --apply
-# 3. Only after a clean run (it needs the client id and secret): delete the parameters.
+# 3. After a clean run (it needs the client id and secret) and the deploy: delete the parameters.
 aws ssm delete-parameters --names /att/strava-client-id /att/strava-client-secret /att/strava-webhook-verify-token --profile paddlesnitch --region eu-west-1
 # 4. The STRAVA_OFF repository variable is unused now.
 gh variable delete STRAVA_OFF
 ```
 
 Then delete the Strava API application at https://www.strava.com/settings/api.
-Until step 2 has run, account erasure still deletes a user's
-`strava-athletes/{athleteId}.json` (the users/ prefix takes their other files).
+Account erasure still deletes a user's `strava-athletes/{athleteId}.json` in
+case anything is left (the users/ prefix takes their other files).
 
 **Writing a secret to SSM or Secrets Manager:** write it to a tempfile with
 `printf '%s'` so there is NO trailing newline (`echo`/`grep > file` append one,

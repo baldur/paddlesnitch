@@ -69,8 +69,6 @@ const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.o
   'kayak.spw.wallonie.be',   // a link to Wallonia's kayak status; nothing is fetched from it
   'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
   'developers.google.com',   // Google's branding rules, cited in a comment; nothing is fetched from it
-  // The iOS sample server (tests only) until the iOS Strava removal lands; then delete this line.
-  'www.strava.com',
 ])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
 // machine or the weekly refresh job, so no visitor's data ever reaches these hosts.
@@ -93,7 +91,11 @@ describe('privacy page names every outside service the code uses', () => {
     ...readdirSync(path.join(repo, 'mobile/ios/Packages')).map(p => path.join(repo, 'mobile/ios/Packages', p, 'Sources')),
   ].filter(d => { try { return statSync(d).isDirectory() } catch { return false } })
   for (const f of [...sourceFiles(path.join(repo, 'apps/web/src')), ...sourceFiles(path.join(repo, 'packages')), ...apps.flatMap(sourceFiles)]) {
-    for (const m of readFileSync(f, 'utf8').matchAll(/https:\/\/([a-z0-9.-]+\.[a-z]{2,})/g)) hosts.add(m[1])
+    for (const m of readFileSync(f, 'utf8').matchAll(/https:\/\/([a-z0-9.-]+\.[a-z]{2,})/g)) {
+      // The iOS test server still fakes Strava until the iOS Strava removal lands (then drop this).
+      if (m[1] === 'www.strava.com' && f.includes('/SampleServer/')) continue
+      hosts.add(m[1])
+    }
   }
 
   it('has no outside host missing from the list of known services', () => {

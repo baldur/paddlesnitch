@@ -67,10 +67,9 @@ become its admin, or ask an admin of an existing group to add you.
 
 ## How do I submit my result?
 
-Open the trial page and upload your trace (a file, a link or a tracker
-recording). If the trial is members-only, you need to be a member of the group
-running it first — the upload page will show a "join this group to submit"
-link when that's the case. Public trials accept anyone; invitational trials accept the people the
+Open the trial page and upload your file, a link to one, or a tracker
+recording. If the trial is members-only, join the group running it first. The
+upload page shows a "join this group to submit" link when you need to. Public trials accept anyone; invitational trials accept the people the
 organiser invited.
 
 ## How do I join a group?

@@ -166,6 +166,17 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await getJson('strava-athletes/888.json')).toEqual({ userId: 'someone-else' })
   })
 
+  it('an account made with Strava (no strava.json left): its placeholder email names the athlete index to delete', async () => {
+    const athlete = 700000 + Math.floor(Math.random() * 99999)
+    const me = await makeUser('Strava Person', { email: `strava-${athlete}@noreply.paddlesnitch.com` })
+    await putJson(`strava-athletes/${athlete}.json`, { userId: me.id })
+
+    signInAs(me.idToken)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
+
+    expect(await getJson(`strava-athletes/${athlete}.json`)).toBeNull()
+  })
+
   it("takes them off every game leaderboard, and leaves everyone else's times (#742)", async () => {
     const me = await makeUser('Me')
     const other = await makeUser('Other')
@@ -308,6 +319,14 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     expect(text).not.toContain('SECRET-A')
     expect(text).not.toContain('SECRET-R')
     expect(text).not.toContain('tokenHash')
+  })
+
+  it('exports the old Strava auto-import setting while the file is still there', async () => {
+    const me = await makeUser('Me')
+    await putJson(`users/${me.id}/strava-prefs.json`, { autoImport: false, historyImportedAt: '2026-10-01T00:00:00Z' })
+    signInAs(me.idToken)
+    const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
+    expect(body.account.stravaAutoImport).toEqual({ autoImport: false, historyImportedAt: '2026-10-01T00:00:00Z' })
   })
 
   it('says nothing about Strava for an account that never connected it', async () => {

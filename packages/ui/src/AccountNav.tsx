@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { buttonClass } from './Button'
 
 // Shared signed-in/out account nav. Presentational + config-driven: the host app
@@ -20,6 +20,10 @@ import { buttonClass } from './Button'
 // The menu's "Report an issue" item opens the shared FeedbackWidget via this
 // window event (same contract AppShell used for its old REPORT link).
 const OPEN_FEEDBACK = 'paddlesnitch:open-feedback'
+
+// Focus moves with the sign-out confirm (the button that had it is gone),
+// once React has drawn the change.
+const focusSoon = (r: RefObject<HTMLButtonElement | null>) => requestAnimationFrame(() => r.current?.focus())
 
 /** `placeholderEmail`: the account was made with Strava and has no real email (sign out asks first). */
 export type NavUser = { id: string; displayName: string; placeholderEmail?: true }
@@ -65,16 +69,24 @@ export default function AccountNav({
   const [open, setOpen] = useState(false)
   const [confirmingOut, setConfirmingOut] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const signOutRef = useRef<HTMLButtonElement>(null)
+  const anywayRef = useRef<HTMLButtonElement>(null)
+  const startConfirm = () => { setConfirmingOut(true); focusSoon(anywayRef) }
+  const cancelConfirm = () => { setConfirmingOut(false); focusSoon(signOutRef) }
 
-  // Close on click-outside + Escape.
+  // Close on click-outside + Escape (Escape in the sign-out confirm goes back to the menu).
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (confirmingOut) { setConfirmingOut(false); focusSoon(signOutRef) }
+      else setOpen(false)
+    }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
-  }, [open])
+  }, [open, confirmingOut])
 
   const tab = variant === 'tab'
   const tabClass = 'flex flex-col items-center justify-center gap-0.5 min-h-14 w-full text-xs font-medium text-muted hover:text-fg'
@@ -117,9 +129,10 @@ export default function AccountNav({
         Report an issue
       </button>
       <button
+        ref={signOutRef}
         role="menuitem"
         type="button"
-        onClick={() => { if (signOutConfirm) { setConfirmingOut(true); return } setOpen(false); onSignOut() }}
+        onClick={() => { if (signOutConfirm) { startConfirm(); return } setOpen(false); onSignOut() }}
         className={`${item} text-muted hover:bg-surface-2 hover:text-red`}
       >
         Sign out
@@ -129,20 +142,25 @@ export default function AccountNav({
 
   // Asked first, inside the menu: the account can't sign back in by itself.
   const confirmOut = signOutConfirm && (
-    <div role="alertdialog" aria-label="Sign out" className="px-4 py-3 flex flex-col gap-3 max-w-xs">
-      <p className="text-sm text-fg">{signOutConfirm.text}</p>
+    <div className="px-4 py-3 flex flex-col gap-3">
+      <p id="sign-out-confirm-text" className="text-sm text-fg">{signOutConfirm.text}</p>
       <div className="flex flex-wrap gap-2">
         <a href={signOutConfirm.emailHref} className={buttonClass('primary')}>Email us</a>
-        <button type="button" onClick={() => { setOpen(false); onSignOut() }} className={buttonClass('secondary')}>
+        <button ref={anywayRef} type="button" onClick={() => { setOpen(false); onSignOut() }} className={buttonClass('secondary')}>
           Sign out anyway
         </button>
-        <button type="button" onClick={() => setConfirmingOut(false)} className={buttonClass('quiet')}>
+        <button type="button" onClick={cancelConfirm} className={buttonClass('quiet')}>
           Cancel
         </button>
       </div>
     </div>
   )
-  const shown = confirmingOut && confirmOut ? confirmOut : items
+  const confirming = !!(confirmingOut && confirmOut)
+  const shown = confirming ? confirmOut : items
+  // A menu holds only menu items: while asking, the box is an alert dialog instead.
+  const boxRole = confirming
+    ? { role: 'alertdialog', 'aria-modal': true, 'aria-describedby': 'sign-out-confirm-text' } as const
+    : { role: 'menu' } as const
 
   if (tab) {
     return (
@@ -157,7 +175,7 @@ export default function AccountNav({
         {open && (
           <>
             <div className="fixed inset-0 z-[1190] bg-black/50" aria-hidden onClick={() => setOpen(false)} />
-            <div role="menu" aria-label="Your account" className="fixed inset-x-0 bottom-0 z-[1200] rounded-t-sheet border-t border-border-strong bg-surface pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2 flex flex-col">
+            <div {...boxRole} aria-label={confirming ? 'Sign out' : 'Your account'} className="fixed inset-x-0 bottom-0 z-[1200] rounded-t-sheet border-t border-border-strong bg-surface pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2 flex flex-col">
               <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
               <p className="px-4 pb-2 text-sm text-muted truncate">Signed in as <span className="text-fg font-medium">{user.displayName}</span></p>
               {shown}
@@ -184,7 +202,7 @@ export default function AccountNav({
       </button>
 
       {open && (
-        <div role="menu" className="absolute right-0 top-full mt-2 min-w-[12rem] rounded-control border border-border-strong bg-surface shadow-lg z-[1200] flex flex-col py-1">
+        <div {...boxRole} aria-label={confirming ? 'Sign out' : undefined} className={`absolute right-0 top-full mt-2 ${confirming ? 'w-80 max-w-[calc(100vw-2rem)]' : 'min-w-[12rem]'} rounded-control border border-border-strong bg-surface shadow-lg z-[1200] flex flex-col py-1`}>
           {shown}
         </div>
       )}

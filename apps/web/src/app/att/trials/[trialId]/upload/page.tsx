@@ -469,7 +469,7 @@ export default function UploadPage({
             {inputMode === 'url' && (
               <form onSubmit={handleUrlSubmit} className="flex flex-col gap-6">
                 <Field
-                  label="Activity link"
+                  label="GPX link"
                   htmlFor="activity-url"
                   help="A direct link to a .gpx file. The whole session is fine."
                 >

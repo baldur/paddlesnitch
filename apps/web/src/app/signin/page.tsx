@@ -527,9 +527,10 @@ function AuthForm() {
           not Report an issue: reports are public, and people would write their
           name and email in them. */}
       {tab === 'signin' && !confirming && (
-        <p className="text-sm text-muted text-center border-t border-border pt-6 mt-6">
-          Made your account with Strava? <a href="mailto:privacy@paddlesnitch.com" className="tt-link">Email us</a> and we’ll move it to your email.
-        </p>
+        <div className="flex flex-col items-center gap-3 border-t border-border pt-6 mt-6">
+          <p className="text-sm text-muted text-center">Made your account with Strava? Email us and we’ll move it to your email.</p>
+          <a href="mailto:privacy@paddlesnitch.com" className={buttonClass('secondary')}>Email us</a>
+        </div>
       )}
     </Page>
   )

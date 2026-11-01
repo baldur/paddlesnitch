@@ -231,7 +231,7 @@ function AccountPageInner() {
     // Made with Strava, which is gone: signing out would leave no way back in.
     // (Delete account offers Email us instead, below.)
     if (isSyntheticStravaEmail(user.email)) {
-      setErr('You made this account with Strava, so you can’t sign in again until we move it to your email.')
+      setErr('You made this account with Strava, so you can’t sign back in until we move it to your email.')
       return
     }
     setWorking(then)
@@ -323,7 +323,7 @@ function AccountPageInner() {
                   <Field
                     label="Contact email"
                     htmlFor="contact-email"
-                    help="We don't have an email for this account. Add one so we can move your account to it and tell you about changes to our Terms. We never share it."
+                    help="We don’t have an email for this account. Add one so we can move your account to it and tell you about changes to our Terms."
                   >
                     <input
                       id="contact-email"
@@ -415,9 +415,7 @@ function AccountPageInner() {
             </section>
 
             {GOOGLE_SIGNIN && (
-              <>
-                <GoogleConnect onSignInAgain={() => signInAgain('google')} signingIn={working === 'google'} signInError={googleSignInError} />
-              </>
+              <GoogleConnect onSignInAgain={() => signInAgain('google')} signingIn={working === 'google'} signInError={googleSignInError} />
             )}
 
             <section id="devices" className="flex flex-col gap-3 scroll-mt-4">
@@ -480,7 +478,7 @@ function AccountPageInner() {
                     An account made with Strava can’t sign in again here. Email us and we’ll delete it.
                   </p>
                   <div className="flex gap-2 flex-wrap">
-                    <a href={`mailto:privacy@paddlesnitch.com?subject=${encodeURIComponent('Delete my account')}&body=${encodeURIComponent(`Support ID: ${user.id}`)}`} className={buttonClass('primary')}>
+                    <a href={`mailto:privacy@paddlesnitch.com?subject=${encodeURIComponent('Delete my account')}&body=${encodeURIComponent(`Support ID: ${user.id}`)}`} autoFocus className={buttonClass('primary')}>
                       Email us
                     </a>
                     <button type="button" onClick={() => setDeleteStep('closed')} className={buttonClass('secondary')}>

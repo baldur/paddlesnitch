@@ -122,11 +122,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
         <PageHeader
           eyebrow={<>{trial.name} · {fmtDay(entry.raceDate)}</>}
           title={entry.displayName}
-          description={
-            <>
-              {entry.runCount && entry.runCount > 1 && <>Best of {entry.runCount} runs in this upload. </>}
-            </>
-          }
+          description={entry.runCount && entry.runCount > 1 ? <>Best of {entry.runCount} runs in this upload.</> : undefined}
         />
 
         <div className={`${cardClass} p-4 grid grid-cols-2 sm:grid-cols-4 gap-4`}>

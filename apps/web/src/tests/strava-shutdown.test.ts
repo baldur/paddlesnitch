@@ -14,6 +14,7 @@ function fakeStore(files: Record<string, unknown>) {
   const store: Store = {
     listKeys: async prefix => [...data.keys()].filter(k => k.startsWith(prefix)),
     getJson: async <T,>(key: string) => (data.has(key) ? (data.get(key) as T) : null),
+    putJson: async (key, value) => { data.set(key, value) },
     deleteObject: async key => { deleted.push(key); data.delete(key) },
   }
   return { store, data, deleted }
@@ -42,11 +43,14 @@ const FILES = {
   'users/u3/strava-prefs.json': { autoImport: false },
   'strava-athletes/111.json': { userId: 'u1' },
   'strava-athletes/222.json': { userId: 'u2' },
+  'jobs/strava-event/a-1.json': { kind: 'strava-event' },
+  'jobs-failed/strava-event/b-2.json': { kind: 'strava-event' },
   // Never touched:
   'users/u1/profile.json': { public: true },
   'users/u1/contact.json': { email: 'real@example.com' },
   'analysis/u1/p1.json': { source: { type: 'strava', stravaActivityId: 9 } },
   'users/u1/strava.json.bak': {},
+  'jobs/tracker-paddle/c-3.json': { kind: 'tracker-paddle' },
 }
 
 describe('plan', () => {
@@ -56,6 +60,7 @@ describe('plan', () => {
       tokens: ['users/u1/strava.json', 'users/u2/strava.json'],
       prefs: ['users/u1/strava-prefs.json', 'users/u3/strava-prefs.json'],
       athletes: ['strava-athletes/111.json', 'strava-athletes/222.json'],
+      jobs: ['jobs-failed/strava-event/b-2.json', 'jobs/strava-event/a-1.json'],
     })
   })
 })
@@ -85,7 +90,7 @@ describe('run', () => {
     expect(calls).toEqual([])
     expect(deleted).toEqual([])
     expect(r.tokens).toBe(2)
-    expect(lines.join('\n')).toMatch(/2 Strava connection\(s\).*2 preference.*2 athlete index/)
+    expect(lines.join('\n')).toMatch(/2 Strava connection\(s\).*2 preference.*2 athlete index.*2 webhook job/)
   })
 
   it('--apply deletes the webhook, ends each connection (refreshing an old token), and deletes only the Strava files', async () => {
@@ -104,11 +109,12 @@ describe('run', () => {
     expect(deauths).toEqual(['Bearer LIVE-1', 'Bearer FRESH-ACCESS'])
 
     expect(deleted.sort()).toEqual([
+      'jobs-failed/strava-event/b-2.json', 'jobs/strava-event/a-1.json',
       'strava-athletes/111.json', 'strava-athletes/222.json',
       'users/u1/strava-prefs.json', 'users/u1/strava.json', 'users/u2/strava.json', 'users/u3/strava-prefs.json',
     ])
-    for (const kept of ['users/u1/profile.json', 'users/u1/contact.json', 'analysis/u1/p1.json', 'users/u1/strava.json.bak']) expect(data.has(kept), kept).toBe(true)
-    expect(r).toMatchObject({ subscriptions: 1, subscriptionsDeleted: 1, tokens: 2, ended: 2, failed: 0, prefsDeleted: 2, athletesDeleted: 2 })
+    for (const kept of ['users/u1/profile.json', 'users/u1/contact.json', 'analysis/u1/p1.json', 'users/u1/strava.json.bak', 'jobs/tracker-paddle/c-3.json']) expect(data.has(kept), kept).toBe(true)
+    expect(r).toMatchObject({ subscriptions: 1, subscriptionsDeleted: 1, tokens: 2, ended: 2, failed: 0, prefsDeleted: 2, athletesDeleted: 2, jobsDeleted: 2 })
   })
 
   it('prints counts only: no tokens, secrets, athlete ids or account ids', async () => {
@@ -131,6 +137,51 @@ describe('run', () => {
     expect(r).toMatchObject({ ended: 1, failed: 1 })
     expect(data.has('users/u1/strava.json')).toBe(false)
     expect(data.has('users/u2/strava.json')).toBe(true)
+  })
+
+  it('keeps a refreshed token when deauthorizing fails, so a second run still ends it', async () => {
+    const { store, data } = fakeStore({ 'users/u2/strava.json': FILES['users/u2/strava.json'] })
+    const down = fakeStrava(url => (url.endsWith('/oauth/deauthorize') ? new Response('down', { status: 503 }) : undefined))
+    expect(await run({ apply: true, store, creds, fetch: down.f, nowS: NOW, log: () => {} })).toMatchObject({ ended: 0, failed: 1 })
+    // Strava retired R-2 when it refreshed: the new tokens were saved.
+    expect(data.get('users/u2/strava.json')).toMatchObject({ accessToken: 'FRESH-ACCESS', refreshToken: 'FRESH-REFRESH' })
+
+    const up = fakeStrava()
+    expect(await run({ apply: true, store, creds, fetch: up.f, nowS: NOW, log: () => {} })).toMatchObject({ ended: 1, failed: 0 })
+    expect(up.calls.filter(c => c.url.endsWith('/oauth/deauthorize')).map(c => c.auth)).toEqual(['Bearer FRESH-ACCESS'])
+    expect(data.has('users/u2/strava.json')).toBe(false)
+  })
+
+  it('an unreadable connection file is a failure for that one, not the end of the run', async () => {
+    const { store, data } = fakeStore(FILES)
+    const realGet = store.getJson
+    store.getJson = async <T,>(key: string) => { if (key === 'users/u1/strava.json') throw new Error('bad object'); return realGet<T>(key) }
+    const r = await run({ apply: true, store, creds, fetch: fakeStrava().f, nowS: NOW, log: () => {} })
+    expect(r).toMatchObject({ ended: 1, failed: 1, athletesDeleted: 2 })
+    expect(data.has('users/u1/strava.json')).toBe(true)
+  })
+
+  it('a refresh that fails on Strava\'s side keeps the file', async () => {
+    const { store, data } = fakeStore({ 'users/u2/strava.json': FILES['users/u2/strava.json'] })
+    const { f } = fakeStrava(url => (url.endsWith('/oauth/token') ? new Response('down', { status: 502 }) : undefined))
+    expect(await run({ apply: true, store, creds, fetch: f, nowS: NOW, log: () => {} })).toMatchObject({ ended: 0, failed: 1 })
+    expect(data.has('users/u2/strava.json')).toBe(true)
+  })
+
+  it('stops before deleting anything when Strava won\'t list the webhook (wrong id or secret)', async () => {
+    const { store, deleted } = fakeStore(FILES)
+    const { f } = fakeStrava(url => (url.includes('/push_subscriptions?') ? new Response('{}', { status: 401 }) : undefined))
+    await expect(run({ apply: true, store, creds, fetch: f, nowS: NOW, log: () => {} })).rejects.toThrow(/401/)
+    expect(deleted).toEqual([])
+  })
+
+  it('a webhook delete that fails is reported and the rest carries on', async () => {
+    const { store } = fakeStore(FILES)
+    const lines: string[] = []
+    const { f } = fakeStrava((url, init) => (init?.method === 'DELETE' ? new Response('no', { status: 500 }) : undefined))
+    const r = await run({ apply: true, store, creds, fetch: f, nowS: NOW, log: l => lines.push(l) })
+    expect(r).toMatchObject({ subscriptions: 1, subscriptionsDeleted: 0, ended: 2 })
+    expect(lines.join('\n')).toContain('couldn\'t delete a webhook subscription')
   })
 
   it('refuses to act without the client id and secret', async () => {
