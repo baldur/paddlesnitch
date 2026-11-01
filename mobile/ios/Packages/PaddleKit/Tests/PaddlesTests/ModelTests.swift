@@ -186,9 +186,16 @@ actor ScriptedSource: PaddlesSource {
         #expect(river.coachSummary != nil)
     }
 
-    @Test func aPhonesPaddleSaysPhone() async throws {
-        var paddle = try await SamplePaddles(directory: fixtures).paddle(id: "pdl-river")
-        paddle.source.phone = true
+    /// `source.phone` from JSON, so a wrong key fails here. Until the contract
+    /// has `paddles.get.with-phone.json` (#804), the sample gets the key.
+    @Test func aPhonesPaddleSaysPhone() throws {
+        let data = try Data(contentsOf: fixtures.appending(path: "paddles.get.json"))
+        var json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var source = try #require(json["source"] as? [String: Any])
+        source["phone"] = true
+        json["source"] = source
+        let paddle = try JSONDecoder.paddlesnitch.decode(
+            AnalysisSession.self, from: try JSONSerialization.data(withJSONObject: json))
         #expect(PaddleSummary(paddle).eyebrow == "Phone · K1")
     }
 
