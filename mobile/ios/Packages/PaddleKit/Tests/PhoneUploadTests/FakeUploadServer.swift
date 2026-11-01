@@ -45,6 +45,8 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
     /// Pieces held from an earlier upload that broke off.
     var held: [String: [Int: Data]] = [:]
     var phoneAnswer: (Int, Data) = (201, fixture("account.phone"))
+    /// What the held-pieces GET answers instead, if set.
+    var heldAnswer: (Int, Data)?
     /// Requests with this token get 401, as an expired one does.
     var refusesToken: String?
     /// The next this many requests fail as the network does.
@@ -95,6 +97,7 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
         let name = call.query["filename"] ?? ""
         if phoneRemoved { return (404, fixture("account.phone-upload.not-found")) }
         if call.method == "GET" {
+            if let heldAnswer { return heldAnswer }
             return (200, json(["parts": (held[name] ?? [:]).keys.sorted()]))
         }
         for key in [name, "*"] {
@@ -106,6 +109,11 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
         }
         guard let partText = call.query["part"], let part = Int(partText), let parts = Int(call.query["parts"] ?? "")
         else { return whole(name, call.body) }
+        return piece(part, of: parts, name, call)
+    }
+
+    /// Under the lock.
+    private func piece(_ part: Int, of parts: Int, _ name: String, _ call: Call) -> (Int, Data) {
         if !lose.contains(part) {
             pieces[name, default: held[name] ?? [:]][part] = call.body
         } else {

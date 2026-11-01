@@ -22,11 +22,14 @@ struct RecordingSender {
         case removed
         /// The server will never take it. Files kept.
         case refused
+        /// 410: the account was deleted (on the website, say). Its
+        /// recordings must never upload: the queue deletes them.
+        case accountDeleted
     }
 
     /// One file's answer, in the README's terms.
     enum FileOutcome: Equatable {
-        case sent, noPoints, removed, trackFirst, refused
+        case sent, noPoints, removed, trackFirst, refused, accountDeleted
     }
 
     static let pieceSize = 64 * 1024
@@ -37,36 +40,43 @@ struct RecordingSender {
     let mismatched: Mismatches
 
     func send(_ recording: WaitingRecording) async throws -> Outcome {
-        let manager = FileManager.default
-        if manager.fileExists(atPath: recording.track.path(percentEncoded: false)) {
-            switch try await sendFile(recording.track, as: recording.trackName) {
-            case .sent:
-                try? manager.removeItem(at: recording.track)
-            case .noPoints:
-                recording.deleteAll()
-                return .noFix
-            case .removed:
-                return .removed
-            case .trackFirst, .refused:
-                return .refused
-            }
-        }
-        if manager.fileExists(atPath: recording.motion.path(percentEncoded: false)) {
-            switch try await sendFile(recording.motion, as: recording.motionName) {
-            case .sent, .noPoints:
-                try? manager.removeItem(at: recording.motion)
-            case .removed:
-                return .removed
-            case .trackFirst:
-                // Its track went first, in this pass or an earlier one: the
-                // server hasn't caught up yet.
-                throw TryLater(reason: "the server doesn't have the track of \(recording.stem) yet")
-            case .refused:
-                return .refused
-            }
-        }
+        if let stop = try await sendTrack(of: recording) { return stop }
+        if let stop = try await sendMotion(of: recording) { return stop }
         recording.deleteLogIfDone()
         return .sent
+    }
+
+    /// The track, if it's still here. An outcome means stop with it.
+    private func sendTrack(of recording: WaitingRecording) async throws -> Outcome? {
+        guard FileManager.default.fileExists(atPath: recording.track.path(percentEncoded: false)) else { return nil }
+        switch try await sendFile(recording.track, as: recording.trackName) {
+        case .sent:
+            try? FileManager.default.removeItem(at: recording.track)
+            return nil
+        case .noPoints:
+            recording.deleteAll()
+            return .noFix
+        case .removed: return .removed
+        case .accountDeleted: return .accountDeleted
+        case .trackFirst, .refused: return .refused
+        }
+    }
+
+    /// The motion file, if it's still here, after its track.
+    private func sendMotion(of recording: WaitingRecording) async throws -> Outcome? {
+        guard FileManager.default.fileExists(atPath: recording.motion.path(percentEncoded: false)) else { return nil }
+        switch try await sendFile(recording.motion, as: recording.motionName) {
+        case .sent, .noPoints:
+            try? FileManager.default.removeItem(at: recording.motion)
+            return nil
+        case .removed: return .removed
+        case .accountDeleted: return .accountDeleted
+        case .trackFirst:
+            // Its track went first, in this pass or an earlier one: the
+            // server hasn't caught up yet.
+            throw TryLater(reason: "the server doesn't have the track of \(recording.stem) yet")
+        case .refused: return .refused
+        }
     }
 
     func sendFile(_ url: URL, as name: String) async throws -> FileOutcome {
@@ -93,6 +103,8 @@ struct RecordingSender {
             held = Set(try await client.heldParts(deviceID: deviceID, filename: name))
         } catch PaddleAPIError.rejected(_, let status, _) where status == 404 {
             return .removed
+        } catch PaddleAPIError.rejected(_, let status, _) where status == 410 {
+            return .accountDeleted
         }
         var queue = Self.order((1...count).filter { !held.contains($0) }, last: count)
         var gapRounds = 0
@@ -141,6 +153,7 @@ struct RecordingSender {
         case (422, "no_motion_rows"): return .sent
         case (409, "track_not_uploaded"): return .trackFirst
         case (404, _): return .removed
+        case (410, _): return .accountDeleted
         case (400..<500, _): return .refused
         default: throw TryLater(reason: "the server answered \(answer.status)")
         }

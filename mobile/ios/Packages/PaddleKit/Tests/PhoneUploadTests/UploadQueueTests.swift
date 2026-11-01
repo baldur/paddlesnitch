@@ -71,7 +71,8 @@ struct UploadQueueTests {
         #expect(server.calls.isEmpty)
         #expect(queue.lines.map(\.text) == ["Waiting to upload"])
         queue.online = true
-        #expect(queue.lines.map(\.text) == ["Uploading…"])
+        // "Uploading…" only while it's the one going up.
+        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
     }
 
     @Test func theRawIMUFileIsNeverSent() async throws {

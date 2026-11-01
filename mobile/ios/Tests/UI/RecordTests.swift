@@ -76,7 +76,7 @@ final class RecordTests: AppTestCase {
     func testARecordingTheServerWontTakeIsKeptWithReportAnIssue() throws {
         try record(with: "-UploadsRefused")
         let line = element("upload-line")
-        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("Couldn't upload this recording") })
+        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("Couldn’t upload this recording") })
         XCTAssertEqual(app.buttons["report-issue"].label, "Report an issue")
         try auditPaddles()
     }

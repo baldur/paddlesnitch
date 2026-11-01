@@ -35,8 +35,8 @@ public final class UploadQueue {
         public var text: String {
             switch self {
             case .waiting(_, _, let uploading): uploading ? "Uploading…" : "Waiting to upload"
-            case .noFix: "No GPS fix, so this didn't become a paddle"
-            case .refused: "Couldn't upload this recording. It's kept on this phone."
+            case .noFix: "No GPS fix, so this didn’t become a paddle"
+            case .refused: "Couldn’t upload this recording. It’s kept on this phone."
             case .removed: "This phone was removed from your account"
             case .cannotAdd(let message): message
             }
@@ -82,6 +82,9 @@ public final class UploadQueue {
     /// never goes, whatever `recording` says.
     let isOpen: @Sendable (URL) -> Bool
     private var stopped = false
+    /// The server said the account was deleted (410): its recordings are
+    /// gone from the phone and the queue has stopped; sign out.
+    public var accountDeleted: (@MainActor () -> Void)?
     private var uploading: String?
     private var failures = 0
     private var cannotAdd: String?
@@ -159,6 +162,9 @@ public final class UploadQueue {
             save()
             refreshLines()
             return phone.deviceId
+        } catch PaddleAPIError.rejected(_, let status, _) where status == 410 {
+            deleteAccountsRecordings()
+            throw CancellationError()
         } catch PaddleAPIError.rejected(let message, let status, _) where status == 400 || status == 409 {
             cannotAdd = message
             refreshLines()
@@ -226,6 +232,9 @@ public final class UploadQueue {
             case .noFix: state.noFix.append(recording.stem)
             case .refused: state.refused.append(recording.stem)
             case .removed: state.removed = true
+            case .accountDeleted:
+                deleteAccountsRecordings()
+                return
             }
             save()
             if state.removed { return }
@@ -235,6 +244,16 @@ public final class UploadQueue {
     /// 5 s, 10 s, 20 s … up to 5 minutes.
     static func backoff(_ failures: Int) -> Duration {
         .seconds(min(300, 5 << min(failures - 1, 6)))
+    }
+
+    /// 410: the account no longer exists. Never upload its recordings:
+    /// delete them all, stop, and say so (the app signs out).
+    private func deleteAccountsRecordings() {
+        stop()
+        try? FileManager.default.removeItem(at: folder)
+        state = UploadState()
+        lines = []
+        accountDeleted?()
     }
 
     /// Not once stopped: a queue of an account signed out of (or deleted)
@@ -252,9 +271,9 @@ public final class UploadQueue {
         if state.removed && !waiting.isEmpty {
             lines.append(.removed)
         } else {
-            let canGo = online && !recording && failures == 0 && cannotAdd == nil
+            // "Uploading…" for the one going up now; the rest wait.
             lines += waiting.map {
-                .waiting(stem: $0.stem, startedAt: $0.startedAt, uploading: canGo || uploading == $0.stem)
+                .waiting(stem: $0.stem, startedAt: $0.startedAt, uploading: uploading == $0.stem)
             }
         }
         lines += all.filter { state.refused.contains($0.stem) }.map { .refused(stem: $0.stem, startedAt: $0.startedAt) }

@@ -102,7 +102,7 @@ struct UploadTests {
         await queue.pass()
         #expect(names(in: folder).contains("track_20261101_070211.csv"))
         #expect(names(in: folder).contains("track_20261101_070211_i10.csv"))
-        #expect(queue.lines.map(\.text) == ["Couldn't upload this recording. It's kept on this phone."])
+        #expect(queue.lines.map(\.text) == ["Couldn’t upload this recording. It’s kept on this phone."])
         // Never retried by itself.
         let sent = server.uploads.count
         await queue.pass()
@@ -126,7 +126,7 @@ struct UploadTests {
         #expect(server.uploads.count == 1)  // the motion file isn't sent
         #expect(names(in: folder) == ["uploads.json"])
         let line = try #require(queue.lines.first)
-        #expect(line.text == "No GPS fix, so this didn't become a paddle")
+        #expect(line.text == "No GPS fix, so this didn’t become a paddle")
         #expect(line.started(in: .gmt) == "1 Nov 2026, 07:02")
         queue.dismiss("track_20261101_070211")
         #expect(queue.lines.isEmpty)

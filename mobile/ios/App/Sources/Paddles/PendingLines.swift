@@ -25,6 +25,8 @@ struct RecordingLine: View {
                         .accessibilityHidden(true)
                 }
                 .frame(minHeight: 44)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Recording, \(Spoken.duration(context.date.timeIntervalSince(startedAt)))")
             }
         }
         .buttonStyle(.plain)
@@ -39,8 +41,10 @@ struct RecordingLine: View {
 struct UploadLineView: View {
     let line: UploadQueue.Line
     let queue: UploadQueue
-    let openReport: () -> Void
+    let openReport: () async -> Bool
     @State private var adding = false
+    @State private var opening = false
+    @State private var reportFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -78,7 +82,7 @@ struct UploadLineView: View {
             }
             switch line {
             case .removed:
-                action(adding ? "Upload now…" : "Upload now") {
+                action(adding ? "Upload now…" : "Upload now", filled: true) {
                     adding = true
                     Task {
                         await queue.addAgain()
@@ -88,8 +92,21 @@ struct UploadLineView: View {
                 .disabled(adding)
                 .accessibilityIdentifier("upload-now")
             case .refused:
-                action("Report an issue", run: openReport)
-                    .accessibilityIdentifier("report-issue")
+                action(opening ? "Report an issue…" : "Report an issue") {
+                    opening = true
+                    reportFailed = false
+                    Task {
+                        reportFailed = await !openReport()
+                        opening = false
+                    }
+                }
+                .disabled(opening)
+                .accessibilityIdentifier("report-issue")
+                if reportFailed {
+                    Text("Couldn’t open the issue form. Please try again.")
+                        .font(.plexSans(.subheadline))
+                        .foregroundStyle(Palette.red)
+                }
             case .waiting, .noFix, .cannotAdd:
                 EmptyView()
             }
@@ -99,16 +116,36 @@ struct UploadLineView: View {
 
     private var tone: Color {
         switch line {
-        case .refused, .removed, .cannotAdd: Palette.red
-        case .waiting, .noFix: Palette.fg
+        case .refused, .cannotAdd: Palette.red
+        // The owner's own choice on Devices, not a failure.
+        case .waiting, .noFix, .removed: Palette.fg
         }
     }
 
-    private func action(_ title: String, run: @escaping () -> Void) -> some View {
-        Button(action: run) {
-            Text(title).font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44)
+    /// The one thing to do (Upload now) filled; the rest outlined.
+    @ViewBuilder
+    private func action(_ title: String, filled: Bool = false, run: @escaping () -> Void) -> some View {
+        let label = Text(title).font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44)
+        if filled {
+            Button(action: run) { label }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+                .tint(Palette.primary)
+        } else {
+            Button(action: run) { label }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+                .tint(Palette.primaryText)
         }
-        .buttonStyle(.bordered)
-        .tint(Palette.primaryText)
+    }
+}
+
+/// Times as VoiceOver should say them: "12 minutes, 3 seconds", not "0:12:03".
+enum Spoken {
+    static func duration(_ seconds: Double) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute, .second] : [.minute, .second]
+        return formatter.string(from: max(0, seconds.rounded(.down))) ?? ""
     }
 }

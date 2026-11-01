@@ -27,8 +27,9 @@ struct PaddleListView: View {
     let recordings: URL?
     /// This account's recordings from this phone, waiting to upload.
     let uploads: UploadQueue?
-    /// The website's issue form, for a recording the server won't take.
-    let openReport: () -> Void
+    /// The website's issue form, for a recording the server won't take:
+    /// false if it couldn't open.
+    let openReport: () async -> Bool
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var loadedID: String?
@@ -44,7 +45,8 @@ struct PaddleListView: View {
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
         openTerms: @escaping () -> Void, adding: AddPaddleModel, options: SignInOptions,
-        openFile: @escaping (URL) -> Void, recordings: URL?, uploads: UploadQueue?, openReport: @escaping () -> Void
+        openFile: @escaping (URL) -> Void, recordings: URL?, uploads: UploadQueue?,
+        openReport: @escaping () async -> Bool
     ) {
         self.source = source
         self.sourceID = sourceID
@@ -141,10 +143,14 @@ struct PaddleListView: View {
                 .font(.plexSans(.body))
                 .foregroundStyle(Palette.muted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .safeAreaInset(edge: .top) { pendingAbove }
         case .failed(let message):
+            // Offline is when this shows, and when "Waiting to upload" matters.
             MessageView(
                 title: "Couldn't load your paddles", message: message,
-                action: ("Try again", { Task { await model.load() } }))
+                action: ("Try again", { Task { await model.load() } })
+            )
+            .safeAreaInset(edge: .top) { pendingAbove }
         case .loaded(let rows) where rows.isEmpty && !hasPending:
             MessageView(
                 title: "No paddles yet",
@@ -194,10 +200,13 @@ struct PaddleListView: View {
                     }
                 }
             } header: {
-                Text("All paddles")
-                    .font(.plexSans(.subheadline, weight: .medium))
-                    .foregroundStyle(Palette.muted)
-                    .textCase(nil)
+                // Not over no rows (a first recording still uploading).
+                if !rows.isEmpty {
+                    Text("All paddles")
+                        .font(.plexSans(.subheadline, weight: .medium))
+                        .foregroundStyle(Palette.muted)
+                        .textCase(nil)
+                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -249,6 +258,24 @@ extension PaddleListView {
         recorder?.stop()
         recorder?.done()
         if deleted { try? FileManager.default.removeItem(at: folder) }
+    }
+
+    /// The same lines over a list that's loading or failed to load.
+    @ViewBuilder fileprivate var pendingAbove: some View {
+        if hasPending {
+            VStack(alignment: .leading, spacing: 8) {
+                if isRecording, let started = recorder?.startedAt {
+                    RecordingLine(startedAt: started) { showingRecord = true }
+                }
+                if let uploads {
+                    ForEach(uploads.lines) { line in
+                        UploadLineView(line: line, queue: uploads, openReport: openReport)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Palette.surface)
+        }
     }
 
     /// Opens the record screen: the running recording, or a new one in the
