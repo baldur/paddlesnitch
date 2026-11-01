@@ -12,6 +12,12 @@ struct YouView: View {
     /// Made with Strava: an alert, so Cancel shows (iOS 26 draws a dialog as
     /// a popover without one).
     @State private var warningSignOut = false
+    /// Couldn't tell whether the account was made with Strava: no sign-out
+    /// until it's known (signing out could lock it out).
+    @State private var signOutCheckFailed = false
+    @State private var checkingSignOut = false
+    /// No mail app took the Email us link: the address, as text.
+    @State private var noMailApp: String?
     @Environment(\.openURL) private var openURL
 
     struct WebPage: Identifiable {
@@ -54,12 +60,26 @@ struct YouView: View {
                             Text("Devices").font(.plexSans(.body)).foregroundStyle(Palette.fg)
                         }
                         .listRowBackground(Palette.surface)
-                        Button("Sign out", role: .destructive) {
-                            if account.madeWithStrava { warningSignOut = true } else { confirmingSignOut = true }
+                        Button("Sign out", role: .destructive) { Task { await askBeforeSigningOut() } }
+                            .disabled(checkingSignOut)
+                            .font(.plexSans(.body))
+                            .foregroundStyle(Palette.red)
+                            .listRowBackground(Palette.surface)
+                        if signOutCheckFailed {
+                            Text(MadeWithStrava.checkFailed)
+                                .font(.plexSans(.subheadline))
+                                .foregroundStyle(Palette.red)
+                                .accessibilityIdentifier("sign-out-check-failed")
+                                .listRowBackground(Palette.surface)
                         }
-                        .font(.plexSans(.body))
-                        .foregroundStyle(Palette.red)
-                        .listRowBackground(Palette.surface)
+                        if let noMailApp {
+                            Text(noMailApp)
+                                .font(.plexSans(.subheadline))
+                                .foregroundStyle(Palette.fg)
+                                .textSelection(.enabled)
+                                .accessibilityIdentifier("no-mail-app")
+                                .listRowBackground(Palette.surface)
+                        }
                     } else {
                         if account.accountDeleted {
                             Text("Your account and everything in it are deleted.")
@@ -120,16 +140,40 @@ struct YouView: View {
             }
             // It can't sign back in until we move it to an email (lead).
             .alert("Sign out of paddlesnitch?", isPresented: $warningSignOut) {
-                Button("Email us") { openURL(SignInHelp.emailUs) }
-                    .accessibilityIdentifier("sign-out-email-us")
+                Button("Email us") {
+                    openURL(SignInHelp.emailUs) { accepted in noMailApp = accepted ? nil : MadeWithStrava.noMailApp() }
+                }
+                .accessibilityIdentifier("sign-out-email-us")
                 Button("Sign out anyway", role: .destructive) { Task { await account.signOut() } }
                     .accessibilityIdentifier("confirm-sign-out")
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(MadeWithStrava.signOutWarning)
             }
-            // Whether this account was made with Strava, for signing out.
-            .task(id: account.user?.id) { await account.checkMadeWithStrava() }
+            // Whether this account was made with Strava, ready for signing out.
+            .task(id: account.user?.id) {
+                signOutCheckFailed = false
+                noMailApp = nil
+                await account.askMadeWithStrava()
+            }
+        }
+    }
+
+    /// Made with Strava: the warning; not: the plain confirm; unknown: say
+    /// so and don't sign out.
+    private func askBeforeSigningOut() async {
+        checkingSignOut = true
+        defer { checkingSignOut = false }
+        switch await account.askMadeWithStrava() {
+        case true?:
+            signOutCheckFailed = false
+            warningSignOut = true
+        case false?:
+            signOutCheckFailed = false
+            confirmingSignOut = true
+        case nil:
+            signOutCheckFailed = true
+            AccessibilityNotification.Announcement(MadeWithStrava.checkFailed).post()
         }
     }
 

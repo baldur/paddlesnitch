@@ -43,9 +43,10 @@ public final class AccountModel {
     /// Why the app signed out by itself, for the sign-in screen: the
     /// server's words when the account was deleted elsewhere (410).
     public internal(set) var signedOutBecause: String?
-    /// Who the server last said made their account with Strava (its
-    /// sign-in email is a placeholder): `madeWithStrava` is for them only.
-    var madeWithStravaUserId: String?
+    /// What the server last said about whether an account was made with
+    /// Strava (its sign-in email is a placeholder), and for whom:
+    /// `madeWithStrava` is for that account only.
+    var madeWithStravaAnswer: (userId: String, made: Bool)?
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
     public private(set) var client: PaddleClient
     public var user: User? {

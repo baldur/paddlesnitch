@@ -23,12 +23,15 @@ import Testing
             .filter { $0.pathExtension == "swift" && !$0.path.contains("/Generated/") }
     }
 
+    /// The app's own sources, without the generated code or its generator.
+    static var sources: [URL] {
+        swiftFiles(under: "App/Sources")
+            + swiftFiles(under: "Packages/PaddleKit/Sources").filter { !$0.path.contains("/ContractGenKit/") }
+    }
+
     @Test func noCodeNamesAStravaCall() throws {
         let call = try #require(Self.call)
-        let files =
-            Self.swiftFiles(under: "App/Sources")
-            + Self.swiftFiles(under: "Packages/PaddleKit/Sources")
-            .filter { !$0.path.contains("/ContractGenKit/") }
+        let files = Self.sources
         #expect(files.count > 50, "found the sources")
         for file in files {
             let text = try String(contentsOf: file, encoding: .utf8)
@@ -38,6 +41,22 @@ import Testing
                     text[..<(Range(match.range, in: text)?.lowerBound ?? text.startIndex)]
                     .filter { $0 == "\n" }.count + 1
                 Issue.record("\(file.lastPathComponent):\(line) names a Strava call")
+            }
+        }
+    }
+}
+
+/// Trackers are added and removed, never linked or unlinked (lead,
+/// 2026-11-01; the root CLAUDE.md's one name per thing).
+@Suite struct NoUnlinkWordTests {
+    @Test func noSourceSaysUnlink() throws {
+        let files = NoStravaCallsTests.sources
+        #expect(files.count > 50, "found the sources")
+        for file in files {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            let lines = text.components(separatedBy: "\n")
+            for (index, line) in lines.enumerated() where line.lowercased().contains("unlink") {
+                Issue.record("\(file.lastPathComponent):\(index + 1) says unlink")
             }
         }
     }

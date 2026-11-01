@@ -195,3 +195,8 @@ isn't obvious from the code.
 - On iOS 26 a `confirmationDialog` shows as a popover with no Cancel button
   (tap outside closes it). When Cancel must show, use `.alert` (the sign-out
   question for an account made with Strava).
+- "Made with Strava" is `Bool?` (`AccountModel.madeWithStrava`): nil is
+  unknown, never no. Anything that could lock such an account out (Sign
+  out, Sign in again to delete) asks `askMadeWithStrava()` first and waits
+  on nil. Every mailto goes through `openURL(_:completion:)` with a text
+  fallback (`MadeWithStrava.noMailApp`): the simulator has no Mail.

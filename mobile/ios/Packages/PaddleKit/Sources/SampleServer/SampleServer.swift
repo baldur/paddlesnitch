@@ -38,6 +38,12 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _handle: String? = "river-pat"
     var _contact: String?
     var _placeholderEmail = false
+    var _failsContact = false
+    /// `GET /api/account/contact` fails, as when the server is down.
+    public var failsContact: Bool {
+        get { lock.withLock { _failsContact } }
+        set { lock.withLock { _failsContact = newValue } }
+    }
     var _options: SignInOptions? = SignInOptions(google: true, strava: false)
     /// An account made with Strava: the sign-in email is a placeholder.
     public var placeholderEmail: Bool {

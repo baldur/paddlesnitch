@@ -9,11 +9,14 @@ struct DeleteAccountView: View {
     let account: AccountModel
     let deleted: () -> Void
     /// Sign out and sign in again, then come straight back here.
+    let signInAgain: () -> Void
     /// Made with Strava, which has gone (its sign-in email is a placeholder):
     /// there's no way back in to sign in again with, so it offers Email us
-    /// instead, with the Support ID.
-    var cantSignInAgain = false
-    let signInAgain: () -> Void
+    /// instead, with the Support ID. Asked before showing either; unknown
+    /// shows neither, as guessing "no" would lock the account out.
+    @State private var madeWithStrava = false
+    /// No mail app took the Email us link: the address, as text.
+    @State private var noMailApp: String?
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .checking
     @State private var confirmText = ""
@@ -25,8 +28,6 @@ struct DeleteAccountView: View {
         case checking, needsSignIn, ready
     }
 
-    static let cantSignInAgainWords =
-        "An account made with Strava can’t sign in again here. Email us and we’ll delete it."
     static let needsSignIn =
         "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
 
@@ -48,20 +49,27 @@ struct DeleteAccountView: View {
                         ProgressView("Checking…").tint(Palette.muted).foregroundStyle(Palette.muted)
                             .frame(maxWidth: .infinity)
                     case .needsSignIn:
-                        Text(cantSignInAgain ? Self.cantSignInAgainWords : Self.needsSignIn)
+                        Text(madeWithStrava ? MadeWithStrava.deleteWords : Self.needsSignIn)
                             .font(.plexSans(.body))
                             .foregroundStyle(Palette.fg)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("delete-needs-sign-in")
-                        Button(action: cantSignInAgain ? emailUs : signInAgain) {
-                            Text(cantSignInAgain ? "Email us" : "Sign in again")
+                        Button(action: madeWithStrava ? emailUs : signInAgain) {
+                            Text(madeWithStrava ? "Email us" : "Sign in again")
                                 .font(.plexSans(.body, weight: .semibold))
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(Palette.primary)
-                        .accessibilityHint(cantSignInAgain ? "Opens Mail" : "")
-                        .accessibilityIdentifier(cantSignInAgain ? "delete-email-us" : "delete-sign-in-again")
+                        .accessibilityHint(madeWithStrava ? "Opens Mail" : "")
+                        .accessibilityIdentifier(madeWithStrava ? "delete-email-us" : "delete-sign-in-again")
+                        if madeWithStrava, let noMailApp {
+                            Text(noMailApp)
+                                .font(.plexSans(.body))
+                                .foregroundStyle(Palette.fg)
+                                .textSelection(.enabled)
+                                .accessibilityIdentifier("no-mail-app")
+                        }
                     case .ready:
                         confirm
                     }
@@ -87,7 +95,7 @@ struct DeleteAccountView: View {
     }
 
     @ViewBuilder private var confirm: some View {
-        Text(AccountView.deleteExplained)
+        Text(DeleteAccountWords.explained)
             .font(.plexSans(.body))
             .foregroundStyle(Palette.fg)
         VStack(alignment: .leading, spacing: 6) {
@@ -123,12 +131,31 @@ struct DeleteAccountView: View {
     /// Asked before DELETE is typed, so nobody types it in vain.
     private func check() async {
         do {
-            step = try await account.recentSignIn() ? .ready : .needsSignIn
-            failure = nil
+            if try await account.recentSignIn() {
+                step = .ready
+                failure = nil
+                return
+            }
         } catch {
             failure = AccountView.failure("Couldn't check your sign-in.", error)
             AccessibilityNotification.Announcement(failure ?? "").post()
+            return
         }
+        await needSignIn()
+    }
+
+    /// A fresh sign-in is needed: Sign in again, or Email us for an account
+    /// made with Strava. Unknown is neither: Try again.
+    private func needSignIn() async {
+        guard let made = await account.askMadeWithStrava() else {
+            step = .checking
+            failure = MadeWithStrava.checkFailed
+            AccessibilityNotification.Announcement(MadeWithStrava.checkFailed).post()
+            return
+        }
+        madeWithStrava = made
+        step = .needsSignIn
+        failure = nil
     }
 
     private func delete() async {
@@ -139,20 +166,26 @@ struct DeleteAccountView: View {
             deleted()
         } catch AccountModel.DeleteError.needsRecentSignIn {
             // The 10 minutes ran out while they typed.
-            step = .needsSignIn
-            failure = nil
-            AccessibilityNotification.Announcement(Self.needsSignIn).post()
+            await needSignIn()
+            if step == .needsSignIn {
+                AccessibilityNotification.Announcement(madeWithStrava ? MadeWithStrava.deleteWords : Self.needsSignIn)
+                    .post()
+            }
         } catch {
             failure = AccountView.failure("Couldn't delete your account.", error)
             AccessibilityNotification.Announcement(failure ?? "").post()
         }
     }
 
-    /// Signed in through a one-time link, so the report is filed as this
-    /// account.
-    /// Mail to us with the Support ID the Account screen shows.
+    /// Mail to us with the Support ID the Account screen shows; with no
+    /// mail app, the address and the Support ID as text.
     private func emailUs() {
-        guard let id = account.user?.id else { return }
-        openURL(MadeWithStrava.deleteEmail(supportID: id))
+        guard let id = account.user?.id else {
+            noMailApp = MadeWithStrava.noMailApp()
+            return
+        }
+        openURL(MadeWithStrava.deleteEmail(supportID: id)) { accepted in
+            noMailApp = accepted ? nil : MadeWithStrava.noMailApp(supportID: id)
+        }
     }
 }

@@ -63,6 +63,22 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(app.buttons["Sign in"].appears(timeout: 10))
     }
 
+    /// Unknown isn't "no": when the server can't say whether the account was
+    /// made with Strava, Sign out says so and doesn't sign out.
+    func testSigningOutWaitsWhenItCantCheckTheAccount() {
+        signInAndWait()
+        app.terminate()
+        app.launchArguments = ["-SampleServer", "-ContactFails"]
+        app.launch()
+        selectTab("You")
+        app.buttons["Sign out"].firstMatch.tap()
+        let failed = element("sign-out-check-failed")
+        XCTAssertTrue(failed.appears(timeout: 10))
+        XCTAssertEqual(failed.label, "Couldn’t check your account. Please try again.")
+        XCTAssertFalse(app.buttons["confirm-sign-out"].exists, "no sign-out offered")
+        XCTAssertTrue(element("signed-in-as").exists, "still signed in")
+    }
+
     /// The line for an account made with Strava is on Sign in only.
     func testCreateAccountHasNoLineForAStravaAccount() {
         app.buttons["sample-notice-action"].tap()

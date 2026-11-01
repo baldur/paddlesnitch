@@ -56,7 +56,7 @@ public enum SignInHelp {
     /// Under the sign-in form, always.
     public static let madeWithStrava = "Made your account with Strava? Email us and we’ll move it to your email."
     public static let emailUs =
-        URL(string: "mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava")
+        URL(string: "mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email")
         ?? URL(filePath: "/")
 }
 

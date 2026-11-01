@@ -35,14 +35,7 @@ struct AccountView: View {
 
     /// Under the button. Short: a row several screens tall at the largest
     /// text size left the List blank (LargeTextTests).
-    static let deleteSummary = "Deletes your account, paddles, results and tracker recordings. It can't be undone."
-
-    /// The website's account page, word for word: in the confirm step.
-    static let deleteExplained =
-        "Deletes your account, your paddles and diary notes, your results (leaderboards update without you), "
-        + "your shared links and your tracker recordings. Courses and trials you created go too, unless a group "
-        + "owns them or someone else has a result in them. Your trackers are removed. "
-        + "A group you own passes to one of its admins or members. This happens at once and can't be undone."
+    static let deleteSummary = "Deletes your account, paddles, results and tracker recordings. It can’t be undone."
 
     var body: some View {
         List {
@@ -114,9 +107,6 @@ struct AccountView: View {
                     // Back to You, which now says the account is deleted.
                     dismiss()
                 },
-                // Made with Strava (its sign-in email is a placeholder): no
-                // way back in to sign in again with, so it asks for help.
-                cantSignInAgain: profile.needsContactEmail,
                 signInAgain: {
                     confirmingDelete = false
                     signInAgain(then: .delete)

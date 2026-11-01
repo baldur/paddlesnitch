@@ -86,6 +86,7 @@ extension SampleServer {
     }
 
     func contact(method: String, body: Data) throws -> (Int, Data) {
+        if lock.withLock({ _failsContact }) { return (500, Data(#"{"error":"Something went wrong."}"#.utf8)) }
         switch method {
         case "POST":
             let email = try JSONDecoder().decode(ContactEmail.self, from: body).email

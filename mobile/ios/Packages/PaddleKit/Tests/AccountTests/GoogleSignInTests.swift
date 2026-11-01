@@ -96,20 +96,6 @@ import Testing
         #expect(form.error == nil)
     }
 
-    /// Strava has gone: an older server that still says `strava: true`
-    /// changes nothing, and the words never offer Strava.
-    @Test func stravaInTheOptionsIsIgnored() async {
-        let account = account()
-        server.options = SignInOptions(google: true, strava: true)
-        await account.loadOptions()
-        let form = SignInForm()
-        _ = await form.signInWithGoogle(to: account) { _ in
-            URL(string: "com.paddlesnitch.app:/signin/google?error=google_account_exists") ?? URL(filePath: "/")
-        }
-        #expect(form.error == "You already have an account with this email. Sign in with your email instead.")
-        #expect(!server.requests.contains { $0.url?.path().lowercased().contains("strava") == true })
-    }
-
     @Test func optionsAreEmailOnlyUntilAnsweredAndAFailedAskKeepsTheLastAnswer() async {
         let account = account()
         server.options = nil
@@ -130,7 +116,7 @@ import Testing
     @Test func emailUsGoesToPrivacyWithTheSubject() {
         #expect(
             SignInHelp.emailUs.absoluteString
-                == "mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava")
+                == "mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email")
     }
 
     @Test func theReportPageIsSignedInAsThisAccount() async throws {

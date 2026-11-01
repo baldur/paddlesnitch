@@ -21,39 +21,74 @@ import Testing
         return account
     }
 
-    @Test func theServersPlaceholderEmailSaysSo() async throws {
+    @Test func unknownUntilAskedThenTheServersAnswer() async throws {
         let account = try await signedIn()
-        #expect(!account.madeWithStrava, "unknown until asked")
+        #expect(account.madeWithStrava == nil, "unknown isn't no")
         server.placeholderEmail = true
-        await account.checkMadeWithStrava()
-        #expect(account.madeWithStrava)
-        server.placeholderEmail = false
-        await account.checkMadeWithStrava()
-        #expect(!account.madeWithStrava)
+        #expect(await account.askMadeWithStrava() == true)
+        #expect(account.madeWithStrava == true)
     }
 
-    @Test func loadingTheProfileSaysSoToo() async throws {
+    @Test func aRealEmailIsNo() async throws {
+        let account = try await signedIn()
+        #expect(await account.askMadeWithStrava() == false)
+        #expect(account.madeWithStrava == false)
+    }
+
+    /// A failed ask is nil, never "no": Delete and Sign out wait for an
+    /// answer rather than lock the account out.
+    @Test func aFailedAskIsUnknown() async throws {
+        let account = try await signedIn()
+        server.failsContact = true
+        #expect(await account.askMadeWithStrava() == nil)
+        #expect(account.madeWithStrava == nil)
+    }
+
+    @Test func aKnownAnswerIsKeptWithoutAsking() async throws {
+        let account = try await signedIn()
+        server.placeholderEmail = true
+        await account.askMadeWithStrava()
+        server.failsContact = true
+        #expect(await account.askMadeWithStrava() == true)
+    }
+
+    @Test func loadingTheProfileAnswersToo() async throws {
         let account = try await signedIn()
         server.placeholderEmail = true
         await ProfileForm(account: account).load()
-        #expect(account.madeWithStrava)
+        #expect(account.madeWithStrava == true)
     }
 
-    @Test func itIsForThatAccountOnly() async throws {
+    @Test func theAnswerIsForThatAccountOnly() async throws {
         let account = try await signedIn()
         server.placeholderEmail = true
-        await account.checkMadeWithStrava()
+        await account.askMadeWithStrava()
         await account.signOut()
-        #expect(!account.madeWithStrava, "signed out")
-        account.madeWithStravaUserId = "someone-else"
+        #expect(account.madeWithStrava == nil, "signed out")
+        account.madeWithStravaAnswer = ("someone-else", true)
         try await account.signIn(email: "pat@example.com", password: SampleServer.password)
-        #expect(!account.madeWithStrava, "another account")
+        #expect(account.madeWithStrava == nil, "another account's answer")
     }
 
     @Test func theWordsAreLeadsDecision() {
         #expect(
             MadeWithStrava.signOutWarning
                 == "You made this account with Strava, so you can’t sign back in until we move it to your email.")
+    }
+
+    @Test func theDeleteWordsAreAndroidsToo() {
+        #expect(
+            MadeWithStrava.deleteWords
+                == "An account made with Strava can’t sign in again here. Email us and we’ll delete it.")
+        #expect(MadeWithStrava.checkFailed == "Couldn’t check your account. Please try again.")
+    }
+
+    /// No mail app: the address as text, and the Support ID for deleting.
+    @Test func withoutAMailAppTheAddressShows() {
+        #expect(MadeWithStrava.noMailApp() == "Email us at privacy@paddlesnitch.com.")
+        #expect(
+            MadeWithStrava.noMailApp(supportID: "user-1") == "Email us at privacy@paddlesnitch.com.\nSupport ID: user-1"
+        )
     }
 
     @Test func deletingIsAnEmailWithTheSupportID() {

@@ -18,6 +18,8 @@ struct OtherWaysIn: View {
     let google: () -> Void
     let tryAgain: () -> Void
     @Environment(\.openURL) private var openURL
+    /// No mail app took the Email us link: the address, as text.
+    @State private var noMailApp: String?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -37,7 +39,17 @@ struct OtherWaysIn: View {
             if signingIn {
                 Divider().overlay(Palette.border).padding(.top, options.google ? 12 : 0)
                 muted(SignInHelp.madeWithStrava).accessibilityIdentifier("made-with-strava")
-                bordered("Email us", id: "email-us", hint: "Opens Mail") { openURL(SignInHelp.emailUs) }
+                bordered("Email us", id: "email-us", hint: "Opens Mail") {
+                    openURL(SignInHelp.emailUs) { accepted in noMailApp = accepted ? nil : MadeWithStrava.noMailApp() }
+                }
+                if let noMailApp {
+                    Text(noMailApp)
+                        .font(.plexSans(.subheadline))
+                        .foregroundStyle(Palette.fg)
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+                        .accessibilityIdentifier("no-mail-app")
+                }
             }
         }
         .frame(maxWidth: .infinity)

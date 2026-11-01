@@ -132,7 +132,11 @@ The protocol is fixed by the tracker sync contract and its fixtures. On iPhone:
   always says "Made your account with Strava? Email us and we’ll move it to
   your email." with Email us (privacy@); signing out asks first (Email us,
   Sign out anyway, Cancel); deleting offers Email us with the Support ID
-  instead of signing in again (`Account/MadeWithStrava.swift`).
+  instead of signing in again (`Account/MadeWithStrava.swift`). Unknown is
+  never "no": until the server has answered, Sign out and a delete that needs
+  a fresh sign-in say "Couldn’t check your account. Please try again." and
+  offer neither. With no mail app, Email us shows the address (and the
+  Support ID for deleting) as text.
 - The same file also declares `webcredentials`, so iOS offers saved
   paddlesnitch.com passwords and suggests strong ones at sign-up.
 - Website link-outs open in `SFSafariViewController`, signed in through the

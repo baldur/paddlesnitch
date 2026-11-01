@@ -30,19 +30,30 @@ final class GoogleSignInTests: AppTestCase {
     private func signInHasNoStrava() {
         XCTAssertTrue(scrollToElement(app.buttons["google-sign-in"]).exists)
         XCTAssertTrue(text(containing: "Or use your Google account").exists)
-        XCTAssertFalse(app.buttons["strava-sign-in"].exists, "no Strava sign-in")
         XCTAssertTrue(
             scrollTo("made-with-strava").label
                 == "Made your account with Strava? Email us and we’ll move it to your email.")
         XCTAssertTrue(scrollToElement(app.buttons["email-us"]).exists)
+        XCTAssertEqual(stravaButtons.count, 0, "no Strava button of any kind")
+    }
+
+    /// Whatever its identifier: a button that names Strava. Paddle rows
+    /// may (a paddle brought in from Strava earlier still says so).
+    private var stravaButtons: XCUIElementQuery {
+        app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Strava' AND NOT (identifier BEGINSWITH 'paddle-')"))
     }
 
     func testAccountHasNoStrava() {
         signInAndWait()
         openAccount()
-        XCTAssertTrue(scrollToElement(app.buttons["Download my data"]).exists)
-        XCTAssertFalse(element("strava-connect").appears(timeout: 3), "no Connect")
-        XCTAssertFalse(element("strava-connected").exists)
+        XCTAssertTrue(app.buttons["Make profile private"].appears(timeout: 10))
+        let anyStrava = NSPredicate(format: "label CONTAINS[c] 'Strava'")
+        XCTAssertEqual(stravaButtons.count, 0)
+        XCTAssertEqual(app.staticTexts.matching(anyStrava).count, 0)
+        XCTAssertTrue(scrollToElement(app.buttons["Delete my account"]).exists)
+        XCTAssertEqual(stravaButtons.count, 0, "nor further down")
+        XCTAssertEqual(app.staticTexts.matching(anyStrava).count, 0)
     }
 
     /// "Couldn't load the other ways to sign in." with Try again, and the
@@ -88,6 +99,27 @@ final class GoogleSignInTests: AppTestCase {
         XCTAssertEqual(app.buttons["delete-email-us"].label, "Email us")
         XCTAssertFalse(app.buttons["Sign in again"].exists)
         XCTAssertFalse(app.buttons["Report an issue"].exists)
+    }
+
+    /// Unknown isn't "no": when the server can't say whether the account was
+    /// made with Strava, deleting offers neither Sign in again (which could
+    /// lock it out) nor Email us, only Try again.
+    func testDeletingWaitsWhenItCantCheckTheAccount() {
+        signInAndWait()
+        app.terminate()
+        app.launchArguments = ["-SampleServer", "-StaleSignIn", "-ContactFails"]
+        app.launch()
+        // Not openAccount(): the profile can't load without the contact call.
+        selectTab("You")
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.navigationBars["Account"].appears(timeout: 10))
+        scrollToElement(app.buttons["Delete my account"]).tap()
+        let failed = element("delete-error")
+        XCTAssertTrue(failed.appears(timeout: 10))
+        XCTAssertEqual(failed.label, "Couldn’t check your account. Please try again.")
+        XCTAssertTrue(app.buttons["Try again"].exists)
+        XCTAssertFalse(app.buttons["Sign in again"].exists)
+        XCTAssertFalse(app.buttons["delete-email-us"].exists)
     }
 
     func testTheSignInSheetPassesTheAccessibilityAudit() throws {
