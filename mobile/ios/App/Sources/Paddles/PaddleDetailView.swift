@@ -229,8 +229,7 @@ struct SpeedLegend: View {
                 stops: [0, 0.4, 0.7, 1].map { .init(color: Color(ColourScale.ramp($0)), location: $0) },
                 startPoint: .leading, endPoint: .trailing
             )
-            .frame(height: 6)
-            .clipShape(Capsule())
+            .frame(height: 6)  // square: data has no rounded corners (design system)
             HStack {
                 Text(legend.slower)
                 Spacer()
@@ -244,6 +243,7 @@ struct SpeedLegend: View {
         .background(Palette.surface)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Speed colours: blue \(legend.slower), red \(legend.faster)")
+        .accessibilityIdentifier("speed-legend")
     }
 }
 

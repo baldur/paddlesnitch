@@ -26,6 +26,23 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(text(containing: "29 s at 1:23").exists)
     }
 
+    /// Data has no rounded corners (design system): the speed legend's bar is
+    /// square, as on Android. Its top-left corner, a third of a point in, is
+    /// the bar's colour, where a rounded end would show the card behind it.
+    func testTheSpeedLegendIsSquare() {
+        open("pdl-river")
+        let legend = element("speed-legend")
+        XCTAssertTrue(legend.appears(timeout: 10))
+        let shot = legend.screenshot().image
+        guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
+        // The bar starts 16 pt in and 8 pt down (the legend's padding), 6 pt tall.
+        let corner = pixels.at(x: 16.4, y: 8.4)
+        let bar = pixels.at(x: 16.4, y: 11)
+        let card = pixels.at(x: 4, y: 4)
+        XCTAssertFalse(bar.near(card), "the bar is found: \(bar) vs \(card)")
+        XCTAssertTrue(corner.near(bar), "the corner is the bar's colour: \(corner) vs \(bar)")
+    }
+
     func testAPaddleWithoutGPSSaysWhyThereIsNoMap() {
         open("pdl-motion")
         XCTAssertTrue(text(containing: "The GPS lost the sky").appears(timeout: 10))
