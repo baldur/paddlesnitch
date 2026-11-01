@@ -194,3 +194,5 @@ isn't obvious from the code.
   buttons. `ButtonShapeTests` (UI) reads a real button's corner pixels;
   `ButtonBorderShape.path` outside a button is a plain rectangle, so a
   unit test can't check the shape.
+  System chrome keeps the system's shape on purpose (design-usability,
+  #793): navigation-bar buttons (Cancel, Close) and the segmented picker.
