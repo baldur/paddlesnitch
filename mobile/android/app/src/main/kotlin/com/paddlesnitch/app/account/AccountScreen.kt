@@ -1,5 +1,6 @@
 package com.paddlesnitch.app.account
 
+import com.paddlesnitch.app.ui.PsRadius
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.layout.widthIn
@@ -49,16 +50,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.paddlesnitch.app.ui.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.paddlesnitch.app.ui.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.paddlesnitch.app.ui.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -462,7 +463,7 @@ private fun StravaSection(
                     FlowRow(Modifier.fillMaxWidth().padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
                         itemVerticalAlignment = Alignment.CenterVertically) {
                         Text("Connected", color = PsColor.green, style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.border(1.dp, PsColor.green, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                            modifier = Modifier.border(1.dp, PsColor.green, RoundedCornerShape(PsRadius.control)).padding(horizontal = 6.dp, vertical = 2.dp))
                         Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp))
                         if (!confirmDisconnect) TextButton(enabled = !working, colors = linkColors(),
                             onClick = { if (stravaOnly) confirmDisconnect = true else disconnect() }) { Text(if (working) "Disconnecting…" else "Disconnect") }
@@ -514,7 +515,7 @@ private fun PausedStrava(load: Load, status: StravaStatus?, working: Boolean, me
         Message(message, red = failed, tag = "strava-message")
         FlowRow(Modifier.card().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             Text("Paused", color = PsColor.muted, style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                modifier = Modifier.border(1.dp, PsColor.borderStrong, RoundedCornerShape(PsRadius.control)).padding(horizontal = 6.dp, vertical = 2.dp))
             Text(status.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp).padding(vertical = 12.dp))
             if (!stravaOnly) TextButton(enabled = !working, colors = linkColors(), onClick = disconnect) { Text(if (working) "Disconnecting…" else "Disconnect") }
         }
@@ -584,7 +585,7 @@ private fun ImportStatus(p: ImportProgress, what: String, tag: String, modifier:
 }
 
 /** A bordered surface box, as the website's cards. */
-private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(6.dp)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp))
+private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(PsRadius.control)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(PsRadius.control))
 
 /** What the Delete account section shows. */
 private enum class Deleting { No, Checking, NeedsSignIn, Confirming }
