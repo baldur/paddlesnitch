@@ -62,7 +62,7 @@ const CASES = [
   { name: 'chrome GPU, desktop, ?webgl', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, query: '?webgl', expect: 'webgl2' },
   { name: 'android chrome', engine: chromium, ctx: landscape('Pixel 7'), touch: true },
   { name: 'android, features missing', engine: chromium, ctx: landscape('Pixel 7'), touch: true, strip: true, expect: 'webgl2' },
-  { name: 'webkit, desktop', engine: webkit, ctx: desktop },
+  { name: 'webkit, desktop', engine: webkit, ctx: desktop, skip: true },
   { name: 'iphone safari', engine: webkit, ctx: landscape('iPhone 15'), touch: true },
   { name: 'iphone, features missing', engine: webkit, ctx: landscape('iPhone 15'), touch: true, strip: true, expect: 'webgl2' },
   { name: 'firefox, desktop', engine: firefox, ctx: desktop },
@@ -82,6 +82,7 @@ const CASES = [
   { name: 'webkit, desktop, portage drill', engine: webkit, ctx: desktop, course: 'drill-portage' },
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
+  { name: 'webkit, desktop, try it now from the bridge', engine: webkit, ctx: desktop, club: true, tryIt: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
   { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
@@ -103,6 +104,8 @@ async function play(c, page, errors) {
   if (c.site) {
     await page.route('**/api/trpc/**', (r) => r.fulfill({ json: { result: { data: r.request().url().includes('/api/trpc/me') ? { user: { id: 'test', displayName: 'Pat R.' } } : null } } }));
   }
+  // Racing friends: someone who's paddled before (a first visit's bridge leads with Try it now instead).
+  if (c.friends) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:last', 'loop'));
   await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
@@ -163,7 +166,7 @@ async function play(c, page, errors) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
     // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
-    const steps = c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
+    const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     for (const [label, place] of steps) {
@@ -199,6 +202,7 @@ async function play(c, page, errors) {
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
     if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
+    if (c.tryIt && (await page.evaluate(() => window.kayak.race?.racers.length)) !== 1) errors.push('Try it now started something other than a paddle on your own');
     // The erg: both sides together for each stroke, and the monitor counts down the 500 m.
     if (c.erg) {
       for (let i = 0; i < 6; i++) {
@@ -215,6 +219,13 @@ async function play(c, page, errors) {
   // The practice time trial on your own, or a real river with the pack: there
   // the horn waits for you on the line, so the boat is put there.
   // A first visit opens on making your paddler: Next through boat and paddle to the races.
+  // (Or skip it: one tap to the races, with the paddler you were given.)
+  if (c.skip) {
+    const skip = page.locator('#menu .step:not([hidden]) [data-skip]');
+    if (!(await skip.isVisible())) errors.push('no Skip on a first visit');
+    else await skip.click();
+    if (await page.locator('#stepHome').isHidden()) errors.push("Skip didn't go to the races");
+  }
   for (let i = 0; i < 3 && !c.club && await page.locator('#stepHome').isHidden(); i++) {
     const next = page.locator('#menu .step:not([hidden]) .step-buttons .next');
     await (c.touch ? next.tap() : next.click());
@@ -236,6 +247,15 @@ async function play(c, page, errors) {
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   if (!c.club) await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
+  // At the start the controls are on screen in a line: the phone's on a phone, the keys
+  // on a keyboard (where the tap-here L and R aren't shown). Not in a scull on a keyboard, nor on an outing.
+  if (!c.row && !c.outing) {
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('touchhelp')).display !== 'none', null, { timeout: 10_000 }).catch(() => {});
+    const help = await page.evaluate(() => ({ text: document.getElementById('touchhelp').textContent, shown: getComputedStyle(document.getElementById('touchhelp')).display !== 'none', cue: getComputedStyle(document.querySelector('.cue')).display !== 'none' }));
+    if (!help.shown) errors.push('no controls line at the start');
+    if (!(c.touch ? /tap left/i.test(help.text) : /\u2190 \u2192/.test(help.text))) errors.push(`the controls line says "${help.text}"`);
+    if (help.cue !== !!c.touch) errors.push(`the L and R tap marks ${help.cue ? 'show' : "don't show"}`);
+  }
   await page.evaluate(() => {
     const { race, course, boat } = window.kayak;
     // This checks the game runs and answers the keys, not balance: the test never leans.
@@ -261,6 +281,7 @@ async function play(c, page, errors) {
     window.__best = 0;
     const tick = () => {
       window.__best = Math.max(window.__best, window.kayak.boat.speed);
+      window.__building ||= document.getElementById('flow').textContent === 'building';
       requestAnimationFrame(tick);
     };
     tick();
@@ -276,6 +297,8 @@ async function play(c, page, errors) {
   }
   const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.__best, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
   if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
+  // An even beat fills the rhythm bar, and it says so while it does.
+  if (!c.row && !c.outing && !(await page.evaluate(() => window.__building))) errors.push('the rhythm bar never said "building"');
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
@@ -348,6 +371,9 @@ async function play(c, page, errors) {
     const fell = await page.evaluate(() => ({ flash: document.getElementById('flash').textContent, hint: document.getElementById('hint').textContent, assist: document.getElementById('hud').classList.contains('assisted') }));
     // (With the balance assist on, there's no lean to tell you about.)
     if (fell.flash !== 'You lost your balance!' || (!fell.assist && !(c.touch ? /turn the phone/ : /A and D/).test(fell.hint))) errors.push(`going in said ${JSON.stringify(fell)}`);
+    // …and that counts as taught (teach.js won't tell you again), kept on the device.
+    const taught = await page.evaluate(() => JSON.parse(localStorage.getItem('snitchmedia:kayak:taught') ?? '[]'));
+    if (!fell.assist && !taught.includes('lean')) errors.push(`after going in, taught is ${JSON.stringify(taught)}`);
   }
   // Rowing really is rowing: a scull, the coach on its screen, gone while you look round.
   if (c.row) {

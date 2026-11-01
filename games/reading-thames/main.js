@@ -22,6 +22,7 @@ import { perspective, view, basis, multiply, translation, rotationX, rotationY, 
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
 import { tone, noise, isMuted, setMuted } from '../shared/audio.js';
 import { openDialog, gamepadDialogs, soundToggle } from '../shared/dialogs.js';
+import { nextLesson, loadTaught, saveTaught, howTo } from './teach.js';
 
 const STEP = 1 / 120;
 const EYE_HEIGHT = 0.78;
@@ -164,6 +165,16 @@ let placeTimer = 0;
 let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprintHint)
 let stuck = { left: 2, for: 0, s: 0 }; // back-paddling tips still to give this race, and how long you've been getting nowhere (stuckHint)
 const TOUCH_HELP = document.getElementById('touchhelp').textContent;
+// On your own or in a time trial you wait for the horn (paddle early and you're called back).
+const afterHorn = (line) => (race.racers.length === 1 || race.format === 'interval' ? `After the horn: ${line[0].toLowerCase()}${line.slice(1)}` : line);
+// The same line on a keyboard or a pad: the rest is taught as it comes up (teach.js).
+const KEY_HELP = '\u2190 \u2192 (or LT, RT) to paddle, left then right \u00b7 Q E (or the left stick) to steer \u00b7 A D (or the right stick) to lean';
+const taught = (() => { try { return loadTaught(localStorage); } catch { return new Set(); } })();
+// (Reading `localStorage` itself throws where site data is blocked.)
+const rememberTaught = () => { try { saveTaught(localStorage, taught); } catch {} };
+let washTime = 0; // seconds on a wash this race, for the finish screen
+let lastRhythm = 0; // the rhythm bar a moment ago: rising says it's building
+let buildingFor = 0; // and how much longer to say so (a stroke's rise lasts a frame)
 let hitSwan = -Infinity; // race time the player last paddled into a swan
 let hitBoat = { kind: null, time: -Infinity }; // and into another boat
 let behindTimer = 0; // hides the arrow for an eight coming up behind
@@ -233,7 +244,10 @@ function start() {
   hud.classList.toggle('rowing', !!mode.row);
   els.touchhelp.textContent = mode.row
     ? "Left thumb, left oar; right thumb, right oar · Both together to go straight · Lead with one, or use one alone, to turn · Tap Look to glance over that shoulder, or hold it"
-    : TOUCH_HELP;
+    : afterHorn(phone.matches ? TOUCH_HELP : KEY_HELP);
+  washTime = 0;
+  lastRhythm = 0;
+  buildingFor = 0;
   // Rowing on a keyboard or a pad (a phone has its own help line): how, once, at the start.
   if (mode.row && !phone.matches) show('← → (or LT, RT) are your oars: both together for a stroke, lead with one to turn. Hold Q or E (X or B on a pad) to look over your left or right shoulder', { small: true, hold: 6 });
   // An outing from Caversham Pier: no starter, no clock; off at once.
@@ -307,12 +321,13 @@ function finish() {
   const capsText = caps ? `${caps} capsize${caps > 1 ? 's' : ''}` : 'no capsizes';
   if (solo) {
     els.result.textContent = record ? `New best: ${formatTime(time)}` : `Finished in ${formatTime(time)}`;
-    els.details.textContent = `Best ${formatTime(best.time)}, ${capsText}.`;
+    els.details.textContent = record ? `${capsText[0].toUpperCase()}${capsText.slice(1)}.` : `Best ${formatTime(best.time)}, ${capsText}.`; // a new best is the heading
   } else {
     els.result.textContent = place === 1 ? 'You won!' : `You came ${ordinal(place)}`;
     els.details.textContent = `${formatTime(time)}, ${capsText}. Best ${ordinal(best.place)}, ${formatTime(best.time)}.`;
   }
-  els.details.textContent += ` Form up ${(gained * 100).toFixed(1)}% to +${(form() * 100).toFixed(1)}%.`;
+  if (!solo && washTime >= 1) els.details.textContent += ` You rode a wash for ${formatTime(shown(washTime), 0)}.`;
+  els.details.textContent += ` Form this session: +${(form() * 100).toFixed(1)}%, ${(gained * 100).toFixed(1)}% from this race.`;
   // Rivals still out on the course get the time they're on track for.
   els.standings.replaceChildren(...table.map((r) => {
     const li = document.createElement('li');
@@ -324,6 +339,7 @@ function finish() {
   }));
   els.standings.hidden = solo;
   finished.querySelector('button[value="again"]').hidden = !!liveRace;
+  finished.querySelector('button[value="boards"]').hidden = account.offline || !!mode.row || !!drill;
   tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
   setTimeout(() => { if (state === 'finished') openDialog(finished); }, 1500);
 }
@@ -341,6 +357,7 @@ function finishDrill() {
   els.details.textContent = lines.join('. ') + '.';
   els.standings.hidden = true;
   finished.querySelector('button[value="again"]').hidden = false;
+  finished.querySelector('button[value="boards"]').hidden = true;
   tone({ freq: 523, to: 1046, duration: 0.5, type: 'triangle', gain: 0.15 });
   setTimeout(() => { if (state === 'finished') openDialog(finished); }, 1200);
 }
@@ -385,6 +402,7 @@ function showStep(name) {
   // Named by its step's heading (the menu's own "Reading Thames" heading is hidden as a sheet).
   menu.setAttribute('aria-label', document.getElementById(STEPS[name])?.querySelector('h3')?.textContent || 'Reading Thames');
   for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen || !!club;
+  for (const b of menu.querySelectorAll('[data-skip]')) b.hidden = kitChosen || !!club;
   for (const b of menu.querySelectorAll('.step-buttons .next')) {
     b.innerHTML = kitChosen || club ? 'Done' : b.dataset.first;
   }
@@ -590,8 +608,16 @@ paused.addEventListener('close', () => {
   else state = resumeTo;
 });
 finished.addEventListener('close', () => {
-  if (finished.returnValue === 'again') start();
-  else toMenu();
+  if (finished.returnValue === 'again') return start();
+  toMenu();
+  // The leaderboards: as a sheet on the walk, or the menu's own page.
+  if (finished.returnValue === 'boards') {
+    if (club) boards(null);
+    else {
+      showStep('boards');
+      if (!menu.open) openDialog(menu); // (a walk with nowhere to walk to opens no menu itself)
+    }
+  }
 });
 
 document.getElementById('pause').addEventListener('click', pause);
@@ -853,9 +879,14 @@ function arrive(place) {
   if (place === 'path' && !hiring && label(club.plan)) {
     spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
+  // Nothing paddled yet: straight onto the water, a short paddle on your own
+  // that teaches as it goes (anyone can, signed in or not; races need an account).
+  else if (place === 'path' && !hiring) {
+    spots.unshift({ card: { name: 'Try it now', line: 'A 1 km paddle on your own' }, act: () => choose('practice'), go: true });
+  }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
-  if ((place === 'path' || place === 'club') && !hiring && !account.offline) {
+  if ((place === 'path' || place === 'club') && !hiring && !account.offline && (place === 'club' || label(club.plan))) {
     spots.unshift(
       { friend: { name: 'Invite friends', line: 'Make a live race and send the link' }, act: () => openLive('', 'make') },
       { friend: { name: 'Join a race', line: 'Type the code from the link you were sent' }, act: () => openLive('', 'join') },
@@ -1679,7 +1710,11 @@ function react({ events, splashes }) {
       const why = race.time - hitSwan < 0.5 ? 'You hit a swan!' : race.time - hitBoat.time < 0.5 ? HIT[hitBoat.kind] : null;
       show(why ?? 'You lost your balance!', { hold });
       // Gone in on your own: what keeps you up next time.
-      if (!why && !controls.assist) show(`Keep the needle in the middle: ${phone.matches ? 'turn the phone to lean' : 'lean with A and D (or the right stick)'}`, { small: true, hold, now: true });
+      if (!why && !controls.assist) {
+        show(`Keep the needle in the middle: ${howTo(phone.matches).lean}`, { small: true, hold, now: true });
+        taught.add('lean');
+        rememberTaught();
+      }
       controls.rumble(1, 400);
     }
     if (e === 'line') {
@@ -2373,7 +2408,12 @@ function updateHud(dt) {
     sprintHint(boat, dt);
     stuckHint(boat, dt);
   }
-  els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : '';
+  // The flow it's worth; or, while an even beat fills the bar, that it's building.
+  buildingFor = boat.rhythm > lastRhythm + 0.0005 ? 1.2 : buildingFor - dt;
+  lastRhythm = boat.rhythm;
+  const building = state === 'racing' && buildingFor > 0 && boat.rhythm < 0.9;
+  els.flow.textContent = boat.flow > 0.05 ? `+${(boat.flow * boat.hull.flowBonus * 100).toFixed(0)}%` : building ? 'building' : '';
+  if (state === 'racing' && race.player.draft > 0.3) washTime += dt;
   showPlace(course, loc.s, dt);
   if (!race.outing) showCue(course, loc.s, dt);
   els.drill.hidden = !drill?.readout;
@@ -2383,7 +2423,8 @@ function updateHud(dt) {
   els.rhythm.parentElement.classList.toggle('locked', boat.rhythm > 0.9);
   hud.classList.toggle('assisted', controls.assist);
   // On phones, the controls in a line until a little way into the race.
-  hud.classList.toggle('helping', phone.matches && (state === 'start' || (state === 'racing' && race.time < 6)));
+  // The controls in a line until a little way into the race (rowing on a keyboard has its own message).
+  hud.classList.toggle('helping', (phone.matches || !mode.row) && (state === 'start' || (state === 'racing' && race.time < 6)));
   els.rudder.style.transform = `translateX(${(controls.rudder * 39).toFixed(1)}px)`;
   const angle = Math.max(-1.1, Math.min(1.1, boat.roll / (boat.hull.scull ? boat.hull.crabAt : BOAT.capsize))) * 90;
   els.needle.style.transform = `rotate(${angle.toFixed(1)}deg)`;
@@ -2391,6 +2432,20 @@ function updateHud(dt) {
   const tipping = !race.outing && boat.swim <= 0 && Math.abs(angle) > 50;
   els.balance.classList.toggle('tipping', tipping);
   creakWait -= dt;
+  // Teaching as you go: one thing at a time, when it first matters, while no other hint is up.
+  if ((state === 'racing' || state === 'start') && boat.swim <= 0) {
+    const lesson = nextLesson({
+      angle, rhythm: boat.rhythm, draft: race.player.draft, racing: state === 'racing', time: race.time,
+      rate: boat.hull.scull ? 0 : strokeRate(boat), stamina: boat.stamina, sprinting: boat.sprinting,
+      assist: controls.assist || (phone.matches && !controls.tilting), scull: !!boat.hull.scull, outing: !!race.outing,
+    }, taught, howTo(phone.matches));
+    // (One that can wait, waits for a clear moment: it isn't counted as taught till it shows.)
+    if (lesson && (lesson.now || hintTimer <= 0)) {
+      show(lesson.text, { small: true, hold: 6, now: lesson.now });
+      taught.add(lesson.key);
+      rememberTaught();
+    }
+  }
   if (tipping && Math.abs(angle) > 65 && creakWait <= 0) {
     sounds.creak();
     controls.rumble(0.4, 80);
@@ -2493,7 +2548,8 @@ function moveMap() {
 // out. A back stroke swings the bow towards its side, so it turns you on the spot.
 function stuckHint(boat, dt) {
   const { loc } = race.player;
-  const going = state === 'racing' && race.player.finish === null && boat.swim <= 0 && released(race, race.player);
+  // (Paddling and getting nowhere: not someone who hasn't started yet.)
+  const going = state === 'racing' && race.player.finish === null && boat.swim <= 0 && released(race, race.player) && Number(els.rate.textContent) > 0;
   if (!going || loc.s > stuck.s + 3) Object.assign(stuck, { s: loc.s, for: 0 });
   else stuck.for += dt;
   if (stuck.left <= 0 || stuck.for < 3) return;

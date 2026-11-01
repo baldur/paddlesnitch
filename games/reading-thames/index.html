@@ -32,7 +32,7 @@
     <p id="place" aria-live="polite"></p>
     <div class="lane-low">
       <p id="assisted">Balance assist on: tilt isn't available</p>
-      <p id="touchhelp">Tap left, then right · Faster than 90 a minute is a sprint · Swipe down to paddle backwards · Push one side of the phone forward to steer · Turn the phone to lean</p>
+      <p id="touchhelp">Tap left, then right, to paddle · Push one side of the phone forward to steer</p>
       <p id="hint" aria-live="polite"></p>
       <p id="drill" aria-live="polite" hidden></p>
     </div>
@@ -219,6 +219,7 @@
         </div>
       </div>
       <p class="step-buttons">
+        <button type="button" class="back" data-step="home" data-skip hidden>Skip for now</button>
         <button type="button" class="next" data-step="boat" data-first="Next: your boat &rarr;">Done</button>
       </p>
     </section>
@@ -360,6 +361,7 @@
     <p id="ranked"></p>
     <form method="dialog">
       <button value="again" autofocus>Go again</button>
+      <button value="boards" hidden>Leaderboards</button>
       <button value="menu">Menu</button>
     </form>
   </dialog>
