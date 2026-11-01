@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
-import { paddleTotals, paddleLogbook, groupSameOuting } from '@paddlesnitch/core/paddles'
+import { paddleTotals, paddleLogbook, groupSameOuting, isPhonePaddle } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
@@ -50,7 +50,7 @@ export const paddlesRouter = router({
     const cards = await listPaddleCards(ctx.user.id)
     const grouped = groupSameOuting(cards.map(c => ({ ...c, source: { type: c.sourceType } })))
       .map(({ lead: { source: _, ...lead }, others }) =>
-        others.length ? { ...lead, sameOuting: others.map(o => ({ id: o.id, sourceType: o.sourceType })) } : lead)
+        others.length ? { ...lead, sameOuting: others.map(o => ({ id: o.id, sourceType: o.sourceType, ...(o.phone ? { phone: true as const } : {}) })) } : lead)
     return { cards: grouped, totals: paddleTotals(cards), logbook: paddleLogbook(cards, new Date()) }
   }),
 
@@ -85,10 +85,10 @@ export const paddlesRouter = router({
     const near = all.filter(s => s.id !== me.id && timeOverlapShare(me, s) >= MIN_TIME_OVERLAP)
     if (near.length === 0) return []
     const self = await getSession(ctx.user.id, me.id)
-    const out: { id: string; sourceType: string; paddledAt: string }[] = []
+    const out: { id: string; sourceType: string; paddledAt: string; phone?: true }[] = []
     for (const s of near) {
       const other = await getSession(ctx.user.id, s.id)
-      if (self && other && isSameOuting(self, other)) out.push({ id: s.id, sourceType: s.source.type, paddledAt: s.paddledAt })
+      if (self && other && isSameOuting(self, other)) out.push({ id: s.id, sourceType: s.source.type, paddledAt: s.paddledAt, ...(isPhonePaddle(s.source) ? { phone: true as const } : {}) })
     }
     return out
   }),

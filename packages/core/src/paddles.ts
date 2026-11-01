@@ -21,8 +21,19 @@ export type PaddleCard = {
   noGps?: true                // a paddle without a map (#414): draw no route
   // The same outing recorded by another source, shown once under this card
   // (see groupSameOuting). Set only by paddles.list.
-  sameOuting?: { id: string; sourceType: string }[]
+  sameOuting?: { id: string; sourceType: string; phone?: true }[]
+  phone?: true                // a 'device' paddle recorded on a phone with the app (C3), not a tracker
 }
+
+/** A phone on the account (C3): `P` and 16 hex digits. Pure, so browser code
+ *  can use it; same rule as isPhoneId in core/devices (phone-recording.test.ts
+ *  checks). */
+export const isPhoneDeviceId = (deviceId: unknown): boolean => typeof deviceId === 'string' && /^P[0-9A-F]{16}$/.test(deviceId)
+
+/** A 'device' paddle from a phone rather than a tracker: both are devices on
+ *  the account and share the source shape, so only the device ID tells them apart. */
+export const isPhonePaddle = (source: { type?: string; deviceId?: string } | undefined): boolean =>
+  source?.type === 'device' && isPhoneDeviceId(source.deviceId)
 
 // ≤24 evenly-spaced [lat,lng] points, rounded to ~1 m, for a list thumbnail.
 export function thumbRoute(points: { lat: number; lng: number }[]): [number, number][] {

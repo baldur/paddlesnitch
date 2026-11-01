@@ -14,6 +14,7 @@ public struct PaddleCard: Codable, Hashable, Sendable {
     public var noGps: Bool?
     public var note: String?
     public var paddledAt: Date
+    public var phone: Bool?
     public var route: [Coordinate]
     public var sameOuting: [SameOutingItem]?
     public var sourceType: String
@@ -28,6 +29,7 @@ public struct PaddleCard: Codable, Hashable, Sendable {
         noGps: Bool? = nil,
         note: String? = nil,
         paddledAt: Date,
+        phone: Bool? = nil,
         route: [Coordinate],
         sameOuting: [SameOutingItem]? = nil,
         sourceType: String
@@ -41,6 +43,7 @@ public struct PaddleCard: Codable, Hashable, Sendable {
         self.noGps = noGps
         self.note = note
         self.paddledAt = paddledAt
+        self.phone = phone
         self.route = route
         self.sameOuting = sameOuting
         self.sourceType = sourceType
@@ -48,10 +51,12 @@ public struct PaddleCard: Codable, Hashable, Sendable {
 
     public struct SameOutingItem: Codable, Hashable, Sendable {
         public var id: String
+        public var phone: Bool?
         public var sourceType: String
 
-        public init(id: String, sourceType: String) {
+        public init(id: String, phone: Bool? = nil, sourceType: String) {
             self.id = id
+            self.phone = phone
             self.sourceType = sourceType
         }
     }

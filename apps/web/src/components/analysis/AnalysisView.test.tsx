@@ -138,6 +138,20 @@ describe('AnalysisView ALSO RECORDED BY', () => {
     const link = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('Also recorded by'))
     expect(link?.textContent).toBe('Also recorded by Strava →')
   })
+
+  it('says the phone, not the tracker, when a phone recorded it too (#789)', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />, qc =>
+      qc.setQueryData(getQueryKey(trpc.paddles.sameOuting, { id: 't-rec1' }, 'query'),
+        [{ id: 't-rec2', sourceType: 'device', paddledAt: '2026-10-06T09:01:00Z', phone: true }]))
+    const link = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('Also recorded by'))
+    expect(link?.textContent).toBe('Also recorded by the phone →')
+  })
+
+  it('labels a phone paddle Phone over the date (#789)', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }} sessionId="t-rec1" />)
+    expect(container.textContent).toContain('Phone')
+    expect(container.textContent).not.toContain('Tracker')
+  })
 })
 
 // A shared paddle is the owner's: a stranger can't flip its stroke-rate setting.

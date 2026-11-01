@@ -46,7 +46,8 @@ export const PaddleCard = named('PaddleCard', z.object({
   route: z.array(z.tuple([z.number(), z.number()])),
   note: z.string().optional(),
   noGps: z.literal(true).optional(),
-  sameOuting: z.array(z.object({ id: z.string(), sourceType: z.string() })).optional(),
+  sameOuting: z.array(z.object({ id: z.string(), sourceType: z.string(), phone: z.literal(true).optional() })).optional(),
+  phone: z.literal(true).optional(),
 }))
 export const PaddleTotals = named('PaddleTotals', z.object({
   count: z.int(),

@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { sourceLabel, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
+import { sourceLabel, isPhonePaddle, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
+
+// A phone's paddle (C3) has the tracker's source shape; only the device ID differs (#789).
+describe('isPhonePaddle', () => {
+  it('is true only for a device paddle whose device is a phone', () => {
+    expect(isPhonePaddle({ type: 'device', deviceId: 'P0123456789ABCDEF' })).toBe(true)
+    expect(isPhonePaddle({ type: 'device', deviceId: 'A1B2C3D4' })).toBe(false)
+    expect(isPhonePaddle({ type: 'device' })).toBe(false)
+    expect(isPhonePaddle({ type: 'file', deviceId: 'P0123456789ABCDEF' })).toBe(false)
+    expect(isPhonePaddle(undefined)).toBe(false)
+  })
+})
 
 describe('sourceLabel', () => {
   it.each([

@@ -78,6 +78,24 @@ describe('paddles.list', () => {
     expect(res.totals.count).toBe(3)                                   // every recording counts, as on the website
   })
 
+  it('marks a phone paddle and a phone in the same outing, so the apps can say Phone (#789)', async () => {
+    const outing = (id: string, source: object, at: string) => writeSession(dir, id, {
+      id, paddledAt: at, source,
+      result: { distanceKm: 4, durationS: 1200, cruiseSpeed: 3.1, avgSR: 60, points: [{ lat: 51.1, lng: -0.9 }, { lat: 51.2, lng: -0.8 }] },
+    })
+    await outing('phone', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's1' }, '2026-09-01T10:00:00.000Z')
+    await outing('watch', { type: 'strava' }, '2026-09-01T10:00:30.000Z')
+    await outing('tracker', { type: 'device', deviceId: 'A1B2C3D4', deviceSessionId: 's2' }, '2026-09-08T10:00:00.000Z')
+    await outing('phone2', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's3' }, '2026-09-08T10:00:10.000Z')
+    const { cards } = await createCaller({ user: USER }).paddles.list()
+    const card = (id: string) => cards.find(c => c.id === id)
+    expect(card('phone')).toMatchObject({ sourceType: 'device', phone: true, sameOuting: [{ id: 'watch', sourceType: 'strava' }] })
+    // A tracker and a phone on one outing: either may lead; only the phone is marked.
+    const lead = card('tracker') ?? card('phone2')!
+    const shown = [{ id: lead.id, phone: lead.phone }, ...lead.sameOuting!.map(o => ({ id: o.id, phone: o.phone }))]
+    expect(shown.sort((a, b) => a.id.localeCompare(b.id))).toEqual([{ id: 'phone2', phone: true }, { id: 'tracker', phone: undefined }])
+  })
+
   it('works out the logbook the website shows: last 12 weeks, streak, this month and last', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-09-16T12:00:00Z'))                // a Wednesday

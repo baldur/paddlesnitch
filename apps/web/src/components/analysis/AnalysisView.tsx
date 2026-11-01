@@ -17,7 +17,7 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Stat, badgeClass, cardClass, Chevron } from '@paddlesnitch/ui/Card'
 import { Field, inputClass, selectClass } from '@paddlesnitch/ui/Form'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { isMotionOnly } from '@paddlesnitch/core/paddles'
+import { isMotionOnly, isPhonePaddle } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import { sourceName } from './SameOuting'
 import PortageSuggestions from './PortageSuggestions'
@@ -37,7 +37,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; stravaActivityId?: number; deviceId?: string } }
 
 // One paddle: the site header, the map (with only the colour scale, the replay
 // bar and section picking over it), then everything to read below it, and the
@@ -284,7 +284,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
   // or pace, and nothing to compare or pick a section on.
   const motionOnly = isMotionOnly(dataProp)
   const owner = !!sessionId && !readOnly
-  const source = SOURCE[data.source?.type ?? '']
+  const source = isPhonePaddle(data.source) ? 'Phone' : SOURCE[data.source?.type ?? '']
 
   return (
     <main className="flex-1 flex flex-col bg-bg text-fg">
@@ -587,7 +587,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             <div className="flex flex-col gap-1">
               {sameOuting.map(o => (
                 <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`} className="text-sm text-primary-text hover:underline min-h-11 inline-flex items-center">
-                  Also recorded by {o.sourceType === 'device' ? 'the tracker' : sourceName(o.sourceType)} →
+                  Also recorded by {o.phone ? 'the phone' : o.sourceType === 'device' ? 'the tracker' : sourceName(o.sourceType)} →
                 </Link>
               ))}
             </div>

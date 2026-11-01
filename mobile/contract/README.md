@@ -227,7 +227,7 @@ they are the website's.
 | Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
 | `paddles.get` fails or finds nothing | Title "We can't find this paddle", button Back to Paddles |
 | Loading | "Loading" |
-| Call failed, or 404 | "Couldn’t read the tracker’s recording. Please try again." with pull-to-refresh or a Try again button (the website has neither: it is reloaded) |
+| Call failed, or 404 | "Couldn’t read this recording. Please try again." with pull-to-refresh or a Try again button (the website has neither: it is reloaded) |
 | `attitude` null, or `attitude.available` false | "No boat motion for this recording." (as the box's title) then `noMotionCopy` (format.json: no `attitude`, or an empty `reason` = the motion file hasn't arrived; a `reason` = it couldn't be measured). Never show `reason` itself: it is the engine's English, for engineers |
 | `attitude.available` | The tiles, the three charts and the two notes below, in that order |
 
@@ -337,6 +337,11 @@ holds from a broken upload, so send only the rest. Fixtures:
   sent: the server keeps nothing, so delete it and its motion file.
 
 ### The phone on the account
+
+- A phone's paddle has `sourceType` `device`, like a tracker's. The card
+  (`paddles.list`) and each `sameOuting` entry carry `phone: true` for a phone:
+  label it **Phone** (list: "· Phone"; same outing: "Also recorded by the
+  phone"), never Tracker. The website says the same (#789).
 
 - Add the phone (`POST …/phone`) before the first upload and keep `deviceId`
   with the account's recordings. Ask again after every sign-in: it's the same
