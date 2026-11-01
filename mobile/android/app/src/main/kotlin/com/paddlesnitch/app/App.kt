@@ -287,6 +287,7 @@ internal fun deleteRecordings(context: android.content.Context, accountId: Strin
     // Only this account's recording: another account's may still be going after a sign-out.
     val running = com.paddlesnitch.app.record.RecordingService.state.value as? com.paddlesnitch.app.record.RecordingService.State.Recording
     if (running != null && running.files.track.parentFile == folder) com.paddlesnitch.app.record.RecordingService.stop(context)
+    com.paddlesnitch.app.record.Uploads.cancel(context, accountId)
     com.paddlesnitch.app.record.RecordingFiles.deleteAccount(base, accountId)
 }
 

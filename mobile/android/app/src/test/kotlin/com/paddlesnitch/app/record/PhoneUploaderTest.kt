@@ -83,6 +83,77 @@ class PhoneUploaderTest {
         assertEquals(2, server.adds.size)
     }
 
+    // security-privacy: the id goes into the upload's address, so only the server's own shape is used.
+    @Test fun anIdThatIsntAPhoneIdIsNeverUsed() {
+        recording()
+        File(dir, "phone").writeText("../../att/api/x")
+        val odd = object : PhoneAccount by server { override suspend fun addPhone(installId: String) = phone.copy(deviceId = "../evil") }
+        assertFalse(runBlocking { PhoneUploader(dir, odd, { "install-id-0123456789" }).run() })
+        assertEquals(emptyList<String>(), server.sent)
+        assertTrue(has("track_20261101_070211.csv"))
+    }
+
+    @Test fun anAccountDeletedMidUploadIsntMadeAgain() {
+        recording()
+        val deleting = object : PhoneAccount by server {
+            override suspend fun addPhone(installId: String): Phone { dir.deleteRecursively(); return phone }
+        }
+        runBlocking { PhoneUploader(dir, deleting, { "install-id-0123456789" }).run() }
+        assertFalse(dir.exists())
+    }
+
+    @Test fun uploadsUseOnlyTheTokensOfTheAccountTheyreFor() {
+        val tokens = com.paddlesnitch.app.auth.MemoryTokenStore().apply { save("id-a", "r-a"); userId = "a" }
+        val pinned = PinnedTokenStore(tokens, "a")
+        assertEquals("id-a", pinned.idToken)
+        // A signs out, B signs in mid-upload: the upload has no token, and B's are left alone.
+        tokens.clear(); tokens.save("id-b", "r-b"); tokens.userId = "b"
+        assertEquals(null, pinned.idToken)
+        assertEquals(null, pinned.refreshToken)
+        pinned.clear(); pinned.save("x", "y"); pinned.userId = "a"
+        assertEquals("id-b", tokens.idToken); assertEquals("b", tokens.userId)
+    }
+
+    @Test fun aRemovedPhoneAfterTheTrackKeepsTheMotionFile() {
+        recording()
+        server.answer("track_20261101_070211_imu.csv", UploadReply(404, "not_found"))
+        assertTrue(run())
+        assertFalse(has("track_20261101_070211.csv"))
+        assertTrue(has("track_20261101_070211_i10.csv"))
+        assertEquals(listOf(UploadLine.PhoneOff(null)), PhoneUploader.lines(dir, null))
+    }
+
+    @Test fun aRefusedAddWithoutWordsSaysSoInTheAppsOwn() {
+        recording()
+        server.addFails = ApiFailure("Couldn’t finish that. Please try again.", 400, generic = true)
+        assertTrue(run())
+        assertEquals(listOf(UploadLine.PhoneOff(PhoneUploader.PHONE_NOT_ADDED)), PhoneUploader.lines(dir, null))
+    }
+
+    @Test fun aBadRequestWhenAddingIsShownNotRetried() {
+        recording()
+        server.addFails = ApiFailure("Couldn't add this phone. Please update the app.", 400)
+        assertTrue(run())
+        assertEquals(listOf(UploadLine.PhoneOff("Couldn't add this phone. Please update the app.")), PhoneUploader.lines(dir, null))
+    }
+
+    @Test fun aMotionFileThatFailsAfterItsTrackGoesAloneNextTime() {
+        recording()
+        server.answer("track_20261101_070211_imu.csv", UploadReply(503))
+        assertFalse(run())
+        assertFalse(has("track_20261101_070211.csv"))
+        server.sent.clear()
+        assertTrue(run())
+        assertEquals(listOf("track_20261101_070211_imu.csv"), server.sent)
+    }
+
+    @Test fun aRawImuFileIsNeverUploadedAsATrack() {
+        recording(motion = null)
+        File(dir, "track_20261101_070211_imu.csv").writeText("raw\n")
+        run()
+        assertEquals(listOf("track_20261101_070211.csv"), server.sent)
+    }
+
     @Test fun alreadyUploadedCountsAsSent() {
         recording()
         server.answer("track_20261101_070211.csv", UploadReply(409, "already_uploaded"))
@@ -116,6 +187,7 @@ class PhoneUploaderTest {
         assertTrue("nothing more to do in the background", run())
         assertEquals(listOf("track_20261101_070211.csv"), server.sent)
         assertTrue(has("track_20261101_070211.csv")); assertTrue(has("track_20261101_090000.csv"))
+        assertTrue("its motion file too", has("track_20261101_070211_i10.csv"))
         assertEquals(listOf(UploadLine.PhoneOff(null)), PhoneUploader.lines(dir, null))
         // Never added again in the background...
         assertTrue(run())
@@ -125,6 +197,7 @@ class PhoneUploaderTest {
         PhoneUploader.allowAdding(dir)
         assertTrue(run())
         assertEquals(2, server.adds.size)
+        assertTrue("the motion file goes too", "track_20261101_070211_imu.csv" in server.sent)
         assertEquals(listOf("phone"), dir.list()!!.toList())
     }
 
@@ -262,6 +335,28 @@ class PhoneUploaderTest {
         assertTrue(run())
         assertTrue(has("track_20261101_070211.csv"))
         assertEquals(listOf(UploadLine.Failed("track_20261101_070211", "2026-11-01T07:02:11Z")), PhoneUploader.lines(dir, null))
+    }
+
+    @Test fun aFileOfExactly64KbGoesInPieces() {
+        recording(track = "x".repeat(PhoneUploader.PIECE), motion = null)
+        run()
+        assertEquals(listOf("track_20261101_070211.csv#1/1"), server.sent)
+    }
+
+    @Test fun theLastPieceIsntSentTwiceWhenItsTheOneMissing() {
+        recording(track = big, motion = null)
+        server.answer("track_20261101_070211.csv", UploadReply(202), UploadReply(202), UploadReply(409, "parts_missing", listOf(3)))
+        run()
+        assertEquals(listOf("track_20261101_070211.csv#1/3", "track_20261101_070211.csv#2/3", "track_20261101_070211.csv#3/3",
+            "track_20261101_070211.csv#3/3"), server.sent)
+    }
+
+    @Test fun aServerThatKeepsLosingPiecesIsTriedAgainLaterNotForever() {
+        recording(track = big, motion = null)
+        repeat(10) { server.answer("track_20261101_070211.csv", UploadReply(202), UploadReply(202), UploadReply(409, "parts_missing", listOf(1, 2))) }
+        assertFalse(run())
+        assertTrue(has("track_20261101_070211.csv"))
+        assertTrue(server.sent.size < 15)
     }
 
     @Test fun aSmallFileGoesWholeWithNoPieces() {

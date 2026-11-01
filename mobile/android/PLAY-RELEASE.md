@@ -181,7 +181,8 @@ All of these must be done before the closed test can start.
 
 - **The phone's location** is collected only while a recording runs, which the
   paddler starts and stops. It's kept on the phone until uploaded, then deleted
-  from the phone.
+  from the phone. A recording the server refuses stays on the phone, and is
+  deleted with the account.
 - **Not collected:** contacts, photos, messages, crash logs, analytics. Heart rate isn't stored even when a FIT or TCX file
   has it, and `/privacy` says so.
 - **WiFi name and password** for a tracker go from the phone to the tracker

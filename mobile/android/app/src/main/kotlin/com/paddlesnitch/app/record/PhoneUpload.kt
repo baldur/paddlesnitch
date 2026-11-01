@@ -68,9 +68,14 @@ class PhoneUploader(
 
     /** The phone's id on the account, adding it if this sign-in hasn't yet; null when it couldn't be (see `phone-off`). */
     private suspend fun deviceId(): String? {
-        phoneFile(dir).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        // The id goes into the upload's address: only ever the server's own shape (isPhoneId).
+        phoneFile(dir).takeIf { it.exists() }?.readText()?.trim()?.takeIf { PHONE_ID.matches(it) }?.let { return it }
         return try {
-            account.addPhone(installId()).deviceId.also { dir.mkdirs(); phoneFile(dir).writeText(it) }
+            val id = account.addPhone(installId()).deviceId
+            if (!PHONE_ID.matches(id)) return null   // not a phone id: try again later, never use it
+            if (!dir.isDirectory) return null        // the account was deleted meanwhile: don't remake its folder
+            phoneFile(dir).writeText(id)
+            id
         } catch (e: ApiFailure) {
             // 409 (ten phones) and 400 say why in their own words; anything else (a server
             // without the call yet, 5xx, no network) is tried again later.
@@ -160,6 +165,7 @@ class PhoneUploader(
         /** The tracker's piece size (docs/features/device-uplink.md). */
         const val PIECE = 64 * 1024
 
+        private val PHONE_ID = Regex("^P[0-9A-F]{16}$")
         private val NAME = Regex("""^(track_[A-Za-z0-9_]+?)(_i10)?\.csv$""")
 
         fun phoneFile(dir: File) = File(dir, "phone")
@@ -169,8 +175,9 @@ class PhoneUploader(
         fun waiting(dir: File, running: File?): List<String> = recordings(dir)
             .filter { File(dir, "$it.csv") != running && !File(dir, "$it.failed").exists() }
 
+        // A raw `_imu.csv` (kept only while debugging) is never a recording of its own.
         private fun recordings(dir: File): List<String> =
-            dir.list().orEmpty().mapNotNull { NAME.find(it)?.groupValues?.get(1) }.distinct().sorted()
+            dir.list().orEmpty().filterNot { it.endsWith("_imu.csv") }.mapNotNull { NAME.find(it)?.groupValues?.get(1) }.distinct().sorted()
 
         /** Signed in again: ask the server for this phone's id before the next upload (README § The phone on the account). */
         fun signedIn(dir: File) { phoneFile(dir).delete() }

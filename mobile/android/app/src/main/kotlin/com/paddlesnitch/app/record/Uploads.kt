@@ -87,12 +87,6 @@ object Uploads {
         schedule(context, accountId)
     }
 
-    /** After every sign-in: ask the server for this phone again (it's the same phone for the same account and install). */
-    fun signedIn(context: Context, accountId: String) {
-        PhoneUploader.signedIn(dir(context, accountId))
-        schedule(context, accountId)
-    }
-
     /**
      * This install's id: random, made once and kept with the app's own settings (never a
      * hardware or advertising id). Left out of backups and transfers (data_extraction_rules),
@@ -106,31 +100,63 @@ object Uploads {
         return id
     }
 
+    /** Deleting the account: no upload may run on, or remake its folder. */
+    fun cancel(context: Context, accountId: String) {
+        runCatching { WorkManager.getInstance(context).cancelUniqueWork("phone-upload-$accountId") }
+    }
+
     internal const val ACCOUNT = "account"
     private const val PREFS = "phone"
     private const val INSTALL_ID = "installId"
+}
+
+/**
+ * The signed-in tokens, but only while [account] is the one signed in: checked on every
+ * request, not once, so a sign-in as someone else mid-upload can never send this account's
+ * recordings with their token. Otherwise there's no token (Api then says SignedOut), and
+ * nothing here clears or saves another account's.
+ */
+class PinnedTokenStore(private val inner: com.paddlesnitch.app.auth.TokenStore, private val account: String) : com.paddlesnitch.app.auth.TokenStore {
+    private val mine get() = inner.userId == account
+    override val idToken: String? get() = if (mine) inner.idToken else null
+    override val refreshToken: String? get() = if (mine) inner.refreshToken else null
+    override var userId: String?
+        get() = inner.userId
+        set(_) {}   // never moves the account under an upload
+    override fun save(idToken: String, refreshToken: String?) { if (mine) inner.save(idToken, refreshToken) }
+    override fun clear() { if (mine) inner.clear() }
 }
 
 /** One upload run for one account. Only ever as the account that's signed in now. */
 class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val account = inputData.getString(Uploads.ACCOUNT) ?: return Result.success()
-        val tokens = KeystoreTokenStore(applicationContext)
-        // Signed out, or someone else signed in: their recordings wait for their own sign-in.
-        if (tokens.userId != account) return Result.success()
-        val api = Api(BuildConfig.API_BASE_URL, tokens, BuildConfig.VERSION_NAME)
-        val uploader = PhoneUploader(
-            Uploads.dir(applicationContext, account), ApiPhoneAccount(api),
-            installId = { Uploads.installId(applicationContext) },
-            recording = { (RecordingService.state.value as? RecordingService.State.Recording)?.files?.track },
-            changed = Uploads::bump,
-        )
-        return try {
-            if (uploader.run()) Result.success() else Result.retry()
-        } catch (e: SignedOut) {
-            Result.success()   // the next sign-in schedules it again
-        } finally {
-            Uploads.bump(false)
-        }
+        return uploadAs(account, KeystoreTokenStore(applicationContext), Uploads.dir(applicationContext, account),
+            server = { tokens -> ApiPhoneAccount(Api(BuildConfig.API_BASE_URL, tokens, BuildConfig.VERSION_NAME)) },
+            installId = { Uploads.installId(applicationContext) })
+    }
+}
+
+/** The track a recording is writing now, if one runs: never uploaded until it stops. */
+internal fun runningTrack(): File? = (RecordingService.state.value as? RecordingService.State.Recording)?.files?.track
+
+/**
+ * One upload run for [account], as UploadWorker does it: nothing unless [account] is the one
+ * signed in, and then only with its own tokens ([PinnedTokenStore]) for every request.
+ */
+internal suspend fun uploadAs(
+    account: String, tokens: com.paddlesnitch.app.auth.TokenStore, dir: File,
+    server: (com.paddlesnitch.app.auth.TokenStore) -> PhoneAccount, installId: () -> String,
+    running: () -> File? = ::runningTrack,
+): androidx.work.ListenableWorker.Result {
+    // Signed out, or someone else signed in: their recordings wait for their own sign-in.
+    if (tokens.userId != account) return androidx.work.ListenableWorker.Result.success()
+    val uploader = PhoneUploader(dir, server(PinnedTokenStore(tokens, account)), installId, recording = running, changed = Uploads::bump)
+    return try {
+        if (uploader.run()) androidx.work.ListenableWorker.Result.success() else androidx.work.ListenableWorker.Result.retry()
+    } catch (e: SignedOut) {
+        androidx.work.ListenableWorker.Result.success()   // the next sign-in schedules it again
+    } finally {
+        Uploads.bump(false)
     }
 }

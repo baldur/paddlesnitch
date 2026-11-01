@@ -125,6 +125,16 @@ fun liveStrokeRate(live: RecorderCore.Live?): String = live?.spm?.takeIf { !it.i
 enum class LocationReady { Ready, Refused, Off }
 
 /**
+ * Off first: with location switched off nothing records, whatever the permission. Not yet
+ * granted counts as Refused only once the app has asked (until then Start asks).
+ */
+fun locationReady(granted: Boolean, asked: Boolean, enabled: Boolean): LocationReady = when {
+    !enabled -> LocationReady.Off
+    !granted && asked -> LocationReady.Refused
+    else -> LocationReady.Ready
+}
+
+/**
  * Record a paddle on the phone (docs/features/android-app.md, Recording). Connects
  * RecordScreen to RecordingService and asks for location (and notifications) first.
  * Once someone has said no, the screen says so in place of Start, with the way to the setting.
@@ -135,12 +145,11 @@ fun Record(accountId: suspend () -> String, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val state by RecordingService.state.collectAsState()
     val prefs = remember { context.getSharedPreferences("recording", android.content.Context.MODE_PRIVATE) }
-    fun readiness(): LocationReady = when {
-        context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED ->
-            if (prefs.getBoolean(ASKED, false)) LocationReady.Refused else LocationReady.Ready
-        context.getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled == false -> LocationReady.Off
-        else -> LocationReady.Ready
-    }
+    fun readiness(): LocationReady = locationReady(
+        granted = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+        asked = prefs.getBoolean(ASKED, false),
+        enabled = context.getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled != false,
+    )
     var location by remember { mutableStateOf(readiness()) }
     // Coming back from the settings: look again.
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
