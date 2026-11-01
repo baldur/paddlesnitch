@@ -130,24 +130,36 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     // Terms that changed are asked for on every start until accepted, not only at sign-in:
     // closing the app on the Terms screen mustn't skip them, and the app rarely signs in again.
     LaunchedEffect(signedIn) { if (signedIn) runCatching { api.terms() }.onSuccess { needsTerms = !it.accepted } }
+    // Phone recordings waiting for this account go up on every start and sign-in (C3).
+    LaunchedEffect(signedIn) { if (signedIn) api.keptAccountId?.let { runCatching { com.paddlesnitch.app.record.Uploads.schedule(context, it) } } }
     fun signedOut() { com.paddlesnitch.app.record.RecordingService.forgetFinished(); signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
+    // The server said the account was deleted (410, on the website or elsewhere): its
+    // recordings are gone from the phone, and so is its sign-in.
+    // The sign-in screen says why, in the server's words.
+    val goneAccount by com.paddlesnitch.app.record.Uploads.deleted.collectAsState()
+    LaunchedEffect(goneAccount) {
+        val gone = goneAccount ?: return@LaunchedEffect
+        if (signedIn && !api.signedIn) { signedOut(); resetNotice = gone.said ?: "This account was deleted."; signingIn = true }
+    }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
-    Scaffold(bottomBar = {
+    // Record sits above every screen, so a recording keeps its screen and Hold to stop
+    // through a forced sign-out; while one runs, every screen has its line at the top.
+    com.paddlesnitch.app.record.WithRecording(signedIn = signedIn,
+        record = { com.paddlesnitch.app.record.Record(accountId = { api.accountId() }) }) { recordEntry, recordingBar ->
+    Scaffold(topBar = { recordingBar?.invoke() }, bottomBar = {
         AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
             onClose = { intake = intake.cardClosed() })
     }) { inner ->
         val m = Modifier.padding(inner)
-        // Record sits above every screen, so a recording keeps its screen and Hold to stop
-        // through a forced sign-out. Release builds never reach it (no location: lead, #761).
-        com.paddlesnitch.app.record.WithRecording(signedIn = signedIn, modifier = m,
-            record = { com.paddlesnitch.app.record.Record(accountId = { api.accountId() }) }) { recordEntry ->
         when (screen) {
             Screen.SignIn -> {
                 // Signed in, from the sign-in screen or a password reset.
                 val signedInWith: (com.paddlesnitch.app.api.SignIn) -> Unit = {
                     if (reauth.signingInAgain) { reauth = reauth.signedIn(it.id); reauthEmail = null; inAccount = reauth.resume != null }
                     forgotFor = null; resetNotice = null; googleVerifiers.clear() // signed in some other way: a late Google return means nothing
+                    // Ask for this phone again before the next upload: it's the same phone for the same account.
+                    com.paddlesnitch.app.record.PhoneUploader.signedIn(com.paddlesnitch.app.record.Uploads.dir(context, it.id))
                     signedIn = true; signingIn = false; needsTerms = it.needsTerms == true; run(intake.signedIn())
                 }
                 val forgot = forgotFor
@@ -156,7 +168,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                     ForgotPasswordScreen(api, forgot, onSignedIn = signedInWith,
                         onPasswordSet = { email -> forgotFor = null; reauthEmail = email; resetNotice = "Your password is set. Please sign in." },
                         onBack = { forgotFor = null }, modifier = m)
-                    return@WithRecording
+                    return@Scaffold
                 }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
@@ -193,7 +205,9 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                     })
             }
             Screen.Paddles -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
-                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m, recordEntry = recordEntry)
+                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m, recordEntry = recordEntry,
+                // Filed as this account, on the website: reports are public, so nothing personal goes in the link.
+                onReport = { scope.launch { runCatching { com.paddlesnitch.app.account.openTab(context, api.signedInPage("/account?report=1")) } } })
             Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m,
                 // One motion answer ships, the fixture for the river sample's recording: only that sample offers it.
                 loadMotion = { readMotionSample(context) }, offersMotion = { it.source.deviceSessionId == SAMPLE_MOTION_RECORDING },
@@ -222,13 +236,16 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 private fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier,
-    /** The way to Record (WithRecording); null in release builds. */
+    /** The way to Record (WithRecording). */
     recordEntry: (@Composable () -> Unit)?,
+    onReport: () -> Unit,
 ) {
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
-    LaunchedEffect(attempt, added) {
+    // A phone recording that reached the server is a paddle now: load the list again.
+    val uploaded by com.paddlesnitch.app.record.Uploads.sent.collectAsState()
+    LaunchedEffect(attempt, added, uploaded) {
         error = null
         runCatching { api.paddles() }
             .onSuccess { list = it }
@@ -236,11 +253,19 @@ private fun MyPaddles(
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
+    val accountId = api.keptAccountId
+    // Record, then each recording that isn't a paddle yet (README § After Stop).
+    val notice: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            recordEntry?.invoke()
+            if (accountId != null) com.paddlesnitch.app.record.UploadLines(accountId, onReport)
+        }
+    }
     when {
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
             loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
-            notice = recordEntry, action = {
+            notice = notice, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
                 account()
@@ -270,6 +295,7 @@ internal fun deleteRecordings(context: android.content.Context, accountId: Strin
     // Only this account's recording: another account's may still be going after a sign-out.
     val running = com.paddlesnitch.app.record.RecordingService.state.value as? com.paddlesnitch.app.record.RecordingService.State.Recording
     if (running != null && running.files.track.parentFile == folder) com.paddlesnitch.app.record.RecordingService.stop(context)
+    com.paddlesnitch.app.record.Uploads.cancel(context, accountId)
     com.paddlesnitch.app.record.RecordingFiles.deleteAccount(base, accountId)
 }
 

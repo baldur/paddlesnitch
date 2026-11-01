@@ -77,6 +77,33 @@ class TrackersScreenTest {
         compose.onRoot().captureRoboImage()
     }
 
+    private fun withPhone() = com.paddlesnitch.app.api.ApiJson.decodeFromString(TrackerList.serializer(),
+        java.io.File("../../contract/fixtures/api/account.devices.with-phone.json").readText())
+
+    // C3: phones are listed and removed on the website, never as a tracker card here.
+    @Test fun phonesAreLeftOutOfTrackers() {
+        show(FakeAccountApi(trackerList = withPhone()))
+        waitFor("Tracker C0FFEE01")
+        compose.onNodeWithText("Android phone").assertDoesNotExist()
+        compose.onNodeWithText("P3F2A9C41B7E0D865", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Tracker BADC0DE9").assertExists()
+    }
+
+    @Test fun anAccountWithOnlyAPhoneHasNoTrackersYet() {
+        val l = withPhone()
+        show(FakeAccountApi(trackerList = l.copy(summaries = l.summaries.filter { it.kind == TrackerSummary.Kind.Phone })))
+        waitFor("No trackers yet")
+    }
+
+    @Test fun onlyTrackersAndSummariesWithNoKindAreTrackers() {
+        val l = withPhone()
+        val unknown = l.summaries.first().copy(deviceId = "W1", kind = TrackerSummary.Kind.Unknown)
+        val old = l.summaries.first().copy(deviceId = "OLD1", kind = null)
+        assertEquals(listOf("C0FFEE01", "C0FFEE02", "BADC0DE9", "OLD1"),
+            trackersOnly(l.copy(summaries = l.summaries + unknown + old)).summaries.map { it.deviceId })
+        assertEquals(listOf("C0FFEE01", "C0FFEE02"), trackersOnly(l).devices.map { it.deviceId })
+    }
+
     @Test fun noTrackersYet() {
         show(FakeAccountApi(trackerList = TrackerList(emptyList(), "0.18.2", emptyList())))
         waitFor("No trackers yet")
