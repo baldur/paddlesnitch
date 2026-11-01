@@ -30,6 +30,8 @@ time and isn't obvious from the code.
   fields, checkboxes and switches do the same with `fieldColors()`, `checkboxColors()`
   and `switchColors()` (`ui/Fields.kt`). The theme's `primary` stays #0369a1 for
   filled buttons (lead, 2026-10-26).
+- Data is square: no rounded corners on charts, chart keys, tables or maps (design system).
+  `SquareDataTest` draws the weekly bars and the speed colour key and checks their corner pixels.
 - TalkBack reads a change inside a live region it already knows, not a node
   that has just appeared. Keep the live-region container in the layout even
   when it's empty (`AddPaddleCard(card = null)`).

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -169,11 +168,11 @@ fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Mo
 }
 
 @Composable
-private fun Legend(ends: Pair<String, String>) {
+internal fun Legend(ends: Pair<String, String>) {
     Column(Modifier.fillMaxWidth().background(PsColor.surface).padding(horizontal = 16.dp, vertical = 8.dp)
         .semantics(mergeDescendants = true) { contentDescription = "Speed colours: blue ${ends.first}, red ${ends.second}" }) {
         Box(Modifier.fillMaxWidth().height(6.dp).background(
-            Brush.horizontalGradient(listOf(0.0, 0.4, 0.7, 1.0).map { Color(0xFF000000 or ColourScale.ramp(it).toLong()) }), RoundedCornerShape(3.dp)))
+            Brush.horizontalGradient(listOf(0.0, 0.4, 0.7, 1.0).map { Color(0xFF000000 or ColourScale.ramp(it).toLong()) })))   // data is square (design system)
         Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
             Text(ends.first, color = PsColor.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(ends.second, color = PsColor.muted, fontSize = 13.sp)
