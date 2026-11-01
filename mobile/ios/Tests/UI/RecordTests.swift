@@ -42,16 +42,20 @@ final class RecordTests: AppTestCase {
         XCTAssertFalse(element("upload-line").exists)
     }
 
-    /// Close while recording hides the screen and keeps recording: Paddles
-    /// says so, and opens it again.
+    /// Hide while recording hides the screen and keeps recording: every
+    /// screen says so at the top, and opens it again.
     func testClosingTheScreenKeepsRecording() throws {
         try startRecording(allow: true)
         XCTAssertTrue(element("record-recording").appears(timeout: 10))
-        app.buttons["record-close"].tap()
+        XCTAssertTrue(text(containing: "Recording carries on.").exists)
+        app.buttons["record-hide"].tap()
         let line = element("recording-line")
         XCTAssertTrue(line.appears(timeout: 10))
-        XCTAssertTrue(line.label.hasPrefix("Recording · 0:0"), line.label)
+        XCTAssertTrue(line.label.hasPrefix("Recording, "), line.label)
         try auditPaddles()
+        // At the top of every screen, not only Paddles.
+        selectTab("You")
+        XCTAssertTrue(line.appears(timeout: 5), "on You too")
         line.tap()
         XCTAssertTrue(element("record-recording").appears(timeout: 10), "the same recording")
         element("record-stop").press(forDuration: 2)
@@ -82,14 +86,17 @@ final class RecordTests: AppTestCase {
     }
 
     /// The owner removed this phone on Devices: the recording stays until
-    /// Upload now adds the phone again.
-    func testARemovedPhoneUploadsAfterUploadNow() throws {
+    /// Add phone again adds the phone again.
+    func testARemovedPhoneUploadsAfterAddPhoneAgain() throws {
         try record(with: "-PhoneRemoved")
         let line = element("upload-line")
-        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("This phone was removed") })
-        let uploadNow = app.buttons["upload-now"]
-        XCTAssertEqual(uploadNow.label, "Upload now")
-        uploadNow.tap()
+        XCTAssertTrue(
+            poll(timeout: 20) {
+                line.exists && line.label.contains("This phone was removed from your account. 1 recording is waiting.")
+            })
+        let addAgain = app.buttons["add-phone-again"]
+        XCTAssertEqual(addAgain.label, "Add phone again")
+        addAgain.tap()
         XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
         XCTAssertFalse(line.exists)
     }
@@ -106,6 +113,20 @@ final class RecordTests: AppTestCase {
         element("record-stop").press(forDuration: 2)
         XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
         XCTAssertFalse(text(containing: "This phone was removed").exists)
+    }
+
+    /// The account was deleted on the website (410 with accountDeleted): the
+    /// app signs out and the sign-in screen says why, in the server's words.
+    func testADeletedAccountSignsOutAndSaysWhy() {
+        app.terminate()
+        app.launchArguments += ["-AccountDeleted"]
+        app.launch()
+        signIn()
+        XCTAssertTrue(element("sample-notice").appears(timeout: 15), "signed out")
+        app.buttons["sample-notice-action"].tap()
+        XCTAssertTrue(
+            element("sign-in-account-deleted").appears(timeout: 10)
+                && text(containing: "This account was deleted").exists)
     }
 
     /// The app signs out on its own when the server refuses a refresh (a

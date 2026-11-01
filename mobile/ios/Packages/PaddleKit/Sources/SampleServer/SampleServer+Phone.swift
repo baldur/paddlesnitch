@@ -11,6 +11,9 @@ public enum PhoneUploads: Sendable {
     case refused
     /// Down (503): the recordings wait.
     case down
+    /// The account was deleted elsewhere (410 with `accountDeleted`), on
+    /// every phone call.
+    case accountDeleted
 }
 
 /// The phone's routes (C3, mobile/contract/README.md § Phone recording), from
@@ -48,6 +51,9 @@ extension SampleServer {
         guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
             return (401, try fixture("account.error"))
         }
+        if lock.withLock({ _phoneUploads }) == .accountDeleted {
+            return (410, try fixture("account.phone.account-deleted"))
+        }
         if path == "/api/account/devices/phone" {
             lock.withLock { if _phoneRemovedSeen { _phoneRemoved = false } }
             return (201, try fixture("account.phone"))
@@ -61,8 +67,8 @@ extension SampleServer {
             URLComponents(url: request.url ?? URL(filePath: "/"), resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "filename" }?.value ?? ""
         switch lock.withLock({ _phoneUploads }) {
-        case .down:
-            return (503, Data("<html>Service unavailable</html>".utf8))
+        case .down, .accountDeleted:
+            return (503, try fixture("account.phone-upload.erasing"))
         case .refused:
             return (413, Data(#"{"error":"too_large"}"#.utf8))
         case .noFix where !name.hasSuffix("_imu.csv"):

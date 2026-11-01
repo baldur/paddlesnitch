@@ -138,6 +138,14 @@ struct SignInView: View {
                     .foregroundStyle(Palette.fg)
                     .accessibilityIdentifier("sign-in-notice")
             }
+            if form.error == nil, let gone = account.signedOutBecause {
+                // The account was deleted elsewhere: the server's words.
+                Text(gone)
+                    .font(.plexSans(.body))
+                    .foregroundStyle(Palette.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("sign-in-account-deleted")
+            }
             if let error = form.error {
                 Text(error)
                     .font(.plexSans(.body))

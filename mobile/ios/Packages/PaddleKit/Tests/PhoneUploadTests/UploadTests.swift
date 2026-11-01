@@ -126,7 +126,7 @@ struct UploadTests {
         #expect(server.uploads.count == 1)  // the motion file isn't sent
         #expect(names(in: folder) == ["uploads.json"])
         let line = try #require(queue.lines.first)
-        #expect(line.text == "No GPS fix, so this didn’t become a paddle")
+        #expect(line.text == "No GPS fix, so this didn’t become a paddle.")
         #expect(line.started(in: .gmt) == "1 Nov 2026, 07:02")
         queue.dismiss("track_20261101_070211")
         #expect(queue.lines.isEmpty)
@@ -170,7 +170,7 @@ struct UploadTests {
         server.answers["*"] = [(500, Data()), (502, Data()), (503, Data())]
         let queue = queue(folder)
         #expect(await queue.pass() == .seconds(5))
-        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
         #expect(await queue.pass() == .seconds(10))
         #expect(await queue.pass() == .seconds(20))
         #expect(names(in: folder).count == 4)

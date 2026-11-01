@@ -44,6 +44,9 @@ public final class AccountModel {
     public internal(set) var optionsFailed = false
     /// The email to sign in again with (none for a Strava account).
     public internal(set) var signInAgainEmail: String?
+    /// Why the app signed out by itself, for the sign-in screen: the
+    /// server's words when the account was deleted elsewhere (410).
+    public internal(set) var signedOutBecause: String?
     /// Signing in again goes straight to Strava sign-in.
     public internal(set) var signInAgainWithStrava = false
     /// Calls as the signed-in user (Bearer ID token, refreshed as needed).
@@ -140,6 +143,13 @@ public final class AccountModel {
     /// Signs out here at once, then asks the server to revoke the refresh
     /// token. If that can't reach the server the token is still gone from
     /// this phone.
+    /// Signs out because the server said the account is gone; the sign-in
+    /// screen shows `message` until the next sign-in.
+    public func signOut(because message: String) async {
+        await signOut()
+        signedOutBecause = message
+    }
+
     public func signOut() async {
         let refreshToken = await session.signOut()
         profile.clear()
@@ -152,6 +162,7 @@ public final class AccountModel {
 
     /// Tokens first, so the first call after signing in already has them.
     func accept(_ answer: SignIn) async throws {
+        signedOutBecause = nil
         let user = User(
             id: answer.id, email: answer.email, displayName: answer.displayName, needsTerms: answer.needsTerms == true)
         try await session.signedIn(idToken: answer.idToken, refreshToken: answer.refreshToken)

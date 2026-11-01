@@ -86,7 +86,7 @@ public final class RecordModel {
         self.status = status
         if let said = GPSLine.announcement(before: before, now: status.live) { announce(said) }
         if status.couldNotSave {
-            problem = "Couldn't save any more of this recording. Stop to keep what's saved so far."
+            problem = "Couldn’t save the rest of this recording. Stop to upload what’s saved."
         }
     }
 }

@@ -6,6 +6,13 @@ import PaddleAPI
 /// read yet (locked phone). The queue tries again later, with backoff.
 public struct TryLater: Error, Equatable {
     public let reason: String
+    /// How long the server asked to wait (`Retry-After`), if it did.
+    public var after: Duration?
+
+    public init(reason: String, after: Duration? = nil) {
+        self.reason = reason
+        self.after = after
+    }
 }
 
 /// Sends one recording as mobile/contract/README.md § Phone recording says:
@@ -22,14 +29,16 @@ struct RecordingSender {
         case removed
         /// The server will never take it. Files kept.
         case refused
-        /// 410: the account was deleted (on the website, say). Its
-        /// recordings must never upload: the queue deletes them.
-        case accountDeleted
+        /// 410 with `accountDeleted`: the account was deleted (on the
+        /// website, say). Its recordings must never upload: the queue deletes
+        /// them and signs out, showing the server's words.
+        case accountDeleted(String)
     }
 
     /// One file's answer, in the README's terms.
     enum FileOutcome: Equatable {
-        case sent, noPoints, removed, trackFirst, refused, accountDeleted
+        case sent, noPoints, removed, trackFirst, refused
+        case accountDeleted(String)
     }
 
     static let pieceSize = 64 * 1024
@@ -57,7 +66,7 @@ struct RecordingSender {
             recording.deleteAll()
             return .noFix
         case .removed: return .removed
-        case .accountDeleted: return .accountDeleted
+        case .accountDeleted(let message): return .accountDeleted(message)
         case .trackFirst, .refused: return .refused
         }
     }
@@ -70,7 +79,7 @@ struct RecordingSender {
             try? FileManager.default.removeItem(at: recording.motion)
             return nil
         case .removed: return .removed
-        case .accountDeleted: return .accountDeleted
+        case .accountDeleted(let message): return .accountDeleted(message)
         case .trackFirst:
             // Its track went first, in this pass or an earlier one: the
             // server hasn't caught up yet.
@@ -103,8 +112,8 @@ struct RecordingSender {
             held = Set(try await client.heldParts(deviceID: deviceID, filename: name))
         } catch PaddleAPIError.rejected(_, let status, _) where status == 404 {
             return .removed
-        } catch PaddleAPIError.rejected(_, let status, _) where status == 410 {
-            return .accountDeleted
+        } catch PaddleAPIError.accountDeleted(let message) {
+            return .accountDeleted(message)
         }
         var queue = Self.order((1...count).filter { !held.contains($0) }, last: count)
         var gapRounds = 0
@@ -153,7 +162,12 @@ struct RecordingSender {
         case (422, "no_motion_rows"): return .sent
         case (409, "track_not_uploaded"): return .trackFirst
         case (404, _): return .removed
-        case (410, _): return .accountDeleted
+        // A 410 without the flag isn't ours (a proxy): try again later.
+        case (410, let error) where answer.accountDeleted: return .accountDeleted(error ?? "")
+        case (410, _): throw TryLater(reason: "the server answered 410")
+        // The account is being deleted, or the server is busy.
+        case (503, _):
+            throw TryLater(reason: "the server is busy", after: answer.retryAfter.map { .seconds($0) })
         case (400..<500, _): return .refused
         default: throw TryLater(reason: "the server answered \(answer.status)")
         }

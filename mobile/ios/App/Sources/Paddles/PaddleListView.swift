@@ -2,7 +2,6 @@ import DesignSystem
 import PaddleAPI
 import Paddles
 import PhoneUpload
-import Recorder
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -23,8 +22,8 @@ struct PaddleListView: View {
     /// when it's on.
     let options: SignInOptions
     let openFile: (URL) -> Void
-    /// Where the signed-in account's recordings from this phone go.
-    let recordings: URL?
+    /// Opens the record screen (RootView owns the recording).
+    let openRecord: () -> Void
     /// This account's recordings from this phone, waiting to upload.
     let uploads: UploadQueue?
     /// The website's issue form, for a recording the server won't take:
@@ -35,17 +34,11 @@ struct PaddleListView: View {
     @State private var loadedID: String?
     @State private var choosingFile = false
     @State private var openedID: String?
-    /// The recording on this phone: it outlives its screen (Close while
-    /// recording) and a sign-out, and stays in the account it started in.
-    @State private var recorder: RecordModel?
-    @State private var showingRecord = false
-    /// The account folder the recording writes to.
-    @State private var recordingFolder: URL?
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
         openTerms: @escaping () -> Void, adding: AddPaddleModel, options: SignInOptions,
-        openFile: @escaping (URL) -> Void, recordings: URL?, uploads: UploadQueue?,
+        openFile: @escaping (URL) -> Void, openRecord: @escaping () -> Void, uploads: UploadQueue?,
         openReport: @escaping () async -> Bool
     ) {
         self.source = source
@@ -57,7 +50,7 @@ struct PaddleListView: View {
         self.adding = adding
         self.options = options
         self.openFile = openFile
-        self.recordings = recordings
+        self.openRecord = openRecord
         self.uploads = uploads
         self.openReport = openReport
         _model = State(initialValue: PaddleListModel(source: source))
@@ -96,22 +89,6 @@ struct PaddleListView: View {
                 }
                 .safeAreaInset(edge: .bottom) { addNotice }
         }
-        // Presented from Paddles itself, not from the Record button: a
-        // sign-out the app makes on its own (a refused refresh) takes the
-        // button away, and would take the screen and its Stop with it.
-        .fullScreenCover(isPresented: $showingRecord) {
-            if let recorder {
-                RecordView(model: recorder) {
-                    // Start adds a phone removed on Devices again.
-                    if let uploads, uploads.state.removed { Task { await uploads.addAgain() } }
-                }
-            }
-        }
-        // Nothing uploads while a recording runs.
-        .task(id: UploadsAndRecording(uploads: uploads, recording: isRecording)) {
-            uploads?.recording = isRecording
-        }
-        .onChange(of: sourceID) { _, id in endRecordingOfAnother(id) }
         .onChange(of: uploads?.lines.count ?? 0) { before, after in
             // One went up: its paddle is in the list now.
             if after < before { Task { await model.load() } }
@@ -215,10 +192,8 @@ struct PaddleListView: View {
 }
 
 extension PaddleListView {
-    fileprivate var isRecording: Bool { recorder?.phase == .recording }
-
-    /// A recording running, or recordings waiting to upload.
-    fileprivate var hasPending: Bool { isRecording || !(uploads?.lines.isEmpty ?? true) }
+    /// Recordings waiting to upload, or what came of them.
+    fileprivate var hasPending: Bool { !(uploads?.lines.isEmpty ?? true) }
 
     /// Samples, or Terms to accept.
     @ViewBuilder fileprivate var notices: some View {
@@ -232,13 +207,9 @@ extension PaddleListView {
         }
     }
 
-    /// The recording running, and the recordings waiting to upload.
+    /// The recordings waiting to upload, and what came of them.
     fileprivate var pending: some View {
         Section {
-            if isRecording, let started = recorder?.startedAt {
-                RecordingLine(startedAt: started) { showingRecord = true }
-                    .listRowBackground(Palette.surface)
-            }
             if let uploads {
                 ForEach(uploads.lines) { line in
                     UploadLineView(line: line, queue: uploads, openReport: openReport)
@@ -247,51 +218,17 @@ extension PaddleListView {
         }
     }
 
-    /// A recording keeps going through a sign-out the app makes on its own
-    /// (a refused refresh), in the account it started in. It ends when that
-    /// account is deleted (its files go too) or another one signs in.
-    fileprivate func endRecordingOfAnother(_ id: String) {
-        guard isRecording, let folder = recordingFolder else { return }
-        let deleted = !FileManager.default.fileExists(atPath: folder.path(percentEncoded: false))
-        guard deleted || (recordings != nil && recordings != folder) else { return }
-        showingRecord = false
-        recorder?.stop()
-        recorder?.done()
-        if deleted { try? FileManager.default.removeItem(at: folder) }
-    }
-
     /// The same lines over a list that's loading or failed to load.
     @ViewBuilder fileprivate var pendingAbove: some View {
-        if hasPending {
+        if hasPending, let uploads {
             VStack(alignment: .leading, spacing: 8) {
-                if isRecording, let started = recorder?.startedAt {
-                    RecordingLine(startedAt: started) { showingRecord = true }
-                }
-                if let uploads {
-                    ForEach(uploads.lines) { line in
-                        UploadLineView(line: line, queue: uploads, openReport: openReport)
-                    }
+                ForEach(uploads.lines) { line in
+                    UploadLineView(line: line, queue: uploads, openReport: openReport)
                 }
             }
             .padding(16)
             .background(Palette.surface)
         }
-    }
-
-    /// Opens the record screen: the running recording, or a new one in the
-    /// signed-in account's own folder, fixed now.
-    fileprivate func openRecord() {
-        if !isRecording {
-            guard let folder = recordings else { return }
-            recordingFolder = folder
-            recorder = RecordModel(
-                announce: { AccessibilityNotification.Announcement($0).post() },
-                start: { onStatus in
-                    let recording = try PhoneRecording(directory: folder, onStatus: onStatus)
-                    return (recording, recording.files.track.lastPathComponent)
-                })
-        }
-        showingRecord = true
     }
 
     /// Adding a file: waiting for sign-in, adding, then what came of it.
@@ -384,17 +321,5 @@ extension PaddleListView {
             .padding(.vertical, 4)
             .listRowBackground(Palette.surface)
         }
-    }
-}
-
-/// Re-runs the task that tells the queue a recording runs, for a new queue
-/// (another sign-in) as well as a change.
-private struct UploadsAndRecording: Equatable {
-    let queue: ObjectIdentifier?
-    let recording: Bool
-
-    @MainActor init(uploads: UploadQueue?, recording: Bool) {
-        queue = uploads.map(ObjectIdentifier.init)
-        self.recording = recording
     }
 }

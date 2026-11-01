@@ -28,6 +28,28 @@ import Testing
         #expect(request.value(forHTTPHeaderField: "Content-Type") == nil)
     }
 
+    /// 410 with `accountDeleted: true` (C3): the account is gone, with words
+    /// for the sign-in screen. A 410 without the flag (a proxy) isn't ours.
+    @Test func aDeletedAccountSaysSoOnlyWithTheFlag() async throws {
+        let gone = FakeTransport(
+            status: 410,
+            body: Data(
+                #"{"error":"This account was deleted, so its recordings on this phone were removed.","accountDeleted":true}"#
+                    .utf8))
+        await #expect(
+            throws: PaddleAPIError.accountDeleted(
+                message: "This account was deleted, so its recordings on this phone were removed.")
+        ) {
+            _ = try await client(gone, tokens: TokenRecorder(current: "id-1", fresh: nil))
+                .send(Endpoints.accountDevicesPhone, PhoneAdd(installId: "install-0123456789abcdef", model: .phoneIos))
+        }
+        let bare = FakeTransport(status: 410, body: Data(#"{"error":"Gone"}"#.utf8))
+        await #expect(throws: PaddleAPIError.rejected(message: "Gone", status: 410, session: nil)) {
+            _ = try await client(bare, tokens: TokenRecorder(current: "id-1", fresh: nil))
+                .send(Endpoints.accountDevicesPhone, PhoneAdd(installId: "install-0123456789abcdef", model: .phoneIos))
+        }
+    }
+
     @Test func aGetsInputGoesInTheQueryString() async throws {
         let transport = FakeTransport(body: Data(#"{"available":true,"slug":"pat-r"}"#.utf8))
         _ = try await client(transport, tokens: TokenRecorder(current: "id-1", fresh: nil))

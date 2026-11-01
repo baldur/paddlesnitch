@@ -52,6 +52,7 @@ struct PaddlesnitchApp: App {
         // Phone recordings (C3): what the server does with an upload.
         let uploads: [String: PhoneUploads] = [
             "-UploadsDown": .down, "-UploadsRefused": .refused, "-UploadsNoFix": .noFix,
+            "-AccountDeleted": .accountDeleted,
         ]
         if let answer = uploads.first(where: { arguments.contains($0.key) })?.value { server.phoneUploads = answer }
         server.phoneRemoved = arguments.contains("-PhoneRemoved")

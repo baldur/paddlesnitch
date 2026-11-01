@@ -52,13 +52,15 @@ The format and upload are fixed by the recording contract in
   untouched, on one serial queue, and writes its lines to `track_<stamp>.csv`
   and `_i10.csv`. The screen shows elapsed time, stroke rate "—" until the
   core has it (and why there's none on a phone without motion sensors), the
-  GPS state and hold to stop; Close hides it and keeps recording, and Paddles
-  shows "Recording · h:mm:ss". After Stop the `PhoneUpload` package adds the
+  GPS state and hold to stop; Hide keeps recording, and every screen shows
+  "Recording · h:mm:ss" at the top. After Stop the `PhoneUpload` package adds the
   phone to the account and uploads the track, then the motion file as
   `_imu.csv`, as a tracker does (mobile/contract/README.md § Phone
   recording); Paddles shows each recording waiting, a track with no GPS fix,
   one the server won't take (with Report an issue), and a phone removed on
-  Devices (with Upload now). Recordings are kept per account
+  Devices (with Add phone again). A deleted account (410) has its recordings
+  deleted, never uploaded, and the app signs out; a busy server (503) is asked
+  again after `Retry-After`. Recordings are kept per account
   (`Documents/Recordings/<user id>`) until the server has them: deleted with
   the account, kept on sign-out, and left out of backups, as on Android
   (#761). A second recording in the same second is `track_<stamp>_1`, the

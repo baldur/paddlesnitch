@@ -55,8 +55,9 @@ touches `mobile/ios/` or `mobile/contract/`.
 ## Recording and uploading
 
 Record is on Paddles when signed in. The spec for both apps is
-mobile/contract/README.md § Phone recording (C3). Close while recording hides
-the screen and keeps recording; Paddles then shows "Recording · h:mm:ss".
+mobile/contract/README.md § Phone recording (C3). Hide while recording hides
+the screen and keeps recording; every screen then shows "Recording · h:mm:ss"
+at the top (`RecordingSession`, owned by RootView).
 After Stop, the recording waits on Paddles until the server has it, then the
 phone's copy is deleted and the paddle shows in the list. The files are in
 Documents/Recordings/<user id>, out of backups. The app passes Core Motion's values and clocks
@@ -67,7 +68,10 @@ has no accelerometer or gyroscope, so there it records the track only;
 `xcrun simctl location <udid> set <lat>,<lon>` gives it a position.
 
 The sample server takes uploads; `-UploadsDown`, `-UploadsNoFix`,
-`-UploadsRefused` and `-PhoneRemoved` play the other answers (RecordTests).
+`-UploadsRefused`, `-PhoneRemoved` and `-AccountDeleted` play the other answers
+(RecordTests). A deleted account's 410 deletes its recordings and signs out,
+with the server's words on the sign-in screen. The install ID is in the
+Keychain, this device only, so a phone restored from a backup is a new phone.
 
 ## Signing in
 

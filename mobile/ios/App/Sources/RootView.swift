@@ -18,6 +18,7 @@ struct RootView: View {
     @State private var uploads: UploadQueue?
     @State private var network = NetworkWatch()
     @State private var reportPage: URL?
+    @State private var recording = RecordingSession()
     @Environment(\.scenePhase) private var scenePhase
 
     init(account: AccountModel, samples: SamplePaddles) {
@@ -40,7 +41,7 @@ struct RootView: View {
                 needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
                 openTerms: { termsOpen = true }, adding: adding, options: account.options,
                 openFile: { url in Task { await open(url) } },
-                recordings: account.user.map { account.recordings(for: $0.id) },
+                openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
                 uploads: uploads,
                 openReport: openReport
             )
@@ -55,7 +56,16 @@ struct RootView: View {
         .onChange(of: account.user?.id) { _, id in
             if id != nil { Task { await adding.signedIn() } }
         }
-        .onChange(of: account.user?.id, initial: true) { _, id in uploadRecordings(of: id) }
+        .onChange(of: account.user?.id, initial: true) { _, id in
+            recording.accountChanged(to: id.map { account.recordings(for: $0) })
+            uploadRecordings(of: id)
+        }
+        .recording(recording) {
+            // Start adds a phone removed on Devices again.
+            if let uploads, uploads.state.removed { Task { await uploads.addAgain() } }
+        }
+        // Nothing uploads while a recording runs.
+        .onChange(of: recording.isRecording, initial: true) { _, running in uploads?.recording = running }
         .onChange(of: network.online, initial: true) { _, online in uploads?.online = online }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -144,15 +154,24 @@ struct RootView: View {
             return try await shared.idToken(refresh)
         }
         let queue = UploadQueue(
-            folder: account.recordings(for: userID), client: client, installID: InstallID.current(),
+            folder: account.recordings(for: userID), client: client, installID: Self.installID(),
             isOpen: { RecordingFiles.isOpen($0) })
         queue.online = network.online
+        queue.recording = recording.isRecording
         // 410: the account was deleted elsewhere; its recordings are gone.
-        queue.accountDeleted = { [account] in Task { await account.signOut() } }
+        queue.accountDeleted = { [account] message in Task { await account.signOut(because: message) } }
         uploads = queue
         queue.start()
         // After every sign-in: the same phone for the same account and install.
         Task { await queue.signedIn() }
+    }
+
+    /// This phone's install ID, in the Keychain (this device only), so a
+    /// phone restored from a backup is a new phone.
+    private static func installID() -> String {
+        let store = KeychainTokenStore(
+            service: "com.paddlesnitch.app.install-id" + (PaddlesnitchApp.usesSampleServer ? ".sample" : ""))
+        return InstallID.current(stored: { store.load() }, keep: { try? store.save($0) })
     }
 
     /// Adds the paddle in a GPS file, or keeps it until sign-in.

@@ -17,8 +17,12 @@ public final class UploadQueue {
         case noFix(stem: String, startedAt: Date?)
         /// The server will never take it: kept, with Report an issue.
         case refused(stem: String, startedAt: Date?)
-        /// The owner removed this phone on Devices, with Upload now.
-        case removed
+        /// The owner removed this phone on Devices, with Add phone again;
+        /// `waiting` recordings are kept until then.
+        case removed(waiting: Int)
+        /// Add phone again failed with no words from the server: the same
+        /// button, to try again.
+        case addFailed
         /// The server wouldn't add this phone (10 already): its words.
         case cannotAdd(String)
 
@@ -28,16 +32,20 @@ public final class UploadQueue {
             case .noFix(let stem, _): "nofix-\(stem)"
             case .refused(let stem, _): "refused-\(stem)"
             case .removed: "removed"
+            case .addFailed: "add-failed"
             case .cannotAdd: "cannot-add"
             }
         }
 
         public var text: String {
             switch self {
-            case .waiting(_, _, let uploading): uploading ? "Uploading…" : "Waiting to upload"
-            case .noFix: "No GPS fix, so this didn’t become a paddle"
+            case .waiting(_, _, let uploading): uploading ? "Uploading…" : "Waiting to upload."
+            case .noFix: "No GPS fix, so this didn’t become a paddle."
             case .refused: "Couldn’t upload this recording. It’s kept on this phone."
-            case .removed: "This phone was removed from your account"
+            case .removed(let waiting):
+                "This phone was removed from your account. "
+                    + (waiting == 1 ? "1 recording is waiting." : "\(waiting) recordings are waiting.")
+            case .addFailed: "Couldn’t add this phone to your account. Tap Add phone again to try again."
             case .cannotAdd(let message): message
             }
         }
@@ -48,7 +56,7 @@ public final class UploadQueue {
             switch self {
             case .waiting(_, let date, _), .noFix(_, let date), .refused(_, let date):
                 date.map { Format.dayTime($0, zone: zone) }
-            case .removed, .cannotAdd: nil
+            case .removed, .addFailed, .cannotAdd: nil
             }
         }
     }
@@ -83,8 +91,11 @@ public final class UploadQueue {
     let isOpen: @Sendable (URL) -> Bool
     private var stopped = false
     /// The server said the account was deleted (410): its recordings are
-    /// gone from the phone and the queue has stopped; sign out.
-    public var accountDeleted: (@MainActor () -> Void)?
+    /// gone from the phone and the queue has stopped; sign out, showing
+    /// the server's words.
+    public var accountDeleted: (@MainActor (String) -> Void)?
+    /// Add phone again failed with no words from the server.
+    private var addFailed = false
     private var uploading: String?
     private var failures = 0
     private var cannotAdd: String?
@@ -139,15 +150,27 @@ public final class UploadQueue {
     /// Upload now, or Start after the phone was removed: adds it again, then
     /// uploads what's waiting.
     public func addAgain() async {
-        guard (try? await addPhone()) != nil else { return }
+        do {
+            try await addPhone()
+        } catch PaddleAPIError.rejected {
+            return  // the server's words are on the line (`cannotAdd`)
+        } catch {
+            addFailed = true
+            refreshLines()
+            return
+        }
+        addFailed = false
         state.removed = false
         save()
+        refreshLines()
         kick()
     }
 
-    /// Closes a "No GPS fix" line.
+    /// Closes a "No GPS fix" line, or a "Couldn’t upload" one (its files
+    /// stay on the phone, never retried).
     public func dismiss(_ stem: String) {
         state.noFix.removeAll { $0 == stem }
+        if state.refused.contains(stem) && !state.dismissed.contains(stem) { state.dismissed.append(stem) }
         save()
         refreshLines()
     }
@@ -162,8 +185,8 @@ public final class UploadQueue {
             save()
             refreshLines()
             return phone.deviceId
-        } catch PaddleAPIError.rejected(_, let status, _) where status == 410 {
-            deleteAccountsRecordings()
+        } catch PaddleAPIError.accountDeleted(let message) {
+            deleteAccountsRecordings(message)
             throw CancellationError()
         } catch PaddleAPIError.rejected(let message, let status, _) where status == 400 || status == 409 {
             cannotAdd = message
@@ -210,6 +233,10 @@ public final class UploadQueue {
         } catch let PaddleAPIError.rejected(_, status, _) where status == 400 || status == 409 {
             uploading = nil  // couldn't add the phone: the line says why
             return Self.idle
+        } catch let wait as TryLater {
+            uploading = nil
+            failures += 1
+            return wait.after ?? Self.backoff(failures)
         } catch {
             uploading = nil
             failures += 1
@@ -232,8 +259,8 @@ public final class UploadQueue {
             case .noFix: state.noFix.append(recording.stem)
             case .refused: state.refused.append(recording.stem)
             case .removed: state.removed = true
-            case .accountDeleted:
-                deleteAccountsRecordings()
+            case .accountDeleted(let message):
+                deleteAccountsRecordings(message)
                 return
             }
             save()
@@ -248,12 +275,12 @@ public final class UploadQueue {
 
     /// 410: the account no longer exists. Never upload its recordings:
     /// delete them all, stop, and say so (the app signs out).
-    private func deleteAccountsRecordings() {
+    private func deleteAccountsRecordings(_ message: String) {
         stop()
         try? FileManager.default.removeItem(at: folder)
         state = UploadState()
         lines = []
-        accountDeleted?()
+        accountDeleted?(message)
     }
 
     /// Not once stopped: a queue of an account signed out of (or deleted)
@@ -268,15 +295,18 @@ public final class UploadQueue {
         var lines: [Line] = []
         if let cannotAdd { lines.append(.cannotAdd(cannotAdd)) }
         let waiting = all.filter { !state.refused.contains($0.stem) }
-        if state.removed && !waiting.isEmpty {
-            lines.append(.removed)
+        if addFailed && state.removed && !waiting.isEmpty {
+            lines.append(.addFailed)
+        } else if state.removed && !waiting.isEmpty {
+            lines.append(.removed(waiting: waiting.count))
         } else {
             // "Uploading…" for the one going up now; the rest wait.
             lines += waiting.map {
                 .waiting(stem: $0.stem, startedAt: $0.startedAt, uploading: uploading == $0.stem)
             }
         }
-        lines += all.filter { state.refused.contains($0.stem) }.map { .refused(stem: $0.stem, startedAt: $0.startedAt) }
+        lines += all.filter { state.refused.contains($0.stem) && !state.dismissed.contains($0.stem) }
+            .map { .refused(stem: $0.stem, startedAt: $0.startedAt) }
         lines += state.noFix.map {
             .noFix(stem: $0, startedAt: WaitingRecording(stem: $0, folder: folder).startedAt)
         }

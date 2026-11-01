@@ -38,7 +38,7 @@ struct UploadEdgeTests {
         #expect(await queue.pass() == UploadQueue.idle)
         #expect(names(in: folder).contains("track_20261101_070211.csv"))
         #expect(queue.state.refused.isEmpty)
-        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
     }
 
     @Test func noNetworkMidFileWaitsAndKeepsTheFiles() async throws {
@@ -49,7 +49,7 @@ struct UploadEdgeTests {
         server.networkFailures = 1
         #expect(await queue.pass() == .seconds(5))
         #expect(names(in: folder).contains("track_20261101_070211.csv"))
-        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
         await queue.pass()
         #expect(names(in: folder) == ["uploads.json"])
     }
@@ -113,7 +113,7 @@ struct UploadEdgeTests {
         await queue.pass()
         #expect(names(in: folder) == ["track_20261101_070211.log", "track_20261101_070211_i10.csv", "uploads.json"])
         #expect(queue.state.removed)
-        #expect(queue.lines == [.removed])
+        #expect(queue.lines == [.removed(waiting: 1)])
     }
 
     /// "Once" across passes: a mismatch, a server failure, then a second
@@ -183,28 +183,59 @@ struct UploadEdgeTests {
         #expect(try await gone(folder))
     }
 
-    /// 410: the account was deleted (on the website). Its recordings must
-    /// never upload: the folder goes, the queue stops, and the app signs out.
+    /// 410 with `accountDeleted`: the account was deleted (on the website).
+    /// Its recordings must never upload: the folder goes, the queue stops,
+    /// and the app signs out with the server's words.
     @Test(arguments: ["upload", "phone", "held"])
     func aDeletedAccountsRecordingsAreDeletedNotUploaded(_ answeredBy: String) async throws {
         let folder = try folder()
         try record(in: folder, trackBytes: answeredBy == "held" ? 64 * 1024 + 1 : 300)
-        let gone = (410, Data(#"{"error":"This account was deleted.","accountDeleted":true}"#.utf8))
         switch answeredBy {
-        case "phone": server.phoneAnswer = gone
-        case "held": server.heldAnswer = gone
-        default: server.answers["*"] = [gone]
+        case "phone": server.phoneAnswer = (410, fixture("account.phone.account-deleted"))
+        case "held": server.heldAnswer = (410, fixture("account.phone-upload.account-deleted"))
+        default: server.answers["*"] = [(410, fixture("account.phone-upload.account-deleted"))]
         }
         let queue = queue(folder)
-        var signedOut = false
-        queue.accountDeleted = { signedOut = true }
+        var signedOutWith: String?
+        queue.accountDeleted = { signedOutWith = $0 }
         await queue.pass()
-        #expect(signedOut)
+        #expect(signedOutWith == "This account was deleted, so its recordings on this phone were removed.")
         #expect(!FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)))
         #expect(server.files.isEmpty)
         #expect(queue.lines.isEmpty)
         await queue.pass()
         #expect(!FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)))
+    }
+
+    /// A 410 without `accountDeleted` isn't ours (a proxy): try again later,
+    /// keep everything.
+    @Test(arguments: ["upload", "phone"])
+    func aBare410IsTriedAgainLater(_ answeredBy: String) async throws {
+        let folder = try folder()
+        try record(in: folder)
+        let bare = (410, Data("<html>Gone</html>".utf8))
+        if answeredBy == "phone" { server.phoneAnswer = bare } else { server.answers["*"] = [bare] }
+        let queue = queue(folder)
+        var signedOut = false
+        queue.accountDeleted = { _ in signedOut = true }
+        #expect(await queue.pass() == .seconds(5))
+        #expect(!signedOut)
+        #expect(names(in: folder).contains("track_20261101_070211.csv"))
+        #expect(queue.state.refused.isEmpty)
+    }
+
+    /// 503 while the account is being deleted (or the server is busy): keep
+    /// the files and wait as long as `Retry-After` says.
+    @Test func aBusyServerIsAskedAgainAfterRetryAfter() async throws {
+        let folder = try folder()
+        try record(in: folder)
+        server.answers["*"] = [(503, fixture("account.phone-upload.erasing"))]
+        server.retryAfter = 120
+        let queue = queue(folder)
+        #expect(await queue.pass() == .seconds(120))
+        #expect(names(in: folder).contains("track_20261101_070211.csv"))
+        #expect(queue.state.refused.isEmpty)
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
     }
 
     private func gone(_ folder: URL) async throws -> Bool {

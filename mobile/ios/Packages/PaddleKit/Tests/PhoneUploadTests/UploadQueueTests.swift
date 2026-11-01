@@ -22,8 +22,9 @@ struct UploadQueueTests {
         server.phoneRemoved = true
         await queue.pass()
         #expect(names(in: folder).count == 4)
-        #expect(queue.lines == [.removed])
-        #expect(queue.lines[0].text == "This phone was removed from your account")
+        #expect(queue.lines == [.removed(waiting: 1)])
+        #expect(
+            queue.lines[0].text == "This phone was removed from your account. 1 recording is waiting.")
         // Not added again in the background, nor at the next sign-in.
         let phoneCalls = server.phoneCalls
         await queue.pass()
@@ -56,7 +57,7 @@ struct UploadQueueTests {
         queue.recording = true
         await queue.pass()
         #expect(server.uploads.isEmpty)
-        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
         queue.recording = false
         await queue.pass()
         #expect(names(in: folder) == ["uploads.json"])
@@ -69,10 +70,10 @@ struct UploadQueueTests {
         queue.online = false
         await queue.pass()
         #expect(server.calls.isEmpty)
-        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
         queue.online = true
         // "Uploading…" only while it's the one going up.
-        #expect(queue.lines.map(\.text) == ["Waiting to upload"])
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
     }
 
     @Test func theRawIMUFileIsNeverSent() async throws {
@@ -156,11 +157,71 @@ struct UploadQueueTests {
 
     @Test func theInstallIDIsMadeOnceAndFitsTheServersRule() throws {
         let defaults = try #require(UserDefaults(suiteName: "install-\(UUID().uuidString)"))
-        let id = InstallID.current(in: defaults)
+        var kept: String?
+        let id = InstallID.current(stored: { kept }, keep: { kept = $0 }, older: defaults)
         #expect(id.count == 32)
         #expect(InstallID.valid(id))
-        #expect(InstallID.current(in: defaults) == id)
+        #expect(kept == id)
+        #expect(InstallID.current(stored: { kept }, keep: { kept = $0 }, older: defaults) == id)
         #expect(!InstallID.valid("short"))
         #expect(!InstallID.valid("has a space in it, so it's not one"))
+    }
+
+    /// An earlier build kept it in UserDefaults (in backups): it moves to the
+    /// Keychain, so this phone stays the same phone on the account.
+    @Test func anEarlierBuildsInstallIDMovesOutOfBackup() throws {
+        let defaults = try #require(UserDefaults(suiteName: "install-\(UUID().uuidString)"))
+        defaults.set("earlier-0123456789abcdef", forKey: "phoneInstallID")
+        var kept: String?
+        #expect(InstallID.current(stored: { kept }, keep: { kept = $0 }, older: defaults) == "earlier-0123456789abcdef")
+        #expect(kept == "earlier-0123456789abcdef")
+        #expect(defaults.string(forKey: "phoneInstallID") == nil)
+    }
+
+    @Test func theRemovedLineCountsWhatsWaiting() async throws {
+        let folder = try folder()
+        try record("track_20261101_070211", in: folder)
+        try record("track_20261101_090000", in: folder)
+        let queue = queue(folder)
+        await queue.signedIn()
+        server.phoneRemoved = true
+        await queue.pass()
+        #expect(
+            queue.lines.map(\.text) == ["This phone was removed from your account. 2 recordings are waiting."])
+    }
+
+    /// Add phone again with no words from the server (no network): say so,
+    /// with the same button.
+    @Test func addPhoneAgainThatFailsSaysToTryAgain() async throws {
+        let folder = try folder()
+        try record(in: folder)
+        let queue = queue(folder)
+        await queue.signedIn()
+        server.phoneRemoved = true
+        await queue.pass()
+        server.networkFailures = 1
+        await queue.addAgain()
+        #expect(
+            queue.lines.map(\.text) == [
+                "Couldn’t add this phone to your account. Tap Add phone again to try again."
+            ])
+        #expect(queue.state.removed)
+        await queue.addAgain()
+        #expect(!queue.state.removed)
+        #expect(queue.lines.map(\.text) == ["Waiting to upload."])
+    }
+
+    @Test func aRefusedLineCanBeDismissedAndItsFilesStay() async throws {
+        let folder = try folder()
+        try record(in: folder)
+        server.answers["track_20261101_070211.csv"] = [(413, Data(#"{"error":"too_large"}"#.utf8))]
+        let queue = queue(folder)
+        await queue.pass()
+        queue.dismiss("track_20261101_070211")
+        #expect(queue.lines.isEmpty)
+        #expect(names(in: folder).contains("track_20261101_070211.csv"))
+        await queue.pass()
+        #expect(server.uploads.count == 1)
+        #expect(UploadQueue(folder: folder, client: client(server), installID: "x").lines.isEmpty)
     }
 }

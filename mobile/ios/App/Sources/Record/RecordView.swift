@@ -36,12 +36,13 @@ struct RecordView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    // While recording it only hides the screen.
-                    Button("Close") { dismiss() }
-                        .font(.plexSans(.body))
-                        .accessibilityHint(model.phase == .recording ? "Keeps recording" : "")
-                        .accessibilityIdentifier("record-close")
+                // While recording, Hide (in the page) closes it instead.
+                if model.phase != .recording {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                            .font(.plexSans(.body))
+                            .accessibilityIdentifier("record-close")
+                    }
                 }
             }
         }
@@ -76,7 +77,7 @@ struct RecordView: View {
     }
 
     @ViewBuilder private var ready: some View {
-        Text("Records your route and the boat's motion. Start here, then lock the screen. Recording carries on.")
+        Text("Records your route and boat motion. Each recording uploads after you stop it.")
             .font(.plexSans(.body))
             .foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
@@ -84,8 +85,8 @@ struct RecordView: View {
         if permission.servicesOff || permission.denied {
             Text(
                 permission.servicesOff
-                    ? "Recording needs Location Services. Turn them on in Settings, under Privacy & Security."
-                    : "Recording needs your location. Turn it on for paddlesnitch in Settings."
+                    ? "Location is off on this phone. Turn it on to record."
+                    : "Recording needs your location all the time. Allow it in Settings."
             )
             .font(.plexSans(.body))
             .foregroundStyle(Palette.fg)
@@ -171,14 +172,34 @@ struct RecordView: View {
             }
         }
         if model.problem == nil {
-            let gps = GPSLine(model.status.live)
-            // Not a live region: VoiceOver hears a change once (RecordModel).
-            Text(gps.text)
-                .font(.plexSans(.body))
-                .foregroundStyle(gps.state == .fix ? Palette.green : gps.state == .lost ? Palette.red : Palette.muted)
-                .accessibilityLabel(gps.label)
-                .accessibilityIdentifier("record-gps")
+            gpsLine
         }
+        // Hides the screen; the recording carries on, and every screen says so.
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                dismiss()
+            } label: {
+                Text("Hide").font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44).padding(.horizontal, 8)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+            .tint(Palette.primaryText)
+            .accessibilityIdentifier("record-hide")
+            Text("Recording carries on.")
+                .font(.plexSans(.subheadline))
+                .foregroundStyle(Palette.muted)
+        }
+    }
+
+    /// Not a live region: VoiceOver hears a change once (RecordModel).
+    /// "Waiting for GPS" muted; only "GPS lost…" red.
+    private var gpsLine: some View {
+        let gps = GPSLine(model.status.live)
+        return Text(gps.text)
+            .font(.plexSans(.body))
+            .foregroundStyle(gps.state == .fix ? Palette.green : gps.state == .lost ? Palette.red : Palette.muted)
+            .accessibilityLabel(gps.label)
+            .accessibilityIdentifier("record-gps")
     }
 }
 

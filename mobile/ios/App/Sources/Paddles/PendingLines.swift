@@ -49,24 +49,17 @@ struct UploadLineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    if let started = line.started(in: .current) {
-                        Text(started)
-                            .font(.plexSans(.subheadline))
-                            .foregroundStyle(Palette.muted)
-                    }
-                    HStack(spacing: 8) {
-                        if case .waiting(_, _, true) = line { ProgressView().tint(Palette.muted) }
-                        Text(line.text)
-                            .font(.plexSans(.subheadline))
-                            .foregroundStyle(tone)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                HStack(spacing: 8) {
+                    if case .waiting(_, _, true) = line { ProgressView().tint(Palette.muted) }
+                    // "1 Nov 2026, 07:02 · Waiting to upload."
+                    (startedText + Text(line.text).foregroundStyle(tone))
+                        .font(.plexSans(.subheadline))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("upload-line")
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                if case .noFix(let stem, _) = line {
+                if let stem = dismissable {
                     Button {
                         queue.dismiss(stem)
                     } label: {
@@ -81,8 +74,8 @@ struct UploadLineView: View {
                 }
             }
             switch line {
-            case .removed:
-                action(adding ? "Upload now…" : "Upload now", filled: true) {
+            case .removed, .addFailed:
+                action(adding ? "Add phone again…" : "Add phone again", filled: true) {
                     adding = true
                     Task {
                         await queue.addAgain()
@@ -90,7 +83,7 @@ struct UploadLineView: View {
                     }
                 }
                 .disabled(adding)
-                .accessibilityIdentifier("upload-now")
+                .accessibilityIdentifier("add-phone-again")
             case .refused:
                 action(opening ? "Report an issue…" : "Report an issue") {
                     opening = true
@@ -116,13 +109,27 @@ struct UploadLineView: View {
 
     private var tone: Color {
         switch line {
-        case .refused, .cannotAdd: Palette.red
+        case .refused, .cannotAdd, .addFailed: Palette.red
         // The owner's own choice on Devices, not a failure.
         case .waiting, .noFix, .removed: Palette.fg
         }
     }
 
-    /// The one thing to do (Upload now) filled; the rest outlined.
+    /// The recording's start, muted, before the words.
+    private var startedText: Text {
+        guard let started = line.started(in: .current) else { return Text("") }
+        return Text("\(started) · ").foregroundStyle(Palette.muted)
+    }
+
+    /// The no-GPS and couldn’t-upload lines each have Dismiss.
+    private var dismissable: String? {
+        switch line {
+        case .noFix(let stem, _), .refused(let stem, _): stem
+        default: nil
+        }
+    }
+
+    /// The one thing to do (Add phone again) filled; the rest outlined.
     @ViewBuilder
     private func action(_ title: String, filled: Bool = false, run: @escaping () -> Void) -> some View {
         let label = Text(title).font(.plexSans(.body, weight: .semibold)).frame(minHeight: 44)

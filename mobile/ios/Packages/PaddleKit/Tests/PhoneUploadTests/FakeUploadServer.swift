@@ -45,6 +45,8 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
     /// Pieces held from an earlier upload that broke off.
     var held: [String: [Int: Data]] = [:]
     var phoneAnswer: (Int, Data) = (201, fixture("account.phone"))
+    /// Sent as `Retry-After` with every answer, if set.
+    var retryAfter: Int?
     /// What the held-pieces GET answers instead, if set.
     var heldAnswer: (Int, Data)?
     /// Requests with this token get 401, as an expired one does.
@@ -78,7 +80,9 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
             if let refusesToken, call.authorization == "Bearer \(refusesToken)" { return (401, Data()) }
             return answer(call)
         }
-        guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else {
+        let headers = lock.withLock { retryAfter }.map { ["Retry-After": String($0)] }
+        guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: headers)
+        else {
             throw URLError(.badServerResponse)
         }
         return (body, response)

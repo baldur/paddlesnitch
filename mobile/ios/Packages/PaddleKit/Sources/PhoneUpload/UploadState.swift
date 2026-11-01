@@ -16,6 +16,8 @@ public struct UploadState: Codable, Equatable, Sendable {
     /// Files that already had one sha256 mismatch: a second is a dead end,
     /// in this pass or a later one.
     public var mismatched: [String] = []
+    /// Refused recordings whose line was dismissed: kept, not shown.
+    public var dismissed: [String] = []
 
     public init() {}
 
@@ -26,6 +28,7 @@ public struct UploadState: Codable, Equatable, Sendable {
         refused = try values.decodeIfPresent([String].self, forKey: .refused) ?? []
         noFix = try values.decodeIfPresent([String].self, forKey: .noFix) ?? []
         mismatched = try values.decodeIfPresent([String].self, forKey: .mismatched) ?? []
+        dismissed = try values.decodeIfPresent([String].self, forKey: .dismissed) ?? []
     }
 
     static func file(in folder: URL) -> URL { folder.appending(path: "uploads.json") }
@@ -49,18 +52,31 @@ public struct UploadState: Codable, Equatable, Sendable {
     }
 }
 
-/// A random ID made once per install, kept with the app's own settings
-/// (never the advertising or a hardware ID): the server gives the same
-/// install and account the same phone. Deleting the app makes a new one.
+/// A random ID made once for this phone, kept out of backups (the app
+/// keeps it in the Keychain, this device only), so a phone restored from a
+/// backup is a new phone. Never the advertising or a hardware ID: the server
+/// gives the same ID and account the same phone.
 public enum InstallID {
-    static let key = "phoneInstallID"
+    /// Where builds before the Keychain kept it.
+    static let olderKey = "phoneInstallID"
     static let characters = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 
-    public static func current(in defaults: UserDefaults = .standard) -> String {
-        if let id = defaults.string(forKey: key), valid(id) { return id }
+    /// - Parameters:
+    ///   - stored: reads the kept ID; `keep` keeps one.
+    ///   - older: an ID kept by an earlier build moves over, so this phone
+    ///     stays the same phone on the account.
+    public static func current(
+        stored: () -> String?, keep: (String) -> Void, older: UserDefaults = .standard
+    ) -> String {
+        if let id = stored(), valid(id) { return id }
+        if let id = older.string(forKey: olderKey), valid(id) {
+            keep(id)
+            older.removeObject(forKey: olderKey)
+            return id
+        }
         var generator = SystemRandomNumberGenerator()
         let id = String((0..<32).map { _ in characters[Int.random(in: 0..<characters.count, using: &generator)] })
-        defaults.set(id, forKey: key)
+        keep(id)
         return id
     }
 

@@ -9,11 +9,19 @@ public struct UploadAnswer: Equatable, Sendable {
     public let error: String?
     /// 409 `parts_missing`: the pieces to send again.
     public let missing: [Int]
+    /// 410 says the account was deleted (`accountDeleted: true`).
+    public let accountDeleted: Bool
+    /// `Retry-After` in seconds (503 while an account is being deleted).
+    public let retryAfter: Int?
 
-    public init(status: Int, error: String? = nil, missing: [Int] = []) {
+    public init(
+        status: Int, error: String? = nil, missing: [Int] = [], accountDeleted: Bool = false, retryAfter: Int? = nil
+    ) {
         self.status = status
         self.error = error
         self.missing = missing
+        self.accountDeleted = accountDeleted
+        self.retryAfter = retryAfter
     }
 }
 
@@ -62,7 +70,10 @@ extension PaddleClient {
         }
         if response.statusCode == 401 { throw PaddleAPIError.signedOut }
         let refusal = try? JSONDecoder.paddlesnitch.decode(Refusal.self, from: data)
-        return UploadAnswer(status: response.statusCode, error: refusal?.error, missing: refusal?.missing ?? [])
+        return UploadAnswer(
+            status: response.statusCode, error: refusal?.error, missing: refusal?.missing ?? [],
+            accountDeleted: refusal?.accountDeleted == true,
+            retryAfter: response.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) })
     }
 
     func recordingRequest(deviceID: String, filename: String, body: Data, piece: UploadPiece?, token: String)
@@ -89,4 +100,5 @@ extension PaddleClient {
 private struct Refusal: Decodable {
     let error: String?
     let missing: [Int]?
+    let accountDeleted: Bool?
 }
