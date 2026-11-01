@@ -40,8 +40,14 @@ final class RecordTests: AppTestCase {
         // Back to Paddles; the sample server takes it and makes a paddle.
         XCTAssertTrue(app.buttons["record"].appears(timeout: 10), "back on Paddles")
         XCTAssertFalse(element("recording-line").exists)
-        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        let paddle = element("paddle-pdl-phone")
+        XCTAssertTrue(paddle.appears(timeout: 20), "uploaded, and in the list")
         XCTAssertFalse(element("upload-line").exists)
+        // #789: the phone's paddle says Phone, never Tracker.
+        XCTAssertTrue(paddle.label.contains("· Phone"), "labelled Phone: \(paddle.label)")
+        XCTAssertFalse(paddle.label.contains("Tracker"))
+        paddle.tap()
+        XCTAssertTrue(text(containing: "PHONE · K1").appears(timeout: 10), "the paddle page says Phone")
     }
 
     /// Hide while recording hides the screen and keeps recording: every

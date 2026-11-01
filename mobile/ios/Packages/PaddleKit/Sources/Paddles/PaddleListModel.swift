@@ -64,7 +64,7 @@ public struct PaddleRow: Identifiable, Hashable, Sendable {
 
     public init(_ card: PaddleCard) {
         id = card.id
-        let source = Format.source(card.sourceType)
+        let source = Format.source(card.sourceType, phone: card.phone)
         heading = ([Format.weekday(card.paddledAt)] + [source].compactMap { $0 }).joined(separator: " · ")
         boatClass = card.boatClass?.rawValue
         noGps = card.noGps == true
@@ -73,7 +73,9 @@ public struct PaddleRow: Identifiable, Hashable, Sendable {
         detail = [pace, card.avgSR.map(Format.strokeRate)].compactMap { $0 }.joined(separator: " · ")
         route = noGps ? [] : card.route
         note = card.note.flatMap { $0.isEmpty ? nil : $0 }
-        alsoRecordedBy = (card.sameOuting ?? []).map { "Also recorded by \(Format.alsoRecordedBy($0.sourceType))" }
+        alsoRecordedBy = (card.sameOuting ?? []).map {
+            "Also recorded by \(Format.alsoRecordedBy($0.sourceType, phone: $0.phone))"
+        }
     }
 }
 
